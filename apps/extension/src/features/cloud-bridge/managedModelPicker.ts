@@ -5,6 +5,7 @@ import {
   resolveModelEffort,
   type CapabilityTier,
   type Effort,
+  type ModelQuality,
 } from '@agiworkforce/types';
 import type { ManagedModelAccess } from './freeTrialClient';
 
@@ -13,6 +14,8 @@ export interface ManagedModelPickerOption {
   label: string;
   provider?: string;
   capability?: CapabilityTier;
+  description?: string;
+  quality?: ModelQuality;
 }
 
 export interface ManagedEffortControlState {
@@ -55,9 +58,37 @@ export function getManagedModelPickerOptions(
       label: metadata.name,
       provider: metadata.provider,
       capability: capabilityForQuality(metadata.qualityTier),
+      ...(metadata.bestFor[0] ? { description: metadata.bestFor[0] } : {}),
+      quality: metadata.quality,
     });
   }
   return options;
+}
+
+const PRIMARY_CAPABILITY_ORDER: readonly CapabilityTier[] = ['most-capable', 'balanced', 'fastest'];
+
+const QUALITY_RANK: Record<ModelQuality, number> = { excellent: 3, good: 2, fair: 1 };
+
+function qualityRank(option: ManagedModelPickerOption): number {
+  return option.quality ? QUALITY_RANK[option.quality] : 0;
+}
+
+export function partitionManagedModelOptions(options: readonly ManagedModelPickerOption[]): {
+  primary: ManagedModelPickerOption[];
+  more: ManagedModelPickerOption[];
+} {
+  const primary: ManagedModelPickerOption[] = [];
+  for (const tier of PRIMARY_CAPABILITY_ORDER) {
+    const best = options
+      .filter((option) => option.capability === tier)
+      .sort((left, right) => qualityRank(right) - qualityRank(left))[0];
+    if (best) primary.push(best);
+  }
+  const promoted = new Set(primary.map((option) => option.value));
+  return {
+    primary,
+    more: options.filter((option) => option.value !== 'auto' && !promoted.has(option.value)),
+  };
 }
 
 export function reconcileManagedModelSelection(

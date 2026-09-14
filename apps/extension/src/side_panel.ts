@@ -121,8 +121,9 @@ import {
   Shield,
   X,
   Play,
-  ChevronDown,
+  ChevronRight,
   Check,
+  Plug,
   renderIcon,
 } from './assets/icons';
 import {
@@ -196,6 +197,7 @@ import {
   getManagedEffortControlState,
   getManagedOutboundEffort,
   getManagedModelPickerOptions,
+  partitionManagedModelOptions,
   reconcileManagedModelSelection,
   type ManagedModelPickerOption,
 } from './features/cloud-bridge/managedModelPicker';
@@ -271,9 +273,6 @@ let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
 const scheduledTasksRequestFence = new ManagedCloudOwnerRequestFence();
 const scheduledTaskCreateRequestFence = new ManagedCloudOwnerRequestFence();
-let updatePersistencePill: () => void = () => {
-  /* no-op until buildUI() creates the composer */
-};
 let activePersistenceEntry: ConversationEntry | undefined;
 let activePersistenceReadGeneration = 0;
 
@@ -372,7 +371,6 @@ function conversationPersistencePresentation(
 function clearActivePersistenceState(): void {
   activePersistenceReadGeneration += 1;
   activePersistenceEntry = undefined;
-  updatePersistencePill();
 }
 
 async function refreshActivePersistenceState(): Promise<void> {
@@ -381,7 +379,6 @@ async function refreshActivePersistenceState(): Promise<void> {
   const readGeneration = ++activePersistenceReadGeneration;
   if (!owner || _ctx.messages.length === 0) {
     activePersistenceEntry = undefined;
-    updatePersistencePill();
     return;
   }
   const entry = await getConversation(owner, conversationId).catch(() => undefined);
@@ -393,20 +390,11 @@ async function refreshActivePersistenceState(): Promise<void> {
     return;
   }
   activePersistenceEntry = entry;
-  updatePersistencePill();
 }
 let refreshTabGroupUI: () => void = () => {
   /* no-op until buildUI() registers the controls */
 };
 
-function currentConversationCloudEligible(): boolean {
-  return (
-    _ctx.messages.length > 0 &&
-    _ctx.messages
-      .filter((message) => !message.error)
-      .every((message) => message.runtime === 'managed-cloud')
-  );
-}
 let resetScheduledTaskDraftForOwnerTransition: () => void = () => {
   /* no-op until buildUI() creates the Workflows form */
 };
@@ -686,6 +674,19 @@ function managedTurnPersistencePayload(streamId: string): {
 }
 
 // Provider display order in the grouped picker.
+const UNKNOWN_PROVIDER_KEY = 'unknown-provider';
+
+const CONNECTORS_URL = 'https://agiworkforce.com/connectors?from=chrome-extension';
+
+const RECENTS_SEARCH_THRESHOLD = 10;
+
+const RELATIVE_TIME_FORMAT = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+const RELATIVE_TIME_STEPS: { ms: number; unit: Intl.RelativeTimeFormatUnit }[] = [
+  { ms: 86_400_000, unit: 'day' },
+  { ms: 3_600_000, unit: 'hour' },
+  { ms: 60_000, unit: 'minute' },
+];
+
 const PROVIDER_GROUP_ORDER: ProviderId[] = [
   'anthropic',
   'openai',
@@ -790,13 +791,11 @@ function persistMessages(): Promise<void> {
       sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
     ) {
       activePersistenceEntry = entry;
-      updatePersistencePill();
     }
   });
 }
 
 function saveMessages(): void {
-  updatePersistencePill();
   void persistMessages()
     .then(() => {
       requestCloudConversationSync();
@@ -879,7 +878,6 @@ async function loadMessages(): Promise<void> {
     if (persistedSeed) active = persistedSeed;
   }
   activePersistenceEntry = active;
-  updatePersistencePill();
   _ctx.selectedModel = normalizeModelId(active.routing.selectedModel) ?? 'auto';
   _ctx.currentModelKey = active.routing.currentModelKey;
   _ctx.previousTaskType = active.routing.previousTaskType;
@@ -1023,7 +1021,6 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   updateSendButton();
   removeThinking();
   renderMessages();
-  updatePersistencePill();
 
   if (previousOwner) {
     try {
@@ -1221,33 +1218,6 @@ function injectStyles(): void {
       flex-shrink: 0;
       gap: 8px;
     }
-    #sp-header-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-    #sp-logo {
-      width: 24px;
-      height: 24px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      /* currentColor for the 11 gray spokes; amber spoke is hard-wired in SVG */
-      color: var(--agi-ext-text-muted);
-    }
-    #sp-logo svg {
-      width: 24px;
-      height: 24px;
-      display: block;
-    }
-    #sp-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--agi-ext-text);
-      white-space: nowrap;
-    }
     #sp-model-badge {
       font-size: 10px;
       color: var(--agi-ext-accent);
@@ -1317,21 +1287,6 @@ function injectStyles(): void {
       margin-bottom: 8px;
       opacity: 0.7;
     }
-    #sp-empty-headline {
-      display: none;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--agi-ext-text);
-      letter-spacing: -0.015em;
-    }
-    #sp-empty-subtext {
-      display: none;
-      font-size: 12px;
-      color: var(--agi-ext-text-muted);
-      line-height: 1.55;
-      max-width: 220px;
-    }
-
     /* ── Restricted-page notice; chat remains available ── */
     #sp-blocked {
       display: none;
@@ -1345,14 +1300,7 @@ function injectStyles(): void {
       background: var(--agi-ext-surface);
     }
     #sp-blocked.visible { display: flex; }
-    #sp-blocked-shield {
-      width: 20px;
-      height: 20px;
-      flex: 0 0 20px;
-      opacity: 0.65;
-    }
     .sp-blocked-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    #sp-blocked-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-text); }
     #sp-blocked-desc { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.45; }
 
     /* ── Message bubbles ── */
@@ -1643,7 +1591,9 @@ function injectStyles(): void {
       color: var(--agi-ext-accent);
       font-size: 12px;
     }
-    @keyframes sp-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    @keyframes sp-blink { 0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+    }
 
     /* ── Inline tool-call UI (design-spec §4) ── */
     .tool-call {
@@ -1723,7 +1673,8 @@ function injectStyles(): void {
     /* spinner rotation for pending/running state */
     .tool-call--running .tool-call__icon { color: var(--agi-ext-text-muted); }
     .tool-call--running .tool-call__icon svg { animation: sp-spin 0.8s linear infinite; }
-    @keyframes sp-spin { to { transform: rotate(360deg); } }
+    @keyframes sp-spin { to { transform: rotate(360deg); }
+    }
     .tool-call--error .tool-call__label { color: var(--agi-ext-danger); }
     .tool-call--error .tool-call__icon { color: var(--agi-ext-danger); }
     .tool-call--success .tool-call__icon { color: var(--agi-ext-success); }
@@ -2081,7 +2032,7 @@ function injectStyles(): void {
       gap: 8px;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
-    #sp-composer-shell:focus-within {
+    #sp-composer-shell:has(#sp-input:focus) {
       border-color: color-mix(in srgb, var(--agi-ext-accent) 50%, transparent);
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--agi-ext-accent) 18%, transparent);
     }
@@ -2282,44 +2233,6 @@ function injectStyles(): void {
       min-width: 0;
       overflow: hidden;
     }
-    .sp-context-chip {
-      display: inline-block;
-      vertical-align: middle;
-      background: var(--agi-ext-overlay);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 12px;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      font-weight: 500;
-      padding: 2px 9px;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-      white-space: nowrap;
-      min-width: 0;
-      flex-shrink: 1;
-      max-width: 140px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .sp-context-chip::before {
-      content: '';
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--agi-ext-border-strong);
-      flex-shrink: 0;
-      transition: background 0.15s;
-    }
-    .sp-context-chip.has-context {
-      color: var(--agi-ext-success);
-      border-color: var(--agi-ext-success-border);
-      background: var(--agi-ext-success-bg);
-    }
-    .sp-context-chip.has-context::before { background: var(--agi-ext-success); }
-    .sp-context-chip:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
-    .sp-context-chip:hover::before { background: var(--agi-ext-accent); }
-    .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
 
     /* Autonomy chip (EXT-11). Reads the same agi_cu_ask_before_acting pref the
        background's authoritative gate reads, it reports that gate, it does not
@@ -2349,55 +2262,6 @@ function injectStyles(): void {
     .sp-autonomy-chip:hover { filter: brightness(1.12); }
     .sp-autonomy-chip .agi-icon { flex-shrink: 0; }
 
-    /* W5-06: quick mode toggle */
-    #sp-quick-mode-toggle {
-      display: inline-flex;
-      align-items: center;
-      background: var(--agi-ext-overlay);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 12px;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      font-weight: 500;
-      padding: 2px 8px;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-      white-space: nowrap;
-      flex-shrink: 0;
-      user-select: none;
-    }
-    #sp-quick-mode-toggle:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
-    #sp-quick-mode-toggle.sp-quick-mode-active {
-      color: var(--agi-ext-accent);
-      border-color: var(--agi-ext-accent);
-      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-    }
-    #sp-quick-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-
-    /* Where this chat is stored. Required by the trust-boundary rule: the user
-       must be able to see, without opening a menu, whether a conversation is
-       browser-local or mirrored to their account. Modeled on the
-       #sp-bridge-notice pattern. */
-    .sp-persistence-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: var(--agi-ext-overlay);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 12px;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      font-weight: 500;
-      padding: 2px 8px;
-      white-space: nowrap;
-      flex-shrink: 0;
-      user-select: none;
-      cursor: default;
-    }
-    .sp-persistence-pill .agi-icon { flex-shrink: 0; }
-    .sp-persistence-pill[data-state="cloud"] { color: var(--agi-ext-accent); }
-    .sp-persistence-pill[data-state="pending"] { color: var(--agi-ext-info); }
-    .sp-persistence-pill[data-state="error"] { color: var(--agi-ext-warning); }
     /* Per-row provenance badge in the history drawer. */
     .sp-drawer-history-badge {
       display: inline-flex;
@@ -2409,76 +2273,6 @@ function injectStyles(): void {
     .sp-drawer-history-badge[data-state="cloud"] { color: var(--agi-ext-accent); }
     .sp-drawer-history-badge[data-state="pending"] { color: var(--agi-ext-info); }
     .sp-drawer-history-badge[data-state="error"] { color: var(--agi-ext-warning); }
-
-    /* Catalog-driven reasoning effort. The popover opens upward so it remains
-       usable in the short side-panel composer. */
-    #sp-effort-control {
-      position: relative;
-      margin-left: auto;
-      flex-shrink: 0;
-    }
-    #sp-effort-btn {
-      display: inline-flex;
-      align-items: center;
-      height: 22px;
-      padding: 0 8px;
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 12px;
-      background: var(--agi-ext-overlay);
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      font-weight: 500;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    #sp-effort-btn:hover,
-    #sp-effort-btn[aria-expanded='true'] {
-      color: var(--agi-ext-accent);
-      border-color: var(--agi-ext-accent);
-    }
-    #sp-effort-btn[data-disabled='true'] { opacity: 0.72; }
-    #sp-effort-popover {
-      position: absolute;
-      right: 0;
-      bottom: calc(100% + 7px);
-      z-index: 80;
-      display: none;
-      width: min(250px, calc(100vw - 24px));
-      padding: 11px;
-      border: 1px solid var(--agi-ext-border-strong);
-      border-radius: 10px;
-      background: var(--agi-ext-surface);
-      box-shadow: 0 10px 30px var(--agi-ext-modal-shadow);
-    }
-    #sp-effort-popover.open { display: block; }
-    .sp-effort-heading {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 9px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--agi-ext-text);
-    }
-    #sp-effort-value { color: var(--agi-ext-accent); }
-    #sp-effort-slider { width: 100%; accent-color: var(--agi-ext-accent); cursor: pointer; }
-    #sp-effort-slider:disabled { cursor: not-allowed; opacity: 0.45; }
-    #sp-effort-scale {
-      display: flex;
-      justify-content: space-between;
-      gap: 5px;
-      margin-top: 4px;
-      color: var(--agi-ext-text-muted);
-      font-size: 9px;
-    }
-    #sp-effort-description {
-      margin-top: 8px;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      line-height: 1.35;
-    }
-
 
     /* ── Auth bar ── */
     #sp-auth-bar {
@@ -2736,7 +2530,9 @@ function injectStyles(): void {
     .sp-wf-record-btn:hover { background: color-mix(in srgb, var(--agi-ext-danger) 85%, black); transform: scale(1.02); }
     .sp-wf-record-btn.recording { background: var(--agi-ext-danger-bg); border: 1px solid var(--agi-ext-danger); animation: sp-record-pulse 1.5s infinite; }
     .sp-wf-record-btn.recording:hover { background: var(--agi-ext-danger-bg); }
-    @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--agi-ext-transparent-shadow); } 50% { box-shadow: 0 0 0 6px var(--agi-ext-transparent-shadow); } }
+    @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--agi-ext-transparent-shadow); }
+    50% { box-shadow: 0 0 0 6px var(--agi-ext-transparent-shadow); }
+    }
     .sp-wf-record-dot { width: 8px; height: 8px; border-radius: 50%; background: white; flex-shrink: 0; }
     .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse 1s infinite; }
     .sp-wf-action-counter { font-size: 11px; color: var(--agi-ext-text-muted); flex: 1; }
@@ -2753,8 +2549,6 @@ function injectStyles(): void {
     #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; }
     #sp-model-selector-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); border-color: var(--agi-ext-accent); }
     #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    #sp-model-selector-btn .sp-chevron { font-size: 8px; transition: transform 0.15s; flex-shrink: 0; }
-    #sp-model-selector-btn.open .sp-chevron { transform: rotate(180deg); }
     #sp-model-dropdown { display: none; position: absolute; top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 200px; max-width: calc(100vw - 24px); max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px var(--agi-ext-modal-shadow); }
     #sp-model-dropdown.open { display: block; }
     .sp-model-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; border: 0; border-radius: 5px; cursor: pointer; background: transparent; transition: background 0.12s; font: inherit; font-size: 11px; color: var(--agi-ext-text-muted); text-align: left; }
@@ -2835,35 +2629,6 @@ function injectStyles(): void {
       flex-shrink: 0;
     }
 
-    /* Model picker header row with provider-count badge */
-    .sp-model-picker-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 6px 9px 4px;
-      border-bottom: 1px solid var(--agi-ext-border);
-      margin-bottom: 2px;
-    }
-    .sp-model-picker-title {
-      font-size: 9px;
-      font-weight: 600;
-      color: var(--agi-ext-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-    .provider-count-badge {
-      font-size: 10px;
-      color: var(--agi-ext-text-muted);
-      background: var(--agi-ext-hover);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
-      padding: 1px 7px;
-      font-weight: 500;
-      white-space: nowrap;
-      margin-left: auto;
-    }
-
-    /* Provider group header */
     .sp-model-group-header {
       font-size: 9px;
       font-weight: 600;
@@ -2877,116 +2642,6 @@ function injectStyles(): void {
       margin-top: 4px;
       padding-top: 8px;
     }
-
-    /* Thinking toggle row at bottom of dropdown */
-    .sp-thinking-toggle-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 9px 5px;
-      border-top: 1px solid var(--agi-ext-border);
-      margin-top: 4px;
-    }
-    .sp-thinking-toggle-label {
-      flex: 1;
-      font-size: 10px;
-      color: var(--agi-ext-text-muted);
-      user-select: none;
-      cursor: pointer;
-    }
-    .sp-thinking-toggle-label.active { color: var(--agi-ext-accent); }
-    .sp-thinking-toggle {
-      appearance: none;
-      width: 28px;
-      height: 15px;
-      border-radius: 8px;
-      background: var(--agi-ext-hover);
-      position: relative;
-      cursor: pointer;
-      transition: background 0.2s;
-      flex-shrink: 0;
-      border: none;
-      outline: none;
-    }
-    .sp-thinking-toggle:checked { background: var(--agi-ext-accent); }
-    .sp-thinking-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-thinking-toggle::after {
-      content: '';
-      position: absolute;
-      width: 11px;
-      height: 11px;
-      border-radius: 50%;
-      background: white;
-      top: 2px;
-      left: 2px;
-      transition: transform 0.2s;
-    }
-    .sp-thinking-toggle:checked::after { transform: translateX(13px); }
-
-    /* ── History dropdown ── */
-    .sp-history-wrapper { position: relative; }
-    #sp-history-dropdown {
-      display: none;
-      position: absolute;
-      top: 100%;
-      right: 0;
-      margin-top: 4px;
-      width: 260px;
-      max-height: 320px;
-      overflow-y: auto;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 8px;
-      padding: 4px;
-      z-index: 200;
-      box-shadow: 0 4px 16px var(--agi-ext-modal-shadow);
-    }
-    #sp-history-dropdown.open { display: block; }
-    #sp-history-dropdown::-webkit-scrollbar { width: 4px; }
-    #sp-history-dropdown::-webkit-scrollbar-track { background: transparent; }
-    #sp-history-dropdown::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
-    .sp-history-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 5px 8px 4px;
-      border-bottom: 1px solid var(--agi-ext-border);
-      margin-bottom: 2px;
-    }
-    .sp-history-title { font-size: 9px; font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
-    .sp-history-empty { padding: 12px 8px; color: var(--agi-ext-text-muted); font-size: 11px; text-align: center; }
-    .sp-history-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 8px;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.12s;
-    }
-    .sp-history-item:hover { background: var(--agi-ext-hover); }
-    .sp-history-item-text { flex: 1; min-width: 0; }
-    .sp-history-item-title {
-      font-size: 11px;
-      color: var(--agi-ext-text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sp-history-item-date { font-size: 9px; color: var(--agi-ext-text-muted); margin-top: 1px; }
-    .sp-history-item-del {
-      background: none;
-      border: none;
-      color: var(--agi-ext-text-muted);
-      font-size: 12px;
-      cursor: pointer;
-      padding: 2px 4px;
-      border-radius: 3px;
-      line-height: 1;
-      flex-shrink: 0;
-      transition: color 0.12s, background 0.12s;
-    }
-    .sp-history-item-del:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
 
     /* ── Phase 2: Tab bar hidden (Workflows / CU are drawer launchers now) ──
        Hidden on the chat view only. Workflows and Computer Use are entered from
@@ -4004,15 +3659,7 @@ function injectStyles(): void {
       background: var(--agi-ext-bg);
       border-bottom-color: color-mix(in srgb, var(--agi-ext-border) 70%, transparent);
     }
-    #sp-header-left {
-      flex: 1 1 auto;
-      gap: 9px;
-      overflow: hidden;
-    }
     #sp-header-right { flex: 0 0 auto; }
-    #sp-logo,
-    #sp-logo svg { width: 22px; height: 22px; }
-    #sp-title { font-size: 14px; letter-spacing: -0.02em; }
     .sp-icon-btn {
       width: 32px;
       height: 32px;
@@ -4059,19 +3706,6 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       opacity: 0.58;
     }
-    #sp-empty-headline {
-      display: block;
-      font-size: 18px;
-      font-weight: 550;
-      letter-spacing: -0.025em;
-    }
-    #sp-empty-subtext {
-      display: block;
-      max-width: 260px;
-      font-size: 12px;
-      line-height: 1.55;
-      opacity: 0.82;
-    }
     .sp-msg { max-width: 92%; gap: 5px; }
     .sp-msg-assistant { max-width: 100%; }
     .sp-bubble {
@@ -4106,7 +3740,7 @@ function injectStyles(): void {
       background: var(--agi-ext-surface);
       box-shadow: none;
     }
-    #sp-composer-shell:focus-within {
+    #sp-composer-shell:has(#sp-input:focus) {
       border-color: color-mix(in srgb, var(--agi-ext-accent) 55%, var(--agi-ext-border));
       box-shadow: none;
     }
@@ -4153,19 +3787,6 @@ function injectStyles(): void {
       background: var(--agi-ext-hover);
       color: var(--agi-ext-text);
     }
-    .sp-context-chip {
-      min-height: 32px;
-      max-width: 108px;
-      padding: 6px 8px;
-      border: 0;
-      border-radius: 10px;
-      background: transparent;
-      font-size: 10.5px;
-      line-height: 18px;
-    }
-    .sp-context-chip::before { margin-right: 6px; }
-    .sp-context-chip:hover { border-color: transparent; background: var(--agi-ext-hover); }
-    .sp-context-chip.has-context { border: 0; }
     .sp-autonomy-control { position: relative; }
     .sp-autonomy-chip {
       position: relative;
@@ -4206,14 +3827,6 @@ function injectStyles(): void {
       box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
     }
     #sp-autonomy-popover.open { display: block; }
-    .sp-autonomy-heading {
-      padding: 5px 8px 7px;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
     .sp-autonomy-option {
       width: 100%;
       display: flex;
@@ -4233,88 +3846,28 @@ function injectStyles(): void {
     .sp-autonomy-option-warning:hover { color: var(--agi-ext-warning); }
     .sp-autonomy-option-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; }
     .sp-autonomy-option-copy strong { font-size: 11.5px; font-weight: 600; }
-    .sp-autonomy-option-copy small { color: var(--agi-ext-text-muted); font-size: 10px; line-height: 1.35; }
-    #sp-effort-control { margin-left: 0; }
-    #sp-effort-btn {
-      height: 32px;
-      padding: 0 8px;
-      border-color: transparent;
-      border-radius: 10px;
-      background: transparent;
-      font-size: 10.5px;
-      min-width: 0;
-    }
-    #sp-effort-btn-label {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    #sp-effort-btn:hover,
-    #sp-effort-btn[aria-expanded='true'] {
-      border-color: transparent;
-      background: var(--agi-ext-hover);
-      color: var(--agi-ext-text);
+    .sp-autonomy-option-copy small {
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+      line-height: 1.35;
     }
     #sp-send-btn {
       width: 32px;
       height: 32px;
       box-shadow: none;
-    }
-    .sp-trust-strip {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      min-height: 0;
-      margin-top: 4px;
-      color: var(--agi-ext-text-muted);
-    }
-    .sp-trust-strip:empty { display: none; }
-    .sp-trust-strip .sp-autonomy-control {
-      padding-left: 6px;
-      border-left: 1px solid var(--agi-ext-border);
-    }
-    .sp-persistence-pill {
-      padding: 0 4px;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      font-weight: 450;
-      opacity: 0.82;
-    }
-    .sp-trust-strip .sp-persistence-pill[data-state='local'] { display: none; }
-    .sp-persistence-pill[data-state='cloud'] { color: var(--agi-ext-accent); opacity: 0.9; }
-    .sp-persistence-pill[data-state='pending'] { color: var(--agi-ext-info); opacity: 0.9; }
-    .sp-persistence-pill[data-state='error'] { color: var(--agi-ext-warning); opacity: 0.95; }
-    #sp-quick-mode-toggle {
-      width: 100%;
-      min-height: 34px;
-      justify-content: center;
-      margin-top: 10px;
-      border-radius: 9px;
-      font-size: 11px;
-    }
-
-    #sp-model-dropdown,
-    #sp-attach-menu,
-    #sp-slash-menu,
-    #sp-effort-popover,
-    #sp-history-dropdown,
-    #sp-shortcuts-dropdown {
+    }#sp-model-dropdown,
+#sp-attach-menu,
+#sp-slash-menu,
+#sp-shortcuts-dropdown {
       padding: 6px;
       border-color: var(--agi-ext-border-strong);
       border-radius: 14px;
       box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
     }
-    #sp-model-dropdown { margin-top: 8px; min-width: 232px; }
-    .sp-model-option,
-    .sp-attach-menu-item,
-    .sp-slash-item,
-    .sp-history-item,
-    .sp-shortcut-item { border-radius: 9px; }
+    #sp-model-dropdown { margin-top: 8px; min-width: 232px; }.sp-model-option,
+.sp-attach-menu-item,
+.sp-slash-item,
+.sp-shortcut-item { border-radius: 9px; }
     .sp-model-option { padding: 9px; }
 
     #sp-cloud-gate,
@@ -4336,10 +3889,341 @@ function injectStyles(): void {
     #sp-drawer-header { min-height: 56px; padding: 10px 14px; }
     .sp-drawer-section { border-radius: 14px; }
 
+
+    /* ── 2026-09 side panel: one quiet header, one glyph, one composer card ── */
+    #sp-header { justify-content: flex-end; }
+
+    #sp-empty { padding: 24px 20px; gap: 0; }
+    #sp-empty-icon {
+      width: 110px;
+      height: 110px;
+      margin: 0;
+      color: color-mix(in srgb, var(--agi-ext-brand) 30%, var(--agi-ext-text-muted));
+      opacity: 0.55;
+    }
+    #sp-empty-icon svg { width: 110px; height: 110px; }
+
+    #sp-blocked {
+      align-items: center;
+      gap: 7px;
+      padding: 0 2px;
+      border: 0;
+      border-radius: 0;
+      background: none;
+    }
+    #sp-blocked-shield {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 16px;
+      opacity: 0.7;
+    }
+    #sp-blocked-desc {
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--agi-ext-text-muted);
+    }
+
+    #sp-composer-shell {
+      min-height: 104px;
+      padding: 10px 12px 9px;
+      border-radius: 16px;
+      gap: 2px;
+    }
+    #sp-input { min-height: 46px; font-size: 14px; }
+    #sp-composer-bar {
+      padding: 0;
+      gap: 4px;
+      overflow: visible;
+    }
+    .sp-composer-controls-start,
+    .sp-composer-controls-end { gap: 4px; }
+    #sp-send-btn[hidden] { display: none; }
+
+    #sp-model-selector-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      min-width: 0;
+      max-width: 100%;
+      padding: 4px 8px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    #sp-model-selector-btn:hover,
+    #sp-model-selector-btn[aria-expanded='true'] { background: var(--agi-ext-hover); }
+    #sp-model-badge {
+      max-width: 132px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--agi-ext-text);
+      font-size: 13px;
+      font-weight: 400;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #sp-model-effort-badge {
+      color: var(--agi-ext-text-muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .sp-autonomy-chip {
+      justify-content: center;
+      gap: 0;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 9px;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+    }
+    .sp-autonomy-chip[data-mode='full'] {
+      border-color: var(--agi-ext-warning-border);
+      background: transparent;
+      color: var(--agi-ext-warning);
+    }
+    .sp-autonomy-chip:hover { filter: none; background: var(--agi-ext-hover); }
+    #sp-autonomy-icon { display: inline-flex; }
+    .sp-autonomy-option { align-items: flex-start; }
+    .sp-autonomy-option-copy strong { font-size: 13px; font-weight: 500; }
+    .sp-autonomy-option-check {
+      display: inline-flex;
+      align-items: center;
+      width: 14px;
+      flex-shrink: 0;
+      color: var(--agi-ext-accent);
+    }
+
+    #sp-attach-menu { min-width: 224px; }
+    .sp-attach-menu-item {
+      min-height: 34px;
+      color: var(--agi-ext-text);
+      font-size: 13px;
+    }
+    .sp-attach-menu-label { flex: 1; min-width: 0; }
+    .sp-attach-menu-check {
+      display: inline-flex;
+      align-items: center;
+      width: 14px;
+      flex-shrink: 0;
+      color: var(--agi-ext-accent);
+    }
+
+    .sp-model-option { font-size: 13px; }
+    .sp-model-option.selected {
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text);
+    }
+    .sp-model-option.selected .sp-model-option-sublabel {
+      color: var(--agi-ext-text-muted);
+      opacity: 1;
+    }
+    .sp-model-option-check { color: var(--agi-ext-accent); }
+    .sp-model-option-auto .sp-model-option-name,
+    .sp-model-option-auto:hover .sp-model-option-name {
+      color: var(--agi-ext-text);
+      font-weight: 400;
+      opacity: 1;
+    }
+    .sp-model-option-name { font-size: 13px; }
+    .sp-model-option-sublabel { font-size: 12px; }
+    .sp-model-group-header { font-size: 12px; text-transform: none; letter-spacing: 0; }
+    .sp-menu-heading {
+      padding: 9px 10px 3px;
+      margin-top: 4px;
+      border-top: 1px solid var(--agi-ext-border);
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+    }
+    .sp-menu-note {
+      padding: 4px 10px 8px;
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .sp-effort-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 32px;
+      padding: 6px 10px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .sp-effort-option:hover { background: var(--agi-ext-hover); }
+    .sp-effort-option:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-effort-option[aria-disabled='true'] { color: var(--agi-ext-text-muted); cursor: default; }
+    .sp-effort-option-label { flex: 1; min-width: 0; }
+    .sp-effort-option-badge {
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: var(--agi-ext-overlay);
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+    }
+    .sp-menu-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+      padding: 8px 10px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-menu-toggle-copy { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
+    .sp-menu-toggle-label { color: var(--agi-ext-text); font-size: 13px; cursor: pointer; }
+    .sp-menu-toggle-desc { color: var(--agi-ext-text-muted); font-size: 12px; line-height: 1.35; }
+    .sp-menu-toggle {
+      appearance: none;
+      position: relative;
+      width: 34px;
+      height: 20px;
+      flex-shrink: 0;
+      border: none;
+      border-radius: 999px;
+      background: var(--agi-ext-border-strong);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .sp-menu-toggle:checked { background: var(--agi-ext-accent); }
+    .sp-menu-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-menu-toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--agi-ext-on-accent);
+      transition: transform 0.15s;
+    }
+    .sp-menu-toggle:checked::after { transform: translateX(14px); }
+
+    #sp-recents {
+      position: fixed;
+      inset: 8px;
+      z-index: 240;
+      display: flex;
+      flex-direction: column;
+      padding: 6px 12px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 16px;
+      background: var(--agi-ext-surface);
+      box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
+    }
+    #sp-recents[hidden] { display: none; }
+    #sp-recents-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 2px 12px;
+    }
+    #sp-recents-title {
+      color: var(--agi-ext-text);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    #sp-recents-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 9px;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    #sp-recents-close:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    #sp-recents-close:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    #sp-recents #sp-drawer-history-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      max-height: none;
+    }
+    #sp-recents #sp-drawer-history-search { margin-bottom: 8px; font-size: 13px; }
+    .sp-drawer-history-bullet {
+      width: 6px;
+      height: 6px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      background: var(--agi-ext-accent);
+    }
+    .sp-drawer-history-open { min-height: 40px; gap: 10px; }
+    .sp-drawer-history-title { font-size: 13px; }
+    .sp-drawer-history-date { font-size: 12px; }
+
+    #sp-drawer-menu { display: flex; flex-direction: column; }
+    #sp-drawer-menu[hidden],
+    #sp-drawer-page[hidden],
+    .sp-drawer-group[hidden] { display: none; }
+    .sp-drawer-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 4px;
+      border: 0;
+      border-bottom: 1px solid var(--agi-ext-border);
+      background: transparent;
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: 14px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .sp-drawer-row:hover { background: var(--agi-ext-hover); }
+    .sp-drawer-row:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-drawer-row-label { flex: 1; min-width: 0; }
+    .sp-drawer-row-chevron { display: inline-flex; color: var(--agi-ext-text-muted); }
+    #sp-drawer-back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      transform: rotate(180deg);
+    }
+    #sp-drawer-back[hidden] { display: none; }
+    #sp-drawer-back:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    #sp-drawer-title { flex: 1; min-width: 0; }
+    .sp-drawer-section-title {
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 13px;
+    }
+    .sp-drawer-group > .sp-drawer-section:first-child { margin-top: 0; }
+
     @media (max-width: 390px) {
       #sp-header { padding-inline: 10px; }
-      #sp-title { display: none; }
-      #sp-quota-badge.visible {
+    #sp-quota-badge.visible {
         display: inline-flex;
         max-width: 38px;
         padding-inline: 4px;
@@ -4352,12 +4236,8 @@ function injectStyles(): void {
       #sp-messages { padding-inline: 11px; }
       #sp-input-area { padding-inline: 8px; }
       #sp-composer-shell { padding-inline: 9px; }
-      .sp-context-chip { max-width: 82px; }
-      #sp-effort-btn { max-width: 58px; }
     }
     @media (max-width: 340px) {
-      .sp-context-chip { max-width: 64px; text-overflow: ellipsis; overflow: hidden; }
-      #sp-effort-btn { max-width: 48px; padding-inline: 5px; }
       .sp-composer-controls-start,
       .sp-composer-controls-end { gap: 2px; }
     }
@@ -5133,15 +5013,18 @@ let contextBtn: HTMLButtonElement | null = null;
 
 function updateContextButton(): void {
   if (!contextBtn) return;
-  const hostname = currentPageHostname || 'page';
-  if (_ctx.pendingPageContext) {
-    contextBtn.classList.add('has-context');
-    contextBtn.title = t('spContextBtnAttached');
-    contextBtn.textContent = hostname;
-  } else {
-    contextBtn.classList.remove('has-context');
-    contextBtn.title = t('spContextBtnAttach');
-    contextBtn.textContent = hostname;
+  const attached = _ctx.pendingPageContext !== null;
+  const label = contextBtn.querySelector('.sp-attach-menu-label');
+  const check = contextBtn.querySelector('.sp-attach-menu-check');
+  contextBtn.classList.toggle('has-context', attached);
+  contextBtn.setAttribute('aria-checked', String(attached));
+  contextBtn.title = attached
+    ? t('spContextBtnAttached')
+    : currentPageHostname || t('spContextBtnAttach');
+  if (label) label.textContent = attached ? t('spContextItemAttached') : t('spContextItem');
+  if (check) {
+    clearChildren(check);
+    if (attached) check.appendChild(renderIcon(Check, 14));
   }
 }
 
@@ -5157,6 +5040,7 @@ function updateSendButton(): void {
   if (!btn) return;
   if (_ctx.isStreaming) {
     btn.disabled = false;
+    btn.hidden = false;
     btn.setAttribute('data-mode', 'stop');
     btn.title = t('spSendStop');
     btn.setAttribute('aria-label', t('spSendStopAria'));
@@ -5164,7 +5048,9 @@ function updateSendButton(): void {
     btn.appendChild(renderIcon(Square, 14));
   } else {
     const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
-    btn.disabled = !canAdmitComposerMessage(input?.value ?? '');
+    const text = input?.value ?? '';
+    btn.disabled = !canAdmitComposerMessage(text);
+    btn.hidden = text.trim().length === 0 && pendingAttachments.length === 0;
     btn.setAttribute('data-mode', 'send');
     btn.title = t('spSendSend');
     btn.setAttribute('aria-label', t('spSendSendAria'));
@@ -5461,9 +5347,7 @@ function setBlockedState(blocked: boolean): void {
   if (inputEl) {
     inputEl.disabled = !availability.chat || managedCloudChatState !== 'ready';
     if (managedCloudChatState === 'ready') {
-      inputEl.placeholder = availability.pageContext
-        ? t('spComposerPlaceholder')
-        : t('spComposerPlaceholderNoPageContext');
+      inputEl.placeholder = t('spComposerPlaceholder');
     }
   }
   updateContextButton();
@@ -5965,45 +5849,20 @@ function buildUI(): void {
   }
 
   const header = el('div', { id: 'sp-header' });
-  const headerLeft = el('div', { id: 'sp-header-left' });
-
-  const logoEl = el('div', { id: 'sp-logo' });
-  const logoSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AGI" role="img">
-    <line x1="12" y1="7.4" x2="12" y2="3" stroke="var(--agi-ext-brand,#da7756)" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="14.3" y1="8.016" x2="16.5" y2="4.206" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="15.984" y1="9.7" x2="19.794" y2="7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="16.6" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="15.984" y1="14.3" x2="19.794" y2="16.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="14.3" y1="15.984" x2="16.5" y2="19.794" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="12" y1="16.6" x2="12" y2="21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="9.7" y1="15.984" x2="7.5" y2="19.794" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="8.016" y1="14.3" x2="4.206" y2="16.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="7.4" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="8.016" y1="9.7" x2="4.206" y2="7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="9.7" y1="8.016" x2="7.5" y2="4.206" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-  </svg>`;
-  appendSvgString(logoEl, logoSvg);
-  headerLeft.appendChild(logoEl);
-
-  const titleWrap = el('div', {});
-  titleWrap.appendChild(el('div', { id: 'sp-title' }, 'AGI'));
-  headerLeft.appendChild(titleWrap);
 
   const modelSelectorWrap = el('div', { class: 'sp-model-selector-wrap' });
   const modelSelectorBtn = el('button', {
     id: 'sp-model-selector-btn',
     type: 'button',
-    'aria-label': 'Select model',
     'aria-haspopup': 'menu',
     'aria-expanded': 'false',
   });
   const modelBadge = document.createElement('span');
   modelBadge.id = 'sp-model-badge';
   modelBadge.textContent = t('spModelBadgeDefault');
-  const chevron = document.createElement('span');
-  chevron.className = 'sp-chevron';
-  chevron.replaceChildren(renderIcon(ChevronDown, 12));
-  modelSelectorBtn.replaceChildren(modelBadge, chevron);
+  const modelEffortBadge = document.createElement('span');
+  modelEffortBadge.id = 'sp-model-effort-badge';
+  modelSelectorBtn.replaceChildren(modelBadge, modelEffortBadge);
   const modelDropdownEl = el('div', {
     id: 'sp-model-dropdown',
     role: 'menu',
@@ -6093,15 +5952,11 @@ function buildUI(): void {
 
     const textBlock = el('div', { class: 'sp-model-option-text' });
     textBlock.appendChild(el('span', { class: 'sp-model-option-name' }, m.label));
-    if (m.capability) {
-      const capabilityLabel = getManagedCapabilityLabel(m);
-      if (capabilityLabel) {
-        textBlock.appendChild(el('span', { class: 'sp-model-option-sublabel' }, capabilityLabel));
-      }
-    } else if (isAuto) {
-      textBlock.appendChild(
-        el('span', { class: 'sp-model-option-sublabel' }, 'Automatic provider selection'),
-      );
+    const sublabel = isAuto
+      ? t('spModelAutoDescription')
+      : (m.description ?? getManagedCapabilityLabel(m));
+    if (sublabel) {
+      textBlock.appendChild(el('span', { class: 'sp-model-option-sublabel' }, sublabel));
     }
     opt.appendChild(textBlock);
 
@@ -6132,107 +5987,203 @@ function buildUI(): void {
     return opt;
   }
 
+  function currentEffortState() {
+    return getManagedEffortControlState(
+      _ctx.quickMode ? 'auto-economy' : _ctx.selectedModel,
+      _ctx.quickMode ? undefined : _ctx.currentModelKey,
+      _ctx.reasoningEffort,
+    );
+  }
+
+  function appendModelRows(options: ManagedModelPickerOption[]): void {
+    for (const option of options) {
+      modelDropdownEl.appendChild(buildModelOptionRow(option, _ctx.selectedModel === option.value));
+    }
+  }
+
+  function appendEffortSection(): void {
+    modelDropdownEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spEffortHeading')));
+    const state = currentEffortState();
+    if (state.status !== 'ready' || state.effort === undefined) {
+      const row = el('div', { class: 'sp-effort-option', 'aria-disabled': 'true' });
+      row.appendChild(el('span', { class: 'sp-effort-option-label' }, t('spEffortAuto')));
+      row.setAttribute('title', state.description);
+      modelDropdownEl.appendChild(row);
+      return;
+    }
+    const defaultEffort = state.modelId ? resolveModelEffort(state.modelId, undefined) : undefined;
+    for (const option of state.options) {
+      const isSelected = option === state.effort;
+      const row = el('button', {
+        class: 'sp-effort-option',
+        type: 'button',
+        role: 'menuitemradio',
+        'aria-checked': String(isSelected),
+      });
+      row.appendChild(el('span', { class: 'sp-effort-option-label' }, EFFORT_LABEL[option]));
+      if (option === defaultEffort) {
+        row.appendChild(el('span', { class: 'sp-effort-option-badge' }, t('spEffortDefaultBadge')));
+      }
+      const check = el('span', { class: 'sp-model-option-check' });
+      if (isSelected) check.appendChild(renderIcon(Check, 12));
+      row.appendChild(check);
+      row.addEventListener('click', () => {
+        _ctx.reasoningEffort = option;
+        renderModelDropdown();
+        refreshEffortUI();
+        saveMessages();
+      });
+      modelDropdownEl.appendChild(row);
+    }
+  }
+
+  function appendToggleRow(
+    id: string,
+    label: string,
+    description: string,
+    checked: boolean,
+    onChange: (next: boolean) => void,
+  ): void {
+    const row = el('div', { class: 'sp-menu-toggle-row' });
+    const copy = el('div', { class: 'sp-menu-toggle-copy' });
+    copy.appendChild(el('label', { class: 'sp-menu-toggle-label', for: id }, label));
+    copy.appendChild(el('span', { class: 'sp-menu-toggle-desc' }, description));
+    row.appendChild(copy);
+    const input = el('input', {
+      id,
+      class: 'sp-menu-toggle',
+      type: 'checkbox',
+      role: 'menuitemcheckbox',
+      'data-active': String(checked),
+      'aria-checked': String(checked),
+    }) as HTMLInputElement;
+    input.checked = checked;
+    input.setAttribute('aria-label', label);
+    input.addEventListener('change', () => onChange(input.checked));
+    row.appendChild(input);
+    modelDropdownEl.appendChild(row);
+  }
+
+  function applyQuickMode(next: boolean): void {
+    const previous = _ctx.quickMode;
+    _ctx.quickMode = next;
+    renderModelDropdown();
+    refreshEffortUI();
+    chrome.runtime
+      .sendMessage({ type: 'SET_QUICK_MODE', enabled: next })
+      .then((response: { success?: boolean } | undefined) => {
+        if (response?.success === true) return;
+        _ctx.quickMode = previous;
+        renderModelDropdown();
+        refreshEffortUI();
+      })
+      .catch(() => {
+        _ctx.quickMode = previous;
+        renderModelDropdown();
+        refreshEffortUI();
+      });
+  }
+
   function renderModelDropdown(): void {
     clearChildren(modelDropdownEl);
     const modelOptions = getManagedModelPickerOptions(managedModelAccess);
 
-    const pickerHeader = el('div', { class: 'sp-model-picker-header' });
-    pickerHeader.appendChild(el('span', { class: 'sp-model-picker-title' }, 'Select model'));
-    const providerCount = new Set(
-      modelOptions
-        .map((option) => option.provider)
-        .filter((provider): provider is string => Boolean(provider)),
-    ).size;
-    const providerCountLabel =
-      providerCount === 0
-        ? 'Sign in for models'
-        : `${providerCount} ${providerCount === 1 ? 'provider' : 'providers'}`;
-    pickerHeader.appendChild(el('span', { class: 'provider-count-badge' }, providerCountLabel));
-    modelDropdownEl.appendChild(pickerHeader);
-
-    const autoOpt = modelOptions.find((model) => model.value === 'auto');
-    if (autoOpt) {
-      modelDropdownEl.appendChild(buildModelOptionRow(autoOpt, _ctx.selectedModel === 'auto'));
+    const autoOption = modelOptions.find((option) => option.value === 'auto');
+    if (autoOption) {
+      modelDropdownEl.appendChild(buildModelOptionRow(autoOption, _ctx.selectedModel === 'auto'));
+    }
+    const { primary, more } = partitionManagedModelOptions(modelOptions);
+    appendModelRows(primary);
+    if (managedModelAccess === null) {
+      modelDropdownEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsSignedOut')));
     }
 
-    const nonAutoOptions = modelOptions.filter((model) => model.value !== 'auto');
+    appendEffortSection();
+    appendToggleRow(
+      'sp-quick-mode-toggle',
+      t('spQuickMode'),
+      t('spQuickModeDescription'),
+      _ctx.quickMode,
+      applyQuickMode,
+    );
+    appendToggleRow(
+      'sp-thinking-toggle',
+      t('spThinking'),
+      t('spThinkingDescription'),
+      _ctx.thinkingEnabled,
+      (next) => {
+        _ctx.thinkingEnabled = next;
+        chrome.storage.local.set({ agi_thinking_enabled: next }).catch(() => {});
+        renderModelDropdown();
+      },
+    );
+
+    if (more.length === 0) return;
+    modelDropdownEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spMoreModels')));
 
     const grouped = new Map<string, ManagedModelPickerOption[]>();
-    for (const m of nonAutoOptions) {
-      const provKey = m.provider ?? '__unknown__';
-      if (!grouped.has(provKey)) grouped.set(provKey, []);
-      grouped.get(provKey)!.push(m);
+    for (const option of more) {
+      const providerKey = option.provider ?? UNKNOWN_PROVIDER_KEY;
+      const bucket = grouped.get(providerKey);
+      if (bucket) bucket.push(option);
+      else grouped.set(providerKey, [option]);
     }
 
     const rendered = new Set<string>();
-    for (const pid of PROVIDER_GROUP_ORDER) {
-      const opts = grouped.get(pid);
-      if (!opts || opts.length === 0) continue;
-      rendered.add(pid);
-      const provDisplay = PROVIDER_DISPLAY[pid];
-      const headerLabel = provDisplay?.label ?? pid;
-      modelDropdownEl.appendChild(el('div', { class: 'sp-model-group-header' }, headerLabel));
-      for (const m of opts) {
-        modelDropdownEl.appendChild(buildModelOptionRow(m, _ctx.selectedModel === m.value));
-      }
-    }
-
-    for (const [provKey, opts] of grouped.entries()) {
-      if (rendered.has(provKey)) continue;
+    for (const providerId of PROVIDER_GROUP_ORDER) {
+      const options = grouped.get(providerId);
+      if (!options || options.length === 0) continue;
+      rendered.add(providerId);
       modelDropdownEl.appendChild(
         el(
           'div',
           { class: 'sp-model-group-header' },
-          provKey !== '__unknown__' ? provKey : 'Other',
+          PROVIDER_DISPLAY[providerId]?.label ?? providerId,
         ),
       );
-      for (const m of opts) {
-        modelDropdownEl.appendChild(buildModelOptionRow(m, _ctx.selectedModel === m.value));
-      }
+      appendModelRows(options);
     }
-
-    const toggleRow = el('div', { class: 'sp-thinking-toggle-row' });
-    const toggleLabel = el(
-      'label',
-      {
-        class: `sp-thinking-toggle-label${_ctx.thinkingEnabled ? ' active' : ''}`,
-        for: 'sp-thinking-toggle',
-      },
-      'Extended thinking',
-    );
-    const toggleInput = el('input', {
-      id: 'sp-thinking-toggle',
-      class: 'sp-thinking-toggle',
-      type: 'checkbox',
-      role: 'menuitemcheckbox',
-      'aria-label': 'Extended thinking',
-      'aria-checked': String(_ctx.thinkingEnabled),
-    }) as HTMLInputElement;
-    toggleInput.checked = _ctx.thinkingEnabled;
-    toggleInput.addEventListener('change', () => {
-      _ctx.thinkingEnabled = toggleInput.checked;
-      toggleInput.setAttribute('aria-checked', String(_ctx.thinkingEnabled));
-      chrome.storage.local.set({ agi_thinking_enabled: _ctx.thinkingEnabled }).catch(() => {});
-      if (_ctx.thinkingEnabled) {
-        toggleLabel.classList.add('active');
-      } else {
-        toggleLabel.classList.remove('active');
-      }
-    });
-    toggleRow.appendChild(toggleLabel);
-    toggleRow.appendChild(toggleInput);
-    modelDropdownEl.appendChild(toggleRow);
+    for (const [providerKey, options] of grouped.entries()) {
+      if (rendered.has(providerKey)) continue;
+      modelDropdownEl.appendChild(
+        el(
+          'div',
+          { class: 'sp-model-group-header' },
+          providerKey === UNKNOWN_PROVIDER_KEY ? t('spModelsOtherProvider') : providerKey,
+        ),
+      );
+      appendModelRows(options);
+    }
   }
-  refreshModelPickerUI = () => {
+  function renderModelTrigger(): void {
     updateModelBadge(_ctx.selectedModel);
+    const state = currentEffortState();
+    const effortLabel =
+      state.status === 'ready' && state.effort !== undefined
+        ? EFFORT_LABEL[state.effort]
+        : t('spEffortAuto');
+    modelEffortBadge.textContent = effortLabel;
+    modelSelectorBtn.title = state.description;
+    modelSelectorBtn.setAttribute(
+      'aria-label',
+      t('spModelMenuAria', [getModelBadgeLabel(_ctx.selectedModel), effortLabel]),
+    );
+  }
+  refreshEffortUI = renderModelTrigger;
+
+  refreshModelPickerUI = () => {
     renderModelDropdown();
-    refreshEffortUI();
+    renderModelTrigger();
   };
   function positionModelDropdown(): void {
     const trigger = modelSelectorBtn.getBoundingClientRect();
-    const menuWidth = Math.min(232, window.innerWidth - 24);
-    const left = Math.max(12, Math.min(trigger.left, window.innerWidth - menuWidth - 12));
     const viewportPadding = 12;
+    modelDropdownEl.style.maxWidth = `${window.innerWidth - viewportPadding * 2}px`;
+    const menuWidth = modelDropdownEl.getBoundingClientRect().width;
+    const left = Math.max(
+      viewportPadding,
+      Math.min(trigger.left, window.innerWidth - menuWidth - viewportPadding),
+    );
     const gap = 6;
     const availableBelow = Math.max(0, window.innerHeight - trigger.bottom - viewportPadding);
     const availableAbove = Math.max(0, trigger.top - viewportPadding);
@@ -6264,7 +6215,7 @@ function buildUI(): void {
   modelDropdownEl.addEventListener('keydown', (event: KeyboardEvent) => {
     const options = Array.from(
       modelDropdownEl.querySelectorAll<HTMLElement>(
-        '.sp-model-option:not(:disabled), .sp-thinking-toggle:not(:disabled)',
+        '.sp-model-option:not(:disabled), .sp-effort-option:not(:disabled), .sp-menu-toggle:not(:disabled)',
       ),
     );
     if (event.key === 'Escape') {
@@ -6309,13 +6260,11 @@ function buildUI(): void {
     if (storedThinking !== undefined) {
       _ctx.thinkingEnabled = storedThinking;
     }
-    updateModelBadge(_ctx.selectedModel);
     renderModelDropdown();
+    renderModelTrigger();
   });
   modelSelectorWrap.appendChild(modelSelectorBtn);
   modelSelectorWrap.appendChild(modelDropdownEl);
-  headerLeft.appendChild(modelSelectorWrap);
-  header.appendChild(headerLeft);
 
   const headerRight = el('div', { id: 'sp-header-right' });
 
@@ -6422,15 +6371,13 @@ function buildUI(): void {
   });
 
   function formatHistoryDate(ts: number): string {
-    const d = new Date(ts);
-    const now = new Date();
-    const sameDay =
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate();
-    return sameDay
-      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const elapsedMs = ts - Date.now();
+    for (const step of RELATIVE_TIME_STEPS) {
+      if (Math.abs(elapsedMs) >= step.ms || step.unit === 'minute') {
+        return RELATIVE_TIME_FORMAT.format(Math.round(elapsedMs / step.ms), step.unit);
+      }
+    }
+    return '';
   }
 
   async function restoreHistoryEntry(conversationId: string): Promise<boolean> {
@@ -6475,7 +6422,6 @@ function buildUI(): void {
       adoptChatProject(entry.projectId);
       if (conversationOwner.forked) _ctx.pendingProjectBinding = entry.projectId ?? null;
       activePersistenceEntry = conversationOwner.forked ? undefined : entry;
-      updatePersistencePill();
       _ctx.selectedModel = normalizeModelId(entry.routing.selectedModel) ?? 'auto';
       _ctx.currentModelKey = entry.routing.currentModelKey;
       _ctx.previousTaskType = entry.routing.previousTaskType;
@@ -6568,14 +6514,8 @@ function buildUI(): void {
     drawerOverlay.classList.add('open');
     drawer.classList.add('open');
     drawer.removeAttribute('inert');
-    void refreshDrawerPairingState();
-    void refreshDrawerAllowlist();
-    void refreshDrawerMemory();
-    void projectsDrawer.refresh();
-    void artifactsDrawer.refresh();
+    showDrawerMenu();
     void refreshDrawerStats();
-    void refreshDrawerTabInfo();
-    refreshTabGroupUI();
     drawerClose.focus();
   }
   function closeDrawer(): void {
@@ -6619,17 +6559,56 @@ function buildUI(): void {
   });
 
   const drawerHeader = el('div', { id: 'sp-drawer-header' });
-  drawerHeader.appendChild(el('div', { id: 'sp-drawer-title' }, 'AGI in Chrome'));
-  const drawerClose = el('button', { id: 'sp-drawer-close', 'aria-label': 'Close AGI menu' });
+  const drawerBack = el('button', { id: 'sp-drawer-back', type: 'button', hidden: '' });
+  drawerBack.setAttribute('aria-label', t('spMenuBack'));
+  drawerBack.appendChild(renderIcon(ChevronRight, 14));
+  drawerHeader.appendChild(drawerBack);
+  const drawerTitle = el('div', { id: 'sp-drawer-title' }, t('spMenuTitle'));
+  drawerHeader.appendChild(drawerTitle);
+  const drawerClose = el('button', { id: 'sp-drawer-close' });
+  drawerClose.setAttribute('aria-label', t('spMenuClose'));
   drawerClose.appendChild(renderIcon(X, 14));
   drawerClose.addEventListener('click', closeDrawer);
   drawerHeader.appendChild(drawerClose);
   drawer.appendChild(drawerHeader);
 
   const drawerBody = el('div', { id: 'sp-drawer-body' });
+  const drawerMenu = el('div', { id: 'sp-drawer-menu', role: 'menu' });
+  drawerMenu.setAttribute('aria-label', t('spMenuTitle'));
+  const drawerPage = el('div', { id: 'sp-drawer-page', hidden: '' });
+  drawerBody.appendChild(drawerMenu);
+  drawerBody.appendChild(drawerPage);
+
+  interface DrawerGroup {
+    label: string;
+    body: HTMLElement;
+    refresh?: () => void;
+  }
+  const drawerGroups: DrawerGroup[] = [];
+  function drawerGroupBody(label: string, refresh?: () => void): HTMLElement {
+    const body = el('div', { class: 'sp-drawer-group', hidden: '' });
+    drawerGroups.push(refresh ? { label, body, refresh } : { label, body });
+    drawerPage.appendChild(body);
+    return body;
+  }
+  function showDrawerMenu(): void {
+    for (const group of drawerGroups) group.body.hidden = true;
+    drawerPage.hidden = true;
+    drawerMenu.hidden = false;
+    drawerBack.hidden = true;
+    drawerTitle.textContent = t('spMenuTitle');
+  }
+  function openDrawerGroup(group: DrawerGroup): void {
+    for (const entry of drawerGroups) entry.body.hidden = entry !== group;
+    drawerMenu.hidden = true;
+    drawerPage.hidden = false;
+    drawerBack.hidden = false;
+    drawerTitle.textContent = group.label;
+    group.refresh?.();
+  }
+  drawerBack.addEventListener('click', showDrawerMenu);
 
   const chatActionsSection = el('div', { class: 'sp-drawer-section' });
-  chatActionsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Chat'));
   const chatActionsRow = el('div', { class: 'sp-drawer-tools-row' });
 
   const drawerHistoryBtn = el('button', {
@@ -6640,7 +6619,7 @@ function buildUI(): void {
   drawerHistoryBtn.appendChild(renderIcon(Clock, 13));
   drawerHistoryBtn.appendChild(document.createTextNode(' History'));
 
-  const drawerHistoryList = el('div', { id: 'sp-drawer-history-list', hidden: '' });
+  const drawerHistoryList = el('div', { id: 'sp-drawer-history-list' });
   const drawerHistorySearch = el('input', {
     id: 'sp-drawer-history-search',
     type: 'search',
@@ -6660,6 +6639,7 @@ function buildUI(): void {
 
   function renderDrawerHistory(entries: ConversationEntry[]): void {
     clearChildren(drawerHistoryList);
+    drawerHistorySearch.hidden = entries.length <= RECENTS_SEARCH_THRESHOLD;
     const filteredEntries = filterConversations(entries, drawerHistorySearch.value);
     if (filteredEntries.length === 0) {
       const emptyLabel =
@@ -6688,6 +6668,7 @@ function buildUI(): void {
       badge.appendChild(renderIcon(persistence.cloudIcon ? Globe : Monitor, 12));
       openButton.appendChild(badge);
 
+      openButton.appendChild(el('span', { class: 'sp-drawer-history-bullet' }));
       const textCol = el('div', { class: 'sp-drawer-history-text' });
       const title = el('div', { class: 'sp-drawer-history-title' }, entry.title);
       const date = el('div', { class: 'sp-drawer-history-date' }, formatHistoryDate(entry.savedAt));
@@ -6756,7 +6737,7 @@ function buildUI(): void {
         void openStoredConversation(entry.id).then((opened) => {
           if (opened) {
             drawerHistoryError.setAttribute('hidden', '');
-            closeDrawer();
+            closeRecents();
             return;
           }
           drawerHistoryError.textContent = _ctx.isStreaming
@@ -6780,28 +6761,12 @@ function buildUI(): void {
   });
 
   drawerHistoryBtn.addEventListener('click', () => {
-    const isHidden = drawerHistoryList.hasAttribute('hidden');
-    if (isHidden) {
-      drawerHistoryList.removeAttribute('hidden');
-      drawerHistorySearch.removeAttribute('hidden');
-      refreshDrawerHistory()
-        .then(() => drawerHistorySearch.focus())
-        .catch((err) => console.warn('[SidePanel] history list failed:', err));
-    } else {
-      drawerHistoryList.setAttribute('hidden', '');
-      drawerHistorySearch.setAttribute('hidden', '');
-    }
+    closeDrawer();
+    openRecents();
   });
   chatActionsRow.appendChild(drawerHistoryBtn);
 
-  historyBtn.addEventListener('click', () => {
-    openDrawer(historyBtn);
-    drawerHistoryList.removeAttribute('hidden');
-    drawerHistorySearch.removeAttribute('hidden');
-    refreshDrawerHistory()
-      .then(() => drawerHistorySearch.focus())
-      .catch((err) => console.warn('[SidePanel] history list failed:', err));
-  });
+  historyBtn.addEventListener('click', openRecents);
 
   const drawerSummarizeBtn = el('button', {
     class: 'sp-drawer-tool-btn',
@@ -6817,14 +6782,48 @@ function buildUI(): void {
   chatActionsRow.appendChild(drawerSummarizeBtn);
 
   chatActionsSection.appendChild(chatActionsRow);
-  chatActionsSection.appendChild(drawerHistorySearch);
-  chatActionsSection.appendChild(drawerHistoryError);
-  chatActionsSection.appendChild(drawerHistoryList);
 
-  drawerBody.appendChild(chatActionsSection);
+  const recentsSheet = el('div', { id: 'sp-recents', role: 'dialog', 'aria-modal': 'true' });
+  recentsSheet.hidden = true;
+  recentsSheet.setAttribute('aria-label', t('spRecentsTitle'));
+  const recentsHeader = el('div', { id: 'sp-recents-header' });
+  recentsHeader.appendChild(el('div', { id: 'sp-recents-title' }, t('spRecentsTitle')));
+  const recentsClose = el('button', { id: 'sp-recents-close', type: 'button' });
+  recentsClose.setAttribute('aria-label', t('spRecentsClose'));
+  recentsClose.appendChild(renderIcon(X, 14));
+  recentsHeader.appendChild(recentsClose);
+  recentsSheet.appendChild(recentsHeader);
+  recentsSheet.appendChild(drawerHistorySearch);
+  recentsSheet.appendChild(drawerHistoryError);
+  recentsSheet.appendChild(drawerHistoryList);
+  document.body.appendChild(recentsSheet);
+
+  function closeRecents(): void {
+    if (recentsSheet.hidden) return;
+    recentsSheet.hidden = true;
+    historyBtn.focus();
+  }
+  function openRecents(): void {
+    recentsSheet.hidden = false;
+    drawerHistoryError.setAttribute('hidden', '');
+    void refreshDrawerHistory()
+      .then(() => {
+        if (!drawerHistorySearch.hidden) drawerHistorySearch.focus();
+        else recentsClose.focus();
+      })
+      .catch(() => recentsClose.focus());
+  }
+  recentsClose.addEventListener('click', closeRecents);
+  recentsSheet.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeRecents();
+  });
+
+  const chatGroupBody = drawerGroupBody(t('spMenuChat'));
+  chatGroupBody.appendChild(chatActionsSection);
 
   const viewsSection = el('div', { class: 'sp-drawer-section' });
-  viewsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Automate'));
 
   const wfLaunchBtn = el('button', {
     class: 'sp-drawer-launcher-btn',
@@ -6909,19 +6908,23 @@ function buildUI(): void {
     switchTab('page');
   });
   viewsSection.appendChild(pageLaunchBtn);
-  drawerBody.appendChild(viewsSection);
+  const automateGroupBody = drawerGroupBody(t('spMenuAutomate'));
+  automateGroupBody.appendChild(viewsSection);
 
   const projectsDrawer: ProjectsDrawerAPI = buildProjectsDrawerSection({
     getActiveProject: () => _ctx.activeProject,
     setActiveProject: (project) => selectActiveProject(project),
   });
-  drawerBody.appendChild(projectsDrawer.sectionEl);
+  drawerGroupBody(t('spMenuProjects'), () => {
+    void projectsDrawer.refresh();
+  }).appendChild(projectsDrawer.sectionEl);
 
   const artifactsDrawer: ArtifactsDrawerAPI = buildArtifactsDrawerSection();
-  drawerBody.appendChild(artifactsDrawer.sectionEl);
+  drawerGroupBody(t('spMenuArtifacts'), () => {
+    void artifactsDrawer.refresh();
+  }).appendChild(artifactsDrawer.sectionEl);
 
   const toolsSection = el('div', { class: 'sp-drawer-section' });
-  toolsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Tools'));
   const toolsRow = el('div', { class: 'sp-drawer-tools-row' });
 
   const drawerCaptureBtn = el('button', {
@@ -7037,10 +7040,13 @@ function buildUI(): void {
   toolsRow.appendChild(drawerOptionsBtn);
 
   toolsSection.appendChild(toolsRow);
-  drawerBody.appendChild(toolsSection);
+  const toolsGroupBody = drawerGroupBody(t('spMenuTools'), () => {
+    void refreshDrawerTabInfo();
+    refreshTabGroupUI();
+  });
+  toolsGroupBody.appendChild(toolsSection);
 
   const pairingSection = el('div', { class: 'sp-drawer-section' });
-  pairingSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Desktop Pairing'));
 
   const pairingRow = el('div', { class: 'sp-drawer-pairing-row' });
   const pairingLabel = el(
@@ -7240,7 +7246,9 @@ function buildUI(): void {
   pairingBtnRow.appendChild(drawerPairBtn);
   pairingBtnRow.appendChild(drawerUnpairBtn);
   pairingSection.appendChild(pairingBtnRow);
-  drawerBody.appendChild(pairingSection);
+  drawerGroupBody(t('spMenuPairing'), () => {
+    void refreshDrawerPairingState();
+  }).appendChild(pairingSection);
 
   async function refreshDrawerPairingState(): Promise<void> {
     const state = await loadPairingState();
@@ -7295,7 +7303,11 @@ function buildUI(): void {
     el('div', { class: 'sp-drawer-toggle-status' }, t('spPageAssistantOneShot')),
   );
   inPageSection.appendChild(inPageToggleStatus);
-  drawerBody.appendChild(inPageSection);
+  const settingsGroupBody = drawerGroupBody(t('spMenuSettings'), () => {
+    void refreshDrawerAllowlist();
+    void refreshDrawerMemory();
+  });
+  settingsGroupBody.appendChild(inPageSection);
 
   const dictationSection = el('div', { class: 'sp-drawer-section' });
   dictationSection.appendChild(
@@ -7350,7 +7362,7 @@ function buildUI(): void {
       dictationSelect.disabled = false;
     }
   });
-  drawerBody.appendChild(dictationSection);
+  settingsGroupBody.appendChild(dictationSection);
 
   const allowlistSection = el('div', { class: 'sp-drawer-section' });
   allowlistSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));
@@ -7396,7 +7408,7 @@ function buildUI(): void {
   );
   allowlistSection.appendChild(allowlistList);
   allowlistSection.appendChild(allowlistEmpty);
-  drawerBody.appendChild(allowlistSection);
+  settingsGroupBody.appendChild(allowlistSection);
 
   async function drawerReadAllowlist(): Promise<string[]> {
     try {
@@ -7581,7 +7593,7 @@ function buildUI(): void {
   memorySection.appendChild(memoryEmpty);
   memorySection.appendChild(memoryStatus);
   memorySection.appendChild(memoryRetryBtn);
-  drawerBody.appendChild(memorySection);
+  settingsGroupBody.appendChild(memorySection);
 
   type DrawerMemoryMessageType = 'LIST_MEMORIES' | 'ADD_MEMORY' | 'UPDATE_MEMORY' | 'DELETE_MEMORY';
   async function sendDrawerMemoryMsg(
@@ -7825,7 +7837,7 @@ function buildUI(): void {
   bridgeSection.appendChild(drawerBridgeRow);
   const drawerBridgeError = el('div', { class: 'sp-drawer-bridge-error', hidden: '' });
   bridgeSection.appendChild(drawerBridgeError);
-  drawerBody.appendChild(bridgeSection);
+  settingsGroupBody.appendChild(bridgeSection);
 
   function drawerSaveBridgeUrl(): void {
     const raw = (drawerBridgeInput as HTMLInputElement).value.trim();
@@ -7976,9 +7988,7 @@ function buildUI(): void {
   });
   const connectAppsBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Connect apps');
   connectAppsBtn.addEventListener('click', () => {
-    void chrome.tabs.create({
-      url: 'https://agiworkforce.com/connectors?from=chrome-extension',
-    });
+    void chrome.tabs.create({ url: CONNECTORS_URL });
   });
   const teamsBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Team & Enterprise');
   teamsBtn.addEventListener('click', () => {
@@ -7990,7 +8000,7 @@ function buildUI(): void {
   cloudAccountEl.appendChild(cloudLinkHint);
   cloudAccountEl.appendChild(cloudLinkRow);
   cloudSection.appendChild(cloudAccountEl);
-  drawerBody.appendChild(cloudSection);
+  settingsGroupBody.appendChild(cloudSection);
 
   let drawerCloudModal: ReturnType<typeof mountInviteCodeModal> | null = null;
   const inviteCodeSection = el('div', { class: 'sp-drawer-section' });
@@ -8015,7 +8025,17 @@ function buildUI(): void {
     }
   });
   inviteCodeSection.appendChild(drawerCloudBtn);
-  drawerBody.appendChild(inviteCodeSection);
+  settingsGroupBody.appendChild(inviteCodeSection);
+
+  for (const group of drawerGroups) {
+    const row = el('button', { class: 'sp-drawer-row', type: 'button', role: 'menuitem' });
+    row.appendChild(el('span', { class: 'sp-drawer-row-label' }, group.label));
+    const rowChevron = el('span', { class: 'sp-drawer-row-chevron' });
+    rowChevron.appendChild(renderIcon(ChevronRight, 14));
+    row.appendChild(rowChevron);
+    row.addEventListener('click', () => openDrawerGroup(group));
+    drawerMenu.appendChild(row);
+  }
 
   const quotaBadgeEl = el('button', {
     id: 'sp-quota-badge',
@@ -8578,14 +8598,6 @@ function buildUI(): void {
   </svg>`;
   appendSvgString(emptyIcon, emptyIconSvg);
   emptyState.appendChild(emptyIcon);
-  emptyState.appendChild(el('div', { id: 'sp-empty-headline' }, 'How can I help you today?'));
-  emptyState.appendChild(
-    el(
-      'div',
-      { id: 'sp-empty-subtext' },
-      'Ask a question, summarize a page, or type / for commands.',
-    ),
-  );
   msgsArea.appendChild(emptyState);
 
   const blockedState = el('div', {
@@ -8624,18 +8636,13 @@ function buildUI(): void {
   shield.appendChild(shieldLine);
   shield.appendChild(shieldCircle);
   blockedState.appendChild(shield);
-  const blockedCopy = el('div', { class: 'sp-blocked-copy' });
-  blockedCopy.appendChild(
-    createElementWith({ tag: 'div', id: 'sp-blocked-title', text: 'Page access unavailable' }),
-  );
-  blockedCopy.appendChild(
+  blockedState.appendChild(
     createElementWith({
-      tag: 'div',
+      tag: 'span',
       id: 'sp-blocked-desc',
-      text: "You can still chat, but AGI can't read or automate browser-internal pages.",
+      text: 'AGI cannot read or automate browser-internal pages.',
     }),
   );
-  blockedState.appendChild(blockedCopy);
   msgsArea.appendChild(blockedState);
 
   chatPanel.appendChild(msgsArea);
@@ -9701,11 +9708,12 @@ function buildUI(): void {
 
   const screenshotItem = el('button', {
     class: 'sp-attach-menu-item',
+    id: 'sp-attach-screenshot-item',
     type: 'button',
     role: 'menuitem',
   });
   screenshotItem.appendChild(renderIcon(Camera, 16));
-  screenshotItem.appendChild(document.createTextNode('Take a screenshot'));
+  screenshotItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, 'Take a screenshot'));
   screenshotItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
@@ -9738,11 +9746,12 @@ function buildUI(): void {
 
   const fileItem = el('button', {
     class: 'sp-attach-menu-item',
+    id: 'sp-attach-file-item',
     type: 'button',
     role: 'menuitem',
   });
   fileItem.appendChild(renderIcon(FileImage, 16));
-  fileItem.appendChild(document.createTextNode('Add an image'));
+  fileItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, 'Add an image'));
   const fileInput = el('input', {
     type: 'file',
     accept: COMPOSER_ATTACHMENT_ACCEPT,
@@ -9761,8 +9770,57 @@ function buildUI(): void {
     fileInput.click();
   });
 
-  attachMenu.appendChild(screenshotItem);
-  attachMenu.appendChild(fileItem);
+  contextBtn = el('button', {
+    class: 'sp-attach-menu-item',
+    id: 'sp-context-item',
+    type: 'button',
+    role: 'menuitemcheckbox',
+    'aria-checked': 'false',
+  }) as HTMLButtonElement;
+  contextBtn.appendChild(renderIcon(Globe, 16));
+  const contextItemLabel = el('span', { class: 'sp-attach-menu-label' }, t('spContextItem'));
+  contextBtn.appendChild(contextItemLabel);
+  const contextItemCheck = el('span', { class: 'sp-attach-menu-check' });
+  contextBtn.appendChild(contextItemCheck);
+  contextBtn.addEventListener('click', async () => {
+    const chip = contextBtn!;
+    if (_ctx.pendingPageContext) {
+      clearPendingPageContext();
+      updateContextButton();
+      return;
+    }
+    contextItemLabel.textContent = t('spContextChipCapturing');
+    chip.disabled = true;
+    const capture = await capturePageContext();
+    chip.disabled = false;
+    if (capture.ok) {
+      _ctx.pendingPageContext = capture.text;
+      _ctx.pendingPageContextSource = capture.source;
+      composerContextNotice = null;
+    } else {
+      composerContextNotice = capture.reason;
+    }
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    updateAttachmentPreview();
+    updateContextButton();
+  });
+
+  const connectorsItem = el('button', {
+    class: 'sp-attach-menu-item',
+    type: 'button',
+    role: 'menuitem',
+  });
+  connectorsItem.appendChild(renderIcon(Plug, 16));
+  connectorsItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spConnectors')));
+  connectorsItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    void chrome.tabs.create({ url: CONNECTORS_URL });
+  });
+
+  const attachMenuItems = [fileItem, screenshotItem, contextBtn, connectorsItem];
+  for (const item of attachMenuItems) attachMenu.appendChild(item);
   attachWrapper.appendChild(attachMenu);
   attachWrapper.appendChild(attachBtn);
   attachWrapper.appendChild(fileInput);
@@ -9771,10 +9829,10 @@ function buildUI(): void {
     e.stopPropagation();
     const isOpen = attachMenu.classList.toggle('open');
     attachBtn.setAttribute('aria-expanded', String(isOpen));
-    if (isOpen) screenshotItem.focus();
+    if (isOpen) fileItem.focus();
   });
   attachMenu.addEventListener('keydown', (event: KeyboardEvent) => {
-    const items = [screenshotItem, fileItem];
+    const items = attachMenuItems;
     if (event.key === 'Escape') {
       event.preventDefault();
       attachMenu.classList.remove('open');
@@ -9821,38 +9879,6 @@ function buildUI(): void {
   composerBar.appendChild(composerBarStart);
   composerBar.appendChild(composerBarEnd);
   composerBarStart.appendChild(attachWrapper);
-  contextBtn = el('button', {
-    class: 'sp-context-chip',
-    id: 'sp-context-chip',
-    title: 'Attach page content to next message',
-  });
-  contextBtn.textContent = currentPageHostname || t('spContextChipFallback');
-  contextBtn.addEventListener('click', async () => {
-    if (_ctx.pendingPageContext) {
-      clearPendingPageContext();
-      updateContextButton();
-      return;
-    }
-    const chip = contextBtn!;
-    const prevText = chip.textContent ?? '';
-    chip.textContent = t('spContextChipCapturing');
-    chip.classList.add('loading');
-    chip.disabled = true;
-    const capture = await capturePageContext();
-    chip.disabled = false;
-    chip.classList.remove('loading');
-    if (capture.ok) {
-      _ctx.pendingPageContext = capture.text;
-      _ctx.pendingPageContextSource = capture.source;
-      composerContextNotice = null;
-    } else {
-      chip.textContent = prevText;
-      composerContextNotice = capture.reason;
-    }
-    updateAttachmentPreview();
-    updateContextButton();
-  });
-  composerBarStart.appendChild(contextBtn);
 
   const autonomyChip = el('button', {
     class: 'sp-autonomy-chip',
@@ -9861,9 +9887,9 @@ function buildUI(): void {
     'aria-haspopup': 'menu',
     'aria-expanded': 'false',
   }) as HTMLButtonElement;
-  const autonomyLabel = el('span', { id: 'sp-autonomy-label' });
-  autonomyChip.appendChild(renderIcon(Shield, 11));
-  autonomyChip.appendChild(autonomyLabel);
+  const autonomyIcon = el('span', { id: 'sp-autonomy-icon' });
+  autonomyIcon.appendChild(renderIcon(Shield, 15));
+  autonomyChip.appendChild(autonomyIcon);
 
   const autonomyControl = el('div', { class: 'sp-autonomy-control' });
   const autonomyPopover = el('div', {
@@ -9871,7 +9897,6 @@ function buildUI(): void {
     role: 'menu',
     'aria-label': 'Browser action approvals',
   });
-  const autonomyHeading = el('div', { class: 'sp-autonomy-heading' }, 'Browser actions');
   const askFirstOption = el('button', {
     class: 'sp-autonomy-option',
     type: 'button',
@@ -9880,8 +9905,10 @@ function buildUI(): void {
   askFirstOption.appendChild(renderIcon(Shield, 15));
   const askFirstCopy = el('span', { class: 'sp-autonomy-option-copy' });
   askFirstCopy.appendChild(el('strong', {}, t('spAutonomyAskFirst')));
-  askFirstCopy.appendChild(el('small', {}, 'Review browser actions before they run'));
+  askFirstCopy.appendChild(el('small', {}, t('spAutonomyAskFirstDescription')));
   askFirstOption.appendChild(askFirstCopy);
+  const askFirstCheck = el('span', { class: 'sp-autonomy-option-check' });
+  askFirstOption.appendChild(askFirstCheck);
   const fullAccessOption = el('button', {
     class: 'sp-autonomy-option sp-autonomy-option-warning',
     type: 'button',
@@ -9890,13 +9917,15 @@ function buildUI(): void {
   fullAccessOption.appendChild(renderIcon(Zap, 15));
   const fullAccessCopy = el('span', { class: 'sp-autonomy-option-copy' });
   fullAccessCopy.appendChild(el('strong', {}, t('spAutonomyFullAccess')));
-  fullAccessCopy.appendChild(el('small', {}, 'Allow actions on approved sites without asking'));
+  fullAccessCopy.appendChild(el('small', {}, t('spAutonomyFullAccessDescription')));
   fullAccessOption.appendChild(fullAccessCopy);
-  autonomyPopover.appendChild(autonomyHeading);
+  const fullAccessCheck = el('span', { class: 'sp-autonomy-option-check' });
+  fullAccessOption.appendChild(fullAccessCheck);
   autonomyPopover.appendChild(askFirstOption);
   autonomyPopover.appendChild(fullAccessOption);
   autonomyControl.appendChild(autonomyChip);
   autonomyControl.appendChild(autonomyPopover);
+  composerBarStart.appendChild(autonomyControl);
 
   function closeAutonomyPopover(returnFocus = false): void {
     autonomyPopover.classList.remove('open');
@@ -9907,7 +9936,9 @@ function buildUI(): void {
 
   function renderAutonomyChip(askFirst: boolean): void {
     autonomyChip.setAttribute('data-mode', askFirst ? 'ask' : 'full');
-    autonomyLabel.textContent = askFirst ? t('spAutonomyAskFirst') : t('spAutonomyFullAccess');
+    clearChildren(askFirstCheck);
+    clearChildren(fullAccessCheck);
+    (askFirst ? askFirstCheck : fullAccessCheck).appendChild(renderIcon(Check, 12));
     autonomyChip.title = askFirst
       ? t('spAutonomyAskFirstTooltip')
       : t('spAutonomyFullAccessTooltip');
@@ -9975,207 +10006,15 @@ function buildUI(): void {
     renderAutonomyChip(change.newValue !== false);
   });
 
-  const effortControl = el('div', { id: 'sp-effort-control' });
-  const effortButton = el('button', {
-    id: 'sp-effort-btn',
-    type: 'button',
-    'aria-haspopup': 'dialog',
-    'aria-expanded': 'false',
-  }) as HTMLButtonElement;
-  const effortButtonLabel = el('span', { id: 'sp-effort-btn-label' });
-  effortButton.appendChild(effortButtonLabel);
-  const effortPopover = el('div', {
-    id: 'sp-effort-popover',
-    role: 'dialog',
-    'aria-label': 'Reasoning effort',
-    tabindex: '-1',
-  });
-  const effortHeading = el('div', { class: 'sp-effort-heading' });
-  effortHeading.appendChild(el('span', {}, 'Reasoning effort'));
-  const effortValue = el('span', { id: 'sp-effort-value' });
-  effortHeading.appendChild(effortValue);
-  const effortSlider = el('input', {
-    id: 'sp-effort-slider',
-    type: 'range',
-    min: '0',
-    max: '0',
-    step: '1',
-    value: '0',
-    'aria-label': 'Reasoning effort',
-  }) as HTMLInputElement;
-  const effortScale = el('div', { id: 'sp-effort-scale' });
-  const effortDescription = el('div', { id: 'sp-effort-description' });
-  effortPopover.appendChild(effortHeading);
-  effortPopover.appendChild(effortSlider);
-  effortPopover.appendChild(effortScale);
-  effortPopover.appendChild(effortDescription);
-  effortControl.appendChild(effortButton);
-  effortControl.appendChild(effortPopover);
-
-  function renderEffortControl(): void {
-    const routingSelection = _ctx.quickMode ? 'auto-economy' : _ctx.selectedModel;
-    const state = getManagedEffortControlState(
-      routingSelection,
-      _ctx.quickMode ? undefined : _ctx.currentModelKey,
-      _ctx.reasoningEffort,
-    );
-    const ready = state.status === 'ready' && state.effort !== undefined;
-    const valueLabel = ready
-      ? EFFORT_LABEL[state.effort!]
-      : state.status === 'awaiting-route'
-        ? t('spEffortAuto')
-        : t('spEffortUnavailable');
-
-    effortButtonLabel.textContent = t('spEffortButton', [valueLabel]);
-    effortButton.title = state.description;
-    effortButton.dataset['disabled'] = String(!ready);
-    effortButton.setAttribute(
-      'aria-label',
-      ready
-        ? t('spEffortAriaReady', [valueLabel])
-        : t('spEffortAriaUnavailable', [state.description]),
-    );
-    effortValue.textContent = valueLabel;
-    effortDescription.textContent = state.description;
-    effortSlider.disabled = !ready;
-    effortSlider.min = '0';
-    effortSlider.max = String(Math.max(0, state.options.length - 1));
-    const selectedIndex = ready ? Math.max(0, state.options.indexOf(state.effort!)) : 0;
-    effortSlider.value = String(selectedIndex);
-    effortSlider.setAttribute('aria-valuemin', '0');
-    effortSlider.setAttribute('aria-valuemax', effortSlider.max);
-    effortSlider.setAttribute('aria-valuenow', String(selectedIndex));
-    effortSlider.setAttribute('aria-valuetext', valueLabel);
-    clearChildren(effortScale);
-    if (ready) {
-      const firstEffort = state.options[0];
-      const lastEffort = state.options[state.options.length - 1];
-      if (firstEffort) effortScale.appendChild(el('span', {}, EFFORT_LABEL[firstEffort]));
-      if (lastEffort && lastEffort !== firstEffort) {
-        effortScale.appendChild(el('span', {}, EFFORT_LABEL[lastEffort]));
-      }
-    } else {
-      effortScale.appendChild(el('span', {}, 'Available after a supported model is known'));
-    }
-  }
-
-  refreshEffortUI = renderEffortControl;
-  effortSlider.addEventListener('input', () => {
-    const routingSelection = _ctx.quickMode ? 'auto-economy' : _ctx.selectedModel;
-    const state = getManagedEffortControlState(
-      routingSelection,
-      _ctx.quickMode ? undefined : _ctx.currentModelKey,
-      _ctx.reasoningEffort,
-    );
-    const selected = state.options[Number(effortSlider.value)];
-    if (!selected) return;
-    _ctx.reasoningEffort = selected;
-    renderEffortControl();
-    saveMessages();
-  });
-  effortButton.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const open = effortPopover.classList.toggle('open');
-    effortButton.setAttribute('aria-expanded', String(open));
-    if (open) (effortSlider.disabled ? effortPopover : effortSlider).focus();
-  });
-  effortPopover.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    effortPopover.classList.remove('open');
-    effortButton.setAttribute('aria-expanded', 'false');
-    effortButton.focus();
-  });
-  document.addEventListener('click', (event: MouseEvent) => {
-    if (effortControl.contains(event.target as Node)) return;
-    effortPopover.classList.remove('open');
-    effortButton.setAttribute('aria-expanded', 'false');
-  });
-  renderEffortControl();
-  composerBarEnd.appendChild(effortControl);
-
-  const quickModeToggle = el('button', {
-    id: 'sp-quick-mode-toggle',
-    title: 'Quick mode: prioritize lower latency for each reply',
-    'data-active': 'false',
-  });
-  quickModeToggle.textContent = t('spQuickMode');
+  composerBarEnd.appendChild(modelSelectorWrap);
   chrome.storage.local.get({ agi_quick_mode: false }, (items) => {
-    const active = items['agi_quick_mode'] === true;
-    _ctx.quickMode = active;
-    quickModeToggle.setAttribute('data-active', active ? 'true' : 'false');
-    quickModeToggle.classList.toggle('sp-quick-mode-active', active);
-    refreshEffortUI();
+    _ctx.quickMode = items['agi_quick_mode'] === true;
+    refreshModelPickerUI();
   });
-  quickModeToggle.addEventListener('click', () => {
-    const current = quickModeToggle.getAttribute('data-active') === 'true';
-    const next = !current;
-    _ctx.quickMode = next;
-    quickModeToggle.setAttribute('data-active', next ? 'true' : 'false');
-    quickModeToggle.classList.toggle('sp-quick-mode-active', next);
-    refreshEffortUI();
-    chrome.runtime
-      .sendMessage({ type: 'SET_QUICK_MODE', enabled: next })
-      .then((response: { success?: boolean } | undefined) => {
-        if (response?.success === true) return;
-        _ctx.quickMode = current;
-        refreshEffortUI();
-        quickModeToggle.setAttribute('data-active', current ? 'true' : 'false');
-        quickModeToggle.classList.toggle('sp-quick-mode-active', current);
-      })
-      .catch((err: unknown) => {
-        _ctx.quickMode = current;
-        refreshEffortUI();
-        quickModeToggle.setAttribute('data-active', current ? 'true' : 'false');
-        quickModeToggle.classList.toggle('sp-quick-mode-active', current);
-        console.warn('[SidePanel] Failed to set quick mode:', err);
-      });
-  });
-  effortPopover.appendChild(quickModeToggle);
-
-  const persistencePill = el('span', { class: 'sp-persistence-pill', 'data-state': 'local' });
-  const persistencePillIcon = el('span', { class: 'sp-persistence-pill-icon' });
-  const persistencePillText = el('span');
-  persistencePill.appendChild(persistencePillIcon);
-  persistencePill.appendChild(persistencePillText);
-  updatePersistencePill = () => {
-    const presentation =
-      _ctx.messages.length === 0
-        ? conversationPersistencePresentation(undefined)
-        : !currentConversationCloudEligible()
-          ? {
-              state: 'local' as const,
-              label: 'Saved on this device',
-              detail:
-                'This chat includes a Local, BYOK, or unknown-provenance turn, so it stays here.',
-              cloudIcon: false,
-            }
-          : activePersistenceEntry
-            ? conversationPersistencePresentation(activePersistenceEntry)
-            : {
-                state: 'pending' as const,
-                label: 'Syncing to your account',
-                detail:
-                  'The browser-local chat stays authoritative while the account copy is created.',
-                cloudIcon: true,
-              };
-    persistencePill.setAttribute('data-state', presentation.state);
-    clearChildren(persistencePillIcon);
-    persistencePillIcon.appendChild(renderIcon(presentation.cloudIcon ? Globe : Monitor, 11));
-    persistencePillText.textContent = presentation.label;
-    persistencePill.setAttribute('aria-label', `${presentation.label}. ${presentation.detail}`);
-    persistencePill.setAttribute('title', presentation.detail);
-  };
-  updatePersistencePill();
-
-  const trustStrip = el('div', { class: 'sp-trust-strip' });
-  trustStrip.appendChild(persistencePill);
-  trustStrip.appendChild(autonomyControl);
 
   composerBarEnd.appendChild(micBtn);
   composerBarEnd.appendChild(sendBtn);
   composerShell.appendChild(composerBar);
-  composerShell.appendChild(trustStrip);
 
   const bridgeNotice = el('div', { id: 'sp-bridge-notice' });
   const bridgeNoticeDot = el('span', { id: 'sp-bridge-notice-dot' });

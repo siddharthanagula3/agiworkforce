@@ -15,8 +15,8 @@ function drawerRow(id: string): string {
 
 describe('Work runs drawer entry', () => {
   it('sits in Automate beside the other launchers', () => {
-    const automateStart = panelSource.indexOf("'Automate'");
-    const toolsStart = panelSource.indexOf("'Tools'", automateStart);
+    const automateStart = panelSource.indexOf('const viewsSection = ');
+    const toolsStart = panelSource.indexOf('const toolsSection = ', automateStart);
     const automateSection = panelSource.slice(automateStart, toolsStart);
 
     expect(automateSection).toContain("id: 'sp-drawer-runs-btn'");
