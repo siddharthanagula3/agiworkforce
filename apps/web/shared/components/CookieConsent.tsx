@@ -2,18 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Cookie, X } from 'lucide-react';
 import { useSession } from '@/lib/identity/client';
-import { X } from 'lucide-react';
 import {
-  Switch,
   Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  Label,
+  Switch,
 } from '@agiworkforce/ui';
-import { Label } from '@agiworkforce/ui';
 import {
   ALL_ACCEPTED_PREFERENCES,
   COOKIE_CONSENT_OPEN_EVENT,
@@ -24,32 +25,27 @@ import {
 } from '@shared/lib/cookie-consent';
 
 const CLOSE_ICON_SIZE = 16;
+const COOKIE_ICON_SIZE = 20;
 const PROMPT_DELAY_MS = 1000;
 
 export const CookieConsent = () => {
   const { isLoaded, isSignedIn } = useSession();
+  const reducedMotion = useReducedMotion();
   const [showBanner, setShowBanner] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [preferences, setPreferences] = useState<CookiePreferences>(NECESSARY_ONLY_PREFERENCES);
+  const bannerRef = useRef<HTMLDivElement | null>(null);
 
-  // Consent belongs to the public site: a signed-in visitor is inside the
-  // product, not deciding whether to use it, so the unsolicited banner never
-  // opens there the way it never does on chatgpt.com or claude.ai. The
-  // explicit "Change your cookie preferences" control on /cookies is
-  // untouched by this, it opens `showSettings` directly regardless of
-  // sign-in state, since that is a deliberate visit, not an interruption.
   useEffect(() => {
     if (!isLoaded || isSignedIn) {
       setShowBanner(false);
       return undefined;
     }
-
     const stored = readCookiePreferences();
     if (stored) {
       setPreferences(stored);
       return undefined;
     }
-
     const timer = setTimeout(() => setShowBanner(true), PROMPT_DELAY_MS);
     return () => clearTimeout(timer);
   }, [isLoaded, isSignedIn]);
@@ -70,20 +66,6 @@ export const CookieConsent = () => {
     writeCookiePreferences(prefs);
   }, []);
 
-  // Published so surfaces pinned to the bottom can clear the banner instead of
-  // sitting under it. The composer was the case that mattered: its stop button
-  // landed inside the banner's card and every click hit "Necessary only".
-  const bannerRef = useRef<HTMLDivElement | null>(null);
-
-  // The banner is `position: fixed; bottom: 0`, so it overlays whatever a
-  // normal-flow page has at the viewport bottom on first visit instead of
-  // making room for itself. The fixed chat/support shells clear it via the
-  // `--agi-consent-inset` var below; the body padding gives normal-flow
-  // pages the same room to scroll past their true end so a footer is never
-  // permanently stuck under the bar. Content already on screen when the
-  // banner opens is deliberately left alone rather than scrolled out from
-  // under it: an unrequested scroll on mount is worse than a card briefly
-  // sitting over a card it did not ask to move.
   useEffect(() => {
     const root = document.documentElement;
     const { body } = document;
@@ -113,74 +95,80 @@ export const CookieConsent = () => {
 
   return (
     <>
-      {showBanner && (
-        // The band spans the viewport so the panel can centre in it, but only
-        // the panel may take pointer events: the empty half of the band sat
-        // over the sidebar and swallowed clicks on the account menu.
-        <div
-          ref={bannerRef}
-          data-design="agi"
-          className="agi-ds-consent agi-modal-scope"
-          role="region"
-          aria-label="Cookie consent"
-        >
-          <div className="agi-ds-consent-panel">
-            <div className="agi-ds-consent-text">
-              <h3 className="agi-ds-consent-title">Cookies on this site</h3>
-              <p className="agi-ds-consent-copy">
-                Analytics is off until you allow it, and the{' '}
-                <Link href="/cookies" data-inline-link="true" className="agi-ds-consent-link">
-                  cookie policy
-                </Link>{' '}
-                lists everything else this site sets.
-              </p>
-            </div>
+      <AnimatePresence>
+        {showBanner && (
+          <motion.div
+            ref={bannerRef}
+            initial={reducedMotion ? false : { y: 24, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={reducedMotion ? { opacity: 0 } : { y: 24, opacity: 0 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-4 sm:justify-start sm:p-6"
+            role="region"
+            aria-label="Cookie consent"
+          >
+            <div className="pointer-events-auto relative w-full max-w-md rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-lg">
+              <div className="flex items-start gap-3 pr-8">
+                <Cookie
+                  size={COOKIE_ICON_SIZE}
+                  className="mt-0.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <div>
+                  <h3 className="text-sm font-semibold leading-5">Cookies on this site</h3>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                    Cookies that keep you signed in are always on. Analytics stays off until you
+                    allow it, and we never set advertising cookies. Read the{' '}
+                    <Link
+                      href="/cookies"
+                      data-inline-link="true"
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      cookie policy
+                    </Link>
+                    .
+                  </p>
+                </div>
+              </div>
 
-            <div className="agi-ds-consent-actions">
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  data-variant="primary"
+                  className="bg-foreground text-background hover:bg-foreground/90"
+                  onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
+                >
+                  Necessary only
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-variant="secondary"
+                  onClick={() => savePreferences(ALL_ACCEPTED_PREFERENCES)}
+                >
+                  Allow analytics
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-variant="secondary"
+                  onClick={() => setShowSettings(true)}
+                >
+                  Customise
+                </Button>
+              </div>
               <button
                 type="button"
-                className="agi-ds-btn"
-                data-variant="primary"
                 onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
+                className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Close and reject non-essential cookies"
               >
-                Necessary only
-              </button>
-              <button
-                type="button"
-                className="agi-ds-btn"
-                data-variant="secondary"
-                onClick={() => savePreferences(ALL_ACCEPTED_PREFERENCES)}
-              >
-                Allow analytics
-              </button>
-              <button
-                type="button"
-                className="agi-ds-btn"
-                data-variant="secondary"
-                onClick={() => setShowSettings(true)}
-              >
-                Customise
+                <X size={CLOSE_ICON_SIZE} aria-hidden="true" />
               </button>
             </div>
-
-            {/* Closing is a refusal, never a grant: consent may not be
-                inferred from dismissal, so this may only ever write
-                NECESSARY_ONLY_PREFERENCES. It has to write something;
-                hiding the banner without recording anything left every
-                reload re-prompting the same person forever, which is the
-                pressure tactic the opt-in is supposed to avoid. Users
-                change their mind through the /cookies preferences button. */}
-            <button
-              type="button"
-              className="agi-ds-consent-close"
-              onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
-              aria-label="Close and reject non-essential cookies"
-            >
-              <X size={CLOSE_ICON_SIZE} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent className="sm:max-w-md">
