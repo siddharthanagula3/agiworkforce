@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
-import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkforce/types';
+import {
+  INTERACTIVE_CARDS_METADATA_KEY,
+  PROJECT_FILE_CITATIONS_METADATA_KEY,
+  type InteractiveCard,
+} from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
@@ -161,6 +165,7 @@ export async function persistAssistantTurn(params: {
   if (
     !snapshot.content.trim() &&
     !snapshot.truncated &&
+    !processed.projectSources?.length &&
     !snapshot.runReference &&
     !snapshot.sources?.length &&
     !snapshot.citations?.length &&
@@ -188,6 +193,9 @@ export async function persistAssistantTurn(params: {
     ...(snapshot.codeExecutionResult ? { codeExecutionResult: snapshot.codeExecutionResult } : {}),
     ...(snapshot.generatedFiles?.length ? { generatedFiles: snapshot.generatedFiles } : {}),
     ...(snapshot.research ? { research: snapshot.research } : {}),
+    ...(processed.projectSources?.length
+      ? { [PROJECT_FILE_CITATIONS_METADATA_KEY]: processed.projectSources }
+      : {}),
   };
   if (interactiveCards.length > 0) {
     metadata[INTERACTIVE_CARDS_METADATA_KEY] = interactiveCards;

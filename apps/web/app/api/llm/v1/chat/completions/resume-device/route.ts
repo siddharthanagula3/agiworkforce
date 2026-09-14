@@ -43,6 +43,7 @@ import {
 import { runCloudAgentTurn } from '@/lib/workflows/start-cloud-agent-workflow';
 import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
 import { withSseHeartbeat } from '../lib/sse-heartbeat';
+import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
@@ -183,6 +184,9 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
     toolCallId: entry.tool_call_id,
     content: resultGate.texts[index] ?? entry.content,
     isError: entry.is_error,
+    ...(entry.image
+      ? { image: { base64: entry.image.base64, mimeType: entry.image.mime_type } }
+      : {}),
   }));
 
   const { db } = await getUserScopedDb(request);
@@ -367,6 +371,7 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
   if (processed.quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
   }
+  addProjectSourcesHeader(streamHeaders, processed);
 
   const body =
     turn.transport === 'durable' && turn.workflowRunId

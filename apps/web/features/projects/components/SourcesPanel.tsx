@@ -65,6 +65,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' });
   const [previewFile, setPreviewFile] = useState<ProjectKnowledgeFile | null>(null);
+  const [previewPage, setPreviewPage] = useState<number | undefined>(undefined);
   const [addSourcesOpen, setAddSourcesOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -72,6 +73,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const citedPreviewOpened = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +91,26 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
       cancelled = true;
     };
   }, [projectId, retryToken]);
+
+  // A project-file citation chip in a chat links here with the file it cited and
+  // the page it cited, read from the URL rather than through `useSearchParams`,
+  // which would opt the whole project page into client rendering for a
+  // parameter only this panel ever looks at. Opened once: the list changes
+  // again on every upload and delete, and re-reading the link there reopened a
+  // preview the reader had already closed.
+  useEffect(() => {
+    if (citedPreviewOpened.current || loadState !== 'loaded' || typeof window === 'undefined') {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const citedFileId = params.get('knowledgeFile');
+    const cited = citedFileId ? files.find((file) => file.id === citedFileId) : undefined;
+    if (!cited) return;
+    citedPreviewOpened.current = true;
+    const citedPage = Number(params.get('page'));
+    setPreviewFile(cited);
+    setPreviewPage(Number.isFinite(citedPage) && citedPage > 0 ? citedPage : undefined);
+  }, [files, loadState]);
 
   async function handleDelete(file: ProjectKnowledgeFile) {
     const previous = files;
@@ -461,7 +483,10 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                     gap: 10,
                     cursor: 'pointer',
                   }}
-                  onClick={() => setPreviewFile(file)}
+                  onClick={() => {
+                    setPreviewFile(file);
+                    setPreviewPage(undefined);
+                  }}
                   role="button"
                   tabIndex={0}
                   aria-label={`Preview ${file.fileName}`}
@@ -558,7 +583,14 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
       />
 
       {/* File preview modal */}
-      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+      <FilePreviewModal
+        file={previewFile}
+        page={previewPage}
+        onClose={() => {
+          setPreviewFile(null);
+          setPreviewPage(undefined);
+        }}
+      />
     </div>
   );
 }

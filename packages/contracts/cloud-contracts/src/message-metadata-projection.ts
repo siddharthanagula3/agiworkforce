@@ -20,6 +20,8 @@
  * message-metadata-projection.test.ts` proves it against adversarial inputs.
  */
 
+import { parseProjectFileCitations } from '@agiworkforce/types';
+
 import {
   MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
   managedCloudMetadataLength,
@@ -257,6 +259,7 @@ function safeStringify(value: unknown): string | undefined {
 }
 
 const KEY_BOUNDERS: Record<string, (value: unknown) => unknown> = {
+  projectSources: (value) => parseProjectFileCitations(value),
   searchResults: boundSearchResults,
   citations: boundCitations,
   tools: boundTools,
@@ -286,6 +289,7 @@ function boundEssential(value: unknown): unknown {
  * sum to less than the cap, which is what makes the total guarantee hold.
  */
 const KEY_BUDGET_CHARS: Record<string, number> = {
+  projectSources: 2_500,
   searchResults: 12_000,
   citations: 2_500,
   tools: 6_000,
