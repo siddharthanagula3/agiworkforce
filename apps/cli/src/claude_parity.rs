@@ -1407,34 +1407,70 @@ mod tests {
         }
     }
 
-    /// `/chrome` is the CLI's only statement about browser control, so it must
-    /// not sell one. The CLI registers no browser tool (`features/exec/tools`
-    /// is bash/files/dirs/git/web) and no `--chrome` flag; page actions run in
-    /// the Chrome extension against the Desktop app's
-    /// `com.agiworkforce.browser` native-messaging host
-    /// (`apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs`).
-    /// The copy must therefore name the real owner and the real source path.
-    /// `apps/extension`, not the VS Code extension.
+    /// `/chrome` is the CLI's only statement about browser control, so what it
+    /// claims has to match what this build can do.
+    ///
+    /// It used to assert the opposite of the truth, that the CLI "cannot drive
+    /// Chrome itself", which stopped being true when the browser tool family
+    /// landed. It also called `render_chrome()`, which probes the running
+    /// desktop app, so its answer depended on whether a shell happened to be
+    /// running on the machine. Both are fixed here: the states are supplied,
+    /// and every one of them is checked.
     #[test]
-    fn chrome_command_does_not_claim_the_cli_can_drive_a_browser() {
-        let message = render_chrome();
+    fn chrome_command_claims_only_what_this_build_can_do() {
+        use crate::browser_bridge::{BrowserAvailability, BrowserState};
 
+        let render = |availability| {
+            render_chrome_state(&BrowserState {
+                availability,
+                extension_id: None,
+                app_version: None,
+            })
+        };
+
+        // Without a desktop app there is no browser at all, and the copy says
+        // so while naming the only path to one.
+        let no_shell = render(BrowserAvailability::ShellNotRunning);
+        assert!(no_shell.contains("AGI Desktop is not running"));
         assert!(
-            message.contains("cannot drive Chrome itself"),
-            "/chrome must say the CLI has no browser control: {message}"
+            no_shell.contains("desktop app"),
+            "the unpaired state must name the desktop app as the path: {no_shell}"
         );
-        assert!(
-            message.contains("com.agiworkforce.browser"),
-            "/chrome must name the Desktop native-messaging host that owns page actions: {message}"
-        );
-        assert!(
-            message.contains("apps/extension") && !message.contains("apps/extension-vscode"),
-            "/chrome must point at the Chrome extension, not the VS Code extension: {message}"
-        );
-        for overclaim in ["--chrome", "--no-chrome", "Extension: Installed", "Status:"] {
+
+        for availability in [
+            BrowserAvailability::ShellNotRunning,
+            BrowserAvailability::NotPaired,
+            BrowserAvailability::PairedNotAnswering,
+            BrowserAvailability::Paired,
+        ] {
+            let message = render(availability);
+
+            // The CLI drives the browser only through the desktop app, never
+            // on its own, and it must not say otherwise in either direction.
             assert!(
-                !message.contains(overclaim),
-                "/chrome must not advertise `{overclaim}`, which the CLI does not implement: {message}"
+                !message.contains("cannot drive Chrome"),
+                "{availability:?} repeats a claim this build made false: {message}"
+            );
+            assert!(
+                !message.to_lowercase().contains("cli drives")
+                    && !message.contains("without AGI Desktop"),
+                "{availability:?} must not claim the CLI reaches Chrome alone: {message}"
+            );
+
+            // Flags and status lines the CLI does not implement.
+            for overclaim in ["--chrome", "--no-chrome", "Extension: Installed", "Status:"] {
+                assert!(
+                    !message.contains(overclaim),
+                    "{availability:?} advertises `{overclaim}`, which the CLI does not implement: {message}"
+                );
+            }
+
+            // Only a browser that can answer may advertise the tools.
+            let names_tools = message.contains("browser_read_page");
+            assert_eq!(
+                names_tools,
+                availability == BrowserAvailability::Paired,
+                "{availability:?} must name the tools only when they can run: {message}"
             );
         }
     }
