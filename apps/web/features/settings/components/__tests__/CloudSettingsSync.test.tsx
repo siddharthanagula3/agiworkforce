@@ -11,7 +11,6 @@ const themeState = {
   }),
 };
 const language = { code: 'en', changeLanguage: vi.fn(async (_code: string) => undefined) };
-const cachedLanguage = { value: 'en' as string | null };
 
 const preferences = {
   fetchStoredPreferenceNamespace: vi.fn(
@@ -43,7 +42,6 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/app/i18n/index', () => ({
   SUPPORTED_LANGUAGES: [{ code: 'en' }, { code: 'fr' }, { code: 'es' }],
-  readCachedLanguage: () => cachedLanguage.value,
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
@@ -76,7 +74,6 @@ beforeEach(() => {
   session.isSignedIn = false;
   themeState.theme = 'system';
   language.code = 'en';
-  cachedLanguage.value = 'en';
   preferences.fetchStoredPreferenceNamespace.mockResolvedValue({});
   preferences.savePreferenceNamespace.mockResolvedValue({ version: null });
   useSettingsStore.setState({
@@ -145,9 +142,8 @@ describe('signing in', () => {
     expect(preferences.savePreferenceNamespace).not.toHaveBeenCalled();
   });
 
-  it('keeps this device language when it chose one, and adopts the account one when it did not', async () => {
+  it('adopts the language the account holds', async () => {
     session.isSignedIn = true;
-    cachedLanguage.value = null;
     preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
       namespace === 'appearance' ? {} : { locale: 'fr' },
     );
@@ -156,21 +152,13 @@ describe('signing in', () => {
     await settle();
 
     expect(language.changeLanguage).toHaveBeenCalledWith('fr');
-
-    cachedLanguage.value = 'es';
-    language.changeLanguage.mockClear();
-    render(<CloudSettingsSync />);
-    await settle();
-
-    expect(language.changeLanguage).not.toHaveBeenCalled();
   });
 
-  it('pushes the language this device chose when the account holds another', async () => {
+  it('leaves the language alone when the account already agrees with this device', async () => {
     session.isSignedIn = true;
-    cachedLanguage.value = 'es';
     language.code = 'es';
     preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
-      namespace === 'appearance' ? {} : { locale: 'fr' },
+      namespace === 'appearance' ? {} : { locale: 'es' },
     );
 
     render(<CloudSettingsSync />);
@@ -178,6 +166,26 @@ describe('signing in', () => {
     await flushDebounce();
 
     expect(language.changeLanguage).not.toHaveBeenCalled();
+    expect(preferences.savePreferenceNamespace).not.toHaveBeenCalledWith(
+      'language',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('sends a language the user picks here to the account', async () => {
+    session.isSignedIn = true;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
+      namespace === 'appearance' ? {} : { locale: 'en' },
+    );
+
+    const view = render(<CloudSettingsSync />);
+    await settle();
+
+    language.code = 'es';
+    view.rerender(<CloudSettingsSync />);
+    await settle();
+
     expect(preferences.savePreferenceNamespace).toHaveBeenCalledWith(
       'language',
       { locale: 'es' },
