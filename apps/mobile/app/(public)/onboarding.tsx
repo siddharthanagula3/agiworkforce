@@ -35,6 +35,7 @@ import {
 } from '@agiworkforce/local-llm';
 import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import { useModelStore } from '@/src/features/model-picker/store';
 
 const DISCLOSURE_PROVIDERS: string[] = [];
 
@@ -220,11 +221,19 @@ export default function OnboardingScreen() {
     };
   }, [recommendedModel.id, recommendedModel.needsDownload]);
 
-  const finishOnboarding = useCallback(() => {
-    storage.set('onboarding-done', 'true');
-    storage.delete('onboarding-mode');
-    router.replace({ pathname: '/(app)' as const });
-  }, [router]);
+  // The chat composer reads its model from the model store, not from this
+  // screen. Without this the recommended model was only ever a label here and
+  // the first local send ran against the catalog default, which is a multi-GB
+  // download nobody had fetched.
+  const finishOnboarding = useCallback(
+    (activateModelId?: string) => {
+      if (activateModelId) useModelStore.getState().setModel(activateModelId);
+      storage.set('onboarding-done', 'true');
+      storage.delete('onboarding-mode');
+      router.replace({ pathname: '/(app)' as const });
+    },
+    [router],
+  );
 
   const handleContinueToCloud = useCallback(() => {
     if (downloadTimerRef.current) {
@@ -276,7 +285,7 @@ export default function OnboardingScreen() {
   const handleStartDownload = useCallback(
     (cellularEnabled = false) => {
       if (!recommendedModel.needsDownload) {
-        finishOnboarding();
+        finishOnboarding(recommendedModel.id);
         return;
       }
       setScreen('download');
@@ -304,7 +313,7 @@ export default function OnboardingScreen() {
               capabilities: null,
             });
             setTier2Loading(false);
-            finishOnboarding();
+            finishOnboarding(recommendedModel.id);
           })
           .catch((err: unknown) => {
             setTier2Loading(false);
@@ -332,7 +341,7 @@ export default function OnboardingScreen() {
             setDownloadSpeedMBs(Math.round(speedBps / (1024 * 1024)));
           },
         })
-          .then(finishOnboarding)
+          .then(() => finishOnboarding(recommendedModel.id))
           .catch((err: unknown) => {
             const kind = err instanceof ModelDownloadError ? err.kind : 'network_error';
             if (kind === 'cancelled') {

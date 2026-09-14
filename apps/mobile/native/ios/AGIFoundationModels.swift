@@ -26,6 +26,51 @@ class AGIFoundationModels: RCTEventEmitter {
     return false
   }
 
+  @objc static func availabilityReason() -> String {
+#if canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+      switch SystemLanguageModel.default.availability {
+      case .available:
+        return "available"
+      case .unavailable(.deviceNotEligible):
+        return "device_not_eligible"
+      case .unavailable(.appleIntelligenceNotEnabled):
+        return "apple_intelligence_not_enabled"
+      case .unavailable(.modelNotReady):
+        return "model_not_ready"
+      case .unavailable:
+        return "unavailable"
+      }
+    }
+#endif
+    return "os_too_old"
+  }
+
+  static func generationFailureCode(_ error: Error) -> String {
+#if canImport(FoundationModels)
+    if #available(iOS 26.0, *) {
+      if let generationError = error as? LanguageModelSession.GenerationError {
+        switch generationError {
+        case .exceededContextWindowSize:
+          return "APPLE_INTELLIGENCE_CONTEXT_EXCEEDED"
+        case .assetsUnavailable:
+          return "APPLE_INTELLIGENCE_ASSETS_UNAVAILABLE"
+        case .rateLimited:
+          return "APPLE_INTELLIGENCE_RATE_LIMITED"
+        case .guardrailViolation:
+          return "APPLE_INTELLIGENCE_REFUSED"
+        default:
+          return "APPLE_INTELLIGENCE_FAILED"
+        }
+      }
+      if SystemLanguageModel.default.isAvailable == false {
+        return "APPLE_INTELLIGENCE_UNAVAILABLE"
+      }
+    }
+#endif
+    return "APPLE_INTELLIGENCE_FAILED"
+  }
+
   @objc static func isThermallyThrottled() -> Bool {
     let state = ProcessInfo.processInfo.thermalState
     return state == .serious || state == .critical
@@ -42,7 +87,7 @@ class AGIFoundationModels: RCTEventEmitter {
     resolve([
       "tier": 1,
       "available": AGIFoundationModels.isAvailable(),
-      "status": AGIFoundationModels.isAvailable() ? "available" : "unavailable",
+      "status": AGIFoundationModels.availabilityReason(),
       "thermalThrottled": AGIFoundationModels.isThermallyThrottled(),
       "totalRAMMB": totalRAMMB,
       "osVersion": osVersion,
@@ -62,7 +107,7 @@ class AGIFoundationModels: RCTEventEmitter {
 #if canImport(FoundationModels)
     if #available(iOS 26.0, *) {
       guard SystemLanguageModel.default.isAvailable else {
-        reject("UNAVAILABLE", "Apple Foundation Models are not available on this device", nil)
+        reject("UNAVAILABLE", "APPLE_INTELLIGENCE_UNAVAILABLE", nil)
         return
       }
 
@@ -104,8 +149,12 @@ class AGIFoundationModels: RCTEventEmitter {
           self.sendDone(requestId: requestId, aborted: true, reason: "cancel")
           resolve("")
         } catch {
-          self.sendDone(requestId: requestId, aborted: true, reason: error.localizedDescription)
-          reject("GENERATE_ERROR", error.localizedDescription, error)
+          // The framework's own description is an enum case index
+          // ("GenerationError error -1."), which reached the transcript as-is.
+          // Classify here so the app can say what happened in plain words.
+          let code = AGIFoundationModels.generationFailureCode(error)
+          self.sendDone(requestId: requestId, aborted: true, reason: code)
+          reject("GENERATE_ERROR", code, error)
         }
         self.removeTask(requestId: requestId)
       }
@@ -115,7 +164,7 @@ class AGIFoundationModels: RCTEventEmitter {
     }
 #endif
 
-    reject("UNAVAILABLE", "Apple Foundation Models require iOS 26 or later", nil)
+    reject("UNAVAILABLE", "APPLE_INTELLIGENCE_UNAVAILABLE", nil)
   }
 
   @objc(cancel:)

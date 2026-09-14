@@ -10,7 +10,7 @@ export type { ProviderConsentErrorState } from '@/src/features/chat/utils/provid
 export type { FreeCapacityErrorState } from '@/src/features/chat/utils/freeCapacityRecovery';
 
 export { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
-export { useChatExecutionStore } from './chat/chatExecutionStore';
+export { useChatExecutionStore, LOCAL_NO_MODEL_MESSAGE } from './chat/chatExecutionStore';
 export { useChatViewStore } from './chat/chatViewStore';
 
 import { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
