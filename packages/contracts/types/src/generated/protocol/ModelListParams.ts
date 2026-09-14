@@ -3,10 +3,6 @@
 export type ModelListParams = {
   /**
    * Recompute instead of answering from what this session already resolved.
-   *
-   * Reachability costs a local probe per local runtime and a credential
-   * lookup per route, so it is resolved once and reused. A client asks for
-   * a fresh answer after the user signs in or starts a local server.
    */
   refresh?: boolean;
 };

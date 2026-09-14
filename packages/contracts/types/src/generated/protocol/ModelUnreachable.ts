@@ -4,12 +4,6 @@ import type { TurnFailureCode } from './TurnFailureCode';
 
 /**
  * Why a model on this host cannot be used right now.
- *
- * The same vocabulary a failed turn would have produced, because it is
- * derived from the same code. A list that invented its own words could
- * promise a model that a turn then refuses, which is worse than saying
- * nothing: the user picks it, spends a turn, and is told something the host
- * already knew.
  */
 export type ModelUnreachable = {
   code: TurnFailureCode;

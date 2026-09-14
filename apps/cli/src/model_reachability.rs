@@ -1,14 +1,4 @@
-//! Which models this machine can actually reach.
-//!
-//! A client that picks a model from a thread's history has no way to know the
-//! route behind it is dead: the app-server's default can be a provider with no
-//! credential here, so the turn is spent learning `provider_auth_missing`.
-//!
-//! The answer is derived, never declared. Credentials come from the same
-//! `resolve_key` a turn calls, local runtimes from the same discovery the
-//! `/models` command uses, and a refusal is classified by the same code that
-//! classifies a failed turn. A second table would drift, and the drift would
-//! be invisible until a user lost a turn to it.
+//! Which models this machine can reach.
 
 use std::collections::HashMap;
 
@@ -29,11 +19,7 @@ fn trust_mode_for(provider: &str) -> DeveloperSessionTrustMode {
     }
 }
 
-/// The verdict for one route, and why when it is no.
-///
-/// `None` means reachable. The error is classified through `CliError`, so a
-/// missing credential and a rejected one stay apart here exactly as they do
-/// when a turn fails.
+/// `None` when the route can run; otherwise why it cannot.
 fn route_verdict(config: &CliConfig, provider_name: &str) -> Option<ModelUnreachable> {
     let Some(provider) = crate::models::provider_from_name(provider_name) else {
         return Some(ModelUnreachable {
@@ -66,8 +52,7 @@ fn route_verdict(config: &CliConfig, provider_name: &str) -> Option<ModelUnreach
     }
 }
 
-/// A local runtime is reachable when it is actually serving the model, which
-/// discovery already answers, so no credential question applies.
+/// Models a local runtime is serving right now, as (id, provider).
 async fn running_local_models(config: &CliConfig) -> Vec<(String, String)> {
     crate::local_models::discovered_models(&crate::local_models::discover_all(config).await)
         .into_iter()
@@ -76,11 +61,6 @@ async fn running_local_models(config: &CliConfig) -> Vec<(String, String)> {
 }
 
 /// Every model this host knows about, each with its verdict.
-///
-/// One probe per local runtime and one credential lookup per route, however
-/// many models sit behind them: the catalog has hundreds of ids across a
-/// handful of providers, and asking per model would multiply the cost for an
-/// answer that cannot differ within a route.
 pub async fn host_models(config: &CliConfig) -> Vec<HostModelSummary> {
     let local = running_local_models(config).await;
     let mut verdicts: HashMap<String, Option<ModelUnreachable>> = HashMap::new();
@@ -133,9 +113,6 @@ mod tests {
     use super::*;
     use agiworkforce_protocol::developer_session::TurnFailureAction;
 
-    /// The invariant the whole thing rests on: the list's verdict for a route
-    /// is the verdict a turn on that route would produce. They are the same
-    /// call, so a change to one cannot leave the other behind.
     #[test]
     fn a_routes_verdict_is_the_one_a_turn_would_produce() {
         let config = CliConfig::default();
@@ -166,14 +143,10 @@ mod tests {
         }
     }
 
-    /// A route with no credential says so in the words a client already knows
-    /// how to act on, rather than being left out of the list.
     #[test]
     fn a_route_with_no_credential_says_which_problem_it_is() {
         let config = CliConfig::default();
         let verdict = route_verdict(&config, "anthropic");
-        // The QA machine may hold a key for any given provider, so assert the
-        // shape of a refusal rather than that one is refused.
         if let Some(unreachable) = verdict {
             assert!(matches!(
                 unreachable.code,
@@ -184,8 +157,6 @@ mod tests {
         }
     }
 
-    /// A name no route answers to is an invalid request, not a missing
-    /// credential: there is nothing to sign in to.
     #[test]
     fn an_unknown_route_is_not_reported_as_a_missing_credential() {
         let verdict = route_verdict(&CliConfig::default(), "not-a-provider")
@@ -194,9 +165,6 @@ mod tests {
         assert_eq!(verdict.action, TurnFailureAction::OpenSettings);
     }
 
-    /// Reachable is not allowed. The entry carries the boundary so a client in
-    /// Local privacy mode can refuse a route this host can perfectly well
-    /// reach, and the decision stays with the client.
     #[test]
     fn every_entry_carries_the_boundary_a_turn_would_cross() {
         assert_eq!(trust_mode_for("ollama"), DeveloperSessionTrustMode::Local);

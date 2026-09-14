@@ -5,9 +5,7 @@ import type { LocalModelSummary } from './LocalModelSummary';
 export type LocalModelListResponse = {
   models: Array<LocalModelSummary>;
   /**
-   * Every route this host knows about with its verdict. Absent from a host
-   * that predates it, where a client has nothing to go on but `models` and
-   * its own history, which is what this replaces.
+   * Every route this host knows about with its verdict.
    */
   hostModels?: Array<HostModelSummary>;
 };
