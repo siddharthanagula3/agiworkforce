@@ -17,8 +17,10 @@ use ts_rs::TS;
 
 #[test]
 fn export_typescript_bindings() {
-    let dir = std::env::var("TS_RS_EXPORT_DIR").unwrap_or_else(|_| "bindings".to_string());
-    let dir = Path::new(&dir);
+    let dir = std::env::var("TS_RS_EXPORT_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::env::temp_dir().join("agiworkforce-protocol-bindings"));
+    let dir = dir.as_path();
 
     // Event envelope, pulls in the bulk of the wire graph (session events,
     // approvals, items, permissions, config views). NOTE: the client->server
