@@ -16,7 +16,8 @@ use agiworkforce_protocol::developer_session::{
     SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
     SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams, ThreadIdParams,
     ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus,
-    ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    ThreadSummary, TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -670,6 +671,12 @@ impl CliDeveloperSessionHost {
             updated_at: summary.updated_at.to_rfc3339(),
             created_by: source_from_stored(summary.created_by.as_deref()),
             status: self.status_for(&summary).await,
+            git_branch: summary.git_branch.clone(),
+            worktree_root: summary
+                .worktree_root
+                .as_ref()
+                .map(|path| path.display().to_string()),
+            client: summary.client.clone(),
         }
     }
 
@@ -1073,6 +1080,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .then_some(resolved_model.fallback_model_ids);
         managed.workspace_root = Some(self.workspace_root.clone());
         managed.created_by = Some(source_to_stored(source).to_string());
+        managed.client = Some(client.name.clone());
+        let (git_branch, worktree_root) = workspace_git_state(&self.workspace_root);
+        managed.git_branch = git_branch;
+        managed.worktree_root = worktree_root;
         let store = self.store.clone();
         let managed_to_save = managed.clone();
         let path = tokio::task::spawn_blocking(move || store.save(&managed_to_save))
@@ -1251,6 +1262,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let source_id = params.thread_id;
         let title = clean_title(params.title);
         let created_by = source_to_stored(source_from_client(&client)).to_string();
+        let client_name = client.name.clone();
         let resolved = tokio::task::spawn_blocking(move || {
             let forked = store.fork(ManagedSessionReference::SessionId(source_id))?;
             let mut session = store.load(forked.reference.clone())?;
@@ -1258,6 +1270,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 session.title = title;
             }
             session.created_by = Some(created_by);
+            session.client = Some(client_name);
             store.save(&session)?;
             store.resolve(ManagedSessionReference::SessionId(session.session_id))
         })
@@ -1420,6 +1433,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let task_thread_id = thread_id.clone();
         let task_turn_id = turn_id.clone();
         let task_event_sequence = Arc::new(StdMutex::new(0_u64));
+        let task_store = self.store.clone();
+        let task_workspace_root = self.workspace_root.clone();
         let process_owner = crate::process_tree::ProcessTreeOwner::new();
         let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
             if start_receiver.await.is_err() {
@@ -1435,6 +1450,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut next_input = Some(prepared);
             let mut final_status = TurnStatus::Completed;
             let mut final_error: Option<String> = None;
+            let mut final_failure: Option<TurnFailure> = None;
             let mut last_response = String::new();
             let mut cumulative_input_tokens = 0u32;
             let mut cumulative_output_tokens = 0u32;
@@ -1506,6 +1522,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     Err(error) => {
                         final_status = TurnStatus::Failed;
                         final_error = Some(format!("{error:#}"));
+                        final_failure = Some(classify_turn_failure(&error));
                         drop(agent);
                         close_running_turn_claim(
                             task_running.as_ref(),
@@ -1592,17 +1609,24 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             ) {
                 let _ = task_notifications.send(notification);
             }
+            refresh_persisted_workspace_state(
+                &task_store,
+                &task_workspace_root,
+                task_thread_id.clone(),
+            )
+            .await;
             if let Ok(notification) = AppServerNotification::new(
                 method,
-                serde_json::json!({
-                    "threadId": task_thread_id,
-                    "turnId": task_turn_id,
-                    "status": final_status,
-                    "response": last_response,
-                    "inputTokens": cumulative_input_tokens,
-                    "outputTokens": cumulative_output_tokens,
-                    "error": final_error,
-                }),
+                TurnEndedNotification {
+                    thread_id: task_thread_id,
+                    turn_id: task_turn_id,
+                    status: final_status,
+                    response: last_response,
+                    input_tokens: cumulative_input_tokens,
+                    output_tokens: cumulative_output_tokens,
+                    error: final_error,
+                    failure: final_failure,
+                },
             ) {
                 let _ = task_notifications.send(notification);
             }
@@ -2534,19 +2558,106 @@ fn apply_agent_controls(
     }
 }
 
+/// Classify the error that ended a turn into the protocol's closed set.
+///
+/// The CLI's own taxonomy is the richer one and wins: it knows which provider
+/// failed and whether a credential was missing or rejected. The shared engine's
+/// taxonomy is the fallback, so a turn that fails below the CLI layer still
+/// reaches a client as a code rather than as prose.
+fn classify_turn_failure(error: &anyhow::Error) -> TurnFailure {
+    for cause in error.chain() {
+        if let Some(cli) = cause.downcast_ref::<crate::errors::CliError>() {
+            return cli.turn_failure();
+        }
+        if let Some(engine) = cause.downcast_ref::<agiworkforce_protocol::error::AgiworkforceErr>()
+        {
+            return TurnFailure::from_agiworkforce_err(engine);
+        }
+    }
+    TurnFailure::new(TurnFailureCode::Unknown, format!("{error:#}"))
+}
+
+/// Re-persist the thread's branch and worktree root now that a turn has ended.
+///
+/// Best effort: a thread that cannot be reloaded or saved keeps the state it
+/// had, because failing a finished turn over stale metadata would be worse
+/// than the stale metadata.
+async fn refresh_persisted_workspace_state(
+    store: &ManagedSessionStore,
+    workspace_root: &Path,
+    thread_id: String,
+) {
+    let store = store.clone();
+    let workspace_root = workspace_root.to_path_buf();
+    let _ = tokio::task::spawn_blocking(move || {
+        let (git_branch, worktree_root) = workspace_git_state(&workspace_root);
+        if git_branch.is_none() && worktree_root.is_none() {
+            return;
+        }
+        let Ok(mut session) = store.load(ManagedSessionReference::SessionId(thread_id)) else {
+            return;
+        };
+        if session.git_branch == git_branch && session.worktree_root == worktree_root {
+            return;
+        }
+        session.git_branch = git_branch;
+        session.worktree_root = worktree_root;
+        let _ = store.save(&session);
+    })
+    .await;
+}
+
+/// Branch and worktree root of `root`.
+///
+/// Both are persisted on the thread rather than probed while listing: a client
+/// that opens a picker over a hundred threads must not cost a hundred process
+/// spawns, and a thread whose checkout later moves or switches branch should
+/// still say where its work happened.
+///
+/// Two invocations rather than one: `rev-parse --abbrev-ref HEAD` fails
+/// outright in a repository with no commits, which would lose the worktree
+/// root as well as the branch. `branch --show-current` answers there, and
+/// answers empty on a detached HEAD, where there is genuinely no branch.
+fn workspace_git_state(root: &Path) -> (Option<String>, Option<PathBuf>) {
+    fn git(root: &Path, args: &[&str]) -> Option<String> {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        (!value.is_empty()).then_some(value)
+    }
+
+    (
+        git(root, &["branch", "--show-current"]),
+        git(root, &["rev-parse", "--show-toplevel"]).map(PathBuf::from),
+    )
+}
+
+/// Which surface a connection speaks for, from the name it introduced itself
+/// with. The exact name is kept separately on the thread; this is the coarse
+/// bucket a client groups and filters by.
 fn source_from_client(client: &AppServerClientInfo) -> DeveloperSessionSource {
-    if client.name.to_ascii_lowercase().contains("vscode") {
+    let name = client.name.to_ascii_lowercase();
+    if name.contains("vscode") {
         DeveloperSessionSource::Vscode
+    } else if name.contains("desktop") {
+        DeveloperSessionSource::Desktop
     } else {
         DeveloperSessionSource::Cli
     }
 }
 
 fn source_from_stored(source: Option<&str>) -> DeveloperSessionSource {
-    if source.is_some_and(|source| source.eq_ignore_ascii_case("vscode")) {
-        DeveloperSessionSource::Vscode
-    } else {
-        DeveloperSessionSource::Cli
+    match source {
+        Some(source) if source.eq_ignore_ascii_case("vscode") => DeveloperSessionSource::Vscode,
+        Some(source) if source.eq_ignore_ascii_case("desktop") => DeveloperSessionSource::Desktop,
+        _ => DeveloperSessionSource::Cli,
     }
 }
 
@@ -2554,6 +2665,7 @@ fn source_to_stored(source: DeveloperSessionSource) -> &'static str {
     match source {
         DeveloperSessionSource::Cli => "cli",
         DeveloperSessionSource::Vscode => "vscode",
+        DeveloperSessionSource::Desktop => "desktop",
     }
 }
 
@@ -2615,6 +2727,7 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 mod tests {
     use super::*;
     use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
+    use agiworkforce_protocol::developer_session::TurnFailureAction;
     use tempfile::tempdir;
 
     fn text_input(text: &str) -> UserInput {
@@ -2766,6 +2879,153 @@ mod tests {
             .expect_err("late steer must conflict");
         assert!(error.to_string().contains("No running turn"));
         assert!(!host.steering.lock().await.contains_key(&thread_id));
+    }
+
+    /// `createdBy` is the coarse surface a client groups by; `client` is the
+    /// exact name the connection introduced itself with. A desktop client used
+    /// to land in the `cli` bucket, so every desktop thread was
+    /// indistinguishable from one started in a terminal.
+    #[test]
+    fn a_clients_name_decides_its_surface_in_both_directions() {
+        for (name, expected) in [
+            ("agi_vscode", DeveloperSessionSource::Vscode),
+            ("agi-vscode-insiders", DeveloperSessionSource::Vscode),
+            ("agi-desktop", DeveloperSessionSource::Desktop),
+            ("agi", DeveloperSessionSource::Cli),
+            ("fable_probe", DeveloperSessionSource::Cli),
+        ] {
+            let client = AppServerClientInfo {
+                name: name.to_string(),
+                title: name.to_string(),
+                version: "0.0.0".to_string(),
+            };
+            let source = source_from_client(&client);
+            assert_eq!(source, expected, "surface for {name}");
+            assert_eq!(
+                source_from_stored(Some(source_to_stored(source))),
+                source,
+                "the stored spelling for {name} must round-trip"
+            );
+        }
+
+        // A value stored before `desktop` existed still reads, rather than
+        // failing the listing that contains it.
+        assert_eq!(source_from_stored(None), DeveloperSessionSource::Cli);
+        assert_eq!(
+            source_from_stored(Some("something-new")),
+            DeveloperSessionSource::Cli
+        );
+    }
+
+    /// The branch comes from what the host persisted, never from probing while
+    /// listing: a picker over a hundred threads must not spawn a hundred git
+    /// processes, and a thread whose checkout has since moved should still say
+    /// where its work happened.
+    #[tokio::test]
+    async fn a_threads_branch_and_worktree_come_from_what_was_persisted() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+
+        let mut session = ManagedSession::new("session-branch", chrono::Utc::now());
+        session.workspace_root = Some(workspace.path().to_path_buf());
+        session.created_by = Some("desktop".to_string());
+        session.client = Some("agi-desktop".to_string());
+        session.git_branch = Some("feature/typed-failures".to_string());
+        session.worktree_root = Some(workspace.path().to_path_buf());
+        host.store.save(&session).expect("save session");
+
+        let resolved = host
+            .store
+            .resolve(ManagedSessionReference::SessionId(
+                "session-branch".to_string(),
+            ))
+            .expect("resolve session");
+        let summary = host.thread_summary(resolved.summary).await;
+        assert_eq!(
+            summary.git_branch.as_deref(),
+            Some("feature/typed-failures")
+        );
+        assert_eq!(
+            summary.worktree_root,
+            Some(workspace.path().display().to_string())
+        );
+        assert_eq!(summary.client.as_deref(), Some("agi-desktop"));
+        assert_eq!(summary.created_by, DeveloperSessionSource::Desktop);
+
+        // A thread persisted before these fields existed reports none of them,
+        // rather than borrowing the host's own branch.
+        let legacy = ManagedSession::new("session-legacy", chrono::Utc::now());
+        host.store.save(&legacy).expect("save legacy session");
+        let resolved = host
+            .store
+            .resolve(ManagedSessionReference::SessionId(
+                "session-legacy".to_string(),
+            ))
+            .expect("resolve legacy session");
+        let summary = host.thread_summary(resolved.summary).await;
+        assert_eq!(summary.git_branch, None);
+        assert_eq!(summary.worktree_root, None);
+        assert_eq!(summary.client, None);
+    }
+
+    /// A free-text error cannot tell a client whether to offer a sign-in, a
+    /// retry, or nothing at all. The code can, and it is derived from the
+    /// typed error rather than by matching on prose that changes per provider.
+    #[test]
+    fn a_failed_turn_classifies_into_a_code_a_client_can_act_on() {
+        let missing =
+            classify_turn_failure(&anyhow::Error::new(crate::errors::CliError::auth_missing(
+                "deepseek",
+                "No API key found. Run `agi login deepseek` or set DEEPSEEK_API_KEY.",
+            )));
+        assert_eq!(missing.code, TurnFailureCode::ProviderAuthMissing);
+        assert_eq!(missing.provider.as_deref(), Some("deepseek"));
+        assert_eq!(missing.action, TurnFailureAction::SignInProvider);
+        assert!(!missing.retryable);
+        assert!(missing.message.contains("No API key found"));
+
+        // A rejected credential has a different remedy from an absent one.
+        let invalid = classify_turn_failure(&anyhow::Error::new(crate::errors::CliError::auth(
+            "anthropic",
+            "key revoked",
+        )));
+        assert_eq!(invalid.code, TurnFailureCode::ProviderAuthInvalid);
+
+        let limited =
+            classify_turn_failure(&anyhow::Error::new(crate::errors::CliError::RateLimited {
+                provider: "openai".to_string(),
+                retry_after: Some(30),
+            }));
+        assert_eq!(limited.code, TurnFailureCode::ProviderRateLimited);
+        assert!(limited.retryable);
+        assert_eq!(limited.action, TurnFailureAction::Retry);
+
+        // The typed error arrives wrapped in anyhow context, which is how the
+        // turn loop actually hands it over.
+        let wrapped = classify_turn_failure(
+            &anyhow::Error::new(crate::errors::CliError::auth_missing("deepseek", "no key"))
+                .context("while running the turn"),
+        );
+        assert_eq!(wrapped.code, TurnFailureCode::ProviderAuthMissing);
+
+        // The shared engine's taxonomy is the fallback, not a second vocabulary.
+        let engine = classify_turn_failure(&anyhow::Error::new(
+            agiworkforce_protocol::error::AgiworkforceErr::ContextWindowExceeded,
+        ));
+        assert_eq!(engine.code, TurnFailureCode::ContextWindowExceeded);
+
+        // Anything else is `unknown`, never a guessed code.
+        let opaque = classify_turn_failure(&anyhow::anyhow!("something went wrong"));
+        assert_eq!(opaque.code, TurnFailureCode::Unknown);
+        assert_eq!(opaque.action, TurnFailureAction::None);
+        assert_eq!(opaque.message, "something went wrong");
     }
 
     #[tokio::test]

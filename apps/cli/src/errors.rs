@@ -1,3 +1,4 @@
+use agiworkforce_protocol::developer_session::{TurnFailure, TurnFailureCode};
 use regex::Regex;
 use std::fmt;
 use std::sync::LazyLock;
@@ -77,8 +78,15 @@ pub enum CliError {
         status: u16,
         message: String,
     },
-    /// Authentication failures (missing key, expired token, revoked).
+    /// Authentication failures where a credential exists and was rejected:
+    /// expired, revoked, wrong key.
     Auth { provider: String, message: String },
+    /// No credential exists for the route at all.
+    ///
+    /// Separate from [`CliError::Auth`] because the remedy is different and a
+    /// client has to be able to tell them apart: nothing can be refreshed, the
+    /// user has to sign in or set a key for the first time.
+    AuthMissing { provider: String, message: String },
     /// Configuration errors (missing config, parse failure).
     Config { message: String },
     /// Tool execution errors (tool not found, execution failed).
@@ -128,6 +136,9 @@ impl fmt::Display for CliError {
                 message,
             } => write!(f, "[{}] API error (HTTP {}): {}", provider, status, message),
             CliError::Auth { provider, message } => {
+                write!(f, "[{}] Authentication failed: {}", provider, message)
+            }
+            CliError::AuthMissing { provider, message } => {
                 write!(f, "[{}] Authentication failed: {}", provider, message)
             }
             CliError::Config { message } => write!(f, "Configuration error: {}", message),
@@ -194,6 +205,7 @@ impl CliError {
             CliError::Api { status, .. } if (500..600).contains(status) => "api_server_error",
             CliError::Api { .. } => "api_http_error",
             CliError::Auth { .. } => "auth_expired",
+            CliError::AuthMissing { .. } => "auth_missing",
             CliError::Config { .. } => "config_invalid",
             CliError::Tool { .. } => "tool_failed",
             CliError::Network { .. } => "network",
@@ -224,6 +236,10 @@ impl CliError {
             CliError::Auth { provider, .. } => format!(
                 "Run `agi login {provider}` to refresh credentials, or set the \
                  corresponding API key environment variable."
+            ),
+            CliError::AuthMissing { provider, .. } => format!(
+                "Run `agi login {provider}` to sign in, or set the corresponding \
+                 API key environment variable."
             ),
             CliError::Config { .. } => {
                 "Run `agi init` to regenerate the default config, or fix the indicated \
@@ -294,9 +310,17 @@ impl CliError {
         }
     }
 
-    /// Create an authentication error.
+    /// Create an authentication error for a credential that was rejected.
     pub fn auth(provider: impl Into<String>, message: impl Into<String>) -> Self {
         CliError::Auth {
+            provider: provider.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Create an authentication error for a route with no credential at all.
+    pub fn auth_missing(provider: impl Into<String>, message: impl Into<String>) -> Self {
+        CliError::AuthMissing {
             provider: provider.into(),
             message: message.into(),
         }
@@ -380,6 +404,54 @@ impl CliError {
         match self {
             CliError::Paywall { .. } => 78,
             _ => 1,
+        }
+    }
+
+    /// Project this error onto the protocol's closed turn-failure set.
+    ///
+    /// The `error` string a client receives today is prose: it names a
+    /// provider, a status code and a remedy in one sentence that changes with
+    /// every provider. A client cannot branch on it. This is the same
+    /// information as a code the client can act on.
+    pub fn turn_failure(&self) -> TurnFailure {
+        let (code, provider) = match self {
+            CliError::AuthMissing { provider, .. } => {
+                (TurnFailureCode::ProviderAuthMissing, Some(provider))
+            }
+            CliError::Auth { provider, .. } => {
+                (TurnFailureCode::ProviderAuthInvalid, Some(provider))
+            }
+            CliError::RateLimited { provider, .. } => {
+                (TurnFailureCode::ProviderRateLimited, Some(provider))
+            }
+            // A paywall is a quota the account has spent, not a broken
+            // credential: the same shape as a rate limit, and the remedy is
+            // the plan rather than a sign-in.
+            CliError::Paywall { .. } => (TurnFailureCode::ProviderRateLimited, None),
+            CliError::Api {
+                provider, status, ..
+            } => (
+                match status {
+                    401 | 403 => TurnFailureCode::ProviderAuthInvalid,
+                    429 => TurnFailureCode::ProviderRateLimited,
+                    408 | 504 => TurnFailureCode::Timeout,
+                    500..=599 => TurnFailureCode::ProviderUnavailable,
+                    _ => TurnFailureCode::InvalidRequest,
+                },
+                Some(provider),
+            ),
+            CliError::StreamError { provider, .. } => {
+                (TurnFailureCode::ProviderUnavailable, Some(provider))
+            }
+            CliError::Network { .. } => (TurnFailureCode::Network, None),
+            CliError::ContextOverflow { .. } => (TurnFailureCode::ContextWindowExceeded, None),
+            CliError::Tool { .. } => (TurnFailureCode::ToolDenied, None),
+            CliError::Config { .. } => (TurnFailureCode::InvalidRequest, None),
+        };
+        let failure = TurnFailure::new(code, self.to_string());
+        match provider {
+            Some(provider) => failure.with_provider(provider.clone()),
+            None => failure,
         }
     }
 }
