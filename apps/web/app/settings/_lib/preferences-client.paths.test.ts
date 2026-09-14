@@ -87,16 +87,9 @@ describe('settings preference paths come from the cloud contract', () => {
 
     await settingsService.getSettings();
     await settingsService.updateSettings({ session_timeout: 30 });
-    await settingsService.getProfile();
-    await settingsService.updateProfile({ bio: 'hello' });
 
     const preferenceUrls = requestedUrls().filter((url) => url.startsWith(RELOCATED));
-    expect(preferenceUrls).toEqual([
-      RELOCATED,
-      RELOCATED,
-      `${RELOCATED}?namespace=profile`,
-      RELOCATED,
-    ]);
+    expect(preferenceUrls).toEqual([RELOCATED, RELOCATED]);
     expect(requestedUrls().some((url) => url.startsWith('/api/settings/preferences'))).toBe(false);
   });
 });

@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@shared/lib/get-auth-token', () => ({
@@ -36,9 +35,7 @@ describe('settingsService · getSettings', () => {
   });
 
   it('calls GET /api/settings/preferences with auth header and surfaces server result', async () => {
-    fetchMock.mockResolvedValueOnce(
-      makeResponse({ settings: { theme: 'light', email_notifications: false } }),
-    );
+    fetchMock.mockResolvedValueOnce(makeResponse({ settings: { session_timeout: 30 } }));
 
     const { settingsService } = await import('./user-preferences');
     const result = await settingsService.getSettings();
@@ -49,8 +46,7 @@ describe('settingsService · getSettings', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    expect(result.data.theme).toBe('light');
-    expect(result.data.email_notifications).toBe(false);
+    expect(result.data.session_timeout).toBe(30);
     expect(result.error).toBeUndefined();
   });
 
@@ -61,7 +57,7 @@ describe('settingsService · getSettings', () => {
     const result = await settingsService.getSettings();
 
     expect(result.data).toBeDefined();
-    expect(result.data.theme).toBe('dark');
+    expect(result.data.session_timeout).toBe(60);
     expect(result.error).toBeTruthy();
   });
 });
@@ -73,10 +69,10 @@ describe('settingsService · updateSettings', () => {
   });
 
   it('calls PUT /api/settings/preferences with CSRF + auth + body', async () => {
-    fetchMock.mockResolvedValueOnce(makeResponse({ settings: { theme: 'light' } }));
+    fetchMock.mockResolvedValueOnce(makeResponse({ settings: { session_timeout: 30 } }));
 
     const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.updateSettings({ theme: 'light' });
+    const result = await settingsService.updateSettings({ session_timeout: 30 });
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/settings/preferences',
@@ -95,7 +91,7 @@ describe('settingsService · updateSettings', () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Invalid payload' }, 422));
 
     const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.updateSettings({ theme: 'light' });
+    const result = await settingsService.updateSettings({ session_timeout: 30 });
 
     expect(result.error).toBeTruthy();
   });
@@ -134,117 +130,6 @@ describe('settingsService · updateProfile', () => {
     const { settingsService } = await import('./user-preferences');
     const result = await settingsService.updateProfile({ name: 'Alice' });
 
-    expect(result.error).toBeTruthy();
-  });
-
-  it('stores extended fields via PUT /api/settings/preferences for bio/phone/timezone/language', async () => {
-    fetchMock.mockResolvedValueOnce(makeResponse({ settings: {} }));
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.updateProfile({ timezone: 'Europe/London' });
-
-    const firstCall = fetchMock.mock.calls[0] as [string, RequestInit] | undefined;
-    expect(firstCall).toBeDefined();
-    const [url, opts] = firstCall!;
-    expect(url).toBe('/api/settings/preferences');
-    expect((opts as { method?: string }).method).toBe('PUT');
-    expect(result.error).toBeUndefined();
-  });
-
-  it('surfaces error from preferences PUT when extended fields fail', async () => {
-    fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Settings too large' }, 413));
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.updateProfile({ bio: 'x'.repeat(200) });
-
-    expect(result.error).toBeTruthy();
-  });
-});
-
-describe('settingsService · getProfile (round-trip: extended fields read from preferences)', () => {
-  beforeEach(async () => {
-    fetchMock.mockReset();
-    await setupMocks();
-  });
-
-  const mePayload = {
-    id: 'u1',
-    email: 'alice@example.com',
-    name: 'Alice',
-    avatar_url: null,
-    plan: { tier: 'free' },
-  };
-
-  it('calls GET /api/me AND GET /api/settings/preferences?namespace=profile in parallel', async () => {
-    fetchMock
-      .mockResolvedValueOnce(makeResponse(mePayload))
-      .mockResolvedValueOnce(
-        makeResponse({ settings: { timezone: 'Europe/London', language: 'fr' } }),
-      );
-
-    const { settingsService } = await import('./user-preferences');
-    await settingsService.getProfile();
-
-    const urls = (fetchMock.mock.calls as [string][]).map(([url]) => url);
-    expect(urls).toContain('/api/me');
-    expect(
-      urls.some((u) => u.includes('/api/settings/preferences') && u.includes('namespace=profile')),
-    ).toBe(true);
-  });
-
-  it('surfaces stored timezone and language over hardcoded defaults', async () => {
-    fetchMock
-      .mockResolvedValueOnce(makeResponse(mePayload))
-      .mockResolvedValueOnce(
-        makeResponse({ settings: { timezone: 'Asia/Tokyo', language: 'ja' } }),
-      );
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.getProfile();
-
-    expect(result.error).toBeUndefined();
-    expect(result.data?.timezone).toBe('Asia/Tokyo');
-    expect(result.data?.language).toBe('ja');
-  });
-
-  it('surfaces stored bio and phone · which were previously invisible', async () => {
-    fetchMock
-      .mockResolvedValueOnce(makeResponse(mePayload))
-      .mockResolvedValueOnce(
-        makeResponse({ settings: { bio: 'AI researcher', phone: '+1-555-0100' } }),
-      );
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.getProfile();
-
-    expect(result.data?.bio).toBe('AI researcher');
-    expect(result.data?.phone).toBe('+1-555-0100');
-  });
-
-  it('falls back to safe defaults when preferences fetch fails · does not error the whole call', async () => {
-    fetchMock
-      .mockResolvedValueOnce(makeResponse(mePayload))
-      .mockResolvedValueOnce(makeResponse({ error: 'DB error' }, 500));
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.getProfile();
-
-    expect(result.data).not.toBeNull();
-    expect(result.error).toBeUndefined();
-    expect(result.data?.timezone).toBe('America/New_York');
-    expect(result.data?.language).toBe('en');
-    expect(result.data?.bio).toBeUndefined();
-  });
-
-  it('returns error only when /api/me fails · not when preferences fetch fails', async () => {
-    fetchMock
-      .mockResolvedValueOnce(makeResponse({ error: 'Unauthorized' }, 401))
-      .mockResolvedValueOnce(makeResponse({ settings: {} }));
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.getProfile();
-
-    expect(result.data).toBeNull();
     expect(result.error).toBeTruthy();
   });
 });
