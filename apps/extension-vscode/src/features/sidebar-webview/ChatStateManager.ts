@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
+import {
+  formatRelativeTime,
+  type ConversationTreeProvider,
+} from '../trees/conversationTreeProvider';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
 import {
   normalizeConfiguredModelId,
@@ -84,6 +87,7 @@ type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
 const RUNTIME_SETUP_ERROR_MARKERS = [CLI_NOT_FOUND_MARKER, CLI_NOT_EXECUTABLE_MARKER] as const;
 const RUNTIME_SETUP_ERROR_MAX_LENGTH = 320;
 
+const RECENT_CONVERSATION_LIMIT = 3;
 const MAX_QUEUED_SENDS = 20;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const PRE_START_EVENT_OVERFLOW_MESSAGE =
@@ -131,6 +135,8 @@ export type WebviewToExtMessage =
   | { type: 'openPermissionDocs' }
   | { type: 'openPrivacySettings' }
   | { type: 'openCloudTasks' }
+  | { type: 'openRecentConversation'; payload: { threadId: string } }
+  | { type: 'revealConversationHistory' }
   | { type: 'openPathReference'; payload: PathReferenceTarget }
   | { type: 'requestContextMenuState' }
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
@@ -170,6 +176,13 @@ export type ExtToWebviewMessage =
       payload: { files: Array<WorkspaceFileReference & { label: string }> };
     }
   | { type: 'conversationCleared' }
+  | {
+      type: 'recentConversations';
+      payload: {
+        conversations: Array<{ id: string; title: string; age: string }>;
+        total: number;
+      };
+    }
   | {
       type: 'conversationLoaded';
       payload: {
@@ -554,6 +567,7 @@ export class ChatStateManager {
         });
 
         await this.refreshAccountPresentation();
+        await this.pushRecentConversations();
         if (this._loadedConversation !== undefined && this._thread !== undefined) {
           this._postLoadedConversation();
           this._postProviderBadgeForSession(
@@ -728,6 +742,19 @@ export class ChatStateManager {
 
       case 'openHistory': {
         await vscode.commands.executeCommand('agi-workforce.showSessionsHistory');
+        break;
+      }
+
+      case 'revealConversationHistory': {
+        await vscode.commands.executeCommand('agi-workforce.conversations.focus');
+        break;
+      }
+
+      case 'openRecentConversation': {
+        await vscode.commands.executeCommand(
+          'agi-workforce.openConversation',
+          msg.payload.threadId,
+        );
         break;
       }
 
@@ -1182,6 +1209,27 @@ export class ChatStateManager {
 
   public showOnboarding(): void {
     this._post({ type: 'showOnboarding' });
+  }
+
+  public async pushRecentConversations(): Promise<void> {
+    if (this._conversationTreeProvider === undefined) return;
+    let threads: ThreadSummary[];
+    try {
+      threads = await this._conversationTreeProvider.getThreads();
+    } catch {
+      threads = [];
+    }
+    this._post({
+      type: 'recentConversations',
+      payload: {
+        total: threads.length,
+        conversations: threads.slice(0, RECENT_CONVERSATION_LIMIT).map((thread) => ({
+          id: thread.id,
+          title: thread.title,
+          age: formatRelativeTime(Date.parse(thread.updatedAt)),
+        })),
+      },
+    });
   }
 
   public pushFollowUpBehavior(): void {
