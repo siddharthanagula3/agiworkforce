@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { contextWindowLabel, formatTokenCount } from './code-surface';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { CODE_COPY, contextWindowLabel, formatTokenCount } from './code-surface';
 
 describe('formatTokenCount', () => {
   it('reads a small count exactly and a large one in place value', () => {
@@ -24,5 +25,13 @@ describe('contextWindowLabel', () => {
 
   it('stops at a full window rather than reporting more', () => {
     expect(contextWindowLabel(300000, 200000)).toBe('300k / 200k (100%)');
+  });
+});
+
+describe('code surface approval copy', () => {
+  it('refuses an action with the shared verb, never a second spelling', () => {
+    expect(CODE_COPY.reject).toBe(TOOL_APPROVAL_ACTION_LABELS.deny);
+    expect(CODE_COPY.reject).not.toBe('Reject');
+    expect(CODE_COPY.approve).toContain(TOOL_APPROVAL_ACTION_LABELS.approve);
   });
 });
