@@ -6,8 +6,15 @@ import {
 import { SETTINGS_DEEP_LINK_QUERY_KEY } from '@/features/settings/lib/web-settings-sections';
 import { isWebSettingsSection } from '@/features/settings/lib/web-settings-sections';
 
-const CHAT_PATH = '/chat';
-const PROJECT_PATH = '/chat/projects';
+/**
+ * Where the product starts. The shell opens here, a deep link resolves against
+ * it, and a page the shell reached by mistake offers it instead of the
+ * marketing home, which the shell does not host.
+ */
+export const PRODUCT_HOME_PATH = '/chat';
+
+const CHAT_PATH = PRODUCT_HOME_PATH;
+const PROJECT_PATH = `${PRODUCT_HOME_PATH}/projects`;
 
 export function conversationDeepLink(conversationId: string): string {
   return desktopDeepLink('chat', conversationId);

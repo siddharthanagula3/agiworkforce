@@ -1,5 +1,7 @@
 'use client';
 
+import { useHomeHref } from '@/features/desktop-host/hooks/use-home-href';
+
 export default function Error({
   error,
   reset,
@@ -7,6 +9,8 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const homeHref = useHomeHref();
+
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center px-4">
       <div className="text-center max-w-md">
@@ -22,7 +26,7 @@ export default function Error({
             Try Again
           </button>
           <a
-            href="/"
+            href={homeHref}
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
           >
             Go Home
