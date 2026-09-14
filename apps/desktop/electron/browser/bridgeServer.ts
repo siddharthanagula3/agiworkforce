@@ -68,9 +68,8 @@ export interface BridgeDependencies {
   home?: string;
   appVersion?: string;
   /**
-   * Runs one command through the same gate the renderer uses, scoped to the
-   * asking client. Injected rather than imported so this module keeps no
-   * dependency on the runtime dispatcher, which imports it.
+   * Injected rather than imported, so this module keeps no dependency on the
+   * runtime dispatcher, which imports it.
    */
   runBrowserCommand?: (
     command: string,
@@ -90,12 +89,9 @@ const pollWaiters: PollWaiter[] = [];
 const pendingResults = new Map<string, PendingResult>();
 
 /**
- * A bridge failure, carrying why rather than only what.
- *
- * Every one of these used to reach a local client as `timeout`, so a page that
- * refused an action ("that site is not on your approved list") was reported to
- * the user as a browser that never answered. Those need different things from
- * the user, so they cannot share a code.
+ * A bridge failure carrying why, not only what. A refusal and a browser that
+ * never answered need different things from the user, so they cannot share a
+ * code.
  */
 export class BrowserBridgeError extends Error {
   constructor(
@@ -288,8 +284,6 @@ function handlePairRequestRoute(response: ServerResponse, body: Record<string, u
     expiresInMs: PAIR_REQUEST_TTL_MS,
     codeLength: PAIR_CODE_LENGTH,
   });
-  // After the answer, never before: showing the code is the shell's business
-  // and a modal there must not hold the browser's request open.
   setImmediate(() => {
     deps?.onPairRequest(prompt);
     publishState();
@@ -427,9 +421,7 @@ function handleNativeMessageRoute(
 
   const type = (message as Record<string, unknown>)['type'];
   if (type === NATIVE_BROWSER_UNPAIR_MESSAGE) {
-    // The browser has forgotten this Mac. Keeping the record would leave every
-    // local client offering tools that can never answer, so the pairing and
-    // the host manifests go with it.
+    // Keeping the record would leave clients offering tools that never answer.
     removeHostAndPairing();
     sendJson(response, 200, { success: true });
     return;
@@ -447,12 +439,8 @@ function handleNativeMessageRoute(
 }
 
 /**
- * One page command from another program on this machine.
- *
- * The shell decides, not the caller: the same gate the renderer goes through
- * runs here, scoped to the client's name so the user answers once per client.
- * Every outcome answers with a code rather than prose, because a client has to
- * tell "pair the browser" from "you refused" from "the page never answered".
+ * One page command from another program on this machine. The shell decides:
+ * the renderer's own gate runs here, scoped to the client's name.
  */
 async function handleLocalClientCommandRoute(
   response: ServerResponse,
@@ -491,9 +479,8 @@ async function handleLocalClientCommandRoute(
 
   const described = describeLocalClient(parsed.client);
   recordLocalClientActivity(described.label, parsed.command);
-  // A throw is answered here rather than left to the caller: an uncaught one
-  // becomes a plain-text 500, and a client parsing JSON reads that as a broken
-  // connection instead of the refusal it actually was.
+  // An uncaught throw becomes a plain-text 500, which a client parsing JSON
+  // reads as a broken connection rather than the refusal it was.
   let outcome: { ok: boolean; value?: unknown; error?: string; code?: string };
   try {
     outcome = await run(parsed.command, parsed.args, {
@@ -645,11 +632,8 @@ export async function stopBrowserBridge(): Promise<void> {
 }
 
 /**
- * Hands one command to the paired browser and waits for its answer.
- *
- * The extension is the only side that can act, so a desktop command is parked
- * until the extension's next poll; if nothing is polling, the command times out
- * rather than sitting in the queue forever.
+ * The extension is the only side that can act, so a command is parked until
+ * its next poll and times out rather than sitting in the queue forever.
  */
 export function sendBrowserCommand(
   command: BrowserCommand,
@@ -704,12 +688,8 @@ export function installHostForPairedExtension(): string[] {
 }
 
 /**
- * Drop the pairing and everything that depended on it.
- *
- * The shell's own Unpair control and the browser telling us it has unpaired
- * both land here, so the two can never leave different state behind. Commands
- * already waiting are failed rather than left to time out: nothing is coming,
- * and a client should be told which of the two it is.
+ * The one owner: the shell's Unpair control and the browser's own unpair both
+ * land here, so the two cannot leave different state behind.
  */
 export function removeHostAndPairing(): void {
   for (const waiter of pollWaiters.splice(0)) waiter(null);
@@ -727,13 +707,7 @@ export function removeHostAndPairing(): void {
   publishState();
 }
 
-/**
- * What the shell can say about a client's browser use.
- *
- * Bounded, because a runaway client must not grow this without limit. Surfacing
- * it in the shell's own activity view needs an event on the local-runtime
- * contract, which this module does not own.
- */
+/** Bounded, so a runaway client cannot grow it without limit. */
 const localClientActivity: { atMs: number; client: string; command: string }[] = [];
 const MAX_LOCAL_CLIENT_ACTIVITY = 200;
 

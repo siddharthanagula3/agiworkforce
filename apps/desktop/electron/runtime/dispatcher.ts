@@ -252,9 +252,9 @@ function workspaceScope(root: WorkspaceRoot): PermissionScope {
 }
 
 /**
- * Every command that touches the disk names the capability it needs and the
- * reason shown in the prompt. A command absent from this table reaches no
- * service: `dispatch` refuses anything it cannot classify.
+ * Every command that touches the disk names the capability it needs. A command
+ * absent from this table reaches no service: `dispatch` refuses what it cannot
+ * classify.
  */
 const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; reason: string }> = {
   file_list: { capability: 'filesystem.read', reason: 'The agent wants to browse this folder.' },
@@ -316,11 +316,7 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
 const COMPUTER_USE_REASON =
   'The agent moves the pointer, clicks and types on this Mac as if you were doing it, and reads the screen to decide where. It can reach anything already open, including apps and pages you are signed into.';
 
-/**
- * Capabilities that are not about one folder. The clipboard belongs to the
- * session rather than to a workspace, so it carries a global scope and asks
- * once.
- */
+/** Capabilities scoped to the session rather than to one folder. */
 const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   string,
   { capability: DesktopCapability; reason: string }
@@ -382,12 +378,8 @@ function emitRuntimeEvent(window: BrowserWindow | null, event: unknown): void {
 }
 
 /**
- * The second gate on a local command.
- *
- * The capability grant says this folder may run programs at all; this asks
- * about the one command about to start, quoting it verbatim so the text the
- * user approves is the text that is spawned. Programs the user has put on the
- * allow list never reach here.
+ * The second gate on a local command, quoting it verbatim so the text the user
+ * approves is the text that is spawned.
  */
 async function approveShellCommand(
   window: BrowserWindow | null,
@@ -412,12 +404,8 @@ async function approveShellCommand(
 }
 
 /**
- * The second gate on a browser command.
- *
- * The capability grant says the paired browser may be driven at all; this asks
- * about the one action, naming what it does to the page in front of the user.
- * The extension applies its own site allowlist after this, so a yes here is
- * necessary and not sufficient.
+ * The second gate on a browser command. The extension applies its own site
+ * allowlist after this, so a yes here is necessary and not sufficient.
  */
 async function approveBrowserCommand(
   window: BrowserWindow | null,
@@ -439,13 +427,7 @@ async function approveBrowserCommand(
   return result.response === 1;
 }
 
-/**
- * Another program on this machine asking for the browser, rather than this
- * shell's own renderer.
- *
- * `name` scopes the grant so the user answers once per client, and `label`
- * is what the prompt says out loud ("agi in ~/project").
- */
+/** Another program on this machine asking for the browser, not the renderer. */
 export interface BrowserCommandCaller {
   /** Scope key, so the user answers once per client rather than once per program. */
   name: string;
@@ -458,13 +440,9 @@ export interface BrowserCommandCaller {
 }
 
 /**
- * What the prompt says, for a browser action another program asked for.
- *
- * Three things the user needs and one they do not. They need to know who is
- * asking, where it is working, and that the extension's own approved-sites
- * list still stands. They do not need to be asked twice: the client already
- * put this tool call through its own approval, so the shell says that rather
- * than raising a second dialog for every action.
+ * What the prompt says for a browser action another program asked for. The
+ * client already approved the tool call, so the shell says so rather than
+ * raising a second dialog per action.
  */
 function browserPromptReason(caller: BrowserCommandCaller): string {
   const where = caller.folder ? ` running in ${caller.folder}` : '';
@@ -490,9 +468,8 @@ export async function runBrowserCommand(
   caller?: BrowserCommandCaller,
 ): Promise<DesktopRuntimeResponse> {
   const plan = planBrowserCommand(command, args);
-  // A local client is its own permission subject: the user grants "agi" the
-  // browser, not every client at once, and revoking one does not revoke the
-  // renderer.
+  // Each client is its own permission subject, so revoking one leaves the
+  // renderer's grant standing.
   const scope: PermissionScope = caller
     ? { kind: 'application', target: caller.name }
     : { kind: 'global' };
@@ -508,10 +485,6 @@ export async function runBrowserCommand(
           reason,
           caller
             ? {
-                // The title names the client as the user would type it; the
-                // body says who that is in words. Putting the prose name in
-                // the title gives "Allow The AGI CLI to…", a capital mid
-                // sentence.
                 subject: caller.name,
                 objectPhrase: BROWSER_OBJECT_PHRASES[plan.capability],
               }
@@ -529,10 +502,8 @@ export async function runBrowserCommand(
       },
     );
   }
-  // The per-action dialog is the renderer's second gate. A local client already
-  // put the tool call through its own approval, so asking again here would be
-  // the same question twice with no new information, and would make a tool the
-  // model can call one the user has to babysit.
+  // A local client already put the tool call through its own approval, so a
+  // second dialog here would ask the same question with no new information.
   if (!caller && !(await approveBrowserCommand(window, plan))) {
     return runtimeFailure('cancelled', 'That browser action was not run.');
   }
@@ -543,13 +514,9 @@ export async function runBrowserCommand(
 }
 
 /**
- * What this machine tells a cloud turn it can be asked to do.
- *
- * A capability is declared when the user has not refused it on at least one
- * granted folder, not when it is already granted: the point of the declaration
- * is to let the model ask, and the ask is what raises the permission prompt. A
- * refused capability is left out, so the model never spends a turn reaching a
- * refusal this process already knows about.
+ * What this machine tells a cloud turn it can be asked to do. Declared when the
+ * user has not refused it, not when it is already granted: the ask is what
+ * raises the prompt, and a refused capability is left out.
  */
 function declareDeviceHost(): DesktopHostDeclaration {
   const roots = listRoots();
@@ -836,11 +803,8 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
 }
 
 /**
- * The single entry point from IPC into anything privileged.
- *
- * Order matters: a command is classified before it runs, the workspace is
- * resolved before permission is checked, and permission is checked before the
- * service is called. Nothing reaches the disk on an unclassified command.
+ * The single entry point from IPC into anything privileged. Order matters:
+ * classify, resolve the workspace, check permission, then call the service.
  */
 export async function dispatch(
   window: BrowserWindow | null,
