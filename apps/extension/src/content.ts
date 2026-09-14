@@ -90,7 +90,6 @@ const automationState: AutomationState = {
   connectionStatus: 'disconnected',
   captureValues: false,
 };
-let lastPointerTarget: Element | null = null;
 
 /**
  * Whether this page's origin carries the user's approval.
@@ -117,10 +116,6 @@ function initialize(): void {
   void setupInPagePanel(logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);
-  document.addEventListener('mousemove', (event) => {
-    const target = event.target;
-    lastPointerTarget = target instanceof Element ? target : null;
-  });
 
   void originApproved.then((approved) => {
     if (!approved) return;
@@ -224,10 +219,6 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'SUBMIT_FORM':
       return handleSubmitForm(message as SubmitFormMessage);
-    case 'CAPTURE_ELEMENT':
-      return handleCaptureElement();
-    case 'GET_ELEMENT_INFO':
-      return handleGetElementInfo();
     case 'RUN_PAGE_ACTIONS':
       return handleRunPageActions(message as RunPageActionsMessage);
     case 'AUTO_FILL_JOB_APPLICATION':
@@ -597,75 +588,6 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
     screenshot,
     error: firstError,
   } as ExtensionResponse;
-}
-
-function serializeElement(target: Element | null): Record<string, unknown> | null {
-  if (!target) {
-    return null;
-  }
-
-  const rect = target.getBoundingClientRect();
-  const html = target.outerHTML || '';
-  return {
-    tag: target.tagName.toLowerCase(),
-    id: target.id || null,
-    className: target.className || null,
-    text: (target.textContent || '').trim().slice(0, 400),
-    selector: buildElementSelector(target),
-    rect: {
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height,
-    },
-    html: html.slice(0, 4000),
-  };
-}
-
-function buildElementSelector(element: Element): string {
-  if (element.id) {
-    return `#${CSS.escape(element.id)}`;
-  }
-
-  const parts: string[] = [];
-  let current: Element | null = element;
-  while (current && current.parentElement && parts.length < 4) {
-    const tag = current.tagName.toLowerCase();
-    const classPart =
-      typeof current.className === 'string' && current.className.trim()
-        ? `.${current.className
-            .trim()
-            .split(/\s+/)
-            .slice(0, 2)
-            .map((cls) => CSS.escape(cls))
-            .join('.')}`
-        : '';
-    const siblings = Array.from(current.parentElement.children).filter(
-      (child) => child.tagName === current!.tagName,
-    );
-    const nth = siblings.length > 1 ? `:nth-of-type(${siblings.indexOf(current) + 1})` : '';
-    parts.unshift(`${tag}${classPart}${nth}`);
-    current = current.parentElement;
-  }
-  return parts.join(' > ');
-}
-
-function handleCaptureElement(): ExtensionResponse {
-  const payload = serializeElement(lastPointerTarget);
-  if (!payload) {
-    return { success: false, error: 'No element under pointer' };
-  }
-
-  return { success: true, element: payload } as ExtensionResponse;
-}
-
-function handleGetElementInfo(): ExtensionResponse {
-  const active = document.activeElement instanceof Element ? document.activeElement : null;
-  const payload = serializeElement(active || lastPointerTarget);
-  if (!payload) {
-    return { success: false, error: 'No active element found' };
-  }
-  return { success: true, element: payload } as ExtensionResponse;
 }
 
 async function handleClick(message: ClickMessage): Promise<ClickResponse> {
@@ -1898,8 +1820,6 @@ const VALID_MESSAGE_TYPES = new Set([
   'GET_FORMS',
   'FILL_FORM',
   'SUBMIT_FORM',
-  'CAPTURE_ELEMENT',
-  'GET_ELEMENT_INFO',
   'RUN_PAGE_ACTIONS',
   'AUTO_FILL_JOB_APPLICATION',
   'GET_CONNECTION_STATUS',
