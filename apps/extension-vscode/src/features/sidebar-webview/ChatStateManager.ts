@@ -26,6 +26,7 @@ import {
   type UsageMeter,
   type UserInput,
 } from '@agiworkforce/types';
+import { presentChatError, type ChatErrorPresentation } from './errorPresentation';
 import { Config, type ComposerFollowUpBehavior } from '../../platform/config';
 import {
   CLI_NOT_EXECUTABLE_MARKER,
@@ -182,7 +183,7 @@ export type WebviewToExtMessage =
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
   | { type: 'done'; payload?: { model?: string; providerLabel?: string; brandColor?: string } }
-  | { type: 'error'; payload: { message: string } }
+  | { type: 'error'; payload: ChatErrorPresentation }
   | { type: 'sessionNotice'; payload: { message: string } }
   | {
       type: 'conversationBoundaryChanged';
@@ -736,15 +737,12 @@ export class ChatStateManager {
       case 'shareDiagnostics': {
         const editor = vscode.window.activeTextEditor;
         if (editor === undefined) {
-          this._post({ type: 'error', payload: { message: 'No active editor for diagnostics.' } });
+          this._postError('No active editor for diagnostics.');
           break;
         }
         const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
         if (diagnostics.length === 0) {
-          this._post({
-            type: 'error',
-            payload: { message: 'No diagnostics found in active file.' },
-          });
+          this._postError('No diagnostics found in active file.');
           break;
         }
         const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
@@ -1094,12 +1092,7 @@ export class ChatStateManager {
           !this._localModelProviders.has(normalized) &&
           !isModelReachableForTier(normalized, tier)
         ) {
-          this._post({
-            type: 'error',
-            payload: {
-              message: 'This model is not available for your current plan or provider setup.',
-            },
-          });
+          this._postError('This model is not available for your current plan or provider setup.');
           break;
         }
         await vscode.workspace
@@ -1546,7 +1539,7 @@ export class ChatStateManager {
   }
 
   private _rejectResume(message: string): false {
-    this._post({ type: 'error', payload: { message } });
+    this._postError(message);
     void vscode.window.showWarningMessage(`AGI Workforce: ${message}`);
     return false;
   }
@@ -1556,6 +1549,22 @@ export class ChatStateManager {
    * keeps the catalog the single owner of that name and keeps raw ids out of
    * the webview.
    */
+  /**
+   * The provider the user chose, by the catalog's name for it. A failure that
+   * does not name a provider itself, a dead connection for instance, still gets
+   * to say which one it could not reach.
+   */
+  private _activeProviderLabel(): string | undefined {
+    const threadProvider = this._thread?.provider;
+    if (threadProvider !== undefined) return providerDisplayLabel(threadProvider);
+    if (isAutoRoutingModel(this._activeModel)) return undefined;
+    return getModelProviderInfo(this._activeModel).providerLabel;
+  }
+
+  private _postError(message: string): void {
+    this._post({ type: 'error', payload: presentChatError(message, this._activeProviderLabel()) });
+  }
+
   private _postSessionBoundary(
     trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>,
     provider?: string,
@@ -1701,10 +1710,7 @@ export class ChatStateManager {
   }
 
   rewindLast(): void {
-    this._post({
-      type: 'error',
-      payload: { message: 'Rewind is unavailable until the local runtime exposes turn rollback.' },
-    });
+    this._postError('Rewind is unavailable until the local runtime exposes turn rollback.');
   }
 
   private _dropQueuedSends(message: string): void {
@@ -2146,23 +2152,17 @@ export class ChatStateManager {
     const { text, model, browseWeb } = request;
     if (conversationEpoch !== this._conversationEpoch) return false;
     if (!vscode.workspace.isTrusted) {
-      this._post({
-        type: 'error',
-        payload: { message: 'Trust this workspace before starting a developer session.' },
-      });
+      this._postError('Trust this workspace before starting a developer session.');
       return false;
     }
     const activeWorkspace = await getActiveWorkspaceFolder();
     const cwd = this._thread?.cwd ?? activeWorkspace?.uri.fsPath;
     if (cwd === undefined) {
-      this._post({
-        type: 'error',
-        payload: { message: 'Open a workspace folder before starting a developer session.' },
-      });
+      this._postError('Open a workspace folder before starting a developer session.');
       return false;
     }
     if (this._localRuntimes === undefined) {
-      this._post({ type: 'error', payload: { message: 'The AGI local runtime is unavailable.' } });
+      this._postError('The AGI local runtime is unavailable.');
       return false;
     }
 
@@ -2170,10 +2170,7 @@ export class ChatStateManager {
       (folder) => folder.uri.fsPath === cwd,
     );
     if (workspaceStillOpen !== true) {
-      this._post({
-        type: 'error',
-        payload: { message: 'Reopen this developer session’s workspace before continuing.' },
-      });
+      this._postError('Reopen this developer session’s workspace before continuing.');
       return false;
     }
     const workspaceUri = vscode.Uri.file(cwd);
@@ -2195,7 +2192,7 @@ export class ChatStateManager {
     ) {
       const message =
         'AGI will not continue a Local developer session into BYOK, Managed Cloud, or Auto routing without a reviewed handoff. Use New Chat for a fresh provider session, or create a reviewed continuation in the AGI CLI.';
-      this._post({ type: 'error', payload: { message } });
+      this._postError(message);
       this._post({
         type: 'followUpStatus',
         payload: {
@@ -2215,12 +2212,7 @@ export class ChatStateManager {
       !this._localModelProviders.has(requestedModel) &&
       !isModelReachableForTier(requestedModel, tier)
     ) {
-      this._post({
-        type: 'error',
-        payload: {
-          message: 'This model is not available for your current plan or provider setup.',
-        },
-      });
+      this._postError('This model is not available for your current plan or provider setup.');
       return false;
     }
     this._activeModel = requestedModel;
@@ -2336,7 +2328,7 @@ export class ChatStateManager {
           preStartOverflowTurnId = event.turnId;
           bufferedTurnEvents.splice(0);
           uiSettled = true;
-          this._post({ type: 'error', payload: { message: PRE_START_EVENT_OVERFLOW_MESSAGE } });
+          this._postError(PRE_START_EVENT_OVERFLOW_MESSAGE);
           if (!terminal) {
             terminal = true;
             resolveCompletion();
@@ -2345,14 +2337,11 @@ export class ChatStateManager {
           void runtime
             .interruptTurn({ threadId: thread.id, turnId: event.turnId })
             .catch((error: unknown) => {
-              this._post({
-                type: 'error',
-                payload: {
-                  message: `The overflowing local turn could not be interrupted: ${
-                    error instanceof Error ? error.message : 'Cancellation failed.'
-                  }`,
-                },
-              });
+              this._postError(
+                `The overflowing local turn could not be interrupted: ${
+                  error instanceof Error ? error.message : 'Cancellation failed.'
+                }`,
+              );
             });
           return;
         }
@@ -2458,8 +2447,7 @@ export class ChatStateManager {
       }
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'The AGI local runtime failed.';
-      this._post({ type: 'error', payload: { message } });
+      this._postError(error instanceof Error ? error.message : 'The AGI local runtime failed.');
       return false;
     }
   }
@@ -2506,7 +2494,7 @@ export class ChatStateManager {
     complete: () => void,
   ): Promise<void> {
     if (event.type === 'runtime_disconnected') {
-      this._post({ type: 'error', payload: { message: event.error } });
+      this._postError(event.error);
       complete();
       return;
     }
@@ -2614,12 +2602,7 @@ export class ChatStateManager {
           complete();
           return;
         }
-        this._post({
-          type: 'error',
-          payload: {
-            message: error instanceof Error ? error.message : 'The approval response failed.',
-          },
-        });
+        this._postError(error instanceof Error ? error.message : 'The approval response failed.');
         await this._interruptActiveTurn();
       }
       return;
@@ -2661,10 +2644,7 @@ export class ChatStateManager {
       complete();
       return;
     }
-    this._post({
-      type: 'error',
-      payload: { message: event.error ?? 'The local developer turn failed.' },
-    });
+    this._postError(event.error ?? 'The local developer turn failed.');
     complete();
   }
 
@@ -2687,10 +2667,7 @@ export class ChatStateManager {
       await active.runtime.interruptTurn({ threadId: active.threadId, turnId: active.turnId });
       if (!active.isUiSettled()) this._post({ type: 'done' });
     } catch (error) {
-      this._post({
-        type: 'error',
-        payload: { message: error instanceof Error ? error.message : 'Cancellation failed.' },
-      });
+      this._postError(error instanceof Error ? error.message : 'Cancellation failed.');
     } finally {
       active.complete();
     }
