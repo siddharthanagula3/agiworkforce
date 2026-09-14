@@ -6,6 +6,7 @@
 
 pub mod chat;
 pub mod client;
+pub mod image;
 pub mod memory;
 pub mod projects;
 pub mod state;

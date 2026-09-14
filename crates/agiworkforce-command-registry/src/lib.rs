@@ -391,6 +391,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec!["v"],
         ),
         RegistryCommand::builtin_slash(
+            "image",
+            "Generate an image (/image <prompt>)",
+            false,
+            true,
+            vec!["imagine"],
+        ),
+        RegistryCommand::builtin_slash(
             "theme",
             "Change syntax highlighting theme",
             false,

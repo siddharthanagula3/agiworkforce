@@ -896,6 +896,34 @@ enum Command {
         #[command(subcommand)]
         action: MemorySubcommand,
     },
+    /// Generate an image with your AGI Workforce account and save it to a file.
+    ///
+    /// Runs on the same hosted image route the web and mobile apps use, so the
+    /// image lands in your account library as well as on disk. Managed privacy
+    /// mode only.
+    Image {
+        /// What to draw.
+        prompt: Option<String>,
+        /// Where to write the image. A directory takes a name from the prompt;
+        /// a filename is used as given. Defaults to the working directory.
+        #[arg(long)]
+        out: Option<String>,
+        /// Image size, e.g. 256x256. The account decides the default.
+        #[arg(long)]
+        size: Option<String>,
+        /// Rendering quality the hosted route accepts (standard or hd).
+        #[arg(long)]
+        quality: Option<String>,
+        /// How many images to generate.
+        #[arg(long, short = 'n', default_value_t = 1)]
+        count: u8,
+        /// Catalogue image model to use instead of the first admitted one.
+        #[arg(short, long)]
+        model: Option<String>,
+        /// List the image models this account can generate with, and exit.
+        #[arg(long)]
+        list_models: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1495,6 +1523,59 @@ async fn print_hosted_history(limit: usize) {
         }
         Err(error) => println!("Account history unavailable: {error}"),
     }
+}
+
+/// `agi image "<prompt>"`: one hosted generation, saved where the user asked.
+async fn handle_image_command(
+    prompt: Option<&str>,
+    out: Option<&str>,
+    size: Option<&str>,
+    quality: Option<&str>,
+    count: u8,
+    model: Option<&str>,
+    list_models: bool,
+) -> Result<()> {
+    let privacy = account_privacy_mode();
+
+    if list_models {
+        let models = cloud::image::image_models(privacy)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        if models.is_empty() {
+            println!("Your account's catalogue publishes no image models.");
+            return Ok(());
+        }
+        for model in &models {
+            println!(
+                "{}  {}  {}  {}",
+                model.model_id, model.name, model.provider, model.state
+            );
+        }
+        return Ok(());
+    }
+
+    let Some(prompt) = prompt.map(str::trim).filter(|prompt| !prompt.is_empty()) else {
+        anyhow::bail!("An image needs a prompt: agi image \"a red bicycle\"");
+    };
+
+    let options = cloud::image::ImageRequestOptions {
+        prompt: prompt.to_string(),
+        count,
+        size: size.map(str::to_string),
+        quality: quality.map(str::to_string),
+        model: model.map(str::to_string),
+        out: out.map(std::path::PathBuf::from),
+    };
+    let cwd = std::env::current_dir()?;
+    let generation = cloud::image::generate(privacy, &options, &cwd)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+
+    for path in &generation.paths {
+        println!("{}", path.display());
+    }
+    output::print_info(&format!("{} via {}", generation.model, generation.provider));
+    Ok(())
 }
 
 async fn handle_projects_command(action: &ProjectsSubcommand) -> Result<()> {
@@ -3415,6 +3496,26 @@ pub async fn run_main() -> Result<()> {
             Command::Schedules { action } => handle_schedules_command(action, cli.output).await,
             Command::Projects { action } => handle_projects_command(action).await,
             Command::Memory { action } => handle_memory_command(action).await,
+            Command::Image {
+                prompt,
+                out,
+                size,
+                quality,
+                count,
+                model,
+                list_models,
+            } => {
+                handle_image_command(
+                    prompt.as_deref(),
+                    out.as_deref(),
+                    size.as_deref(),
+                    quality.as_deref(),
+                    *count,
+                    model.as_deref(),
+                    *list_models,
+                )
+                .await
+            }
 
             // --- Onboarding ---
             Command::Onboarding => {

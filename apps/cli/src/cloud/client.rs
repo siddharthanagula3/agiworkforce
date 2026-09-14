@@ -165,6 +165,54 @@ impl CloudClient {
     ) -> Result<T, CloudError> {
         Self::send(self.request(reqwest::Method::POST, path).json(body)).await
     }
+
+    /// POST one billable Managed Cloud operation. The key identifies the
+    /// operation so a retry settles the same reservation instead of charging
+    /// the account twice.
+    pub async fn post_idempotent<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        idempotency_key: &str,
+        body: &B,
+        timeout: Duration,
+    ) -> Result<T, CloudError> {
+        Self::send(
+            self.request(reqwest::Method::POST, path)
+                .header("Idempotency-Key", idempotency_key)
+                .timeout(timeout)
+                .json(body),
+        )
+        .await
+    }
+
+    /// Read a hosted file the account owns. Media the account stores is served
+    /// behind the same credential as the JSON APIs, so a generated image is not
+    /// reachable by URL alone.
+    pub async fn get_bytes(&self, path: &str) -> Result<Vec<u8>, CloudError> {
+        let response = self
+            .request(reqwest::Method::GET, path)
+            .header("Accept", "*/*")
+            .send()
+            .await
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let status = response.status().as_u16();
+        if status == 401 {
+            tier_cache::invalidate_tier_cache();
+            return Err(CloudError::SessionExpired);
+        }
+        if !(200..300).contains(&status) {
+            let body = response.text().await.unwrap_or_default();
+            return Err(CloudError::Api {
+                status,
+                message: api_error_message(&body),
+            });
+        }
+        response
+            .bytes()
+            .await
+            .map(|bytes| bytes.to_vec())
+            .map_err(|error| CloudError::Transport(error.to_string()))
+    }
 }
 
 #[cfg(test)]
