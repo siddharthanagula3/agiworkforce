@@ -79,7 +79,7 @@ ratatui = "0.30"
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
 cron = "0.13"
 axum = { version = "0.8", features = ["tokio", "ws"] }
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "v5"] }
 base64 = "0.22"
 rand = "0.9"
 supports-color = "3"

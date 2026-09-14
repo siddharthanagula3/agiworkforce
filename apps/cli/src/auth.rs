@@ -1301,6 +1301,20 @@ fn base64url_decode(input: &str) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// The `sub` claim of a JWT, used as the identity that locally cached account
+/// data belongs to. The payload is read, never trusted: a wrong value costs a
+/// re-sync, and no authorization decision is made from it.
+pub(crate) fn jwt_subject(jwt: &str) -> Option<String> {
+    let payload = jwt.split('.').nth(1)?;
+    let decoded = base64url_decode(payload).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
+    claims
+        .get("sub")
+        .and_then(serde_json::Value::as_str)
+        .filter(|subject| !subject.trim().is_empty())
+        .map(str::to_string)
+}
+
 fn extract_chatgpt_account_id(jwt: &str) -> Result<String> {
     let parts: Vec<&str> = jwt.split('.').collect();
     if parts.len() < 2 {

@@ -18,6 +18,11 @@ pub struct ProjectEntry {
     pub last_seen: String,
     /// Trust level: "trusted", "untrusted", "ask".
     pub trust_level: String,
+    /// Id of the account project this directory belongs to, when the user has
+    /// linked one. A directory is never published to the account by being
+    /// visited; the link is always explicit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloud_project_id: Option<String>,
 }
 
 /// Registry of known projects, stored as `~/.agiworkforce/projects.json`.
@@ -102,6 +107,7 @@ impl ProjectRegistry {
                 id,
                 last_seen: chrono::Utc::now().to_rfc3339(),
                 trust_level: trust_level.to_string(),
+                cloud_project_id: None,
             },
         );
         Ok(())
@@ -111,6 +117,34 @@ impl ProjectRegistry {
     #[cfg(test)]
     pub fn get_project(&self, path: &str) -> Option<&ProjectEntry> {
         self.projects.get(path)
+    }
+
+    /// Point a directory at an account project. Registers the directory first
+    /// when it is not known yet, so linking never depends on having chatted
+    /// here before.
+    pub fn link_cloud_project(&mut self, path: &Path, cloud_project_id: &str) -> Result<()> {
+        if cloud_project_id.trim().is_empty() {
+            bail!("An account project id cannot be blank");
+        }
+        let abs_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let path_key = abs_path.to_string_lossy().to_string();
+        if !self.projects.contains_key(&path_key) {
+            self.register_project(path, "ask")?;
+        }
+        let entry = self
+            .projects
+            .get_mut(&path_key)
+            .context("Project entry vanished while linking it to an account project")?;
+        entry.cloud_project_id = Some(cloud_project_id.trim().to_string());
+        Ok(())
+    }
+
+    /// The account project a directory is linked to, if any.
+    pub fn cloud_project_for(&self, path: &Path) -> Option<&str> {
+        let abs_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        self.projects
+            .get(&abs_path.to_string_lossy().to_string())
+            .and_then(|entry| entry.cloud_project_id.as_deref())
     }
 
     // --- Private helpers ---
@@ -295,5 +329,69 @@ mod tests {
             .to_string_lossy()
             .to_string();
         assert_eq!(registry.get_project(&key).unwrap().trust_level, "trusted");
+    }
+
+    #[test]
+    fn a_directory_carries_no_account_project_until_it_is_linked() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("repo");
+        std::fs::create_dir_all(&project).unwrap();
+
+        let mut registry = ProjectRegistry::default();
+        registry.register_project(&project, "trusted").unwrap();
+        assert_eq!(registry.cloud_project_for(&project), None);
+
+        registry.link_cloud_project(&project, "  p-123  ").unwrap();
+        assert_eq!(registry.cloud_project_for(&project), Some("p-123"));
+    }
+
+    #[test]
+    fn linking_registers_a_directory_that_was_never_visited() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("fresh");
+        std::fs::create_dir_all(&project).unwrap();
+
+        let mut registry = ProjectRegistry::default();
+        registry.link_cloud_project(&project, "p-9").unwrap();
+        assert_eq!(registry.cloud_project_for(&project), Some("p-9"));
+    }
+
+    #[test]
+    fn a_blank_account_project_id_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("repo");
+        std::fs::create_dir_all(&project).unwrap();
+        let mut registry = ProjectRegistry::default();
+        assert!(registry.link_cloud_project(&project, "   ").is_err());
+    }
+
+    #[test]
+    fn an_account_link_survives_a_save_and_load() {
+        let config = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("repo");
+        std::fs::create_dir_all(&project).unwrap();
+
+        let mut registry = ProjectRegistry::default();
+        registry.link_cloud_project(&project, "p-77").unwrap();
+        registry.save(config.path()).unwrap();
+
+        let reloaded = ProjectRegistry::load(config.path()).unwrap();
+        assert_eq!(reloaded.cloud_project_for(&project), Some("p-77"));
+    }
+
+    #[test]
+    fn a_registry_written_before_account_links_still_loads() {
+        let config = tempfile::tempdir().unwrap();
+        std::fs::write(
+            config.path().join("projects.json"),
+            r#"{"/tmp/legacy":{"id":"legacy","last_seen":"2026-01-01T00:00:00Z","trust_level":"trusted"}}"#,
+        )
+        .unwrap();
+        let registry = ProjectRegistry::load(config.path()).unwrap();
+        assert_eq!(
+            registry.projects.get("/tmp/legacy").unwrap().cloud_project_id,
+            None
+        );
     }
 }
