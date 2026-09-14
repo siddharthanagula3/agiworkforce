@@ -930,3 +930,32 @@ already, since those are display-only and the subprocessors page runs its
 objection window from the date it publishes.
 **Impact** NON-BLOCKING (the policies are now accurate; this is about notice)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [QA] Re-grant Accessibility to the process that runs the agents
+
+**Why founder assistance is required**
+From about 10:05 local time on 2026-09-14, synthetic input from the agents'
+shell (System Events, CGEvent clicks, keystrokes) reaches no application:
+window counts read zero for every app, a click at a known control changes
+nothing, a keystroke types nowhere, while screen capture still works. At 09:08
+the same commands clicked the desktop shell's capability prompt. Accessibility
+is a per-process grant in System Settings on the founder's machine, and an
+agent must not change it.
+**Exact action**
+System Settings, Privacy and Security, Accessibility: confirm the terminal (or
+Claude) process that runs the agents is listed and on; turn it off and on if it
+already is. Then re-run the VS Code sidebar leg of the browser tool: with the
+dev host open on the QA project and a browser paired, type a prompt that asks
+for the open page's title. One minute.
+**Where** System Settings on the founder's machine.
+**Needed input** The toggle, then a yes or no on the sidebar leg.
+**How to verify completion** An osascript count of Finder's windows through
+System Events returns a number above zero, and the VS Code sidebar's transcript
+shows the paired page's title.
+**What remains after founder action** Record the sidebar leg in the release
+doc's verification matrix (VS Code to Chrome moves from the app-server
+boundary to the sidebar itself) and the native-prompt proofs run unattended
+again.
+**Impact** VERIFICATION-BLOCKING (the VS Code sidebar leg of the browser tool
+and every native-prompt proof)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED

@@ -152,6 +152,14 @@ extension state plus the desktop pairing record).
    app's sign-in form renders with no fields and Clerk never reports loaded.
    Entry "[Mobile] Enable the Native API on the Clerk development instance" in
    the founder file. NON-BLOCKING for every other client.
+6. Accessibility on the founder's machine: from about 10:05 on 2026-09-14
+   synthetic input from the agents' shell reaches no application (window
+   counts read zero, clicks and keystrokes land nowhere, screen capture still
+   works), so the VS Code sidebar leg of the browser tool and every
+   native-prompt proof stop at the app-server boundary. A per-process grant in
+   System Settings, not an agent's to change. Entry "[QA] Re-grant
+   Accessibility to the process that runs the agents" in the founder file.
+   NON-BLOCKING.
 
 ## 5. Plan
 
@@ -311,7 +319,8 @@ slider's two ends and the choice surviving a reload all behave.
 Founder items (section 4 and the founder file): the Tauri decision; the
 zero-price router on paid plans; a native sign-in path for the QA account; the
 Clerk development instance's Native API; one click on Chrome's host-permission
-prompt. Not founder-gated but open: on-device generation on the simulator
+prompt; the Accessibility grant for the process that runs the agents. Not
+founder-gated but open: on-device generation on the simulator
 (needs one run on a real device), the appearance-settings flush (fixed in the
 tree, its commit waiting on one green test run on a quieter machine), and
 chrome-5's remaining items.
