@@ -117,6 +117,7 @@ describe('POST knowledge-files records why a file has no extracted text', () => 
     wireInsertPath('Not readable: text is not extracted from images.');
     mockExtractProjectKnowledgeFile.mockResolvedValue({
       extractedText: null,
+      anchors: [],
       objectKey: 'knowledge-files/projects/proj-1/source.txt',
       etag: '"etag-1"',
     });
@@ -133,6 +134,7 @@ describe('POST knowledge-files records why a file has no extracted text', () => 
     wireInsertPath(null);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
       extractedText: null,
+      anchors: [],
       objectKey: 'knowledge-files/projects/proj-1/source.txt',
       etag: '"etag-1"',
     });
@@ -149,6 +151,7 @@ describe('POST knowledge-files records why a file has no extracted text', () => 
     wireInsertPath(null);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
       extractedText: 'Launch is October 4.',
+      anchors: [],
       objectKey: 'knowledge-files/projects/proj-1/source.txt',
       etag: '"etag-1"',
     });
