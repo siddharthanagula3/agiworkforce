@@ -112,6 +112,31 @@ const nextConfig: NextConfig = {
       { source: '/cookie-policy', destination: '/cookies', permanent: true },
       { source: '/aup', destination: '/acceptable-use', permanent: true },
       { source: '/acceptable-use-policy', destination: '/acceptable-use', permanent: true },
+
+      { source: '/register', destination: '/signup', permanent: true },
+      { source: '/sign-up', destination: '/signup', permanent: true },
+      { source: '/sign-in', destination: '/login', permanent: true },
+      { source: '/auth/login', destination: '/login', permanent: true },
+      { source: '/forgot-password', destination: '/login', permanent: true },
+      { source: '/downloads', destination: '/download', permanent: true },
+      { source: '/documentation', destination: '/docs', permanent: true },
+      { source: '/api-reference', destination: '/api-docs', permanent: true },
+      { source: '/marketplace', destination: '/apps', permanent: true },
+      { source: '/features/ai-skills', destination: '/skills', permanent: true },
+      {
+        source: '/use-cases/consulting-businesses',
+        destination: '/use-cases/consulting',
+        permanent: true,
+      },
+      {
+        source: '/use-cases/it-service-providers',
+        destination: '/use-cases/it-providers',
+        permanent: true,
+      },
+      { source: '/user', destination: '/settings', permanent: false },
+      { source: '/settings/skills', destination: '/skills', permanent: false },
+      { source: '/connectors/new', destination: '/connectors', permanent: false },
+      { source: '/resources', destination: '/help', permanent: true },
     ];
   },
 
