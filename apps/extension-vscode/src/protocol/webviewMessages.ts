@@ -121,25 +121,6 @@ const attachFiles = z.object({
   }),
 });
 
-const transcribeAudio = z.object({
-  type: z.literal('transcribeAudio'),
-  payload: z.object({
-    dataUrl: z
-      .string()
-      .min(1)
-      .max(14_000_000)
-      .refine((value) => value.startsWith('data:audio/'), {
-        message: 'Expected an audio data: URL',
-      }),
-    language: z
-      .string()
-      .min(2)
-      .max(16)
-      .regex(/^[A-Za-z-]+$/u)
-      .optional(),
-  }),
-});
-
 const fileSearch = z.object({
   type: z.literal('fileSearch'),
   payload: z.object({
@@ -214,7 +195,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   attachContext,
   attachFiles,
   removePendingAttachment,
-  transcribeAudio,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;
