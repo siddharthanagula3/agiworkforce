@@ -12,6 +12,7 @@ export type AgentActivityRunStatus =
   | 'running'
   | 'paused'
   | 'awaiting-approval'
+  | 'awaiting-device'
   | 'completed'
   | 'partial'
   | 'failed'
@@ -21,6 +22,7 @@ export type AgentActivityStepStatus =
   | 'pending'
   | 'running'
   | 'awaiting-approval'
+  | 'awaiting-device'
   | 'completed'
   | 'failed'
   | 'cancelled';
@@ -69,8 +71,20 @@ export interface AgentActivityToolEntry {
   completedAtMs?: number;
   elapsedMs?: number;
   approval?: AgentActivityApproval;
+  /**
+   * Set while the step is waiting on one particular machine. Every surface that
+   * is not that machine renders it as a wait, naming the device the user has to
+   * go to; nothing here says what the step will read.
+   */
+  deviceStep?: AgentActivityDeviceStep;
   query?: string;
   sources?: AgentEventSource[];
+}
+
+export interface AgentActivityDeviceStep {
+  deviceId: string;
+  deviceName: string;
+  expiresAtMs: number;
 }
 
 export interface AgentActivitySourcesEntry {
@@ -742,6 +756,63 @@ function applyAgentEvent(
         next.completedAtMs = envelope.emittedAtMs;
         next.entries = withoutGenerationProgress(next.entries);
       }
+      return next;
+    }
+
+    case 'device-step-requested': {
+      next.entries = closeRunningGenerationProgress(next.entries, envelope.emittedAtMs);
+      const id = `tool:${event.toolCallId}`;
+      const index = next.entries.findIndex((entry) => entry.id === id);
+      const deviceStep: AgentActivityDeviceStep = {
+        deviceId: event.deviceId,
+        deviceName: event.deviceName,
+        expiresAtMs: event.expiresAtMs,
+      };
+      if (index >= 0) {
+        next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
+          ...entry,
+          deviceStep,
+          summary: event.summary,
+          status: 'awaiting-device',
+        }));
+      } else {
+        next.entries = [
+          ...next.entries,
+          {
+            kind: 'tool',
+            id,
+            toolCallId: event.toolCallId,
+            name: event.toolName,
+            category: 'other',
+            summary: event.summary,
+            input: event.input,
+            status: 'awaiting-device',
+            deviceStep,
+            startedAtMs: envelope.emittedAtMs,
+          },
+        ];
+      }
+      next.status = 'awaiting-device';
+      return next;
+    }
+
+    case 'device-step-resolved': {
+      const id = `tool:${event.toolCallId}`;
+      const index = next.entries.findIndex((entry) => entry.id === id);
+      const resolvedStatus: AgentActivityStepStatus =
+        event.outcome === 'completed'
+          ? 'completed'
+          : event.outcome === 'cancelled'
+            ? 'cancelled'
+            : 'failed';
+      if (index >= 0) {
+        next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
+          ...entry,
+          status: resolvedStatus,
+          completedAtMs: envelope.emittedAtMs,
+        }));
+      }
+      next.status = event.outcome === 'cancelled' ? 'cancelled' : 'running';
       return next;
     }
 

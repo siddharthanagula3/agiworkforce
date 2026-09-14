@@ -3,6 +3,8 @@ import type { AgentEventApprovalRequested } from './AgentEventApprovalRequested'
 import type { AgentEventApprovalResolved } from './AgentEventApprovalResolved';
 import type { AgentEventArtifactProduced } from './AgentEventArtifactProduced';
 import type { AgentEventContextCompacted } from './AgentEventContextCompacted';
+import type { AgentEventDeviceStepRequested } from './AgentEventDeviceStepRequested';
+import type { AgentEventDeviceStepResolved } from './AgentEventDeviceStepResolved';
 import type { AgentEventError } from './AgentEventError';
 import type { AgentEventInputRequested } from './AgentEventInputRequested';
 import type { AgentEventInputResolved } from './AgentEventInputResolved';
@@ -47,6 +49,8 @@ export type AgentEvent =
   | ({ type: 'approval-resolved' } & AgentEventApprovalResolved)
   | ({ type: 'input-requested' } & AgentEventInputRequested)
   | ({ type: 'input-resolved' } & AgentEventInputResolved)
+  | ({ type: 'device-step-requested' } & AgentEventDeviceStepRequested)
+  | ({ type: 'device-step-resolved' } & AgentEventDeviceStepResolved)
   | ({ type: 'artifact-produced' } & AgentEventArtifactProduced)
   | ({ type: 'context-compacted' } & AgentEventContextCompacted)
   | ({ type: 'task-state-changed' } & AgentTaskStateChanged);
