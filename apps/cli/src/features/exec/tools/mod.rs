@@ -331,8 +331,21 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     // Network-capable built-ins are a trust-boundary operation, even when
     // their catalog classification is read-only. Local means no hidden API or
     // cloud call; the user must create an explicit BYOK/Managed continuation.
+    // A browser command leaves this device by definition: it acts in the
+    // user's signed-in Chrome and brings page content back into the
+    // conversation.
     if opts.privacy_mode == crate::agent::PrivacyMode::Local
-        && matches!(canonical_name, "web_search" | "web_fetch" | "advisor")
+        && matches!(
+            canonical_name,
+            "web_search"
+                | "web_fetch"
+                | "advisor"
+                | "browser_read_page"
+                | "browser_click"
+                | "browser_type"
+                | "browser_navigate"
+                | "browser_screenshot"
+        )
     {
         return Ok(ToolResult {
             tool_name: canonical_name.to_string(),
@@ -438,6 +451,8 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             )
             .await
         }
+        "browser_read_page" | "browser_click" | "browser_type" | "browser_navigate"
+        | "browser_screenshot" => execute_browser_command(canonical_name, &call.args).await,
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
         "apply_patch" => {
@@ -663,6 +678,66 @@ async fn execute_web_fetch_with_opts(
     _quiet: bool,
 ) -> Result<ToolResult> {
     execute_web_fetch(args).await
+}
+
+// ---------------------------------------------------------------------------
+// Tool family: the user's paired browser
+// ---------------------------------------------------------------------------
+
+/// Turn the CLI's flat string arguments into the JSON the shell expects.
+///
+/// Arguments arrive here as strings because that is the CLI's tool-call shape,
+/// so a boolean and a number have to be recovered rather than passed through.
+/// An unparseable value is passed as the string it was: the shell validates
+/// every argument itself and says what was wrong, which is a better answer
+/// than this layer guessing.
+fn browser_command_args(
+    command: &str,
+    args: &HashMap<String, String>,
+) -> serde_json::Map<String, Value> {
+    let mut out = serde_json::Map::new();
+    let mut copy_string = |key: &str| {
+        if let Some(value) = args.get(key) {
+            out.insert(key.to_string(), Value::String(value.clone()));
+        }
+    };
+    match command {
+        "browser_click" => copy_string("selector"),
+        "browser_type" => {
+            copy_string("selector");
+            copy_string("text");
+            if let Some(clear) = args.get("clear") {
+                out.insert("clear".to_string(), Value::Bool(clear == "true"));
+            }
+        }
+        "browser_navigate" => copy_string("url"),
+        _ => {}
+    }
+    out
+}
+
+async fn execute_browser_command(
+    command: &str,
+    args: &HashMap<String, String>,
+) -> Result<ToolResult> {
+    let identity =
+        crate::browser_bridge::ClientIdentity::for_cli(std::env::current_dir().ok(), None);
+    let payload = Value::Object(browser_command_args(command, args));
+    match crate::browser_bridge::run_command(command, payload, identity).await {
+        Ok(value) => Ok(ToolResult {
+            tool_name: command.to_string(),
+            success: true,
+            output: match &value {
+                Value::String(text) => text.clone(),
+                other => serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),
+            },
+        }),
+        Err(failure) => Ok(ToolResult {
+            tool_name: command.to_string(),
+            success: false,
+            output: failure.user_message(),
+        }),
+    }
 }
 
 // ---------------------------------------------------------------------------

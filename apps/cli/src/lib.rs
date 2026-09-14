@@ -13,6 +13,7 @@ pub mod agent_events;
 pub mod agents;
 pub mod auth;
 pub mod auth_oauth;
+pub mod browser_bridge;
 pub mod claude_parity;
 pub mod cli_options;
 pub mod cloud;
