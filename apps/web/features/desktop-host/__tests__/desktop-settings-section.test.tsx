@@ -5,6 +5,7 @@ import {
   HOST_SHORTCUT_CHOICES,
   NO_HOST_SHORTCUT,
   describeAccelerator,
+  type DeveloperRuntimeStatus,
   type HostPreferences,
   type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
@@ -22,25 +23,32 @@ const DEFAULT_STATE: HostPreferencesState = {
   shortcutStatus: { quickAsk: 'registered', screenshot: 'registered', voice: 'registered' },
 };
 
-const RESOLVED_CLI = {
+const RESOLVED_CLI: DeveloperRuntimeStatus = {
   available: true,
   name: 'agi',
   version: '1.7.1',
   path: '~/.cargo/bin/agi',
   hint: null,
+  accountSyncError: null,
 };
 
-const MISSING_CLI = {
+const MISSING_CLI: DeveloperRuntimeStatus = {
   available: false,
   name: 'agi',
   version: null,
   path: null,
   hint: 'Install the AGI CLI from agiworkforce.com/download.',
+  accountSyncError: null,
+};
+
+const REFUSED_ACCOUNT_CLI: DeveloperRuntimeStatus = {
+  ...RESOLVED_CLI,
+  accountSyncError: 'Device sign-in is turned off for this account.',
 };
 
 function installHost(
   overrides: Partial<HostPreferencesState> = {},
-  cli: typeof RESOLVED_CLI | typeof MISSING_CLI = RESOLVED_CLI,
+  cli: DeveloperRuntimeStatus = RESOLVED_CLI,
 ) {
   const state: HostPreferencesState = {
     preferences: { ...DEFAULT_STATE.preferences, ...overrides.preferences },
@@ -103,6 +111,17 @@ describe('the desktop settings section', () => {
         'Not found on this computer. Install the AGI CLI to run coding sessions here. Install the AGI CLI from agiworkforce.com/download.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('says the account could not be given to the CLI, and why', async () => {
+    installHost({}, REFUSED_ACCOUNT_CLI);
+
+    render(<DesktopSettingsSection />);
+
+    const note = await screen.findByText(
+      'Using agi 1.7.1 from ~/.cargo/bin/agi. This account could not be given to the AGI CLI on this computer. Device sign-in is turned off for this account.',
+    );
+    expect(note).toBeInTheDocument();
   });
 
   it('renders nothing in a browser', () => {
