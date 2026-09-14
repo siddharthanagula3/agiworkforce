@@ -7,6 +7,7 @@ import { Brain, Mic } from 'lucide-react';
 import {
   SettingsModal,
   SETTINGS_NAV_GROUPS_WEB,
+  SETTINGS_NAV_GROUP_DESKTOP_APP,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
 } from '@agiworkforce/ui';
 import type {
@@ -24,7 +25,11 @@ import {
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { useConnectorsSettingsAdapter } from '@/features/connectors/hooks/use-connectors-settings-adapter';
 import { useSkillsSettingsAdapter } from '@/features/skills/hooks/use-skills-settings-adapter';
-import type { WebSettingsContentSection } from '../lib/web-settings-sections';
+import type {
+  WebSettingsContentSection,
+  WebSettingsHostedSection,
+} from '../lib/web-settings-sections';
+import { DesktopSettingsSection, useDesktopHost } from '@/features/desktop-host';
 
 import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
@@ -120,6 +125,16 @@ const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_
       },
 );
 
+/**
+ * The shell's own settings sit between Settings and Customize, and only when
+ * there is a shell: a browser has nothing behind that group to configure.
+ */
+const HOSTED_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = [
+  ...WEB_SETTINGS_NAV_GROUPS.filter((group) => group.label !== SETTINGS_NAV_GROUP_CUSTOMIZE),
+  SETTINGS_NAV_GROUP_DESKTOP_APP,
+  ...WEB_SETTINGS_NAV_GROUPS.filter((group) => group.label === SETTINGS_NAV_GROUP_CUSTOMIZE),
+];
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -140,6 +155,7 @@ export function WebSettingsModal({
   initialSection = 'general',
 }: WebSettingsModalProps) {
   const pathname = usePathname();
+  const host = useDesktopHost();
 
   // Derive section from current URL path (deep-link support)
   const sectionFromPath = (() => {
@@ -210,7 +226,9 @@ export function WebSettingsModal({
 
   const adapter: SettingsDataAdapter = connectors.adapter;
 
-  const sectionContent: Record<WebSettingsContentSection, React.ReactNode> = {
+  const sectionContent: Record<WebSettingsContentSection, React.ReactNode> &
+    Partial<Record<WebSettingsHostedSection, React.ReactNode>> = {
+    ...(host ? { desktop: <DesktopSettingsSection /> } : {}),
     general: <GeneralSection />,
     account: <AccountSection />,
     team: (
@@ -246,7 +264,7 @@ export function WebSettingsModal({
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
           sectionContent={sectionContent}
-          navGroups={WEB_SETTINGS_NAV_GROUPS}
+          navGroups={host ? HOSTED_SETTINGS_NAV_GROUPS : WEB_SETTINGS_NAV_GROUPS}
           adapter={adapter}
           directoryAdapter={connectors.directoryAdapter}
           navBadges={connectors.navBadges}

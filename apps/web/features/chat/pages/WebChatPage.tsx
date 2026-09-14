@@ -124,7 +124,7 @@ import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permi
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@agiworkforce/ui';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import {
-  isWebSettingsSection,
+  resolveWebSettingsSection,
   SETTINGS_DEEP_LINK_QUERY_KEY,
 } from '@features/settings/lib/web-settings-sections';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
@@ -259,6 +259,7 @@ import {
 } from '../stores/image-transcript-recovery-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { onAppCommand } from '@shared/lib/app-commands';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 
 // A fresh [] each render changes the identity every time and defeats the
@@ -1061,8 +1062,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   }, [openSearchParam, searchParams, router, pathname]);
 
   useEffect(() => {
-    if (!settingsSectionParam || !isWebSettingsSection(settingsSectionParam)) return;
-    openSettings(settingsSectionParam);
+    if (!settingsSectionParam) return;
+    const section = resolveWebSettingsSection(settingsSectionParam, isDesktopHost());
+    if (section === null) return;
+    openSettings(section);
     const next = new URLSearchParams(Array.from(searchParams?.entries() ?? []));
     next.delete(SETTINGS_DEEP_LINK_QUERY_KEY);
     const qs = next.toString();

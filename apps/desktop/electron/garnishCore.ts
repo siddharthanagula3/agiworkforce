@@ -1,18 +1,28 @@
 import {
-  DEFAULT_GLOBAL_VOICE_ACCELERATOR,
-  GLOBAL_VOICE_ACCELERATOR_CHOICES,
-} from '../src/lib/globalVoiceShortcut';
+  HOST_SHORTCUT_CHOICES,
+  HOST_SHORTCUT_KEYS,
+  HOST_SHORTCUT_PREFERENCE_KEYS,
+  NO_HOST_SHORTCUT,
+  defaultHostShortcut,
+  describeAccelerator,
+  type HostPreferences,
+  type HostShortcutKey,
+} from '@agiworkforce/local-runtime-contract';
 
-export interface GarnishShortcuts {
-  quickAskShortcut: string;
-  screenshotShortcut: string;
-  voiceShortcut: string;
-}
+/**
+ * The shell's half of `HostPreferences`. The shapes come from the contract so
+ * the hosted settings panel and this process cannot end up with two spellings
+ * of the same preference.
+ */
+export type GarnishShortcuts = Pick<
+  HostPreferences,
+  'quickAskShortcut' | 'screenshotShortcut' | 'voiceShortcut'
+>;
 
 export const DEFAULT_SHORTCUTS: GarnishShortcuts = {
-  quickAskShortcut: 'Alt+Shift+Space',
-  screenshotShortcut: 'CommandOrControl+Shift+2',
-  voiceShortcut: DEFAULT_GLOBAL_VOICE_ACCELERATOR,
+  quickAskShortcut: defaultHostShortcut('quickAsk'),
+  screenshotShortcut: defaultHostShortcut('screenshot'),
+  voiceShortcut: defaultHostShortcut('voice'),
 };
 
 export function isUsableAccelerator(value: unknown): value is string {
@@ -31,11 +41,17 @@ export function normalizeShortcuts(raw: unknown): GarnishShortcuts {
 
 export type ShortcutKey = keyof GarnishShortcuts;
 
-export const SHORTCUT_KEYS: readonly ShortcutKey[] = [
-  'quickAskShortcut',
-  'screenshotShortcut',
-  'voiceShortcut',
-];
+export const SHORTCUT_KEYS: readonly ShortcutKey[] = HOST_SHORTCUT_KEYS.map(
+  (key) => HOST_SHORTCUT_PREFERENCE_KEYS[key] as ShortcutKey,
+);
+
+export function hostShortcutKeyFor(key: ShortcutKey): HostShortcutKey {
+  const found = HOST_SHORTCUT_KEYS.find(
+    (candidate) => HOST_SHORTCUT_PREFERENCE_KEYS[candidate] === key,
+  );
+  if (!found) throw new Error(`${key} is not a shortcut the contract names`);
+  return found;
+}
 
 export const SHORTCUT_LABELS: Record<ShortcutKey, string> = {
   quickAskShortcut: 'Quick Ask',
@@ -43,23 +59,21 @@ export const SHORTCUT_LABELS: Record<ShortcutKey, string> = {
   voiceShortcut: 'Dictation',
 };
 
+/**
+ * An empty string is the user choosing no shortcut, which is a setting rather
+ * than a missing value, so it survives normalisation instead of springing back
+ * to the default the next time the file is read.
+ */
 function readAccelerator(source: Record<string, unknown>, key: ShortcutKey): string {
   const raw = source[key];
+  if (raw === NO_HOST_SHORTCUT) return NO_HOST_SHORTCUT;
   return isUsableAccelerator(raw) ? raw : DEFAULT_SHORTCUTS[key];
 }
 
 export const SHORTCUT_CHOICES: Record<ShortcutKey, readonly string[]> = {
-  quickAskShortcut: [
-    DEFAULT_SHORTCUTS.quickAskShortcut,
-    'CommandOrControl+Shift+Space',
-    'CommandOrControl+Alt+A',
-  ],
-  screenshotShortcut: [
-    DEFAULT_SHORTCUTS.screenshotShortcut,
-    'CommandOrControl+Shift+4',
-    'CommandOrControl+Alt+S',
-  ],
-  voiceShortcut: GLOBAL_VOICE_ACCELERATOR_CHOICES,
+  quickAskShortcut: HOST_SHORTCUT_CHOICES.quickAsk,
+  screenshotShortcut: HOST_SHORTCUT_CHOICES.screenshot,
+  voiceShortcut: HOST_SHORTCUT_CHOICES.voice,
 };
 
 const MODIFIER_ALIASES: Record<string, string> = {
@@ -103,6 +117,7 @@ export function duplicateShortcutKeys(shortcuts: GarnishShortcuts): ShortcutKey[
   const claimed = new Map<string, ShortcutKey>();
   const duplicates: ShortcutKey[] = [];
   for (const key of SHORTCUT_KEYS) {
+    if (shortcuts[key] === NO_HOST_SHORTCUT) continue;
     const identity = acceleratorIdentity(shortcuts[key]);
     if (claimed.has(identity)) duplicates.push(key);
     else claimed.set(identity, key);
@@ -116,27 +131,11 @@ export function shortcutChoices(key: ShortcutKey, current: string): string[] {
   return [current, ...presets];
 }
 
-const MAC_MODIFIER_SYMBOLS: Record<string, string> = {
-  commandorcontrol: '⌘',
-  cmdorctrl: '⌘',
-  command: '⌘',
-  cmd: '⌘',
-  control: '⌃',
-  ctrl: '⌃',
-  alt: '⌥',
-  option: '⌥',
-  shift: '⇧',
-};
-
-export function describeAccelerator(accelerator: string, platform: string): string {
-  const parts = accelerator.split('+');
-  if (platform !== 'darwin') {
-    return parts
-      .map((part) => (/^(commandorcontrol|cmdorctrl)$/i.test(part) ? 'Ctrl' : part))
-      .join('+');
-  }
-  return parts.map((part) => MAC_MODIFIER_SYMBOLS[part.toLowerCase()] ?? part).join('');
+export function isShortcutOff(accelerator: string): boolean {
+  return accelerator === NO_HOST_SHORTCUT;
 }
+
+export { describeAccelerator };
 
 export function parseSettingsFile(contents: string): GarnishShortcuts {
   try {
@@ -211,6 +210,7 @@ export function centeredUpperPosition(
 
 export interface GarnishPreferences {
   launchAtLogin: boolean;
+  showInMenuBar: boolean;
   /**
    * Chromium's zoom level, not a percentage: each step is a factor of 1.2, and
    * 0 is actual size. Held here so the window opens at the size the user last
@@ -221,6 +221,7 @@ export interface GarnishPreferences {
 
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
   launchAtLogin: false,
+  showInMenuBar: true,
   zoomLevel: 0,
 };
 
@@ -241,6 +242,10 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       typeof source['launchAtLogin'] === 'boolean'
         ? source['launchAtLogin']
         : DEFAULT_PREFERENCES.launchAtLogin,
+    showInMenuBar:
+      typeof source['showInMenuBar'] === 'boolean'
+        ? source['showInMenuBar']
+        : DEFAULT_PREFERENCES.showInMenuBar,
     zoomLevel:
       typeof source['zoomLevel'] === 'number'
         ? clampZoomLevel(source['zoomLevel'])

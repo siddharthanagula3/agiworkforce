@@ -1,9 +1,11 @@
 import { Notification, globalShortcut } from 'electron';
 import { getShortcuts } from './settingsStore';
+import type { HostShortcutStatus } from '@agiworkforce/local-runtime-contract';
 import {
   SHORTCUT_KEYS,
   SHORTCUT_LABELS,
   duplicateShortcutKeys,
+  isShortcutOff,
   isUsableAccelerator,
   type GarnishShortcuts,
   type ShortcutKey,
@@ -15,7 +17,7 @@ export interface GarnishShortcutHandlers {
   onVoice: () => void;
 }
 
-export type ShortcutStatus = 'registered' | 'duplicate' | 'taken' | 'malformed';
+export type ShortcutStatus = HostShortcutStatus;
 
 export interface ShortcutRegistration {
   key: ShortcutKey;
@@ -67,6 +69,9 @@ function registerOne(
   handler: () => void,
   duplicates: readonly ShortcutKey[],
 ): ShortcutRegistration {
+  if (isShortcutOff(accelerator)) {
+    return { key, accelerator, status: 'off' };
+  }
   if (!isUsableAccelerator(accelerator)) {
     return { key, accelerator, status: 'malformed' };
   }
