@@ -32,6 +32,7 @@ const ROOT_DOCS = new Set([
   'CONTRIBUTING.md',
   'DPDP_PROGRESS.md',
   'PLAN.md',
+  'PRODUCT_GAPS.md',
   'README.md',
   'SECURITY.md',
   'THIRD_PARTY_LICENSES.md',
