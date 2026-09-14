@@ -7,6 +7,8 @@ import { MarkdownContent } from '@agiworkforce/unified-chat';
 interface Props {
   file: ProjectKnowledgeFile | null;
   onClose: () => void;
+  /** 1-based page a citation pointed at; only paginated previews can honour it. */
+  page?: number | undefined;
 }
 
 const EXT_LANG: Record<string, string> = {
@@ -176,7 +178,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
   );
 }
 
-export function FilePreviewModal({ file, onClose }: Props) {
+export function FilePreviewModal({ file, onClose, page }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -356,7 +358,7 @@ export function FilePreviewModal({ file, onClose }: Props) {
 
           {isPdf && (
             <iframe
-              src={file.storageUri}
+              src={page && page > 0 ? `${file.storageUri}#page=${page}` : file.storageUri}
               title={file.fileName}
               sandbox="allow-same-origin"
               style={{ width: '100%', height: '70vh', border: 0, display: 'block' }}

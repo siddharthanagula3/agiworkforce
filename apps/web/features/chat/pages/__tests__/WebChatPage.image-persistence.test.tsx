@@ -1,7 +1,16 @@
 import type { ReactNode } from 'react';
-import type { ImageAspectRatio } from '../../components/ImageGenerationCard';
+import type { ImageRevisionRequest } from '../../components/ImageGenerationCard';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
+  useMediaModelAvailability: () => ({
+    status: 'ready',
+    error: null,
+    admissionFor: () => undefined,
+    retry: vi.fn(),
+  }),
+}));
 
 const mocks = vi.hoisted(() => ({
   modelId: '',
@@ -11,10 +20,7 @@ const mocks = vi.hoisted(() => ({
   watchVideoGeneration: vi.fn(),
   regenerateImage: undefined as
     | undefined
-    | ((
-        messageId: string,
-        options: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
-      ) => Promise<string>),
+    | ((messageId: string, options: ImageRevisionRequest) => Promise<string>),
   deleteMessage: undefined as undefined | ((messageId: string) => void),
   routerReplace: vi.fn(),
   openSettings: vi.fn(),

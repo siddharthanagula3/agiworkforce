@@ -22,6 +22,13 @@ files:
   - electron/dist/**
   - '!node_modules'
 
+# The macOS input helper is a separate Mach-O executable, so it must sit in
+# Contents/Resources rather than in the asar: electron-builder signs it there
+# with the app's identity and notarization covers it with the bundle.
+extraResources:
+  - from: electron/dist/agi-input
+    to: agi-input
+
 mac:
   category: public.app-category.productivity
   # The main process handles Electron's macOS `open-url` event. Register the

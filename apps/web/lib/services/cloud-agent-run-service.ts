@@ -21,6 +21,7 @@ import {
   type InteractiveCard,
 } from '@agiworkforce/types';
 import { MAX_DEVICE_STEP_RESULT_LENGTH } from '@agiworkforce/local-runtime-contract';
+import { MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -1736,6 +1737,7 @@ export interface CloudAgentDeviceStepResult {
   toolCallId: string;
   content: string;
   isError: boolean;
+  image?: { base64: string; mimeType: 'image/png' | 'image/jpeg' };
 }
 
 export interface ClaimedCloudAgentDeviceCheckpoint {
@@ -1953,6 +1955,12 @@ export async function claimCloudAgentDeviceCheckpoint(
         toolCallId: z.string().min(1).max(256),
         content: z.string().max(MAX_DEVICE_STEP_RESULT_LENGTH),
         isError: z.boolean(),
+        image: z
+          .object({
+            base64: z.string().min(1).max(MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH),
+            mimeType: z.enum(['image/png', 'image/jpeg']),
+          })
+          .optional(),
       }),
     )
     .min(1)

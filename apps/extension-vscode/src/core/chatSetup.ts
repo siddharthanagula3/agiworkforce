@@ -20,12 +20,33 @@ import {
   SchedulesTreeProvider,
   resolveSchedulesClient,
 } from '../features/schedules';
+import {
+  PROJECTS_VIEW_ID,
+  ProjectsTreeProvider,
+  resolveProjectsWorkspace,
+} from '../features/projects';
+import {
+  ARTIFACTS_VIEW_ID,
+  ArtifactContentProvider,
+  ARTIFACT_SCHEME,
+  ArtifactsTreeProvider,
+  resolveArtifactsWorkspace,
+} from '../features/artifacts';
+import {
+  CONNECTORS_VIEW_ID,
+  ConnectorsTreeProvider,
+  resolveConnectorsClient,
+} from '../features/connectors';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 
 export interface ChatState {
   conversationTreeProvider: ConversationTreeProvider;
   cloudTasksTreeProvider: CloudTasksTreeProvider;
   schedulesTreeProvider: SchedulesTreeProvider;
+  projectsTreeProvider: ProjectsTreeProvider;
+  artifactsTreeProvider: ArtifactsTreeProvider;
+  artifactContentProvider: ArtifactContentProvider;
+  connectorsTreeProvider: ConnectorsTreeProvider;
   sidebarProvider: SidebarProvider;
   contextPanelProvider: ContextPanelProvider;
   memoryTreeProvider: MemoryTreeProvider;
@@ -114,6 +135,60 @@ export function setupChat(
     schedulesTreeProvider,
   );
 
+  const projectsTreeProvider = new ProjectsTreeProvider(async () => {
+    const resolution = await resolveProjectsWorkspace(context.secrets);
+    return resolution.status === 'signed-out'
+      ? { status: 'signed-out' }
+      : { status: 'ready', client: resolution.workspace.projects };
+  });
+  const projectsView = vscode.window.createTreeView(PROJECTS_VIEW_ID, {
+    treeDataProvider: projectsTreeProvider,
+  });
+  projectsTreeProvider.setAutoRefreshEnabled(projectsView.visible);
+  context.subscriptions.push(
+    projectsView.onDidChangeVisibility((event) => {
+      projectsTreeProvider.setAutoRefreshEnabled(event.visible);
+    }),
+    projectsView,
+    projectsTreeProvider,
+  );
+
+  const artifactContentProvider = new ArtifactContentProvider();
+  const artifactsTreeProvider = new ArtifactsTreeProvider(async () => {
+    const resolution = await resolveArtifactsWorkspace(context.secrets);
+    return resolution.status === 'signed-out'
+      ? { status: 'signed-out' }
+      : { status: 'ready', client: resolution.workspace.index };
+  });
+  const artifactsView = vscode.window.createTreeView(ARTIFACTS_VIEW_ID, {
+    treeDataProvider: artifactsTreeProvider,
+  });
+  artifactsTreeProvider.setAutoRefreshEnabled(artifactsView.visible);
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(ARTIFACT_SCHEME, artifactContentProvider),
+    artifactsView.onDidChangeVisibility((event) => {
+      artifactsTreeProvider.setAutoRefreshEnabled(event.visible);
+    }),
+    artifactsView,
+    artifactsTreeProvider,
+    artifactContentProvider,
+  );
+
+  const connectorsTreeProvider = new ConnectorsTreeProvider(() =>
+    resolveConnectorsClient(context.secrets),
+  );
+  const connectorsView = vscode.window.createTreeView(CONNECTORS_VIEW_ID, {
+    treeDataProvider: connectorsTreeProvider,
+  });
+  connectorsTreeProvider.setAutoRefreshEnabled(connectorsView.visible);
+  context.subscriptions.push(
+    connectorsView.onDidChangeVisibility((event) => {
+      connectorsTreeProvider.setAutoRefreshEnabled(event.visible);
+    }),
+    connectorsView,
+    connectorsTreeProvider,
+  );
+
   const indexer = new WorkspaceIndexer(context);
   context.subscriptions.push(...indexer.registerFileWatcher());
 
@@ -121,6 +196,10 @@ export function setupChat(
     conversationTreeProvider,
     cloudTasksTreeProvider,
     schedulesTreeProvider,
+    projectsTreeProvider,
+    artifactsTreeProvider,
+    artifactContentProvider,
+    connectorsTreeProvider,
     sidebarProvider,
     contextPanelProvider,
     memoryTreeProvider,
