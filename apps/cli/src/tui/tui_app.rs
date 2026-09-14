@@ -3885,6 +3885,8 @@ pub async fn run(
         crate::output::print_warn(&format!("Session memory extraction failed: {error:#}"));
     }
 
+    app.session.sync_to_account().await;
+
     // Session end hooks
     crate::hooks::run_hooks(
         &hooks_config,

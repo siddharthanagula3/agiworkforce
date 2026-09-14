@@ -560,6 +560,44 @@ pub fn save_message(
     Ok(session.messages.len() as i64)
 }
 
+/// Write a conversation that came from the account into the managed session
+/// store so the existing resume path can open it.
+///
+/// The routing authority is Managed because that is the boundary the
+/// conversation already lives on: it was pulled from AGI cloud, so resuming it
+/// there sends nothing anywhere it has not already been.
+pub fn import_hosted_session(
+    conn: &Connection,
+    session_id: &str,
+    title: &str,
+    model: Option<&str>,
+    messages: Vec<Message>,
+) -> Result<()> {
+    let mut session = match find_session_path(&conn.base_dir, session_id) {
+        Some(path) => load_managed_session_from_path(&path)?,
+        None => ManagedSession::new(session_id.to_string(), Utc::now()),
+    };
+    session.messages = messages;
+    session.model = model.map(str::to_string);
+    session.title = Some(title.to_string());
+    session.created_by = Some("cli".to_string());
+    session.routing_authority = Some(crate::platform::runtime::session::ManagedSessionRoutingAuthority {
+        privacy_mode: crate::platform::runtime::session::PrivacyMode::Managed,
+        provider: crate::models::provider_persistence_name(&crate::models::Provider::ManagedCloud),
+    });
+    session.version = crate::platform::runtime::session::MANAGED_SESSION_VERSION;
+    session.touch();
+    save_session_to_default_path(&conn.base_dir, &session)?;
+
+    let mut metadata = read_metadata(&conn.base_dir, session_id)?.unwrap_or_default();
+    metadata.title = Some(title.to_string());
+    metadata.custom_title = true;
+    if let Some(model) = model {
+        metadata.model = Some(model.to_string());
+    }
+    write_metadata(&conn.base_dir, session_id, &metadata)
+}
+
 /// List sessions ordered by most-recently-updated, up to `limit` rows.
 pub fn list_sessions(conn: &Connection, limit: usize) -> Result<Vec<SessionSummary>> {
     list_sessions_in(&conn.base_dir, limit)

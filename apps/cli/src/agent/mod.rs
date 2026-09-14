@@ -453,6 +453,26 @@ impl AgentSession {
         Self::new_with_provider(model, sys_context, custom_system_prompt, provider)
     }
 
+    /// Refresh the account memory cache before a session is built, so the
+    /// system prompt carries what the account holds right now rather than what
+    /// this device last saw. Managed sessions only, and best effort: a session
+    /// still starts when the account is unreachable, with the cached copy.
+    pub async fn prime_account_memory(model: &str, provider_override: Option<&str>) {
+        let Ok(provider) = models::resolve_selected_provider(model, provider_override) else {
+            return;
+        };
+        if provider_privacy_mode(&provider) != PrivacyMode::Managed {
+            return;
+        }
+        match crate::cloud::refresh_memory(PrivacyMode::Managed).await {
+            Ok(_) => {}
+            Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
+            Err(error) => crate::output::print_warn(&format!(
+                "using the account memory this device already had: {error}"
+            )),
+        }
+    }
+
     pub fn new_checked(
         model: &str,
         sys_context: &SystemContext,
@@ -519,11 +539,18 @@ impl AgentSession {
             .map(|rule| rule.source.clone())
             .collect();
 
-        let combined_memory = if persistent_memory.is_empty() {
-            memory_context
-        } else {
-            format!("{}\n{}", memory_context, persistent_memory)
-        };
+        let privacy_mode = provider_privacy_mode(&provider);
+
+        let account_memory = crate::config::CliConfig::config_dir()
+            .ok()
+            .map(|home| crate::cloud::account_memory_context(privacy_mode, &home))
+            .unwrap_or_default();
+
+        let combined_memory = [memory_context, persistent_memory, account_memory]
+            .into_iter()
+            .filter(|block| !block.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
 
         let system_message = Message::text(
             "system",
@@ -536,8 +563,6 @@ impl AgentSession {
                 &rules_context,
             ),
         );
-
-        let privacy_mode = provider_privacy_mode(&provider);
 
         Self {
             messages: vec![system_message],
@@ -1446,6 +1471,47 @@ impl AgentSession {
         self.sync_managed_session_metadata()
     }
 
+    /// This session as the hosted chat history sees it. `None` when the session
+    /// is not persisted at all, in which case there is nothing to share.
+    pub fn cloud_snapshot(&self) -> Option<crate::cloud::chat::SessionSnapshot> {
+        let session_id = self.managed_session_id()?.to_string();
+        let title = self
+            .managed_session
+            .as_ref()
+            .and_then(|session| session.title.clone())
+            .unwrap_or_default();
+        Some(crate::cloud::chat::SessionSnapshot {
+            session_id,
+            title,
+            model: Some(self.model.clone()),
+            provider: Some(models::provider_persistence_name(&self.provider)),
+            project_id: linked_cloud_project(),
+            messages: self
+                .messages
+                .iter()
+                .map(|message| crate::cloud::chat::TurnMessage {
+                    role: message.role.clone(),
+                    content: message.text_content(),
+                })
+                .collect(),
+        })
+    }
+
+    /// Share the session with the account. Managed sessions only: a Local or
+    /// BYOK session is refused inside the client, which says so once.
+    pub async fn sync_to_account(&self) {
+        let Some(snapshot) = self.cloud_snapshot() else {
+            return;
+        };
+        match crate::cloud::sync_session(self.privacy_mode, &snapshot).await {
+            Ok(_) => {}
+            Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
+            Err(error) => crate::output::print_warn(&format!(
+                "this turn is saved on this device but not yet in your account: {error}"
+            )),
+        }
+    }
+
     pub fn managed_session_id(&self) -> Option<&str> {
         self.managed_session.as_ref().map(|s| s.session_id.as_str())
     }
@@ -1711,6 +1777,16 @@ fn escape_attr(path: &Path) -> String {
         .replace('"', "&quot;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+/// The account project this working directory has been linked to with
+/// `agi projects link`. Visiting a directory never creates an account project,
+/// so this is `None` until the user asks for the link.
+fn linked_cloud_project() -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let home = crate::config::CliConfig::config_dir().ok()?;
+    let registry = crate::project_registry::ProjectRegistry::load(&home).ok()?;
+    registry.cloud_project_for(&cwd).map(str::to_string)
 }
 
 fn provider_privacy_mode(provider: &Provider) -> PrivacyMode {

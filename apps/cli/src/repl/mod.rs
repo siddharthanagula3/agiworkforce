@@ -66,6 +66,8 @@ pub async fn run_repl(
     output::print_banner(model, &provider_str);
     output::print_tier_status();
 
+    AgentSession::prime_account_memory(model, provider_override).await;
+
     let mut session =
         AgentSession::new_with_provider(model, sys_context, custom_system_prompt, provider);
     session.apply_ui_config(config);
@@ -608,6 +610,8 @@ pub async fn run_repl(
     if let Err(error) = session.finalize_memory(config).await {
         output::print_warn(&format!("Session memory extraction failed: {error:#}"));
     }
+
+    session.sync_to_account().await;
 
     crate::hooks::run_hooks(
         &hooks_config,
