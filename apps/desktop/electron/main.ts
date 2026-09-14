@@ -5,6 +5,7 @@ import {
   desktopCapturer,
   dialog,
   ipcMain,
+  nativeTheme,
   protocol,
   session,
   shell,
@@ -28,6 +29,7 @@ import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   type BrowserPairRequestPrompt,
   type BrowserPairingState,
+  type HostCommand,
 } from '@agiworkforce/local-runtime-contract';
 import { startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
@@ -46,13 +48,15 @@ import {
   RENDERER_ORIGIN,
   RENDERER_SCHEME,
 } from './config';
-import { pickableCaptureSources } from './garnishCore';
+import { ZOOM_LEVEL_STEP, clampZoomLevel, pickableCaptureSources } from './garnishCore';
 import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
 import { captureToChat } from './screenshot';
+import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcuts';
 import { createTray } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
-import { applyRemoteWindowPolicy } from './windowPolicy';
+import { applyRemoteWindowPolicy, openExternally } from './windowPolicy';
+import { pageBackgroundColor, titleBarChrome } from './windowChrome';
 import { handleWorkspaceDrop } from './workspaceDrop';
 import {
   isTrustedCloudRendererOrigin,
@@ -69,6 +73,8 @@ function installedMacArchitecture(): DesktopCloudMacArchitecture {
 }
 
 const QUICK_ASK_WARMUP_MS = 5000;
+
+const SUPPORT_PATH = '/support';
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -510,7 +516,8 @@ function createMainWindow(): void {
     minWidth: 800,
     minHeight: 600,
     show: false,
-    backgroundColor: '#212121',
+    backgroundColor: pageBackgroundColor(nativeTheme.shouldUseDarkColors),
+    ...titleBarChrome(process.platform),
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
@@ -545,10 +552,25 @@ function createMainWindow(): void {
     }
   });
 
+  // Chromium's zoom is per origin and per session, so it survives a navigation
+  // but not a relaunch. Reapplying it on every load is what makes View > Zoom
+  // In outlive quitting the app.
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.setZoomLevel(getPreferences().zoomLevel);
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
     if (process.platform !== 'darwin') destroyQuickAsk();
   });
+
+  const followSystemTheme = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setBackgroundColor(pageBackgroundColor(nativeTheme.shouldUseDarkColors));
+    }
+  };
+  nativeTheme.on('updated', followSystemTheme);
+  mainWindow.once('closed', () => nativeTheme.off('updated', followSystemTheme));
 
   const entryUrl = isRemote ? `${CLOUD_APP_ORIGIN}/chat` : `${RENDERER_ORIGIN}/index.html`;
 
@@ -590,6 +612,42 @@ function openSettings(): void {
 
 function openLogsFolder(): void {
   void shell.openPath(app.getPath('logs'));
+}
+
+function openSupport(): void {
+  openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
+}
+
+/**
+ * A menu item the page is the only thing that can carry out. The window is
+ * raised first: choosing Toggle Sidebar from the menu bar while the window is
+ * behind something else would otherwise change a surface the user cannot see.
+ */
+function sendHostCommand(command: HostCommand): void {
+  showMainWindow();
+  mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
+}
+
+function goBack(): void {
+  const history = mainWindow?.webContents.navigationHistory;
+  if (history?.canGoBack()) history.goBack();
+}
+
+function goForward(): void {
+  const history = mainWindow?.webContents.navigationHistory;
+  if (history?.canGoForward()) history.goForward();
+}
+
+function applyZoomLevel(level: number): void {
+  const clamped = clampZoomLevel(level);
+  saveSettings({ zoomLevel: clamped });
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.setZoomLevel(clamped);
+  }
+}
+
+function stepZoomLevel(steps: number): void {
+  applyZoomLevel(getPreferences().zoomLevel + steps * ZOOM_LEVEL_STEP);
 }
 
 async function checkForCloudUpdate(): Promise<void> {
@@ -691,13 +749,26 @@ if (!hasSingleInstanceLock) {
       onCheckForUpdates: () => void checkForCloudUpdate(),
     };
     createTray(garnishHandlers);
-    installAppMenu({
-      newChat: garnishHandlers.onNewChat,
-      toggleQuickAsk: garnishHandlers.onQuickAsk,
-      captureScreenshot: garnishHandlers.onScreenshot,
-      openSettings,
-      openLogs: openLogsFolder,
-    });
+    installAppMenu(
+      {
+        newChat: garnishHandlers.onNewChat,
+        toggleQuickAsk: garnishHandlers.onQuickAsk,
+        captureScreenshot: garnishHandlers.onScreenshot,
+        openSettings,
+        openLogs: openLogsFolder,
+        openSupport,
+        checkForUpdates: garnishHandlers.onCheckForUpdates,
+        sendHostCommand,
+        goBack,
+        goForward,
+        setZoomLevel: applyZoomLevel,
+        stepZoomLevel,
+      },
+      {
+        quickAsk: getShortcuts().quickAskShortcut,
+        screenshot: getShortcuts().screenshotShortcut,
+      },
+    );
     applyLaunchAtLogin();
     registerGarnishShortcuts({
       onQuickAsk: garnishHandlers.onQuickAsk,
