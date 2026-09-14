@@ -213,13 +213,14 @@ extension state plus the desktop pairing record).
 
 ## 8. Release report (2026-09-14, wave in progress)
 
-Ninety-four commits since origin 9c8e3d2ca (35 fixes, 24 features, 7 test-only,
-6 refactors, 19 doc checkpoints; 369 files, about 25k lines added and 5k
-removed), pushed in three checkpoints through b4fecf1ac with the pre-push chain
-green each time. Every commit came through a captured gate or a lead fix.
-Three packages still running when this section was written: protocol-3 (the
-reachable-models list), chrome-5 (shared sign-out and the panel's unpair), and
-the control-driven web pass.
+One hundred and fourteen commits since origin 9c8e3d2ca (42 fixes, 25
+features, 8 test-only, 9 refactors, 26 doc checkpoints, one CI change; 389
+files, about 26k lines added and 5.5k removed), pushed in four checkpoints
+through 13dce80b1 with the pre-push chain green each time. Every commit came
+through a captured gate or a lead fix. One package still running when this
+section was written: the protocol-3 consumers (the VS Code quick pick and the
+Electron coding-session picker reading the reachable-models list) and the
+comment pass ahead of it.
 
 ### Completed
 
