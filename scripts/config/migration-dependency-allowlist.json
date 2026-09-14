@@ -455,6 +455,11 @@
       "file": "apps/web/lib/memory/import-store.ts",
       "migration": 189,
       "reason": "0189 scopes a memory row key to its owner and adds import_key, the per-owner dedupe key that replaces the derived global row id; the deploy runbook applies it before this code reaches production, and until it does the import insert names a column that does not exist."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-agent-run-service.ts",
+      "migration": 190,
+      "reason": "the founder-assistance entry for migrations 0183 to 0190 applies this migration before the deployment that carries this file; the device-step checkpoint column is written only when a desktop turn pauses on a device step"
     }
   ]
 }
