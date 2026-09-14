@@ -29,7 +29,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'What does BYOK mean here?',
-    body: `You bring your own API key on ${BYOK_SURFACES.label}. Keys stay in the local developer or desktop runtime and requests go directly to your provider. Usage is billed by the provider, not by AGI. ${BYOK_SURFACES.exclusion}`,
+    body: `You bring your own API key on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability} Keys stay in the local developer or desktop runtime and requests go directly to your provider. Usage is billed by the provider, not by AGI. ${BYOK_SURFACES.exclusion}`,
   },
   {
     title: 'Can I run AGI fully offline?',
