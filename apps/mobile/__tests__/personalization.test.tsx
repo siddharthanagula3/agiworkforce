@@ -7,7 +7,6 @@ const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockNavigate = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>(() => true);
-const mockUseLocalSearchParams = jest.fn(() => ({}) as { scope?: string });
 jest.mock('expo-router', () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -16,7 +15,6 @@ jest.mock('expo-router', () => ({
     canGoBack: mockCanGoBack,
     back: mockBack,
   }),
-  useLocalSearchParams: () => mockUseLocalSearchParams(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -73,6 +71,7 @@ import PersonalizationScreen from '../app/(app)/settings/personalization';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useAuthStore } from '../src/features/auth/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
 const defaultPersonalization = {
   fullName: '',
@@ -100,7 +99,7 @@ describe('Personalization page', () => {
     useAuthStore.setState({ clerkUserId: null });
     jest.clearAllMocks();
     mockCanGoBack.mockReturnValue(true);
-    mockUseLocalSearchParams.mockReturnValue({});
+    useChatAppModeStore.setState({ appMode: 'local' });
   });
 
   it('renders the Personalization header', () => {
@@ -210,7 +209,7 @@ describe('Personalization page', () => {
     expect(getByText('Response Style')).toBeTruthy();
   });
 
-  it('resyncs editable fields (not stale scope-crossed data) when ?scope= changes on a reused screen instance', () => {
+  it('resyncs editable fields (not stale scope-crossed data) when the app mode changes under a mounted screen', () => {
     useLocalSettingsStore.setState({
       personalization: { ...defaultPersonalization, fullName: 'Local Name' },
     });
@@ -219,20 +218,20 @@ describe('Personalization page', () => {
       settingsUpdatedAt: null,
     });
 
-    mockUseLocalSearchParams.mockReturnValue({ scope: 'local' });
-    const { getByDisplayValue, getByText, rerender } = render(<PersonalizationScreen />);
+    const { getByDisplayValue, getByText } = render(<PersonalizationScreen />);
     expect(getByDisplayValue('Local Name')).toBeTruthy();
     expect(getByText('Personalization')).toBeTruthy();
 
-    mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
-    rerender(<PersonalizationScreen />);
+    act(() => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+    });
 
     expect(getByDisplayValue('Cloud Name')).toBeTruthy();
     expect(getByText('Cloud Personalization')).toBeTruthy();
   });
 
   it('hydrates a pristine Cloud draft when the first server pull arrives after mount', () => {
-    mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByDisplayValue } = render(<PersonalizationScreen />);
 
     act(() => {
@@ -250,7 +249,7 @@ describe('Personalization page', () => {
   });
 
   it('does not overwrite an edited Cloud draft when a later server pull arrives', () => {
-    mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByDisplayValue, getByPlaceholderText } = render(<PersonalizationScreen />);
 
     fireEvent.changeText(getByPlaceholderText('Your full name'), 'Unsaved Draft');
@@ -267,7 +266,7 @@ describe('Personalization page', () => {
   });
 
   it('discards an account-A dirty draft when the active Cloud owner changes to B', () => {
-    mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ clerkUserId: 'account-a' });
     useCloudSettingsStore.setState({
       personalization: { ...defaultPersonalization, fullName: 'Account A' },
@@ -293,7 +292,7 @@ describe('Personalization theme card removal', () => {
     useAuthStore.setState({ clerkUserId: null });
     jest.clearAllMocks();
     mockCanGoBack.mockReturnValue(true);
-    mockUseLocalSearchParams.mockReturnValue({});
+    useChatAppModeStore.setState({ appMode: 'local' });
   });
 
   it('renders no appearance control at all', () => {
