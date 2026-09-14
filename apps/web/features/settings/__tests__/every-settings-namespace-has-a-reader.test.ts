@@ -27,6 +27,13 @@ interface NamespaceConsumer {
 }
 
 const NAMESPACE_CONSUMERS: Readonly<Record<string, NamespaceConsumer>> = {
+  // Hydrated onto this device at sign-in and written back on every change, so a
+  // choice made on the phone reaches web and back. Mobile writes the same three
+  // keys (apps/mobile/services/cloudSettingsMapping.ts).
+  appearance: {
+    file: 'features/settings/components/CloudSettingsSync.tsx',
+    token: 'APPEARANCE_NAMESPACE',
+  },
   capabilities: { file: 'lib/services/managed-memory-context-service.ts' },
   general: { file: 'lib/server/user-identity.ts' },
   // Read on the path that assembles a completion's tool list, so the denial
@@ -34,6 +41,10 @@ const NAMESPACE_CONSUMERS: Readonly<Record<string, NamespaceConsumer>> = {
   lockdown: {
     file: 'app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts',
     token: 'parseLockdownEnabled',
+  },
+  language: {
+    file: 'features/settings/components/CloudSettingsSync.tsx',
+    token: 'LANGUAGE_NAMESPACE',
   },
   memory: { file: 'lib/services/managed-memory-context-service.ts' },
   notifications: { file: 'lib/services/schedule-notification-service.ts' },
