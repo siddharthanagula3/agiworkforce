@@ -35,6 +35,7 @@ import type {
   SlashCommandRunResponse,
 } from '@agiworkforce/types/protocol';
 import { redactSecrets } from '../core/telemetry';
+import { trackRuntimeChild } from './runtimeProcessRegistry';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
 const MAX_REJECTED_LINE_CHARS = 400;
@@ -1098,6 +1099,7 @@ export class LocalRuntimeClient {
     }
     this.stderrTail = '';
     this.child = child;
+    const releaseTracking = trackRuntimeChild(child);
     let resolveChildExit!: () => void;
     const childExitPromise = new Promise<void>((resolve) => {
       resolveChildExit = resolve;
@@ -1119,12 +1121,16 @@ export class LocalRuntimeClient {
       this.stderrTail = `${this.stderrTail}${chunk}`.slice(-64 * 1024);
     });
     child.once('error', (error) => {
-      if (child.pid === undefined) resolveChildExit();
+      if (child.pid === undefined) {
+        releaseTracking();
+        resolveChildExit();
+      }
       if (this.child === child && this.connection === connection) {
         this.resetProcess(describeSpawnFailure(cliPath, error));
       }
     });
     child.once('exit', (code, signal) => {
+      releaseTracking();
       resolveChildExit();
       const detail = this.stderrTail.trim();
       const suffix = detail === '' ? '' : `: ${detail}`;
