@@ -162,6 +162,8 @@ export interface CodeRailProps {
   onNewSession: () => void;
   onSelectSession: (sessionId: string) => void;
   onCollapse?: () => void;
+  /** The desktop shell's own sessions. Absent in a browser. */
+  localSection?: React.ReactNode;
 }
 
 export function CodeRail({
@@ -174,6 +176,7 @@ export function CodeRail({
   onNewSession,
   onSelectSession,
   onCollapse,
+  localSection,
 }: CodeRailProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRegionId = useId();
@@ -262,6 +265,8 @@ export function CodeRail({
           ))}
         </div>
       )}
+
+      {localSection}
 
       <div className={styles['railSectionHeader']}>
         <span className={styles['railSectionLabel']}>{CODE_COPY.recents}</span>
