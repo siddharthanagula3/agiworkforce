@@ -184,7 +184,7 @@ export function CodeRail({
 
   return (
     <>
-      <div className={styles['railTop']}>
+      <div className={styles['railTop']} data-sidebar-region="header-first-row">
         <h2 className={styles['railTitle']}>{CODE_COPY.surface}</h2>
         <div className={styles['railTopActions']}>
           <div className={styles['segmented']}>
