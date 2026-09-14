@@ -82,6 +82,7 @@
     "cloud-agent-runs",
     "connectors",
     "conversations",
+    "device-steps",
     "embeddings",
     "generated-files",
     "interactive-cards",
@@ -106,5 +107,5 @@
     "tool-approval-resume",
     "tool-events"
   ],
-  "generatedProtocolTypeCount": 299
+  "generatedProtocolTypeCount": 302
 }
