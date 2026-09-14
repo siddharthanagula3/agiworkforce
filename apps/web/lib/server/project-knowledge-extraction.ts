@@ -13,7 +13,10 @@ import {
   extractPdfAttachmentContent,
   PdfAttachmentUnreadableError,
 } from './pdf-attachment-content';
-import { getProjectKnowledgeObject } from './project-knowledge-object-storage';
+import {
+  getProjectKnowledgeObject,
+  type ProjectKnowledgeObject,
+} from './project-knowledge-object-storage';
 import {
   SCANNED_DOCUMENT_OCR_NOTE,
   transcribeScannedPages,
@@ -184,9 +187,15 @@ function extractNotebookText(bytes: Uint8Array, fileName: string): string | null
   return text.length > 0 ? normalizeAndBoundText(text) : null;
 }
 
+export interface ProjectKnowledgeExtraction {
+  extractedText: string | null;
+  objectKey: string;
+  etag: string | undefined;
+}
+
 export async function extractProjectKnowledgeFile(
   input: ExtractProjectKnowledgeFileInput,
-): Promise<{ extractedText: string | null }> {
+): Promise<ProjectKnowledgeExtraction> {
   const objectKey = objectKeyFromStorageUri(input.storageUri);
   const expectedPrefix = `knowledge-files/projects/${input.projectId}/`;
   if (!objectKey || !objectKey.startsWith(expectedPrefix)) {
@@ -207,7 +216,7 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
-  let object: { data: Buffer; contentType: string | undefined } | null;
+  let object: ProjectKnowledgeObject | null;
   try {
     object = await getProjectKnowledgeObject(objectKey, input.byteCount);
   } catch (error) {
@@ -266,8 +275,11 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
+  const inspected = { objectKey, etag: object.etag };
+
   if (declaredMimeType === 'application/pdf') {
     return {
+      ...inspected,
       extractedText: await extractPdfText(object.data, input.fileName, input.transcribeScans),
     };
   }
@@ -275,7 +287,7 @@ export async function extractProjectKnowledgeFile(
   if (officeKind) {
     try {
       const text = await extractOfficeDocumentText(object.data, input.fileName, officeKind);
-      return { extractedText: text || null };
+      return { ...inspected, extractedText: text || null };
     } catch (error) {
       if (!(error instanceof OfficeDocumentUnreadableError)) throw error;
       throw new ProjectKnowledgeExtractionError(
@@ -285,12 +297,12 @@ export async function extractProjectKnowledgeFile(
     }
   }
   if (declaredMimeType === 'application/x-ipynb+json') {
-    return { extractedText: extractNotebookText(object.data, input.fileName) };
+    return { ...inspected, extractedText: extractNotebookText(object.data, input.fileName) };
   }
   if (isTextAttachmentMeta(input.fileName, declaredMimeType)) {
     try {
       const text = new TextDecoder('utf-8', { fatal: true }).decode(object.data);
-      return { extractedText: normalizeAndBoundText(text) };
+      return { ...inspected, extractedText: normalizeAndBoundText(text) };
     } catch {
       throw new ProjectKnowledgeExtractionError(
         'document_unreadable',
@@ -299,5 +311,5 @@ export async function extractProjectKnowledgeFile(
     }
   }
 
-  return { extractedText: null };
+  return { ...inspected, extractedText: null };
 }

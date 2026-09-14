@@ -5,6 +5,7 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import path from 'node:path';
 import { objectStorageConfig } from './object-storage-runtime';
 import {
+  copyPrivateObjectIfUnchanged,
   deleteObject,
   deletePrivateObject,
   getBoundedObject,
@@ -16,6 +17,7 @@ import {
 
 const UPLOAD_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
 const UPLOAD_TOKEN_VERSION = 2;
+const SEALED_KNOWLEDGE_SEGMENT = 'sealed';
 
 export interface ProjectKnowledgeUploadClaims {
   v: number;
@@ -36,12 +38,40 @@ function localStorageRoot(): string {
   return path.resolve(process.cwd(), '.agi-local-media', 'project-knowledge');
 }
 
-function validKnowledgeKey(key: string): boolean {
+function traversalFree(key: string): boolean {
   return (
-    /^knowledge-files\/projects\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(key) &&
-    !key.includes('//') &&
-    !key.split('/').some((segment) => segment === '.' || segment === '..')
+    !key.includes('//') && !key.split('/').some((segment) => segment === '.' || segment === '..')
   );
+}
+
+/**
+ * What a presign, an upload authorization, and the proxy PUT may name. The
+ * sealed shape is deliberately outside it: the bytes an upload can still
+ * rewrite for the rest of its ttl never share a key with the bytes that passed
+ * inspection.
+ */
+function validKnowledgeUploadKey(key: string): boolean {
+  return (
+    /^knowledge-files\/projects\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(key) && traversalFree(key)
+  );
+}
+
+export function isSealedProjectKnowledgeKey(key: string): boolean {
+  return (
+    new RegExp(
+      `^knowledge-files/projects/[A-Za-z0-9-]+/${SEALED_KNOWLEDGE_SEGMENT}/[A-Za-z0-9._-]+$`,
+    ).test(key) && traversalFree(key)
+  );
+}
+
+export function sealedProjectKnowledgeKey(key: string): string | null {
+  if (!validKnowledgeUploadKey(key)) return null;
+  const lastSlash = key.lastIndexOf('/');
+  return `${key.slice(0, lastSlash)}/${SEALED_KNOWLEDGE_SEGMENT}${key.slice(lastSlash)}`;
+}
+
+function validKnowledgeKey(key: string): boolean {
+  return validKnowledgeUploadKey(key) || isSealedProjectKnowledgeKey(key);
 }
 
 function localPathForKey(key: string): { objectPath: string; metadataPath: string } | null {
@@ -89,7 +119,7 @@ function parseClaims(value: unknown): ProjectKnowledgeUploadClaims | null {
     typeof claims['userId'] !== 'string' ||
     !claims['userId'] ||
     typeof claims['key'] !== 'string' ||
-    !validKnowledgeKey(claims['key']) ||
+    !validKnowledgeUploadKey(claims['key']) ||
     typeof claims['contentType'] !== 'string' ||
     !claims['contentType'] ||
     typeof claims['byteCount'] !== 'number' ||
@@ -144,7 +174,7 @@ export async function createProjectKnowledgeUploadAuthorization(input: {
   byteCount: number;
   checksumSha256: string;
 }): Promise<string> {
-  if (!validKnowledgeKey(input.key)) {
+  if (!validKnowledgeUploadKey(input.key)) {
     throw new Error('The project knowledge upload destination is invalid.');
   }
   const claims: ProjectKnowledgeUploadClaims = {
@@ -264,14 +294,28 @@ export async function storeLocalProjectKnowledgeUpload(input: {
   await rename(/* turbopackIgnore: true */ metadataTemp, resolved.metadataPath);
 }
 
+export interface ProjectKnowledgeObject {
+  data: Buffer;
+  contentType: string | undefined;
+  etag: string | undefined;
+}
+
+function localEtag(data: Buffer): string {
+  return createHash('sha256').update(data).digest('hex');
+}
+
 export async function getProjectKnowledgeObject(
   key: string,
   maxBytes: number,
-): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+): Promise<ProjectKnowledgeObject | null> {
   if (isPrivateObjectStorageConfigured()) {
     const privateObject = await getBoundedPrivateObject(key, maxBytes);
     if (privateObject) return privateObject;
-    return isObjectStorageConfigured() ? getBoundedObject(key, maxBytes) : null;
+    if (!isObjectStorageConfigured()) return null;
+    const publicObject = await getBoundedObject(key, maxBytes);
+    // Only the private bucket can be sealed, so a fallback read reports no
+    // entity tag rather than one no copy of ours could ever match.
+    return publicObject ? { ...publicObject, etag: undefined } : null;
   }
   const resolved = localPathForKey(key);
   if (!resolved) return null;
@@ -286,11 +330,75 @@ export async function getProjectKnowledgeObject(
     return {
       data,
       contentType: typeof metadata.contentType === 'string' ? metadata.contentType : undefined,
+      etag: localEtag(data),
     };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
+}
+
+async function sealLocalProjectKnowledgeObject(
+  key: string,
+  sealedKey: string,
+  etag: string,
+): Promise<boolean> {
+  const source = localPathForKey(key);
+  const destination = localPathForKey(sealedKey);
+  if (!source || !destination) return false;
+  let data: Buffer;
+  let metadata: Buffer;
+  try {
+    [data, metadata] = await Promise.all([
+      readFile(/* turbopackIgnore: true */ source.objectPath),
+      readFile(/* turbopackIgnore: true */ source.metadataPath),
+    ]);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+  if (localEtag(data) !== etag) return false;
+
+  await mkdir(/* turbopackIgnore: true */ path.dirname(destination.objectPath), {
+    recursive: true,
+  });
+  await mkdir(/* turbopackIgnore: true */ path.dirname(destination.metadataPath), {
+    recursive: true,
+  });
+  const tempId = randomUUID();
+  const objectTemp = `${destination.objectPath}.${tempId}.tmp`;
+  const metadataTemp = `${destination.metadataPath}.${tempId}.tmp`;
+  await writeFile(/* turbopackIgnore: true */ objectTemp, data, { flag: 'wx' });
+  await writeFile(/* turbopackIgnore: true */ metadataTemp, metadata, { flag: 'wx', mode: 0o600 });
+  await rename(/* turbopackIgnore: true */ objectTemp, destination.objectPath);
+  await rename(/* turbopackIgnore: true */ metadataTemp, destination.metadataPath);
+  return true;
+}
+
+/**
+ * Promotes inspected bytes to a key no presign, upload authorization or
+ * cleanup request can name. The presigned PUT that wrote `key` stays valid for
+ * the rest of its ttl, so a copy that still matches the inspected entity tag is
+ * the only evidence that what was read is what will be served. Resolves null
+ * when the object changed underneath the inspection.
+ */
+export async function sealProjectKnowledgeObject(input: {
+  key: string;
+  etag: string | undefined;
+}): Promise<string | null> {
+  const sealedKey = sealedProjectKnowledgeKey(input.key);
+  if (!sealedKey || !input.etag) return null;
+  if (isPrivateObjectStorageConfigured()) {
+    const copied = await copyPrivateObjectIfUnchanged({
+      sourceKey: input.key,
+      destinationKey: sealedKey,
+      etag: input.etag,
+    });
+    return copied ? sealedKey : null;
+  }
+  return (await sealLocalProjectKnowledgeObject(input.key, sealedKey, input.etag))
+    ? sealedKey
+    : null;
 }
 
 export async function deleteProjectKnowledgeObject(key: string): Promise<void> {

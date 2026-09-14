@@ -8,12 +8,14 @@ const {
   mockGetPrivateObject,
   mockDeletePrivateObject,
   mockDeleteObject,
+  mockCopyPrivateObjectIfUnchanged,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
   mockGetPrivateObject: vi.fn(),
   mockDeletePrivateObject: vi.fn(),
   mockDeleteObject: vi.fn(),
+  mockCopyPrivateObjectIfUnchanged: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -35,6 +37,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
 }));
 vi.mock('@/lib/server/object-storage', () => ({
+  copyPrivateObjectIfUnchanged: mockCopyPrivateObjectIfUnchanged,
   getBoundedObject: vi.fn(),
   getBoundedPrivateObject: mockGetPrivateObject,
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
@@ -49,6 +52,7 @@ import { POST } from '@/app/api/projects/[id]/knowledge-files/route';
 
 const PROJECT_ID = 'proj-1';
 const STORAGE_URI = `knowledge-files/projects/${PROJECT_ID}/notes-1234.txt`;
+const SEALED_URI = `knowledge-files/projects/${PROJECT_ID}/sealed/notes-1234.txt`;
 const INSERT_SQL_FRAGMENT = 'insert into project_knowledge_files';
 
 function sha256(bytes: Buffer): string {
@@ -82,7 +86,7 @@ function wireDatabase(): void {
 }
 
 function post(bytes: Buffer, mimeType: string, fileName: string): Promise<Response> {
-  mockGetPrivateObject.mockResolvedValue({ data: bytes, contentType: mimeType });
+  mockGetPrivateObject.mockResolvedValue({ data: bytes, contentType: mimeType, etag: '"etag-1"' });
   const request = new NextRequest(`http://localhost/api/projects/${PROJECT_ID}/knowledge-files`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -108,15 +112,38 @@ describe('POST /api/projects/[id]/knowledge-files, content inspection', () => {
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
     mockDeletePrivateObject.mockResolvedValue(undefined);
     mockDeleteObject.mockResolvedValue(undefined);
+    mockCopyPrivateObjectIfUnchanged.mockResolvedValue(true);
     wireDatabase();
   });
 
-  it('registers a benign text source', async () => {
+  it('registers a benign text source under the sealed key and drops the writable one', async () => {
     const res = await post(Buffer.from('hello', 'utf8'), 'text/plain', 'notes.txt');
 
     expect(res.status).toBe(201);
     expect(insertWasAttempted()).toBe(true);
-    expect(mockDeletePrivateObject).not.toHaveBeenCalled();
+    expect(mockCopyPrivateObjectIfUnchanged).toHaveBeenCalledWith({
+      sourceKey: STORAGE_URI,
+      destinationKey: SEALED_URI,
+      etag: '"etag-1"',
+    });
+    const insertCall = mockNeonQuery.mock.calls.find((call) =>
+      String(call[0]).includes(INSERT_SQL_FRAGMENT),
+    );
+    expect(insertCall?.[1]).toContain(SEALED_URI);
+    expect(insertCall?.[1]).not.toContain(STORAGE_URI);
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_URI);
+  });
+
+  it('refuses to register a source the uploader replaced after inspection', async () => {
+    mockCopyPrivateObjectIfUnchanged.mockResolvedValue(false);
+
+    const res = await post(Buffer.from('hello', 'utf8'), 'text/plain', 'notes.txt');
+    const json = (await res.json()) as { error?: { message?: string } };
+
+    expect(res.status).toBe(400);
+    expect(json.error?.message).toMatch(/changed during its safety check/i);
+    expect(insertWasAttempted()).toBe(false);
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_URI);
   });
 
   it('rejects an ELF executable disguised as a text source and purges the object', async () => {

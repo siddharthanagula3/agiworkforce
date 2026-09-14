@@ -18,6 +18,7 @@ import {
   createProjectKnowledgeUploadAuthorization,
   deleteProjectKnowledgeObject,
   isProjectKnowledgeObjectStorageConfigured,
+  isSealedProjectKnowledgeKey,
 } from '@/lib/server/project-knowledge-object-storage';
 import {
   IMAGE_ATTACHMENT_MIME_TYPES,
@@ -260,6 +261,7 @@ async function handleCleanup(request: NextRequest): Promise<NextResponse> {
   const expectedPrefix = `knowledge-files/projects/${projectId}/`;
   if (
     !storageKey.startsWith(expectedPrefix) ||
+    isSealedProjectKnowledgeKey(storageKey) ||
     storageKey.includes('//') ||
     storageKey.split('/').some((segment) => segment === '.' || segment === '..')
   ) {
