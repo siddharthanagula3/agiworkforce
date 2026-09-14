@@ -32,7 +32,7 @@ use uuid::Uuid;
 
 use super::account;
 use super::surfaces;
-use crate::agent::{AgentSession, ToolApprovalSink, ToolEventSink};
+use crate::agent::{AgentSession, ContinuationSink, ToolApprovalSink, ToolEventSink};
 use crate::config::CliConfig;
 use crate::context;
 use crate::models::{self, ContentBlock};
@@ -1480,35 +1480,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_notifications.clone(),
                 )));
 
-                let delta_notifications = task_notifications.clone();
-                let delta_thread = task_thread_id.clone();
-                let delta_turn = task_turn_id.clone();
-                let delta_partial = task_partial.clone();
+                let on_chunk = install_output_deltas(
+                    &mut agent,
+                    output_delta_callback(
+                        task_thread_id.clone(),
+                        task_turn_id.clone(),
+                        task_partial.clone(),
+                        task_notifications.clone(),
+                    ),
+                );
                 let turn_config = turn_config_pinned_to_session_route(&task_config, &agent);
-                let result = agent
-                    .send(
-                        &turn_config,
-                        &input.text,
-                        Box::new(move |chunk| {
-                            match delta_partial.lock() {
-                                Ok(mut partial) => partial.push_str(chunk),
-                                Err(poisoned) => poisoned.into_inner().push_str(chunk),
-                            }
-                            if let Ok(notification) = AppServerNotification::new(
-                                "turn/output_delta",
-                                serde_json::json!({
-                                    "threadId": delta_thread,
-                                    "turnId": delta_turn,
-                                    "delta": chunk,
-                                }),
-                            ) {
-                                let _ = delta_notifications.send(notification);
-                            }
-                        }),
-                    )
-                    .await;
+                let result = agent.send(&turn_config, &input.text, on_chunk).await;
                 agent.on_tool_approval = None;
                 agent.on_tool_event = None;
+                agent.on_continuation_chunk = None;
 
                 match result {
                     Ok(turn) => {
@@ -2252,6 +2237,52 @@ fn emit_agent_event(
         let _ = notifications.send(notification);
         *next_sequence = next_sequence.saturating_add(1);
     }
+}
+
+/// The one place a turn's assistant text leaves the agent engine.
+///
+/// It backs both halves of a reply: the `on_chunk` the first completion
+/// streams through, and the session's continuation sink, which every
+/// completion after a tool call uses. Without the second installation the
+/// agent engine falls back to writing the continuation to the terminal, and
+/// under stdio transport the terminal is the protocol channel: the client's
+/// reader hits a non-JSON line and closes the session.
+fn output_delta_callback(
+    thread_id: String,
+    turn_id: String,
+    partial: Arc<StdMutex<String>>,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> Arc<dyn Fn(&str) + Send + Sync> {
+    Arc::new(move |chunk: &str| {
+        match partial.lock() {
+            Ok(mut partial) => partial.push_str(chunk),
+            Err(poisoned) => poisoned.into_inner().push_str(chunk),
+        }
+        if let Ok(notification) = AppServerNotification::new(
+            "turn/output_delta",
+            serde_json::json!({
+                "threadId": thread_id,
+                "turnId": turn_id,
+                "delta": chunk,
+            }),
+        ) {
+            let _ = notifications.send(notification);
+        }
+    })
+}
+
+/// Wire both halves of one reply to `deltas` and hand back the first
+/// completion's stream callback.
+///
+/// Installing the continuation sink is not optional for this host, so it is not
+/// a separate statement a later edit can drop: the only way to obtain the
+/// `on_chunk` a turn needs is to go through here.
+fn install_output_deltas(
+    agent: &mut AgentSession,
+    deltas: Arc<dyn Fn(&str) + Send + Sync>,
+) -> crate::models::StreamCallback {
+    agent.on_continuation_chunk = Some(ContinuationSink(deltas.clone()));
+    Box::new(move |chunk: &str| deltas(chunk))
 }
 
 fn tool_event_callback(
@@ -3265,6 +3296,52 @@ mod tests {
         assert!(completed.is_error);
         assert_eq!(completed.elapsed_ms, Some(125));
         assert_eq!(completed.output["text"], "provider timed out");
+    }
+
+    #[tokio::test]
+    async fn a_turns_continuation_reaches_the_client_instead_of_the_protocol_stream() {
+        // Regression: this host installed no continuation sink, so the reply
+        // after a tool call fell through to the agent engine's terminal
+        // fallback and was written raw to stdout, the stdio protocol channel.
+        // The client's reader closed on the non-JSON line, and the text only
+        // ever reached it inside `turn/completed`, never as a delta.
+        let (notifications, mut receiver) = broadcast::channel(8);
+        let partial = Arc::new(StdMutex::new(String::new()));
+        let mut agent = test_agent();
+
+        let mut on_chunk = install_output_deltas(
+            &mut agent,
+            output_delta_callback(
+                "thread-1".to_string(),
+                "turn-1".to_string(),
+                partial.clone(),
+                notifications,
+            ),
+        );
+
+        assert!(
+            agent.on_continuation_chunk.is_some(),
+            "the turn path must leave the engine no terminal fallback to take"
+        );
+
+        on_chunk("First line of ");
+        (agent.continuation_sink())("`README.md`");
+
+        let first = receiver.recv().await.expect("first completion delta");
+        let continuation = receiver.recv().await.expect("continuation delta");
+        assert_eq!(first.method, "turn/output_delta");
+        assert_eq!(first.params["delta"], "First line of ");
+        assert_eq!(continuation.method, "turn/output_delta");
+        assert_eq!(continuation.params["threadId"], "thread-1");
+        assert_eq!(continuation.params["turnId"], "turn-1");
+        assert_eq!(continuation.params["delta"], "`README.md`");
+
+        // Both halves land in the buffer `turn/completed.response` is built
+        // from, so the transcript a client rebuilds from deltas matches it.
+        assert_eq!(
+            partial.lock().expect("partial").as_str(),
+            "First line of `README.md`"
+        );
     }
 
     #[tokio::test]

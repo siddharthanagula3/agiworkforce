@@ -236,18 +236,78 @@ pub fn print_user_prompt() {
 /// track whether that line needs closing first.
 static ASSISTANT_LINE_OPEN: AtomicBool = AtomicBool::new(false);
 
+/// Whether stdout carries a machine protocol rather than a transcript.
+///
+/// `agi app-server --listen stdio` and `agi mcp-server` speak JSON-RPC on
+/// stdout: one JSON value per line and nothing else. A single line of human
+/// text there is not cosmetic, the client's reader fails to parse it and drops
+/// the connection ("malformed JSON"), killing the turn. Every would-be stdout
+/// write in this module consults this and falls back to stderr, which no
+/// protocol reader consumes.
+static STDOUT_IS_PROTOCOL: AtomicBool = AtomicBool::new(false);
+
+/// Claim stdout for a machine protocol, for the remaining life of the process.
+pub fn claim_stdout_for_protocol() {
+    STDOUT_IS_PROTOCOL.store(true, Ordering::SeqCst);
+}
+
+/// Whether stdout has been claimed by [`claim_stdout_for_protocol`].
+pub fn stdout_is_protocol() -> bool {
+    STDOUT_IS_PROTOCOL.load(Ordering::SeqCst)
+}
+
+/// A reverting, serialised hold of the claim above.
+///
+/// The production claim is one-way, and every unit test in this crate shares
+/// one process, so a test that sets it would decide the answer for every test
+/// that ran after it.
+#[cfg(test)]
+pub(crate) struct ProtocolStdoutTestClaim(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+
+#[cfg(test)]
+impl ProtocolStdoutTestClaim {
+    pub(crate) fn hold() -> Self {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        let guard = LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        claim_stdout_for_protocol();
+        Self(guard)
+    }
+}
+
+#[cfg(test)]
+impl Drop for ProtocolStdoutTestClaim {
+    fn drop(&mut self) {
+        STDOUT_IS_PROTOCOL.store(false, Ordering::SeqCst);
+    }
+}
+
 fn record_assistant_output(text: &str) {
     if let Some(last) = text.chars().next_back() {
         ASSISTANT_LINE_OPEN.store(last != '\n', Ordering::Relaxed);
     }
 }
 
+/// The one gate between assistant text and a file descriptor.
+fn write_response_text(text: &str) {
+    use std::io::Write;
+    if stdout_is_protocol() {
+        let mut stderr = std::io::stderr();
+        let _ = stderr.write_all(text.as_bytes());
+        let _ = stderr.flush();
+        return;
+    }
+    print!("{text}");
+    flush_stdout();
+}
+
 /// Print assistant text chunk. Called incrementally during streaming (raw mode).
 pub fn print_assistant_chunk(text: &str) {
     let text = sanitize_terminal_text(text);
-    print!("{}", text);
+    write_response_text(&text);
     record_assistant_output(&text);
-    flush_stdout();
 }
 
 /// Push buffered stdout out now.
@@ -270,8 +330,7 @@ fn flush_stdout() {
 /// line, a boundary notice, the next prompt, opens with a blank line.
 pub fn print_assistant_end() {
     if ASSISTANT_LINE_OPEN.swap(false, Ordering::Relaxed) {
-        println!();
-        flush_stdout();
+        write_response_text("\n");
     }
 }
 
@@ -680,9 +739,8 @@ pub fn print_tier_status() {
 pub fn print_assistant_chunk_formatted(renderer: &mut MarkdownRenderer, chunk: &str) {
     let formatted = renderer.process_chunk(chunk);
     if !formatted.is_empty() {
-        print!("{}", formatted);
+        write_response_text(&formatted);
         record_assistant_output(&formatted);
-        flush_stdout();
     }
 }
 
@@ -691,9 +749,8 @@ pub fn print_assistant_chunk_formatted(renderer: &mut MarkdownRenderer, chunk: &
 pub fn flush_markdown(renderer: &mut MarkdownRenderer) {
     let remaining = renderer.flush();
     if !remaining.is_empty() {
-        print!("{}", remaining);
+        write_response_text(&remaining);
         record_assistant_output(&remaining);
-        flush_stdout();
     }
 }
 
@@ -761,6 +818,66 @@ mod tests {
             "streaming chunks printed outside `output` (unflushed, so they \
              reorder against stderr progress output): {offenders:?}. Call \
              `output::print_assistant_chunk` instead."
+        );
+    }
+
+    /// The agent engine, its tools and the app-server host all run under
+    /// `agi app-server --listen stdio` and `agi mcp-server`, where stdout is
+    /// the JSON-RPC channel. One line of human text there is a framing error
+    /// the client cannot recover from, it drops the session. Those subtrees
+    /// therefore own no stdout writer of their own: everything goes through
+    /// this module, which redirects once stdout is claimed.
+    #[test]
+    fn no_protocol_reachable_module_writes_to_stdout_directly() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut offenders = Vec::new();
+        let mut stack = vec![
+            src.join("agent"),
+            src.join("app_server"),
+            src.join("models"),
+        ];
+        for dir in &stack {
+            assert!(
+                dir.is_dir(),
+                "{} no longer exists, so this guard now covers less than it \
+                 claims; point it at the module that replaced it",
+                dir.display()
+            );
+        }
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("read source dir").flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("read source");
+                for (i, line) in text.lines().enumerate() {
+                    let line = line.trim();
+                    if line.starts_with("//") || line.starts_with("///") {
+                        continue;
+                    }
+                    let writes_stdout = line.contains("print!(")
+                        || line.contains("println!(")
+                        || line.contains("io::stdout()");
+                    if writes_stdout && !line.contains("eprint") {
+                        offenders.push(format!(
+                            "{}:{}",
+                            path.strip_prefix(&src).unwrap_or(&path).display(),
+                            i + 1
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "stdout written from a module that runs under the stdio protocol \
+             transports: {offenders:?}. Route it through `output`, which sends \
+             it to stderr once `claim_stdout_for_protocol` has been called."
         );
     }
 
