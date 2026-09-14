@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { HostBridge, ShellPolicy } from '@agiworkforce/local-runtime-contract';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 const listWorkspaceRoots = vi.fn();
 const pickWorkspaceRoot = vi.fn();
@@ -39,6 +40,7 @@ const root = {
 
 function installHost() {
   window.agiHost = {
+    ...hostBridgeStub(),
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     invokeRuntime: async () => ({
