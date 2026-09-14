@@ -512,3 +512,105 @@ describe('completions stream fallback (RN null response.body)', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
 });
+
+function providerFrame(delta: Record<string, unknown>, finishReason: string | null = null): string {
+  return `data: ${JSON.stringify({
+    id: 'gen_01M2FR6MQTV0BQXYT528HZ2VRH',
+    object: 'chat.completion.chunk',
+    model: 'deepseek-v4-flash',
+    choices: [{ index: 0, delta, logprobs: null, finish_reason: finishReason }],
+  })}`;
+}
+
+function readableBody(chunks: string[]): { getReader: () => unknown } {
+  const encoder = new TextEncoder();
+  let index = 0;
+  return {
+    getReader: () => ({
+      read: async () =>
+        index < chunks.length
+          ? { done: false, value: encoder.encode(chunks[index++]) }
+          : { done: true, value: undefined },
+      releaseLock: () => undefined,
+    }),
+  };
+}
+
+describe('completions stream tolerates provider frames joined without a blank separator', () => {
+  afterEach(() => {
+    jest.dontMock('@/lib/constants');
+    jest.dontMock('@/lib/egressGuard');
+    jest.dontMock('../services/authSession');
+    jest.dontMock('../services/llmGate');
+    jest.dontMock('../services/remoteChatGate');
+    jest.dontMock('@/src/features/waitlist/store');
+  });
+
+  it('delivers every delta of a run joined by single newlines, as an unfixed server writes it', async () => {
+    const { streamChat } = await loadStreamingService();
+    const joined = [
+      providerFrame({ role: 'assistant', content: '' }),
+      providerFrame({ content: 's' }),
+      providerFrame({ content: 'se' }),
+      providerFrame({ content: ' frames' }),
+      providerFrame({ content: ' ok' }),
+      providerFrame({}, 'stop'),
+      'data: [DONE]',
+      '',
+    ].join('\n');
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: readableBody([joined]),
+      headers: undefined,
+    } as unknown as Response);
+
+    const { deltas, callbacks } = makeCallbacks();
+    await streamChat(
+      {
+        model: MODEL_ID,
+        messages: [{ role: 'user', content: 'Reply with exactly: sse frames ok' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000031',
+      },
+      callbacks,
+    );
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(deltas.join('')).toBe('sse frames ok');
+    expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('delivers every delta when a proxy re-chunks the run mid-frame', async () => {
+    const { streamChat } = await loadStreamingService();
+    const joined = [
+      providerFrame({ content: 'sse ' }),
+      providerFrame({ content: 'frames ok' }),
+      providerFrame({}, 'stop'),
+      'data: [DONE]',
+      '',
+    ].join('\n');
+    const cut = Math.floor(joined.length / 3);
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: readableBody([joined.slice(0, cut), joined.slice(cut, cut * 2), joined.slice(cut * 2)]),
+      headers: undefined,
+    } as unknown as Response);
+
+    const { deltas, callbacks } = makeCallbacks();
+    await streamChat(
+      {
+        model: MODEL_ID,
+        messages: [{ role: 'user', content: 'Reply with exactly: sse frames ok' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000032',
+      },
+      callbacks,
+    );
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(deltas.join('')).toBe('sse frames ok');
+    expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+  });
+});
