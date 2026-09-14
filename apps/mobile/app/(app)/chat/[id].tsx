@@ -52,7 +52,11 @@ import {
 } from '@/src/features/voice/utils/assistantResponse';
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { Text } from '@/components/ui/text';
-import { paywallErrorStateFromApiError, useChatStore } from '@/stores/chatStore';
+import {
+  LOCAL_NO_MODEL_MESSAGE,
+  paywallErrorStateFromApiError,
+  useChatStore,
+} from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { useWaitlistStore } from '@/src/features/waitlist';
@@ -78,6 +82,11 @@ import {
   executionModeForConversation,
   executionModeForSelection,
 } from '@/src/features/chat/utils/conversationMode';
+import { localModelRecovery } from '@/src/features/chat/utils/localModelRecovery';
+import {
+  readyLocalModelIdOr,
+  useModelInstallStore,
+} from '@/src/features/model-picker/installStore';
 import { visibleThreadFor } from '@/src/features/chat/utils/conversationThread';
 import {
   imageAssetsToChatAttachments,
@@ -600,7 +609,7 @@ export default function ChatScreen() {
         : conversation.model &&
             executionModeForSelection(conversation.model, conversationExecutionMode) === 'local'
           ? conversation.model
-          : DEFAULT_LOCAL_MODEL_ID;
+          : readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID);
 
     if (!preferredModel) return;
     if (conversationExecutionMode === 'cloud' && !cloudUnlocked) return;
@@ -608,6 +617,49 @@ export default function ChatScreen() {
       useModelStore.getState().setModel(preferredModel);
     }
   }, [cloudUnlocked, conversation, conversationExecutionMode, setAppMode, subscriptionTier]);
+
+  const installedModelIds = useModelInstallStore((state) => state.installedModelIds);
+  const readySystemModelIds = useModelInstallStore((state) => state.readySystemModelIds);
+
+  const localRecovery = useMemo(
+    () =>
+      localModelRecovery({
+        executionMode: conversationExecutionMode,
+        isNoLocalModelError: sendError === LOCAL_NO_MODEL_MESSAGE,
+        selectedModelId: selectedModel,
+        installedModelIds,
+        readySystemModelIds,
+        displayNameFor: (modelId) => getShortDisplayName(modelId, subscriptionTier),
+      }),
+    [
+      conversationExecutionMode,
+      installedModelIds,
+      readySystemModelIds,
+      selectedModel,
+      sendError,
+      subscriptionTier,
+    ],
+  );
+
+  const localRecoveryAction = useMemo(() => {
+    if (!localRecovery) return null;
+    return {
+      label: localRecovery.label,
+      onPress: () => {
+        if (localRecovery.kind === 'open-models') {
+          clearError();
+          router.push('/(app)/models' as Parameters<typeof router.push>[0]);
+          return;
+        }
+        if (!localRecovery.modelId) return;
+        useModelStore.getState().setModel(localRecovery.modelId);
+        clearError();
+        if (!id) return;
+        const lastUser = [...conversationMessages].reverse().find((m) => m.role === 'user');
+        if (lastUser) retryMessage(id, lastUser.id);
+      },
+    };
+  }, [clearError, conversationMessages, id, localRecovery, retryMessage, router]);
 
   const handleOpenCloudSignIn = useCallback(() => {
     router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
@@ -815,7 +867,7 @@ export default function ChatScreen() {
 
   const handleTapLocalMode = useCallback(() => {
     setAppMode('local');
-    useModelStore.getState().setModel(DEFAULT_LOCAL_MODEL_ID);
+    useModelStore.getState().setModel(readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID));
     router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
   }, [router, setAppMode]);
 
@@ -1353,6 +1405,7 @@ export default function ChatScreen() {
         <SendErrorBanner
           error={providerConsentError ? null : sendError}
           freeCapacity={providerConsentError ? null : freeCapacityError}
+          action={localRecoveryAction}
           onRetry={
             conversationMessages.some((m) => m.role === 'user')
               ? () => {

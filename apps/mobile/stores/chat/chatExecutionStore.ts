@@ -239,6 +239,11 @@ interface ExecutionState {
   ) => Promise<void>;
 }
 
+// Exported so the composer can offer a download or a ready model against this
+// exact failure instead of leaving the user with a dead Retry.
+export const LOCAL_NO_MODEL_MESSAGE =
+  'Local Mode is active, but no on-device model is ready yet. Open Models to download or select a local model.';
+
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const MAX_DEFERRED_SENDS = 5;
@@ -524,8 +529,13 @@ function sanitizeLocalOutput(raw: string): string {
     .trimEnd();
 }
 
+// Every local failure leaves through here, so a runtime exception string never
+// reaches the transcript. A raw `FoundationModels.LanguageModelSession.\
+// GenerationError error -1.` told the user nothing and read as a crash.
 function localSetupMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
+  if (raw) console.warn('[chat] local inference failed:', raw);
+
   if (
     raw.includes('No model path') ||
     raw.includes('No local runtime') ||
@@ -533,12 +543,30 @@ function localSetupMessage(error: unknown): string {
     raw.includes('not downloaded') ||
     raw.includes('not available on this device')
   ) {
-    return 'Local Mode is active, but no on-device model is ready yet. Open Models to download or select a local model.';
+    return LOCAL_NO_MODEL_MESSAGE;
   }
-  return (
-    raw ||
-    'Local inference failed. Check device storage, thermal state, and installed model status.'
-  );
+  if (raw.includes('APPLE_INTELLIGENCE_UNAVAILABLE')) {
+    return 'Apple Intelligence is not available on this device. Choose another on-device model to keep chatting privately.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_ASSETS_UNAVAILABLE')) {
+    return 'Apple Intelligence is still preparing its on-device model. Try again shortly, or choose another on-device model.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_CONTEXT_EXCEEDED')) {
+    return 'This conversation is too long for Apple Intelligence. Start a new chat or choose a model with a larger context window.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_REFUSED')) {
+    return 'Apple Intelligence declined to answer this message. Rephrase it, or choose another on-device model.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_RATE_LIMITED')) {
+    return 'Apple Intelligence is busy on this device. Wait a moment and try again.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_FAILED') || raw.includes('FoundationModels')) {
+    return 'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.';
+  }
+  if (raw.includes('out of memory') || raw.includes('OOM')) {
+    return 'This device ran out of memory for the on-device model. Close other apps, or choose a smaller model.';
+  }
+  return 'Local inference failed. Check device storage, thermal state, and installed model status.';
 }
 
 async function uploadWithRetry(
