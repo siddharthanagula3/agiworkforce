@@ -126,6 +126,11 @@ import {
   type ChromeManagedChatResult,
 } from './features/cloud-bridge/managedChatHandler';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
+import {
+  isPermanentNativeDisconnect,
+  nativeReconnectDelayMs,
+  NATIVE_RECONNECT_MAX_ATTEMPTS,
+} from './features/native-bridge/reconnect';
 import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   BROWSER_COMMAND_POLL_WINDOW_MS,
@@ -580,9 +585,6 @@ const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
 const CONTENT_SCRIPT_FORWARD_TIMEOUT_MS = 30000;
 const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
-const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
-const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
-const NATIVE_RECONNECT_MAX_ATTEMPTS = 8;
 const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
 const TAB_GROUP_NAME = 'AGI Workforce';
 
@@ -648,6 +650,48 @@ function setNativeSessionSecret(hex: string | undefined): void {
   nativeSessionSecret = bytes.buffer;
 }
 
+const NATIVE_RECONNECT_GAVE_UP_KEY = 'agi_native_reconnect_gave_up';
+const DESKTOP_PAIRED_KEY = 'connectedToDesktop';
+
+/**
+ * Held in session storage rather than a worker-local flag: MV3 restarts the
+ * worker freely, and a fresh one used to retry a host that had already been
+ * declared permanently unavailable earlier in the same browser session.
+ */
+const nativeReconnectGaveUpRestored: Promise<void> = chrome.storage.session
+  .get(NATIVE_RECONNECT_GAVE_UP_KEY)
+  .then((stored) => {
+    if (stored[NATIVE_RECONNECT_GAVE_UP_KEY] === true) _bgCtx.nativeReconnectGaveUp = true;
+  })
+  .catch((error: unknown) => {
+    logger.warn('Failed to restore the native reconnect state', error);
+  });
+
+function setNativeReconnectGaveUp(gaveUp: boolean): void {
+  _bgCtx.nativeReconnectGaveUp = gaveUp;
+  void chrome.storage.session
+    .set({ [NATIVE_RECONNECT_GAVE_UP_KEY]: gaveUp })
+    .catch((error: unknown) => {
+      logger.warn('Failed to persist the native reconnect state', error);
+    });
+}
+
+function setDesktopPaired(paired: boolean): void {
+  void storageUtils.setItem(DESKTOP_PAIRED_KEY, paired);
+}
+
+/**
+ * A user who has never paired AGI Desktop has no native host to reach, so an
+ * automatic connectNative on every worker start only produced a failed connect
+ * and a warning. Pairing, manual reconnect and any request that needs the host
+ * still connect directly.
+ */
+async function shouldAutoConnectToDesktop(): Promise<boolean> {
+  await nativeReconnectGaveUpRestored;
+  if (_bgCtx.nativeReconnectGaveUp) return false;
+  return (await storageUtils.getItem<boolean>(DESKTOP_PAIRED_KEY, false)) === true;
+}
+
 function clearNativeReconnectTimer(): void {
   if (_bgCtx.nativeReconnectTimer) {
     clearTimeout(_bgCtx.nativeReconnectTimer);
@@ -657,7 +701,7 @@ function clearNativeReconnectTimer(): void {
 
 function resetNativeReconnectState(): void {
   _bgCtx.nativeReconnectAttempt = 0;
-  _bgCtx.nativeReconnectGaveUp = false;
+  setNativeReconnectGaveUp(false);
   clearNativeReconnectTimer();
 }
 
@@ -698,18 +742,14 @@ function scheduleNativeReconnect(trigger: string): void {
     NATIVE_RECONNECT_MAX_ATTEMPTS,
   );
 
-  if (_bgCtx.nativeReconnectAttempt >= NATIVE_RECONNECT_MAX_ATTEMPTS) {
+  const delay = nativeReconnectDelayMs(_bgCtx.nativeReconnectAttempt);
+  if (delay === null) {
     logger.warn('Max native reconnect attempts reached; giving up until user action', { trigger });
-    _bgCtx.nativeReconnectGaveUp = true;
+    setNativeReconnectGaveUp(true);
     state.connectionStatus = 'disconnected';
     void notifyConnectionStatusChange();
     return;
   }
-
-  const delay = Math.min(
-    NATIVE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(_bgCtx.nativeReconnectAttempt - 1, 0),
-    NATIVE_RECONNECT_MAX_DELAY_MS,
-  );
 
   logger.info('Scheduling native reconnect', {
     trigger,
@@ -757,8 +797,11 @@ function initialize(): void {
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
     logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
   });
-  connectToNativeHost();
-  checkDesktopConnection();
+  void shouldAutoConnectToDesktop().then((autoConnect) => {
+    if (!autoConnect) return;
+    connectToNativeHost();
+    void checkDesktopConnection();
+  });
   void restoreScheduledTaskAlarms()
     .then(recoverScheduledTaskRuns)
     .catch((error) => logger.warn('Failed to restore scheduled Managed Cloud work', error));
@@ -850,7 +893,8 @@ function connectToNativeHost(): void {
         state.isNativeConnected = true;
         void pollDesktopBrowserCommands();
         _bgCtx.nativeReconnectAttempt = 0;
-        _bgCtx.nativeReconnectGaveUp = false;
+        setNativeReconnectGaveUp(false);
+        setDesktopPaired(true);
         clearNativeReconnectTimer();
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
@@ -1169,14 +1213,10 @@ function handleNativeDisconnect(): void {
     return;
   }
 
-  const isPermanentError =
-    error.includes('Native host not found') ||
-    error.includes('Specified native messaging host not found') ||
-    error.includes('Access to the specified native messaging host is forbidden') ||
-    error.includes('not allowed');
-  if (isPermanentError) {
+  if (isPermanentNativeDisconnect(error)) {
     logger.warn('Native host permanently unavailable; halting reconnect', { error });
-    _bgCtx.nativeReconnectGaveUp = true;
+    setNativeReconnectGaveUp(true);
+    setDesktopPaired(false);
     return;
   }
 
@@ -2195,8 +2235,8 @@ async function runMaintenancePass(): Promise<boolean> {
     outstanding = true;
   }
 
-  if (!_bgCtx.nativeReconnectGaveUp && !state.isNativeConnected) {
-    void connectToNativeHost();
+  if (!state.isNativeConnected && (await shouldAutoConnectToDesktop())) {
+    connectToNativeHost();
     outstanding = true;
   }
 
@@ -4367,6 +4407,12 @@ async function forwardToContentScript(
   }
 }
 
+/**
+ * `connectedToDesktop` records that the native host has answered on this
+ * profile, not that it is answering right now. A closed Desktop app is a
+ * reconnect, not an unpairing, so only a permanently unavailable host or an
+ * explicit unpair clears it.
+ */
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
     if (!_bgCtx.nativeReconnectGaveUp && !_bgCtx.nativeHandshakeInFlight) {
@@ -4388,7 +4434,7 @@ async function checkDesktopConnection(): Promise<void> {
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
       }
-      await storageUtils.setItem('connectedToDesktop', true);
+      setDesktopPaired(true);
       return;
     } catch (error) {
       logger.warn('Native ping failed', error);
@@ -4401,7 +4447,6 @@ async function checkDesktopConnection(): Promise<void> {
     state.connectionStatus = 'disconnected';
     void notifyConnectionStatusChange();
   }
-  await storageUtils.setItem('connectedToDesktop', false);
   scheduleNativeReconnect('ping_failed');
 }
 
@@ -5356,6 +5401,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         logger.warn(`Failed to load/execute scheduled task ${taskId}`, err);
       });
   }
+});
+
+chrome.runtime.onSuspendCanceled.addListener(() => {
+  _bgCtx.nativeSuspendInProgress = false;
 });
 
 chrome.runtime.onSuspend.addListener(() => {
