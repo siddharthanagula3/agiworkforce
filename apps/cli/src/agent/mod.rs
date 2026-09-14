@@ -503,7 +503,13 @@ impl AgentSession {
         custom_system_prompt: Option<&str>,
         provider_override: Option<&str>,
     ) -> Result<Self> {
-        let provider = models::resolve_selected_provider(model, provider_override)?;
+        let config = crate::config::CliConfig::load().unwrap_or_default();
+        let provider = models::select_turn_route(
+            &config,
+            &models::AccountRoute::load(),
+            model,
+            provider_override,
+        )?;
         Ok(Self::new_with_provider(
             model,
             sys_context,

@@ -28,7 +28,7 @@ export type ChatErrorCategory =
 
 /** What the error block should offer besides Retry, when the runtime named one. */
 export interface ChatErrorAction {
-  kind: 'sign-in-provider' | 'open-settings';
+  kind: 'sign-in-provider' | 'sign-in-account' | 'upgrade-plan' | 'open-settings';
   label: string;
   provider?: string;
 }
@@ -216,12 +216,20 @@ export interface TurnFailureShape {
   message: string;
   provider?: string;
   retryable: boolean;
-  action: 'sign_in_provider' | 'open_settings' | 'retry' | 'none';
+  action:
+    | 'sign_in_provider'
+    | 'sign_in_account'
+    | 'upgrade_plan'
+    | 'open_settings'
+    | 'retry'
+    | 'none';
 }
 
 const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.freeze({
   provider_auth_missing: 'sign-in',
   provider_auth_invalid: 'sign-in',
+  account_signed_out: 'sign-in',
+  plan_excludes_model: 'subscription',
   provider_rate_limited: 'rate-limit',
   provider_unavailable: 'provider',
   context_window_exceeded: 'provider',
@@ -235,6 +243,10 @@ const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.fre
 
 function failureHeadline(failure: TurnFailureShape, provider: string): string {
   switch (failure.code) {
+    case 'account_signed_out':
+      return 'Sign in to AGI to run this model on your plan.';
+    case 'plan_excludes_model':
+      return 'Your plan does not include this model.';
     case 'provider_auth_missing':
       return `AGI has no ${provider} key to run this with.`;
     case 'provider_auth_invalid':
@@ -273,6 +285,12 @@ export function turnFailureOffer(failure: {
       label: `Sign in to ${provider}`,
       ...(failure.provider === undefined ? {} : { provider: failure.provider }),
     };
+  }
+  if (failure.action === 'sign_in_account') {
+    return { kind: 'sign-in-account', label: 'Sign in to AGI' };
+  }
+  if (failure.action === 'upgrade_plan') {
+    return { kind: 'upgrade-plan', label: 'Upgrade your plan' };
   }
   if (failure.action === 'open_settings') {
     return { kind: 'open-settings', label: 'Open settings' };

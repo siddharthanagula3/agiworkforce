@@ -408,7 +408,17 @@ pub async fn stream_completion(
     }
 
     // ---- Fall through to API key auth ----
-    let api_key = resolve_key(config, provider)?;
+    let api_key = resolve_key(config, provider).map_err(|error| {
+        match super::provider_dispatch::resolve_turn_route(
+            config,
+            &super::AccountRoute::load(),
+            model,
+            None,
+        ) {
+            Ok(_) => error,
+            Err(account) => account,
+        }
+    })?;
     let key = api_key.as_deref().unwrap_or_default();
 
     match provider {

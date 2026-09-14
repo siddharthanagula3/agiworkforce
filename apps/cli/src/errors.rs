@@ -110,6 +110,10 @@ pub enum CliError {
         message: String,
         is_retryable: bool,
     },
+    /// No AGI Workforce session, and no other route can run the model.
+    AccountSignedOut { model: String },
+    /// Signed in, but the account's plan does not include the model.
+    PlanExcludesModel { model: String, tier: String },
     /// AGI Workforce managed-cloud paywall, user's tier cap reached.
     ///
     /// HTTP 429 + `{"kind":"paywall", "feature":..., "requiredTier":..., "reason":...}`
@@ -173,6 +177,20 @@ impl fmt::Display for CliError {
             } => {
                 write!(f, "[{}] Stream error: {}", provider, message)
             }
+            CliError::AccountSignedOut { model } => {
+                write!(
+                    f,
+                    "No AGI Workforce session, and no provider key for '{}'. Run `agi login`, or set that provider's key.",
+                    model
+                )
+            }
+            CliError::PlanExcludesModel { model, tier } => {
+                write!(
+                    f,
+                    "Your {} plan does not include '{}', and no provider key for it is set.",
+                    tier, model
+                )
+            }
             CliError::Paywall {
                 feature,
                 required_tier,
@@ -197,6 +215,13 @@ impl std::error::Error for CliError {}
 // Deterministic error classification, for `--json-events` and CI
 // ---------------------------------------------------------------------------
 
+/// `agi login <provider>` for these opens a vendor subscription sign-in rather
+/// than an API-key prompt, which is a founder decision still open, so no copy
+/// may send a user there.
+pub fn login_opens_vendor_subscription(provider: &str) -> bool {
+    matches!(provider, "openai" | "anthropic")
+}
+
 impl CliError {
     /// Stable, machine-readable kind. Never localized, never reformatted; safe
     /// to grep, `jq -r '.kind'`, and pattern-match in CI runbooks.
@@ -212,6 +237,8 @@ impl CliError {
             CliError::ContextOverflow { .. } => "context_overflow",
             CliError::RateLimited { .. } => "api_rate_limit",
             CliError::StreamError { .. } => "stream_disconnect",
+            CliError::AccountSignedOut { .. } => "account_signed_out",
+            CliError::PlanExcludesModel { .. } => "plan_excludes_model",
             CliError::Paywall { .. } => "paywall",
         }
     }
@@ -237,10 +264,19 @@ impl CliError {
                 "Run `agi login {provider}` to refresh credentials, or set the \
                  corresponding API key environment variable."
             ),
-            CliError::AuthMissing { provider, .. } => format!(
-                "Run `agi login {provider}` to sign in, or set the corresponding \
-                 API key environment variable."
-            ),
+            CliError::AuthMissing { provider, .. } => {
+                if login_opens_vendor_subscription(provider) {
+                    format!(
+                        "Run `agi login` to use your AGI Workforce plan, or set the \
+                         {provider} API key environment variable to use your own key."
+                    )
+                } else {
+                    format!(
+                        "Run `agi login` to use your AGI Workforce plan, or run \
+                         `agi login {provider}` to use your own key."
+                    )
+                }
+            }
             CliError::Config { .. } => {
                 "Run `agi init` to regenerate the default config, or fix the indicated \
                  file path manually."
@@ -277,6 +313,15 @@ impl CliError {
                 "Stream disconnected with a non-retryable signal. Re-run the command."
             }
             .to_string(),
+            CliError::AccountSignedOut { .. } => {
+                "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
+                    .to_string()
+            }
+            CliError::PlanExcludesModel { .. } => {
+                "Upgrade at https://agiworkforce.com/pricing, choose a model your plan includes, \
+                 or set that provider's own key."
+                    .to_string()
+            }
             CliError::Paywall { required_tier, .. } => format!(
                 "Visit https://agiworkforce.com/pricing to upgrade to {required_tier}, \
                  or switch to a BYOK provider with `--provider anthropic`."
@@ -427,6 +472,8 @@ impl CliError {
             // A paywall is a quota the account has spent, not a broken
             // credential: the same shape as a rate limit, and the remedy is
             // the plan rather than a sign-in.
+            CliError::AccountSignedOut { .. } => (TurnFailureCode::AccountSignedOut, None),
+            CliError::PlanExcludesModel { .. } => (TurnFailureCode::PlanExcludesModel, None),
             CliError::Paywall { .. } => (TurnFailureCode::ProviderRateLimited, None),
             CliError::Api {
                 provider, status, ..

@@ -198,7 +198,14 @@ const hostModelSummarySchema = z.object({
   unreachable: z
     .object({
       code: z.string().min(1),
-      action: z.enum(['sign_in_provider', 'open_settings', 'retry', 'none']),
+      action: z.enum([
+        'sign_in_provider',
+        'sign_in_account',
+        'upgrade_plan',
+        'open_settings',
+        'retry',
+        'none',
+      ]),
       provider: z.string().optional(),
     })
     .optional(),
