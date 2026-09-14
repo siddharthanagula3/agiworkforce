@@ -264,15 +264,13 @@ export const formUtils = {
     }
   },
 
-  submitForm(form: HTMLFormElement | null = null): boolean {
+  submitForm(form: HTMLFormElement | null): boolean {
+    if (!form) return false;
     try {
-      const target = form ?? this.getForms()[0] ?? null;
-      if (target) {
-        if (typeof target.requestSubmit === 'function') {
-          target.requestSubmit();
-        } else {
-          target.submit();
-        }
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.submit();
       }
       return true;
     } catch (error) {
