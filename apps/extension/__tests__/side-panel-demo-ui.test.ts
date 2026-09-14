@@ -310,6 +310,19 @@ describe('Chrome side-panel sign-out ends the shared session, not just the local
     expect(clerkSignOutIndex).toBeGreaterThan(syncHostRevokeIndex);
     expect(localResetIndex).toBeGreaterThan(clerkSignOutIndex);
   });
+
+  it('tells the user in the panel, not only the console, when the sync host revoke fails', () => {
+    const start = source.indexOf("signoutBtn.addEventListener('click'");
+    const end = source.indexOf('\n  });', start);
+    const body = source.slice(start, end);
+
+    const catchStart = body.indexOf('catch (error) {', body.indexOf('revokeSyncedWebSession()'));
+    const catchEnd = body.indexOf('}', catchStart);
+    const revokeCatchBlock = body.slice(catchStart, catchEnd);
+
+    expect(revokeCatchBlock).toContain("t('spCloudSignOutSyncFailed')");
+    expect(revokeCatchBlock).toContain('signoutStatusEl.textContent');
+  });
 });
 
 describe('Chrome side-panel composer placeholder never shows a stale literal', () => {
