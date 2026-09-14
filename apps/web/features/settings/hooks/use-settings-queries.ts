@@ -222,7 +222,7 @@ export function useChangePassword(): UseMutationResult<void, Error, ChangePasswo
     },
     onError: (error: Error): void => {
       logger.error('Error changing password:', error);
-      toast.error(error.message || 'Failed to change password');
+      toast.error(toUserMessage(error, 'Failed to change password'));
     },
   });
 }
@@ -261,7 +261,7 @@ export function useCreateAPIKey(): UseMutationResult<
     },
     onError: (error: Error): void => {
       logger.error('Error generating API key:', error);
-      toast.error(error.message || 'Failed to generate API key');
+      toast.error(toUserMessage(error, 'Failed to generate API key'));
     },
   });
 }
@@ -291,7 +291,7 @@ export function useDeleteAPIKey(): UseMutationResult<string, Error, string> {
     },
     onError: (error: Error): void => {
       logger.error('Error deleting API key:', error);
-      toast.error(error.message || 'Failed to delete API key');
+      toast.error(toUserMessage(error, 'Failed to delete API key'));
     },
   });
 }
@@ -368,7 +368,7 @@ export function useToggle2FA(): UseMutationResult<
         queryClient.setQueryData(queryKeys.settings.preferences(), context.previousSettings);
       }
       logger.error('Error toggling 2FA:', error);
-      toast.error(error.message || `Failed to ${enabled ? 'enable' : 'disable'} 2FA`);
+      toast.error(toUserMessage(error, `Failed to ${enabled ? 'enable' : 'disable'} 2FA`));
     },
   });
 }
@@ -674,8 +674,14 @@ interface ApiErrorEnvelope {
   error?: string | { message?: string };
 }
 
+const REQUEST_FAILED = 'The request failed. Please try again.';
+
+function statusMessage(status: number): string {
+  return toUserMessage(Object.assign(new Error(`HTTP ${status}`), { status }), REQUEST_FAILED);
+}
+
 async function readApiError(response: Response): Promise<string> {
-  const fallback = `HTTP ${response.status}`;
+  const fallback = statusMessage(response.status);
   const body = (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
   if (typeof body?.error === 'string' && body.error.trim()) {
     return toUserMessage(
@@ -750,7 +756,7 @@ export function useSwitchWorkspace(): UseMutationResult<void, Error, string | nu
       toast.success('Workspace switched');
       window.location.reload();
     },
-    onError: (error) => toast.error(error.message || 'Failed to switch workspace'),
+    onError: (error) => toast.error(toUserMessage(error, 'Failed to switch workspace')),
   });
 }
 
@@ -820,7 +826,7 @@ export function useCreateOrganization(): UseMutationResult<
     },
     onError: (error) => {
       logger.error('Failed to create workspace:', error);
-      toast.error(error.message || 'Failed to create workspace');
+      toast.error(toUserMessage(error, 'Failed to create workspace'));
     },
   });
 }
@@ -1068,7 +1074,7 @@ export function useCreateTeamInvitation(): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
       toast.success('Invitation created. Copy the private link to share it.');
     },
-    onError: (error: Error) => toast.error(error.message || 'Failed to create invitation'),
+    onError: (error: Error) => toast.error(toUserMessage(error, 'Failed to create invitation')),
   });
 }
 
@@ -1105,7 +1111,7 @@ export function useResendTeamInvitation(): UseMutationResult<
       });
       toast.success('A new private invitation link is ready.');
     },
-    onError: (error: Error) => toast.error(error.message || 'Failed to renew invitation'),
+    onError: (error: Error) => toast.error(toUserMessage(error, 'Failed to renew invitation')),
   });
 }
 
@@ -1140,7 +1146,7 @@ export function useRevokeTeamInvitation(): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
       toast.success('Invitation revoked and its seat released.');
     },
-    onError: (error: Error) => toast.error(error.message || 'Failed to revoke invitation'),
+    onError: (error: Error) => toast.error(toUserMessage(error, 'Failed to revoke invitation')),
   });
 }
 
@@ -1175,7 +1181,7 @@ export function useLeaveOrganization(): UseMutationResult<
       );
       window.location.reload();
     },
-    onError: (error: Error) => toast.error(error.message || 'Failed to leave workspace'),
+    onError: (error: Error) => toast.error(toUserMessage(error, 'Failed to leave workspace')),
   });
 }
 
@@ -1238,7 +1244,7 @@ export function useInviteTeamMember(): UseMutationResult<
     },
     onError: (error: Error) => {
       logger.error('Failed to add team member:', error);
-      toast.error(error.message || 'Failed to add team member');
+      toast.error(toUserMessage(error, 'Failed to add team member'));
     },
   });
 }
@@ -1282,7 +1288,7 @@ export function useTransferOrganizationOwnership(): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
       toast.success('Ownership transferred.');
     },
-    onError: (error: Error) => toast.error(error.message || 'Failed to transfer ownership'),
+    onError: (error: Error) => toast.error(toUserMessage(error, 'Failed to transfer ownership')),
   });
 }
 
@@ -1429,7 +1435,7 @@ export function useUserActivity(
       });
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        throw new Error(statusMessage(res.status));
       }
 
       const json = (await res.json()) as { activities: UserActivity[] };
@@ -1526,7 +1532,7 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
       });
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        throw new Error(statusMessage(res.status));
       }
 
       const json = (await res.json()) as { entries: AuditLogEntry[] };
@@ -1557,7 +1563,7 @@ export function useAuditLogActions(): UseQueryResult<string[], Error> {
       });
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        throw new Error(statusMessage(res.status));
       }
 
       const json = (await res.json()) as { actions: string[] };
@@ -1704,7 +1710,8 @@ export function useShareProjectWithOrganization(): UseMutationResult<unknown, Er
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Project shared with your organization');
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
   });
 }
 
@@ -1718,7 +1725,8 @@ export function useUnshareProjectFromOrganization(): UseMutationResult<unknown, 
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Project is no longer shared');
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
   });
 }
 
@@ -1746,7 +1754,8 @@ export function useSetSharedProjectMemberAccess(): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       toast.success('Access updated');
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
   });
 }
 
@@ -1759,7 +1768,8 @@ export function useUnshareConnectorFromOrganization(): UseMutationResult<unknown
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       toast.success('Connector is no longer shared');
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
   });
 }
 
@@ -1781,7 +1791,8 @@ export function useUnshareArtifactFromOrganization(): UseMutationResult<unknown,
       queryClient.invalidateQueries({ queryKey: ['settings', 'published-artifacts'] });
       toast.success('Artifact is no longer shared');
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
   });
 }
 
@@ -1806,7 +1817,8 @@ export function useUnshareConversationFromOrganization(): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       toast.success('Conversation is no longer shared');
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
   });
 }
 
@@ -1819,7 +1831,8 @@ export function useShareConnectorWithOrganization(): UseMutationResult<unknown, 
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       toast.success('Connector shared with your organization');
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
   });
 }
 
@@ -1903,7 +1916,8 @@ export function useUpdateWorkspacePolicy(): UseMutationResult<
       queryClient.setQueryData(ORG_POLICY_QUERY_KEY, data);
       toast.success('Workspace policy saved');
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
   });
 }
 

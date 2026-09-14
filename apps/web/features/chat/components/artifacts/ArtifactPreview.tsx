@@ -303,6 +303,20 @@ export function ArtifactPreview({
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      setIsFullscreen(false);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isFullscreen]);
   const generatedFileSummary = useMemo(
     () =>
       summarizeGeneratedFileBundle({
@@ -1448,13 +1462,13 @@ if (__AgiApp) {
               </Button>
             )}
 
-            {/* Fullscreen, renderable only; hidden on narrow widths. */}
+            {/* Fullscreen, renderable only; the entry is hidden on narrow widths, the exit never is. */}
             {(canPreview || isMermaid) && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleFullscreen}
-                className="hidden h-7 px-2 @[22rem]:flex"
+                className={isFullscreen ? 'flex h-7 px-2' : 'hidden h-7 px-2 @[22rem]:flex'}
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                 title="Fullscreen"
               >
@@ -1903,7 +1917,7 @@ if (__AgiApp) {
                 variant="ghost"
                 size="sm"
                 onClick={handleFullscreen}
-                className="hidden h-7 px-2 @[22rem]:flex"
+                className={isFullscreen ? 'flex h-7 px-2' : 'hidden h-7 px-2 @[22rem]:flex'}
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                 title="Fullscreen"
               >

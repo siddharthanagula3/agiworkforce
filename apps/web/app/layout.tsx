@@ -193,16 +193,13 @@ export default async function RootLayout({
         <ClerkProvider localization={clerkLocalization} telemetry={{ disabled: true }}>
           <SkipLinks />
           {/*
-           * role="main" (rather than a native <main> tag) so nested route
-           * pages that already render their own <main> (marketing pages)
-           * don't end up with two <main> elements, which is invalid HTML.
-           * This still gives every route, including the authenticated
-           * chat app, which has no <main> of its own, a main landmark
-           * for assistive tech and the skip link to jump to.
+           * No landmark here. Each route owns its `main`: the marketing pages
+           * render `<main id="main-content">`, `WebAppShell` and the chat
+           * column carry `role="main"` with the same id. A wrapper landmark
+           * at this level sat around the sidebar navigation and doubled
+           * every page that already had one.
            */}
-          <div id="main-content" role="main" tabIndex={-1}>
-            <Providers nonce={nonce}>{children}</Providers>
-          </div>
+          <Providers nonce={nonce}>{children}</Providers>
           {/*
            * SIX-25: cookie consent.
            *

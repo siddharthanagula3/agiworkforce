@@ -19,7 +19,9 @@ export function AuthLayout({
       data-embedded={String(embedded)}
     >
       <AuthBrand />
-      <div className={AUTH_COLUMN_CLASS}>{children}</div>
+      <main id="main-content" className={AUTH_COLUMN_CLASS}>
+        {children}
+      </main>
     </div>
   );
 }

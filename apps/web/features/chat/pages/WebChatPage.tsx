@@ -5002,7 +5002,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         aria-hidden={isNarrowViewport && mobileNavOpen ? true : undefined}
         inert={isNarrowViewport && mobileNavOpen ? true : undefined}
       >
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]">
+        <div
+          id="main-content"
+          role="main"
+          tabIndex={-1}
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]"
+        >
           <div
             className={cn(
               'relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
@@ -5249,9 +5254,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 <ChatLoadingState className="w-full" />
               </div>
             ) : isEmptyChat ? (
-              <div className="min-h-0 flex-1 overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto">
                 {/* Empty state: greeting banner + centered composer. */}
-                <div className="flex h-full w-full flex-col items-center justify-center gap-6">
+                <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
                   {!voiceModeActive && <GreetingBanner />}
                   <div className="mx-auto w-full max-w-3xl px-4">
                     {usageBanner}

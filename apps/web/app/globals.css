@@ -703,6 +703,7 @@
        Use this variant for CTA/link copy (e.g. the free-trial "Upgrade" link).
        Measures ~5.3-5.6:1 against light-mode chat surfaces. */
     --chat-accent-primary-text: #8b5f1d;
+    --chat-focus-ring: var(--chat-accent-primary-text);
     /* Accent-picker swatches: the solid fill each choice paints.
        Measured as text against the three light surfaces these actually render
        on - --chat-bg #f9f8f6, elevated #ffffff and the tinted #f8f1e5 - the
@@ -850,6 +851,7 @@
     /* On dark surfaces #c8892a already clears WCAG AA for text (~6.7:1 against
        --chat-bg #0a0a0a), so the text variant can reuse the same value. */
     --chat-accent-primary-text: #c8892a;
+    --chat-focus-ring: var(--chat-accent-primary-text);
     --accent-swatch-default: #c8892a;
     --accent-swatch-green: #10a37f;
     --accent-swatch-blue: #60a5fa;
