@@ -100,6 +100,7 @@ export const ManagedCloudConversationListQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).optional(),
   includeHistoryStats: z.boolean().optional(),
   archived: z.enum(['include', 'only', 'exclude']).optional(),
+  projectId: z.string().trim().min(1).max(128).optional(),
 });
 export type ManagedCloudConversationListQuery = z.infer<
   typeof ManagedCloudConversationListQuerySchema

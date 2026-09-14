@@ -1,8 +1,18 @@
-
 import { z } from 'zod';
 
-export const CONNECTOR_SOURCES = ['user', 'github-app', 'custom'] as const;
+export const MANAGED_CLOUD_CONNECTORS_PATH = '/api/connectors';
+
+export const CONNECTOR_SOURCES = ['user', 'github-app', 'custom', 'oauth'] as const;
 export type ConnectorSource = (typeof CONNECTOR_SOURCES)[number];
+
+export const CONNECTOR_HEALTH_STATES = [
+  'connected',
+  'connectable',
+  'needs-reauthorization',
+  'not-configured',
+  'unsupported-here',
+] as const;
+export type ConnectorHealthState = (typeof CONNECTOR_HEALTH_STATES)[number];
 
 export const ConnectorConnectionSchema = z.object({
   id: z.string().min(1),
@@ -12,12 +22,26 @@ export const ConnectorConnectionSchema = z.object({
   updatedAt: z.string(),
   source: z.enum(CONNECTOR_SOURCES),
   name: z.string().optional(),
+  toolConnectorId: z.string().optional(),
+  directoryId: z.string().optional(),
+  scopes: z.array(z.string()).optional(),
+  needsReauthorization: z.boolean().optional(),
+  health: z.enum(CONNECTOR_HEALTH_STATES).optional(),
 });
 export type ConnectorConnection = z.infer<typeof ConnectorConnectionSchema>;
+
+export const ConnectorSetupEntrySchema = z.object({
+  kind: z.string(),
+  missingEnv: z.array(z.string()),
+  message: z.string(),
+});
+export type ConnectorSetupEntry = z.infer<typeof ConnectorSetupEntrySchema>;
 
 export const ListConnectorsResponseSchema = z.object({
   connectors: z.array(ConnectorConnectionSchema),
   available: z.array(z.string()),
+  setup: z.record(z.string(), ConnectorSetupEntrySchema).optional(),
+  pending: z.array(z.string()).optional(),
 });
 export type ListConnectorsResponse = z.infer<typeof ListConnectorsResponseSchema>;
 

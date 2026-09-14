@@ -118,7 +118,14 @@ export default function ProjectDetailPage() {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const toggleStar = useProjectStore((s) => s.toggleStar);
 
-  const [tab, setTab] = useState<Tab>('chats');
+  // A citation chip in a chat deep-links to the file it cited, which lives on
+  // the sources tab; landing on chats would hide the thing the link promised.
+  const [tab, setTab] = useState<Tab>(() =>
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('knowledgeFile')
+      ? 'sources'
+      : 'chats',
+  );
 
   /**
    * Reached through an organisation share rather than owned. Every project

@@ -430,6 +430,48 @@ pub(super) async fn handle_slash_command(
                 return SlashResult::Voice(lang.to_string());
             }
         }
+        "/artifacts" => {
+            output::print_block(&crate::cloud::artifacts::slash(session.privacy_mode, arg).await);
+        }
+        "/image" | "/imagine" => match arg {
+            "" => output::print_info(
+                "/image <prompt> draws an image on your AGI Workforce account and saves it to \
+                 the working directory.",
+            ),
+            prompt => {
+                let options = crate::cloud::image::ImageRequestOptions {
+                    prompt: prompt.to_string(),
+                    count: 1,
+                    size: None,
+                    quality: None,
+                    model: None,
+                    out: None,
+                };
+                match std::env::current_dir() {
+                    Err(error) => output::print_warn(&format!(
+                        "Could not resolve the working directory: {error}"
+                    )),
+                    Ok(cwd) => {
+                        match crate::cloud::image::generate(session.privacy_mode, &options, &cwd)
+                            .await
+                        {
+                            Ok(generation) => {
+                                for path in &generation.paths {
+                                    output::print_info(&format!("{}", path.display()));
+                                }
+                                output::print_info(&format!(
+                                    "{} via {}",
+                                    generation.model, generation.provider
+                                ));
+                            }
+                            Err(error) => {
+                                output::print_warn(&format!("Image generation failed: {error}"))
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/theme" => {
             if arg.is_empty() {
                 output::print_info(
@@ -590,6 +632,8 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
         "config",
         "voice",
         "v",
+        "image",
+        "imagine",
         "theme",
         "login",
         "logout",

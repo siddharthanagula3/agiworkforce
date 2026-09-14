@@ -14,6 +14,7 @@ const servicesPackageName = '@agiworkforce/services';
 const cloudModules = [
   'embeddings',
   'generated-files',
+  'artifact-index',
   'library',
   'managed-media',
   'me',
