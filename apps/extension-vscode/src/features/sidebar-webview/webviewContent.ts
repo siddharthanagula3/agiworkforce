@@ -3,6 +3,7 @@ import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker
 import {
   AGENT_MODE_LABEL,
   EFFORT_LABEL,
+  TOOL_APPROVAL_ACTION_LABELS,
   toolCallStatusLabel,
   type AgentMode,
   type Effort,
@@ -550,18 +551,28 @@ export function getWebviewContent(
       font-size: 11px;
     }
     .error-retry:hover { background: var(--hover); }
-    .error-details > summary {
+    .error-details {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    .error-details-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      min-height: 28px;
+      padding: 0 4px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
       color: var(--text-secondary);
       cursor: pointer;
+      font: inherit;
       font-size: 11px;
-      list-style: none;
+      text-align: left;
     }
-    .error-details > summary::-webkit-details-marker { display: none; }
-    .error-details > summary::before {
-      content: '▸ ';
-      font-size: 9px;
-    }
-    .error-details[open] > summary::before { content: '▾ '; }
+    .error-details-toggle:hover { background: var(--hover); color: var(--text-primary); }
+    .error-details-toggle__chevron { font-size: 9px; }
     .error-detail-text {
       margin-top: 6px;
       max-height: 180px;
@@ -572,6 +583,77 @@ export function getWebviewContent(
       line-height: 1.45;
       white-space: pre-wrap;
       word-break: break-word;
+    }
+
+    /* One approval card, one layout. A native modal renders its buttons stacked
+       or in a row depending on how long the message is, so the same prompt did
+       not look the same twice. */
+    .approval-card {
+      border: 1px solid var(--warning-border);
+      border-radius: 12px;
+      background: var(--bg-elevated);
+      padding: 12px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+    .approval-card__head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .approval-card__head .codicon { font-size: 14px; }
+    .approval-card__summary {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .approval-card__detail {
+      margin: 8px 0 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      line-height: 1.5;
+      max-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .approval-card__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .approval-card__action {
+      min-height: 28px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+    }
+    .approval-card__action:hover { background: var(--hover); }
+    .approval-card__action--primary {
+      border-color: transparent;
+      background: var(--accent-teal);
+      color: var(--agi-vscode-button-text);
+    }
+    .approval-card__action--danger { color: var(--error); border-color: var(--error-border); }
+    .approval-card__outcome {
+      margin-top: 10px;
+      color: var(--text-secondary);
+      font-size: 11px;
     }
 
     .message.system {
@@ -1265,6 +1347,9 @@ export function getWebviewContent(
       border-radius: 12px;
       background: var(--bg-elevated);
       margin-bottom: 4px;
+      /* #messages is a column flex container, so a tall child is squeezed and
+         this one's overflow:hidden then clips the expanded tool body. */
+      flex-shrink: 0;
     }
     .activity-group__summary {
       display: grid;
@@ -1426,6 +1511,50 @@ export function getWebviewContent(
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .tool-call__code {
+      margin: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      line-height: 1.5;
+      max-height: 240px;
+      overflow: auto;
+      white-space: pre;
+    }
+    .tool-call__exit {
+      margin-top: 6px;
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
+    .tool-call__exit[data-failed='1'] { color: var(--error); }
+    .tool-call__path {
+      color: var(--text-primary);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      word-break: break-all;
+    }
+    .tool-call__diffstat {
+      margin-top: 4px;
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
+    .tool-call__open-diff {
+      margin-top: 8px;
+      min-height: 28px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+    }
+    .tool-call__open-diff:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -3173,14 +3302,33 @@ export function getWebviewContent(
           actions.appendChild(retry);
         }
         if (presentation.detail) {
-          var details = document.createElement('details');
+          // A native <details> put the whole hit target on 11px of inline text.
+          // The toggle is a full-width row so a click anywhere on it opens.
+          var details = document.createElement('div');
           details.className = 'error-details';
-          var summary = document.createElement('summary');
-          summary.textContent = 'Details';
+          var toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'error-details-toggle';
+          toggle.setAttribute('aria-expanded', 'false');
+          var chevron = document.createElement('span');
+          chevron.className = 'error-details-toggle__chevron';
+          chevron.textContent = '▸';
+          chevron.setAttribute('aria-hidden', 'true');
+          var toggleLabel = document.createElement('span');
+          toggleLabel.textContent = 'Details';
+          toggle.appendChild(chevron);
+          toggle.appendChild(toggleLabel);
           var body = document.createElement('div');
           body.className = 'error-detail-text';
           body.textContent = presentation.detail;
-          details.appendChild(summary);
+          body.hidden = true;
+          toggle.addEventListener('click', function () {
+            var open = body.hidden;
+            body.hidden = !open;
+            chevron.textContent = open ? '▾' : '▸';
+            toggle.setAttribute('aria-expanded', String(open));
+          });
+          details.appendChild(toggle);
           details.appendChild(body);
           actions.appendChild(details);
         }
@@ -4223,6 +4371,113 @@ export function getWebviewContent(
       });
     }
 
+    // ── Approval card ─────────────────────────────────────────────────────────
+    var approvalCards = {};
+    // The verbs are the shared vocabulary's, composed here into the phrases the
+    // card needs. "Abort turn" is a turn control, not an approval verb.
+    var APPROVE_VERB = ${JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.approve)};
+    var DENY_VERB = ${JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.deny)};
+    var APPROVED_STATE = ${JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.allowed)};
+    var DENIED_STATE = ${JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.denied)};
+    var APPROVAL_ACTIONS = [
+      { decision: 'once', label: APPROVE_VERB + ' once', variant: 'primary' },
+      { decision: 'session', label: APPROVE_VERB + ' for session', variant: '' },
+      { decision: 'deny', label: DENY_VERB, variant: 'danger' },
+      { decision: 'abort', label: 'Abort turn', variant: 'danger' },
+    ];
+    var APPROVAL_OUTCOMES = {
+      once: APPROVED_STATE + ' once.',
+      session: APPROVED_STATE + ' for the rest of this session.',
+      deny: DENIED_STATE + '.',
+      abort: 'Turn aborted.',
+      expired: 'The turn ended before this was answered.',
+    };
+
+    function renderApprovalCard(payload) {
+      hideEmptyState();
+      var card = document.createElement('section');
+      card.className = 'approval-card';
+      card.dataset.requestId = payload.requestId;
+      card.setAttribute('role', 'group');
+
+      var head = document.createElement('div');
+      head.className = 'approval-card__head';
+      var icon = document.createElement('span');
+      icon.className = 'codicon codicon-shield';
+      icon.setAttribute('aria-hidden', 'true');
+      var headText = document.createElement('span');
+      headText.textContent = 'Approval needed';
+      head.appendChild(icon);
+      head.appendChild(headText);
+      card.appendChild(head);
+      card.setAttribute('aria-label', 'Approval needed, ' + payload.summary);
+
+      var summary = document.createElement('div');
+      summary.className = 'approval-card__summary';
+      summary.textContent = payload.summary;
+      card.appendChild(summary);
+
+      if (payload.detail) {
+        var detail = document.createElement('pre');
+        detail.className = 'approval-card__detail';
+        detail.textContent = payload.detail;
+        card.appendChild(detail);
+      }
+
+      var actions = document.createElement('div');
+      actions.className = 'approval-card__actions';
+      for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
+        (function (action) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className =
+            'approval-card__action' +
+            (action.variant ? ' approval-card__action--' + action.variant : '');
+          button.dataset.decision = action.decision;
+          button.textContent =
+            action.decision === 'session'
+              ? APPROVE_VERB + ' ' + payload.toolLabel + ' for session'
+              : action.label;
+          button.addEventListener('click', function () {
+            vscode.postMessage({
+              type: 'respondToApproval',
+              payload: { requestId: payload.requestId, decision: action.decision },
+            });
+          });
+          actions.appendChild(button);
+        })(APPROVAL_ACTIONS[i]);
+      }
+      card.appendChild(actions);
+
+      approvalCards[payload.requestId] = { el: card, actions: actions };
+      messagesEl.appendChild(card);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      var first = actions.querySelector('.approval-card__action');
+      if (first) first.focus();
+      return card;
+    }
+
+    function restartPendingToolClocks() {
+      var now = Date.now();
+      var ids = Object.keys(toolCallMap);
+      for (var i = 0; i < ids.length; i++) {
+        var row = toolCallMap[ids[i]];
+        if (row && row.el && row.el.classList.contains('tool-call--pending')) row.startedAt = now;
+      }
+    }
+
+    function resolveApprovalCard(requestId, outcome) {
+      if (outcome === 'once' || outcome === 'session') restartPendingToolClocks();
+      var entry = approvalCards[requestId];
+      if (!entry) return;
+      delete approvalCards[requestId];
+      entry.actions.remove();
+      var outcomeEl = document.createElement('div');
+      outcomeEl.className = 'approval-card__outcome';
+      outcomeEl.textContent = APPROVAL_OUTCOMES[outcome] || APPROVAL_OUTCOMES.expired;
+      entry.el.appendChild(outcomeEl);
+    }
+
     // ── Editor context chips ──────────────────────────────────────────────────
     var editorContextStrip = document.getElementById('editorContextStrip');
     var EDITOR_CONTEXT_ICONS = {
@@ -4591,10 +4846,14 @@ export function getWebviewContent(
           tcEnd.el.classList.remove('tool-call--pending');
           tcEnd.el.classList.add(msg.payload.isError ? 'tool-call--error' : 'tool-call--done');
           if (msg.payload.isError) toolCallStackHasError = true;
-          tcEnd.responseEl.textContent = formatToolPayload(msg.payload.output);
+          renderToolResponse(tcEnd, msg.payload.output, msg.payload.isError);
           tcEnd.responseSection.style.display = '';
-          if (typeof msg.payload.elapsedMs === 'number') {
-            tcEnd.summaryEl.textContent += ' · ' + formatElapsedMs(msg.payload.elapsedMs);
+          var elapsedMs =
+            typeof tcEnd.startedAt === 'number'
+              ? Math.max(0, Date.now() - tcEnd.startedAt)
+              : msg.payload.elapsedMs;
+          if (typeof elapsedMs === 'number') {
+            tcEnd.summaryEl.textContent += ' · ' + formatElapsedMs(elapsedMs);
           }
           updateActivitySummary(tcEnd.summaryEl.textContent, false);
         }
@@ -4753,6 +5012,7 @@ export function getWebviewContent(
         clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
         invalidateAttachmentBatches();
+        approvalCards = {};
         messagesEl.innerHTML = '';
         activePlanCard = null;
         toolCallStack = null;
@@ -4807,6 +5067,7 @@ export function getWebviewContent(
         clearContextUsage();
         resetAuthoritativeSessionBoundary();
         invalidateAttachmentBatches();
+        approvalCards = {};
         messagesEl.innerHTML = '';
         activePlanCard = null;
         mountEmptyState();
@@ -4870,6 +5131,19 @@ export function getWebviewContent(
           var description = button.querySelector('.plus-menu-description');
           if (description) description.textContent = state.detail || '';
         }
+      }
+
+      else if (msg.type === 'approvalRequested') {
+        removeTyping();
+        renderApprovalCard(msg.payload);
+        // Anything the model says after this belongs below the card, not back
+        // in the bubble it was writing before it asked.
+        currentAssistantEl = null;
+        accumulatedContent = '';
+      }
+
+      else if (msg.type === 'approvalResolved') {
+        resolveApprovalCard(msg.payload.requestId, msg.payload.outcome);
       }
 
       else if (msg.type === 'editorContext') {
@@ -5139,10 +5413,153 @@ export function getWebviewContent(
       return name.replace(/_/g, ' ').replace(/\\b[a-z]/g, function(c) { return c.toUpperCase(); });
     }
 
+    // A JSON dump escapes every newline inside a string value, which is what
+    // turned a shell transcript into one \\n-ridden line. Values render as text.
     function formatToolPayload(value) {
+      if (value === null || value === undefined) return '';
       if (typeof value === 'string') return value;
-      try { return JSON.stringify(value, null, 2); }
-      catch (_) { return String(value); }
+      if (typeof value !== 'object') return String(value);
+      if (Array.isArray(value)) {
+        try { return JSON.stringify(value, null, 2); }
+        catch (_) { return String(value); }
+      }
+      var lines = [];
+      var keys = Object.keys(value);
+      for (var i = 0; i < keys.length; i++) {
+        var entry = value[keys[i]];
+        if (typeof entry === 'string') {
+          lines.push(keys[i] + ':' + (entry.indexOf('\\n') === -1 ? ' ' + entry : '\\n' + entry));
+          continue;
+        }
+        try { lines.push(keys[i] + ': ' + JSON.stringify(entry, null, 2)); }
+        catch (_) { lines.push(keys[i] + ': ' + String(entry)); }
+      }
+      return lines.join('\\n');
+    }
+
+    var TOOL_COMMAND_NAMES = { run_command: 1, powershell: 1, bash: 1, shell: 1, terminal: 1 };
+    var TOOL_READ_NAMES = { read_file: 1, read: 1, file_read: 1, view_file: 1 };
+    var TOOL_WRITE_NAMES = {
+      write_file: 1, write: 1, create_file: 1,
+      edit_file: 1, edit: 1, apply_patch: 1, notebook_edit: 1,
+    };
+    var TOOL_SNIPPET_LINES = 40;
+
+    function toolKind(name, category) {
+      var key = String(name || '').toLowerCase().replace(/[- ]/g, '_');
+      if (TOOL_COMMAND_NAMES[key] || category === 'shell' || category === 'code-execution') {
+        return 'command';
+      }
+      if (TOOL_READ_NAMES[key]) return 'read';
+      if (TOOL_WRITE_NAMES[key]) return 'write';
+      return 'other';
+    }
+
+    function toolArgument(input, keys) {
+      if (!input || typeof input !== 'object') return '';
+      for (var i = 0; i < keys.length; i++) {
+        var candidate = input[keys[i]];
+        if (typeof candidate === 'string' && candidate !== '') return candidate;
+      }
+      return '';
+    }
+
+    function toolOutputText(output) {
+      if (typeof output === 'string') return output;
+      if (output && typeof output === 'object' && typeof output.text === 'string') return output.text;
+      return formatToolPayload(output);
+    }
+
+    function splitExitCode(text) {
+      var match = /^Exit code:\\s*(-?\\d+)\\r?\\n?/.exec(text || '');
+      if (!match) return { code: null, body: text || '' };
+      return { code: Number(match[1]), body: (text || '').slice(match[0].length) };
+    }
+
+    function snippetOf(text, limit) {
+      var lines = String(text || '').split('\\n');
+      if (lines.length <= limit) return { text: lines.join('\\n'), hidden: 0 };
+      return { text: lines.slice(0, limit).join('\\n'), hidden: lines.length - limit };
+    }
+
+    function countPatchLines(patch) {
+      var lines = String(patch || '').split('\\n');
+      var added = 0;
+      var removed = 0;
+      for (var i = 0; i < lines.length; i++) {
+        if (/^\\+\\+\\+|^---/.test(lines[i])) continue;
+        if (lines[i].charAt(0) === '+') added++;
+        else if (lines[i].charAt(0) === '-') removed++;
+      }
+      return { added: added, removed: removed };
+    }
+
+    function writeDiffStat(name, input) {
+      var key = String(name || '').toLowerCase().replace(/[- ]/g, '_');
+      var oldText = toolArgument(input, ['old_string', 'old_text', 'old']);
+      var newText = toolArgument(input, ['new_string', 'new_text', 'new']);
+      if (oldText !== '' || newText !== '') {
+        var removed = oldText === '' ? 0 : oldText.split('\\n').length;
+        var added = newText === '' ? 0 : newText.split('\\n').length;
+        return '+' + added + ' −' + removed + ' lines';
+      }
+      if (key === 'apply_patch') {
+        var patch = toolArgument(input, ['patch', 'diff', 'content']);
+        if (patch !== '') {
+          var counted = countPatchLines(patch);
+          return '+' + counted.added + ' −' + counted.removed + ' lines';
+        }
+      }
+      var content = toolArgument(input, ['content', 'contents', 'text']);
+      if (content !== '') {
+        var written = content.split('\\n').length;
+        return written + (written === 1 ? ' line written' : ' lines written');
+      }
+      return '';
+    }
+
+    function codeBlock(text) {
+      var pre = document.createElement('pre');
+      pre.className = 'tool-call__code';
+      pre.textContent = text;
+      return pre;
+    }
+
+    function renderToolResponse(row, output, isError) {
+      var section = row.responseSection;
+      var existingExit = section.querySelector('.tool-call__exit');
+      if (existingExit) existingExit.remove();
+
+      if (row.kind === 'command') {
+        var split = splitExitCode(toolOutputText(output));
+        row.responseEl.textContent = split.body;
+        var exitEl = document.createElement('div');
+        exitEl.className = 'tool-call__exit';
+        var failed = split.code === null ? isError === true : split.code !== 0;
+        exitEl.dataset.failed = failed ? '1' : '0';
+        exitEl.textContent =
+          split.code === null
+            ? failed ? 'Command failed' : 'Command finished'
+            : 'Exit status ' + split.code;
+        section.appendChild(exitEl);
+        return;
+      }
+
+      if (row.kind === 'read') {
+        var snippet = snippetOf(toolOutputText(output), TOOL_SNIPPET_LINES);
+        row.responseEl.textContent = snippet.text;
+        if (snippet.hidden > 0) {
+          var moreEl = document.createElement('div');
+          moreEl.className = 'tool-call__exit';
+          moreEl.dataset.failed = '0';
+          moreEl.textContent = snippet.hidden + ' more lines not shown';
+          section.appendChild(moreEl);
+        }
+        return;
+      }
+
+      row.responseEl.textContent =
+        row.kind === 'write' ? toolOutputText(output) : formatToolPayload(output);
     }
 
     function formatElapsedMs(value) {
@@ -5271,6 +5688,9 @@ export function getWebviewContent(
       bar.appendChild(summaryEl);
       bar.appendChild(chevron);
 
+      var kind = toolKind(name, category);
+      var filePath = toolArgument(input, ['path', 'file_path', 'filename']);
+
       var bodyEl = document.createElement('div');
       bodyEl.className = 'tool-call__body';
 
@@ -5278,21 +5698,54 @@ export function getWebviewContent(
       requestSection.className = 'tool-call__section';
       var requestLabel = document.createElement('div');
       requestLabel.className = 'tool-call__section-label';
-      requestLabel.textContent = 'Request';
-      var requestEl = document.createElement('pre');
-      requestEl.className = 'tool-call__payload';
-      requestEl.textContent = formatToolPayload(input);
       requestSection.appendChild(requestLabel);
+
+      var requestEl;
+      if (kind === 'command') {
+        requestLabel.textContent = 'Command';
+        requestEl = codeBlock('$ ' + toolArgument(input, ['command', 'script']));
+      } else if (kind === 'read' || kind === 'write') {
+        requestLabel.textContent = kind === 'read' ? 'File' : 'Wrote';
+        requestEl = document.createElement('div');
+        requestEl.className = 'tool-call__path';
+        requestEl.textContent = filePath || formatToolPayload(input);
+      } else {
+        requestLabel.textContent = 'Request';
+        requestEl = document.createElement('pre');
+        requestEl.className = 'tool-call__payload';
+        requestEl.textContent = formatToolPayload(input);
+      }
       requestSection.appendChild(requestEl);
+
+      if (kind === 'write') {
+        var stat = writeDiffStat(name, input);
+        if (stat) {
+          var statEl = document.createElement('div');
+          statEl.className = 'tool-call__diffstat';
+          statEl.textContent = stat;
+          requestSection.appendChild(statEl);
+        }
+        if (filePath) {
+          var openDiff = document.createElement('button');
+          openDiff.type = 'button';
+          openDiff.className = 'tool-call__open-diff';
+          openDiff.textContent = 'Open diff';
+          openDiff.addEventListener('click', function (event) {
+            event.stopPropagation();
+            vscode.postMessage({ type: 'openToolDiff', payload: { path: filePath } });
+          });
+          requestSection.appendChild(openDiff);
+        }
+      }
 
       var responseSection = document.createElement('div');
       responseSection.className = 'tool-call__section';
       responseSection.style.display = 'none';
       var responseLabel = document.createElement('div');
       responseLabel.className = 'tool-call__section-label';
-      responseLabel.textContent = 'Response';
+      responseLabel.textContent = kind === 'command' ? 'Output' : kind === 'read' ? 'Snippet' : 'Response';
       var responseEl = document.createElement('pre');
-      responseEl.className = 'tool-call__payload';
+      responseEl.className = kind === 'other' ? 'tool-call__payload' : 'tool-call__code';
       responseSection.appendChild(responseLabel);
       responseSection.appendChild(responseEl);
 
@@ -5318,7 +5771,12 @@ export function getWebviewContent(
         summaryEl: summaryEl,
         requestEl: requestEl,
         responseEl: responseEl,
-        responseSection: responseSection
+        responseSection: responseSection,
+        kind: kind,
+        // The runtime's own elapsed time starts before the approval card is
+        // answered, so a one-millisecond command reads as the minutes a person
+        // took to say yes. This clock starts when the tool can actually run.
+        startedAt: Date.now()
       };
       return toolCallMap[toolUseId];
     }

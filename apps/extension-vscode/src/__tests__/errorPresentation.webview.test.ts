@@ -9,6 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { requireCatalogModel } from './catalogModelFixtures';
 
 import { presentChatError } from '../features/sidebar-webview/errorPresentation';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
@@ -29,7 +30,7 @@ describe('presentChatError', () => {
     ["Tool 'bash' failed: exit status 2", 'tool', false],
     ['Network error (https://api.deepseek.com): dns failure', 'network', true],
     [
-      "Context overflow for model 'deepseek-v4-flash': 200000 tokens exceeds limit of 128000",
+      `Context overflow for model '${requireCatalogModel('deepseek').id}': 200000 tokens exceeds limit of 128000`,
       'provider',
       false,
     ],
@@ -220,11 +221,13 @@ describe('the chat webview error block', () => {
     expect(block?.dataset.category).toBeUndefined();
     expect(block?.getAttribute('data-error-category')).toBe('provider');
 
-    const details = block?.querySelector('details.error-details') as HTMLDetailsElement | null;
-    expect(details).not.toBeNull();
-    expect(details?.open).toBe(false);
-    expect(details?.querySelector('summary')?.textContent).toBe('Details');
-    expect(details?.querySelector('.error-detail-text')?.textContent).toBe(DEEPSEEK_400);
+    const toggle = block?.querySelector('.error-details-toggle') as HTMLButtonElement | null;
+    const detailText = block?.querySelector('.error-detail-text') as HTMLElement | null;
+    expect(toggle).not.toBeNull();
+    expect(toggle?.textContent).toContain('Details');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(detailText?.hidden).toBe(true);
+    expect(detailText?.textContent).toBe(DEEPSEEK_400);
   });
 
   it('does not offer Retry before any turn has been sent', () => {

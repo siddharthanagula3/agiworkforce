@@ -330,9 +330,10 @@ describe('getWebviewContent, structural smoke', () => {
       .join('\n');
 
     expect(scriptBody).toContain("requestLabel.textContent = 'Request'");
-    expect(scriptBody).toContain("responseLabel.textContent = 'Response'");
     expect(scriptBody).toContain('requestEl.textContent = formatToolPayload(input)');
-    expect(scriptBody).toContain('responseEl.textContent = formatToolPayload(msg.payload.output)');
+    expect(scriptBody).toContain(
+      'renderToolResponse(tcEnd, msg.payload.output, msg.payload.isError)',
+    );
     expect(scriptBody).toContain(
       "tcEnd.el.classList.add(msg.payload.isError ? 'tool-call--error' : 'tool-call--done')",
     );

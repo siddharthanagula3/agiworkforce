@@ -74,6 +74,34 @@ export async function openPathReference(raw: unknown): Promise<boolean> {
   return true;
 }
 
+/**
+ * VS Code's own source-control diff is the only view that knows what the file
+ * looked like before the agent wrote it; the extension never sees that content,
+ * because the write goes through the CLI. Without a repository there is nothing
+ * to diff against, so the file opens and the reason is stated rather than the
+ * control doing nothing.
+ */
+export async function openWorkspaceFileDiff(rawPath: unknown): Promise<boolean> {
+  if (typeof rawPath !== 'string') return false;
+  const uri = await resolvePathReferenceUri({ path: rawPath });
+  if (uri === undefined) {
+    void vscode.window.showWarningMessage(
+      `AGI Workforce: ${rawPath} is not a readable file inside this workspace.`,
+    );
+    return false;
+  }
+  try {
+    await vscode.commands.executeCommand('git.openChange', uri);
+    return true;
+  } catch {
+    await vscode.window.showTextDocument(uri, { preview: true });
+    void vscode.window.showInformationMessage(
+      'AGI Workforce: this workspace has no source control to diff against, so the file opened instead.',
+    );
+    return false;
+  }
+}
+
 interface AgiTerminalLink extends vscode.TerminalLink {
   target: PathReferenceTarget;
 }

@@ -82,8 +82,9 @@ import {
   type EditorContextChip,
   type EditorContextSnapshot,
 } from '../../data/composerContext';
-import type { ContextAttachmentKind } from '../../protocol/webviewMessages';
-import { openPathReference, type PathReferenceTarget } from '../path-links';
+import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
+import { approvalToolIdentity, approvalToolLabel } from '../permissions/approvalScope';
+import { openPathReference, openWorkspaceFileDiff, type PathReferenceTarget } from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
 import { clearActiveCloudProject, getActiveCloudProject } from '../projects/activeProject';
 import {
@@ -165,6 +166,8 @@ export type WebviewToExtMessage =
   | { type: 'requestContextMenuState' }
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
   | { type: 'dismissEditorContext'; payload: { id: string } }
+  | { type: 'openToolDiff'; payload: { path: string } }
+  | { type: 'respondToApproval'; payload: { requestId: string; decision: ApprovalDecision } }
   | {
       type: 'attachFiles';
       payload: {
@@ -325,6 +328,20 @@ export type ExtToWebviewMessage =
   | { type: 'contextMenuState'; payload: { items: ContextMenuItemState[] } }
   | { type: 'contextAttached'; payload: { id: string; name: string } }
   | { type: 'editorContext'; payload: { chips: EditorContextChip[] } }
+  | {
+      type: 'approvalRequested';
+      payload: {
+        requestId: string;
+        toolLabel: string;
+        summary: string;
+        detail: string;
+        sessionApproved: boolean;
+      };
+    }
+  | {
+      type: 'approvalResolved';
+      payload: { requestId: string; outcome: 'once' | 'session' | 'deny' | 'abort' | 'expired' };
+    }
   | { type: 'attachmentsConsumed'; payload: { ids: string[] } }
   | { type: 'attachmentsReleased'; payload: { ids: string[] } }
   | { type: 'rewindComplete' }
@@ -551,6 +568,17 @@ export class ChatStateManager {
   private _runtimeReady = false;
   private readonly _cliCapabilities: CliCapabilityAdapter;
   private readonly _dismissedEditorContext = new Set<string>();
+  private readonly _sessionApprovals = new Set<string>();
+  private readonly _pendingApprovals = new Map<
+    string,
+    {
+      threadId: string;
+      turnId: string;
+      runtime: LocalRuntimeClient;
+      identity: string;
+      label: string;
+    }
+  >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
 
   constructor(
@@ -792,6 +820,8 @@ export class ChatStateManager {
         delete this._loadedConversation;
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
+        this._sessionApprovals.clear();
+        this._pendingApprovals.clear();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         break;
@@ -829,6 +859,8 @@ export class ChatStateManager {
         delete this._loadedConversation;
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
+        this._sessionApprovals.clear();
+        this._pendingApprovals.clear();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         break;
@@ -901,6 +933,16 @@ export class ChatStateManager {
           type: 'contextMenuState',
           payload: { items: await resolveContextMenuState() },
         });
+        break;
+      }
+
+      case 'respondToApproval': {
+        await this._resolveApproval(msg.payload.requestId, msg.payload.decision, false);
+        break;
+      }
+
+      case 'openToolDiff': {
+        await openWorkspaceFileDiff(msg.payload.path);
         break;
       }
 
@@ -1674,6 +1716,65 @@ export class ChatStateManager {
     await this.pushUsageMeter();
   }
 
+  /**
+   * A session approval is remembered against the tool, not against the exact
+   * argument the agent happened to send, so the next shell command or the next
+   * file write under the same approval runs without asking again.
+   */
+  private async _resolveApproval(
+    requestId: string,
+    decision: ApprovalDecision,
+    automatic: boolean,
+  ): Promise<void> {
+    const pending = this._pendingApprovals.get(requestId);
+    if (pending === undefined) return;
+    this._pendingApprovals.delete(requestId);
+
+    if (decision === 'session') this._sessionApprovals.add(pending.identity);
+    this._post({
+      type: 'approvalResolved',
+      payload: { requestId, outcome: automatic ? 'session' : decision },
+    });
+
+    if (decision === 'abort') {
+      await this._interruptActiveTurn();
+      return;
+    }
+
+    try {
+      await pending.runtime.respondToApproval({
+        threadId: pending.threadId,
+        turnId: pending.turnId,
+        requestId,
+        decision:
+          decision === 'deny'
+            ? 'denied'
+            : decision === 'session'
+              ? 'approved_for_session'
+              : 'approved',
+      });
+    } catch (error) {
+      const current = this._activeTurn;
+      if (
+        current?.threadId !== pending.threadId ||
+        current.turnId !== pending.turnId ||
+        current.runtime !== pending.runtime
+      ) {
+        return;
+      }
+      this._postError(error instanceof Error ? error.message : 'The approval response failed.');
+      await this._interruptActiveTurn();
+    }
+  }
+
+  private _expirePendingApprovals(turnId: string): void {
+    for (const [requestId, pending] of [...this._pendingApprovals]) {
+      if (pending.turnId !== turnId) continue;
+      this._pendingApprovals.delete(requestId);
+      this._post({ type: 'approvalResolved', payload: { requestId, outcome: 'expired' } });
+    }
+  }
+
   pushEditorContext(): void {
     this._post({
       type: 'editorContext',
@@ -1690,6 +1791,8 @@ export class ChatStateManager {
     this._resumeAttemptSeq++;
     this._conversationEpoch++;
     this._dismissedEditorContext.clear();
+    this._sessionApprovals.clear();
+    this._pendingApprovals.clear();
     this.pushEditorContext();
     this._dropQueuedSends('Queued follow-up cancelled when the conversation was reset.');
     this._dropInFlightSend('Message cancelled when the conversation was reset.');
@@ -2603,16 +2706,6 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'approval_requested') {
-      const detail =
-        event.detail.trim() === '' ? event.summary : `${event.summary}\n\n${event.detail}`;
-      const choice = await vscode.window.showWarningMessage(
-        detail,
-        { modal: true },
-        'Approve once',
-        'Approve for session',
-        'Deny',
-        'Abort turn',
-      );
       const approvalOwner = this._activeTurn;
       if (
         approvalOwner?.threadId !== event.threadId ||
@@ -2622,39 +2715,33 @@ export class ChatStateManager {
         complete();
         return;
       }
-      if (choice === 'Abort turn') {
-        await this._interruptActiveTurn();
+      const identity = approvalToolIdentity(event.kind);
+      const label = approvalToolLabel(event.kind);
+      this._pendingApprovals.set(event.requestId, {
+        threadId: event.threadId,
+        turnId: event.turnId,
+        runtime,
+        identity,
+        label,
+      });
+      if (this._sessionApprovals.has(identity)) {
+        await this._resolveApproval(event.requestId, 'once', true);
         return;
       }
-      const decision =
-        choice === 'Approve once'
-          ? 'approved'
-          : choice === 'Approve for session'
-            ? 'approved_for_session'
-            : 'denied';
-      try {
-        await runtime.respondToApproval({
-          threadId: event.threadId,
-          turnId: event.turnId,
+      this._post({
+        type: 'approvalRequested',
+        payload: {
           requestId: event.requestId,
-          decision,
-        });
-      } catch (error) {
-        const current = this._activeTurn;
-        if (
-          current?.threadId !== event.threadId ||
-          current.turnId !== event.turnId ||
-          current.runtime !== runtime
-        ) {
-          complete();
-          return;
-        }
-        this._postError(error instanceof Error ? error.message : 'The approval response failed.');
-        await this._interruptActiveTurn();
-      }
+          toolLabel: label,
+          summary: event.summary,
+          detail: event.detail,
+          sessionApproved: false,
+        },
+      });
       return;
     }
     if (event.type === 'turn_completed') {
+      this._expirePendingApprovals(event.turnId);
       const resolvedModel =
         this._thread?.id === event.threadId ? this._activeModel : Config.model();
       const localProvider = this._localModelProviders.get(resolvedModel);
@@ -2687,10 +2774,12 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'turn_interrupted') {
+      this._expirePendingApprovals(event.turnId);
       this._post({ type: 'done' });
       complete();
       return;
     }
+    this._expirePendingApprovals(event.turnId);
     this._postError(event.error ?? 'The local developer turn failed.');
     complete();
   }

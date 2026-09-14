@@ -2799,7 +2799,6 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('interrupts and settles the turn when an approval response is rejected', async () => {
     const harness = makeHarness({ approvalFailure: new Error('approval channel closed') });
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Approve once');
     let settled = false;
     const send = harness.manager
       .handleMessage({ type: 'sendMessage', payload: { text: 'Run tests' } })
@@ -2813,9 +2812,13 @@ describe('ChatStateManager local turn lifecycle', () => {
       threadId: 'thread-1',
       turnId: 'turn-1',
       requestId: 'approval-1',
-      kind: 'shell',
-      summary: 'Run tests',
+      kind: 'Exec { command: "pnpm test" }',
+      summary: 'Allow this command?',
       detail: 'pnpm test',
+    });
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'once' },
     });
 
     await vi.waitFor(() => expect(settled).toBe(true));
@@ -2830,9 +2833,8 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
-  it('interrupts the turn directly when approval UI selects Abort turn', async () => {
+  it('asks in the transcript rather than in a native dialog', async () => {
     const harness = makeHarness();
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Abort turn');
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
       payload: { text: 'Run tests' },
@@ -2844,9 +2846,131 @@ describe('ChatStateManager local turn lifecycle', () => {
       threadId: 'thread-1',
       turnId: 'turn-1',
       requestId: 'approval-1',
-      kind: 'shell',
-      summary: 'Run tests',
+      kind: 'Exec { command: "pnpm test" }',
+      summary: 'Allow this command?',
       detail: 'pnpm test',
+    });
+
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual({
+        type: 'approvalRequested',
+        payload: {
+          requestId: 'approval-1',
+          toolLabel: 'shell commands',
+          summary: 'Allow this command?',
+          detail: 'pnpm test',
+          sessionApproved: false,
+        },
+      }),
+    );
+    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'once' },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('stops asking for the same tool after Approve for session, whatever the argument', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'approval_requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'approval-1',
+      kind: 'Exec { command: "node -e m.add(2,3)" }',
+      summary: 'Allow this command?',
+      detail: 'node -e',
+    });
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'session' },
+    });
+
+    for (const command of ['ls -la', '/usr/bin/env node -e "x"']) {
+      harness.emit({
+        type: 'approval_requested',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        requestId: `approval-${command}`,
+        kind: `Exec { command: ${JSON.stringify(command)} }`,
+        summary: 'Allow this command?',
+        detail: command,
+      });
+    }
+
+    await vi.waitFor(() => expect(harness.runtime.respondToApproval).toHaveBeenCalledTimes(3));
+    expect(harness.posted.filter((message) => message.type === 'approvalRequested')).toHaveLength(
+      1,
+    );
+
+    harness.emit({
+      type: 'approval_requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'approval-write',
+      kind: 'FileWrite { path: "/workspace/a.ts" }',
+      summary: 'Allow this write?',
+      detail: '/workspace/a.ts',
+    });
+    await vi.waitFor(() =>
+      expect(harness.posted.filter((message) => message.type === 'approvalRequested')).toHaveLength(
+        2,
+      ),
+    );
+
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-write', decision: 'deny' },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('interrupts the turn directly when the approval card chooses Abort turn', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'approval_requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'approval-1',
+      kind: 'Exec { command: "pnpm test" }',
+      summary: 'Allow this command?',
+      detail: 'pnpm test',
+    });
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'abort' },
     });
     await send;
 
@@ -2857,11 +2981,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
   });
 
-  it('does not approve a stale sidebar modal after New Chat retires its turn', async () => {
-    let resolveApproval!: (choice: string | undefined) => void;
-    vi.mocked(vscode.window.showWarningMessage).mockImplementationOnce(
-      () => new Promise((resolve) => (resolveApproval = resolve)),
-    );
+  it('does not approve a stale card after New Chat retires its turn', async () => {
     const harness = makeHarness();
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
@@ -2873,16 +2993,20 @@ describe('ChatStateManager local turn lifecycle', () => {
       threadId: 'thread-1',
       turnId: 'turn-1',
       requestId: 'approval-1',
-      kind: 'shell',
-      summary: 'Run tests',
+      kind: 'Exec { command: "pnpm test" }',
+      summary: 'Allow this command?',
       detail: 'pnpm test',
     });
-    await vi.waitFor(() => expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(harness.posted.some((message) => message.type === 'approvalRequested')).toBe(true),
+    );
 
     await harness.manager.handleMessage({ type: 'newChat' });
     await send;
-    resolveApproval('Approve once');
-    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'once' },
+    });
 
     expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
     expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'error' }));
