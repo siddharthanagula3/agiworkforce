@@ -111,8 +111,8 @@ describe('local model minimum size', () => {
   });
 
   it('names the hidden model and what to do about it', () => {
-    expect(localModelBelowMinimumReason({ name: 'smollm2:135m' })).toBe(
-      'smollm2:135m is under 1B parameters and is hidden; pull a larger model',
+    expect(localModelBelowMinimumReason({ name: 'tinyfixture:135m' })).toBe(
+      'tinyfixture:135m is under 1B parameters and is hidden; pull a larger model',
     );
   });
 
