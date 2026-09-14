@@ -415,6 +415,20 @@ function registerIpcHandlers(): void {
     await handleWorkspaceDrop(BrowserWindow.fromWebContents(event.sender), candidates);
   });
 
+  /**
+   * The page's theme decides the appearance of this process's own dialogs.
+   *
+   * macOS draws a message box from the process appearance, not from the page's
+   * stylesheet, so a user on the light theme was getting a dark permission
+   * prompt and the Settings theme control could not reach it. "system" hands
+   * the decision back to macOS, which is what the user asked for there.
+   */
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.rendererTheme, async (event, theme) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (theme !== 'dark' && theme !== 'light' && theme !== 'system') return;
+    nativeTheme.themeSource = theme;
+  });
+
   ipcMain.handle(ELECTRON_IPC_CHANNELS.relaunch, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     app.relaunch();
