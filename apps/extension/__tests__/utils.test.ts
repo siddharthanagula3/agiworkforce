@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   logger,
+  originOfUrl,
   sleep,
   withTimeout,
   RateLimiter,
@@ -78,6 +79,47 @@ describe('logger', () => {
     const err = new Error('oops');
     logger.error('error msg', err);
     expect(console.error).toHaveBeenCalledWith('[AGI Workforce] %s', 'error msg', err);
+  });
+
+  it("drops debug and info in a packaged build, where the console is the user's", () => {
+    vi.stubEnv('DEV', false as unknown as string);
+
+    logger.debug('page context captured', { url: 'https://example.com/doc?token=abc' });
+    logger.info('navigating', { url: 'https://example.com/doc?token=abc' });
+
+    expect(console.debug).not.toHaveBeenCalled();
+    // eslint-disable-next-line no-console
+    expect(console.info).not.toHaveBeenCalled();
+
+    vi.unstubAllEnvs();
+  });
+
+  it('keeps warn and error in a packaged build, because support reports need them', () => {
+    vi.stubEnv('DEV', false as unknown as string);
+
+    logger.warn('warn msg');
+    logger.error('error msg');
+
+    expect(console.warn).toHaveBeenCalledWith('[AGI Workforce] %s', 'warn msg', undefined);
+    expect(console.error).toHaveBeenCalledWith('[AGI Workforce] %s', 'error msg', undefined);
+
+    vi.unstubAllEnvs();
+  });
+});
+
+describe('originOfUrl', () => {
+  it('reduces a page URL to its origin, dropping path, query and fragment', () => {
+    expect(originOfUrl('https://mail.example.com/u/0/#inbox/msg-123?q=salary')).toBe(
+      'https://mail.example.com',
+    );
+    expect(originOfUrl('http://localhost:8787/pair/confirm')).toBe('http://localhost:8787');
+  });
+
+  it('returns undefined rather than a half-parsed value for unusable input', () => {
+    expect(originOfUrl(undefined)).toBeUndefined();
+    expect(originOfUrl(null)).toBeUndefined();
+    expect(originOfUrl('')).toBeUndefined();
+    expect(originOfUrl('not a url')).toBeUndefined();
   });
 });
 
