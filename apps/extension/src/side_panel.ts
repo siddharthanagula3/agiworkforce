@@ -59,6 +59,10 @@ import {
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
 import {
+  removeApprovedSiteHostPermission,
+  requestApprovedSiteHostPermission,
+} from './features/options/site-allowlist';
+import {
   backgroundConversationId,
   takePendingResultConversation,
   OPEN_BROWSER_CONVERSATION_MESSAGE,
@@ -2979,6 +2983,8 @@ function injectStyles(): void {
     }
     .sp-drawer-allowlist-item-remove:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
     .sp-drawer-allowlist-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
+    .sp-drawer-allowlist-status { font-size: 11px; color: var(--agi-ext-danger); line-height: 1.5; padding: 4px 0; }
+    .sp-drawer-allowlist-status[hidden] { display: none; }
     /* Memory */
     .sp-drawer-memory-help { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; margin-bottom: 8px; }
     .sp-drawer-memory-add-btn {
@@ -4430,8 +4436,8 @@ function updateStreamingBubble(id: string, fullText: string, done: boolean): voi
 const PAGE_CONTEXT_MAX_CHARS = 5_000;
 
 const PAGE_CONTEXT_DENIED_REASON =
-  'Chrome would not let the extension read this page. Add this site under Approved sites in the ' +
-  'extension options, reload the page, and try again.';
+  'Chrome would not let the extension read this page. Approve this site under Settings, Site ' +
+  'Allowlist in this panel, reload the page, and try again.';
 
 const PAGE_CONTEXT_EMPTY_REASON = 'This page had no readable text to attach.';
 
@@ -7385,10 +7391,18 @@ function buildUI(): void {
     { class: 'sp-drawer-allowlist-empty', id: 'sp-drawer-allowlist-empty', hidden: '' },
     'No sites allowlisted yet.',
   );
+  const allowlistStatus = el('div', {
+    class: 'sp-drawer-allowlist-status',
+    id: 'sp-drawer-allowlist-status',
+    role: 'alert',
+    hidden: '',
+  });
   allowlistSection.appendChild(allowlistList);
   allowlistSection.appendChild(allowlistEmpty);
+  allowlistSection.appendChild(allowlistStatus);
   settingsGroupBody.appendChild(allowlistSection);
 
+  let currentAllowlistOrigin: string | null = null;
   async function drawerReadAllowlist(): Promise<string[]> {
     try {
       const res = await chrome.storage.local.get(SP_SITE_ALLOWLIST_KEY);
@@ -7462,6 +7476,7 @@ function buildUI(): void {
         'Remove',
       );
       removeBtn.addEventListener('click', async () => {
+        await removeApprovedSiteHostPermission(origin);
         const cur = await drawerReadAllowlist();
         await drawerWriteAllowlist(cur.filter((o) => o !== origin));
         await refreshDrawerAllowlist();
@@ -7472,6 +7487,8 @@ function buildUI(): void {
   }
   async function refreshDrawerAllowlist(): Promise<void> {
     const [list, origin] = await Promise.all([drawerReadAllowlist(), drawerCurrentTabOrigin()]);
+    currentAllowlistOrigin = origin;
+    allowlistStatus.setAttribute('hidden', '');
     allowlistOriginLabel.textContent = origin ?? t('spAllowlistNoSite');
     (allowlistToggleBtn as HTMLButtonElement).disabled = !origin;
     if (origin) {
@@ -7485,11 +7502,29 @@ function buildUI(): void {
     await renderDrawerAllowlistList(list, origin);
   }
   allowlistToggleBtn.addEventListener('click', async () => {
-    const origin = await drawerCurrentTabOrigin();
+    const origin = currentAllowlistOrigin;
     if (!origin) return;
+    allowlistStatus.setAttribute('hidden', '');
+    const removing = allowlistToggleBtn.classList.contains('is-remove');
+    if (removing) {
+      await removeApprovedSiteHostPermission(origin);
+      const list = await drawerReadAllowlist();
+      await drawerWriteAllowlist(list.filter((o) => o !== origin));
+      await refreshDrawerAllowlist();
+      return;
+    }
+    // Must be the first await after the click: Chrome only honours
+    // chrome.permissions.request inside the still-live user gesture, and the
+    // allowlist must never claim a site is approved when Chrome refused it
+    // the read access page context actually needs.
+    const hostGranted = await requestApprovedSiteHostPermission(origin);
+    if (!hostGranted) {
+      allowlistStatus.textContent = `Chrome did not grant access to ${origin}, so it was not approved.`;
+      allowlistStatus.removeAttribute('hidden');
+      return;
+    }
     const list = await drawerReadAllowlist();
-    const present = list.includes(origin);
-    await drawerWriteAllowlist(present ? list.filter((o) => o !== origin) : [...list, origin]);
+    await drawerWriteAllowlist(list.includes(origin) ? list : [...list, origin]);
     await refreshDrawerAllowlist();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
