@@ -924,6 +924,8 @@ message -- revise and call `update_plan` again.\n\n",
             );
         }
 
+        self.sync_to_account().await;
+
         hooks::run_hooks(
             &self.hooks_config,
             hooks::HookEvent::AfterMessage,

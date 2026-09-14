@@ -15,6 +15,7 @@ pub mod auth;
 pub mod auth_oauth;
 pub mod claude_parity;
 pub mod cli_options;
+pub mod cloud;
 pub mod command_registry;
 pub mod compaction;
 pub mod config;
@@ -776,8 +777,13 @@ enum Command {
         #[arg(long)]
         allow_query_token: bool,
     },
-    /// Continue previous session.
-    Resume { session_id: Option<String> },
+    /// Continue previous session, from this device or from your account.
+    Resume {
+        session_id: Option<String>,
+        /// Resolve the id against your AGI Workforce account rather than this device.
+        #[arg(long)]
+        cloud: bool,
+    },
     /// Fork a previous session.
     Fork { session_id: String },
     /// Inspect or branch sessions (replay).
@@ -818,11 +824,14 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Browse session history.
+    /// Browse session history, on this device and in your account.
     History {
         /// Maximum number of sessions to display.
         #[arg(long, default_value = "20")]
         limit: usize,
+        /// Show only the conversations stored in your AGI Workforce account.
+        #[arg(long)]
+        cloud: bool,
     },
     /// Sync dotfiles and settings across devices.
     Sync {
@@ -859,6 +868,54 @@ enum Command {
     Schedules {
         #[command(subcommand)]
         action: SchedulesSubcommand,
+    },
+    /// Browse and create the projects in your AGI Workforce account.
+    Projects {
+        #[command(subcommand)]
+        action: ProjectsSubcommand,
+    },
+    /// Read and write the memory your AGI Workforce account shares across clients.
+    Memory {
+        #[command(subcommand)]
+        action: MemorySubcommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ProjectsSubcommand {
+    /// List the account's projects, refreshed from the account.
+    List,
+    /// Create a project in the account.
+    Create {
+        /// Project name.
+        name: String,
+        /// Optional description.
+        #[arg(long)]
+        description: Option<String>,
+    },
+    /// Link this directory to an account project by id or name.
+    Link {
+        /// Project id or name.
+        project: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum MemorySubcommand {
+    /// List the memories in the account, refreshed from the account.
+    List,
+    /// Record a memory in the account.
+    Add {
+        /// What to remember.
+        text: Vec<String>,
+        /// Optional category label.
+        #[arg(long)]
+        category: Option<String>,
+    },
+    /// Remove a memory from the account by id or exact text.
+    Forget {
+        /// Memory id or its exact text.
+        memory: String,
     },
 }
 
@@ -1293,6 +1350,188 @@ fn print_structured(value: &serde_json::Value, mode: StructuredOutput) -> Result
         _ => println!("{}", serde_json::to_string_pretty(value)?),
     }
     Ok(())
+}
+
+/// The privacy boundary the account commands run under. They read and write
+/// the account, so Local and BYOK are refused with a message that names the
+/// mode rather than failing silently.
+fn account_privacy_mode(config: &config::CliConfig) -> platform::runtime::session::PrivacyMode {
+    config
+        .ui
+        .privacy_mode
+        .as_deref()
+        .and_then(platform::runtime::session::PrivacyMode::from_arg)
+        .unwrap_or(platform::runtime::session::PrivacyMode::Managed)
+}
+
+/// Pull one conversation out of the account and write it into the managed
+/// session store, returning the local id the resume path takes.
+async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
+    let config = config::CliConfig::load().unwrap_or_default();
+    let privacy = account_privacy_mode(&config);
+    let conversation = cloud::hosted_conversation(privacy, conversation_id)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?
+        .ok_or_else(|| {
+            anyhow::anyhow!("No conversation '{conversation_id}' in your AGI Workforce account")
+        })?;
+
+    let messages = conversation
+        .messages
+        .iter()
+        .map(|message| models::Message::text(&message.role, &message.content))
+        .collect::<Vec<_>>();
+    let conn = sessions::open_db()?;
+    sessions::import_hosted_session(
+        &conn,
+        &conversation.id,
+        &conversation.title,
+        conversation.model.as_deref(),
+        messages,
+    )?;
+    eprintln!(
+        "Resuming '{}' from your account ({} messages).",
+        conversation.title,
+        conversation.messages.len()
+    );
+    Ok(conversation.id)
+}
+
+/// Print the account's conversations under the device list. A boundary (signed
+/// out, Local mode) is stated, never swallowed and never shown as an empty
+/// account.
+async fn print_hosted_history(limit: usize) {
+    let config = config::CliConfig::load().unwrap_or_default();
+    let privacy = account_privacy_mode(&config);
+    match cloud::hosted_conversations(privacy).await {
+        Ok(conversations) if conversations.is_empty() => {
+            println!("No conversations in your AGI Workforce account yet.");
+        }
+        Ok(conversations) => {
+            println!("In your AGI Workforce account:");
+            for conversation in conversations.iter().take(limit) {
+                println!(
+                    "  {}  {}  {} messages  {}",
+                    conversation.id,
+                    conversation.title,
+                    conversation.messages.len(),
+                    conversation.updated_at
+                );
+            }
+            println!();
+            println!("Resume one with `agi resume --cloud <id>`.");
+        }
+        Err(error) => println!("Account history unavailable: {error}"),
+    }
+}
+
+async fn handle_projects_command(action: &ProjectsSubcommand) -> Result<()> {
+    let config = config::CliConfig::load().unwrap_or_default();
+    let privacy = account_privacy_mode(&config);
+    match action {
+        ProjectsSubcommand::List => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if cache.projects.is_empty() {
+                println!("No projects in your AGI Workforce account.");
+                println!("Create one with `agi projects create <name>`.");
+                return Ok(());
+            }
+            for project in &cache.projects {
+                let archived = if project.is_archived { "  [archived]" } else { "" };
+                println!("{}  {}{}", project.id, project.name, archived);
+                if let Some(description) = project.description.as_deref() {
+                    println!("  {description}");
+                }
+            }
+            Ok(())
+        }
+        ProjectsSubcommand::Create { name, description } => {
+            if name.trim().is_empty() {
+                anyhow::bail!("A project needs a name");
+            }
+            let project = cloud::create_project(privacy, name, description.as_deref())
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!("Created '{}' in your account ({}).", project.name, project.id);
+            Ok(())
+        }
+        ProjectsSubcommand::Link { project } => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache.find(project).ok_or_else(|| {
+                anyhow::anyhow!("No project '{project}' in your AGI Workforce account")
+            })?;
+            let cwd = std::env::current_dir()?;
+            let home = config::CliConfig::config_dir()?;
+            let mut registry = project_registry::ProjectRegistry::load(&home)?;
+            registry.link_cloud_project(&cwd, &found.id)?;
+            registry.save(&home)?;
+            println!(
+                "{} is linked to the account project '{}'.",
+                cwd.display(),
+                found.name
+            );
+            Ok(())
+        }
+    }
+}
+
+async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
+    let config = config::CliConfig::load().unwrap_or_default();
+    let privacy = account_privacy_mode(&config);
+    match action {
+        MemorySubcommand::List => {
+            let cache = cloud::refresh_memory(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if cache.entries.is_empty() {
+                println!("Your AGI Workforce account holds no memories.");
+                println!("Add one with `agi memory add <text>`.");
+                return Ok(());
+            }
+            for entry in &cache.entries {
+                let pin = if entry.pinned { "*" } else { " " };
+                let origin = entry.source.as_deref().unwrap_or("web");
+                println!("{pin} {}  [{origin}]", entry.id);
+                println!("    {}", entry.content);
+            }
+            Ok(())
+        }
+        MemorySubcommand::Add { text, category } => {
+            let content = text.join(" ");
+            if content.trim().is_empty() {
+                anyhow::bail!("Usage: agi memory add <text>");
+            }
+            let refusals = cloud::add_memory(privacy, &content, category.as_deref())
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if refusals.is_empty() {
+                println!("Remembered in your account, on every client.");
+                return Ok(());
+            }
+            for refusal in &refusals {
+                println!("Not remembered: {refusal}");
+            }
+            anyhow::bail!("Your account did not store this memory")
+        }
+        MemorySubcommand::Forget { memory } => {
+            cloud::refresh_memory(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let removed = cloud::forget_memory(privacy, memory)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if removed {
+                println!("Forgotten in your account, on every client.");
+                Ok(())
+            } else {
+                anyhow::bail!("No memory '{memory}' in your AGI Workforce account")
+            }
+        }
+    }
 }
 
 async fn handle_schedules_command(
@@ -2352,8 +2591,19 @@ pub async fn run_main() -> Result<()> {
                     }
                 }
             }
-            Command::Resume { session_id } => {
-                let (session_label, (messages, managed_session)) = match session_id {
+            Command::Resume { session_id, cloud } => {
+                let resolved_id = match (session_id, cloud) {
+                    (Some(id), true) => Some(adopt_hosted_conversation(id).await?),
+                    (Some(id), false) => Some(match resolve_resume_payload(id, false) {
+                        Ok(_) => id.clone(),
+                        Err(local_error) => match adopt_hosted_conversation(id).await {
+                            Ok(adopted) => adopted,
+                            Err(_) => return Err(local_error),
+                        },
+                    }),
+                    (None, _) => None,
+                };
+                let (session_label, (messages, managed_session)) = match resolved_id.as_ref() {
                     Some(id) => (id.clone(), resolve_resume_payload(id, false)?),
                     None => resolve_latest_resume_payload()?
                         .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
@@ -2776,14 +3026,19 @@ pub async fn run_main() -> Result<()> {
             }
 
             // --- History ---
-            Command::History { limit } => {
-                let conn = sessions::open_db()?;
-                let list = sessions::list_sessions(&conn, *limit)?;
-                if list.is_empty() {
-                    println!("No sessions found.");
-                } else {
-                    println!("{}", sessions::format_session_list(&list));
+            Command::History { limit, cloud } => {
+                if !cloud {
+                    let conn = sessions::open_db()?;
+                    let list = sessions::list_sessions(&conn, *limit)?;
+                    if list.is_empty() {
+                        println!("No sessions on this device.");
+                    } else {
+                        println!("On this device:");
+                        println!("{}", sessions::format_session_list(&list));
+                        println!();
+                    }
                 }
+                print_hosted_history(*limit).await;
                 Ok(())
             }
 
@@ -2943,6 +3198,8 @@ pub async fn run_main() -> Result<()> {
 
             // --- Schedules ---
             Command::Schedules { action } => handle_schedules_command(action, cli.output).await,
+            Command::Projects { action } => handle_projects_command(action).await,
+            Command::Memory { action } => handle_memory_command(action).await,
 
             // --- Onboarding ---
             Command::Onboarding => {
@@ -3846,16 +4103,18 @@ pub async fn run_oneshot(
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
 ) -> Result<()> {
+    let resolved_provider_override = models::selection_provider_override(
+        model,
+        &config.default.model,
+        &config.default.provider,
+        provider_override,
+    );
+    agent::AgentSession::prime_account_memory(model, resolved_provider_override).await;
     let mut session = agent::AgentSession::new_checked(
         model,
         sys_context,
         custom_system_prompt,
-        models::selection_provider_override(
-            model,
-            &config.default.model,
-            &config.default.provider,
-            provider_override,
-        ),
+        resolved_provider_override,
     )?;
     session.apply_ui_config(config);
     session.max_turns = max_turns;
