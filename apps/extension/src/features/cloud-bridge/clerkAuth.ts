@@ -262,11 +262,6 @@ export async function revokeSyncedWebSession(): Promise<void> {
   const baseUrl = configuredAgiWebOrigin();
   if (!baseUrl) return;
 
-  // The foreground (page) Clerk client is not a reliable source for the live
-  // session id -- refreshCloudAccountUI() already treats its profile as
-  // best-effort and falls back when it disagrees with the background-relay
-  // owner. getFreshClerkAuthContext() is the same authoritative source every
-  // other "are we signed in, and as whom" check in this file's callers uses.
   const authContext = await getFreshClerkAuthContext();
   const sessionId = authContext?.owner.authIncarnation;
   if (!sessionId) return;

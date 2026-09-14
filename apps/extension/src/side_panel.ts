@@ -958,10 +958,6 @@ function clearStoredMessages(): void {
   _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
-  // The selected model is a sticky preference, not conversation state: a new
-  // chat starts with an empty transcript, not a different model than the one
-  // just picked. Only sign-out/account switch resets it, in
-  // transitionManagedCloudOwner.
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
@@ -1023,9 +1019,6 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.activeProject = null;
   delete _ctx.pendingProjectBinding;
   refreshProjectChip();
-  // A first sign-in discovering an already-restored preference must not wipe
-  // it; only a genuine sign-out or account switch (a real previous owner
-  // being replaced) resets the sticky model choice.
   if (previousOwner) {
     _ctx.selectedModel = 'auto';
     chrome.storage.local.remove(SELECTED_MODEL_STORAGE_KEY).catch(() => {});
@@ -3263,6 +3256,12 @@ function injectStyles(): void {
       transition: color 0.15s, border-color 0.15s;
     }
     .sp-cloud-signout-btn:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+    .sp-cloud-signout-status {
+      width: 100%;
+      font-size: 10px;
+      color: var(--agi-ext-danger);
+    }
+    .sp-cloud-signout-status:empty { display: none; }
 
     /* Quota bar */
     .sp-quota-bar-wrap {
@@ -6308,10 +6307,6 @@ function buildUI(): void {
     if (storedThinking !== undefined) {
       _ctx.thinkingEnabled = storedThinking;
     }
-    // Reconciled against real access once GET_CLOUD_AUTH_TOKEN resolves
-    // (reconcileManagedModelSelection with null access here would only ever
-    // discard it back to 'auto'); a retired or now-inaccessible model gets
-    // corrected there, not by skipping the restore.
     const storedModel = result[SELECTED_MODEL_STORAGE_KEY] as string | undefined;
     if (storedModel) {
       _ctx.selectedModel = storedModel;
@@ -8022,6 +8017,11 @@ function buildUI(): void {
   signedInView.appendChild(avatarEl);
   signedInView.appendChild(userInfoEl);
   signedInView.appendChild(signoutBtn);
+  const signoutStatusEl = el('div', {
+    class: 'sp-cloud-signout-status',
+    id: 'sp-cloud-signout-status',
+    role: 'status',
+  });
 
   const quotaWrap = el('div', {
     class: 'sp-quota-bar-wrap',
@@ -8052,6 +8052,7 @@ function buildUI(): void {
 
   cloudAccountEl.appendChild(signinPrompt);
   cloudAccountEl.appendChild(signedInView);
+  cloudAccountEl.appendChild(signoutStatusEl);
   cloudAccountEl.appendChild(quotaWrap);
   const cloudLinkHint = el(
     'div',
@@ -8355,16 +8356,12 @@ function buildUI(): void {
   };
 
   signoutBtn.addEventListener('click', async () => {
-    // One identity across the web and the extension is the contract: the
-    // web's own sign-out already ends the synced session for both, so this
-    // control must too, not just clear the extension's own local state and
-    // leave the shared Clerk session alive on the sync host. This has to run
-    // before the local Clerk sign-out below, while the current session id
-    // is still live: that call tears down this client's own view of it.
+    signoutStatusEl.textContent = '';
     try {
       await revokeSyncedWebSession();
     } catch (error) {
       console.warn('[SidePanel] Revoking the synced web session failed:', error);
+      signoutStatusEl.textContent = t('spCloudSignOutSyncFailed');
     }
     try {
       await signOutClerk();

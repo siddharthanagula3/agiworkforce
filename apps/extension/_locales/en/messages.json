@@ -239,6 +239,10 @@
     "message": "Free tier",
     "description": "Account tier row before entitlements are read"
   },
+  "spCloudSignOutSyncFailed": {
+    "message": "Signed out here. The web session could not be ended.",
+    "description": "Shown next to Sign out when the sync host session revoke call fails"
+  },
   "spCloudAvatarFallback": {
     "message": "A",
     "description": "Avatar initial when the profile carries none"
