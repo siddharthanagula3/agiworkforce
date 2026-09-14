@@ -16,21 +16,26 @@ describe('view container contribution', () => {
     expect(containers.secondarySidebar).toBeUndefined();
   });
 
-  it('contributes the chat webview view into the activity-bar container', () => {
+  it('contributes exactly one view, the chat webview', () => {
     const activityBarContainerId = containers.activitybar[0]?.id ?? '';
     const views = manifest.contributes.views as Record<
       string,
       Array<{ id: string; type?: string }>
     >;
 
-    expect(views[activityBarContainerId]).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'agi-workforce.sidebar', type: 'webview' }),
-        expect.objectContaining({ id: 'agi-workforce.conversations', type: 'tree' }),
-        expect.objectContaining({ id: 'agi-workforce.contextPanel', type: 'tree' }),
-      ]),
-    );
+    expect(views[activityBarContainerId]).toEqual([
+      expect.objectContaining({ id: 'agi-workforce.sidebar', type: 'webview' }),
+    ]);
     expect(manifest.activationEvents).toContain('onView:agi-workforce.sidebar');
+  });
+
+  it('keeps no tree view menus once the trees are gone', () => {
+    const menus = manifest.contributes.menus as Record<string, Array<{ when?: string }>>;
+    expect(menus['view/item/context']).toBeUndefined();
+    expect(menus['view/title']).toEqual([
+      expect.objectContaining({ when: 'view == agi-workforce.sidebar' }),
+    ]);
+    expect('viewsWelcome' in manifest.contributes).toBe(false);
   });
 
   it('ships the container icon it references', () => {
