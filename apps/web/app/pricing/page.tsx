@@ -56,10 +56,8 @@ import {
 } from '@features/billing/lib/subscription-owner-presentation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Container, Eyebrow, Prose, ScrollableTable } from '@/features/marketing/components/system';
+import { Reveal } from '@/features/marketing/components/Reveal';
 import { toUserMessage } from '@/lib/user-error-message';
-import '@/features/marketing/components/pages/business/pricing.css';
-import '@/features/marketing/components/pages/business/data-table.css';
 
 // Paid-plan checkout (2026-07-04): open by default, matching the
 // managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
@@ -151,7 +149,7 @@ function CheckIcon() {
       viewBox="0 0 14 14"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className="agi-ds-tier-check-icon"
+      className="agi-tier-check-icon"
     >
       <path
         d="M2 7L5.5 10.5L12 3.5"
@@ -551,7 +549,7 @@ export default function PricingPage() {
   function renderPlanAction(plan: CheckoutPlan, upgradeLabel: string) {
     if (!authInitialized) {
       return (
-        <button type="button" className="agi-ds-btn" data-variant="primary" disabled>
+        <button type="button" className="agi-tier-cta" disabled>
           Checking account…
         </button>
       );
@@ -559,7 +557,7 @@ export default function PricingPage() {
     const relationship = planRelationship(plan);
     if (relationship === 'current') {
       return (
-        <button type="button" className="agi-ds-btn" data-variant="primary" disabled>
+        <button type="button" className="agi-tier-cta" disabled>
           Current plan
         </button>
       );
@@ -579,8 +577,7 @@ export default function PricingPage() {
       return (
         <button
           type="button"
-          className="agi-ds-btn"
-          data-variant="secondary"
+          className="agi-tier-cta agi-tier-cta--ghost"
           disabled={portalPending}
           onClick={() => void openPortalFromPricing()}
         >
@@ -594,7 +591,7 @@ export default function PricingPage() {
       accountSubscription?.subscription_source !== 'stripe'
     ) {
       return (
-        <Link href="/settings/billing" className="agi-ds-btn" data-variant="secondary">
+        <Link href="/settings/billing" className="agi-tier-cta agi-tier-cta--ghost">
           {billingOwnerPlanActionLabel(accountSubscription?.subscription_source)}
         </Link>
       );
@@ -602,8 +599,7 @@ export default function PricingPage() {
     return (
       <button
         type="button"
-        className="agi-ds-btn"
-        data-variant="primary"
+        className="agi-tier-cta"
         disabled={paidPlanSelectionDisabled || !isPlanCheckoutReady(plan)}
         onClick={() => void handleUpgrade(plan)}
       >
@@ -822,567 +818,743 @@ export default function PricingPage() {
   const comparablePlanCount = comparableRows.length;
 
   return (
-    <div data-design="agi" className="agi-ds-page">
-      <Header />
-      <main id="main-content">
-        <section
-          className="agi-ds-section agi-ds-pricing-plans"
-          aria-labelledby="pricing-hero-title"
-        >
-          <Container>
-            <h1 id="pricing-hero-title" className="sr-only">
-              {t('pageTitle')}
-            </h1>
-            {!CHECKOUT_ENABLED ? (
-              <p role="status" className="agi-ds-prose" data-size="sm">
-                Checkout is temporarily unavailable. Please try again later. Existing plans and
-                Enterprise contact are unaffected.
-              </p>
-            ) : null}
-            <div className="agi-ds-tier-controls">
-              <div className="agi-ds-tier-toggle" role="group" aria-label={t('audienceLabel')}>
-                <button
-                  type="button"
-                  aria-pressed={audience === 'individual'}
-                  onClick={() => setAudience('individual')}
-                  className={
-                    audience === 'individual'
-                      ? 'agi-ds-tier-toggle-btn agi-ds-tier-toggle-btn--active'
-                      : 'agi-ds-tier-toggle-btn'
-                  }
-                >
-                  {t('audienceIndividual')}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={audience === 'business'}
-                  onClick={() => setAudience('business')}
-                  className={
-                    audience === 'business'
-                      ? 'agi-ds-tier-toggle-btn agi-ds-tier-toggle-btn--active'
-                      : 'agi-ds-tier-toggle-btn'
-                  }
-                >
-                  {t('audienceBusiness')}
-                </button>
-              </div>
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
 
-              {audience === 'individual' ? (
+        <section
+          className="agi-page-hero"
+          aria-labelledby="pricing-hero-title"
+          style={{ borderBottom: 'none', paddingTop: 48, paddingBottom: 24 }}
+        >
+          <h1 id="pricing-hero-title" className="agi-fl-h1">
+            {t('pageTitle')}
+          </h1>
+          <p className="agi-fl-section-lede">{t('heroLede')}</p>
+          {!CHECKOUT_ENABLED ? (
+            <p role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
+              Checkout is temporarily unavailable. Please try again later. Existing plans and
+              Enterprise contact are unaffected.
+            </p>
+          ) : null}
+        </section>
+
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 32,
+          }}
+        >
+          <div
+            className="agi-tier-toggle"
+            role="group"
+            aria-label={t('audienceLabel')}
+            style={{ marginBottom: 0 }}
+          >
+            <button
+              type="button"
+              aria-pressed={audience === 'individual'}
+              onClick={() => setAudience('individual')}
+              className={
+                audience === 'individual'
+                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  : 'agi-tier-toggle-btn'
+              }
+            >
+              {t('audienceIndividual')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={audience === 'business'}
+              onClick={() => setAudience('business')}
+              className={
+                audience === 'business'
+                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  : 'agi-tier-toggle-btn'
+              }
+            >
+              {t('audienceBusiness')}
+            </button>
+          </div>
+
+          {audience === 'individual' ? (
+            <div
+              className="agi-tier-toggle"
+              role="group"
+              aria-label={t('billingCadenceLabel')}
+              style={{ marginBottom: 0 }}
+            >
+              <button
+                type="button"
+                aria-pressed={!annual}
+                onClick={() => setAnnual(false)}
+                className={
+                  annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                }
+              >
+                {t('monthly')}
+              </button>
+              <button
+                type="button"
+                aria-pressed={annual}
+                onClick={() => setAnnual(true)}
+                className={
+                  annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
+                }
+              >
+                {t('annual')}{' '}
+                <span className="agi-tier-toggle-save">
+                  {t('annualSave', { pct: proSavingsPct })}
+                </span>
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <section
+          className="agi-fl-section"
+          aria-label={t('audienceBusiness')}
+          hidden={audience !== 'business'}
+          style={{ paddingTop: 0 }}
+        >
+          <h2 className="sr-only">{t('audienceBusiness')}</h2>
+          <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
+            <Reveal as="article" className="agi-tier agi-tier--featured">
+              <span className="agi-tier-badge">{t('teamBadge')}</span>
+              <h3 id="pricing-team-title" className="agi-tier-name">
+                {team.label}
+              </h3>
+              {teamYearlyAvailable ? (
                 <div
-                  className="agi-ds-tier-toggle"
+                  className="agi-tier-toggle"
                   role="group"
-                  aria-label={t('billingCadenceLabel')}
+                  aria-label="Team billing cadence"
+                  style={{ marginBottom: 16 }}
                 >
                   <button
                     type="button"
-                    aria-pressed={!annual}
-                    onClick={() => setAnnual(false)}
+                    aria-pressed={!teamAnnual}
+                    onClick={() => setTeamAnnual(false)}
                     className={
-                      annual
-                        ? 'agi-ds-tier-toggle-btn'
-                        : 'agi-ds-tier-toggle-btn agi-ds-tier-toggle-btn--active'
+                      teamAnnual
+                        ? 'agi-tier-toggle-btn'
+                        : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
                     }
                   >
                     {t('monthly')}
                   </button>
                   <button
                     type="button"
-                    aria-pressed={annual}
-                    onClick={() => setAnnual(true)}
+                    aria-pressed={teamAnnual}
+                    onClick={() => setTeamAnnual(true)}
                     className={
-                      annual
-                        ? 'agi-ds-tier-toggle-btn agi-ds-tier-toggle-btn--active'
-                        : 'agi-ds-tier-toggle-btn'
+                      teamAnnual
+                        ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                        : 'agi-tier-toggle-btn'
                     }
                   >
                     {t('annual')}{' '}
-                    <span className="agi-ds-tier-toggle-save">
-                      {t('annualSave', { pct: proSavingsPct })}
-                    </span>
+                    {teamSavingsPct > 0 ? (
+                      <span className="agi-tier-toggle-save">
+                        {t('annualSave', { pct: teamSavingsPct })}
+                      </span>
+                    ) : null}
                   </button>
                 </div>
               ) : null}
-            </div>
-
-            <section aria-label={t('audienceBusiness')} hidden={audience !== 'business'}>
-              <h2 className="sr-only">{t('audienceBusiness')}</h2>
-              <div className="agi-ds-tier-grid agi-ds-tier-columns" data-columns="2">
-                <article className="agi-ds-tier agi-ds-tier-lifted">
-                  <div className="agi-ds-tier-head">
-                    <h3 id="pricing-team-title" className="agi-ds-h3">
-                      {team.label}
-                    </h3>
-                    <span className="agi-ds-tier-mark">{t('teamBadge')}</span>
-                  </div>
-                  {teamYearlyAvailable ? (
-                    <div
-                      className="agi-ds-tier-toggle"
-                      role="group"
-                      aria-label="Team billing cadence"
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={!teamAnnual}
-                        onClick={() => setTeamAnnual(false)}
-                        className={
-                          teamAnnual
-                            ? 'agi-ds-tier-toggle-btn'
-                            : 'agi-ds-tier-toggle-btn agi-ds-tier-toggle-btn--active'
-                        }
-                      >
-                        {t('monthly')}
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={teamAnnual}
-                        onClick={() => setTeamAnnual(true)}
-                        className={
-                          teamAnnual
-                            ? 'agi-ds-tier-toggle-btn agi-ds-tier-toggle-btn--active'
-                            : 'agi-ds-tier-toggle-btn'
-                        }
-                      >
-                        {t('annual')}{' '}
-                        {teamSavingsPct > 0 ? (
-                          <span className="agi-ds-tier-toggle-save">
-                            {t('annualSave', { pct: teamSavingsPct })}
-                          </span>
-                        ) : null}
-                      </button>
-                    </div>
-                  ) : null}
-                  <p className="agi-ds-tier-price-row">
-                    <span className="agi-ds-tier-price">
-                      {teamInterval === 'yearly' ? teamYearlyTotalPrice : teamTotalPrice}
-                    </span>
-                    <span className="agi-ds-tier-price-sub">
-                      {teamInterval === 'yearly'
-                        ? t('seatCadenceAnnual', { count: teamSeats })
-                        : t('seatCadenceMonthly', { count: teamSeats })}
-                    </span>
-                  </p>
-                  <p className="agi-ds-tier-seats-total">
-                    {teamInterval === 'yearly'
-                      ? t('perSeatPriceAnnual', { price: teamYearlySeatPricePerMonth })
-                      : t('perSeatPrice', { price: teamSeatPrice })}
-                  </p>
-                  <Prose size="sm">{t('teamTierBody')}</Prose>
-                  <ul className="agi-ds-tier-features">
-                    <li>
-                      <CheckIcon />
-                      {t('teamFeature1')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('teamFeature2')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('teamFeature3')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('teamFeature4')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('teamFeature5')}
-                    </li>
-                  </ul>
-                  <div className="agi-ds-tier-seats">
-                    <label className="agi-ds-tier-seats-label" htmlFor="team-seat-count">
-                      {t('seatCountLabel')}
-                    </label>
-                    <input
-                      id="team-seat-count"
-                      className="agi-ds-tier-seats-input"
-                      type="number"
-                      inputMode="numeric"
-                      min={MIN_PURCHASABLE_SEATS}
-                      max={MAX_PURCHASABLE_SEATS}
-                      step={1}
-                      value={teamSeats}
-                      onChange={(event) => {
-                        const parsed = Number.parseInt(event.target.value, 10);
-                        if (!Number.isFinite(parsed)) {
-                          setTeamSeats(MIN_PURCHASABLE_SEATS);
-                          return;
-                        }
-                        setTeamSeats(
-                          Math.min(Math.max(parsed, MIN_PURCHASABLE_SEATS), MAX_PURCHASABLE_SEATS),
-                        );
-                      }}
-                    />
-                  </div>
-                  <div className="agi-ds-tier-cta-group">
-                    {renderPlanAction(
-                      'team',
-                      isPerSeatBillingPlan(billing?.plan) ? t('changeSeatsCta') : t('teamCta'),
-                    )}
-                  </div>
-                </article>
-
-                <article className="agi-ds-tier">
-                  <div className="agi-ds-tier-head">
-                    <h3 className="agi-ds-h3">{t('enterpriseHeading')}</h3>
-                    <span className="agi-ds-tier-mark">{t('enterpriseBadge')}</span>
-                  </div>
-                  <p className="agi-ds-tier-price-row">
-                    <span className="agi-ds-tier-price">{t('custom')}</span>
-                    <span className="agi-ds-tier-price-sub">{t('customPricingSub')}</span>
-                  </p>
-                  <Prose size="sm">
-                    SSO, SCIM, and audit are shipped and entitlement-gated; we scope capacity, data
-                    retention, and rollout to how your org actually works. Reach out and we will
-                    plan it together.
-                  </Prose>
-                  <ul className="agi-ds-tier-features">
-                    <li>
-                      <CheckIcon />
-                      {t('enterpriseFeature1')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('enterpriseFeature2')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      SSO, SCIM directory sync, and audit logs: shipped, gated on the Enterprise
-                      plan&apos;s entitlement. Retention windows stay contract-scoped.
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('enterpriseFeature4')}
-                    </li>
-                  </ul>
-                  <div className="agi-ds-tier-cta-group">
-                    <Link href="/contact-sales" className="agi-ds-btn" data-variant="primary">
-                      {t('contactSalesCta')}
-                    </Link>
-                  </div>
-                </article>
-              </div>
-            </section>
-
-            <section aria-label={t('audienceIndividual')} hidden={audience !== 'individual'}>
-              <h2 className="sr-only">{t('audienceIndividual')}</h2>
-
-              {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
-                <p role="status" className="agi-ds-prose" data-size="sm">
-                  Loading checkout availability…
-                </p>
-              ) : null}
-              {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
-                <p role="alert" className="agi-ds-prose" data-size="sm">
-                  Checkout availability could not be verified. Refresh this page to try again.
-                </p>
-              ) : null}
-              {unavailableCheckoutPlans.map((plan) => (
-                <p key={plan} role="status" className="agi-ds-prose" data-size="sm">
-                  {BILLING_PLAN_PRICING[plan].label} checkout is not available in your region yet.
-                </p>
-              ))}
-
-              <div className="agi-ds-tier-grid agi-ds-tier-columns" data-columns="4">
-                <article className="agi-ds-tier">
-                  <h3 className="agi-ds-h3">{BILLING_PLAN_PRICING.free.label}</h3>
-                  <p className="agi-ds-tier-price-row">
-                    <span className="agi-ds-tier-price">{t('free')}</span>
-                    <span className="agi-ds-tier-price-sub">{t('foreverLabel')}</span>
-                  </p>
-                  <Prose size="sm">{t('freeTierBody')}</Prose>
-                  <ul className="agi-ds-tier-features">
-                    <li>
-                      <CheckIcon />
-                      {t('freeFeature1')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('freeFeature2')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('freeFeature3')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('freeLocalByok')}
-                    </li>
-                  </ul>
-                  <div className="agi-ds-tier-cta-group">
-                    <Link href={freeHref} className="agi-ds-btn" data-variant="secondary">
-                      {t('freeCta')}
-                    </Link>
-                  </div>
-                </article>
-
-                {isPlanSelectableOnSurface('basic', 'web') && (
-                  <article className="agi-ds-tier">
-                    <h3 className="agi-ds-h3">{basic.label}</h3>
-                    <p className="agi-ds-tier-price-row">
-                      <span className="agi-ds-tier-price">{basicPrice}</span>
-                      <span className="agi-ds-tier-price-sub">{t('perMonthBilledMonthly')}</span>
-                    </p>
-                    <Prose size="sm">{t('basicTierBody')}</Prose>
-                    <ul className="agi-ds-tier-features">
-                      <li>
-                        <CheckIcon />
-                        {t('basicFeature1')}
-                      </li>
-                      <li>
-                        <CheckIcon />
-                        {t('basicFeature2')}
-                      </li>
-                      <li>
-                        <CheckIcon />
-                        {t('basicFeature3')}
-                      </li>
-                      <li>
-                        <CheckIcon />
-                        {t('basicFeature4')}
-                      </li>
-                      <li>
-                        <CheckIcon />
-                        {t('basicFeature5')}
-                      </li>
-                      <li>
-                        <CheckIcon />
-                        {t('basicFeature6')}
-                      </li>
-                    </ul>
-                    <div className="agi-ds-tier-cta-group">
-                      {renderPlanAction('basic', t('basicCta'))}
-                    </div>
-                  </article>
-                )}
-
-                <article className="agi-ds-tier agi-ds-tier-lifted" data-recommended="true">
-                  <div className="agi-ds-tier-head">
-                    <h3 className="agi-ds-h3">{pro.label}</h3>
-                    <span className="agi-ds-tier-mark">Recommended</span>
-                  </div>
-                  <p className="agi-ds-tier-price-row">
-                    <span className="agi-ds-tier-price">{proPrice}</span>
-                    <span className="agi-ds-tier-price-sub">
-                      {annual && proSavingsPct > 0
-                        ? t('perMonthBilledAnnually')
-                        : t('perMonthBilledMonthly')}
-                    </span>
-                  </p>
-                  <Prose size="sm">{t('proTierBody')}</Prose>
-                  <ul className="agi-ds-tier-features">
-                    <li>
-                      <CheckIcon />
-                      {t('proFeature1')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('proFeature2')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('proFeature3')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('proFeature4')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('proFeature5')}
-                    </li>
-                    <li>
-                      <CheckIcon />
-                      {t('proFeature6')}
-                    </li>
-                  </ul>
-                  <div className="agi-ds-tier-cta-group">
-                    {renderPlanAction('pro', t('proCta'))}
-                  </div>
-                </article>
-
-                <article className="agi-ds-tier">
-                  <div className="agi-ds-tier-head">
-                    <h3 className="agi-ds-h3">{t('maxFamilyName')}</h3>
-                    <div
-                      className="agi-ds-tier-toggle"
-                      role="group"
-                      aria-label={t('maxVariantLabel')}
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={maxVariant === 'max'}
-                        aria-label={max.label}
-                        onClick={() => setMaxVariant('max')}
-                        className={
-                          maxVariant === 'max'
-                            ? 'agi-ds-tier-toggle-btn agi-ds-tier-toggle-btn--active'
-                            : 'agi-ds-tier-toggle-btn'
-                        }
-                      >
-                        {t('maxVariant5x')}
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={maxVariant === 'max_15x'}
-                        aria-label={max15x.label}
-                        onClick={() => setMaxVariant('max_15x')}
-                        className={
-                          maxVariant === 'max_15x'
-                            ? 'agi-ds-tier-toggle-btn agi-ds-tier-toggle-btn--active'
-                            : 'agi-ds-tier-toggle-btn'
-                        }
-                      >
-                        {t('maxVariant15x')}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="agi-ds-tier-price-row">
-                    <span className="agi-ds-tier-price">
-                      {maxVariant === 'max' ? maxPrice : max15xPrice}
-                    </span>
-                    <span className="agi-ds-tier-price-sub">{t('perMonthBilledMonthly')}</span>
-                  </p>
-                  <Prose size="sm">
-                    {maxVariant === 'max' ? t('maxTierBody') : t('max15xTierBody')}
-                  </Prose>
-                  <ul className="agi-ds-tier-features">
-                    {maxTierFeatures.map((feature) => (
-                      <li key={feature}>
-                        <CheckIcon />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="agi-ds-tier-cta-group">
-                    {maxVariant === 'max'
-                      ? renderPlanAction('max', t('maxCta'))
-                      : renderPlanAction('max_15x', t('max15xCta'))}
-                  </div>
-                </article>
-              </div>
-            </section>
-          </Container>
-        </section>
-
-        <section className="agi-ds-section" aria-labelledby="pricing-compare-title" data-rule="top">
-          <Container>
-            <Eyebrow>{t('compareEyebrow')}</Eyebrow>
-            <h2 id="pricing-compare-title" className="agi-ds-h2">
-              {t('compareHeading')}
-            </h2>
-            <Prose size="lg">{t('compareSubheading')}</Prose>
-            <details className="agi-ds-compare-disclosure" open>
-              <summary className="agi-ds-compare-summary">
-                <span>Full capability table</span>
-                <span className="agi-ds-compare-summary-hint">
-                  {comparablePlanCount} plans across {COMPARISON_COLUMNS.length} capabilities
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">
+                  {teamInterval === 'yearly' ? teamYearlyTotalPrice : teamTotalPrice}
                 </span>
-              </summary>
-              <ScrollableTable label="Scrollable plan comparison">
-                <table
-                  aria-label="Plan capabilities"
-                  className="agi-ds-compare-table agi-ds-compare-table-wide"
+                <span className="agi-tier-price-sub">
+                  {teamInterval === 'yearly'
+                    ? t('seatCadenceAnnual', { count: teamSeats })
+                    : t('seatCadenceMonthly', { count: teamSeats })}
+                </span>
+              </p>
+              <p
+                className="agi-tier-seats-total"
+                style={{
+                  marginTop: -8,
+                  marginBottom: 16,
+                  fontSize: 13,
+                  color: 'var(--agi-ink-quiet)',
+                }}
+              >
+                {teamInterval === 'yearly'
+                  ? t('perSeatPriceAnnual', { price: teamYearlySeatPricePerMonth })
+                  : t('perSeatPrice', { price: teamSeatPrice })}
+              </p>
+              <p className="agi-tier-body">{t('teamTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature3')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature4')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature5')}
+                </li>
+              </ul>
+              <div
+                className="agi-tier-seats"
+                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <label
+                  className="agi-tier-seats-label"
+                  htmlFor="team-seat-count"
+                  style={{ fontSize: 13, color: 'var(--agi-ink-2)' }}
                 >
-                  <thead>
-                    <tr>
-                      {COMPARISON_COLUMNS.map(([col, label]) => (
-                        <th key={col} scope="col">
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparableRows.map((row) => (
-                      <tr key={row.planId} data-tone={row.highlighted ? 'highlight' : undefined}>
-                        <td>{row.label}</td>
-                        <td>{row.price}</td>
-                        <td>{row.billingInterval}</td>
-                        <td>{row.usageCapacity}</td>
-                        {[
-                          row.projects,
-                          row.customMcp,
-                          row.skillsConnectors,
-                          row.agiWork,
-                          row.imageGeneration,
-                          row.videoGeneration,
-                          row.apiAccess,
-                          row.developerSurfaces,
-                          row.teamControls,
-                          row.trainingData,
-                        ].map((value, index) => (
-                          <td key={`${row.planId}-capability-${index}`}>{value}</td>
-                        ))}
-                        <td>{row.bestFor}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </ScrollableTable>
-            </details>
-          </Container>
+                  {t('seatCountLabel')}
+                </label>
+                <input
+                  id="team-seat-count"
+                  className="agi-tier-seats-input"
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_PURCHASABLE_SEATS}
+                  max={MAX_PURCHASABLE_SEATS}
+                  step={1}
+                  value={teamSeats}
+                  style={{
+                    width: 88,
+                    minHeight: 36,
+                    padding: '6px 10px',
+                    background: 'var(--agi-bg-2)',
+                    border: '1px solid var(--agi-rule)',
+                    borderRadius: 6,
+                    color: 'var(--agi-ink)',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                  }}
+                  onChange={(event) => {
+                    const parsed = Number.parseInt(event.target.value, 10);
+                    if (!Number.isFinite(parsed)) {
+                      setTeamSeats(MIN_PURCHASABLE_SEATS);
+                      return;
+                    }
+                    setTeamSeats(
+                      Math.min(Math.max(parsed, MIN_PURCHASABLE_SEATS), MAX_PURCHASABLE_SEATS),
+                    );
+                  }}
+                />
+              </div>
+              <div className="agi-tier-cta-group">
+                {renderPlanAction(
+                  'team',
+                  isPerSeatBillingPlan(billing?.plan) ? t('changeSeatsCta') : t('teamCta'),
+                )}
+              </div>
+            </Reveal>
+
+            <Reveal as="article" delay={60} className="agi-tier agi-tier--featured">
+              <span className="agi-tier-badge">{t('enterpriseBadge')}</span>
+              <h3 className="agi-tier-name">{t('enterpriseHeading')}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{t('custom')}</span>
+                <span className="agi-tier-price-sub">{t('customPricingSub')}</span>
+              </p>
+              <p className="agi-tier-body">
+                SSO, SCIM, and audit are shipped and entitlement-gated; we scope capacity, data
+                retention, and rollout to how your org actually works. Reach out and we will plan it
+                together.
+              </p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('enterpriseFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('enterpriseFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  SSO, SCIM directory sync, and audit logs: shipped, gated on the Enterprise
+                  plan&apos;s entitlement. Retention windows stay contract-scoped.
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('enterpriseFeature4')}
+                </li>
+              </ul>
+              <div className="agi-tier-cta-group">
+                <Link href="/contact-sales" className="agi-tier-cta">
+                  {t('contactSalesCta')}
+                </Link>
+              </div>
+            </Reveal>
+          </div>
         </section>
 
-        <section className="agi-ds-section" aria-labelledby="pricing-models-title" data-rule="top">
-          <Container>
-            <Eyebrow>Models</Eyebrow>
-            <h2 id="pricing-models-title" className="agi-ds-h2">
-              Models included by plan
-            </h2>
-            <Prose size="lg">
-              Auto routes each message to the best model for the task, your plan, and cost; the
-              ceiling it can reach rises with the plan. Manual model selection widens the same way:
-              this is how many of each provider&apos;s models are reachable at each level, read live
-              from our model catalog.
-            </Prose>
-            <ScrollableTable
-              label="Scrollable model access by plan"
-              style={{ marginTop: 'var(--agi-space-4)' }}
+        <section
+          className="agi-fl-section"
+          aria-label={t('audienceIndividual')}
+          hidden={audience !== 'individual'}
+          style={{ paddingTop: 0 }}
+        >
+          <h2 className="sr-only">{t('audienceIndividual')}</h2>
+
+          {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
+            <p role="status" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
+              Loading checkout availability…
+            </p>
+          ) : null}
+          {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
+            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
+              Checkout availability could not be verified. Refresh this page to try again.
+            </p>
+          ) : null}
+          {unavailableCheckoutPlans.map((plan) => (
+            <p key={plan} role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
+              {BILLING_PLAN_PRICING[plan].label} checkout is not available in your region yet.
+            </p>
+          ))}
+
+          <div className="agi-tier-grid agi-tier-grid--four" style={{ marginTop: 24 }}>
+            <Reveal as="article" className="agi-tier">
+              <h3 className="agi-tier-name">{BILLING_PLAN_PRICING.free.label}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{t('free')}</span>
+                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
+              </p>
+              <p className="agi-tier-body">{t('freeTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('freeFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('freeFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('freeFeature3')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('freeLocalByok')}
+                </li>
+              </ul>
+              <div className="agi-tier-cta-group">
+                <Link href={freeHref} className="agi-tier-cta agi-tier-cta--ghost">
+                  {t('freeCta')}
+                </Link>
+              </div>
+            </Reveal>
+
+            {isPlanSelectableOnSurface('basic', 'web') && (
+              <Reveal as="article" delay={40} className="agi-tier">
+                <h3 className="agi-tier-name">{basic.label}</h3>
+                <p className="agi-tier-price">
+                  <span className="agi-tier-price-num">{basicPrice}</span>
+                  <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
+                </p>
+                <p className="agi-tier-body">{t('basicTierBody')}</p>
+                <ul className="agi-tier-features">
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature1')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature2')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature3')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature4')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature5')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature6')}
+                  </li>
+                </ul>
+                <div className="agi-tier-cta-group">{renderPlanAction('basic', t('basicCta'))}</div>
+              </Reveal>
+            )}
+
+            <Reveal as="article" delay={80} className="agi-tier">
+              <h3 className="agi-tier-name">{pro.label}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{proPrice}</span>
+                <span className="agi-tier-price-sub">
+                  {annual && proSavingsPct > 0
+                    ? t('perMonthBilledAnnually')
+                    : t('perMonthBilledMonthly')}
+                </span>
+              </p>
+              <p className="agi-tier-body">{t('proTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('proFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature3')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature4')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature5')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature6')}
+                </li>
+              </ul>
+              <div className="agi-tier-cta-group">{renderPlanAction('pro', t('proCta'))}</div>
+            </Reveal>
+
+            <Reveal as="article" delay={120} className="agi-tier">
+              <div className="agi-tier-head">
+                <h3 className="agi-tier-name">{t('maxFamilyName')}</h3>
+                <div className="agi-tier-toggle" role="group" aria-label={t('maxVariantLabel')}>
+                  <button
+                    type="button"
+                    aria-pressed={maxVariant === 'max'}
+                    aria-label={max.label}
+                    onClick={() => setMaxVariant('max')}
+                    className={
+                      maxVariant === 'max'
+                        ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                        : 'agi-tier-toggle-btn'
+                    }
+                  >
+                    {t('maxVariant5x')}
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={maxVariant === 'max_15x'}
+                    aria-label={max15x.label}
+                    onClick={() => setMaxVariant('max_15x')}
+                    className={
+                      maxVariant === 'max_15x'
+                        ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                        : 'agi-tier-toggle-btn'
+                    }
+                  >
+                    {t('maxVariant15x')}
+                  </button>
+                </div>
+              </div>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">
+                  {maxVariant === 'max' ? maxPrice : max15xPrice}
+                </span>
+                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
+              </p>
+              <p className="agi-tier-body">
+                {maxVariant === 'max' ? t('maxTierBody') : t('max15xTierBody')}
+              </p>
+              <ul className="agi-tier-features">
+                {maxTierFeatures.map((feature) => (
+                  <li key={feature}>
+                    <CheckIcon />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <div className="agi-tier-cta-group">
+                {maxVariant === 'max'
+                  ? renderPlanAction('max', t('maxCta'))
+                  : renderPlanAction('max_15x', t('max15xCta'))}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="pricing-compare-title">
+          <p className="agi-fl-eyebrow">{t('compareEyebrow')}</p>
+          <h2 id="pricing-compare-title" className="agi-fl-h2">
+            {t('compareHeading')}
+          </h2>
+          <p className="agi-fl-section-lede">{t('compareSubheading')}</p>
+          <details className="agi-compare-disclosure" open>
+            <summary className="agi-compare-summary">
+              <span>Full capability table</span>
+              <span className="agi-compare-summary-hint">
+                {comparablePlanCount} plans across {COMPARISON_COLUMNS.length} capabilities
+              </span>
+            </summary>
+            <div
+              aria-label="Scrollable plan comparison"
+              role="region"
+              tabIndex={0}
+              style={{ overflowX: 'auto', marginTop: 24 }}
             >
-              <table aria-label="Model access by plan" className="agi-ds-compare-table">
+              <table
+                aria-label="Plan capabilities"
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: 13,
+                  color: 'var(--agi-ink)',
+                }}
+              >
                 <thead>
                   <tr>
-                    <th scope="col">Provider</th>
-                    {MODEL_ACCESS_COLUMNS.map((column) => (
-                      <th key={column.label} scope="col">
-                        {column.label}
+                    {COMPARISON_COLUMNS.map(([col, label]) => (
+                      <th
+                        key={col}
+                        scope="col"
+                        style={{
+                          textAlign: 'left',
+                          padding: '10px 16px',
+                          borderBottom: '1px solid var(--agi-rule-strong)',
+                          color: 'var(--agi-ink-quiet)',
+                          fontSize: 12,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          fontFamily: 'var(--agi-font-mono)',
+                          fontWeight: 500,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {label}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {modelAccessByProvider().map((row) => (
-                    <tr key={row.provider}>
-                      <td>{row.label}</td>
-                      {row.accessByColumn.map((accessibleCount, columnIndex) => (
-                        <td key={`${row.provider}-${MODEL_ACCESS_COLUMNS[columnIndex]?.label}`}>
-                          {formatModelAccess(accessibleCount, row.total)}
+                  {comparableRows.map((row, i) => (
+                    <tr
+                      key={row.planId}
+                      style={{
+                        background: row.highlighted
+                          ? 'var(--agi-amber-soft)'
+                          : i % 2 === 0
+                            ? 'transparent'
+                            : 'var(--agi-bg-2)',
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          fontWeight: 600,
+                          color: row.highlighted ? 'var(--agi-amber)' : 'var(--agi-ink)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.label}
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink)',
+                        }}
+                      >
+                        {row.price}
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink-2)',
+                        }}
+                      >
+                        {row.billingInterval}
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink-2)',
+                        }}
+                      >
+                        {row.usageCapacity}
+                      </td>
+                      {[
+                        row.projects,
+                        row.customMcp,
+                        row.skillsConnectors,
+                        row.agiWork,
+                        row.imageGeneration,
+                        row.videoGeneration,
+                        row.apiAccess,
+                        row.developerSurfaces,
+                        row.teamControls,
+                        row.trainingData,
+                      ].map((value, index) => (
+                        <td
+                          key={`${row.planId}-capability-${index}`}
+                          style={{
+                            padding: '14px 16px',
+                            borderBottom: '1px solid var(--agi-rule)',
+                            color: 'var(--agi-ink-2)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {value}
                         </td>
                       ))}
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink-2)',
+                        }}
+                      >
+                        {row.bestFor}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </ScrollableTable>
-          </Container>
+            </div>
+          </details>
         </section>
 
-        <section className="agi-ds-section" aria-labelledby="pricing-faq-title" data-rule="top">
-          <Container>
-            <Eyebrow>Questions</Eyebrow>
-            <h2 id="pricing-faq-title" className="agi-ds-h2">
-              Have a question about a plan?
-            </h2>
-            <Prose size="lg">
-              Billing, upgrades, downgrades, cancellations, invoices, and what happens to your data
-              are answered on the{' '}
-              <Link href="/faq" className="agi-ds-link">
-                FAQ
-              </Link>
-              .
-            </Prose>
-          </Container>
+        <section className="agi-fl-section" aria-labelledby="pricing-models-title">
+          <p className="agi-fl-eyebrow">Models</p>
+          <h2 id="pricing-models-title" className="agi-fl-h2">
+            Models included by plan
+          </h2>
+          <p className="agi-fl-section-lede">
+            Auto routes each message to the best model for the task, your plan, and cost; the
+            ceiling it can reach rises with the plan. Manual model selection widens the same way:
+            this is how many of each provider&apos;s models are reachable at each level, read live
+            from our model catalog.
+          </p>
+          <div
+            aria-label="Scrollable model access by plan"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto', marginTop: 36 }}
+          >
+            <table
+              aria-label="Model access by plan"
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: 13,
+                color: 'var(--agi-ink)',
+              }}
+            >
+              <thead>
+                <tr>
+                  <th
+                    scope="col"
+                    style={{
+                      textAlign: 'left',
+                      padding: '10px 16px',
+                      borderBottom: '1px solid var(--agi-rule-strong)',
+                      color: 'var(--agi-ink-quiet)',
+                      fontSize: 12,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--agi-font-mono)',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Provider
+                  </th>
+                  {MODEL_ACCESS_COLUMNS.map((column) => (
+                    <th
+                      key={column.label}
+                      scope="col"
+                      style={{
+                        textAlign: 'left',
+                        padding: '10px 16px',
+                        borderBottom: '1px solid var(--agi-rule-strong)',
+                        color: 'var(--agi-ink-quiet)',
+                        fontSize: 12,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--agi-font-mono)',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {modelAccessByProvider().map((row, i) => (
+                  <tr
+                    key={row.provider}
+                    style={{ background: i % 2 === 0 ? 'transparent' : 'var(--agi-bg-2)' }}
+                  >
+                    <td
+                      style={{
+                        padding: '14px 16px',
+                        borderBottom: '1px solid var(--agi-rule)',
+                        fontWeight: 600,
+                        color: 'var(--agi-ink)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {row.label}
+                    </td>
+                    {row.accessByColumn.map((accessibleCount, columnIndex) => (
+                      <td
+                        key={`${row.provider}-${MODEL_ACCESS_COLUMNS[columnIndex]?.label}`}
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink-2)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {formatModelAccess(accessibleCount, row.total)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="pricing-faq-title">
+          <p className="agi-fl-eyebrow">Questions</p>
+          <h2 id="pricing-faq-title" className="agi-fl-h2">
+            Have a question about a plan?
+          </h2>
+          <p className="agi-fl-section-lede">
+            Billing, upgrades, downgrades, cancellations, invoices, and what happens to your data
+            are answered on the{' '}
+            <Link href="/faq" className="agi-ds-link">
+              FAQ
+            </Link>
+            .
+          </p>
         </section>
 
         <MarketingFooter />
