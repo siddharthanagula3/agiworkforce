@@ -8,6 +8,7 @@ import {
   BROWSER_BRIDGE_DEFAULT_PORT,
   BROWSER_BRIDGE_LOOPBACK_ADDRESS,
   BROWSER_BRIDGE_ROUTES,
+  LOCAL_CLIENT_PROTOCOL_VERSION,
   BROWSER_COMMAND_POLL_WINDOW_MS,
   BROWSER_COMMAND_PROTOCOL_VERSION,
   BROWSER_COMMAND_TIMEOUT_MS,
@@ -27,6 +28,13 @@ import {
   type BrowserCommand,
   type BrowserCommandRequest,
 } from '@agiworkforce/types';
+import {
+  describeLocalClient,
+  isAuthorizedLocalClient,
+  parseLocalClientCommand,
+  publishLocalClientBridge,
+  withdrawLocalClientBridge,
+} from './localClient';
 import { installNativeHost, installedManifestPaths, uninstallNativeHost } from './hostInstaller';
 import { bridgeToken, clearPairing, hostToken, readPairing, savePairing } from './pairingStore';
 
@@ -55,6 +63,17 @@ export interface BridgeDependencies {
   extraManifestDirectories?: readonly string[];
   port?: number;
   home?: string;
+  appVersion?: string;
+  /**
+   * Runs one command through the same gate the renderer uses, scoped to the
+   * asking client. Injected rather than imported so this module keeps no
+   * dependency on the runtime dispatcher, which imports it.
+   */
+  runBrowserCommand?: (
+    command: string,
+    args: Record<string, unknown>,
+    caller: { name: string; label: string },
+  ) => Promise<{ ok: boolean; value?: unknown; error?: string; code?: string }>;
 }
 
 let server: Server | null = null;
@@ -396,6 +415,61 @@ function handleNativeMessageRoute(
   sendJson(response, 200, { success: true });
 }
 
+/**
+ * One page command from another program on this machine.
+ *
+ * The shell decides, not the caller: the same gate the renderer goes through
+ * runs here, scoped to the client's name so the user answers once per client.
+ * Every outcome answers with a code rather than prose, because a client has to
+ * tell "pair the browser" from "you refused" from "the page never answered".
+ */
+async function handleLocalClientCommandRoute(
+  response: ServerResponse,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const parsed = parseLocalClientCommand(body);
+  if (!parsed) {
+    sendJson(response, 400, {
+      version: LOCAL_CLIENT_PROTOCOL_VERSION,
+      ok: false,
+      error: 'Malformed browser command.',
+      code: 'not-paired',
+    });
+    return;
+  }
+  if (!pairingState().paired) {
+    sendJson(response, 200, {
+      version: LOCAL_CLIENT_PROTOCOL_VERSION,
+      ok: false,
+      error: 'No browser is paired with this desktop app.',
+      code: 'not-paired',
+    });
+    return;
+  }
+
+  const run = deps?.runBrowserCommand;
+  if (!run) {
+    sendJson(response, 200, {
+      version: LOCAL_CLIENT_PROTOCOL_VERSION,
+      ok: false,
+      error: 'This desktop app cannot run browser commands.',
+      code: 'not-paired',
+    });
+    return;
+  }
+
+  const label = describeLocalClient(parsed.client);
+  recordLocalClientActivity(label, parsed.command);
+  const outcome = await run(parsed.command, parsed.args, {
+    name: parsed.client.name.trim().slice(0, 60),
+    label,
+  });
+  sendJson(response, 200, {
+    version: LOCAL_CLIENT_PROTOCOL_VERSION,
+    ...outcome,
+  });
+}
+
 async function route(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const socket = request.socket;
   if (socket.remoteAddress && !isLoopbackAddress(socket.remoteAddress)) {
@@ -409,8 +483,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   const path = (request.url ?? '').split('?')[0] ?? '';
   const isNative = path === BROWSER_BRIDGE_ROUTES.nativeMessage;
+  const isLocalClient =
+    path === BROWSER_BRIDGE_ROUTES.clientState || path === BROWSER_BRIDGE_ROUTES.clientCommand;
   const known =
     isNative ||
+    isLocalClient ||
     path === BROWSER_BRIDGE_ROUTES.pair ||
     path === BROWSER_BRIDGE_ROUTES.pairRequest ||
     path === BROWSER_BRIDGE_ROUTES.pairConfirm;
@@ -427,6 +504,32 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     );
   } catch (error) {
     sendText(response, 400, error instanceof Error ? error.message : 'Bad Request');
+    return;
+  }
+
+  if (isLocalClient) {
+    // The local-client token is a separate grant from the extension's: an
+    // extension that somehow reached these routes still has to present it.
+    if (!isAuthorizedLocalClient(request.headers as Record<string, unknown>)) {
+      sendJson(response, 401, {
+        version: LOCAL_CLIENT_PROTOCOL_VERSION,
+        ok: false,
+        error: 'This client is not authorized to use the browser bridge.',
+        code: 'unauthorized',
+      });
+      return;
+    }
+    if (path === BROWSER_BRIDGE_ROUTES.clientState) {
+      const state = pairingState();
+      sendJson(response, 200, {
+        version: LOCAL_CLIENT_PROTOCOL_VERSION,
+        paired: state.paired,
+        ...(state.extensionId ? { extensionId: state.extensionId } : {}),
+        ...(deps?.appVersion ? { appVersion: deps.appVersion } : {}),
+      });
+      return;
+    }
+    await handleLocalClientCommandRoute(response, body);
     return;
   }
 
@@ -473,11 +576,13 @@ export async function startBrowserBridge(dependencies: BridgeDependencies): Prom
   server = instance;
   const address = instance.address();
   listeningPort = typeof address === 'object' && address ? address.port : port;
+  publishLocalClientBridge(listeningPort, deps.home ? { home: deps.home } : {});
   publishState();
   return listeningPort;
 }
 
 export async function stopBrowserBridge(): Promise<void> {
+  withdrawLocalClientBridge();
   for (const waiter of pollWaiters.splice(0)) waiter(null);
   for (const [, pending] of pendingResults) {
     clearTimeout(pending.timer);
@@ -552,6 +657,30 @@ export function removeHostAndPairing(): void {
   clearPairing();
   lastSeenMs = 0;
   publishState();
+}
+
+/**
+ * What the shell can say about a client's browser use.
+ *
+ * Bounded, because a runaway client must not grow this without limit. Surfacing
+ * it in the shell's own activity view needs an event on the local-runtime
+ * contract, which this module does not own.
+ */
+const localClientActivity: { atMs: number; client: string; command: string }[] = [];
+const MAX_LOCAL_CLIENT_ACTIVITY = 200;
+
+function recordLocalClientActivity(client: string, command: string): void {
+  localClientActivity.push({ atMs: Date.now(), client, command });
+  if (localClientActivity.length > MAX_LOCAL_CLIENT_ACTIVITY) localClientActivity.shift();
+  console.debug(`[browser-bridge] ${client} ran ${command} in the paired browser`);
+}
+
+export function listLocalClientActivity(): readonly {
+  atMs: number;
+  client: string;
+  command: string;
+}[] {
+  return localClientActivity;
 }
 
 export function resetBridgeForTests(): void {

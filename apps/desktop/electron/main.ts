@@ -35,7 +35,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
-import { dispatch as dispatchDesktopRuntime } from './runtime/dispatcher';
+import { dispatch as dispatchDesktopRuntime, runBrowserCommand } from './runtime/dispatcher';
 import { cancelAllShellRuns } from './runtime/shellService';
 import {
   configureDeveloperSessions,
@@ -221,6 +221,26 @@ async function startPairingBridge(): Promise<void> {
             title: 'Pair Chrome with AGI Cloud',
             body: `Pairing code ${prompt.code}. Type it in the extension within two minutes.`,
           }).show();
+        }
+      },
+      appVersion: app.getVersion(),
+      // The bridge holds the routes; the gate lives with the renderer's own
+      // dispatch. Injected here so neither module has to import the other.
+      runBrowserCommand: async (command, args, caller) => {
+        try {
+          const outcome = await runBrowserCommand(mainWindow, command, args, caller);
+          return outcome.ok
+            ? { ok: true, value: outcome.value }
+            : { ok: false, error: outcome.error.message, code: outcome.error.code };
+        } catch (error) {
+          // The bridge rejects when the extension never answered or the page
+          // refused. The client has to be told which kind of nothing it got,
+          // so it never surfaces as a bare transport failure.
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'The browser did not answer.',
+            code: 'timeout',
+          };
         }
       },
       ...(extraDirectories.length > 0 ? { extraManifestDirectories: extraDirectories } : {}),

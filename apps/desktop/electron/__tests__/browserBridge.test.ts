@@ -38,19 +38,25 @@ afterAll(async () => {
   await fs.rm(path.dirname(userData), { recursive: true, force: true });
 });
 
-async function freshBridge() {
+async function freshBridge(
+  overrides: Partial<
+    Parameters<typeof import('../browser/bridgeServer').startBrowserBridge>[0]
+  > = {},
+) {
   vi.resetModules();
   const pairingStore = await import('../browser/pairingStore');
   pairingStore.resetPairingCacheForTests();
   const bridge = await import('../browser/bridgeServer');
+  const localClient = await import('../browser/localClient');
   bridge.resetBridgeForTests();
   const port = await bridge.startBrowserBridge({
     onStateChanged: () => undefined,
     onPairRequest: () => undefined,
     port: 0,
     home,
+    ...overrides,
   });
-  return { bridge, pairingStore, port };
+  return { bridge, pairingStore, localClient, port };
 }
 
 describe('native message framing', () => {
@@ -313,5 +319,181 @@ describe('loopback pairing bridge', () => {
     await expect(
       context.bridge.sendBrowserCommand('browser_click', { selector: 'a' }),
     ).rejects.toThrow(/No browser is paired/);
+  });
+});
+
+/**
+ * The CLI is another program on this machine, not the paired extension. It
+ * gets its own token, its own two routes, and the same gate the renderer goes
+ * through, scoped to the client that asked.
+ */
+describe('local client routes', () => {
+  let context: Awaited<ReturnType<typeof freshBridge>>;
+  let calls: {
+    command: string;
+    args: Record<string, unknown>;
+    caller: { name: string; label: string };
+  }[];
+  let outcome: { ok: boolean; value?: unknown; error?: string; code?: string };
+
+  beforeEach(async () => {
+    calls = [];
+    outcome = { ok: true, value: { title: 'Example' } };
+    context = await freshBridge({
+      appVersion: '1.7.1',
+      runBrowserCommand: async (command, args, caller) => {
+        calls.push({ command, args, caller });
+        return outcome;
+      },
+    });
+    // A pairing written by an earlier case persists on disk, and a test that
+    // silently started paired would assert nothing about the unpaired path.
+    context.pairingStore.clearPairing();
+  });
+
+  afterEach(async () => {
+    await context.bridge.stopBrowserBridge();
+  });
+
+  function url(route: string): string {
+    return `http://127.0.0.1:${context.port}${route}`;
+  }
+
+  function post(route: string, body: unknown, token?: string | null): Promise<Response> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const presented = token === undefined ? context.localClient.localClientToken() : token;
+    if (presented) headers['x-local-client-token'] = presented;
+    return fetch(url(route), { method: 'POST', headers, body: JSON.stringify(body) });
+  }
+
+  function pairBrowser(): void {
+    context.pairingStore.savePairing(EXTENSION_ID);
+  }
+
+  it('writes a 0600 bridge file when the bridge starts and removes it when it stops', async () => {
+    const filePath = path.join(home, '.agiworkforce', 'desktop-bridge.json');
+    const file = JSON.parse(await fs.readFile(filePath, 'utf8')) as Record<string, unknown>;
+    expect(file['version']).toBe(1);
+    expect(file['port']).toBe(context.port);
+    expect(file['pid']).toBe(process.pid);
+    expect(String(file['token'])).toHaveLength(64);
+    // The token in this file is the whole grant: anything that can read it can
+    // ask the shell to act in the user's signed-in browser.
+    const mode = (await fs.stat(filePath)).mode & 0o777;
+    expect(mode).toBe(0o600);
+
+    await context.bridge.stopBrowserBridge();
+    await expect(fs.stat(filePath)).rejects.toThrow();
+  });
+
+  it('answers the pairing state to a client holding the token', async () => {
+    const unpaired = (await (await post('/client/state', { version: 1 })).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(unpaired['paired']).toBe(false);
+    expect(unpaired['appVersion']).toBe('1.7.1');
+
+    pairBrowser();
+    const paired = (await (await post('/client/state', { version: 1 })).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(paired['paired']).toBe(true);
+    expect(paired['extensionId']).toBe(EXTENSION_ID);
+  });
+
+  it('refuses both routes without the token, and says which problem it is', async () => {
+    pairBrowser();
+    for (const route of ['/client/state', '/client/command']) {
+      const response = await post(route, { version: 1 }, null);
+      expect(response.status).toBe(401);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body['code']).toBe('unauthorized');
+    }
+
+    const wrong = await post('/client/command', { version: 1 }, 'a'.repeat(64));
+    expect(wrong.status).toBe(401);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('runs a command through the shell gate, naming who asked', async () => {
+    pairBrowser();
+    const response = await post('/client/command', {
+      version: 1,
+      command: 'browser_read_page',
+      args: {},
+      client: { name: 'agi', cwd: '/work/project' },
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body['ok']).toBe(true);
+    expect(body['value']).toEqual({ title: 'Example' });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.command).toBe('browser_read_page');
+    // The grant is scoped to the client, so the user answers once for "agi"
+    // rather than once for every program that reaches the bridge.
+    expect(calls[0]?.caller.name).toBe('agi');
+    expect(calls[0]?.caller.label).toBe('agi in /work/project');
+  });
+
+  it('passes a refusal back with the code the gate chose', async () => {
+    pairBrowser();
+    outcome = { ok: false, error: 'Permission refused.', code: 'permission-denied' };
+    const body = (await (
+      await post('/client/command', {
+        version: 1,
+        command: 'browser_click',
+        args: { selector: '#buy' },
+        client: { name: 'agi' },
+      })
+    ).json()) as Record<string, unknown>;
+    expect(body['ok']).toBe(false);
+    expect(body['code']).toBe('permission-denied');
+  });
+
+  it('answers not-paired rather than running the gate when no browser is paired', async () => {
+    const body = (await (
+      await post('/client/command', {
+        version: 1,
+        command: 'browser_read_page',
+        args: {},
+        client: { name: 'agi' },
+      })
+    ).json()) as Record<string, unknown>;
+    expect(body['code']).toBe('not-paired');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('refuses a malformed command before it reaches the gate', async () => {
+    pairBrowser();
+    for (const body of [
+      { version: 2, command: 'browser_read_page', args: {}, client: { name: 'agi' } },
+      { version: 1, command: 'browser_teleport', args: {}, client: { name: 'agi' } },
+      { version: 1, command: 'browser_read_page', args: {}, client: { name: '  ' } },
+      { version: 1, command: 'browser_read_page', args: {} },
+    ]) {
+      const response = await post('/client/command', body);
+      expect(response.status).toBe(400);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it('is reachable only over loopback', () => {
+    expect(context.bridge.isLoopbackAddress('127.0.0.1')).toBe(true);
+    expect(context.bridge.isLoopbackAddress('10.0.0.7')).toBe(false);
+  });
+
+  it('records each command against the client that asked', async () => {
+    pairBrowser();
+    await post('/client/command', {
+      version: 1,
+      command: 'browser_read_page',
+      args: {},
+      client: { name: 'agi', cwd: '/work/project' },
+    });
+    const activity = context.bridge.listLocalClientActivity();
+    expect(activity.at(-1)?.client).toBe('agi in /work/project');
+    expect(activity.at(-1)?.command).toBe('browser_read_page');
   });
 });
