@@ -149,12 +149,8 @@ const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
 };
 
 /**
- * The verb phrase a prompt asks about.
- *
- * An application-scoped grant names the program that is asking, not a thing
- * being acted on, so appending the target produced "browse agi": a sentence
- * that reads as though `agi` were a website. The asking program belongs in the
- * subject of the question, and the caller supplies it.
+ * The verb phrase a prompt asks about. An application-scoped grant names the
+ * asking program, so appending the target reads as though it were the object.
  */
 function describe(capability: DesktopCapability, scope: PermissionScope): string {
   const verb = CAPABILITY_LABELS[capability];
@@ -171,10 +167,8 @@ export interface PermissionQuestion {
 }
 
 /**
- * Asks the user, once, and records what they chose.
- *
- * Returns the resulting state rather than a boolean so a denial is stored and
- * the next call does not re-prompt for something already refused.
+ * Asks once and records the answer, returning the stored state rather than a
+ * boolean so a denial is not re-prompted.
  */
 export async function requestPermission(
   window: BrowserWindow | null,
@@ -187,8 +181,6 @@ export async function requestPermission(
   if (existing !== 'prompt') return existing;
 
   const highRisk = isHighRiskCapability(capability);
-  // The verbs come from the shared table, so this dialog cannot drift from the
-  // words every other approval surface uses for the same three answers.
   const allowSession = `${TOOL_APPROVAL_ACTION_LABELS.allow} this session`;
   const buttons = highRisk
     ? [TOOL_APPROVAL_ACTION_LABELS.deny, allowSession]
