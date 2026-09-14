@@ -220,8 +220,10 @@ files, about 26k lines added and 5.5k removed), pushed in four checkpoints
 through 13dce80b1 with the pre-push chain green each time, then three small
 pushes for what CI found (a second mobile lint warning, a stale settings
 snapshot, and the unpair message's missing policy entry, F49); CI is green on
-e78ec7c68 (run 34869935221). Every commit came through a captured gate or a
-lead fix. The last package, the protocol-3 consumers (f4ec8871c) and the
+e78ec7c68 (run 34869935221) and again on 22d54be42 (run 34875076454, twelve
+lanes) after a RustSec advisory against the pinned rustls arrived between
+pushes and the lockfile moved past it. Every commit came through a captured
+gate or a lead fix. The last package, the protocol-3 consumers (f4ec8871c) and the
 comment pass behind it (7afca13b1, f1d55fc6a), landed after that run and
 goes out with this section.
 
