@@ -2227,3 +2227,75 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-ds-muted {
   color: var(--agi-ink-2);
 }
+
+/* Desktop shell window chrome (macOS).
+ *
+ * The shell hides the native title bar and hands the top
+ * --chat-window-title-strip of the window back to the page, floating the window
+ * buttons over it. `data-desktop-host` is written by the theme bootstrap before
+ * first paint, so the strip is already reserved on the first frame and nothing
+ * jumps; a browser never carries the attribute, so none of this reaches the web.
+ * The two sides read the same tokens: `build-main.mjs` parses them out of
+ * chat.css and hands them to the main process, which is what keeps the window
+ * buttons and the page's first row from landing on top of each other.
+ */
+/* The strip is measured in CSS pixels and the window buttons over it are not,
+   so zooming out would shrink the reserved band out from under them. The
+   desktop-host feature keeps --agi-window-zoom in step with the window's zoom
+   factor; the 1 below is both the guard's declaration and the value that holds
+   until that runs. */
+html[data-desktop-host^='electron-darwin'] {
+  --agi-window-zoom: 1;
+  --agi-window-title-strip: calc(var(--chat-window-title-strip) / var(--agi-window-zoom));
+  --agi-window-title-strip-inset: calc(
+    var(--chat-window-title-strip-inset) / var(--agi-window-zoom)
+  );
+}
+
+html[data-desktop-host^='electron-darwin'] [data-sidebar-region='header'] {
+  padding-top: 0;
+}
+
+html[data-desktop-host^='electron-darwin'] [data-sidebar-region='header-first-row'] {
+  min-height: var(--agi-window-title-strip);
+  margin-bottom: 0;
+  padding-left: calc(var(--agi-window-title-strip-inset) - var(--chat-sidebar-header-padding));
+}
+
+html[data-desktop-host^='electron-darwin'] [data-sidebar-region='rail'] {
+  padding-top: var(--agi-window-title-strip);
+}
+
+/* The signed-out screens carry no header row, so the shell reserves the strip
+   for them and the brand mark steps aside the way the sidebar wordmark does. */
+html[data-desktop-host^='electron-darwin'] [data-auth-brand] {
+  left: var(--agi-window-title-strip-inset);
+}
+
+html[data-desktop-host^='electron-darwin'] [data-sidebar-region='header-first-row'],
+html[data-desktop-host^='electron-darwin'] [data-sidebar-region='rail'],
+html[data-desktop-host^='electron-darwin'] [data-app-header] {
+  -webkit-app-region: drag;
+}
+
+/* Document-wide rather than scoped to the regions above: a drag region is hit
+   tested by geometry, so a control that merely overlaps the strip without being
+   inside it, the auth brand mark for one, drags the window instead of taking
+   the click. No-drag is the initial value, so this changes nothing outside a
+   drag region. */
+html[data-desktop-host^='electron-darwin']
+  :is(
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    label,
+    [role='button'],
+    [role='menu'],
+    [role='menuitem'],
+    [role='textbox'],
+    [contenteditable]
+  ) {
+  -webkit-app-region: no-drag;
+}
