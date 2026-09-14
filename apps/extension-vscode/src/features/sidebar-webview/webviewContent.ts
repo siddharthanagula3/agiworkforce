@@ -3,6 +3,7 @@ import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker
 import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { ComposerFollowUpBehavior } from '../../platform/config';
+import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
 
 export function escapeHtml(value: string): string {
   return value
@@ -126,6 +127,7 @@ export function getWebviewContent(
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      position: relative;
     }
 
     /* ── Header ── */
@@ -636,6 +638,7 @@ export function getWebviewContent(
       background: var(--vscode-input-background, var(--bg-elevated));
       border: 1px solid var(--vscode-input-border, var(--border));
       border-radius: 14px;
+      position: relative;
       display: flex;
       flex-direction: column;
       min-height: 84px;
@@ -1550,7 +1553,8 @@ export function getWebviewContent(
 
     .recent-chats-title {
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: 12px;
+      text-transform: uppercase;
       font-weight: 600;
       letter-spacing: 0.02em;
       padding: 0 6px 4px;
@@ -1585,7 +1589,7 @@ export function getWebviewContent(
     .recent-chat-age {
       color: var(--text-secondary);
       flex: 0 0 auto;
-      font-size: 11px;
+      font-size: 12px;
     }
 
     .recent-chats-all {
@@ -1596,11 +1600,253 @@ export function getWebviewContent(
       color: var(--text-secondary);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
-      height: 24px;
+      font-size: 12px;
+      min-height: 24px;
       padding: 0 6px;
     }
     .recent-chats-all:hover { color: var(--text-primary); background: var(--hover); }
+
+    /* ── Overflow menu ── */
+    .header-menu-anchor { position: relative; display: inline-flex; }
+
+    .actions-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 40;
+      display: none;
+      flex-direction: column;
+      min-width: 208px;
+      max-height: min(72vh, 460px);
+      overflow-y: auto;
+      padding: 4px;
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+    }
+    .actions-menu.open { display: flex; }
+
+    .actions-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 28px;
+      padding: 0 8px;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+    }
+    .actions-menu-item:hover,
+    .actions-menu-item:focus-visible { background: var(--hover); outline: none; }
+    .actions-menu-item .codicon { color: var(--text-secondary); }
+
+    .actions-menu-separator {
+      height: 1px;
+      margin: 4px 6px;
+      background: var(--border);
+    }
+
+    .actions-menu-account {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 8px 2px;
+    }
+    .actions-menu-account-name {
+      color: var(--text-primary);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .actions-menu-account-plan { color: var(--text-secondary); font-size: 12px; }
+
+    /* ── Sessions sheet ── */
+    .sessions-sheet {
+      position: absolute;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-base);
+    }
+    .sessions-sheet[hidden] { display: none; }
+
+    .sessions-sheet-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 44px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .sessions-sheet-title { font-size: 13px; font-weight: 600; }
+
+    .sessions-sheet-toggle {
+      display: flex;
+      gap: 2px;
+      margin: 8px 10px 0;
+      padding: 2px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .sessions-sheet-toggle button {
+      flex: 1;
+      min-height: 26px;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+    }
+    .sessions-sheet-toggle button[aria-selected='true'] {
+      background: var(--hover);
+      color: var(--text-primary);
+    }
+
+    .sessions-sheet-search {
+      margin: 8px 10px 0;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--radius-md);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: 12px;
+    }
+    .sessions-sheet-search[hidden] { display: none; }
+
+    .sessions-sheet-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 6px 12px;
+    }
+
+    .sessions-sheet-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 32px;
+      padding: 0 8px;
+      background: none;
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+    }
+    .sessions-sheet-row:hover { background: var(--hover); }
+    .sessions-sheet-row-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sessions-sheet-row-age { color: var(--text-secondary); font-size: 12px; }
+    .sessions-sheet-row-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      opacity: 0.6;
+    }
+    .sessions-sheet-empty {
+      padding: 16px 10px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    /* ── Slash commands ── */
+    .slash-menu {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      z-index: 30;
+      display: none;
+      flex-direction: column;
+      width: min(320px, 100%);
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 4px;
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+    }
+    .slash-menu.open { display: flex; }
+
+    .slash-menu-item {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      width: 100%;
+      min-height: 28px;
+      padding: 0 8px;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+    }
+    .slash-menu-item:hover,
+    .slash-menu-item:focus-visible { background: var(--hover); outline: none; }
+    .slash-menu-item-name { font-weight: 600; }
+    .slash-menu-item-description {
+      color: var(--text-secondary);
+      flex: 1;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .slash-menu-empty { padding: 8px; color: var(--text-secondary); font-size: 12px; }
+
+    /* ── Composer status line ── */
+    .composer-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 4px 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .empty-state-signin {
+      align-items: center;
+      background: var(--vscode-button-background, var(--accent-teal));
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--button-text);
+      cursor: pointer;
+      display: inline-flex;
+      font: inherit;
+      font-size: 13px;
+      gap: 6px;
+      min-height: 28px;
+      padding: 0 14px;
+    }
+    .empty-state-signin[hidden] { display: none; }
+    .empty-state-signin:hover { background: var(--vscode-button-hoverBackground, var(--accent-teal)); }
     .plus-btn:disabled,
     .model-pill:disabled,
     .controls-summary:disabled,
@@ -1793,11 +2039,73 @@ export function getWebviewContent(
       <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
         <span class="codicon codicon-add" aria-hidden="true"></span>
       </button>
-      <button class="icon-btn" id="actionsBtn" title="More" aria-label="More actions">
-        <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
+      <button class="icon-btn" id="sessionsBtn" title="Sessions" aria-label="Sessions">
+        <span class="codicon codicon-history" aria-hidden="true"></span>
       </button>
+      <span class="header-menu-anchor">
+        <button
+          class="icon-btn"
+          id="actionsBtn"
+          title="More"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-expanded="false"
+        >
+          <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
+        </button>
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Workforce surfaces">
+          ${SURFACE_MENU_ITEMS.filter((item) => item.id !== 'account')
+            .map(
+              (item) => `<button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="${item.id}"
+          >
+            <span class="codicon codicon-${item.icon}" aria-hidden="true"></span>
+            <span>${escapeHtml(item.label)}</span>
+          </button>`,
+            )
+            .join('')}
+          <div class="actions-menu-separator" role="separator"></div>
+          <div class="actions-menu-account">
+            <span class="actions-menu-account-name" id="menuAccountName">Not signed in</span>
+            <span class="actions-menu-account-plan" id="menuAccountPlan">AGI Cloud account</span>
+          </div>
+          <button type="button" class="actions-menu-item" role="menuitem" id="menuAccountAction">
+            <span class="codicon codicon-sign-in" aria-hidden="true"></span>
+            <span id="menuAccountActionLabel">Sign in</span>
+          </button>
+          <button type="button" class="actions-menu-item" role="menuitem" data-surface="account">
+            <span class="codicon codicon-account" aria-hidden="true"></span>
+            <span>Account &amp; usage</span>
+          </button>
+        </div>
+      </span>
     </div>
   </div>
+
+  <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
+    <div class="sessions-sheet-head">
+      <span class="sessions-sheet-title">Sessions</span>
+      <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
+        <span class="codicon codicon-close" aria-hidden="true"></span>
+      </button>
+    </div>
+    <div class="sessions-sheet-toggle" role="tablist" aria-label="Session source">
+      <button type="button" role="tab" id="sessionsTabLocal" aria-selected="true">Local</button>
+      <button type="button" role="tab" id="sessionsTabCloud" aria-selected="false">Cloud</button>
+    </div>
+    <input
+      class="sessions-sheet-search"
+      id="sessionsSearch"
+      type="search"
+      placeholder="Search sessions"
+      aria-label="Search sessions"
+      hidden
+    />
+    <div class="sessions-sheet-list" id="sessionsSheetList" role="list"></div>
+  </section>
 
   <section
     class="onboarding"
@@ -1951,6 +2259,7 @@ export function getWebviewContent(
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
       <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
       <div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>
+      <button type="button" class="empty-state-signin" id="emptyStateSignIn" hidden>Sign in to AGI</button>
     </div>
   </div>
 
@@ -2082,6 +2391,7 @@ export function getWebviewContent(
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="menu" aria-expanded="false">+</button>
+        <button class="plus-btn" id="slashBtn" title="Commands" aria-label="Commands" aria-haspopup="menu" aria-expanded="false">/</button>
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
         <span class="context-usage" id="contextUsage"></span>
@@ -2089,6 +2399,12 @@ export function getWebviewContent(
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
       </div>
+      <div class="slash-menu" id="slashMenu" role="menu" aria-label="Commands"></div>
+    </div>
+    <div class="composer-status" id="composerStatus" role="status" aria-live="polite">
+      <span id="composerStatusBoundary">Local</span>
+      <span aria-hidden="true">·</span>
+      <span id="composerStatusMode">${modeLabel}</span>
     </div>
   </div>
 
@@ -2119,7 +2435,24 @@ export function getWebviewContent(
     const projectContextRemove = document.getElementById('projectContextRemove');
     const browseContextRemove = document.getElementById('browseContextRemove');
     const actionsBtn = document.getElementById('actionsBtn');
+    const actionsMenu = document.getElementById('actionsMenu');
+    const menuAccountName = document.getElementById('menuAccountName');
+    const menuAccountPlan = document.getElementById('menuAccountPlan');
+    const menuAccountAction = document.getElementById('menuAccountAction');
+    const menuAccountActionLabel = document.getElementById('menuAccountActionLabel');
     const newChatBtn = document.getElementById('newChatBtn');
+    const sessionsBtn = document.getElementById('sessionsBtn');
+    const sessionsSheet = document.getElementById('sessionsSheet');
+    const sessionsSheetClose = document.getElementById('sessionsSheetClose');
+    const sessionsSheetList = document.getElementById('sessionsSheetList');
+    const sessionsSearch = document.getElementById('sessionsSearch');
+    const sessionsTabLocal = document.getElementById('sessionsTabLocal');
+    const sessionsTabCloud = document.getElementById('sessionsTabCloud');
+    const slashBtn = document.getElementById('slashBtn');
+    const slashMenu = document.getElementById('slashMenu');
+    const composerStatusBoundary = document.getElementById('composerStatusBoundary');
+    const composerStatusMode = document.getElementById('composerStatusMode');
+    const emptyStateSignIn = document.getElementById('emptyStateSignIn');
     const mentionDropdown = document.getElementById('mentionDropdown');
     const sessionIdentity = document.getElementById('sessionIdentity');
     const sessionBoundaryLabel = document.getElementById('sessionBoundaryLabel');
@@ -2462,6 +2795,7 @@ export function getWebviewContent(
       sessionIdentity.setAttribute('aria-label', spec.label +
         (showProviderIdentity && activeProviderIdentity ? ' using ' + activeProviderIdentity : '') + '. ' + title);
       sessionIdentity.style.display = 'inline-flex';
+      renderComposerStatus(spec.label);
       updateOnboardingBoundary();
     }
 
@@ -2866,6 +3200,7 @@ export function getWebviewContent(
         (activeSupportsEffort ? ', ' + effort + ' effort' : ', effort unavailable for this model');
       controlsSummary.title = fullLabel;
       controlsSummary.setAttribute('aria-label', fullLabel);
+      renderComposerStatus(null);
     }
 
     function formatContextTokens(count) {
@@ -3355,9 +3690,44 @@ export function getWebviewContent(
 
     userInput.addEventListener('input', function() { autoResize(); detectMention(); });
 
-    actionsBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openActionSheet' });
-    });
+    function closeActionsMenu() {
+      if (!actionsMenu) return;
+      actionsMenu.classList.remove('open');
+      actionsBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    if (actionsMenu) {
+      actionsBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var isOpen = actionsMenu.classList.contains('open');
+        actionsMenu.classList.toggle('open', !isOpen);
+        actionsBtn.setAttribute('aria-expanded', String(!isOpen));
+        if (!isOpen) focusMenuItem(actionsMenu, 0);
+      });
+      wireMenuKeyboard(actionsMenu, actionsBtn, closeActionsMenu);
+      document.addEventListener('click', closeActionsMenu);
+      actionsMenu.addEventListener('click', function (event) {
+        event.stopPropagation();
+      });
+      var surfaceItems = actionsMenu.querySelectorAll('[data-surface]');
+      for (var si = 0; si < surfaceItems.length; si++) {
+        surfaceItems[si].addEventListener('click', function (event) {
+          var surfaceId = event.currentTarget.dataset.surface;
+          closeActionsMenu();
+          if (surfaceId === 'sessions') {
+            openSessionsSheet();
+            return;
+          }
+          vscode.postMessage({ type: 'openSurface', payload: { surfaceId: surfaceId } });
+        });
+      }
+      if (menuAccountAction) {
+        menuAccountAction.addEventListener('click', function () {
+          closeActionsMenu();
+          vscode.postMessage({ type: 'openSurface', payload: { surfaceId: accountSignedIn ? 'signOut' : 'signIn' } });
+        });
+      }
+    }
 
     if (newChatBtn) {
       newChatBtn.addEventListener('click', () => {
@@ -3429,6 +3799,241 @@ export function getWebviewContent(
           e.preventDefault();
           focusMenuItem(container, items.length - 1);
         }
+      });
+    }
+
+    // ── Sessions sheet ────────────────────────────────────────────────────────
+    var sessionsSource = 'local';
+    var sessionsRows = [];
+    var sessionsUnavailable = null;
+    var accountSignedIn = false;
+
+    function renderSessionsRows() {
+      if (!sessionsSheetList) return;
+      sessionsSheetList.replaceChildren();
+      var query = (sessionsSearch && !sessionsSearch.hidden ? sessionsSearch.value : '')
+        .trim()
+        .toLowerCase();
+      var visible = query === ''
+        ? sessionsRows
+        : sessionsRows.filter(function (row) {
+            return row.title.toLowerCase().indexOf(query) !== -1;
+          });
+      if (sessionsUnavailable) {
+        var notice = document.createElement('div');
+        notice.className = 'sessions-sheet-empty';
+        notice.textContent = sessionsUnavailable;
+        sessionsSheetList.appendChild(notice);
+        return;
+      }
+      if (visible.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'sessions-sheet-empty';
+        empty.textContent = sessionsSource === 'local'
+          ? 'No developer sessions in this workspace yet'
+          : 'No cloud chats yet';
+        sessionsSheetList.appendChild(empty);
+        return;
+      }
+      for (var i = 0; i < visible.length; i++) {
+        (function (row) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'sessions-sheet-row';
+          button.setAttribute('role', 'listitem');
+          button.title = row.title;
+          var title = document.createElement('span');
+          title.className = 'sessions-sheet-row-title';
+          title.textContent = row.title;
+          var age = document.createElement('span');
+          age.className = 'sessions-sheet-row-age';
+          age.textContent = row.age;
+          var dot = document.createElement('span');
+          dot.className = 'sessions-sheet-row-dot';
+          dot.setAttribute('aria-hidden', 'true');
+          var source = document.createElement('span');
+          source.className = 'sessions-sheet-row-age';
+          source.textContent = row.sourceLabel;
+          button.appendChild(title);
+          button.appendChild(age);
+          button.appendChild(dot);
+          button.appendChild(source);
+          button.addEventListener('click', function () {
+            closeSessionsSheet();
+            vscode.postMessage({
+              type: 'openSessionRow',
+              payload: { id: row.id, source: row.source },
+            });
+          });
+          sessionsSheetList.appendChild(button);
+        })(visible[i]);
+      }
+    }
+
+    function requestSessions(source) {
+      sessionsSource = source;
+      sessionsRows = [];
+      sessionsUnavailable = null;
+      if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
+      if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
+      renderSessionsRows();
+      vscode.postMessage({ type: 'requestSessions', payload: { source: source } });
+    }
+
+    function openSessionsSheet() {
+      if (!sessionsSheet) return;
+      sessionsSheet.hidden = false;
+      requestSessions(sessionsSource);
+      if (sessionsSheetClose) sessionsSheetClose.focus();
+    }
+
+    function closeSessionsSheet() {
+      if (!sessionsSheet) return;
+      sessionsSheet.hidden = true;
+      if (sessionsSearch) sessionsSearch.value = '';
+      if (sessionsBtn) sessionsBtn.focus();
+    }
+
+    if (sessionsBtn) sessionsBtn.addEventListener('click', openSessionsSheet);
+    if (sessionsSheetClose) sessionsSheetClose.addEventListener('click', closeSessionsSheet);
+    if (sessionsTabLocal) {
+      sessionsTabLocal.addEventListener('click', function () { requestSessions('local'); });
+    }
+    if (sessionsTabCloud) {
+      sessionsTabCloud.addEventListener('click', function () { requestSessions('cloud'); });
+    }
+    if (sessionsSearch) sessionsSearch.addEventListener('input', renderSessionsRows);
+    if (sessionsSheet) {
+      sessionsSheet.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeSessionsSheet();
+        }
+      });
+    }
+
+    // ── Slash commands ────────────────────────────────────────────────────────
+    var slashCommands = [];
+    var slashRequested = false;
+
+    function closeSlashMenu() {
+      if (!slashMenu) return;
+      slashMenu.classList.remove('open');
+      if (slashBtn) slashBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function renderSlashMenu(filter) {
+      if (!slashMenu) return;
+      slashMenu.replaceChildren();
+      var needle = (filter || '').toLowerCase();
+      var visible = slashCommands.filter(function (entry) {
+        return needle === '' || entry.name.toLowerCase().indexOf(needle) === 0;
+      });
+      if (visible.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'slash-menu-empty';
+        empty.textContent = slashCommands.length === 0 ? 'Loading commands…' : 'No matching command';
+        slashMenu.appendChild(empty);
+        return;
+      }
+      for (var i = 0; i < visible.length; i++) {
+        (function (entry) {
+          var item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'slash-menu-item';
+          item.setAttribute('role', 'menuitem');
+          var name = document.createElement('span');
+          name.className = 'slash-menu-item-name';
+          name.textContent = entry.name;
+          item.appendChild(name);
+          if (entry.description) {
+            var description = document.createElement('span');
+            description.className = 'slash-menu-item-description';
+            description.textContent = entry.description;
+            item.appendChild(description);
+          }
+          item.addEventListener('click', function () {
+            closeSlashMenu();
+            if (userInput.value.trim().indexOf('/') === 0) {
+              userInput.value = '';
+              autoResize();
+            }
+            vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
+          });
+          slashMenu.appendChild(item);
+        })(visible[i]);
+      }
+    }
+
+    function openSlashMenu(filter) {
+      if (!slashMenu) return;
+      slashMenu.classList.add('open');
+      if (slashBtn) slashBtn.setAttribute('aria-expanded', 'true');
+      renderSlashMenu(filter);
+      if (!slashRequested) {
+        slashRequested = true;
+        vscode.postMessage({ type: 'requestSlashCommands' });
+      }
+    }
+
+    if (slashBtn && slashMenu) {
+      slashBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (slashMenu.classList.contains('open')) {
+          closeSlashMenu();
+          return;
+        }
+        openSlashMenu('');
+        focusMenuItem(slashMenu, 0);
+      });
+      wireMenuKeyboard(slashMenu, slashBtn, closeSlashMenu);
+      slashMenu.addEventListener('click', function (event) { event.stopPropagation(); });
+      document.addEventListener('click', closeSlashMenu);
+      userInput.addEventListener('input', function () {
+        var value = userInput.value;
+        if (value.indexOf('/') === 0 && value.indexOf(' ') === -1) {
+          openSlashMenu(value);
+          return;
+        }
+        closeSlashMenu();
+      });
+    }
+
+    function renderMenuAccount() {
+      accountSignedIn = activeAccountStatus === 'signed-in';
+      if (menuAccountName) {
+        menuAccountName.textContent = accountSignedIn
+          ? (activeAccountIdentity && (activeAccountIdentity.email || activeAccountIdentity.displayName)) || 'Signed in'
+          : activeAccountStatus === 'expired'
+            ? 'Session expired'
+            : 'Not signed in';
+      }
+      if (menuAccountPlan) {
+        menuAccountPlan.textContent = accountSignedIn && activeAccountIdentity
+          ? activeAccountIdentity.planName + ' plan'
+          : 'AGI Cloud account';
+      }
+      if (menuAccountActionLabel) {
+        menuAccountActionLabel.textContent = accountSignedIn ? 'Sign out' : 'Sign in';
+      }
+      if (menuAccountAction) {
+        var icon = menuAccountAction.querySelector('.codicon');
+        if (icon) icon.className = 'codicon codicon-' + (accountSignedIn ? 'sign-out' : 'sign-in');
+      }
+      if (emptyStateSignIn) emptyStateSignIn.hidden = accountSignedIn;
+    }
+
+    // ── Composer status line ──────────────────────────────────────────────────
+    function renderComposerStatus(boundaryLabel) {
+      if (composerStatusBoundary && boundaryLabel) {
+        composerStatusBoundary.textContent = boundaryLabel;
+      }
+      if (composerStatusMode) composerStatusMode.textContent = capitalizeControl(activeMode);
+    }
+
+    if (emptyStateSignIn) {
+      emptyStateSignIn.addEventListener('click', function () {
+        vscode.postMessage({ type: 'openSurface', payload: { surfaceId: 'signIn' } });
       });
     }
 
@@ -3991,9 +4596,26 @@ export function getWebviewContent(
       else if (msg.type === 'accountStatus') {
         activeAccountStatus = msg.payload.status || 'signed-out';
         activeAccountIdentity = msg.payload.identity || null;
+        renderMenuAccount();
         if (lastUsageMeterPayload) renderUsageMeter(lastUsageMeterPayload);
         if (activeRuntimeSource) updateRuntimePill(activeRuntimeSource);
         else updateOnboardingBoundary();
+      }
+
+      else if (msg.type === 'sessionsList') {
+        if (msg.payload.source === sessionsSource) {
+          sessionsRows = msg.payload.rows || [];
+          sessionsUnavailable = msg.payload.unavailable || null;
+          if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length <= 10;
+          renderSessionsRows();
+        }
+      }
+
+      else if (msg.type === 'slashCommands') {
+        slashCommands = msg.payload.items || [];
+        if (slashMenu && slashMenu.classList.contains('open')) {
+          renderSlashMenu(userInput.value.indexOf('/') === 0 ? userInput.value : '');
+        }
       }
 
       else if (msg.type === 'showOnboarding') {
@@ -4735,7 +5357,7 @@ export function getWebviewContent(
       block.className = 'recent-chats';
       var heading = document.createElement('div');
       heading.className = 'recent-chats-title';
-      heading.textContent = 'Chats';
+      heading.textContent = 'Sessions';
       block.appendChild(heading);
       for (var i = 0; i < recentChats.conversations.length; i++) {
         block.appendChild(buildRecentChatRow(recentChats.conversations[i]));
@@ -4743,9 +5365,9 @@ export function getWebviewContent(
       var viewAll = document.createElement('button');
       viewAll.type = 'button';
       viewAll.className = 'recent-chats-all';
-      viewAll.textContent = 'View all (' + recentChats.total + ')';
+      viewAll.textContent = 'More ' + recentChats.total;
       viewAll.addEventListener('click', function() {
-        vscode.postMessage({ type: 'revealConversationHistory' });
+        openSessionsSheet();
       });
       block.appendChild(viewAll);
       emptyStateEl.insertBefore(block, emptyStateEl.firstChild);

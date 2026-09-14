@@ -41,7 +41,8 @@ async fn cli_websocket_uses_the_full_typed_developer_session() {
                         "name": "agi_cowork_test",
                         "title": "Cowork test",
                         "version": "0.0.0"
-                    }
+                    },
+                    "protocolVersion": DEVELOPER_SESSION_PROTOCOL_VERSION
                 }
             })
             .to_string(),

@@ -9,12 +9,16 @@ const source = readFileSync(
 );
 
 describe('Chrome side-panel demo surface', () => {
-  it('exposes conversation history directly from the header', () => {
+  it('opens recent chats as its own sheet from the header', () => {
     expect(source).toContain("id: 'sp-history-btn'");
     expect(source).toContain("'aria-label': 'Recent chats'");
-    expect(source).toContain('openDrawer(historyBtn)');
+    expect(source).toContain("historyBtn.addEventListener('click', openRecents)");
+    expect(source).toContain("id: 'sp-recents'");
     expect(source).toContain("id: 'sp-drawer-history-search'");
     expect(source).toContain('filterConversations(entries, drawerHistorySearch.value)');
+    expect(source).toContain(
+      'drawerHistorySearch.hidden = entries.length <= RECENTS_SEARCH_THRESHOLD',
+    );
   });
 
   it('invalidates delayed history restores and conditionally rolls back a stale owner claim', () => {
@@ -49,18 +53,18 @@ describe('Chrome side-panel demo surface', () => {
     expect(deleteBody).toContain('_ctx.conversationGeneration === deletionGeneration');
   });
 
-  it('shows a catalog-driven reasoning slider with an honest unresolved Auto state', () => {
-    expect(source).toContain("id: 'sp-effort-btn'");
-    expect(source).toContain("id: 'sp-effort-slider'");
+  it('shows catalog-driven effort rows with an honest unresolved Auto state', () => {
+    expect(source).toContain("class: 'sp-effort-option'");
     expect(source).toContain('getManagedEffortControlState(');
-    expect(source).toContain("state.status === 'awaiting-route'");
+    expect(source).toContain("state.status !== 'ready' || state.effort === undefined");
+    expect(source).toContain("t('spEffortAuto')");
     expect(source).toContain('getManagedOutboundEffort(');
     expect(source).toContain('return effort === undefined ? {} : { effort }');
   });
 
   it('keeps Quick as a per-turn overlay without erasing durable route state on toggle', () => {
-    const start = source.indexOf("quickModeToggle.addEventListener('click'");
-    const end = source.indexOf('effortPopover.appendChild(quickModeToggle)', start);
+    const start = source.indexOf('function applyQuickMode(');
+    const end = source.indexOf('function renderModelDropdown(', start);
     const toggleBody = source.slice(start, end);
 
     expect(toggleBody).toContain('_ctx.quickMode = next');
@@ -72,19 +76,26 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain('!streamUsedQuick && applyRoutingContinuation(chunk.routing)');
   });
 
-  it('keeps the polished composer hierarchy stable without hiding trust state', () => {
+  it('keeps one composer chip row without hiding where a chat is stored', () => {
     expect(source).toContain("class: 'sp-composer-controls-start'");
     expect(source).toContain("class: 'sp-composer-controls-end'");
     expect(source).toContain('composerBarStart.appendChild(attachWrapper)');
-    expect(source).toContain('composerBarStart.appendChild(contextBtn)');
-    expect(source).toContain('trustStrip.appendChild(autonomyControl)');
-    expect(source).toContain('composerBarEnd.appendChild(effortControl)');
+    expect(source).toContain('composerBarStart.appendChild(autonomyControl)');
+    expect(source).toContain('composerBarEnd.appendChild(modelSelectorWrap)');
     expect(source).toContain('composerBarEnd.appendChild(micBtn)');
     expect(source).toContain('composerBarEnd.appendChild(sendBtn)');
-    expect(source).toContain('composerShell.appendChild(trustStrip)');
+    expect(source).not.toContain('composerShell.appendChild(trustStrip)');
     expect(source).toContain("label: 'Syncing to your account'");
     expect(source).toContain("label: 'Saved to your account'");
     expect(source).toContain("'Saved on this device'");
+    expect(source).toContain("class: 'sp-drawer-history-badge'");
+  });
+
+  it('reveals the send button only once there is something to send', () => {
+    expect(source).toContain(
+      'btn.hidden = text.trim().length === 0 && pendingAttachments.length === 0',
+    );
+    expect(source).toContain('#sp-send-btn[hidden] { display: none; }');
   });
 
   it('supports keyboard navigation for modal and menu surfaces', () => {
@@ -95,10 +106,24 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain("['ArrowDown', 'ArrowUp', 'Home', 'End']");
   });
 
-  it('labels the navigation drawer as an AGI menu instead of settings', () => {
+  it('presents the menu as a flat list of rows that open one page each', () => {
     expect(source).toContain("'aria-label': 'AGI menu'");
-    expect(source).toContain("el('div', { id: 'sp-drawer-title' }, 'AGI in Chrome')");
-    expect(source).toContain("'aria-label': 'Open AGI menu'");
+    expect(source).toContain("el('div', { id: 'sp-drawer-title' }, t('spMenuTitle'))");
+    expect(source).toContain("class: 'sp-drawer-row'");
+    expect(source).toContain("class: 'sp-drawer-row-chevron'");
+    expect(source).toContain('function openDrawerGroup(');
+    expect(source).toContain('drawerTitle.textContent = group.label');
+    for (const key of [
+      'spMenuChat',
+      'spMenuAutomate',
+      'spMenuProjects',
+      'spMenuArtifacts',
+      'spMenuTools',
+      'spMenuPairing',
+      'spMenuSettings',
+    ]) {
+      expect(source).toContain(`t('${key}')`);
+    }
   });
 
   it('does not expose unfinished console or desktop actions in the public drawer', () => {
@@ -120,7 +145,7 @@ describe('Chrome side-panel demo surface', () => {
     const end = source.indexOf('drawerHistoryList.appendChild(item)', start);
     const body = source.slice(start, end);
     expect(body).toContain('if (opened)');
-    expect(body).toContain('closeDrawer()');
+    expect(body).toContain('closeRecents()');
     expect(body).toContain("t('spHistoryStopBeforeOpen')");
   });
 
@@ -146,7 +171,8 @@ describe('Chrome side-panel demo surface', () => {
   });
 
   it('uses an honest signed-out model picker label', () => {
-    expect(source).toMatch(/providerCount === 0\s*\?\s*'Sign in for models'/);
+    expect(source).toContain("t('spModelsSignedOut')");
+    expect(source).toContain('managedModelAccess === null');
   });
 
   it('lets users explicitly refresh the Sync Host session after web sign-in', () => {
