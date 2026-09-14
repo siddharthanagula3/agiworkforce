@@ -5,6 +5,7 @@ import {
   loadProjectInstructionSources,
   type ProjectInstructionSource,
 } from '../../data/projectInstructions';
+import { formatActiveProjectPrelude, getActiveCloudProject } from '../projects/activeProject';
 
 export const HOST_CUSTOM_INSTRUCTIONS_KEY = 'agiWorkforce.customInstructions.host';
 export const WORKSPACE_CUSTOM_INSTRUCTIONS_KEY = 'agiWorkforce.customInstructions.workspace';
@@ -82,10 +83,21 @@ export function formatCustomInstructionPrelude(instructions: StoredCustomInstruc
   );
 }
 
+export function buildTurnPrelude(
+  context: Pick<vscode.ExtensionContext, 'globalState' | 'workspaceState'>,
+): string {
+  return [
+    formatActiveProjectPrelude(getActiveCloudProject(context.workspaceState)),
+    formatCustomInstructionPrelude(getStoredCustomInstructions(context)),
+  ]
+    .filter((section) => section !== '')
+    .join('\n\n');
+}
+
 export function buildCustomInstructionInput(
   context: Pick<vscode.ExtensionContext, 'globalState' | 'workspaceState'>,
 ): UserInput | undefined {
-  const text = formatCustomInstructionPrelude(getStoredCustomInstructions(context));
+  const text = buildTurnPrelude(context);
   return text === '' ? undefined : { type: 'text', text, text_elements: [] };
 }
 
@@ -105,7 +117,7 @@ export async function buildInstructionContextSnapshot(
   const projectSources = await loadProjectInstructionSources();
   return {
     ...stored,
-    turnPrelude: formatCustomInstructionPrelude(stored),
+    turnPrelude: buildTurnPrelude(context),
     projectSources: projectSources.map(projectSourceSnapshot),
   };
 }
