@@ -20,13 +20,16 @@ import type {
 import { CODE_LIMITS } from '../code-surface';
 import {
   LOCAL_CODE_COPY,
+  LOCAL_FAILURE_ACTION_LABELS,
   LOCAL_MODEL_EVIDENCE_LABELS,
   localApprovalPrompts,
+  localFailureAction,
   localModelChoices,
   localModelLabel,
   localSessionContext,
   localTranscriptItems,
   localTurnIsRunning,
+  type LocalFailureAction,
   type LocalModelChoice,
 } from '../local-code';
 import { useLocalSession } from '../hooks/use-local-session';
@@ -44,6 +47,36 @@ export interface LocalSessionPanelProps {
   runtimeModels: DeveloperRuntimeModels | null;
   verbose: boolean;
   onClose: () => void;
+}
+
+function FailureAction({
+  action,
+  onRetry,
+}: {
+  action: NonNullable<LocalFailureAction>;
+  onRetry: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  if (action.kind === 'copy') {
+    return (
+      <button
+        type="button"
+        className={styles['secondaryButton']}
+        onClick={() => {
+          void navigator.clipboard.writeText(action.text).then(() => setCopied(true));
+        }}
+      >
+        {copied ? LOCAL_FAILURE_ACTION_LABELS.copied : LOCAL_FAILURE_ACTION_LABELS.copy}
+      </button>
+    );
+  }
+
+  return (
+    <button type="button" className={styles['secondaryButton']} onClick={onRetry}>
+      {LOCAL_FAILURE_ACTION_LABELS.retry}
+    </button>
+  );
 }
 
 function ModelChip({
@@ -104,7 +137,8 @@ export function LocalSessionPanel({
 
   const running = localTurnIsRunning(state.turn);
   const busy = running || state.sending;
-  const items = localTranscriptItems(state.messages, state.turn, session.provider);
+  const items = localTranscriptItems(state.messages, state.turn);
+  const failureAction = state.turn.failure ? localFailureAction(state.turn.failure) : null;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -163,6 +197,13 @@ export function LocalSessionPanel({
                     void state.decideApproval(decision === 'approve')
                   }
                   onRetryTask={(goal) => void state.send(goal)}
+                />
+              )}
+
+              {failureAction && (
+                <FailureAction
+                  action={failureAction}
+                  onRetry={() => void state.send(state.turn.prompt)}
                 />
               )}
 

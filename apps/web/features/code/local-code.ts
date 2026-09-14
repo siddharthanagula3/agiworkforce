@@ -2,9 +2,10 @@ import {
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
   type DeveloperRuntimeModels,
-  type LocalDeveloperSession,
   type DeveloperSessionGroup,
+  type DeveloperTurnFailure,
   type DeveloperTurnOutcome,
+  type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperMessage } from '@agiworkforce/types/protocol';
 import {
@@ -54,30 +55,67 @@ export function localProviderLabel(providerId: string | null): string | null {
   return providerLabels[providerId] ?? providerId;
 }
 
-const PROVIDER_PREFIX = /^\[([A-Za-z0-9_-]+)\]\s*/;
-const LOGIN_INSTRUCTION = /\s*Run\s+`?agi\s+login\s+\S+?`?\s+or\s+set\s+\S+?\.?\s*$/i;
-const MISSING_KEY = /authentication failed|no api key/i;
+/**
+ * The failure as this surface says it.
+ *
+ * The CLI writes for a terminal, so its own line names an environment variable
+ * and a shell command. Where the code says exactly what went wrong, the desktop
+ * says it in its own words; where it does not, the CLI's line is still the best
+ * description anyone has and is shown unchanged.
+ */
+export function localTurnFailureSentence(failure: DeveloperTurnFailure): string {
+  const provider = localProviderLabel(failure.provider);
+  const login = failure.provider ? `\`agi login ${failure.provider}\`` : null;
+
+  if (failure.code === 'provider_auth_missing' && provider && login) {
+    return `No ${provider} key on this computer. Run ${login} in a terminal, then start a new session.`;
+  }
+  if (failure.code === 'provider_auth_invalid' && provider && login) {
+    return `This computer's ${provider} key was refused. Run ${login} in a terminal to replace it.`;
+  }
+  if (failure.code === 'provider_rate_limited' && provider) {
+    return `${provider} is rate limiting this computer. Wait a moment and send it again.`;
+  }
+  if (failure.code === 'provider_unavailable' && provider) {
+    return `${provider} could not be reached from this computer.`;
+  }
+  if (failure.code === 'network') {
+    return 'This computer could not reach the network.';
+  }
+  if (failure.code === 'context_window_exceeded') {
+    return 'This session is longer than the model can read. Start a new one to carry on.';
+  }
+  if (failure.code === 'tool_denied') {
+    return 'The agent stopped because a command it needed was denied.';
+  }
+  if (failure.code === 'timeout') {
+    return 'The turn ran too long and was stopped.';
+  }
+  return failure.message;
+}
 
 /**
- * The CLI's failure line as a sentence a person can act on.
+ * What this surface can actually do about a failure.
  *
- * The CLI writes for a terminal: a bracketed provider id, then an instruction
- * naming an environment variable. The desktop has Settings, so the same
- * condition is said in the desktop's own words with the provider the catalog
- * names.
+ * Signing a provider in happens in a terminal, so the offer is the command
+ * rather than a button that cannot do what it says. An action the desktop
+ * cannot carry out gets no button at all.
  */
-export function localTurnFailureSentence(error: string, sessionProvider: string | null): string {
-  const prefixed = PROVIDER_PREFIX.exec(error);
-  const providerId = prefixed?.[1] ?? sessionProvider;
-  const body = (prefixed ? error.slice(prefixed[0].length) : error)
-    .replace(LOGIN_INSTRUCTION, '')
-    .trim();
+export type LocalFailureAction = { kind: 'retry' } | { kind: 'copy'; text: string } | null;
 
-  if (providerId && MISSING_KEY.test(body)) {
-    return `No ${localProviderLabel(providerId)} key on this computer. Add one in Settings, or run \`agi login ${providerId}\` in a terminal.`;
+export function localFailureAction(failure: DeveloperTurnFailure): LocalFailureAction {
+  if (failure.action === 'retry' && failure.retryable) return { kind: 'retry' };
+  if (failure.action === 'sign_in_provider' && failure.provider) {
+    return { kind: 'copy', text: `agi login ${failure.provider}` };
   }
-  return body === '' ? error.trim() : body;
+  return null;
 }
+
+export const LOCAL_FAILURE_ACTION_LABELS = {
+  retry: 'Send it again',
+  copy: 'Copy the command',
+  copied: 'Copied',
+} as const;
 
 export interface LocalModelChoice {
   id: string;
@@ -188,7 +226,7 @@ export interface LocalTurn {
   reply: string;
   tools: LocalToolRun[];
   outcome: DeveloperTurnOutcome | null;
-  error: string | null;
+  failure: DeveloperTurnFailure | null;
 }
 
 export const EMPTY_LOCAL_TURN: LocalTurn = {
@@ -197,7 +235,7 @@ export const EMPTY_LOCAL_TURN: LocalTurn = {
   reply: '',
   tools: [],
   outcome: null,
-  error: null,
+  failure: null,
 };
 
 const OUTCOME_STOP_REASONS: Record<DeveloperTurnOutcome, CloudCodeAgentStopReason> = {
@@ -234,7 +272,6 @@ function toSteps(tools: LocalToolRun[]): CloudCodeAgentStep[] {
 export function localTranscriptItems(
   messages: readonly DeveloperMessage[],
   turn: LocalTurn,
-  sessionProvider: string | null = null,
 ): CodeTranscriptItem[] {
   const items: CodeTranscriptItem[] = [];
 
@@ -260,9 +297,8 @@ export function localTranscriptItems(
   if (turn.tools.length > 0) {
     items.push({ kind: 'steps', id: 'live-steps', at: '', steps: toSteps(turn.tools) });
   }
-  const failure =
-    turn.error === null ? null : localTurnFailureSentence(turn.error, sessionProvider);
-  const reply = [turn.reply, failure].filter(Boolean).join('\n\n');
+  const said = turn.failure === null ? null : localTurnFailureSentence(turn.failure);
+  const reply = [turn.reply, said].filter(Boolean).join('\n\n');
   if (reply !== '') {
     items.push({
       kind: 'reply',

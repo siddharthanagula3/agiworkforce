@@ -15,6 +15,7 @@ const CONFIGURED_MODEL = 'qa-provider/qa-default';
 import {
   EMPTY_LOCAL_TURN,
   localModelChoices,
+  localFailureAction,
   localModelLabel,
   localTurnFailureSentence,
   startingModelId,
@@ -125,27 +126,52 @@ describe('local code surface', () => {
     ).toBe(`qa-project · ${catalogModelName} · Your key`);
   });
 
-  it('says a missing key in the desktop\u2019s own words', () => {
+  it('says a missing key in the desktop\u2019s own words, naming the terminal command', () => {
     expect(
-      localTurnFailureSentence(
-        '[anthropic] Authentication failed: No API key found. Run agi login anthropic or set ANTHROPIC_API_KEY.',
-        null,
-      ),
+      localTurnFailureSentence({
+        code: 'provider_auth_missing',
+        message: '[anthropic] Authentication failed: No API key found. Run `agi login anthropic`.',
+        provider: 'anthropic',
+        action: 'sign_in_provider',
+        retryable: false,
+      }),
     ).toBe(
-      'No Anthropic key on this computer. Add one in Settings, or run `agi login anthropic` in a terminal.',
+      'No Anthropic key on this computer. Run `agi login anthropic` in a terminal, then start a new session.',
     );
   });
 
-  it('takes the provider from the session when the line carries none', () => {
-    expect(localTurnFailureSentence('Authentication failed: No API key found.', 'deepseek')).toBe(
-      'No DeepSeek key on this computer. Add one in Settings, or run `agi login deepseek` in a terminal.',
-    );
+  it('keeps the CLI line for a failure it has nothing better to say about', () => {
+    expect(
+      localTurnFailureSentence({
+        code: 'unknown',
+        message: 'The model refused the request.',
+        provider: 'deepseek',
+        action: 'none',
+        retryable: false,
+      }),
+    ).toBe('The model refused the request.');
   });
 
-  it('keeps a failure that is not about a key, without the bracketed provider', () => {
-    expect(localTurnFailureSentence('[deepseek] The model refused the request.', 'deepseek')).toBe(
-      'The model refused the request.',
-    );
+  it('offers the command to copy rather than a sign-in button it cannot honour', () => {
+    expect(
+      localFailureAction({
+        code: 'provider_auth_missing',
+        message: 'x',
+        provider: 'anthropic',
+        action: 'sign_in_provider',
+        retryable: false,
+      }),
+    ).toEqual({ kind: 'copy', text: 'agi login anthropic' });
+  });
+
+  it('offers a resend only when the CLI says the turn is retryable', () => {
+    const base = { code: 'provider_rate_limited', message: 'x', provider: 'qa-provider' } as const;
+
+    expect(localFailureAction({ ...base, action: 'retry', retryable: true })).toEqual({
+      kind: 'retry',
+    });
+    expect(localFailureAction({ ...base, action: 'retry', retryable: false })).toBeNull();
+    expect(localFailureAction({ ...base, action: 'none', retryable: true })).toBeNull();
   });
 
   it('names the folder in the new-session action', () => {
@@ -182,7 +208,7 @@ describe('local code surface', () => {
         },
       ],
       outcome: null,
-      error: null,
+      failure: null,
     });
 
     expect(items.map((item) => item.kind)).toEqual(['task', 'task', 'steps', 'reply']);
@@ -194,22 +220,23 @@ describe('local code surface', () => {
   });
 
   it('renders a failed turn as the sentence, not the CLI line', () => {
-    const items = localTranscriptItems(
-      [],
-      {
-        ...EMPTY_LOCAL_TURN,
-        turnId: 'turn-1',
-        prompt: 'ping',
-        outcome: 'failed',
-        error:
-          '[anthropic] Authentication failed: No API key found. Run agi login anthropic or set ANTHROPIC_API_KEY.',
+    const items = localTranscriptItems([], {
+      ...EMPTY_LOCAL_TURN,
+      turnId: 'turn-1',
+      prompt: 'ping',
+      outcome: 'failed',
+      failure: {
+        code: 'provider_auth_missing',
+        message: '[anthropic] Authentication failed: No API key found.',
+        provider: 'anthropic',
+        action: 'sign_in_provider',
+        retryable: false,
       },
-      'anthropic',
-    );
+    });
 
     expect(items.at(-1)).toMatchObject({
       kind: 'reply',
-      text: 'No Anthropic key on this computer. Add one in Settings, or run `agi login anthropic` in a terminal.',
+      text: 'No Anthropic key on this computer. Run `agi login anthropic` in a terminal, then start a new session.',
       stopReason: 'error',
     });
   });
