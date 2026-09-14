@@ -37,7 +37,6 @@ import {
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
 import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
-import { detectNLWeb } from './nlweb';
 import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
 import {
@@ -1761,30 +1760,6 @@ function initWebMCP(): void {
     } catch (err) {
       logger.debug('WebMCP watchForToolChanges failed (non-fatal)', err);
     }
-
-    detectNLWeb(window.location.href)
-      .then((nlwebResult) => {
-        if (nlwebResult.supported) {
-          logger.info('NLWeb: detected support', {
-            endpoints: nlwebResult.endpoints.length,
-            schemaTypes: nlwebResult.schemaTypes,
-            url: nlwebResult.url,
-          });
-          chrome.runtime
-            .sendMessage({
-              type: 'NLWEB_DETECTED',
-              nlweb: nlwebResult,
-              url: window.location.href,
-              timestamp: Date.now(),
-            })
-            .catch((err) => {
-              logger.debug('NLWeb notification to background failed', err);
-            });
-        }
-      })
-      .catch((err) => {
-        logger.debug('NLWeb detection failed (non-fatal)', err);
-      });
   }, 1000);
 }
 
