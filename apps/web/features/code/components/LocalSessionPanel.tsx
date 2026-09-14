@@ -14,7 +14,7 @@ import {
 } from '@agiworkforce/ui';
 import type {
   DeveloperRuntimeModels,
-  DeveloperSession,
+  LocalDeveloperSession,
   DeveloperSessionGroup,
 } from '@agiworkforce/local-runtime-contract';
 import { CODE_LIMITS } from '../code-surface';
@@ -39,7 +39,7 @@ const CHIP_GLYPH_SIZE = 13;
 const SUBMIT_KEY = 'Enter';
 
 export interface LocalSessionPanelProps {
-  session: DeveloperSession;
+  session: LocalDeveloperSession;
   group: Pick<DeveloperSessionGroup, 'name' | 'branch' | 'sessions'>;
   runtimeModels: DeveloperRuntimeModels | null;
   verbose: boolean;

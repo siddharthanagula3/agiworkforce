@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type {
   DeveloperRuntimeModels,
-  DeveloperSession,
+  LocalDeveloperSession,
   DeveloperSessionGroup,
 } from '@agiworkforce/local-runtime-contract';
 import {
@@ -26,7 +26,7 @@ export interface LocalSessionsState {
   unavailable: string | null;
   refresh: () => void;
   addFolder: () => Promise<void>;
-  startSession: (rootId: string) => Promise<DeveloperSession | null>;
+  startSession: (rootId: string) => Promise<LocalDeveloperSession | null>;
   modelsFor: (rootId: string) => DeveloperRuntimeModels | null;
 }
 

@@ -58,7 +58,7 @@ export type {
   DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
   DeveloperRuntimeUnavailable,
-  DeveloperSession,
+  LocalDeveloperSession,
   DeveloperSessionCommand,
   DeveloperSessionEvent,
   DeveloperSessionGroup,
