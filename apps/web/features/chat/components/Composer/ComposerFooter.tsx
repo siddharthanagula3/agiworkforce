@@ -203,6 +203,19 @@ function useFreeLaneUiEnabled(): boolean {
   );
 }
 
+const subscribeToHydration = () => () => {};
+const hydratedSnapshot = () => true;
+const serverSnapshot = () => false;
+
+function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeToHydration, hydratedSnapshot, serverSnapshot);
+}
+
+function initialSelectedModel(): AIModel {
+  const { selectedModelId } = useModelStore.getInitialState();
+  return AVAILABLE_MODELS.find((model) => model.id === selectedModelId) ?? AVAILABLE_MODELS[0]!;
+}
+
 // ---------------------------------------------------------------------------
 // Reasoning / effort capability (per-model, driven by models.json `reasoning`).
 //
@@ -874,7 +887,8 @@ export function ComposerFooter({
   // guess into an "requires upgrade" claim against paying subscribers.
   const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
 
-  const selectedModel = getSelectedModel();
+  const hydrated = useHydrated();
+  const selectedModel = hydrated ? getSelectedModel() : initialSelectedModel();
 
   // Prompt-cache accounting: switching the model mid-conversation resets the cache and re-bills
   // prior context at full input price (caching is per-model). The switch itself is never blocked;
