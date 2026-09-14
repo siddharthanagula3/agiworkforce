@@ -33,8 +33,17 @@ describe('autonomy chip', () => {
     expect(panel).toContain('--agi-ext-warning-bg');
   });
 
-  it('stays in sync with the Computer Use checkbox', () => {
+  it('stays in sync with the Computer Use checkbox in both directions', () => {
     expect(panel).toContain("changes['agi_cu_ask_before_acting']");
+    const computerUsePanel = read('src/features/side-panel/computerUsePanel.ts');
+    expect(computerUsePanel).toContain("'agi_cu_ask_before_acting' in changes");
+    expect(computerUsePanel).toMatch(
+      /askCheckbox\.checked = changes\['agi_cu_ask_before_acting'\]\?\.newValue !== false/,
+    );
+  });
+
+  it('never writes the checkbox back to storage when a run starts', () => {
+    expect(panel).not.toContain('agi_cu_ask_before_acting: cuPanel.isAskBeforeActing()');
   });
 
   it('exposes the mode to assistive tech', () => {
