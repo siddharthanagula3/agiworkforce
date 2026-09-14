@@ -147,16 +147,11 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
 /// (e.g. the command for `run_command`, the path for file tools). Carries no
 /// full output, capped to one line of <=80 chars.
 fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
-    let pick = |k: &str| args.get(k).and_then(|v| v.as_str()).map(str::to_string);
-    let raw = match name {
-        "run_command" | "powershell" => pick("command"),
-        "read_file" | "write_file" | "edit_file" | "multiedit" | "list_directory"
-        | "notebook_edit" => pick("path"),
-        "search_files" | "grep_files" | "glob" => pick("pattern").or_else(|| pick("query")),
-        "web_search" => pick("query"),
-        "web_fetch" => pick("url"),
-        _ => None,
-    }
+    let raw = crate::runtime::tool_catalog::tool_status_line(name, |key| {
+        args.get(key)
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+    })
     .unwrap_or_default();
     let one_line = raw.replace('\n', " ");
     if one_line.trim().is_empty() {
