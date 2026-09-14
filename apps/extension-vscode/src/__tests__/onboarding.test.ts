@@ -17,7 +17,7 @@ describe('VS Code onboarding host contract', () => {
     expect(shouldShowOnboarding(state)).toBe(false);
   });
 
-  it.each(['completeOnboarding', 'openPermissionDocs', 'openPrivacySettings', 'openCloudTasks'])(
+  it.each(['completeOnboarding', 'openPermissionDocs', 'openPrivacySettings'])(
     'runtime-validates the %s webview action',
     (type) => {
       expect(parseWebviewMessage({ type })).toEqual({ type });

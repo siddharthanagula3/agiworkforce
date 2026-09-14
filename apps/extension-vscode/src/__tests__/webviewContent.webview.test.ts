@@ -286,10 +286,15 @@ describe('getWebviewContent, structural smoke', () => {
     expect(styles).toContain('@media (max-width: 480px)');
     expect(styles).toContain('@media (max-width: 380px)');
     expect(styles).toContain('.composer-card.is-streaming .controls-summary { display: none; }');
+    // Narrow widths shrink the chips; they never remove one of the controls.
     expect(styles).not.toMatch(/(?:^|\n)\s*\.controls-summary \{ display: none; \}/);
-    expect(styles).toContain('.controls-summary { max-width: 86px; }');
-    expect(styles).toContain('.controls-summary { max-width: 72px; }');
+    expect(styles).toMatch(/\.model-pill \{[^}]*min-width: 72px;/);
+    expect(styles).toMatch(/\.controls-summary \{\n\s*flex-shrink: 4;\n\s*min-width: 36px;/);
+    expect(styles).toContain('.controls-summary { max-width: 70px; }');
+    expect(styles).toContain('.controls-summary { max-width: 54px; }');
     expect(styles).toContain('.composer-card.is-streaming .controls-summary { display: none; }');
+    // The model name is the chip a user cannot reconstruct from anywhere else.
+    expect(styles).toContain('.model-pill-effort { display: none; }');
     expect(doc.querySelector('#controlsSummary')).not.toBeNull();
     expect(doc.querySelector('#plusMenuActions')).toBeNull();
   });

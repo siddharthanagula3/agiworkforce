@@ -183,6 +183,16 @@ export interface ModelProviderInfo {
   brandColor: string;
 }
 
+/**
+ * The catalog's display name for a provider id the CLI reports (`deepseek`).
+ * An id the catalog does not carry is returned unchanged rather than dressed
+ * up as a name the registry never issued.
+ */
+export function providerDisplayLabel(provider: string): string {
+  const providerId = resolveProviderId(provider);
+  return providerId === null ? provider : PROVIDER_DISPLAY[providerId].label;
+}
+
 export const AGI_CLOUD_BRAND_COLOR = 'var(--vscode-activityBarBadge-background)';
 export const UNKNOWN_PROVIDER_BRAND_COLOR = 'var(--vscode-descriptionForeground)';
 
