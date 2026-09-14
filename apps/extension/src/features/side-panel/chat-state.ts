@@ -64,6 +64,8 @@ function isDisplaySafeActivityEvent(envelope: AgentEventEnvelope): boolean {
     case 'approval-resolved':
     case 'input-requested':
     case 'input-resolved':
+    case 'device-step-requested':
+    case 'device-step-resolved':
     case 'artifact-produced':
     case 'context-compacted':
     case 'task-state-changed':
