@@ -843,6 +843,8 @@ enum Command {
     },
     /// Browse session history, on this device and in your account.
     History {
+        #[command(subcommand)]
+        action: Option<HistorySubcommand>,
         /// Maximum number of sessions to display.
         #[arg(long, default_value = "20")]
         limit: usize,
@@ -891,10 +893,57 @@ enum Command {
         #[command(subcommand)]
         action: ProjectsSubcommand,
     },
+    /// Browse, read and publish the artifacts in your AGI Workforce account.
+    Artifacts {
+        #[command(subcommand)]
+        action: ArtifactsSubcommand,
+    },
     /// Read and write the memory your AGI Workforce account shares across clients.
     Memory {
         #[command(subcommand)]
         action: MemorySubcommand,
+    },
+    /// Generate an image with your AGI Workforce account and save it to a file.
+    ///
+    /// Runs on the same hosted image route the web and mobile apps use, so the
+    /// image lands in your account library as well as on disk. Managed privacy
+    /// mode only.
+    Image {
+        /// What to draw.
+        prompt: Option<String>,
+        /// Where to write the image. A directory takes a name from the prompt;
+        /// a filename is used as given. Defaults to the working directory.
+        #[arg(long)]
+        out: Option<String>,
+        /// Image size, e.g. 256x256. The account decides the default.
+        #[arg(long)]
+        size: Option<String>,
+        /// Rendering quality the hosted route accepts (standard or hd).
+        #[arg(long)]
+        quality: Option<String>,
+        /// How many images to generate.
+        #[arg(long, short = 'n', default_value_t = 1)]
+        count: u8,
+        /// Catalogue image model to use instead of the first admitted one.
+        #[arg(short, long)]
+        model: Option<String>,
+        /// List the image models this account can generate with, and exit.
+        #[arg(long)]
+        list_models: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum HistorySubcommand {
+    /// Delete a conversation from your AGI Workforce account.
+    Delete {
+        /// Conversation id, as `agi history` prints it.
+        id: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -914,6 +963,77 @@ enum ProjectsSubcommand {
     Link {
         /// Project id or name.
         project: String,
+    },
+    /// Delete a project from the account by id or name.
+    Delete {
+        /// Project id or name.
+        project: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Archive a project so it leaves the active list without being deleted.
+    Archive {
+        /// Project id or name.
+        project: String,
+        /// Bring an archived project back instead.
+        #[arg(long)]
+        undo: bool,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ArtifactsSubcommand {
+    /// List the account's artifacts, newest first.
+    List {
+        /// Only the artifacts of this project id.
+        #[arg(long)]
+        project: Option<String>,
+        /// Maximum number of artifacts to return.
+        #[arg(long, default_value_t = cloud::artifacts::DEFAULT_ARTIFACT_LIMIT)]
+        limit: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print an artifact's content, or write it to a file.
+    Show {
+        /// Artifact id, as `agi artifacts list` prints it.
+        id: String,
+        /// Write the content here instead of printing it. A directory takes the
+        /// artifact's own name; a path with no extension gains one.
+        #[arg(long)]
+        out: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Open an artifact in the browser: its published page, or the conversation
+    /// it was produced in.
+    Open {
+        /// Artifact id.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Publish an artifact to a shareable URL.
+    Publish {
+        /// Artifact id.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Take a published artifact's URL away again.
+    Unpublish {
+        /// Artifact id.
+        id: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -1407,6 +1527,37 @@ pub fn structured_output(json_flag: bool, output: Option<OutputFormat>) -> Struc
     }
 }
 
+/// Ask before an account change that cannot be undone, naming what stops
+/// working rather than asking "are you sure".
+///
+/// A non-interactive stdin cannot answer, so it refuses instead of proceeding
+/// unasked. `--yes` is how a script says yes.
+fn confirm_destructive(prompt: &str, yes: bool) -> bool {
+    confirm_destructive_when(
+        prompt,
+        yes,
+        io::stdin().is_terminal() && io::stderr().is_terminal(),
+    )
+}
+
+fn confirm_destructive_when(prompt: &str, yes: bool, interactive: bool) -> bool {
+    match resolve_destructive_decision(yes, interactive) {
+        DestructiveDecision::Proceed => true,
+        DestructiveDecision::Refuse => {
+            output::print_warn(
+                "Nothing was deleted: this run cannot ask for confirmation. Re-run with --yes to \
+                 confirm non-interactively.",
+            );
+            false
+        }
+        DestructiveDecision::Prompt => dialoguer::Confirm::new()
+            .with_prompt(prompt)
+            .default(false)
+            .interact()
+            .unwrap_or(false),
+    }
+}
+
 fn print_structured(value: &serde_json::Value, mode: StructuredOutput) -> Result<()> {
     match (mode, value.as_array()) {
         (StructuredOutput::Ndjson, Some(rows)) => {
@@ -1497,9 +1648,134 @@ async fn print_hosted_history(limit: usize) {
     }
 }
 
-async fn handle_projects_command(action: &ProjectsSubcommand) -> Result<()> {
+/// `agi image "<prompt>"`: one hosted generation, saved where the user asked.
+async fn handle_image_command(
+    prompt: Option<&str>,
+    out: Option<&str>,
+    size: Option<&str>,
+    quality: Option<&str>,
+    count: u8,
+    model: Option<&str>,
+    list_models: bool,
+) -> Result<()> {
+    let privacy = account_privacy_mode();
+
+    if list_models {
+        let models = cloud::image::image_models(privacy)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        if models.is_empty() {
+            println!("Your account's catalogue publishes no image models.");
+            return Ok(());
+        }
+        for model in &models {
+            println!(
+                "{}  {}  {}  {}",
+                model.model_id, model.name, model.provider, model.state
+            );
+        }
+        return Ok(());
+    }
+
+    let Some(prompt) = prompt.map(str::trim).filter(|prompt| !prompt.is_empty()) else {
+        anyhow::bail!("An image needs a prompt: agi image \"a red bicycle\"");
+    };
+
+    let options = cloud::image::ImageRequestOptions {
+        prompt: prompt.to_string(),
+        count,
+        size: size.map(str::to_string),
+        quality: quality.map(str::to_string),
+        model: model.map(str::to_string),
+        out: out.map(std::path::PathBuf::from),
+    };
+    let cwd = std::env::current_dir()?;
+    let generation = cloud::image::generate(privacy, &options, &cwd)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+
+    for path in &generation.paths {
+        println!("{}", path.display());
+    }
+    output::print_info(&format!("{} via {}", generation.model, generation.provider));
+    Ok(())
+}
+
+/// Render a structured command's result, honouring the global
+/// `--output-format` and the command's own `--json`.
+fn render_structured(
+    value: serde_json::Value,
+    text: String,
+    json_flag: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    match structured_output(json_flag, output) {
+        StructuredOutput::Text => {
+            println!("{text}");
+            Ok(())
+        }
+        mode => print_structured(&value, mode),
+    }
+}
+
+async fn handle_projects_command(
+    action: &ProjectsSubcommand,
+    output: Option<OutputFormat>,
+) -> Result<()> {
     let privacy = account_privacy_mode();
     match action {
+        ProjectsSubcommand::Delete { project, yes, json } => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache.find(project).ok_or_else(|| {
+                anyhow::anyhow!("No project '{project}' in your AGI Workforce account")
+            })?;
+            let (id, name) = (found.id.clone(), found.name.clone());
+            if !confirm_destructive(
+                &format!(
+                    "Delete project '{name}'? Its knowledge files are deleted with it and every \
+                     client loses the workspace. Its conversations stay in your history, unfiled. \
+                     This cannot be undone."
+                ),
+                *yes,
+            ) {
+                println!("Left the project in place.");
+                return Ok(());
+            }
+            cloud::delete_project(privacy, &id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::json!({ "deleted": id, "name": name }),
+                format!("Deleted project '{name}' ({id}) from your account."),
+                *json,
+                output,
+            )
+        }
+        ProjectsSubcommand::Archive {
+            project,
+            undo,
+            json,
+        } => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache.find(project).ok_or_else(|| {
+                anyhow::anyhow!("No project '{project}' in your AGI Workforce account")
+            })?;
+            let (id, name) = (found.id.clone(), found.name.clone());
+            cloud::set_project_archived(privacy, &id, !*undo)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let verb = if *undo { "Unarchived" } else { "Archived" };
+            render_structured(
+                serde_json::json!({ "id": id, "name": name, "isArchived": !*undo }),
+                format!("{verb} '{name}' ({id}) in your account."),
+                *json,
+                output,
+            )
+        }
         ProjectsSubcommand::List => {
             let cache = cloud::refresh_projects(privacy)
                 .await
@@ -1553,6 +1829,176 @@ async fn handle_projects_command(action: &ProjectsSubcommand) -> Result<()> {
                 found.name
             );
             Ok(())
+        }
+    }
+}
+
+async fn handle_artifacts_command(
+    action: &ArtifactsSubcommand,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::artifacts;
+
+    let privacy = account_privacy_mode();
+    let client =
+        cloud::CloudClient::connect(privacy).map_err(|error| anyhow::anyhow!("{error}"))?;
+
+    match action {
+        ArtifactsSubcommand::List {
+            project,
+            limit,
+            json,
+        } => {
+            let entries = artifacts::list(&client, *limit, project.as_deref())
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::to_value(&entries)?,
+                artifacts::render_index(&entries),
+                *json,
+                output,
+            )
+        }
+        ArtifactsSubcommand::Show { id, out, json } => {
+            let entry = artifacts::resolve(&client, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let block = artifacts::content(&client, &entry)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let extension = artifacts::file_extension(
+                &entry.artifact_type,
+                entry.language.as_deref().or(Some(&block.language)),
+            );
+
+            let Some(out) = out else {
+                return render_structured(
+                    serde_json::json!({
+                        "id": entry.id,
+                        "title": entry.display_title(),
+                        "type": entry.artifact_type,
+                        "language": block.language,
+                        "content": block.content,
+                    }),
+                    block.content.clone(),
+                    *json,
+                    output,
+                );
+            };
+
+            let cwd = std::env::current_dir()?;
+            let path =
+                artifacts::output_path(std::path::Path::new(out), &cwd, &entry.id, extension);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, &block.content)?;
+            render_structured(
+                serde_json::json!({ "id": entry.id, "path": path.to_string_lossy() }),
+                format!("{}", path.display()),
+                *json,
+                output,
+            )
+        }
+        ArtifactsSubcommand::Open { id, json } => {
+            let entry = artifacts::resolve(&client, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let share_url = artifacts::published_for(&client, &entry.id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+                .and_then(|published| published.share_url);
+            let url = artifacts::browse_url(client.base(), &entry, share_url.as_deref());
+            let opened = oauth::open_external_url(&url, oauth::UserActionContext::user_initiated());
+            render_structured(
+                serde_json::json!({ "id": entry.id, "url": url, "opened": opened }),
+                if opened {
+                    format!("Opened {url}")
+                } else {
+                    format!("Open it yourself: {url}")
+                },
+                *json,
+                output,
+            )
+        }
+        ArtifactsSubcommand::Publish { id, json } => {
+            let entry = artifacts::resolve(&client, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let block = artifacts::content(&client, &entry)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let published = artifacts::publish(&client, &entry, &block)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::to_value(&published)?,
+                format!(
+                    "Published '{}' at {} ({}).",
+                    entry.display_title(),
+                    published.share_url,
+                    published.visibility
+                ),
+                *json,
+                output,
+            )
+        }
+        ArtifactsSubcommand::Unpublish { id, yes, json } => {
+            let Some(published) = artifacts::published_for(&client, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            else {
+                anyhow::bail!("Artifact '{id}' is not published from your account")
+            };
+            if !confirm_destructive(
+                &format!(
+                    "Unpublish artifact {id}? Its link stops working for everyone who has it, and \
+                     publishing again mints a different one. This cannot be undone."
+                ),
+                *yes,
+            ) {
+                println!("Left the artifact published.");
+                return Ok(());
+            }
+            artifacts::unpublish(&client, &published.token)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::json!({ "unpublished": id, "token": published.token }),
+                format!("Unpublished artifact {id}. Its share link no longer resolves."),
+                *json,
+                output,
+            )
+        }
+    }
+}
+
+async fn handle_history_command(
+    action: &HistorySubcommand,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    let privacy = account_privacy_mode();
+    match action {
+        HistorySubcommand::Delete { id, yes, json } => {
+            if !confirm_destructive(
+                &format!(
+                    "Delete conversation {id} from your account? Every signed-in client loses it, \
+                     any artifact published out of it is unpublished, and this cannot be undone."
+                ),
+                *yes,
+            ) {
+                println!("Left the conversation in place.");
+                return Ok(());
+            }
+            cloud::delete_conversation(privacy, id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            render_structured(
+                serde_json::json!({ "deleted": id }),
+                format!("Deleted conversation {id} from your account."),
+                *json,
+                output,
+            )
         }
     }
 }
@@ -1677,15 +2123,13 @@ async fn handle_schedules_command(
         }
         SchedulesSubcommand::Delete { id, yes, json } => match client.resolve_id(id).await {
             Ok(resolved) => {
-                if !*yes
-                    && !dialoguer::Confirm::new()
-                        .with_prompt(format!(
-                            "Delete schedule {resolved}? It stops firing for every surface and its run history goes with it. This cannot be undone."
-                        ))
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false)
-                {
+                if !confirm_destructive(
+                    &format!(
+                        "Delete schedule {resolved}? It stops firing for every surface and its \
+                         run history goes with it. This cannot be undone."
+                    ),
+                    *yes,
+                ) {
                     println!("Left the schedule in place.");
                     return Ok(());
                 }
@@ -3241,7 +3685,15 @@ pub async fn run_main() -> Result<()> {
             }
 
             // --- History ---
-            Command::History { limit, cloud } => {
+            Command::History {
+                action: Some(action),
+                ..
+            } => handle_history_command(action, cli.output).await,
+            Command::History {
+                action: None,
+                limit,
+                cloud,
+            } => {
                 if !cloud {
                     let conn = sessions::open_db()?;
                     let list = sessions::list_sessions(&conn, *limit)?;
@@ -3413,8 +3865,29 @@ pub async fn run_main() -> Result<()> {
 
             // --- Schedules ---
             Command::Schedules { action } => handle_schedules_command(action, cli.output).await,
-            Command::Projects { action } => handle_projects_command(action).await,
+            Command::Projects { action } => handle_projects_command(action, cli.output).await,
+            Command::Artifacts { action } => handle_artifacts_command(action, cli.output).await,
             Command::Memory { action } => handle_memory_command(action).await,
+            Command::Image {
+                prompt,
+                out,
+                size,
+                quality,
+                count,
+                model,
+                list_models,
+            } => {
+                handle_image_command(
+                    prompt.as_deref(),
+                    out.as_deref(),
+                    size.as_deref(),
+                    quality.as_deref(),
+                    *count,
+                    model.as_deref(),
+                    *list_models,
+                )
+                .await
+            }
 
             // --- Onboarding ---
             Command::Onboarding => {
@@ -4816,6 +5289,68 @@ mod tests {
             resolve_destructive_decision(true, true),
             DestructiveDecision::Proceed
         );
+    }
+
+    #[test]
+    fn a_non_interactive_run_refuses_an_irreversible_change_it_cannot_ask_about() {
+        assert!(
+            !confirm_destructive_when("Delete it?", false, false),
+            "a piped stdin can never answer the prompt, so the deletion must not proceed"
+        );
+    }
+
+    #[test]
+    fn the_yes_flag_is_how_a_script_answers_the_prompt() {
+        assert!(confirm_destructive_when("Delete it?", true, false));
+        assert!(confirm_destructive_when("Delete it?", true, true));
+    }
+
+    #[test]
+    fn the_account_deletion_commands_parse_with_their_confirmation_opt_out() {
+        let projects = Cli::try_parse_from(["agi", "projects", "delete", "cli-parity-qa", "--yes"])
+            .expect("projects delete parses");
+        assert!(matches!(
+            projects.command,
+            Some(Command::Projects {
+                action: ProjectsSubcommand::Delete { yes: true, .. }
+            })
+        ));
+
+        let history = Cli::try_parse_from(["agi", "history", "delete", "abc", "-y"])
+            .expect("history delete parses");
+        assert!(matches!(
+            history.command,
+            Some(Command::History {
+                action: Some(HistorySubcommand::Delete { yes: true, .. }),
+                ..
+            })
+        ));
+
+        let listing = Cli::try_parse_from(["agi", "history", "--limit", "5"])
+            .expect("the bare history listing still parses");
+        assert!(matches!(
+            listing.command,
+            Some(Command::History {
+                action: None,
+                limit: 5,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn the_artifact_commands_parse() {
+        for argv in [
+            vec!["agi", "artifacts", "list", "--limit", "5"],
+            vec!["agi", "artifacts", "show", "abc", "--out", "out.html"],
+            vec!["agi", "artifacts", "open", "abc"],
+            vec!["agi", "artifacts", "publish", "abc"],
+            vec!["agi", "artifacts", "unpublish", "abc", "--yes"],
+        ] {
+            let parsed = Cli::try_parse_from(argv.clone())
+                .unwrap_or_else(|error| panic!("{argv:?} must parse: {error}"));
+            assert!(matches!(parsed.command, Some(Command::Artifacts { .. })));
+        }
     }
 
     #[test]

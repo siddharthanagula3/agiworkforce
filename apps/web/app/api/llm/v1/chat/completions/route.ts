@@ -11,6 +11,7 @@ import {
 } from '@/lib/cors';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
+import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
   observeFreeLaneAttemptFailure,
@@ -603,6 +604,7 @@ async function dispatchChatCompletions(
       addFallbackReasonHeader(researchHeaders, processed);
       addModelEscalationHeaders(researchHeaders, processed);
       addSecretRedactionNoticeHeader(researchHeaders, processed);
+      addProjectSourcesHeader(researchHeaders, processed);
       addRouteLaneHeader(researchHeaders, processed);
 
       // AUDIT-FIX BUG-8: the idle heartbeat was applied inside
@@ -732,6 +734,7 @@ async function dispatchChatCompletions(
         addFallbackReasonHeader(headers, processed);
         addModelEscalationHeaders(headers, processed);
         addSecretRedactionNoticeHeader(headers, processed);
+        addProjectSourcesHeader(headers, processed);
         addRouteLaneHeader(headers, processed);
         // GOV-7: name the connectors whose tools did not fit under this plan's
         // ceiling so the client can surface it. Header-encoded because this is

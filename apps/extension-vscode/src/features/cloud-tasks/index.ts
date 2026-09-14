@@ -6,7 +6,13 @@ export {
   OPEN_CLOUD_TASK_COMMAND,
   type CloudRunClientResolution,
 } from './cloudTasksTree';
-export { showCloudRunDetail, type CloudRunDetailClient } from './cloudRunDetail';
+export {
+  cloudRunArtifacts,
+  buildCloudRunDetailItems,
+  showCloudRunDetail,
+  type CloudRunDetailClient,
+  type CloudRunDetailHost,
+} from './cloudRunDetail';
 export {
   APPROVE_CLOUD_TASK_COMMAND,
   REJECT_CLOUD_TASK_COMMAND,

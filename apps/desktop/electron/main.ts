@@ -33,6 +33,7 @@ import { startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
 import { dispatch as dispatchDesktopRuntime } from './runtime/dispatcher';
 import { cancelAllShellRuns } from './runtime/shellService';
+import { stopComputerUseHelper } from './runtime/computerUseService';
 import { installAppMenu } from './appMenu';
 import { applyLaunchAtLogin } from './launchAtLogin';
 import {
@@ -715,6 +716,7 @@ if (!hasSingleInstanceLock) {
   app.on('will-quit', () => {
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
+    stopComputerUseHelper();
     void stopBrowserBridge();
   });
 

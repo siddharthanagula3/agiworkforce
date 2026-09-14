@@ -2,6 +2,7 @@ import 'server-only';
 
 import { after } from 'next/server';
 import type { NextRequest } from 'next/server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -54,6 +55,22 @@ function runAfterResponse(task: Promise<void>): void {
   } catch {
     void task;
   }
+}
+
+async function resolveMeteringDb(
+  params: RecordManagedAutoMemoryTurnParams,
+): Promise<DatabaseAdapter> {
+  const reserved = params.processed.managedUsage?.db;
+  if (reserved) {
+    if (params.processed.managedUsage?.userId !== params.userId) {
+      throw new Error('Managed memory tenant mismatch');
+    }
+    return reserved;
+  }
+  if (!params.request) throw new Error('Managed memory request context is unavailable');
+  const scoped = await getUserScopedDb(params.request);
+  if (scoped.userId !== params.userId) throw new Error('Managed memory tenant mismatch');
+  return scoped.db;
 }
 
 async function persistTurnCandidates(
@@ -135,9 +152,11 @@ export async function recordManagedAutoMemoryTurn(
       let candidates: readonly string[] = patternCandidates;
       try {
         candidates = await extractAutoMemoryFactsWithModel({
+          db: await resolveMeteringDb(params),
           message: params.processed.autoMemorySourceText ?? '',
           userId: params.userId,
           organizationId: params.processed.organizationId ?? null,
+          planTier: params.processed.subscriptionTier ?? 'free',
           requestId: params.processed.requestId,
         });
       } catch (error) {

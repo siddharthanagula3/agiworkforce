@@ -14,10 +14,33 @@ export const DEVICE_STEP_RESUME_PATH = '/api/llm/v1/chat/completions/resume-devi
 
 export const MAX_DEVICE_STEP_OUTPUT_LENGTH = 24_000;
 
+/**
+ * A screen capture is the only device result that is not text, and it is bounded
+ * hard: the desktop shell already scales a capture down and falls back to JPEG,
+ * and a batch of eight results still has to fit inside one request body.
+ */
+export const MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH = 2_500_000;
+
+/**
+ * How a screen capture is introduced to the model, and how an earlier one is
+ * recognised so its pixels can be dropped from the history. Only the newest
+ * capture is worth carrying: the older ones describe a screen that has changed,
+ * and keeping them would grow every later request and every checkpoint by a
+ * megabyte apiece.
+ */
+export const DEVICE_SCREENSHOT_MESSAGE_PREFIX = 'Screen capture from your device';
+
+export const DeviceStepImageSchema = z.object({
+  base64: z.string().min(1).max(MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH),
+  mime_type: z.enum(['image/png', 'image/jpeg']),
+});
+export type DeviceStepImageWire = z.infer<typeof DeviceStepImageSchema>;
+
 export const DeviceStepResultSchema = z.object({
   tool_call_id: z.string().min(1).max(128),
   content: z.string().max(MAX_DEVICE_STEP_OUTPUT_LENGTH),
   is_error: z.boolean(),
+  image: DeviceStepImageSchema.optional(),
 });
 export type DeviceStepResultWire = z.infer<typeof DeviceStepResultSchema>;
 

@@ -16,7 +16,6 @@ import 'server-only';
  * the stage-1 truncated title simply stands.
  */
 
-import { randomUUID } from 'node:crypto';
 import { after } from 'next/server';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
@@ -32,8 +31,15 @@ import {
   storeExactResponseCache,
   type ExactResponseCacheKeyFields,
 } from '@/lib/services/exact-response-cache-service';
-import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import {
+  fingerprintManagedUsageRequest,
+  finalizeManagedUsageRequest,
+  markManagedUsageProviderStarted,
+  reserveManagedUsageRequest,
+} from '@/lib/services/managed-usage-request-service';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { estimateTokens } from '@agiworkforce/routing';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -44,6 +50,8 @@ const MAX_OUTPUT_TOKENS = 24;
 const MAX_TITLE_LENGTH = 60;
 /** Cap how much of a (possibly 100k-char) first message is sent to the titler. */
 const MAX_SOURCE_CHARS = 4000;
+
+export const CONVERSATION_TITLE_QUOTA_FEATURE = 'conversation_title';
 
 const TITLE_SYSTEM_PROMPT =
   'Write a short title (6 words or fewer) that captures the topic of the message below. ' +
@@ -186,7 +194,46 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
   if (cacheLookup.outcome === 'hit' && cacheLookup.entry) {
     title = sanitizeGeneratedTitle(cacheLookup.entry.content);
   } else {
+    const subscription = await SubscriptionService.getSubscription(input.db, input.userId).catch(
+      () => null,
+    );
+    let reservation;
     try {
+      reservation = await reserveManagedUsageRequest({
+        db: input.db,
+        userId: input.userId,
+        organizationId: input.organizationId,
+        idempotencyKey: `title:${input.conversationId}`,
+        requestHash: fingerprintManagedUsageRequest({
+          kind: CONVERSATION_TITLE_QUOTA_FEATURE,
+          conversationId: input.conversationId,
+          provider: route.provider,
+          model: route.modelKey,
+        }),
+        provider: route.provider,
+        model: route.modelKey,
+        estimatedCostCents: LLMCostCalculator.estimateCost(
+          route.provider,
+          route.modelKey,
+          estimateTokens(`${TITLE_SYSTEM_PROMPT}\n${source}`, route.modelKey) + 32,
+          MAX_OUTPUT_TOKENS,
+        ),
+        leaseSeconds: 60,
+        planTier: subscription?.plan_tier ?? 'free',
+        isFlagship: false,
+        quotaFeature: CONVERSATION_TITLE_QUOTA_FEATURE,
+      });
+    } catch (error) {
+      logger.warn(
+        { error, conversationId: input.conversationId },
+        '[conversation-title] usage reservation refused; keeping the truncated title',
+      );
+      return;
+    }
+
+    let providerCompleted = false;
+    try {
+      await markManagedUsageProviderStarted(reservation);
       const adapter = buildServerProviderAdapter(route.provider);
       const response = await drainToLlmResponse(
         adapter.stream(chatRequest, new AbortController().signal),
@@ -194,7 +241,34 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
         (chunk) => toGenericUpstreamError(route.provider, chunk),
         wireMode,
       );
+      providerCompleted = true;
       title = sanitizeGeneratedTitle(response.content);
+
+      const usage = {
+        promptTokens: response.promptTokens,
+        completionTokens: response.completionTokens,
+        totalTokens: response.totalTokens,
+        cacheReadInputTokens: response.cachedInputTokens,
+        cacheCreationInputTokens: response.cacheCreationInputTokens,
+        cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
+      };
+      await finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'completed',
+        actualCostCents: LLMCostCalculator.calculateCost(
+          route.provider,
+          route.modelKey,
+          usage,
+          undefined,
+          route.routeId,
+        ),
+        usage: {
+          ...usage,
+          type: CONVERSATION_TITLE_QUOTA_FEATURE,
+          conversationId: input.conversationId,
+        },
+      });
+
       await storeExactResponseCache(
         cacheFields,
         {
@@ -219,35 +293,24 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
         },
         { bypass: cacheBypass },
       );
-
-      const usage = {
-        promptTokens: response.promptTokens,
-        completionTokens: response.completionTokens,
-        totalTokens: response.totalTokens,
-        cacheReadInputTokens: response.cachedInputTokens,
-        cacheCreationInputTokens: response.cacheCreationInputTokens,
-        cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
-      };
-      await recordSettledProviderCost({
-        userId: input.userId,
-        organizationId: input.organizationId,
-        provider: route.provider,
-        model: route.modelKey,
-        routeId: route.routeId,
-        actualCostCents: LLMCostCalculator.calculateCost(
-          route.provider,
-          route.modelKey,
-          usage,
-          undefined,
-          route.routeId,
-        ),
-        sourceRef: `title:${input.conversationId}:${randomUUID()}`,
-        taskOutcome: 'delivered',
-        surface: 'conversation_title',
-        customerCanonicalMicrousd: 0,
-        usage,
-      });
     } catch (error) {
+      if (!providerCompleted) {
+        await finalizeManagedUsageRequest({
+          ...reservation,
+          outcome: 'failed',
+          actualCostCents: 0,
+          usage: {
+            type: CONVERSATION_TITLE_QUOTA_FEATURE,
+            conversationId: input.conversationId,
+            reason: error instanceof Error ? error.message : String(error),
+          },
+        }).catch((releaseError: unknown) => {
+          logger.error(
+            { releaseError, conversationId: input.conversationId },
+            '[conversation-title] reservation release failed',
+          );
+        });
+      }
       logger.warn(
         { error, conversationId: input.conversationId, provider: route.provider },
         '[conversation-title] generation failed; keeping the truncated title',

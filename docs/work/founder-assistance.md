@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-13
+Last updated: 2026-09-14
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -168,6 +168,13 @@ per-turn spend, which is a founder call rather than an engineering one.
 **Needed input** One decision.
 **How to verify completion** A fact stated with no trigger phrase, for example "I just moved to Berlin", is stored and answered in a second conversation.
 **What remains after founder action** Setting the variable and one live two-chat check, both engineering.
+**Metering** Since 2026-09-14 the extraction call is reserved and finalized on
+the managed usage ledger under the `memory_extraction` quota feature, so it
+counts against the session, weekly and flagship caps and appears on
+`GET /api/usage` like any other spend. A turn whose reservation is refused
+skips the model and keeps the pattern candidates. The only decision still open
+is the on/off call above; nothing about where the spend is recorded remains
+undecided.
 **Impact** NON-BLOCKING (memory works today for the phrasings the patterns know)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -780,14 +787,13 @@ every workstream since 2026-09-05 has been building on, per the founder's
 "Electron is the desktop, leave Tauri alone" instruction) and the frozen Tauri
 app (`apps/desktop/src-tauri`, tag scheme `v-desktop-*`, last touched
 2026-09-09). The public page at `/desktop` still describes the Tauri app: its
-specification ledger names "Tauri 2, Rust backend", it lists native computer
-use (fourteen Tauri commands that the Electron shell does not have), and the
-Linux artifacts it links are Tauri builds. Which app the public sees is a
+specification ledger names "Tauri 2, Rust backend", its computer-use copy
+describes the Tauri commands rather than the screen steps the Electron shell
+carries out, and the Linux artifacts it links are Tauri builds. Which app the public sees is a
 product decision, not an engineering one.
 **Exact action** Say one of: (a) the Electron app is the desktop, so `/desktop`
 and the release API's default should describe and serve it and the Tauri rows
-(engine, native computer use, Linux AppImage) come off the page until the
-Electron shell has them; or (b) both stay public, with `/desktop` split into two
+(engine, Linux AppImage) come off the page until the Electron shell has them; or (b) both stay public, with `/desktop` split into two
 named downloads and their real capability lists.
 **Where** A reply in this file's entry or in chat.
 **Needed input** The choice, and for (a) whether the Tauri Linux download stays
@@ -796,8 +802,10 @@ linked anywhere.
 the linked build has, and the release-state guard and the surface page claim
 tests pass on the rewritten copy.
 **What remains after founder action** Engineering rewrites the page and the
-release API default in one commit; the Electron computer-use port stays tracked
-as `DESKTOP-CLOUD-COMPUTER-USE-UNPORTED-01`.
+release API default in one commit. The Electron shell now carries out computer
+use itself, on macOS only, as cloud-to-device screen steps under a `computer.use`
+grant; Windows and Linux builds report it unsupported, so the rewritten page
+must say which platforms have it.
 **Impact** LAUNCH-BLOCKING for honesty (the page today promises a capability
 the app the team is shipping does not deliver)
 **Status** BLOCKED, FOUNDER DECISION REQUIRED

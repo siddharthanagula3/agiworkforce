@@ -4,8 +4,10 @@
 //! Everything here is gated on Managed privacy mode. A Local or BYOK session
 //! never reaches these endpoints, and says so once instead of failing quietly.
 
+pub mod artifacts;
 pub mod chat;
 pub mod client;
+pub mod image;
 pub mod memory;
 pub mod projects;
 pub mod state;
@@ -16,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::config::CliConfig;
 use crate::platform::runtime::session::PrivacyMode;
 
-pub use client::{CloudClient, CloudError};
+pub use client::{CloudClient, CloudError, Method, Route};
 pub use state::SyncState;
 
 static BOUNDARY_NOTICE_SHOWN: AtomicBool = AtomicBool::new(false);
@@ -236,6 +238,86 @@ pub async fn create_project(
     Ok(created)
 }
 
+pub const PROJECTS_PATH: &str = "/api/projects";
+
+fn project_path(project_id: &str) -> String {
+    format!("{PROJECTS_PATH}/{}", urlencoding::encode(project_id))
+}
+
+/// `agi projects delete` tombstones one project.
+pub fn delete_project_route(project_id: &str) -> Route {
+    Route::delete(project_path(project_id))
+}
+
+/// `agi projects archive` moves one project in or out of the archive.
+pub fn archive_project_route(project_id: &str) -> Route {
+    Route::put(project_path(project_id))
+}
+
+/// `agi history delete` removes one conversation from the account.
+pub fn delete_conversation_route(conversation_id: &str) -> Route {
+    Route::delete(format!(
+        "{}/{}",
+        artifacts::CONVERSATIONS_PATH,
+        urlencoding::encode(conversation_id)
+    ))
+}
+
+/// Delete a project in the account. The hosted route tombstones the project and
+/// unfiles its conversations rather than deleting them, so this removes the
+/// workspace and the knowledge files filed under it, never the chats.
+pub async fn delete_project(privacy: PrivacyMode, project_id: &str) -> Result<(), CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let _: serde_json::Value = session
+        .client
+        .call(&delete_project_route(project_id), &[], None)
+        .await?;
+    let mut cache = load_project_cache(&session.config_dir);
+    cache.projects.retain(|project| project.id != project_id);
+    if let Err(error) = save_project_cache(&session.config_dir, &cache) {
+        crate::output::print_warn(&format!("could not cache the project list: {error}"));
+    }
+    Ok(())
+}
+
+/// Archive or unarchive a project in the account.
+pub async fn set_project_archived(
+    privacy: PrivacyMode,
+    project_id: &str,
+    archived: bool,
+) -> Result<(), CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let body = serde_json::json!({ "isArchived": archived });
+    let _: serde_json::Value = session
+        .client
+        .call(&archive_project_route(project_id), &[], Some(&body))
+        .await?;
+    let mut cache = load_project_cache(&session.config_dir);
+    for project in cache.projects.iter_mut() {
+        if project.id == project_id {
+            project.is_archived = archived;
+        }
+    }
+    if let Err(error) = save_project_cache(&session.config_dir, &cache) {
+        crate::output::print_warn(&format!("could not cache the project list: {error}"));
+    }
+    Ok(())
+}
+
+/// Delete a conversation from the account. Every signed-in client loses it, and
+/// the hosted route revokes any artifact published out of it.
+pub async fn delete_conversation(
+    privacy: PrivacyMode,
+    conversation_id: &str,
+) -> Result<(), CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let _: serde_json::Value = session
+        .client
+        .call(&delete_conversation_route(conversation_id), &[], None)
+        .await?;
+    Ok(())
+}
+
 /// Refresh the local memory cache from the account and return it.
 pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
@@ -367,6 +449,21 @@ mod tests {
         let dir = tempfile::tempdir().expect("temp dir");
         assert!(load_memory_cache(dir.path()).entries.is_empty());
         assert!(load_project_cache(dir.path()).projects.is_empty());
+    }
+
+    #[test]
+    fn each_account_deletion_routes_to_the_hosted_endpoint_it_names() {
+        let project = delete_project_route("a b");
+        assert_eq!(project.method, Method::Delete);
+        assert_eq!(project.path, "/api/projects/a%20b");
+
+        let archive = archive_project_route("a b");
+        assert_eq!(archive.method, Method::Put);
+        assert_eq!(archive.path, "/api/projects/a%20b");
+
+        let conversation = delete_conversation_route("a b");
+        assert_eq!(conversation.method, Method::Delete);
+        assert_eq!(conversation.path, "/api/chat/conversations/a%20b");
     }
 
     #[test]

@@ -267,7 +267,7 @@ mod tests {
     fn format_review_never_emits_a_model_supplied_escape() {
         let review = ReviewOutput {
             overall_explanation: format!("summary{CLIPBOARD_WRITE}"),
-            severity: format!("weird\u{1b}[2J"),
+            severity: "weird\u{1b}[2J".to_string(),
             issues: vec![issue_with(CLIPBOARD_WRITE)],
             suggestions: vec![],
         };

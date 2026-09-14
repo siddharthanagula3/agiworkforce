@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import {
   ConnectorConnectionSchema,
@@ -79,6 +78,63 @@ describe('ConnectorConnectionSchema / ListConnectorsResponseSchema', () => {
       available: ['local-filesystem', 'terminal', 'github'],
     };
     expect(ListConnectorsResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it('accepts the oauth-sourced row the route emits, with scopes and reauthorization', () => {
+    const row = {
+      id: 'oauth-notion',
+      connectorId: 'notion',
+      authType: 'oauth',
+      connectedAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+      source: 'oauth',
+      scopes: ['read', 'write'],
+      needsReauthorization: true,
+      health: 'needs-reauthorization',
+    };
+    expect(ConnectorConnectionSchema.safeParse(row).success).toBe(true);
+  });
+
+  it('accepts a directory-linked custom row with its tool and directory ids', () => {
+    const row = {
+      id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      connectorId: 'linear',
+      toolConnectorId: 'custom-a1b2c3d4e5',
+      directoryId: 'linear',
+      authType: 'custom_mcp',
+      connectedAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+      source: 'custom',
+      name: 'Linear',
+      health: 'connected',
+    };
+    expect(ConnectorConnectionSchema.safeParse(row).success).toBe(true);
+  });
+
+  it('accepts the setup and pending siblings the route returns beside the list', () => {
+    const response = {
+      connectors: [],
+      available: ['github'],
+      setup: {
+        slack: { kind: 'oauth', missingEnv: ['SLACK_CLIENT_ID'], message: 'Slack is not set up.' },
+      },
+      pending: ['notion'],
+    };
+    expect(ListConnectorsResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it('rejects an unknown health value', () => {
+    expect(
+      ConnectorConnectionSchema.safeParse({
+        id: 'conn_1',
+        connectorId: 'slack',
+        authType: 'oauth',
+        connectedAt: '',
+        updatedAt: '',
+        source: 'user',
+        health: 'degraded',
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects an unknown source value', () => {

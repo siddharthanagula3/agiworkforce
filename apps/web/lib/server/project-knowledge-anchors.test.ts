@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   anchorAt,
+  anchorLocationAt,
   formatAnchor,
   headingAnchors,
   joinPagesWithAnchors,
@@ -36,14 +37,43 @@ describe('headingAnchors', () => {
     const anchors = headingAnchors(text);
 
     expect(anchors).toEqual([
-      { start: 0, heading: 'Overview' },
-      { start: 24, heading: 'Pricing' },
+      { start: 0, heading: 'Overview', level: 1 },
+      { start: 24, heading: 'Pricing', level: 2 },
     ]);
     expect(text.slice(24)).toBe('## Pricing\nMore prose.');
   });
 
   it('ignores a hash that is not a heading', () => {
     expect(headingAnchors('#nothashheading\nplain line')).toEqual([]);
+  });
+});
+
+describe('anchorLocationAt', () => {
+  it('answers with the page for a paginated file', () => {
+    const anchors = [
+      { start: 0, page: 1 },
+      { start: 40, page: 2 },
+    ];
+
+    expect(anchorLocationAt(anchors, 55)).toEqual({ page: 2 });
+  });
+
+  it('walks a heading back through its ancestors', () => {
+    const anchors = headingAnchors(
+      '# Handbook\nintro\n\n## Pricing\nrates\n\n### Refunds\nwithin 14 days',
+    );
+
+    expect(anchorLocationAt(anchors, anchors[2]!.start + 5)).toEqual({
+      headingPath: ['Handbook', 'Pricing', 'Refunds'],
+    });
+  });
+
+  it('skips a sibling heading rather than reading it as a parent', () => {
+    const anchors = headingAnchors('## Pricing\nrates\n\n## Refunds\nwithin 14 days');
+
+    expect(anchorLocationAt(anchors, anchors[1]!.start + 3)).toEqual({
+      headingPath: ['Refunds'],
+    });
   });
 });
 
