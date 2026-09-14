@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import * as vscode from 'vscode';
 import type { ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';
 import {
@@ -22,7 +22,7 @@ import {
   setContextPanelInstance,
   type ContextPanelProvider,
 } from '../features/trees/contextPanelProvider';
-import { MEMORY_STORE_KEY } from '../memory/memoryStore';
+import { setAccountMemoryStore, type AccountMemoryStore } from '../memory/accountMemoryStore';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import {
   HOST_CUSTOM_INSTRUCTIONS_KEY,
@@ -151,6 +151,10 @@ function makeHarness(
     },
   };
 }
+
+afterEach(() => {
+  setAccountMemoryStore(undefined);
+});
 
 describe('ChatStateManager local turn lifecycle', () => {
   beforeEach(() => {
@@ -1864,13 +1868,15 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('includes user-curated memory as untrusted turn data', async () => {
     const harness = makeHarness();
-    await harness.context.workspaceState.update(MEMORY_STORE_KEY, [
-      {
-        id: 'memory-1',
-        text: 'Prefer Rust for command-line tools',
-        createdAt: '2026-07-25T00:00:00.000Z',
-      },
-    ]);
+    setAccountMemoryStore({
+      cachedFacts: () => [
+        {
+          id: 'memory-1',
+          text: 'Prefer Rust for command-line tools',
+          createdAt: '2026-07-25T00:00:00.000Z',
+        },
+      ],
+    } as unknown as AccountMemoryStore);
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
       payload: { text: 'Implement the CLI command' },

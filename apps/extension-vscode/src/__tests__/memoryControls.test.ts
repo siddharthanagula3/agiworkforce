@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { setupCommands, type CommandDeps } from '../core/commandSetup';
-import { MEMORY_STORE_KEY, loadFacts } from '../memory/memoryStore';
+import { type MemoryFact } from '../memory/memoryStore';
+import {
+  setAccountMemoryStore,
+  type AccountMemoryState,
+  type AccountMemoryStore,
+} from '../memory/accountMemoryStore';
 
 type Handler = (...args: unknown[]) => unknown;
 
@@ -14,6 +19,37 @@ function makeWorkspaceState() {
     }),
     keys: () => [...store.keys()] as readonly string[],
   };
+}
+
+/**
+ * The account memory, standing in for the hosted store. `signedOut` drives the
+ * boundary the commands must state rather than fake success over.
+ */
+function installAccountMemory(options: { signedOut?: boolean; facts?: MemoryFact[] } = {}) {
+  let facts = [...(options.facts ?? [])];
+  const store = {
+    cachedFacts: () => facts,
+    signedOut: vi.fn(async () => options.signedOut === true),
+    contains: (text: string) =>
+      facts.some((fact) => fact.text.trim().toLowerCase() === text.trim().toLowerCase()),
+    refresh: vi.fn(
+      async (): Promise<AccountMemoryState> =>
+        options.signedOut === true
+          ? { status: 'signed-out', facts: [], detail: 'Sign in to AGI Cloud' }
+          : { status: 'ready', facts },
+    ),
+    add: vi.fn(async (text: string) => {
+      if (options.signedOut === true) return { applied: false, refusals: ['Sign in to AGI Cloud'] };
+      facts = [{ id: `id-${facts.length}`, text, createdAt: '2026-09-13T00:00:00.000Z' }, ...facts];
+      return { applied: true, refusals: [] };
+    }),
+    update: vi.fn(async () => ({ applied: true, refusals: [] })),
+    remove: vi.fn(async () => ({ applied: true, refusals: [] })),
+    clear: vi.fn(async () => ({ applied: true, refusals: [] })),
+    onDidChange: vi.fn(),
+  };
+  setAccountMemoryStore(store as unknown as AccountMemoryStore);
+  return { store, facts: () => facts };
 }
 
 function mockConfiguration(values: Record<string, unknown>): {
@@ -114,10 +150,13 @@ describe('memory enable/disable controls', () => {
     const showInputBox = vi.mocked(vscode.window.showInputBox);
     showInputBox.mockResolvedValue('I prefer Rust');
 
+    const account = installAccountMemory();
+
     await handlers.get('agi-workforce.memory.create')?.();
 
     expect(showInputBox).not.toHaveBeenCalled();
-    expect(loadFacts(workspaceState)).toHaveLength(0);
+    expect(account.facts()).toHaveLength(0);
+    expect(account.store.add).not.toHaveBeenCalled();
     expect(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0]).toContain(
       'Memory is off',
     );
@@ -131,10 +170,28 @@ describe('memory enable/disable controls', () => {
     vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Turn memory on' as never);
     vi.mocked(vscode.window.showInputBox).mockResolvedValue('I prefer Rust');
 
+    const account = installAccountMemory();
+
     await handlers.get('agi-workforce.memory.create')?.();
 
     expect(update).toHaveBeenCalledWith('memory.enabled', true, expect.anything());
-    expect(loadFacts(workspaceState).map((fact) => fact.text)).toEqual(['I prefer Rust']);
+    expect(account.store.add).toHaveBeenCalledWith('I prefer Rust');
+    expect(account.facts().map((fact) => fact.text)).toEqual(['I prefer Rust']);
+  });
+
+  it('says to sign in rather than reporting a memory as saved while signed out', async () => {
+    mockConfiguration({ 'memory.enabled': true });
+    const { handlers } = registerMemoryCommands(makeWorkspaceState());
+    const account = installAccountMemory({ signedOut: true });
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue('I prefer Rust');
+
+    await handlers.get('agi-workforce.memory.create')?.();
+
+    expect(account.store.add).not.toHaveBeenCalled();
+    expect(account.facts()).toHaveLength(0);
+    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls[0]?.[0]).toContain(
+      'Sign in to AGI Cloud',
+    );
   });
 
   it('toggles the setting both ways and refreshes the memory view', async () => {
@@ -154,11 +211,10 @@ describe('memory enable/disable controls', () => {
   it('keeps stored facts readable while memory is off', async () => {
     const values: Record<string, unknown> = { 'memory.enabled': false };
     mockConfiguration(values);
-    const workspaceState = makeWorkspaceState();
-    await workspaceState.update(MEMORY_STORE_KEY, [
-      { id: 'mem_1', text: 'Prefer Rust', createdAt: '2026-01-01T00:00:00.000Z' },
-    ]);
-    const { handlers } = registerMemoryCommands(workspaceState);
+    const { handlers } = registerMemoryCommands(makeWorkspaceState());
+    installAccountMemory({
+      facts: [{ id: 'mem_1', text: 'Prefer Rust', createdAt: '2026-01-01T00:00:00.000Z' }],
+    });
     const showQuickPick = vi.mocked(vscode.window.showQuickPick);
     showQuickPick.mockResolvedValue({ detail: 'list' } as never);
 
@@ -167,5 +223,20 @@ describe('memory enable/disable controls', () => {
     expect(showQuickPick.mock.calls[1]?.[0]).toEqual([
       expect.objectContaining({ label: 'Prefer Rust' }),
     ]);
+  });
+
+  it('offers sign-in instead of an empty memory list while signed out', async () => {
+    mockConfiguration({ 'memory.enabled': true });
+    const { handlers } = registerMemoryCommands(makeWorkspaceState());
+    installAccountMemory({ signedOut: true });
+    const showQuickPick = vi.mocked(vscode.window.showQuickPick);
+    showQuickPick.mockResolvedValue({ detail: 'list' } as never);
+
+    await handlers.get('agi-workforce.memory')?.();
+
+    expect(showQuickPick).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls[0]?.[0]).toContain(
+      'Sign in to AGI Cloud',
+    );
   });
 });

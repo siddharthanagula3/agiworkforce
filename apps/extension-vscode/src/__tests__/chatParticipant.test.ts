@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import * as vscode from 'vscode';
 import type { ThreadSummary } from '@agiworkforce/types';
 import {
@@ -17,7 +17,11 @@ import {
   setContextPanelInstance,
   type ContextPanelProvider,
 } from '../features/trees/contextPanelProvider';
-import { MEMORY_STORE_KEY } from '../memory/memoryStore';
+import {
+  getAccountMemoryStore,
+  setAccountMemoryStore,
+  type AccountMemoryStore,
+} from '../memory/accountMemoryStore';
 import { HOST_CUSTOM_INSTRUCTIONS_KEY } from '../features/instructions';
 
 const editorContext: EditorContext = {
@@ -76,6 +80,17 @@ function mockConfiguredModel(model: string): void {
       }) as unknown as vscode.WorkspaceConfiguration,
   );
 }
+
+/** The account memory the turn should carry, standing in for the hosted store. */
+function installAccountMemory(facts: Array<{ id: string; text: string; createdAt: string }>): void {
+  setAccountMemoryStore({
+    cachedFacts: () => facts,
+  } as unknown as AccountMemoryStore);
+}
+
+afterEach(() => {
+  setAccountMemoryStore(undefined);
+});
 
 describe('chat participant runtime input', () => {
   it('builds slash-command input using the actual production helper', () => {
@@ -639,7 +654,7 @@ describe('chat participant approval lifecycle', () => {
       HOST_CUSTOM_INSTRUCTIONS_KEY,
       'Prefer narrowly scoped changes.',
     );
-    await context.workspaceState.update(MEMORY_STORE_KEY, [
+    installAccountMemory([
       {
         id: 'memory-1',
         text: 'Prefer Rust for command-line tools',
@@ -698,7 +713,7 @@ describe('chat participant approval lifecycle', () => {
     await response;
   });
 
-  it('sends no memory context when memory is turned off, keeping the stored facts', async () => {
+  it('sends no memory context when memory is turned off, leaving the account memory intact', async () => {
     vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
       () =>
         ({
@@ -728,7 +743,7 @@ describe('chat participant approval lifecycle', () => {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
     const context = new vscode.ExtensionContext();
-    await context.workspaceState.update(MEMORY_STORE_KEY, [
+    installAccountMemory([
       {
         id: 'memory-1',
         text: 'Prefer Rust for command-line tools',
@@ -759,7 +774,7 @@ describe('chat participant approval lifecycle', () => {
     await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
     const turn = runtime.startTurn.mock.calls[0]![0] as { input: Array<{ text?: string }> };
     expect(turn.input.some((part) => part.text?.includes('untrusted_memory_context'))).toBe(false);
-    expect(context.workspaceState.get(MEMORY_STORE_KEY)).toHaveLength(1);
+    expect(getAccountMemoryStore()?.cachedFacts()).toHaveLength(1);
     for (const listener of listeners) {
       listener({
         type: 'turn_completed',

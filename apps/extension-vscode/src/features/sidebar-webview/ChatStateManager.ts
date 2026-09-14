@@ -42,6 +42,7 @@ import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import { fetchAccountIdentity, getAccountAuthState, type AccountIdentity } from '../../utils/api';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
+import { getAccountMemoryStore } from '../../memory/accountMemoryStore';
 import {
   enforceAgentModeConsent,
   setAgentEffortWithConsent,
@@ -2143,7 +2144,7 @@ export class ChatStateManager {
         const attachmentEntries = [...request.attachments];
         const attachmentInputs = attachmentEntries.map((entry) => entry.input);
         const customInstructionInput = buildCustomInstructionInput(this._context);
-        const memoryInput = buildMemoryContextInput(this._context.workspaceState);
+        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.cachedFacts() ?? []);
         const contextFiles = contextFilesForWorkspace(cwd);
         const startTurn = runtime.startTurn({
           threadId: thread.id,
