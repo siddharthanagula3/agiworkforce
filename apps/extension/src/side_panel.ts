@@ -143,7 +143,7 @@ import {
   unpair,
   type PairingState,
 } from './features/native-bridge/pairing';
-import { isMemoryItem, MEMORY_STORAGE_KEY } from './background/memory-bridge';
+import { ACCOUNT_MEMORY_CACHE_KEY, isAccountMemory } from './features/cloud-bridge/memoryClient';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
@@ -3295,6 +3295,19 @@ function injectStyles(): void {
     }
     .sp-drawer-memory-item-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-drawer-memory-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
+    .sp-drawer-memory-status { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; padding: 4px 0; }
+    .sp-drawer-memory-retry-btn {
+      align-self: flex-start;
+      margin-top: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      color: var(--agi-ext-text);
+      background: transparent;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .sp-drawer-memory-retry-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
 
     /* Respect the OS "reduce motion" setting. Five infinite animations (typing
        dots, spinners, pulse states) plus smooth scrolling ran unconditionally,
@@ -7228,7 +7241,7 @@ function buildUI(): void {
     el(
       'p',
       { class: 'sp-drawer-memory-help' },
-      'Saved facts and preferences reused across sessions. Stored on this device only.',
+      'Saved facts and preferences reused across sessions, shared with the AGI web and mobile apps on your account.',
     ),
   );
 
@@ -7280,8 +7293,21 @@ function buildUI(): void {
     { class: 'sp-drawer-memory-empty', id: 'sp-drawer-memory-empty', hidden: '' },
     'No saved memories yet.',
   );
+  const memoryStatus = el('div', {
+    class: 'sp-drawer-memory-status',
+    id: 'sp-drawer-memory-status',
+    role: 'status',
+    hidden: '',
+  });
+  const memoryRetryBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-retry-btn', id: 'sp-drawer-memory-retry-btn' },
+    'Try again',
+  ) as HTMLButtonElement;
   memorySection.appendChild(memoryList);
   memorySection.appendChild(memoryEmpty);
+  memorySection.appendChild(memoryStatus);
+  memorySection.appendChild(memoryRetryBtn);
   drawerBody.appendChild(memorySection);
 
   type DrawerMemoryMessageType = 'LIST_MEMORIES' | 'ADD_MEMORY' | 'UPDATE_MEMORY' | 'DELETE_MEMORY';
@@ -7345,7 +7371,7 @@ function buildUI(): void {
           confirmTimer = null;
         }
         sendDrawerMemoryMsg('DELETE_MEMORY', { id: item.id })
-          .then(() => refreshDrawerMemory())
+          .then((res) => applyDrawerMemoryWrite(res))
           .catch(() => {});
       } else {
         deleteBtn.classList.add('is-confirm');
@@ -7382,8 +7408,9 @@ function buildUI(): void {
         const txt = editArea.value.trim();
         if (!txt) return;
         (editSave as HTMLButtonElement).disabled = true;
-        await sendDrawerMemoryMsg('UPDATE_MEMORY', { id: item.id, content: txt });
-        await refreshDrawerMemory();
+        await applyDrawerMemoryWrite(
+          await sendDrawerMemoryMsg('UPDATE_MEMORY', { id: item.id, content: txt }),
+        );
       });
       editCancel.addEventListener('click', () => {
         editArea.remove();
@@ -7405,11 +7432,51 @@ function buildUI(): void {
     return li;
   }
 
+  function setDrawerMemoryStatus(text: string, retryable: boolean): void {
+    if (!text) {
+      memoryStatus.setAttribute('hidden', '');
+      memoryRetryBtn.setAttribute('hidden', '');
+      return;
+    }
+    memoryStatus.textContent = text;
+    memoryStatus.removeAttribute('hidden');
+    if (retryable) memoryRetryBtn.removeAttribute('hidden');
+    else memoryRetryBtn.setAttribute('hidden', '');
+  }
+
   async function refreshDrawerMemory(): Promise<void> {
     const res = await sendDrawerMemoryMsg('LIST_MEMORIES');
+    const status = typeof res['status'] === 'string' ? res['status'] : 'unavailable';
     const raw = Array.isArray(res['memories']) ? (res['memories'] as unknown[]) : [];
-    const items = raw.filter(isMemoryItem);
+    const items = raw.filter(isAccountMemory);
     clearChildren(memoryList);
+
+    if (status === 'signed-out') {
+      memoryEmpty.setAttribute('hidden', '');
+      memoryAddBtn.setAttribute('hidden', '');
+      showDrawerMemoryEditor(false);
+      setDrawerMemoryStatus('Sign in to your AGI account to read and save memories.', false);
+      return;
+    }
+
+    memoryAddBtn.removeAttribute('hidden');
+
+    if (status !== 'ready') {
+      memoryEmpty.setAttribute('hidden', '');
+      setDrawerMemoryStatus(
+        typeof res['error'] === 'string' ? res['error'] : 'Memory is unavailable right now.',
+        true,
+      );
+      return;
+    }
+
+    setDrawerMemoryStatus(
+      res['fromCache'] === true && typeof res['error'] === 'string'
+        ? `Showing the last synced copy · ${res['error']}`
+        : '',
+      res['fromCache'] === true,
+    );
+
     if (items.length === 0) {
       memoryEmpty.removeAttribute('hidden');
       return;
@@ -7418,6 +7485,14 @@ function buildUI(): void {
     for (const item of items) {
       memoryList.appendChild(buildDrawerMemoryItem(item as DrawerMemoryItem));
     }
+  }
+
+  async function applyDrawerMemoryWrite(res: Record<string, unknown>): Promise<void> {
+    if (res['success'] !== true && typeof res['error'] === 'string') {
+      setDrawerMemoryStatus(res['error'], true);
+      return;
+    }
+    await refreshDrawerMemory();
   }
 
   function showDrawerMemoryEditor(show: boolean): void {
@@ -7433,13 +7508,21 @@ function buildUI(): void {
     const content = memoryTextarea.value.trim();
     if (!content) return;
     (memorySaveBtn as HTMLButtonElement).disabled = true;
-    await sendDrawerMemoryMsg('ADD_MEMORY', { content });
-    showDrawerMemoryEditor(false);
+    const res = await sendDrawerMemoryMsg('ADD_MEMORY', { content });
     (memorySaveBtn as HTMLButtonElement).disabled = false;
-    await refreshDrawerMemory();
+    if (res['success'] === true) showDrawerMemoryEditor(false);
+    await applyDrawerMemoryWrite(res);
+  });
+  memoryRetryBtn.addEventListener('click', () => {
+    setDrawerMemoryStatus('', false);
+    void refreshDrawerMemory();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[MEMORY_STORAGE_KEY] && drawer.classList.contains('open')) {
+    if (
+      area === 'local' &&
+      changes[ACCOUNT_MEMORY_CACHE_KEY] &&
+      drawer.classList.contains('open')
+    ) {
       void refreshDrawerMemory();
     }
   });

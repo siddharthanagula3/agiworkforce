@@ -75,7 +75,13 @@ import {
 } from './features/background/scheduled-task-notifications';
 import { getPlatformPrompt } from './features/content/platform-prompts';
 import { migrateAutofillProfile } from './features/content/autofill/filler';
-import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
+import {
+  memoryList,
+  memoryAdd,
+  memoryUpdate,
+  memoryDelete,
+  type MemoryWriteResult,
+} from './background/memory-bridge';
 import { runAgentLoop } from './features/computer-use/agentLoop';
 import {
   ComputerUseRunCoordinator,
@@ -2715,6 +2721,15 @@ function senderTabAllowedToMutate(
   return sender?.tab?.id === targetTabId;
 }
 
+function memoryWriteResponse(result: MemoryWriteResult): ExtensionResponse {
+  return {
+    success: result.status === 'ready',
+    status: result.status,
+    memory: result.memory,
+    error: result.error,
+  } as ExtensionResponse;
+}
+
 function handleMessage(
   message: unknown,
   sender: chrome.runtime.MessageSender,
@@ -3853,8 +3868,14 @@ async function handleMessageAsync(
     }
 
     case 'LIST_MEMORIES' as ExtensionMessage['type']: {
-      const memories = await memoryList();
-      return { success: true, memories } as ExtensionResponse;
+      const listed = await memoryList();
+      return {
+        success: listed.status === 'ready',
+        status: listed.status,
+        memories: listed.memories,
+        fromCache: listed.fromCache,
+        error: listed.error,
+      } as ExtensionResponse;
     }
 
     case 'ADD_MEMORY' as ExtensionMessage['type']: {
@@ -3863,14 +3884,7 @@ async function handleMessageAsync(
       if (!addContent.trim()) {
         return { success: false, error: 'Memory content is required' } as ExtensionResponse;
       }
-      const added = await memoryAdd(addContent);
-      if (!added) {
-        return {
-          success: false,
-          error: 'Memory limit reached or content empty',
-        } as ExtensionResponse;
-      }
-      return { success: true, memory: added } as ExtensionResponse;
+      return memoryWriteResponse(await memoryAdd(addContent));
     }
 
     case 'UPDATE_MEMORY' as ExtensionMessage['type']: {
@@ -3883,11 +3897,7 @@ async function handleMessageAsync(
           error: 'Memory id and content are required',
         } as ExtensionResponse;
       }
-      const updated = await memoryUpdate(upId, upContent);
-      if (!updated) {
-        return { success: false, error: 'Memory not found' } as ExtensionResponse;
-      }
-      return { success: true, memory: updated } as ExtensionResponse;
+      return memoryWriteResponse(await memoryUpdate(upId, upContent));
     }
 
     case 'DELETE_MEMORY' as ExtensionMessage['type']: {
@@ -3896,11 +3906,7 @@ async function handleMessageAsync(
       if (!delId) {
         return { success: false, error: 'Memory id is required' } as ExtensionResponse;
       }
-      const deleted = await memoryDelete(delId);
-      return {
-        success: deleted,
-        error: deleted ? undefined : 'Memory not found',
-      } as ExtensionResponse;
+      return memoryWriteResponse(await memoryDelete(delId));
     }
 
     case 'GET_QUICK_MODE' as ExtensionMessage['type']: {
