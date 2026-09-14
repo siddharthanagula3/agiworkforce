@@ -129,6 +129,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._stateManager.syncActiveModelFromConfiguration();
   }
 
+  public pushActiveProject(): void {
+    this._stateManager.pushActiveProject();
+  }
+
   public pushAccountStatus(): void {
     void this._stateManager.pushAccountStatus();
   }

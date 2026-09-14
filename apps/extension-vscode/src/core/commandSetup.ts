@@ -436,7 +436,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   const projectDetailHost = {
     webOrigin: getCloudWebOrigin(),
     workspaceState: context.workspaceState,
-    onChanged: () => projectsTreeProvider.refresh(),
+    onChanged: () => {
+      projectsTreeProvider.refresh();
+      sidebarProvider.pushActiveProject();
+    },
   };
   const withProjectsWorkspace = async (
     act: (workspace: ProjectsWorkspace) => Promise<void>,
@@ -1955,6 +1958,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         `AGI Workforce: turns in this workspace no longer use "${active.name}".`,
       );
       projectsTreeProvider.refresh();
+      sidebarProvider.pushActiveProject();
     }),
     register('agi-workforce.showArtifacts', async () => {
       await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');

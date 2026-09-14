@@ -114,6 +114,40 @@ describe('projects tree', () => {
   });
 });
 
+describe('composer project strip', () => {
+  it('renders a hidden project strip with a control that stops using it', async () => {
+    const { getWebviewContent } = await import('../features/sidebar-webview/webviewContent');
+    const html = getWebviewContent(
+      {
+        cspSource: 'vscode-webview://mock',
+        asWebviewUri: (uri: { toString(): string }) => ({
+          toString: () => uri.toString().replace(/^file:/, 'https://mock'),
+        }),
+      } as unknown as Parameters<typeof getWebviewContent>[0],
+      {
+        toString: () => 'file:///mock/extension',
+        fsPath: '/mock/extension',
+      } as unknown as Parameters<typeof getWebviewContent>[1],
+      'test-nonce-base64url-32-chars-abcdef',
+      'auto',
+      'medium',
+      true,
+      false,
+    );
+
+    expect(html).toContain('id="projectContextStrip"');
+    expect(html).toContain('id="projectContextName"');
+    expect(html).toContain('aria-label="Stop using this project"');
+    expect(html).toContain("vscode.postMessage({ type: 'clearActiveProject' })");
+  });
+
+  it('accepts the clear message the strip sends', async () => {
+    const { parseWebviewMessage } = await import('../protocol/webviewMessages');
+
+    expect(parseWebviewMessage({ type: 'clearActiveProject' })?.type).toBe('clearActiveProject');
+  });
+});
+
 describe('active project prelude', () => {
   it('carries the instructions and says the knowledge files are not attached', async () => {
     const state = memento();
