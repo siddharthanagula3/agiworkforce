@@ -10,9 +10,9 @@ const panel = read('src/side_panel.ts');
 const background = read('src/background.ts');
 
 describe('autonomy chip', () => {
-  it('exists in the composer trust strip', () => {
+  it('exists in the composer chip row', () => {
     expect(panel).toContain("id: 'sp-autonomy-chip'");
-    expect(panel).toContain('trustStrip.appendChild(autonomyControl)');
+    expect(panel).toContain('composerBarStart.appendChild(autonomyControl)');
   });
 
   it('reads the same pref the authoritative gate reads', () => {
@@ -30,7 +30,9 @@ describe('autonomy chip', () => {
     expect(panel).toContain("t('spAutonomyAskFirst')");
     expect(panel).toContain("t('spAutonomyFullAccess')");
     expect(panel).toContain(".sp-autonomy-chip[data-mode='full']");
-    expect(panel).toContain('--agi-ext-warning-bg');
+    expect(panel).toMatch(
+      /\.sp-autonomy-chip\[data-mode='full'\] \{[^}]*color: var\(--agi-ext-warning\);/,
+    );
   });
 
   it('stays in sync with the Computer Use checkbox', () => {
