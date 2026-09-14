@@ -10,4 +10,16 @@ export type AppServerCapabilities = {
   checkpoints: boolean;
   worktrees: boolean;
   models: boolean;
+  /**
+   * v8 surfaces. Each is false on a host that does not implement that
+   * family, so a client hides the control instead of calling a method that
+   * answers "unavailable".
+   */
+  account?: boolean;
+  instructions?: boolean;
+  skills?: boolean;
+  plugins?: boolean;
+  hooks?: boolean;
+  settings?: boolean;
+  commands?: boolean;
 };
