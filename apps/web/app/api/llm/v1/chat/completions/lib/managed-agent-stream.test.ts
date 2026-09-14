@@ -235,6 +235,30 @@ async function* researchGenerator(): AsyncGenerator<Uint8Array> {
   yield encoder.encode('data: [DONE]\n\n');
 }
 
+/**
+ * A turn that hands a step to the user's machine: a device-step request, the
+ * awaiting-input transition, the pause, and then the stream ends. No terminal
+ * model answer, because the answer is waiting on the device.
+ */
+async function* deviceStepPauseGenerator(): AsyncGenerator<Uint8Array> {
+  const encoder = new TextEncoder();
+  const line = (delta: unknown) =>
+    encoder.encode(`data: ${JSON.stringify({ choices: [{ delta, index: 0 }] })}\n\n`);
+  yield line({ content: 'Let me read that file.' });
+  yield line({
+    x_device_step_request: {
+      tool_call_id: 'call-1',
+      name: 'device_read_file',
+      device_id: 'device-abc',
+      device_name: 'Work MacBook',
+      summary: 'Read notes.md in Documents',
+      input: { rootId: 'root-1', path: 'notes.md' },
+      expires_at_ms: 1_757_800_900_000,
+    },
+  });
+  yield encoder.encode('data: [DONE]\n\n');
+}
+
 async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -432,6 +456,39 @@ describe('managed agent stream', () => {
       expect.anything(),
       expect.objectContaining({ state: 'ready_for_review' }),
     );
+  });
+
+  it('settles a device pause once, and its resume once more', async () => {
+    events.length = 0;
+    finalize.mockClear();
+
+    const paused = await readAll(
+      buildManagedAgentStream({
+        generator: deviceStepPauseGenerator(),
+        processed,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+      }),
+    );
+
+    expect(paused).toContain('x_device_step_request');
+    expect(finalize).toHaveBeenCalledOnce();
+
+    // The resume is a second reservation on a second request, so the pair must
+    // settle twice in total and never twice for the same one.
+    await readAll(
+      buildManagedAgentStream({
+        generator: completedGenerator(),
+        processed,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_device_resume_completed',
+        cancellationReason: 'client_cancelled_tool_loop_device_resume',
+      }),
+    );
+
+    expect(finalize).toHaveBeenCalledTimes(2);
+    expect(events.filter((entry) => entry === 'settled')).toHaveLength(2);
   });
 
   it('prices a journaled in-request run from the same settlement that charged the user', async () => {

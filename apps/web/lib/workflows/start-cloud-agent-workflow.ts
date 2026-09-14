@@ -21,6 +21,7 @@ import {
   completeCloudAgentApprovalCheckpoint,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
+  saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import { makeUserConnectorExecutor } from '@/lib/user-connector-tools';
@@ -307,6 +308,22 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
         pendingToolCalls: checkpoint.pendingToolCalls,
         inputRequests: checkpoint.inputRequests,
         requestState: checkpoint.requestState,
+        events: checkpoint.events,
+      });
+      pauseCheckpointSaved = true;
+    },
+    onDeviceCheckpoint: async (checkpoint) => {
+      await saveCloudAgentDeviceCheckpoint(input.db, {
+        userId: input.userId,
+        runId: input.runId,
+        sessionId: checkpoint.sessionId,
+        turnId: checkpoint.turnId,
+        nextEventSequence: checkpoint.nextEventSequence,
+        completedSteps: checkpoint.completedSteps,
+        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        messages: checkpoint.messages,
+        pendingToolCalls: checkpoint.pendingToolCalls,
+        deviceStep: checkpoint.deviceStep,
         events: checkpoint.events,
       });
       pauseCheckpointSaved = true;

@@ -2,10 +2,12 @@ import { z } from 'zod';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
+import { MAX_DEVICE_STEP_RESULT_LENGTH } from '@agiworkforce/local-runtime-contract';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import type {
   ApprovalMode,
   ResumeApproval,
+  ResumeDeviceResult,
   ResumeInputResponse,
   ToolApprovalDecision,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
@@ -235,10 +237,24 @@ const resumeInputResponseSchemaCoversResponse: SameKeys<
 > = true;
 void resumeInputResponseSchemaCoversResponse;
 
+const ResumeDeviceResultSchema = z
+  .object({
+    toolCallId: z.string().min(1).max(256),
+    content: z.string().max(MAX_DEVICE_STEP_RESULT_LENGTH),
+    isError: z.boolean(),
+  })
+  .strict();
+const resumeDeviceResultSchemaCoversResult: SameKeys<
+  z.infer<typeof ResumeDeviceResultSchema>,
+  ResumeDeviceResult
+> = true;
+void resumeDeviceResultSchemaCoversResult;
+
 const ResumeApprovalSchema = z
   .object({
     approvals: z.array(ToolApprovalDecisionSchema).min(1).max(32).optional(),
     inputResponses: z.array(ResumeInputResponseSchema).min(1).max(32).optional(),
+    deviceResults: z.array(ResumeDeviceResultSchema).min(1).max(8).optional(),
     guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
   })
   .strict();
