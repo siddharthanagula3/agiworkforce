@@ -31,6 +31,8 @@ export function deepLinkDestination(url: string): string | null {
 
   if (link.target === 'chat') return `${CHAT_PATH}/${encodeURIComponent(link.id)}`;
   if (link.target === 'project') return `${PROJECT_PATH}/${encodeURIComponent(link.id)}`;
-  if (!isWebSettingsSection(link.id)) return null;
+  // A `agiworkforce-cloud://settings/...` link only ever arrives from the
+  // shell, so the desktop-only sections are routable here.
+  if (!isWebSettingsSection(link.id, true)) return null;
   return `${CHAT_PATH}?${SETTINGS_DEEP_LINK_QUERY_KEY}=${encodeURIComponent(link.id)}`;
 }

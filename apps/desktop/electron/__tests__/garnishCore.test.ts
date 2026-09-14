@@ -4,6 +4,7 @@ import {
   acceleratorIdentity,
   centeredUpperPosition,
   duplicateShortcutKeys,
+  isShortcutOff,
   isUsableAccelerator,
   normalizeShortcuts,
   parseSettingsFile,
@@ -64,11 +65,30 @@ describe('acceleratorIdentity', () => {
 
 describe('normalizeShortcuts', () => {
   it('rejects values that would make globalShortcut throw', () => {
-    for (const bad of ['', '   ', 'Alt + Space', 42, null, undefined, {}]) {
+    for (const bad of ['   ', 'Alt + Space', 42, null, undefined, {}]) {
       expect(normalizeShortcuts({ quickAskShortcut: bad }).quickAskShortcut).toBe(
         DEFAULT_SHORTCUTS.quickAskShortcut,
       );
     }
+  });
+
+  // An empty accelerator is the user picking "No shortcut" in the desktop
+  // settings panel. Springing it back to the default would turn a choice into
+  // a shortcut the user had just switched off.
+  it('keeps an empty accelerator, which is the user choosing no shortcut', () => {
+    expect(normalizeShortcuts({ quickAskShortcut: '' }).quickAskShortcut).toBe('');
+    expect(isShortcutOff('')).toBe(true);
+    expect(isShortcutOff(DEFAULT_SHORTCUTS.quickAskShortcut)).toBe(false);
+  });
+
+  it('never counts two switched-off shortcuts as a collision', () => {
+    const duplicates = duplicateShortcutKeys({
+      quickAskShortcut: '',
+      screenshotShortcut: '',
+      voiceShortcut: DEFAULT_SHORTCUTS.voiceShortcut,
+    });
+
+    expect(duplicates).toEqual([]);
   });
 
   it('accepts a well-formed accelerator', () => {
