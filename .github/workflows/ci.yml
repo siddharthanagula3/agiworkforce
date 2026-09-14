@@ -682,6 +682,7 @@ jobs:
           xvfb-run --auto-servernum cargo test -p agiworkforce-desktop --lib
           xvfb-run --auto-servernum cargo test -p agiworkforce-cli
           cargo test --workspace --lib --exclude agiworkforce-desktop --exclude agiworkforce-cli
+          cargo test -p agiworkforce-app-server -p agiworkforce-protocol
 
       - name: Trust boundaries (blocking)
         # The only other place this runs is the Guardian lane, which is
