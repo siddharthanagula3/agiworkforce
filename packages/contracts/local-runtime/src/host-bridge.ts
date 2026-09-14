@@ -33,6 +33,23 @@ export function parseDesktopDeepLink(url: string): DesktopDeepLink | null {
   return { target: target as DesktopDeepLinkTarget, id };
 }
 
+/**
+ * What a native menu item or a platform shortcut asks the page to do.
+ *
+ * These are the actions the shell cannot carry out itself: the sidebar and the
+ * shortcut sheet are the page's, not the window's. The shell owns the menu, the
+ * page owns the behaviour, and this union is the whole of what crosses between
+ * them. It is deliberately small; a command the page cannot honour is a dead
+ * menu item.
+ */
+export const HOST_COMMANDS = ['toggle-sidebar', 'show-keyboard-shortcuts'] as const;
+
+export type HostCommand = (typeof HOST_COMMANDS)[number];
+
+export function isHostCommand(value: unknown): value is HostCommand {
+  return typeof value === 'string' && (HOST_COMMANDS as readonly string[]).includes(value);
+}
+
 export interface HostNotifyRequest {
   title: string;
   body?: string;
@@ -86,6 +103,7 @@ export interface HostBridge {
    * a local command's output arriving line by line while it still runs.
    */
   onRuntimeEvent(callback: (event: DesktopRuntimeEvent) => void): () => void;
+  onHostCommand(callback: (command: HostCommand) => void): () => void;
   openExternal(url: string): Promise<void>;
   notify(request: HostNotifyRequest): Promise<void>;
   checkForUpdate(): Promise<HostUpdateAvailability>;

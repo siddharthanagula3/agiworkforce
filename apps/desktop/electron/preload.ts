@@ -9,8 +9,10 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  isHostCommand,
   type DesktopRuntimeEvent,
   type DesktopRuntimeResponse,
+  type HostCommand,
 } from '@agiworkforce/local-runtime-contract';
 import {
   ELECTRON_BRIDGE_COMMANDS,
@@ -66,6 +68,16 @@ const agiHost: ElectronHostBridge = {
     ipcRenderer.on(ELECTRON_IPC_CHANNELS.voiceHotkey, listener);
     return () => {
       ipcRenderer.removeListener(ELECTRON_IPC_CHANNELS.voiceHotkey, listener);
+    };
+  },
+
+  onHostCommand(callback: (command: HostCommand) => void): () => void {
+    const listener = (_event: unknown, command: unknown) => {
+      if (isHostCommand(command)) callback(command);
+    };
+    ipcRenderer.on(ELECTRON_IPC_CHANNELS.hostCommand, listener);
+    return () => {
+      ipcRenderer.removeListener(ELECTRON_IPC_CHANNELS.hostCommand, listener);
     };
   },
 

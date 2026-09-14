@@ -258,6 +258,7 @@ import {
   type ImageTranscriptRecovery,
 } from '../stores/image-transcript-recovery-store';
 import { toUserMessage } from '@/lib/user-error-message';
+import { onAppCommand } from '@shared/lib/app-commands';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 
 // A fresh [] each render changes the identity every time and defeats the
@@ -1071,13 +1072,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   // Listen for sidebar-dispatched events so keyboard shortcuts and Cmd+K still work
   // regardless of which component dispatches them.
   useEffect(() => {
-    const openSearch = () => setSearchDialogOpen(true);
-    const openShortcuts = () => setKeyboardShortcutsOpen(true);
-    window.addEventListener('agi:open-search', openSearch);
-    window.addEventListener('agi:open-shortcuts', openShortcuts);
+    const stopSearch = onAppCommand('open-search', () => setSearchDialogOpen(true));
+    const stopShortcuts = onAppCommand('open-shortcuts', () => setKeyboardShortcutsOpen(true));
     return () => {
-      window.removeEventListener('agi:open-search', openSearch);
-      window.removeEventListener('agi:open-shortcuts', openShortcuts);
+      stopSearch();
+      stopShortcuts();
     };
   }, []);
 
@@ -5006,6 +5005,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       >
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]">
           <div
+            data-app-header=""
             className={cn(
               'relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
               isEmptyChat

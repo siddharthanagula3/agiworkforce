@@ -211,11 +211,27 @@ export function centeredUpperPosition(
 
 export interface GarnishPreferences {
   launchAtLogin: boolean;
+  /**
+   * Chromium's zoom level, not a percentage: each step is a factor of 1.2, and
+   * 0 is actual size. Held here so the window opens at the size the user last
+   * chose instead of resetting every launch.
+   */
+  zoomLevel: number;
 }
 
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
   launchAtLogin: false,
+  zoomLevel: 0,
 };
+
+export const ZOOM_LEVEL_STEP = 1;
+export const MIN_ZOOM_LEVEL = -4;
+export const MAX_ZOOM_LEVEL = 6;
+
+export function clampZoomLevel(level: number): number {
+  if (!Number.isFinite(level)) return DEFAULT_PREFERENCES.zoomLevel;
+  return Math.min(MAX_ZOOM_LEVEL, Math.max(MIN_ZOOM_LEVEL, level));
+}
 
 export function normalizePreferences(raw: unknown): GarnishPreferences {
   const source =
@@ -225,6 +241,10 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       typeof source['launchAtLogin'] === 'boolean'
         ? source['launchAtLogin']
         : DEFAULT_PREFERENCES.launchAtLogin,
+    zoomLevel:
+      typeof source['zoomLevel'] === 'number'
+        ? clampZoomLevel(source['zoomLevel'])
+        : DEFAULT_PREFERENCES.zoomLevel,
   };
 }
 

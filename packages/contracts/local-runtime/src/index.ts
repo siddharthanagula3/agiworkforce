@@ -148,14 +148,17 @@ export type {
 export {
   DESKTOP_DEEP_LINK_SCHEME,
   DESKTOP_DEEP_LINK_TARGETS,
+  HOST_COMMANDS,
   desktopDeepLink,
   getHostBridge,
+  isHostCommand,
   parseDesktopDeepLink,
 } from './host-bridge';
 export type {
   DesktopDeepLink,
   DesktopDeepLinkTarget,
   HostBridge,
+  HostCommand,
   HostNotifyRequest,
   HostUpdateAvailability,
 } from './host-bridge';
