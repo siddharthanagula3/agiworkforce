@@ -406,7 +406,7 @@ export interface MessageMetadata {
 export interface MessageToolEntry {
   id?: string;
   name: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'awaiting_approval';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'awaiting_approval' | 'awaiting_device';
   durationMs?: number;
   args?: string;
   parameters?: Record<string, unknown>;
@@ -424,6 +424,10 @@ export interface MessageToolEntry {
   result?: string;
   /** Playful action phrase shown in the timeline running-state header (e.g. "Running code"). */
   statusPhrase?: string;
+  /** Host-authored one line naming what a device step runs and where. */
+  summary?: string;
+  /** Which machine a device step is waiting on, for the surfaces that are not it. */
+  deviceName?: string;
 }
 
 export interface Message {

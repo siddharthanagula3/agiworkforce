@@ -36,6 +36,7 @@ import {
   type ConnectorConnectRequest,
 } from '../../lib/connector-connect-required';
 import { ConnectorConnectCard } from '../ConnectorConnectCard';
+import { isDesktopHost } from '@/features/desktop-host';
 
 function getFileName(args?: string): string | null {
   if (!args) return null;
@@ -158,9 +159,13 @@ export function humanizeToolName(
 export interface ToolEntry {
   id?: string;
   name: string;
-  status: 'running' | 'completed' | 'failed' | 'pending' | 'awaiting_approval';
+  status: 'running' | 'completed' | 'failed' | 'pending' | 'awaiting_approval' | 'awaiting_device';
   durationMs?: number;
   toolCallId?: string;
+  /** Host-authored one line naming what a device step runs and where. */
+  summary?: string;
+  /** Which machine a device step is waiting on. */
+  deviceName?: string;
   requiresApproval?: boolean;
   args?: string;
   parameters?: Record<string, unknown>;
@@ -211,6 +216,8 @@ function toToolCallStatus(status: ToolEntry['status']): ToolCallStatus {
       return 'error';
     case 'awaiting_approval':
       return 'awaiting_approval';
+    case 'awaiting_device':
+      return 'awaiting_device';
     default:
       return 'pending';
   }
@@ -389,7 +396,8 @@ function TimelineStepRow({
 
   const connectRequest = useMemo(() => findConnectRequest(tool), [tool]);
 
-  const humanLabel = humanizeToolName(tool.name, tool.args, tool.parameters, tool.statusPhrase);
+  const humanLabel =
+    tool.summary ?? humanizeToolName(tool.name, tool.args, tool.parameters, tool.statusPhrase);
   const displayToolCall: ToolCall = connectRequest
     ? { ...withoutRawOutput(toolCall), name: humanLabel }
     : { ...toolCall, name: humanLabel };
@@ -765,6 +773,14 @@ function ToolTimeline({
                         result: tool.result,
                         error: tool.error,
                         requiresApproval: tool.requiresApproval,
+                        ...(tool.deviceName
+                          ? {
+                              deviceStep: {
+                                deviceName: tool.deviceName,
+                                onThisDevice: isDesktopHost(),
+                              },
+                            }
+                          : {}),
                       };
                       const attachSources =
                         !sourcesAttached &&

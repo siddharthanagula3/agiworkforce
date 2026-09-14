@@ -1,4 +1,3 @@
-
 import { ToolCallCard as PackageToolCallCard, detectCodeBlock } from '@agiworkforce/unified-chat';
 
 export { detectCodeBlock };
@@ -9,6 +8,7 @@ export type ToolCallStatus =
   | 'complete'
   | 'error'
   | 'awaiting_approval'
+  | 'awaiting_device'
   | 'cancelled';
 
 export interface ToolCall {
@@ -24,6 +24,8 @@ export interface ToolCall {
   completedAt?: string;
   durationMs?: number;
   requiresApproval?: boolean;
+  /** Names the machine a device step is waiting on, and whether it is this one. */
+  deviceStep?: { deviceName: string; onThisDevice: boolean };
   approved?: boolean;
   approvedAt?: string;
   defaultExpanded?: boolean;
@@ -56,6 +58,7 @@ export function ToolCallCard({
       name={toolCall.name}
       status={toolCall.status}
       requiresApproval={toolCall.requiresApproval}
+      {...(toolCall.deviceStep ? { deviceStep: toolCall.deviceStep } : {})}
       args={toolCall.parameters}
       result={toolCall.result}
       error={toolCall.error}
