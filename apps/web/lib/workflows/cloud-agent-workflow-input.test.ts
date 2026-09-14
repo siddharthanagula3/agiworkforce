@@ -363,6 +363,7 @@ describe('cloud agent workflow input', () => {
           round: 1,
         },
       ],
+      deviceResults: [{ toolCallId: 'call-3', content: 'file contents', isError: false }],
       guidance: 'Retry with the corrected input',
     };
     const fullContinuation: Required<NonNullable<CloudAgentWorkflowInput['continuation']>> = {

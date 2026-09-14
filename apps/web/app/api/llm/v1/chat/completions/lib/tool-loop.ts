@@ -104,6 +104,14 @@ import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
 import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import { isCloudCodeExecutionEnabled } from '@/lib/server/code-execution-policy';
+import {
+  DEVICE_STEP_TTL_MINUTES,
+  DeviceStepRefused,
+  describeDeviceStep,
+  isDeviceStepTool,
+  planDeviceStep,
+  type DesktopHostDeclaration,
+} from '@agiworkforce/local-runtime-contract';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
@@ -340,10 +348,18 @@ export interface ResumeInputResponse {
   round: number;
 }
 
+export interface ResumeDeviceResult {
+  toolCallId: string;
+  content: string;
+  isError: boolean;
+}
+
 export interface ResumeApproval {
   approvals?: ToolApprovalDecision[];
   /** Responses to a prior MCP `input_required` (MRTR) pause, per paused call. */
   inputResponses?: ResumeInputResponse[];
+  /** What the user's own machine produced for a prior device-step pause. */
+  deviceResults?: ResumeDeviceResult[];
   guidance?: string;
 }
 
@@ -377,6 +393,26 @@ export interface ToolLoopInputCheckpoint {
   inputRequests: Record<string, Record<string, unknown>>;
   /** Host-owned per-call continuation metadata ({ requestState?, round }). */
   requestState: Record<string, { requestState?: string; round: number }>;
+}
+
+export interface ToolLoopDeviceCheckpoint {
+  sessionId: string;
+  turnId: string;
+  nextEventSequence: number;
+  completedSteps: number;
+  events: AgentEventEnvelope[];
+  messages: ProcessedRequest['llmRequest']['messages'];
+  pendingToolCalls: Array<{
+    id: string;
+    qualifiedName: string;
+    args: Record<string, unknown>;
+  }>;
+  /** The one device that may answer this pause, and what it was asked to do. */
+  deviceStep: {
+    deviceId: string;
+    deviceName: string;
+    steps: Array<{ toolCallId: string; summary: string }>;
+  };
 }
 
 export interface ToolLoopInvocationCheckpoint {
@@ -504,6 +540,12 @@ export interface ToolLoopOptions {
   onApprovalCheckpoint?: (checkpoint: ToolLoopApprovalCheckpoint) => Promise<void>;
   onInputCheckpoint?: (checkpoint: ToolLoopInputCheckpoint) => Promise<void>;
   onInvocationCheckpoint?: (checkpoint: ToolLoopInvocationCheckpoint) => Promise<void>;
+  /**
+   * Persist a pause on a step only the user's own machine can carry out.
+   * Without it a device call cannot suspend, and the model is told so rather
+   * than left waiting for a device that was never asked.
+   */
+  onDeviceCheckpoint?: (checkpoint: ToolLoopDeviceCheckpoint) => Promise<void>;
   /**
    * Persist the run when the cumulative step budget is spent. Supplying it
    * turns the step-limit exit from a permanent failure into a durable pause;
@@ -827,6 +869,37 @@ function toolInputRequestEvent(
             connector_id: connectorId,
             input_requests: inputRequests,
             round,
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+function deviceStepRequestEvent(
+  toolId: string,
+  toolName: string,
+  deviceId: string,
+  deviceName: string,
+  summary: string,
+  input: Record<string, unknown>,
+  expiresAtMs: number,
+  responseModel: string,
+): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_device_step_request: {
+            tool_call_id: toolId,
+            name: toolName,
+            device_id: deviceId,
+            device_name: deviceName,
+            summary,
+            input,
+            expires_at_ms: expiresAtMs,
           },
         },
         index: 0,
@@ -1950,6 +2023,7 @@ export function isToolOffered(
   if (isManagedOfficeFileTool(qualifiedName)) {
     return availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME);
   }
+  if (isDeviceStepTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (
     isExecutionTool(qualifiedName) ||
     isUrlFetchTool(qualifiedName) ||
@@ -2288,6 +2362,7 @@ export async function* runToolLoop(
     });
   }
 
+  const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const mcpTools = options.mcpTools ?? [];
   const openAiTools: unknown[] = mcpTools.map(toOpenAiToolDef);
   const availableTools = new Set([
@@ -2346,6 +2421,14 @@ export async function* runToolLoop(
     toolCall: PendingToolCall,
     batch: readonly PendingToolCall[] = [],
   ): ToolCallGate {
+    // A device step is authorized on the device, by the permission prompt the
+    // local runtime raises before it runs anything. Asking a second time in the
+    // chat would gate the same action twice and, because a turn holds only one
+    // pause, would leave the step unreachable behind its own approval.
+    if (deviceHost && isDeviceStepTool(toolCall.qualifiedName)) {
+      return { verdict: 'allow', reason: 'auto_approval_mode' };
+    }
+
     const saved = connectorPermissions.levelFor(toolCall.qualifiedName);
     if (saved === 'deny') return { verdict: 'deny', reason: 'blocked_by_user_permission' };
 
@@ -3605,10 +3688,14 @@ export async function* runToolLoop(
       const resumeInputByCallId = new Map(
         (options.resume.inputResponses ?? []).map((entry) => [entry.toolCallId, entry] as const),
       );
+      const resumeDeviceByCallId = new Map(
+        (options.resume.deviceResults ?? []).map((entry) => [entry.toolCallId, entry] as const),
+      );
 
       for (const referencedId of [
         ...resumeApprovals.map((a) => a.toolCallId),
         ...resumeInputByCallId.keys(),
+        ...resumeDeviceByCallId.keys(),
       ]) {
         if (!pendingIds.has(referencedId)) {
           yield encoder.encode(
@@ -3645,6 +3732,28 @@ export async function* runToolLoop(
       const toRun: PendingToolCall[] = [];
       for (const p of pending) {
         if (alreadyResolved.has(p.id)) continue;
+        const deviceResult = resumeDeviceByCallId.get(p.id);
+        if (deviceResult) {
+          // The step already ran, on the machine that was asked. What comes back
+          // is the tool result itself, so nothing re-executes here.
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'device-step-resolved',
+              toolCallId: p.id,
+              outcome: deviceResult.isError ? 'failed' : 'completed',
+            }),
+          );
+          const content = await applyToolResultSecretPolicy(
+            options.userId,
+            p.qualifiedName,
+            deviceResult.content,
+          );
+          yield encoder.encode(
+            toolResultEvent(p.id, p.qualifiedName, content, deviceResult.isError, responseModel),
+          );
+          messages.push({ role: 'tool', content, tool_call_id: p.id });
+          continue;
+        }
         if (resumeInputByCallId.has(p.id)) {
           // An MRTR round: this call already ran and paused for input. Re-run the
           // identical call with the collected responses, still enforcing the live
@@ -4179,9 +4288,19 @@ export async function* runToolLoop(
       }));
       const blockedCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'deny');
       const approvalCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'ask');
-      const autoRunCalls = gatedCalls
+      const allowedCalls = gatedCalls
         .filter((entry) => entry.gate.verdict === 'allow')
         .map((entry) => entry.tc);
+      // A device step never runs here: it runs on the user's machine. Splitting
+      // it out before execution is what keeps the cloud from ever holding a path
+      // on that disk.
+      const deviceCalls = deviceHost
+        ? allowedCalls.filter((call) => isDeviceStepTool(call.qualifiedName))
+        : [];
+      const autoRunCalls =
+        deviceCalls.length > 0
+          ? allowedCalls.filter((call) => !isDeviceStepTool(call.qualifiedName))
+          : allowedCalls;
 
       for (const { tc, gate } of blockedCalls) {
         const escalationDenied = gate.reason === 'lethal_trifecta';
@@ -4262,6 +4381,122 @@ export async function* runToolLoop(
           autoRunCalls.every((call) => isMapSearchTool(call.qualifiedName))
         ) {
           yield* flushTerminal('end-turn');
+          return;
+        }
+      }
+
+      if (deviceCalls.length > 0 && deviceHost) {
+        const planned: Array<{
+          tc: PendingToolCall;
+          summary: string;
+          input: Record<string, unknown>;
+        }> = [];
+        for (const tc of deviceCalls) {
+          let refusal: string | null = null;
+          try {
+            const step = planDeviceStep(tc.qualifiedName, tc.args, deviceHost.roots);
+            planned.push({
+              tc,
+              summary: describeDeviceStep(step, deviceHost.roots),
+              input: { ...step } as Record<string, unknown>,
+            });
+          } catch (error) {
+            refusal =
+              error instanceof DeviceStepRefused
+                ? error.message
+                : 'That step could not be sent to your device.';
+          }
+          // A pause can hold only one boundary per step, and an approval already
+          // claims it. The model is told why rather than left with a call that
+          // silently never ran, so it can ask again once the approval is decided.
+          if (!refusal && approvalCalls.length > 0) {
+            refusal =
+              'This turn is waiting on an approval, so the step was not sent to your device. Ask again after the approval is decided.';
+          }
+          if (!refusal && !options.onDeviceCheckpoint) {
+            refusal = 'This turn cannot pause for your device. Ask again in a new message.';
+          }
+          if (refusal) {
+            const content = await applyToolResultSecretPolicy(
+              options.userId,
+              tc.qualifiedName,
+              refusal,
+            );
+            yield encoder.encode(
+              toolResultEvent(tc.id, tc.qualifiedName, content, true, responseModel),
+            );
+            messages.push({ role: 'tool', content, tool_call_id: tc.id });
+            planned.length = 0;
+          }
+        }
+
+        if (planned.length > 0 && options.onDeviceCheckpoint) {
+          const expiresAtMs = Date.now() + DEVICE_STEP_TTL_MINUTES * 60_000;
+          const deviceChunks: Uint8Array[] = [];
+          const deviceEvents: AgentEventEnvelope[] = [];
+          for (const { tc, summary, input } of planned) {
+            deviceChunks.push(
+              encoder.encode(
+                deviceStepRequestEvent(
+                  tc.id,
+                  tc.qualifiedName,
+                  deviceHost.deviceId,
+                  deviceHost.deviceName,
+                  summary,
+                  input,
+                  expiresAtMs,
+                  responseModel,
+                ),
+              ),
+            );
+            const emitted = eventStream.emitWithEnvelope({
+              type: 'device-step-requested',
+              toolCallId: tc.id,
+              toolName: tc.qualifiedName,
+              deviceId: deviceHost.deviceId,
+              deviceName: deviceHost.deviceName,
+              summary,
+              input: toAgentEventJson(input),
+              expiresAtMs,
+            });
+            deviceEvents.push(emitted.envelope);
+            deviceChunks.push(encoder.encode(emitted.sse));
+          }
+          const previousDeviceState = taskState;
+          taskState = 'awaiting_input';
+          const deviceStateEmitted = eventStream.emitWithEnvelope({
+            type: 'task-state-changed',
+            taskId,
+            state: 'awaiting_input',
+            ...(previousDeviceState !== undefined ? { previousState: previousDeviceState } : {}),
+            summary: 'The agent is waiting for a step to run on your device.',
+          });
+          deviceEvents.push(deviceStateEmitted.envelope);
+          deviceChunks.push(encoder.encode(deviceStateEmitted.sse));
+          const devicePaused = eventStream.emitWithEnvelope({
+            type: 'lifecycle',
+            phase: 'paused',
+          });
+          deviceEvents.push(devicePaused.envelope);
+          deviceChunks.push(encoder.encode(devicePaused.sse));
+
+          await options.onDeviceCheckpoint({
+            sessionId,
+            turnId,
+            nextEventSequence: eventStream.nextSequence(),
+            completedSteps: step,
+            events: deviceEvents,
+            messages: messages.map((message) => ({ ...message })),
+            pendingToolCalls: planned.map(({ tc }) => ({ ...tc, args: { ...tc.args } })),
+            deviceStep: {
+              deviceId: deviceHost.deviceId,
+              deviceName: deviceHost.deviceName,
+              steps: planned.map(({ tc, summary }) => ({ toolCallId: tc.id, summary })),
+            },
+          });
+
+          for (const chunk of deviceChunks) yield chunk;
+          yield encoder.encode(sseDone());
           return;
         }
       }
