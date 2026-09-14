@@ -26,8 +26,7 @@ vi.mock('@/lib/mcp-tool-executor', async () => {
   };
 });
 
-import { isToolOffered, runToolLoop, type ConnectorToolExecutor } from './tool-loop';
-import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 
 function sseStreamFrom(lines: string[]): ReadableStream {
@@ -157,7 +156,7 @@ describe('runToolLoop, device step boundary', () => {
     expect(output).toContain('x_device_step_request');
     expect(onDeviceCheckpoint).toHaveBeenCalledOnce();
 
-    const checkpoint = onDeviceCheckpoint.mock.calls[0]![0] as unknown as {
+    const checkpoint = (onDeviceCheckpoint.mock.calls as unknown as unknown[][])[0]![0] as {
       deviceStep: { deviceId: string; steps: Array<{ toolCallId: string; summary: string }> };
       pendingToolCalls: Array<{ id: string }>;
     };

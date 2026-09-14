@@ -1,3 +1,4 @@
+import { isDeviceStepTool } from '@agiworkforce/local-runtime-contract';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
@@ -21,6 +22,7 @@ export interface ToolLoopInputClassification {
   hasSkillTools: boolean;
   hasOfficeFileTools: boolean;
   hasMapSearchTools: boolean;
+  hasDeviceStepTools: boolean;
   shouldRun: boolean;
   approvalMode: ToolLoopApprovalMode;
 }
@@ -48,10 +50,7 @@ export function functionToolName(tool: unknown): string {
  * and connector tools still force manual on their own: they are undeclared in
  * `PLATFORM_TOOL_METADATA`, so nothing auto-approves them under either policy.
  */
-function anyToolNeedsApproval(
-  names: readonly string[],
-  policy: ToolApprovalPolicy,
-): boolean {
+function anyToolNeedsApproval(names: readonly string[], policy: ToolApprovalPolicy): boolean {
   return names.some((name) => !policyAutoApprovesTool(policy, name));
 }
 
@@ -68,6 +67,10 @@ export function classifyToolLoopInputs(
   const hasSkillTools = names.includes(SKILL_TOOL_NAME);
   const hasOfficeFileTools = names.some(isManagedOfficeFileTool);
   const hasMapSearchTools = names.some(isMapSearchTool);
+  // A device step is carried out by the user's own machine while the loop is
+  // suspended. Without the loop there is nothing to suspend, and the raw tool
+  // call would reach the client as a call nobody runs.
+  const hasDeviceStepTools = names.some(isDeviceStepTool);
 
   return {
     hasMcpTools,
@@ -77,6 +80,7 @@ export function classifyToolLoopInputs(
     hasSkillTools,
     hasOfficeFileTools,
     hasMapSearchTools,
+    hasDeviceStepTools,
     shouldRun:
       hasMcpTools ||
       hasExecutionTools ||
@@ -84,7 +88,8 @@ export function classifyToolLoopInputs(
       hasWebSearchTools ||
       hasSkillTools ||
       hasOfficeFileTools ||
-      hasMapSearchTools,
+      hasMapSearchTools ||
+      hasDeviceStepTools,
     approvalMode:
       hasMcpTools ||
       anyToolNeedsApproval(

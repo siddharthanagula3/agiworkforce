@@ -28,9 +28,20 @@ describe('classifyToolLoopInputs', () => {
       hasSkillTools: false,
       hasOfficeFileTools: false,
       hasMapSearchTools: false,
+      hasDeviceStepTools: false,
       shouldRun: true,
       approvalMode: 'manual',
     });
+  });
+
+  it('runs the loop for a device step, which only a suspended loop can carry out', () => {
+    const result = classifyToolLoopInputs(
+      [],
+      [{ type: 'function', function: { name: 'device_read_file', parameters: {} } }],
+      ASK_EVERY_TIME,
+    );
+    expect(result.hasDeviceStepTools).toBe(true);
+    expect(result.shouldRun).toBe(true);
   });
 
   it('still asks for web search when the account auto-approves read-only work', () => {
