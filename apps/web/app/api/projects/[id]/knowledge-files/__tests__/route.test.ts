@@ -7,12 +7,14 @@ const {
   mockExtractProjectKnowledgeFile,
   MockProjectKnowledgeExtractionError,
   mockResolveActiveOrganizationId,
+  mockSealProjectKnowledgeObject,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
   mockExtractProjectKnowledgeFile: vi.fn(),
   MockProjectKnowledgeExtractionError: class ProjectKnowledgeExtractionError extends Error {},
   mockResolveActiveOrganizationId: vi.fn(),
+  mockSealProjectKnowledgeObject: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -48,8 +50,15 @@ vi.mock('@/lib/server/project-knowledge-extraction', () => ({
   extractProjectKnowledgeFile: mockExtractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError: MockProjectKnowledgeExtractionError,
 }));
+vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  deleteProjectKnowledgeObject: vi.fn(),
+  sealProjectKnowledgeObject: mockSealProjectKnowledgeObject,
+}));
 
 import { GET, POST } from '@/app/api/projects/[id]/knowledge-files/route';
+
+const UPLOADED_KEY = 'knowledge-files/projects/proj-1/spec.pdf';
+const SEALED_KEY = 'knowledge-files/projects/proj-1/sealed/spec.pdf';
 
 const KB_FILE_ROW = {
   id: 'file-1',
@@ -128,7 +137,12 @@ describe('GET /api/projects/[id]/knowledge-files', () => {
 describe('POST /api/projects/[id]/knowledge-files', () => {
   beforeEach(() => {
     wireAuth();
-    mockExtractProjectKnowledgeFile.mockResolvedValue({ extractedText: null });
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: null,
+      objectKey: UPLOADED_KEY,
+      etag: '"etag-1"',
+    });
+    mockSealProjectKnowledgeObject.mockResolvedValue(SEALED_KEY);
   });
 
   it('returns 400 when required fields are missing', async () => {
@@ -191,6 +205,8 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
       extractedText: 'The launch date is October 4.',
+      objectKey: UPLOADED_KEY,
+      etag: '"etag-1"',
     });
 
     const res = await POST(
@@ -368,6 +384,68 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(mockExtractProjectKnowledgeFile).not.toHaveBeenCalled();
   });
 
+  it('stores the sealed key rather than the key the presigned url still names', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 1024,
+        checksumSha256: CHECKSUM,
+        sourceSurface: 'web',
+        storageUri: UPLOADED_KEY,
+      }),
+      routeContext('proj-1'),
+    );
+
+    expect(res.status).toBe(201);
+    expect(mockSealProjectKnowledgeObject).toHaveBeenCalledWith({
+      key: UPLOADED_KEY,
+      etag: '"etag-1"',
+    });
+    const insertCall = mockNeonQuery.mock.calls.find((call) =>
+      String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
+    );
+    expect(insertCall?.[1]).toContain(SEALED_KEY);
+    expect(insertCall?.[1]).not.toContain(UPLOADED_KEY);
+  });
+
+  it('refuses a source whose bytes changed between the inspection and the seal', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockSealProjectKnowledgeObject.mockResolvedValue(null);
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 1024,
+        checksumSha256: CHECKSUM,
+        sourceSurface: 'web',
+        storageUri: UPLOADED_KEY,
+      }),
+      routeContext('proj-1'),
+    );
+
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error?: { message?: string } };
+    expect(json.error?.message ?? '').toMatch(/changed during its safety check/i);
+    expect(
+      mockNeonQuery.mock.calls.some((call) =>
+        String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
+      ),
+    ).toBe(false);
+  });
+
   it('versions a same-name file with new content instead of duplicating it', async () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
     mockNeonQuery.mockResolvedValueOnce([{ count: 1 }]);
@@ -376,7 +454,11 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'kb-old', version: 1 }]);
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
     mockNeonQuery.mockResolvedValueOnce([]);
-    mockExtractProjectKnowledgeFile.mockResolvedValue({ extractedText: 'Corrected text.' });
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: 'Corrected text.',
+      objectKey: UPLOADED_KEY,
+      etag: '"etag-1"',
+    });
 
     const res = await POST(
       makePostRequest('proj-1', {

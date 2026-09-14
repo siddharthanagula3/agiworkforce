@@ -18,7 +18,10 @@ import {
   ProjectKnowledgeExtractionError,
 } from '@/lib/server/project-knowledge-extraction';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
-import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import {
+  deleteProjectKnowledgeObject,
+  sealProjectKnowledgeObject,
+} from '@/lib/server/project-knowledge-object-storage';
 import { recordModerationEvent } from '@/lib/moderation';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { ManagedCloudProjectKnowledgeRegisterRequestSchema } from '@agiworkforce/cloud-contracts';
@@ -37,7 +40,7 @@ function projectKnowledgeResponse(row: Record<string, unknown>, projectId: strin
   };
 }
 
-async function purgeRejectedKnowledgeUpload(
+async function purgeUploadedKnowledgeObject(
   userId: string,
   projectId: string,
   storageUri: string,
@@ -49,7 +52,7 @@ async function purgeRejectedKnowledgeUpload(
   } catch (deleteError) {
     logger.error(
       { err: deleteError, userId, projectId, objectKey },
-      '[knowledge-files] CRITICAL: could not delete a rejected upload from storage',
+      '[knowledge-files] CRITICAL: could not delete an uploaded object from storage',
     );
   }
 }
@@ -327,9 +330,9 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     if (!isSchemaNotReady(error)) throw error;
   }
 
-  let extractedText: string | null;
+  let extraction: Awaited<ReturnType<typeof extractProjectKnowledgeFile>>;
   try {
-    const extraction = await extractProjectKnowledgeFile({
+    extraction = await extractProjectKnowledgeFile({
       projectId,
       storageUri: body.storageUri.trim(),
       fileName: body.fileName.trim(),
@@ -347,7 +350,6 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
         documentId: `${projectId}:${body.checksumSha256.trim()}`,
       },
     });
-    extractedText = extraction.extractedText;
   } catch (error) {
     if (error instanceof ProjectKnowledgeExtractionError) {
       if (error.code === 'content_rejected' || error.code === 'known_illegal_media') {
@@ -362,7 +364,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
           },
           '[knowledge-files] rejected a project source that failed content inspection',
         );
-        await purgeRejectedKnowledgeUpload(userId, projectId, storageUri);
+        await purgeUploadedKnowledgeObject(userId, projectId, storageUri);
         recordModerationEvent({
           surface: 'upload',
           action: 'block',
@@ -385,6 +387,24 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     throw createError.internal('Failed to process the uploaded file');
   }
 
+  // The presigned PUT for the uploaded key stays writable for the rest of its
+  // ttl, so the inspected bytes are promoted to a key no upload route can name
+  // before any reader is pointed at them.
+  const sealedKey = await sealProjectKnowledgeObject({
+    key: extraction.objectKey,
+    etag: extraction.etag,
+  });
+  await purgeUploadedKnowledgeObject(userId, projectId, extraction.objectKey);
+  if (!sealedKey) {
+    logger.warn(
+      { userId, projectId, objectKey: extraction.objectKey, hadEtag: Boolean(extraction.etag) },
+      '[knowledge-files] rejected a project source whose bytes changed after inspection',
+    );
+    throw createError.validation(
+      'The uploaded file changed during its safety check. Upload it again.',
+    );
+  }
+
   let data: Record<string, unknown>;
   try {
     const [inserted] = await db.query<Record<string, unknown>>(
@@ -398,11 +418,11 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
         body.mimeType.trim(),
         body.byteCount,
         body.checksumSha256.trim(),
-        unreadableUploadSummary(body.mimeType, extractedText),
+        unreadableUploadSummary(body.mimeType, extraction.extractedText),
         body.sourceSurface,
         userId,
-        body.storageUri.trim(),
-        extractedText,
+        sealedKey,
+        extraction.extractedText,
         (supersedes?.version ?? 0) + 1,
         supersedes?.id ?? null,
       ],

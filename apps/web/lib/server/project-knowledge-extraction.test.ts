@@ -69,7 +69,7 @@ describe('extractProjectKnowledgeFile', () => {
         byteCount: data.byteLength,
         checksumSha256: checksum(data),
       }),
-    ).resolves.toEqual({ extractedText: 'Launch date: October 4.\nOwner: Ada.' });
+    ).resolves.toMatchObject({ extractedText: 'Launch date: October 4.\nOwner: Ada.' });
 
     expect(storageMocks.getBoundedPrivateObject).toHaveBeenCalledWith(
       'knowledge-files/projects/project-1/object.txt',
@@ -194,7 +194,7 @@ describe('extractProjectKnowledgeFile', () => {
         byteCount: data.byteLength,
         checksumSha256: checksum(data),
       }),
-    ).resolves.toEqual({ extractedText: null });
+    ).resolves.toMatchObject({ extractedText: null });
   });
 
   it('extracts an allowed text extension when the browser reports a generic MIME type', async () => {
@@ -213,7 +213,7 @@ describe('extractProjectKnowledgeFile', () => {
         byteCount: data.byteLength,
         checksumSha256: checksum(data),
       }),
-    ).resolves.toEqual({ extractedText: '# Finder upload\n\nStill text.' });
+    ).resolves.toMatchObject({ extractedText: '# Finder upload\n\nStill text.' });
   });
 
   it('extracts bounded page text from a real PDF-shaped object', async () => {
@@ -250,7 +250,7 @@ describe('extractProjectKnowledgeFile', () => {
         byteCount: data.byteLength,
         checksumSha256: checksum(data),
       }),
-    ).resolves.toEqual({ extractedText: 'Page one\n\nPage two' });
+    ).resolves.toMatchObject({ extractedText: 'Page one\n\nPage two' });
     expect(destroy).toHaveBeenCalledOnce();
   });
 

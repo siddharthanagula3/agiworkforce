@@ -7,12 +7,14 @@ const {
   mockExtractProjectKnowledgeFile,
   MockProjectKnowledgeExtractionError,
   mockResolveActiveOrganizationId,
+  mockSealProjectKnowledgeObject,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
   mockExtractProjectKnowledgeFile: vi.fn(),
   MockProjectKnowledgeExtractionError: class ProjectKnowledgeExtractionError extends Error {},
   mockResolveActiveOrganizationId: vi.fn(),
+  mockSealProjectKnowledgeObject: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -39,6 +41,10 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/server/project-knowledge-extraction', () => ({
   extractProjectKnowledgeFile: mockExtractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError: MockProjectKnowledgeExtractionError,
+}));
+vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  deleteProjectKnowledgeObject: vi.fn(),
+  sealProjectKnowledgeObject: mockSealProjectKnowledgeObject,
 }));
 
 import { POST } from '@/app/api/projects/[id]/knowledge-files/route';
@@ -101,11 +107,18 @@ describe('POST knowledge-files records why a file has no extracted text', () => 
   beforeEach(() => {
     mockNeonQuery.mockReset();
     mockExtractProjectKnowledgeFile.mockReset();
+    mockSealProjectKnowledgeObject.mockResolvedValue(
+      'knowledge-files/projects/proj-1/sealed/source.txt',
+    );
   });
 
   it('stores an image-specific not-readable summary instead of a bare null', async () => {
     wireInsertPath('Not readable: text is not extracted from images.');
-    mockExtractProjectKnowledgeFile.mockResolvedValue({ extractedText: null });
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: null,
+      objectKey: 'knowledge-files/projects/proj-1/source.txt',
+      etag: '"etag-1"',
+    });
 
     const res = await post('scan.png', 'image/png');
 
@@ -117,7 +130,11 @@ describe('POST knowledge-files records why a file has no extracted text', () => 
 
   it('stores a not-readable summary for a document that yielded no text', async () => {
     wireInsertPath(null);
-    mockExtractProjectKnowledgeFile.mockResolvedValue({ extractedText: null });
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: null,
+      objectKey: 'knowledge-files/projects/proj-1/source.txt',
+      etag: '"etag-1"',
+    });
 
     const res = await post('scanned.pdf', 'application/pdf');
 
@@ -129,7 +146,11 @@ describe('POST knowledge-files records why a file has no extracted text', () => 
 
   it('leaves the summary null when text was extracted', async () => {
     wireInsertPath(null);
-    mockExtractProjectKnowledgeFile.mockResolvedValue({ extractedText: 'Launch is October 4.' });
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: 'Launch is October 4.',
+      objectKey: 'knowledge-files/projects/proj-1/source.txt',
+      etag: '"etag-1"',
+    });
 
     const res = await post('launch.txt', 'text/plain');
 
