@@ -56,7 +56,7 @@ import {
 } from '@agiworkforce/provider-runtime';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import { IMAGE_GENERATION_PROVIDER_DEADLINE_MS } from '@/lib/deadline-policy';
-import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
+import { parseManagedMediaIdempotencyKey, type ManagedMediaSurface } from '@agiworkforce/utils';
 import {
   aiGeneratedHeaders,
   buildAiGeneratedProvenance,
@@ -1406,7 +1406,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   const estimatedCostMicrousd = estimateImageCostMicrousd(provider, n, quality, catalogModel.id);
   let reservation: ManagedUsageRequestReservation;
-  let sourceSurface: 'web' | 'mobile' | 'desktop';
+  let sourceSurface: ManagedMediaSurface;
   let organizationId: string | null;
   let scopedDb: Awaited<ReturnType<typeof getUserScopedDb>>['db'] | undefined;
   try {

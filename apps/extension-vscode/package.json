@@ -491,6 +491,89 @@
       {
         "command": "agi-workforce.openPathReference",
         "title": "AGI Workforce: Open File Reference"
+      },
+      {
+        "command": "agi-workforce.showProjects",
+        "title": "AGI Workforce: Show Projects",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "agi-workforce.refreshProjects",
+        "title": "AGI Workforce: Refresh Projects",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agi-workforce.openProjectsOnWeb",
+        "title": "AGI Workforce: Open Projects on Web",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agi-workforce.createProject",
+        "title": "AGI Workforce: New Project",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "agi-workforce.openProject",
+        "title": "AGI Workforce: Open Project"
+      },
+      {
+        "command": "agi-workforce.deleteProject",
+        "title": "AGI Workforce: Delete Project",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agi-workforce.useProjectInChat",
+        "title": "AGI Workforce: Use Project in This Chat",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "agi-workforce.clearActiveProject",
+        "title": "AGI Workforce: Stop Using a Project in This Chat",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "agi-workforce.showArtifacts",
+        "title": "AGI Workforce: Show Artifacts",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "agi-workforce.refreshArtifacts",
+        "title": "AGI Workforce: Refresh Artifacts",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agi-workforce.openArtifactsOnWeb",
+        "title": "AGI Workforce: Open Artifacts on Web",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agi-workforce.openArtifact",
+        "title": "AGI Workforce: Open Artifact"
+      },
+      {
+        "command": "agi-workforce.saveArtifactToWorkspace",
+        "title": "AGI Workforce: Save Artifact into Workspace",
+        "icon": "$(save)"
+      },
+      {
+        "command": "agi-workforce.openArtifactOnWeb",
+        "title": "AGI Workforce: Open Published Artifact",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "agi-workforce.showConnectors",
+        "title": "AGI Workforce: Show Connectors",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "agi-workforce.refreshConnectors",
+        "title": "AGI Workforce: Refresh Connectors",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agi-workforce.manageConnectors",
+        "title": "AGI Workforce: Manage Connectors",
+        "icon": "$(link-external)"
       }
     ],
     "walkthroughs": [
@@ -645,6 +728,26 @@
         },
         {
           "type": "tree",
+          "id": "agi-workforce.projects",
+          "name": "Projects",
+          "contextualTitle": "Projects"
+        },
+        {
+          "type": "tree",
+          "id": "agi-workforce.artifacts",
+          "name": "Artifacts",
+          "contextualTitle": "Artifacts",
+          "visibility": "collapsed"
+        },
+        {
+          "type": "tree",
+          "id": "agi-workforce.connectors",
+          "name": "Connectors",
+          "contextualTitle": "Connectors",
+          "visibility": "collapsed"
+        },
+        {
+          "type": "tree",
           "id": "agi-workforce.contextPanel",
           "name": "Context",
           "contextualTitle": "AI Context",
@@ -747,6 +850,31 @@
           "command": "agi-workforce.showScheduleRuns",
           "when": "view == agi-workforce.schedules && viewItem =~ /^schedule(Active|Paused)$/",
           "group": "inline@3"
+        },
+        {
+          "command": "agi-workforce.useProjectInChat",
+          "when": "view == agi-workforce.projects && viewItem =~ /^project(Archived)?$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "agi-workforce.deleteProject",
+          "when": "view == agi-workforce.projects && viewItem =~ /^project(Archived)?$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "agi-workforce.saveArtifactToWorkspace",
+          "when": "view == agi-workforce.artifacts && viewItem =~ /^artifact(Published)?$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "agi-workforce.openArtifactOnWeb",
+          "when": "view == agi-workforce.artifacts && viewItem == artifactPublished",
+          "group": "inline@2"
+        },
+        {
+          "command": "agi-workforce.manageConnectors",
+          "when": "view == agi-workforce.connectors && viewItem =~ /^connector(NeedsReauthorization)?$/",
+          "group": "inline@1"
         }
       ],
       "view/title": [
@@ -803,6 +931,41 @@
         {
           "command": "agi-workforce.openSchedulesOnWeb",
           "when": "view == agi-workforce.schedules",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agi-workforce.refreshProjects",
+          "when": "view == agi-workforce.projects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.createProject",
+          "when": "view == agi-workforce.projects",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agi-workforce.openProjectsOnWeb",
+          "when": "view == agi-workforce.projects",
+          "group": "navigation@3"
+        },
+        {
+          "command": "agi-workforce.refreshArtifacts",
+          "when": "view == agi-workforce.artifacts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.openArtifactsOnWeb",
+          "when": "view == agi-workforce.artifacts",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agi-workforce.refreshConnectors",
+          "when": "view == agi-workforce.connectors",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.manageConnectors",
+          "when": "view == agi-workforce.connectors",
           "group": "navigation@2"
         }
       ],
@@ -945,6 +1108,30 @@
         },
         {
           "command": "agi-workforce.showScheduleRuns",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.openProject",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.deleteProject",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.useProjectInChat",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.openArtifact",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.saveArtifactToWorkspace",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.openArtifactOnWeb",
           "when": "false"
         }
       ]
@@ -1197,6 +1384,7 @@
   },
   "dependencies": {
     "@agiworkforce/agent-core": "workspace:*",
+    "@agiworkforce/artifacts": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",

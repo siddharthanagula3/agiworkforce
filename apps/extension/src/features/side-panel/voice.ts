@@ -1,5 +1,10 @@
 import { setChild } from '../../dom-helpers';
 import { Mic, renderIcon } from '../../assets/icons';
+import {
+  DICTATION_LANGUAGE_KEY,
+  activeDictationLanguage,
+  languageLabel,
+} from './dictation-language';
 
 type SpeechRecognitionCtor = new () => {
   lang: string;
@@ -12,6 +17,11 @@ type SpeechRecognitionCtor = new () => {
   start(): void;
   stop(): void;
 };
+
+/** What the mic button says it will transcribe, so the choice is visible. */
+export function micTooltip(language: string | null): string {
+  return language ? `Voice input · ${languageLabel(language)}` : 'Voice input';
+}
 
 export function setupVoiceInput(
   micBtn: HTMLButtonElement,
@@ -32,6 +42,17 @@ export function setupVoiceInput(
 
   let recognition: InstanceType<SpeechRecognitionCtor> | null = null;
   let listening = false;
+  let language: string | null = null;
+
+  const refreshLanguage = async (): Promise<void> => {
+    language = await activeDictationLanguage();
+    if (!listening) micBtn.title = micTooltip(language);
+  };
+
+  void refreshLanguage();
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (area === 'sync' && DICTATION_LANGUAGE_KEY in changes) void refreshLanguage();
+  });
 
   micBtn.addEventListener('click', () => {
     if (listening) {
@@ -40,7 +61,9 @@ export function setupVoiceInput(
     }
 
     recognition = new SpeechRecognitionCtor();
-    recognition.lang = 'en-US';
+    // Left at the browser's own default when this profile names no language,
+    // rather than pinning a locale the user never chose.
+    if (language) recognition.lang = language;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
@@ -69,7 +92,7 @@ export function setupVoiceInput(
       if (document.body) {
         micBtn.classList.remove('active');
         micBtn.replaceChildren(renderIcon(Mic, 14));
-        micBtn.title = 'Voice input';
+        micBtn.title = micTooltip(language);
       }
       recognition = null;
     };

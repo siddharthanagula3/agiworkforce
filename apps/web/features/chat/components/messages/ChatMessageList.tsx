@@ -25,7 +25,7 @@ import { isAccountWideUsageBlock } from '@features/chat/stores/account-usage-blo
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
 import type { VariantInfo, VariantInfoByMessageId } from '@/features/chat/lib/messageThread';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
-import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
+import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { MessageBubble, type RegenerateModelOption } from './MessageBubble';
 import { openModelPicker } from '@features/chat/lib/model-picker-trigger';
 import type { ResearchPlanDecision } from '../research/ResearchActivity';
@@ -162,10 +162,7 @@ export interface ChatMessageListProps {
    */
   variantAnchorMessageId?: string | null;
   isConversationStreaming?: boolean;
-  onRegenerateImage?: (
-    messageId: string,
-    opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
-  ) => Promise<string>;
+  onRegenerateImage?: (messageId: string, opts: ImageRevisionRequest) => Promise<string>;
   onResumeVideo?: (messageId: string) => void;
   onRetryVideo?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
@@ -299,10 +296,7 @@ interface MessageGroupRowProps {
     recoveryAction: PaywallRecoveryAction,
   ) => void;
   onPaywallDismiss?: (messageId: string) => void;
-  onRegenerateImage?: (
-    messageId: string,
-    opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
-  ) => Promise<string>;
+  onRegenerateImage?: (messageId: string, opts: ImageRevisionRequest) => Promise<string>;
   onResumeVideo?: (messageId: string) => void;
   onRetryVideo?: (messageId: string) => void;
   speakingMessageId: string | null;
@@ -344,10 +338,7 @@ interface MessageRowProps {
     recoveryAction: PaywallRecoveryAction,
   ) => void;
   onPaywallDismiss?: (messageId: string) => void;
-  onRegenerateImage?: (
-    messageId: string,
-    opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
-  ) => Promise<string>;
+  onRegenerateImage?: (messageId: string, opts: ImageRevisionRequest) => Promise<string>;
   onResumeVideo?: (messageId: string) => void;
   onRetryVideo?: (messageId: string) => void;
   speakingMessageId: string | null;
@@ -591,8 +582,7 @@ const MessageRow = memo(function MessageRow({
     [paywall?.freeCapacity, onRegenerate, handleRegenerate],
   );
   const handleRegenerateImage = useCallback(
-    (opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string }) =>
-      onRegenerateImage!(message.id, opts),
+    (opts: ImageRevisionRequest) => onRegenerateImage!(message.id, opts),
     [onRegenerateImage, message.id],
   );
   const branchNavigation = useMemo(
@@ -1512,10 +1502,7 @@ const ChatMessageListComponent = ({
   );
 
   const handleRegenerateImage = useCallback(
-    (
-      messageId: string,
-      opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
-    ) => onRegenerateImage!(messageId, opts),
+    (messageId: string, opts: ImageRevisionRequest) => onRegenerateImage!(messageId, opts),
     [onRegenerateImage],
   );
 

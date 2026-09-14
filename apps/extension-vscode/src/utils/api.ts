@@ -6,6 +6,7 @@ import { URL } from 'url';
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { TierInfoSchema, type TierInfoResponse } from '../protocol/apiResponses';
+import { notifyAccountTierMayHaveChanged } from '../integrations/tierRevalidation';
 import {
   effectivePlanTier,
   normalizeUsagePercentage,
@@ -288,6 +289,7 @@ export function parseCloudCompletionError(statusCode: number, body: string): Err
     typeof parsed['requiredTier'] === 'string' &&
     typeof parsed['reason'] === 'string'
   ) {
+    notifyAccountTierMayHaveChanged();
     return new AgiWorkforcePaywallError(
       parsed['feature'],
       parsed['requiredTier'],
@@ -316,6 +318,7 @@ export function parseCloudCompletionError(statusCode: number, body: string): Err
         : undefined;
 
   if (statusCode === 403 && code !== undefined && PLAN_GATE_CODES.has(code)) {
+    notifyAccountTierMayHaveChanged();
     return new AgiWorkforcePaywallError(
       code.replace(/_(?:plan_)?required$/u, '') || 'managed_cloud',
       requiredTier ?? 'pro',
@@ -326,6 +329,8 @@ export function parseCloudCompletionError(statusCode: number, body: string): Err
       code,
     );
   }
+
+  if (statusCode === 401 || statusCode === 402) notifyAccountTierMayHaveChanged();
 
   return new AgiWorkforceApiError(
     message ??
@@ -497,6 +502,7 @@ export async function streamChatCompletion(
     );
   } catch (error) {
     if (error instanceof AgiWorkforceApiError && error.statusCode === 401) {
+      notifyAccountTierMayHaveChanged();
       if (credential.kind === 'account') {
         await invalidateAccountToken(secrets, credential.token);
         throw new AgiWorkforceApiError(
@@ -712,7 +718,10 @@ export async function fetchAccountIdentity(
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
       res.on('end', () => {
         if ((res.statusCode ?? 0) >= 400) {
-          if (res.statusCode === 401) void invalidateAccountToken(secrets, accountToken);
+          if (res.statusCode === 401) {
+            notifyAccountTierMayHaveChanged();
+            void invalidateAccountToken(secrets, accountToken);
+          }
           resolve(undefined);
           return;
         }
@@ -767,8 +776,11 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
       res.on('end', () => {
         if ((res.statusCode ?? 0) >= 400) {
-          if (res.statusCode === 401 && credential.kind === 'account') {
-            void invalidateAccountToken(secrets, credential.token);
+          if (res.statusCode === 401) {
+            notifyAccountTierMayHaveChanged();
+            if (credential.kind === 'account') {
+              void invalidateAccountToken(secrets, credential.token);
+            }
           }
           resolve(undefined);
           return;
