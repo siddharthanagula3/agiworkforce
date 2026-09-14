@@ -45,8 +45,15 @@ describe('cloud utility failure classification', () => {
 
 describe('inline command failure handling', () => {
   it('offers a retry for non-credential failures', () => {
-    expect(inline).toContain('showCloudUtilityErrorActions(err');
+    expect(inline).toContain('showCloudUtilityErrorActions(failure');
     expect(inline).toContain('retry: () => runInlineCommand(context, command, targetRange)');
+  });
+
+  it('lets the progress notification close before it asks the user anything', () => {
+    expect(inline).toMatch(/catch \(err\) \{\s*cancelSource\.dispose\(\);\s*return err;\s*\}/u);
+    expect(inline.indexOf('showCloudUtilityErrorActions(failure')).toBeGreaterThan(
+      inline.indexOf('const failure = await vscode.window.withProgress('),
+    );
   });
 
   it('does not implement a second, message-regex credential classifier', () => {

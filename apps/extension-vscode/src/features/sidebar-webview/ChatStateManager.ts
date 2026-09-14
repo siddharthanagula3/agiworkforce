@@ -259,7 +259,7 @@ export type ExtToWebviewMessage =
     }
   | {
       type: 'composerDraft';
-      payload: { text: string; references: WorkspaceFileReference[] };
+      payload: { text: string; references: WorkspaceFileReference[]; submit?: boolean };
     }
   | { type: 'addUserMessage'; payload: { text: string } }
   | { type: 'modeChanged'; payload: { mode: AgentMode } }

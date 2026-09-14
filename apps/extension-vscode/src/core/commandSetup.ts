@@ -104,6 +104,7 @@ import { signIn as signInPreferringCli } from '../features/surfaces/accountAcces
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
+import { buildExplainSelectionPrompt, runEditorUtility } from '../features/editor-utilities';
 import { openPathReference, OPEN_PATH_REFERENCE_COMMAND } from '../features/path-links';
 import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
 import {
@@ -731,7 +732,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.explain', async (targetRange?: vscode.Range) => {
-      await runInlineCommand(context, 'explain', targetRange);
+      await runEditorUtility(buildExplainSelectionPrompt(targetRange));
     }),
 
     register('agi-workforce.fix', async (targetRange?: vscode.Range) => {
@@ -757,13 +758,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return;
       }
 
-      await vscode.window.withProgress(
+      const failure = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: 'AGI Workforce: Running Code Review…',
           cancellable: true,
         },
-        async (_progress, progressToken) => {
+        async (_progress, progressToken): Promise<unknown> => {
           const cancelSource = new vscode.CancellationTokenSource();
           progressToken.onCancellationRequested(() => cancelSource.cancel());
 
@@ -784,16 +785,20 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
                 `AGI Workforce: Found ${result.diagnosticCount} issue(s). Check the Problems panel.`,
               );
             }
+            return undefined;
           } catch (err) {
             cancelSource.dispose();
-            if (err instanceof Error && err.message.includes('CANCELLED')) return;
-            await showCloudUtilityErrorActions(err, {
-              title: 'AGI Workforce: Code review failed',
-              retry: () => vscode.commands.executeCommand('agi-workforce.codeReview'),
-            });
+            return err;
           }
         },
       );
+
+      if (failure === undefined) return;
+      if (failure instanceof Error && failure.message.includes('CANCELLED')) return;
+      await showCloudUtilityErrorActions(failure, {
+        title: 'AGI Workforce: Code review failed',
+        retry: () => vscode.commands.executeCommand('agi-workforce.codeReview'),
+      });
     }),
 
     register('agi-workforce.signIn', async () => {
