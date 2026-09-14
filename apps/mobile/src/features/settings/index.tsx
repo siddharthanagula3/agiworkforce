@@ -502,19 +502,19 @@ export default function SettingsTabScreen() {
         ],
       },
       {
-        title: 'Local Mode',
+        title: 'Assistant',
         rows: [
           {
             key: 'personalization',
             label: 'Personalization',
             icon: Sparkles,
-            onPress: push('/(app)/settings/personalization?scope=local'),
+            onPress: push('/(app)/settings/personalization'),
           },
           {
             key: 'memory',
             label: 'Memory',
             icon: Brain,
-            onPress: push('/(app)/settings/memory?scope=local'),
+            onPress: push('/(app)/settings/memory'),
           },
           {
             key: 'capabilities',
@@ -522,10 +522,6 @@ export default function SettingsTabScreen() {
             icon: Zap,
             onPress: push('/(app)/settings/capabilities'),
           },
-          // The Data Controls screen takes no scope param: one screen already
-          // covers local data, chat history and Sync to AGI Cloud. A second
-          // "Cloud Data Controls" row would gate that same screen behind
-          // sign-in, so this row is its only entry point.
           {
             key: 'data-controls',
             label: 'Data Controls',
@@ -537,22 +533,6 @@ export default function SettingsTabScreen() {
       {
         title: 'Cloud',
         rows: [
-          {
-            key: 'cloud-personalization',
-            label: 'Cloud Personalization',
-            icon: Sparkles,
-            tag: cloudAccessTag,
-            tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/personalization?scope=cloud'),
-          },
-          {
-            key: 'cloud-memory',
-            label: 'Cloud Memory',
-            icon: Brain,
-            tag: cloudAccessTag,
-            tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/memory?scope=cloud'),
-          },
           {
             key: 'reflect',
             label: 'Reflect',
