@@ -10,7 +10,14 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { uniqueCssSelector } from '../src/features/content/autofill/detector';
+
+if (typeof globalThis.CSS === 'undefined') {
+  (globalThis as Record<string, unknown>).CSS = {};
+}
+if (typeof CSS.escape !== 'function') {
+  CSS.escape = (value: string) => value.replace(/([^\w-])/g, '\\$1');
+}
+import { uniqueCssSelector, detectJobApplication } from '../src/features/content/autofill/detector';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -52,5 +59,39 @@ describe('uniqueCssSelector, mixed-tag container', () => {
     const sel = uniqueCssSelector(field);
     expect(sel).toContain('#linkedin-easy-apply');
     expect(document.querySelector(sel)).toBe(field);
+  });
+});
+
+describe('label inference, whole words only', () => {
+  it('does not read velocity as city, paypal as pay, statement as state, subtitle as title', () => {
+    Object.defineProperty(window, 'location', {
+      value: { href: 'https://jobs.lever.co/acme/1234/apply' },
+      writable: true,
+    });
+    document.body.innerHTML = `
+      <div class="application-form">
+        <label for="f1">Velocity</label><input id="f1" />
+        <label for="f2">PayPal handle</label><input id="f2" />
+        <label for="f3">Statement</label><input id="f3" />
+        <label for="f4">Subtitle</label><input id="f4" />
+        <label for="f5">City</label><input id="f5" />
+        <label for="f6">Job title</label><input id="f6" />
+        <label for="f7">Expected salary</label><input id="f7" />
+        <label for="f8">State</label><input id="f8" />
+      </div>
+    `;
+
+    const keyBySelector = new Map(
+      detectJobApplication().fields.map((field) => [field.selector, field.key]),
+    );
+
+    expect(keyBySelector.get('#f1')).toBeUndefined();
+    expect(keyBySelector.get('#f2')).toBeUndefined();
+    expect(keyBySelector.get('#f3')).toBeUndefined();
+    expect(keyBySelector.get('#f4')).toBeUndefined();
+    expect(keyBySelector.get('#f5')).toBe('locationCity');
+    expect(keyBySelector.get('#f6')).toBe('currentTitle');
+    expect(keyBySelector.get('#f7')).toBe('salaryExpectation');
+    expect(keyBySelector.get('#f8')).toBe('locationState');
   });
 });

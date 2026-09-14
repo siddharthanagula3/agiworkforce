@@ -182,6 +182,31 @@ describe('runPlatformJobAutofill runtime', () => {
     expect(emailInput.value).toBe('ada@example.com');
   });
 
+  it('leaves text already entered on the page and records the reason', async () => {
+    const result = await runAutofill(
+      `
+        <form id="application_form">
+          <label for="first_name">First Name</label>
+          <input id="first_name" name="first_name" value="Adaline" />
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" />
+        </form>
+      `,
+      '/job_app',
+    );
+
+    const firstNameInput = document.getElementById('first_name') as HTMLInputElement;
+    const emailInput = document.getElementById('email') as HTMLInputElement;
+
+    expect(firstNameInput.value).toBe('Adaline');
+    expect(emailInput.value).toBe('ada@example.com');
+    expect(
+      result.details?.skippedFields.some((entry: string) =>
+        entry.includes('already holds text entered on the page'),
+      ),
+    ).toBe(true);
+  });
+
   it('keeps success true while reporting unresolved required fields', async () => {
     const result = await runAutofill(
       `

@@ -15,6 +15,7 @@ import {
 } from './ashby';
 
 export const FILE_INPUT_SKIP_REASON = 'File inputs cannot be filled programmatically';
+export const USER_TEXT_SKIP_REASON = 'Field already holds text entered on the page';
 
 export interface FillResult {
   key: string;
@@ -68,14 +69,37 @@ function dispatchFillEvents(el: HTMLElement): void {
   el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
 }
 
-function fillTextField(el: HTMLInputElement | HTMLTextAreaElement, value: string): boolean {
+interface FillOutcome {
+  success: boolean;
+  skipped: boolean;
+  reason?: string;
+}
+
+function fillTextField(el: HTMLInputElement | HTMLTextAreaElement, value: string): FillOutcome {
+  const existing = el.value ?? '';
+  if (existing.trim().length > 0 && existing !== value) {
+    return { success: false, skipped: true, reason: USER_TEXT_SKIP_REASON };
+  }
   try {
     setNativeValue(el, value);
     dispatchFillEvents(el);
-    return true;
+    return { success: true, skipped: false };
   } catch {
-    return false;
+    return { success: false, skipped: false, reason: 'Fill function returned false' };
   }
+}
+
+function fillFieldElement(el: Element, value: string): FillOutcome {
+  if (el instanceof HTMLSelectElement) {
+    const success = fillSelectField(el, value);
+    return success
+      ? { success, skipped: false }
+      : { success, skipped: false, reason: 'Fill function returned false' };
+  }
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    return fillTextField(el, value);
+  }
+  return { success: false, skipped: true, reason: 'Unsupported element type' };
 }
 
 function fillSelectField(el: HTMLSelectElement, value: string): boolean {
@@ -239,29 +263,10 @@ export async function fillFields(
       continue;
     }
 
-    let success = false;
-
-    if (el instanceof HTMLSelectElement) {
-      success = fillSelectField(el, stringValue);
-    } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-      success = fillTextField(el, stringValue);
-    } else {
-      results.push({
-        key: field.key,
-        selector: field.selector,
-        success: false,
-        skipped: true,
-        reason: 'Unsupported element type',
-      });
-      continue;
-    }
-
     results.push({
       key: field.key,
       selector: field.selector,
-      success,
-      skipped: false,
-      reason: success ? undefined : 'Fill function returned false',
+      ...fillFieldElement(el, stringValue),
     });
 
     if (delayMs > 0) {
@@ -317,20 +322,16 @@ export async function autofillLinkedIn(
 
     const { element, selector } = match;
     const stringValue = String(profileValue);
-    let success = false;
+    let outcome: FillOutcome = { success: false, skipped: false };
 
     try {
-      if (element instanceof HTMLSelectElement) {
-        success = fillSelectField(element, stringValue);
-      } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-        success = fillTextField(element, stringValue);
-      }
+      outcome = fillFieldElement(element, stringValue);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       errors.push(`${key}: ${msg}`);
     }
 
-    filled.push({ key, selector, success, skipped: false });
+    filled.push({ key, selector, ...outcome });
 
     if (delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
@@ -391,20 +392,16 @@ export async function autofillLever(
 
     const { element, selector } = match;
     const stringValue = String(profileValue);
-    let success = false;
+    let outcome: FillOutcome = { success: false, skipped: false };
 
     try {
-      if (element instanceof HTMLSelectElement) {
-        success = fillSelectField(element, stringValue);
-      } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-        success = fillTextField(element, stringValue);
-      }
+      outcome = fillFieldElement(element, stringValue);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       errors.push(`${key}: ${msg}`);
     }
 
-    filled.push({ key, selector, success, skipped: false });
+    filled.push({ key, selector, ...outcome });
 
     if (delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
@@ -444,19 +441,15 @@ export async function autofillLever(
       }
 
       const stringValue = String(profileValue);
-      let success = false;
+      let outcome: FillOutcome = { success: false, skipped: false };
       try {
-        if (el instanceof HTMLSelectElement) {
-          success = fillSelectField(el, stringValue);
-        } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-          success = fillTextField(el, stringValue);
-        }
+        outcome = fillFieldElement(el, stringValue);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         errors.push(`${cf.key}: ${msg}`);
       }
 
-      filled.push({ key: cf.key, selector: cf.selector, success, skipped: false });
+      filled.push({ key: cf.key, selector: cf.selector, ...outcome });
 
       if (delayMs > 0) {
         await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
@@ -518,19 +511,15 @@ export async function autofillGreenhouse(
 
     const { element, selector } = match;
     const stringValue = sanitizeProfileValue(String(profileValue));
-    let success = false;
+    let outcome: FillOutcome = { success: false, skipped: false };
 
     try {
-      if (element instanceof HTMLSelectElement) {
-        success = fillSelectField(element, stringValue);
-      } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-        success = fillTextField(element, stringValue);
-      }
+      outcome = fillFieldElement(element, stringValue);
     } catch (e) {
       errors.push(`${key}: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    filled.push({ key, selector, success, skipped: false });
+    filled.push({ key, selector, ...outcome });
 
     if (delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
@@ -563,15 +552,16 @@ export async function autofillGreenhouse(
         });
         continue;
       }
-      let success = false;
+      let outcome: FillOutcome = { success: false, skipped: false };
       try {
-        if (el instanceof HTMLSelectElement) success = fillSelectField(el, String(profileValue));
-        else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
-          success = fillTextField(el, sanitizeProfileValue(String(profileValue)));
+        outcome =
+          el instanceof HTMLSelectElement
+            ? fillFieldElement(el, String(profileValue))
+            : fillFieldElement(el, sanitizeProfileValue(String(profileValue)));
       } catch (e) {
         errors.push(`${cf.key}: ${e instanceof Error ? e.message : String(e)}`);
       }
-      filled.push({ key: cf.key, selector: cf.selector, success, skipped: false });
+      filled.push({ key: cf.key, selector: cf.selector, ...outcome });
       if (delayMs > 0) await new Promise<void>((r) => setTimeout(r, delayMs));
     }
   }
@@ -630,19 +620,15 @@ export async function autofillAshby(
 
     const { element, selector } = match;
     const stringValue = sanitizeProfileValue(String(profileValue));
-    let success = false;
+    let outcome: FillOutcome = { success: false, skipped: false };
 
     try {
-      if (element instanceof HTMLSelectElement) {
-        success = fillSelectField(element, stringValue);
-      } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-        success = fillTextField(element, stringValue);
-      }
+      outcome = fillFieldElement(element, stringValue);
     } catch (e) {
       errors.push(`${key}: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    filled.push({ key, selector, success, skipped: false });
+    filled.push({ key, selector, ...outcome });
 
     if (delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
@@ -675,15 +661,16 @@ export async function autofillAshby(
         });
         continue;
       }
-      let success = false;
+      let outcome: FillOutcome = { success: false, skipped: false };
       try {
-        if (el instanceof HTMLSelectElement) success = fillSelectField(el, String(profileValue));
-        else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
-          success = fillTextField(el, sanitizeProfileValue(String(profileValue)));
+        outcome =
+          el instanceof HTMLSelectElement
+            ? fillFieldElement(el, String(profileValue))
+            : fillFieldElement(el, sanitizeProfileValue(String(profileValue)));
       } catch (e) {
         errors.push(`${cf.key}: ${e instanceof Error ? e.message : String(e)}`);
       }
-      filled.push({ key: cf.key, selector: cf.selector, success, skipped: false });
+      filled.push({ key: cf.key, selector: cf.selector, ...outcome });
       if (delayMs > 0) await new Promise<void>((r) => setTimeout(r, delayMs));
     }
   }
