@@ -13,9 +13,7 @@
  * that surface as VS Code notifications. Do not merge the two.
  */
 
-import { getModelMetadataById } from '@agiworkforce/types';
-
-import { providerDisplayLabel } from '../model-picker/modelConstants';
+import { modelDisplayLabel, providerDisplayLabel } from '../model-picker/modelConstants';
 
 export type ChatErrorCategory =
   | 'network'
@@ -66,10 +64,6 @@ const MACHINE_LENGTH = 600;
 
 /** What to call the provider when the failure text does not name one. */
 const UNNAMED_PROVIDER = 'the model provider';
-
-function modelDisplayName(modelId: string): string {
-  return getModelMetadataById(modelId)?.name ?? modelId;
-}
 
 function fromApiStatus(providerId: string, status: number): Classification {
   const provider = providerDisplayLabel(providerId);
@@ -162,7 +156,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (overflow?.[1] !== undefined) {
     return {
       category: 'provider',
-      headline: `This conversation is longer than ${modelDisplayName(overflow[1])} can read at once.`,
+      headline: `This conversation is longer than ${modelDisplayLabel(overflow[1])} can read at once.`,
       retryable: false,
     };
   }

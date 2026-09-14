@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { Config } from '../platform/config';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
@@ -6,11 +5,10 @@ import { applyLlmEdit } from '../platform/applyEdit';
 import * as telemetry from './telemetry';
 import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
 
-export type InlineCommand = 'explain' | 'fix' | 'refactor' | 'tests' | 'docs';
+export type InlineCommand = 'fix' | 'refactor' | 'tests' | 'docs';
 
 export function commandLabel(command: string): string {
   const labels: Record<string, string> = {
-    explain: 'Explain Code',
     fix: 'Fix Issues',
     refactor: 'Refactor',
     tests: 'Generate Tests',
@@ -56,7 +54,7 @@ export async function runInlineCommand(
     );
   }
 
-  if (planModeEnabled && command !== 'explain') {
+  if (planModeEnabled) {
     const choice = await vscode.window.showInformationMessage(
       `AGI Workforce plan mode is enabled. Proceed with ${commandLabel(command)}?`,
       'Proceed',
@@ -68,7 +66,6 @@ export async function runInlineCommand(
   }
 
   const prompts: Record<string, string> = {
-    explain: `Explain the following ${lang} code clearly and concisely:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
     fix: `Find and fix any bugs or issues in the following ${lang} code. Provide the corrected code and explain each fix:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
     refactor: `Refactor the following ${lang} code to improve readability, maintainability, and performance. Explain each change:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
     tests: `Generate comprehensive unit tests for the following ${lang} code. Cover edge cases, error paths, and happy paths:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
@@ -85,13 +82,13 @@ export async function runInlineCommand(
     { role: 'user', content: prompts[command] ?? selectedText },
   ];
 
-  await vscode.window.withProgress(
+  const failure = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
       title: `AGI Workforce: ${commandLabel(command)}…`,
       cancellable: true,
     },
-    async (progress, progressToken) => {
+    async (progress, progressToken): Promise<unknown> => {
       const cancelSource = new vscode.CancellationTokenSource();
       progressToken.onCancellationRequested(() => cancelSource.cancel());
 
@@ -113,19 +110,19 @@ export async function runInlineCommand(
           commandLabel(command),
           { autoApply: autoApplyFixes && command === 'fix' },
         );
+        return undefined;
       } catch (err) {
         cancelSource.dispose();
-
-        if (err instanceof Error && err.message.includes('CANCELLED')) {
-          return;
-        }
-
-        telemetry.logError(err instanceof Error ? err : String(err), { command });
-        await showCloudUtilityErrorActions(err, {
-          title: `AGI Workforce: ${commandLabel(command)} failed`,
-          retry: () => runInlineCommand(context, command, targetRange),
-        });
+        return err;
       }
     },
   );
+
+  if (failure === undefined) return;
+  if (failure instanceof Error && failure.message.includes('CANCELLED')) return;
+  telemetry.logError(failure instanceof Error ? failure : String(failure), { command });
+  await showCloudUtilityErrorActions(failure, {
+    title: `AGI Workforce: ${commandLabel(command)} failed`,
+    retry: () => runInlineCommand(context, command, targetRange),
+  });
 }

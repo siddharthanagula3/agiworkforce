@@ -4704,6 +4704,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         });
         autoResize();
         userInput.focus();
+        if (msg.payload.submit) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {
@@ -10143,6 +10144,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         });
         autoResize();
         userInput.focus();
+        if (msg.payload.submit) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {
@@ -15582,6 +15584,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         });
         autoResize();
         userInput.focus();
+        if (msg.payload.submit) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {

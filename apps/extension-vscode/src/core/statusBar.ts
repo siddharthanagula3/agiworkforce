@@ -1,8 +1,6 @@
-export function buildExtensionStatusBarText(model: string, mode: string): string {
-  const chips: string[] = [];
-  if (mode !== 'auto') chips.push(mode);
+import { modelDisplayLabel } from '../features/model-picker/modelConstants';
 
-  return chips.length > 0
-    ? `$(hubot) AGI: ${model} · ${chips.join(' · ')}`
-    : `$(hubot) AGI: ${model}`;
+export function buildExtensionStatusBarText(model: string, mode: string): string {
+  const name = modelDisplayLabel(model);
+  return mode === 'auto' ? `$(hubot) AGI: ${name}` : `$(hubot) AGI: ${name} · ${mode}`;
 }

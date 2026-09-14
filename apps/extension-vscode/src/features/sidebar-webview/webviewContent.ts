@@ -4672,6 +4672,7 @@ export function getWebviewContent(
         });
         autoResize();
         userInput.focus();
+        if (msg.payload.submit) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {
