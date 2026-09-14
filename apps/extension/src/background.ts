@@ -765,7 +765,6 @@ function initialize(): void {
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
     logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
   });
-  setupContextMenu();
   connectToNativeHost();
   checkDesktopConnection();
   void restoreScheduledTaskAlarms()
@@ -4513,29 +4512,35 @@ async function notifyConnectionStatusChange(): Promise<void> {
   }
 }
 
-function setupContextMenu(): void {
+const CONTEXT_MENU_ITEMS: ReadonlyArray<chrome.contextMenus.CreateProperties> = [
+  { id: 'ask-agi-workforce', title: t('menuAskAgi'), contexts: ['selection'] },
+  { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
+  { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
+  { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
+  { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
+  // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
+  // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
+];
+
+/**
+ * Chrome keeps context menus across worker restarts, so rebuilding them on
+ * every start duplicated the work and raced `create` against a `removeAll`
+ * that had not settled. Install and update are the only times the set changes.
+ */
+async function rebuildContextMenus(): Promise<void> {
   if (!chrome.contextMenus?.removeAll || !chrome.contextMenus?.create) {
     logger.warn('contextMenus API unavailable; skipping context menu setup');
     return;
   }
 
-  chrome.contextMenus.removeAll(() => {
-    if (chrome.runtime.lastError) {
-      logger.warn('contextMenus.removeAll failed', chrome.runtime.lastError.message);
-    }
-  });
+  try {
+    await chrome.contextMenus.removeAll();
+  } catch (error) {
+    logger.warn('contextMenus.removeAll failed', error);
+    return;
+  }
 
-  const menuItems: chrome.contextMenus.CreateProperties[] = [
-    { id: 'ask-agi-workforce', title: t('menuAskAgi'), contexts: ['selection'] },
-    { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
-    { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
-    { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
-    { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
-    // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
-    // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
-  ];
-
-  for (const item of menuItems) {
+  for (const item of CONTEXT_MENU_ITEMS) {
     chrome.contextMenus.create(item, () => {
       if (chrome.runtime.lastError) {
         logger.warn(
@@ -4545,93 +4550,102 @@ function setupContextMenu(): void {
       }
     });
   }
+}
 
-  chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (!tab?.id) return;
+function handleContextMenuClick(
+  info: chrome.contextMenus.OnClickData,
+  tab: chrome.tabs.Tab | undefined,
+): void {
+  if (!tab?.id) return;
 
-    if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
-      try {
-        const pending = createSelectionContextHandoff({
-          selectedText: info.selectionText,
-          pageUrl: info.pageUrl ?? tab.url ?? '',
-          tabId: tab.id,
-        });
-        void chrome.storage.session
-          .set({ [CONTEXT_HANDOFF_STORAGE_KEY]: pending })
-          .catch((error: unknown) => {
-            logger.warn('Failed to prepare selected-context handoff', error);
-            showNotification(
-              'Context handoff unavailable',
-              'The selected context was not sent. Open the side panel and try again.',
-            );
-          });
-        void chrome.sidePanel?.open({ tabId: pending.tabId }).catch((error: unknown) => {
-          logger.warn('Failed to open selected-context preview', error);
+  if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
+    try {
+      const pending = createSelectionContextHandoff({
+        selectedText: info.selectionText,
+        pageUrl: info.pageUrl ?? tab.url ?? '',
+        tabId: tab.id,
+      });
+      void chrome.storage.session
+        .set({ [CONTEXT_HANDOFF_STORAGE_KEY]: pending })
+        .catch((error: unknown) => {
+          logger.warn('Failed to prepare selected-context handoff', error);
           showNotification(
-            'Context preview ready',
-            'Open the AGI side panel to review and approve the selected context.',
+            'Context handoff unavailable',
+            'The selected context was not sent. Open the side panel and try again.',
           );
         });
-      } catch (error) {
-        logger.warn('Rejected selected-context handoff', error);
+      void chrome.sidePanel?.open({ tabId: pending.tabId }).catch((error: unknown) => {
+        logger.warn('Failed to open selected-context preview', error);
         showNotification(
-          'Context handoff unavailable',
-          error instanceof Error ? error.message : 'The selected context was not sent.',
+          'Context preview ready',
+          'Open the AGI side panel to review and approve the selected context.',
         );
-      }
-    } else if (info.menuItemId === 'explain-selection' && info.selectionText && tab.id) {
-      chrome.storage.session
-        .set({
-          agi_pending_chat: {
-            type: 'explain',
-            text: info.selectionText,
-            url: info.pageUrl ?? '',
-            timestamp: Date.now(),
-          },
-        })
-        .catch((err) => {
-          logger.warn('Failed to store pending chat (explain)', err);
-        });
-      if (chrome.sidePanel) {
-        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-      }
-    } else if (info.menuItemId === 'translate-selection' && info.selectionText && tab.id) {
-      chrome.storage.session
-        .set({
-          agi_pending_chat: {
-            type: 'translate',
-            text: info.selectionText,
-            url: info.pageUrl ?? '',
-            timestamp: Date.now(),
-          },
-        })
-        .catch((err) => {
-          logger.warn('Failed to store pending chat (translate)', err);
-        });
-      if (chrome.sidePanel) {
-        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-      }
-    } else if (info.menuItemId === 'summarize-page' && tab.id) {
-      chrome.storage.session
-        .set({
-          agi_pending_chat: {
-            type: 'summarize',
-            text: '',
-            url: info.pageUrl ?? '',
-            timestamp: Date.now(),
-          },
-        })
-        .catch((err) => {
-          logger.warn('Failed to store pending chat (summarize)', err);
-        });
-      if (chrome.sidePanel) {
-        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-      }
-    } else if (info.menuItemId === 'add-to-tab-group' && tab.id) {
-      void ensureTabGroup(tab.id);
+      });
+    } catch (error) {
+      logger.warn('Rejected selected-context handoff', error);
+      showNotification(
+        'Context handoff unavailable',
+        error instanceof Error ? error.message : 'The selected context was not sent.',
+      );
     }
-  });
+  } else if (info.menuItemId === 'explain-selection' && info.selectionText && tab.id) {
+    chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'explain',
+          text: info.selectionText,
+          url: info.pageUrl ?? '',
+          timestamp: Date.now(),
+        },
+      })
+      .catch((err) => {
+        logger.warn('Failed to store pending chat (explain)', err);
+      });
+    if (chrome.sidePanel) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+  } else if (info.menuItemId === 'translate-selection' && info.selectionText && tab.id) {
+    chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'translate',
+          text: info.selectionText,
+          url: info.pageUrl ?? '',
+          timestamp: Date.now(),
+        },
+      })
+      .catch((err) => {
+        logger.warn('Failed to store pending chat (translate)', err);
+      });
+    if (chrome.sidePanel) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+  } else if (info.menuItemId === 'summarize-page' && tab.id) {
+    chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'summarize',
+          text: '',
+          url: info.pageUrl ?? '',
+          timestamp: Date.now(),
+        },
+      })
+      .catch((err) => {
+        logger.warn('Failed to store pending chat (summarize)', err);
+      });
+    if (chrome.sidePanel) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+  } else if (info.menuItemId === 'add-to-tab-group' && tab.id) {
+    void ensureTabGroup(tab.id);
+  }
 }
+
+chrome.contextMenus?.onClicked?.addListener(handleContextMenuClick);
+
+chrome.runtime.onInstalled.addListener(() => {
+  void rebuildContextMenus();
+});
 
 function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
   return sendNativeRequest(message)
