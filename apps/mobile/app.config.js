@@ -126,6 +126,12 @@ const config = {
           NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
         {
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeAudioData',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+        },
+        {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypePhotosorVideos',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
@@ -156,13 +162,7 @@ const config = {
     package: 'com.agiworkforce.app',
     versionCode: 1,
     allowBackup: false,
-    permissions: [
-      'CAMERA',
-      'RECORD_AUDIO',
-      'READ_EXTERNAL_STORAGE',
-      'USE_BIOMETRIC',
-      'USE_FINGERPRINT',
-    ],
+    permissions: ['RECORD_AUDIO'],
     intentFilters: [
       {
         action: 'SEND',
@@ -243,8 +243,10 @@ const config = {
     [
       'expo-speech-recognition',
       {
-        microphonePermission: 'Use microphone to transcribe speech to text',
-        speechRecognitionPermission: 'Recognize speech for chat input',
+        microphonePermission:
+          'AGI Workforce uses the microphone for voice input and real-time voice conversations with AI.',
+        speechRecognitionPermission:
+          'AGI Workforce uses speech recognition to transcribe voice input for AI conversations.',
         androidSpeechServicePackages: ['com.google.android.googlequicksearchbox'],
       },
     ],

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSegments, Slot } from 'expo-router';
 import { useLinkingURL } from 'expo-linking';
 import * as Linking from 'expo-linking';
@@ -9,6 +9,7 @@ import { reloadAppAsync } from 'expo';
 import {
   View,
   ActivityIndicator,
+  Alert,
   Appearance,
   BackHandler,
   Platform,
@@ -38,7 +39,7 @@ import {
   clearPushTokenAccountSession,
 } from '@/src/features/auth/services/pushTokenAccountLifecycle';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
-import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
+import { clearBiometricFlag, hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { ThemeVars, useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
@@ -52,7 +53,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
-import { getAuthToken } from '@/services/authSession';
+import { clearAuthSession, getAuthToken } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
 import { restoreStoredLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
@@ -200,6 +201,28 @@ export default function RootLayout() {
     );
   }, [themeMode]);
   const { isUnlocked, isReady: isBiometricReady, authenticate } = useBiometricGate();
+
+  const resetAppLock = useCallback(() => {
+    Alert.alert(
+      'Reset app lock and sign out?',
+      'App Lock is turned off and you are signed out of AGI Cloud on this device. Local chats stay on this device. Cloud chats are available again after you sign in.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset and sign out',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              await clearAuthSession();
+              await clearBiometricFlag();
+            })().catch((err) => {
+              console.warn('[RootLayout] App lock reset failed:', err);
+            });
+          },
+        },
+      ],
+    );
+  }, []);
 
   useEffect(() => {
     initMmkvEncryption()
@@ -473,7 +496,7 @@ export default function RootLayout() {
   }, [url, isClerkSignedIn, isInitialized, router]);
 
   useEffect(() => {
-    if (!isInitialized || !isClerkSignedIn) return;
+    if (!isInitialized) return;
     return subscribeToIOSShareInbox(
       ({ text, truncated, files }) => {
         const handoffKey = stageSharedFileAttachments(files);
@@ -489,7 +512,7 @@ export default function RootLayout() {
         console.warn('[RootLayout] Could not import iOS shared content:', error);
       },
     );
-  }, [isInitialized, isClerkSignedIn, router]);
+  }, [isInitialized, router]);
 
   useEffect(() => {
     if (!url || !isInitialized) return;
@@ -680,15 +703,35 @@ export default function RootLayout() {
             </Text>
             <Pressable
               onPress={authenticate}
+              accessibilityRole="button"
+              accessibilityLabel="Unlock"
               style={{
                 marginTop: 8,
                 paddingHorizontal: 24,
                 paddingVertical: 12,
+                minHeight: 44,
+                justifyContent: 'center',
                 backgroundColor: themeColors.teal,
                 borderRadius: 12,
               }}
             >
               <Text style={{ color: themeColors.accentText, fontWeight: '600' }}>Unlock</Text>
+            </Pressable>
+            <Pressable
+              onPress={resetAppLock}
+              accessibilityRole="button"
+              accessibilityLabel="Reset app lock and sign out"
+              style={{
+                marginTop: 24,
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                minHeight: 44,
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: themeColors.textMuted, fontSize: 14 }}>
+                Can&apos;t unlock? Reset app lock and sign out
+              </Text>
             </Pressable>
           </View>
         </SafeAreaProvider>
