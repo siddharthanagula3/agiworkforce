@@ -17,6 +17,7 @@ import {
   type ChatTextSize,
 } from '@shared/stores/web-settings-store';
 import { CustomCommandsSettings } from '@/features/settings/components/CustomCommandsSettings';
+import { useCloudSettingsSyncStatus } from '@/features/settings/lib/cloud-settings-sync-status';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import {
@@ -607,6 +608,7 @@ export function GeneralSection() {
         <h2 className="mb-4 text-base font-semibold text-foreground">Preferences</h2>
 
         <div className="flex flex-col gap-5">
+          <PreferenceSyncNotice />
           {/* Appearance */}
           <Row label="Appearance">
             <div className="flex gap-1" role="group" aria-label="Theme">
@@ -680,6 +682,26 @@ export function GeneralSection() {
 
 const SELECT_CLASS =
   'h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground';
+
+function PreferenceSyncNotice() {
+  const { error, retry } = useCloudSettingsSyncStatus();
+  if (!error) return null;
+
+  return (
+    <p role="alert" className="flex items-center gap-2 text-xs text-danger">
+      {error} This device keeps your choice.
+      {retry && (
+        <button
+          type="button"
+          onClick={retry}
+          className="rounded-md border border-border px-2 py-1 font-medium text-foreground hover:bg-muted"
+        >
+          Retry
+        </button>
+      )}
+    </p>
+  );
+}
 
 function DefaultModelRow() {
   const selectedModelId = useModelStore((state) => state.selectedModelId);

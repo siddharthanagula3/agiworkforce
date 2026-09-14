@@ -16,6 +16,32 @@ export const defaultLanguage = DEFAULT_LANGUAGE;
 
 const LANGUAGE_STORAGE_KEY = 'agiworkforce-language';
 
+function readLanguageCache(): string | null {
+  if (typeof document === 'undefined') return null;
+  const cookie = document.cookie
+    .split(';')
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(`${LANGUAGE_STORAGE_KEY}=`));
+  if (cookie) {
+    const value = decodeURIComponent(cookie.slice(LANGUAGE_STORAGE_KEY.length + 1));
+    if (value) return value;
+  }
+  try {
+    return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Read before init(): the detector caches the language it detects, so a moment
+// later every device looks like it has an explicit choice.
+const cachedLanguageAtLoad = readLanguageCache();
+
+/** The language this device had chosen before the detector cached anything. */
+export function readCachedLanguage(): string | null {
+  return cachedLanguageAtLoad;
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
