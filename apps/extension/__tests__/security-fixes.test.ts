@@ -14,10 +14,8 @@ describe('C-1 + M-02 validateGatewayUrl, exact-match allowlist', () => {
     );
   });
 
-  it('accepts the allowlisted staging subdomain (exact match)', () => {
-    expect(validateGatewayUrl('https://staging-api.agiworkforce.com')).toBe(
-      'https://staging-api.agiworkforce.com',
-    );
+  it('REJECTS the staging subdomain, which no shipped build should reach', () => {
+    expect(validateGatewayUrl('https://staging-api.agiworkforce.com')).toBeNull();
   });
 
   it('REJECTS any other agiworkforce.com subdomain (M-02 tightening)', () => {

@@ -361,10 +361,12 @@ export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): 
   return true;
 }
 
+// Every origin here must also appear in the manifest's `connect-src`, which is
+// fixed at package time: an origin this accepts but the CSP blocks fails as an
+// unexplained network error inside a run.
 export const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>([
   'https://api.agiworkforce.com',
   'https://gateway.agiworkforce.com',
-  'https://staging-api.agiworkforce.com',
   'https://agiworkforce.com',
 ]);
 
