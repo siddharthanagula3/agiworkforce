@@ -569,7 +569,7 @@ long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Database] Apply migrations 0183 to 0190 in production before the next deploy
+## [Database] Apply migrations 0183 to 0191 in production before the next deploy
 
 **Why founder assistance is required**
 Production database credentials exist only with the founder, and the deploy job
@@ -610,19 +610,24 @@ refuses to promote while a draft migration is unapplied.
    memory import insert all name the new columns, the memory sync and
    auto-memory inserts name `(user_id, id)` as their conflict target, which the
    old single-column key cannot satisfy, and a desktop turn that reaches a device
-   step writes the checkpoint row before it pauses.
+   step writes the checkpoint row before it pauses. The ninth is
+   `0191_research_report_settled_cost.sql` (a nullable `settled_cost_microusd`
+   column on `research_reports`, so a finished Deep Research report can state
+   what the managed usage ledger settled for the run instead of leaving the
+   cost unsaid). Apply it after 0190.
 
 **Where** A terminal with the production database URL, as for the 0175 batch.
 **Needed input** The production database URL and the confirm flag.
 **How to verify completion** `pnpm db:migrate -- status` against production
-lists 0190 as applied; the deploy job's migration verify step passes; importing
+lists 0191 as applied; the deploy job's migration verify step passes; importing
 the same memory text twice adds it once and a memory sync push applies rather
 than conflicts; a video
 job completion produces one notice; an artifact and a conversation can each be
 shared with the workspace, read by a member, and refused to a signed-out
 visitor holding the link; a desktop pairs and refreshes without error; and the
 GitHub connect flow reconnects an installation and still lists its
-repositories.
+repositories; and a finished Deep Research report names the credits the run
+consumed.
 **What remains after founder action** Nothing in code.
 **Impact** RELEASE-BLOCKING (the deploy job refuses to promote)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED

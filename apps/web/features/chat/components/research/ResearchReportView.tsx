@@ -27,7 +27,12 @@ import {
   Telescope,
   TriangleAlert,
 } from 'lucide-react';
-import type { Citation, ResearchReport } from '@agiworkforce/types';
+import {
+  creditsFromMicrousd,
+  formatCredits,
+  type Citation,
+  type ResearchReport,
+} from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 import { citationAnchorId, citedSourceNumbers, linkifyCitations } from '../../lib/citation-links';
@@ -364,6 +369,10 @@ export function ResearchReportView({
               {report.sourcesConsulted} {report.sourcesConsulted === 1 ? 'source' : 'sources'}
               {typeof report.totalDurationMs === 'number' &&
                 ` · ${Math.round(report.totalDurationMs / 1000)}s`}
+              {typeof report.settledCostMicrousd === 'number' &&
+                ` · ${formatCredits(creditsFromMicrousd(report.settledCostMicrousd), {
+                  maximumFractionDigits: 2,
+                })}`}
             </p>
           </div>
         </div>

@@ -130,6 +130,8 @@ export interface MessageResearchState {
   sources?: number;
   elapsedMs?: number;
   startedAt?: string;
+  /** AGI credits the managed usage ledger settled for the run, once it has. */
+  credits?: number;
   /** Honest error summary when the run failed mid-way. */
   error?: string;
   /**
