@@ -20,23 +20,18 @@ export type ThreadSummary = {
   createdBy: DeveloperSessionSource;
   status: ThreadStatus;
   /**
-   * Checked-out branch of the thread's workspace, as it was when the host
-   * last persisted it. A host records this at thread start and refreshes it
-   * when a turn ends; nothing recomputes it while listing, so a list of a
-   * hundred threads costs no git invocations.
+   * Checked-out branch as the host last persisted it. Listing never
+   * recomputes it, so a long list costs no git invocations.
    */
   gitBranch?: string;
   /**
-   * Top level of the thread's git worktree, persisted alongside the branch.
-   * Distinct from `cwd`: a thread started in a subdirectory shares its
-   * worktree root with every other thread in the same checkout.
+   * Top level of the thread's git worktree. Distinct from `cwd`, which may
+   * be a subdirectory of it.
    */
   worktreeRoot?: string;
   /**
-   * `clientInfo.name` from the `initialize` of the connection that created
-   * the thread. `created_by` is the coarse surface; this is the exact
-   * client, so two clients that both map to one surface stay tellable
-   * apart.
+   * `clientInfo.name` of the connection that created the thread, where
+   * `created_by` is only the coarse surface.
    */
   client?: string;
 };
