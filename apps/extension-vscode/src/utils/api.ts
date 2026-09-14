@@ -166,12 +166,12 @@ export async function getAccountAuthState(
   return { status: 'signed-in', expiresAt };
 }
 
-export type CloudCredential =
+type CloudCredential =
   | { kind: 'account'; token: string }
   | { kind: 'api-key'; token: string }
   | { kind: 'none'; accountStatus: 'signed-out' | 'expired' };
 
-export async function getCloudCredential(secrets: vscode.SecretStorage): Promise<CloudCredential> {
+async function getCloudCredential(secrets: vscode.SecretStorage): Promise<CloudCredential> {
   const accountState = await getAccountAuthState(secrets);
   if (accountState.status === 'signed-in') {
     const accountToken = await secrets.get(ACCOUNT_TOKEN_KEY);
@@ -225,7 +225,7 @@ function getGlobalConfig<T>(section: string, key: string, defaultValue: T): T {
   return inspected?.globalValue ?? inspected?.defaultValue ?? defaultValue;
 }
 
-export function getCloudApiEndpoint(): string {
+function getCloudApiEndpoint(): string {
   const raw = getGlobalConfig('agiWorkforce', 'apiEndpoint', DEFAULT_ENDPOINT);
   return validateEndpointUrl(raw) ?? DEFAULT_ENDPOINT;
 }
