@@ -311,3 +311,26 @@ describe('Chrome side-panel sign-out ends the shared session, not just the local
     expect(localResetIndex).toBeGreaterThan(clerkSignOutIndex);
   });
 });
+
+describe('Chrome side-panel composer placeholder never shows a stale literal', () => {
+  it('creates the composer with the catalog ready copy, not a hardcoded literal', () => {
+    const start = source.indexOf("id: 'sp-input',");
+    const end = source.indexOf('}) as HTMLTextAreaElement', start);
+    const textareaCall = source.slice(start, end);
+
+    expect(textareaCall).toContain("placeholder: t('spComposerPlaceholder')");
+    expect(textareaCall).not.toContain('Type / for commands');
+  });
+
+  it('owns the placeholder for every chat state, loading included', () => {
+    const start = source.indexOf('function setManagedCloudChatState');
+    const end = source.indexOf('\n}', start);
+    const body = source.slice(start, end);
+
+    expect(body).toContain("if (state === 'signed_out')");
+    expect(body).toContain("input.placeholder = t('spComposerPlaceholderSignedOut')");
+    expect(body).toContain("else if (state === 'unavailable')");
+    expect(body).toContain("input.placeholder = t('spComposerPlaceholderNoAccess')");
+    expect(body).toMatch(/else\s+input\.placeholder = t\('spComposerPlaceholder'\)/);
+  });
+});

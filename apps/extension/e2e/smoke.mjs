@@ -629,7 +629,18 @@ try {
       () => new Promise((res) => chrome.storage.local.set({ agi_onboarding_completed: true }, res)),
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1000);
+    const bootPlaceholder = await page.getAttribute('#sp-input', 'placeholder');
+    if (bootPlaceholder === 'Type / for commands') {
+      fail('chat surface: composer placeholder showed the stale literal on boot');
+    }
+    await page
+      .waitForFunction(
+        () =>
+          document.getElementById('sp-cloud-gate-message')?.textContent !==
+          'Checking your AGI Cloud account…',
+        { timeout: 15000 },
+      )
+      .catch(() => fail('chat surface: account gate never left the checking state'));
 
     const visibleSecondaryChrome = await page.evaluate(() =>
       ['sp-auth-bar', 'sp-toolbar', 'sp-prompt-chips'].filter((id) => {

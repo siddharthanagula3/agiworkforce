@@ -450,9 +450,9 @@ function setManagedCloudChatState(
   }
   if (input) {
     input.disabled = state !== 'ready';
-    if (state === 'ready') input.placeholder = t('spComposerPlaceholder');
-    else if (state === 'signed_out') input.placeholder = t('spComposerPlaceholderSignedOut');
+    if (state === 'signed_out') input.placeholder = t('spComposerPlaceholderSignedOut');
     else if (state === 'unavailable') input.placeholder = t('spComposerPlaceholderNoAccess');
+    else input.placeholder = t('spComposerPlaceholder');
   }
   updateSendButton();
 }
@@ -8135,16 +8135,10 @@ function buildUI(): void {
 
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
+    const accountProfilePromise = getClerkAccountProfile().catch(() => null);
     let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
-    let accountProfile: Awaited<ReturnType<typeof getClerkAccountProfile>> | null;
     try {
-      [authContext, accountProfile] = await withTimeout(
-        Promise.all([
-          getManagedCloudAuthContext(forceAuthRefresh),
-          getClerkAccountProfile().catch(() => null),
-        ]),
-        8_000,
-      );
+      authContext = await withTimeout(getManagedCloudAuthContext(forceAuthRefresh), 8_000);
     } catch {
       if (refreshGeneration !== cloudAccountRefreshGeneration) return;
       managedModelAccess = null;
@@ -8166,10 +8160,6 @@ function buildUI(): void {
     const ownerChanged = await transitionManagedCloudOwner(authContext?.owner ?? null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const token = authContext?.token ?? null;
-    const currentAccountProfile =
-      authContext && sameManagedCloudOwner(accountProfile?.owner, authContext.owner)
-        ? accountProfile
-        : null;
     if (!token) {
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
@@ -8199,6 +8189,13 @@ function buildUI(): void {
       });
       return;
     }
+
+    const accountProfile = await withTimeout(accountProfilePromise, 8_000).catch(() => null);
+    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+    const currentAccountProfile =
+      authContext && sameManagedCloudOwner(accountProfile?.owner, authContext.owner)
+        ? accountProfile
+        : null;
 
     let access: ManagedModelAccess;
     try {
@@ -9608,7 +9605,7 @@ function buildUI(): void {
 
   const inputEl = el('textarea', {
     id: 'sp-input',
-    placeholder: 'Type / for commands',
+    placeholder: t('spComposerPlaceholder'),
     rows: '1',
     name: 'message',
     'aria-label': 'Message AGI',
