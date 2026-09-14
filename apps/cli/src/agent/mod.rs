@@ -87,6 +87,22 @@ impl std::fmt::Debug for ToolEventSink {
     }
 }
 
+/// Where an agentic turn's continuation text goes after a tool call.
+///
+/// The first completion streams to the caller's own callback; every completion
+/// after a tool call used to fall back to `print!`, which under the full-screen
+/// TUI wrote straight past ratatui's buffer and left the model's answer on the
+/// frame's borders instead of in the transcript. A surface that owns the
+/// terminal installs this so both halves of one reply land in the same place.
+#[derive(Clone)]
+pub struct ContinuationSink(pub std::sync::Arc<dyn Fn(&str) + Send + Sync>);
+
+impl std::fmt::Debug for ContinuationSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ContinuationSink(<callback>)")
+    }
+}
+
 /// Stable identifiers shared by every SDK stream event in one CLI turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SdkStreamContext {
@@ -155,6 +171,7 @@ pub struct AgentSession {
     pub auto_approve_safe: bool,
     pub on_tool_approval: Option<ToolApprovalSink>,
     pub on_tool_event: Option<ToolEventSink>,
+    pub on_continuation_chunk: Option<ContinuationSink>,
     pub quiet: bool,
     #[allow(dead_code)]
     pub fast_mode: bool,
@@ -599,6 +616,7 @@ impl AgentSession {
             auto_approve_safe: false,
             on_tool_approval: None::<ToolApprovalSink>,
             on_tool_event: None::<ToolEventSink>,
+            on_continuation_chunk: None::<ContinuationSink>,
             quiet: false,
             fast_mode: false,
             original_model: None,

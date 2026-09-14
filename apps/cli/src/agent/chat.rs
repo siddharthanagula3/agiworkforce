@@ -27,6 +27,22 @@ use super::history::build_assistant_message;
 use super::tools::{execute_mcp_tool, execute_team_tool, is_team_tool};
 use super::{AgentSession, TurnResult};
 
+/// Turn narration. The TUI renders these same events as transcript cells and a
+/// live status line, and a raw stderr write while it owns the terminal lands
+/// outside ratatui's buffer, which then never repaints those cells.
+macro_rules! narrate {
+    () => {
+        if !crate::tui::tui_active() {
+            eprintln!();
+        }
+    };
+    ($($arg:tt)*) => {
+        if !crate::tui::tui_active() {
+            eprintln!($($arg)*);
+        }
+    };
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 struct CompactionUsage {
     input_tokens: u32,
@@ -305,10 +321,14 @@ fn content_block_to_result(block: ContentBlock) -> ResultBlock {
 impl AgentSession {
     /// Build a streaming chunk callback that is machine-output-aware.
     ///
-    /// Canonical SDK stream-json takes precedence over the legacy
-    /// `--json-events` envelope. Otherwise it falls back to raw text so human
-    /// output remains unaffected.
+    /// A surface that owns the terminal takes precedence: its own sink keeps
+    /// the continuation in the same transcript as the first completion. Then
+    /// canonical SDK stream-json over the legacy `--json-events` envelope, and
+    /// finally raw text so human output remains unaffected.
     pub(crate) fn continuation_sink(&self) -> StreamCallback {
+        if let Some(sink) = self.on_continuation_chunk.clone() {
+            return Box::new(move |chunk: &str| (sink.0)(chunk));
+        }
         if let Some(context) = self.sdk_stream_context.clone() {
             Box::new(move |chunk: &str| context.emit_text_delta(chunk))
         } else if self.json_events {
@@ -607,7 +627,7 @@ impl AgentSession {
                 compaction_config.reserved_output_tokens,
                 None,
             );
-            eprintln!(
+            narrate!(
                 "  {}",
                 format!(
                     "Context compacted: {}/{} tokens ({}%)",
@@ -639,7 +659,7 @@ impl AgentSession {
             )
             .await;
         } else if usage.near_limit() {
-            eprintln!(
+            narrate!(
                 "  {}",
                 ts::warning(format!(
                     "Warning: context usage {}/{} tokens ({}%)",
@@ -709,7 +729,7 @@ message -- revise and call `update_plan` again.\n\n",
         self.save_checkpoint();
 
         if let Err(error) = self.persist_managed_session() {
-            eprintln!(
+            narrate!(
                 "{}",
                 ts::warning(format!(
                     "  warning: failed to persist managed session: {error:#}"
@@ -883,9 +903,9 @@ message -- revise and call `update_plan` again.\n\n",
                     true,
                 ) {
                     if let Err(e) = crate::skill_learner::SkillLearner::save_skill(&home, &skill) {
-                        eprintln!("[skill_learner] failed to save learned skill: {}", e);
+                        narrate!("[skill_learner] failed to save learned skill: {}", e);
                     } else if !self.quiet {
-                        eprintln!(
+                        narrate!(
                             "  {} Learned skill: {} (confidence: {:.0}%)",
                             "auto".dimmed(),
                             skill.name,
@@ -908,7 +928,7 @@ message -- revise and call `update_plan` again.\n\n",
                     )
                     .await
                     {
-                        eprintln!("[memory_pipeline] consolidation error: {}", e);
+                        narrate!("[memory_pipeline] consolidation error: {}", e);
                     }
                 });
                 self.track_memory_consolidation(task);
@@ -916,7 +936,7 @@ message -- revise and call `update_plan` again.\n\n",
         }
 
         if let Err(error) = self.persist_managed_session() {
-            eprintln!(
+            narrate!(
                 "{}",
                 ts::warning(format!(
                     "  warning: failed to persist managed session: {error:#}"
@@ -1033,7 +1053,7 @@ impl TurnHostAdapter<'_> {
 
         let first_call_result = if self.session.demo_force_rate_limit {
             self.session.demo_force_rate_limit = false;
-            eprintln!(
+            narrate!(
                 "  {}",
                 "DEMO: synthesizing rate-limit on primary model".dimmed()
             );
@@ -1072,19 +1092,14 @@ impl TurnHostAdapter<'_> {
                     if let Some(cli_err) = last_err.downcast_ref::<CliError>() {
                         if cli_err.is_retryable() {
                             let delay = cli_err.retry_delay();
-                            // Suppress the raw stderr notice while the full-screen
-                            // TUI owns the terminal (it would bleed into the live
-                            // spinner frame); exec/REPL still surface it.
-                            if !crate::tui::tui_active() {
-                                eprintln!(
-                                    "  {}",
-                                    ts::warning(format!(
-                                        "Retrying in {}s: {}",
-                                        delay.as_secs(),
-                                        cli_err
-                                    ))
-                                );
-                            }
+                            narrate!(
+                                "  {}",
+                                ts::warning(format!(
+                                    "Retrying in {}s: {}",
+                                    delay.as_secs(),
+                                    cli_err
+                                ))
+                            );
                             tokio::time::sleep(delay).await;
                             match models::stream_completion(
                                 self.config,
@@ -1138,7 +1153,7 @@ impl TurnHostAdapter<'_> {
                                     last_err = boundary_err;
                                     break;
                                 }
-                                eprintln!(
+                                narrate!(
                                     "  {}",
                                     ts::warning(format!(
                                         "↘ Falling back: {} → {} ({})",
@@ -1236,18 +1251,10 @@ impl TurnHostAdapter<'_> {
                 if let Some(cli_err) = e.downcast_ref::<CliError>() {
                     if cli_err.is_retryable() {
                         let delay = cli_err.retry_delay();
-                        // Suppress the raw stderr notice under the TUI (would
-                        // corrupt the live spinner frame); exec/REPL print it.
-                        if !crate::tui::tui_active() {
-                            eprintln!(
-                                "  {}",
-                                ts::warning(format!(
-                                    "Retrying in {}s: {}",
-                                    delay.as_secs(),
-                                    cli_err
-                                ))
-                            );
-                        }
+                        narrate!(
+                            "  {}",
+                            ts::warning(format!("Retrying in {}s: {}", delay.as_secs(), cli_err))
+                        );
                         tokio::time::sleep(delay).await;
                         models::stream_completion(
                             self.config,
@@ -1323,7 +1330,7 @@ impl TurnHostAdapter<'_> {
             PreToolUseOutcome::Proceed(args) => args,
             PreToolUseOutcome::Blocked(reason_text) => {
                 if !self.session.quiet {
-                    eprintln!(
+                    narrate!(
                         "  {} {} blocked by hook: {}",
                         "->".dimmed(),
                         ts::code(call.name.as_str()),
@@ -1340,7 +1347,7 @@ impl TurnHostAdapter<'_> {
             }
             PreToolUseOutcome::Stopped => {
                 if !self.session.quiet {
-                    eprintln!(
+                    narrate!(
                         "  {} {} stopped by hook",
                         "->".dimmed(),
                         ts::code(call.name.as_str())
@@ -1511,7 +1518,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 PreToolUseOutcome::Proceed(args) => args,
                 PreToolUseOutcome::Blocked(reason_text) => {
                     if !self.session.quiet {
-                        eprintln!(
+                        narrate!(
                             "  {} {} blocked by hook: {}",
                             "->".dimmed(),
                             ts::code(tc.name.as_str()),
@@ -1527,7 +1534,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 }
                 PreToolUseOutcome::Stopped => {
                     if !self.session.quiet {
-                        eprintln!(
+                        narrate!(
                             "  {} {} stopped by hook",
                             "->".dimmed(),
                             ts::code(tc.name.as_str())
@@ -1778,7 +1785,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             } else {
                 ts::danger("failed").to_string()
             };
-            eprintln!(
+            narrate!(
                 "  {} {} [{}]",
                 "->".dimmed(),
                 ts::code(tool_name.as_str()),
@@ -1937,7 +1944,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                     .as_ref()
                     .map(|p| p.display().to_string())
                     .unwrap_or_default();
-                eprintln!(
+                narrate!(
                     "  {} {} ({}{})",
                     "->".dimmed(),
                     "update_plan".bold(),
@@ -2109,7 +2116,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             self.session.messages.push(Message::text("system", merged));
         }
 
-        eprintln!();
+        narrate!();
     }
 
     async fn confirm_tool_runaway(
@@ -2120,7 +2127,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         let strike = tracker.bump_strike();
 
         if strike >= 2 {
-            eprintln!(
+            narrate!(
                 "\n{}",
                 ts::danger("  Auto-stopping: second loop detected in this session.")
             );
@@ -2151,7 +2158,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 .unwrap_or("unknown"),
             strike
         );
-        eprintln!("\n{}", ts::warning(&loop_msg));
+        narrate!("\n{}", ts::warning(&loop_msg));
         hooks::run_hooks(
             &self.session.hooks_config,
             hooks::HookEvent::Notification,
@@ -2191,7 +2198,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             .unwrap_or(false);
 
         if !confirmed {
-            eprintln!("{}", "  Agentic loop stopped by user.".dimmed());
+            narrate!("{}", "  Agentic loop stopped by user.".dimmed());
             hooks::run_hooks(
                 &self.session.hooks_config,
                 hooks::HookEvent::PermissionDenied,
@@ -2222,14 +2229,14 @@ impl TurnHost for TurnHostAdapter<'_> {
         let strike = tracker.bump_strike();
 
         if strike >= 2 {
-            eprintln!(
+            narrate!(
                 "\n{}",
                 ts::danger("  Auto-stopping: second content loop detected in this session.")
             );
             return LoopControl::Break;
         }
 
-        eprintln!(
+        narrate!(
             "\n{}",
             ts::warning(format!(
                 "  Warning: Detected repetitive content in LLM response. Possible content loop. [strike {}/2]",
@@ -2244,7 +2251,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             .unwrap_or(false);
 
         if !confirmed {
-            eprintln!("{}", "  Agentic loop stopped by user.".dimmed());
+            narrate!("{}", "  Agentic loop stopped by user.".dimmed());
             return LoopControl::Break;
         }
 
@@ -2262,7 +2269,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 iteration,
                 max,
             } => {
-                eprintln!(
+                narrate!(
                     "\n{}",
                     format!(
                         "  Executing {} tool{}... (iteration {}/{})",
@@ -2276,7 +2283,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             }
             TurnEvent::ParallelBatchStarted { names } => {
                 if !self.session.quiet {
-                    eprintln!(
+                    narrate!(
                         "  {} ({})",
                         format!("running {} read-only tools in parallel", names.len()).dimmed(),
                         sanitize_terminal_text(&names.join(", "))
@@ -2322,7 +2329,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                     } else {
                         ts::danger("failed").to_string()
                     };
-                    eprintln!(
+                    narrate!(
                         "  {} {} [{}]",
                         "->".dimmed(),
                         ts::code(name.as_str()),
@@ -2357,7 +2364,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 cumulative_usd,
                 cap_usd,
             } => {
-                eprintln!(
+                narrate!(
                     "\n{}",
                     ts::warning(format!(
                         "  Budget cap reached: ${:.4} >= ${:.4}. Stopping agent loop.",
@@ -2386,6 +2393,58 @@ impl TurnHost for TurnHostAdapter<'_> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    /// Regression: the completion after a tool call streamed through a sink
+    /// that fell back to `print!`, so under the full-screen TUI the model's
+    /// answer was written past ratatui's buffer, painting over the frame's
+    /// borders, and never reached the transcript at all.
+    #[test]
+    fn an_installed_continuation_sink_takes_the_text_instead_of_the_terminal() {
+        use std::sync::{Arc, Mutex};
+
+        let context = crate::context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let model = crate::model_catalog::fast_completion_model("anthropic");
+        let mut session = AgentSession::new(&model, &context, None);
+
+        let captured = Arc::new(Mutex::new(String::new()));
+        let sink_buf = Arc::clone(&captured);
+        session.on_continuation_chunk = Some(crate::agent::ContinuationSink(Arc::new(
+            move |chunk: &str| {
+                if let Ok(mut buf) = sink_buf.lock() {
+                    buf.push_str(chunk);
+                }
+            },
+        )));
+
+        (session.continuation_sink())("after the tool call");
+        assert_eq!(
+            captured.lock().expect("lock").as_str(),
+            "after the tool call"
+        );
+
+        // The sink outranks the machine-output envelope too: a surface that
+        // owns the terminal is the one place the text can safely go.
+        session.json_events = true;
+        (session.continuation_sink())(" and more");
+        assert_eq!(
+            captured.lock().expect("lock").as_str(),
+            "after the tool call and more"
+        );
+    }
 
     #[test]
     fn subscription_compaction_does_not_enter_paid_ledger() {
