@@ -27,7 +27,11 @@ import {
   type UsageMeter,
   type UserInput,
 } from '@agiworkforce/types';
-import { presentChatError, type ChatErrorPresentation } from './errorPresentation';
+import {
+  presentChatError,
+  presentTurnFailure,
+  type ChatErrorPresentation,
+} from './errorPresentation';
 import { Config, type ComposerFollowUpBehavior } from '../../platform/config';
 import {
   CLI_NOT_EXECUTABLE_MARKER,
@@ -168,6 +172,10 @@ export type WebviewToExtMessage =
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
   | { type: 'dismissEditorContext'; payload: { id: string } }
   | { type: 'openToolDiff'; payload: { path: string } }
+  | {
+      type: 'resolveTurnFailure';
+      payload: { kind: 'sign-in-provider' | 'open-settings'; provider?: string };
+    }
   | { type: 'respondToApproval'; payload: { requestId: string; decision: ApprovalDecision } }
   | {
       type: 'attachFiles';
@@ -942,6 +950,18 @@ export class ChatStateManager {
         break;
       }
 
+      case 'resolveTurnFailure': {
+        if (msg.payload.kind === 'sign-in-provider') {
+          await vscode.commands.executeCommand(
+            'agi-workforce.signInProvider',
+            msg.payload.provider,
+          );
+          break;
+        }
+        await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
+        break;
+      }
+
       case 'openToolDiff': {
         await openWorkspaceFileDiff(msg.payload.path);
         break;
@@ -1400,6 +1420,8 @@ export class ChatStateManager {
         title: thread.title,
         updatedAt: thread.updatedAt,
         source: 'local',
+        ...(thread.createdBy === undefined ? {} : { origin: thread.createdBy }),
+        ...(thread.gitBranch === undefined ? {} : { branch: thread.gitBranch }),
       }));
       this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
       return;
@@ -2794,7 +2816,11 @@ export class ChatStateManager {
       return;
     }
     this._expirePendingApprovals(event.turnId);
-    this._postError(event.error ?? 'The local developer turn failed.');
+    if (event.failure !== undefined && event.failure !== null) {
+      this._post({ type: 'error', payload: presentTurnFailure(event.failure) });
+    } else {
+      this._postError(event.error ?? 'The local developer turn failed.');
+    }
     complete();
   }
 

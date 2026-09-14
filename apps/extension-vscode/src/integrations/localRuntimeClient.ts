@@ -167,8 +167,11 @@ const threadSummarySchema = z.object({
   trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
   createdAt: z.string(),
   updatedAt: z.string(),
-  createdBy: z.enum(['cli', 'vscode']),
+  createdBy: z.enum(['cli', 'vscode', 'desktop']),
   status: z.enum(['idle', 'running', 'awaiting_approval', 'archived', 'failed']),
+  gitBranch: z.string().min(1).max(512).optional(),
+  worktreeRoot: z.string().min(1).max(16_384).optional(),
+  client: z.string().min(1).max(200).optional(),
 });
 
 const threadStartResponseSchema = z.object({ thread: threadSummarySchema });
@@ -340,6 +343,25 @@ const outputDeltaEventSchema = z.object({
   turnId: z.string().min(1),
   delta: z.string(),
 });
+const turnFailureSchema = z.object({
+  code: z.enum([
+    'provider_auth_missing',
+    'provider_auth_invalid',
+    'provider_rate_limited',
+    'provider_unavailable',
+    'context_window_exceeded',
+    'network',
+    'tool_denied',
+    'interrupted',
+    'timeout',
+    'invalid_request',
+    'unknown',
+  ]),
+  message: z.string().max(10_000),
+  provider: z.string().min(1).max(200).optional(),
+  retryable: z.boolean(),
+  action: z.enum(['sign_in_provider', 'open_settings', 'retry', 'none']),
+});
 const turnTerminalEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
@@ -348,6 +370,7 @@ const turnTerminalEventSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   error: z.string().nullable().optional(),
+  failure: turnFailureSchema.nullable().optional(),
 });
 const approvalRequestedEventSchema = z.object({
   threadId: z.string().min(1),
@@ -1226,5 +1249,7 @@ async function terminateLocalRuntimeProcessTree(
     killer.once('exit', () => resolve());
   });
 }
+
+export type TurnFailureEvent = z.infer<typeof turnFailureSchema>;
 
 export type { AppServerCapabilities };

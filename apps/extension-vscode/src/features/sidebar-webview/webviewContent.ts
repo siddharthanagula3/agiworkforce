@@ -1880,6 +1880,13 @@ export function getWebviewContent(
       white-space: nowrap;
     }
     .sessions-sheet-row-age { color: var(--text-secondary); font-size: 12px; }
+    .sessions-sheet-row-branch {
+      font-family: var(--vscode-editor-font-family, monospace);
+      max-width: 40%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .sessions-sheet-row-dot {
       width: 4px;
       height: 4px;
@@ -3286,7 +3293,7 @@ export function getWebviewContent(
       block.appendChild(headline);
 
       var canRetry = presentation.retryable === true && lastSendPayload !== null;
-      if (canRetry || presentation.detail) {
+      if (canRetry || presentation.detail || presentation.action) {
         var actions = document.createElement('div');
         actions.className = 'error-actions';
         if (canRetry) {
@@ -3300,6 +3307,22 @@ export function getWebviewContent(
             resendLastTurn(block);
           });
           actions.appendChild(retry);
+        }
+        if (presentation.action) {
+          var unlock = document.createElement('button');
+          unlock.type = 'button';
+          unlock.className = 'error-retry';
+          unlock.dataset.action = presentation.action.kind;
+          unlock.textContent = presentation.action.label;
+          unlock.addEventListener('click', function () {
+            vscode.postMessage({
+              type: 'resolveTurnFailure',
+              payload: presentation.action.provider
+                ? { kind: presentation.action.kind, provider: presentation.action.provider }
+                : { kind: presentation.action.kind },
+            });
+          });
+          actions.appendChild(unlock);
         }
         if (presentation.detail) {
           // A native <details> put the whole hit target on 11px of inline text.
@@ -4018,6 +4041,17 @@ export function getWebviewContent(
           button.appendChild(age);
           button.appendChild(dot);
           button.appendChild(source);
+          if (row.branch) {
+            var branchDot = document.createElement('span');
+            branchDot.className = 'sessions-sheet-row-dot';
+            branchDot.setAttribute('aria-hidden', 'true');
+            var branch = document.createElement('span');
+            branch.className = 'sessions-sheet-row-age sessions-sheet-row-branch';
+            branch.textContent = row.branch;
+            button.appendChild(branchDot);
+            button.appendChild(branch);
+            button.title = row.title + ' · ' + row.branch;
+          }
           button.addEventListener('click', function () {
             closeSessionsSheet();
             vscode.postMessage({
