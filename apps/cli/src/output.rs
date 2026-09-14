@@ -262,29 +262,46 @@ pub fn print_assistant_end() {
     }
 }
 
+/// One owner for every terminal notice. A direct stderr write while the
+/// full-screen TUI holds the terminal lands outside ratatui's buffer, so its
+/// diff renderer never repaints those cells and the frame stays corrupt until
+/// something forces a full redraw. While a TUI is running the notice goes to
+/// its own notice area instead.
+fn emit_notice(label: impl std::fmt::Display, message: &str) {
+    let message = sanitize_terminal_text(message);
+    if crate::tui::tui_active() {
+        crate::tui::push_tui_notice(message.into_owned());
+        return;
+    }
+    print_assistant_end();
+    eprintln!("{label} {message}");
+}
+
 /// Print a system/info message.
 pub fn print_info(message: &str) {
-    print_assistant_end();
-    eprintln!("{} {}", ts::info_label(), sanitize_terminal_text(message));
+    emit_notice(ts::info_label(), message);
 }
 
 /// Print a warning message.
 pub fn print_warn(message: &str) {
-    print_assistant_end();
-    eprintln!("{} {}", ts::warn_label(), sanitize_terminal_text(message));
+    emit_notice(ts::warn_label(), message);
 }
 
 /// Print an error message.
 pub fn print_error(message: &str) {
-    print_assistant_end();
-    eprintln!("{} {}", ts::error_label(), sanitize_terminal_text(message));
+    emit_notice(ts::error_label(), message);
 }
 
 /// Print an already-rendered block (a table, a listing, a raw payload) whose
 /// text came from outside this process, the model, a tool, an MCP server, or
 /// files in the checkout, with terminal escapes stripped.
 pub fn print_block(text: &str) {
-    eprintln!("{}", sanitize_terminal_text(text));
+    let text = sanitize_terminal_text(text);
+    if crate::tui::tui_active() {
+        crate::tui::push_tui_notice(text.into_owned());
+        return;
+    }
+    eprintln!("{text}");
 }
 
 // ---------------------------------------------------------------------------
