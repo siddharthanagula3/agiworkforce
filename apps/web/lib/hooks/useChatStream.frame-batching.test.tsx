@@ -137,6 +137,78 @@ describe('useChatStream frame-coalesced store appends', () => {
     expect(assistant?.metadata?.thinkingContent).toBe('weighing the options');
   });
 
+  it('shows a reply shorter than a thinking tag before the stream ends', async () => {
+    const encoder = new TextEncoder();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            controller = c;
+          },
+        }),
+        { status: 200, headers: new Headers() },
+      ),
+    );
+    const { result } = renderHook(() => useChatStream());
+    let settled = false;
+    let sendPromise: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      sendPromise = result.current
+        .sendMessage('hi', { conversationId: TEMP_CONVERSATION.id })
+        .finally(() => {
+          settled = true;
+        });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      for (const token of tokenize('Hi there!', 3))
+        controller.enqueue(encoder.encode(sseEvent(token)));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+    expect(settled).toBe(false);
+    expect(assistantMessage()?.content).toBe('Hi there!');
+    await act(async () => {
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+      await sendPromise;
+    });
+    expect(assistantMessage()?.content).toBe('Hi there!');
+  });
+
+  it('withholds only a suffix that could still become a thinking tag', async () => {
+    const encoder = new TextEncoder();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            controller = c;
+          },
+        }),
+        { status: 200, headers: new Headers() },
+      ),
+    );
+    const { result } = renderHook(() => useChatStream());
+    let sendPromise: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      sendPromise = result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      controller.enqueue(encoder.encode(sseEvent('Sure, <thin')));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+    expect(assistantMessage()?.content).toBe('Sure, ');
+    await act(async () => {
+      controller.enqueue(encoder.encode(sseEvent('king>hidden</thinking>done')));
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+      await sendPromise;
+    });
+    expect(assistantMessage()?.content).toBe('Sure, done');
+  });
+
   it('loses no buffered text when the turn aborts mid-frame', async () => {
     const partial = 'The answer begins here and then the user presses stop';
     mockTokenStream(tokenize(partial, 4), { abortAfterDelivery: true });
