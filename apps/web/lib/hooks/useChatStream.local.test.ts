@@ -164,7 +164,7 @@ describe('a turn on a model installed on this machine', () => {
 
     expect(sent).toBe(false);
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
-    expect(useChatStore.getState().error).toContain('not sent to a model on this device');
+    expect(useChatStore.getState().error).toContain('cannot read attachments');
   });
 });
 
