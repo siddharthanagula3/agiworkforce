@@ -2755,12 +2755,22 @@ export function getWebviewContent(
       return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
     }
 
+    var currentModelLabel = 'Auto';
+    function renderModelPill() {
+      if (!modelPill) return;
+      var effort = capitalizeControl(activeEffort);
+      var effortShort = effort === 'Medium' ? 'Med' : effort;
+      modelPill.textContent = activeSupportsEffort && effortShort
+        ? currentModelLabel + ' · ' + effortShort
+        : currentModelLabel;
+    }
+
     function renderControlsSummary() {
       if (!controlsSummary) return;
       var mode = capitalizeControl(activeMode);
       var effort = capitalizeControl(activeEffort);
-      var effortShort = effort === 'Medium' ? 'Med' : effort;
-      controlsSummary.textContent = activeSupportsEffort ? mode + ' · ' + effortShort : mode;
+      controlsSummary.textContent = mode;
+      renderModelPill();
       var fullLabel = 'Controls: ' + mode + ' mode' +
         (activeSupportsEffort ? ', ' + effort + ' effort' : ', effort unavailable for this model');
       controlsSummary.title = fullLabel;
@@ -3849,9 +3859,9 @@ export function getWebviewContent(
         }
         if (opt) {
           modelSelect.value = msg.payload.model;
-          if (modelPill) modelPill.textContent = opt.dataset.displayLabel || opt.text;
+          currentModelLabel = opt.dataset.displayLabel || opt.text; renderModelPill();
         } else if (modelPill) {
-          modelPill.textContent = msg.payload.model;
+          currentModelLabel = msg.payload.model; renderModelPill();
         }
       }
 
