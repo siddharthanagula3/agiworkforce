@@ -21,10 +21,10 @@ const LOCAL_MODEL: LocalModel = {
 };
 
 const TINY_MODEL: LocalModel = {
-  id: 'local:ollama/smollm2:135m',
+  id: 'local:ollama/tinyfixture:135m',
   serverId: 'ollama',
   serverLabel: 'Ollama',
-  name: 'smollm2:135m',
+  name: 'tinyfixture:135m',
   sizeBillion: 0.13452,
 };
 
@@ -136,11 +136,11 @@ describe('the model picker on the desktop shell', () => {
 
     await screen.findByRole('button', { name: 'tiny-chat:1b - Ollama, runs on this device' });
     expect(
-      screen.queryByRole('button', { name: 'smollm2:135m - Ollama, runs on this device' }),
+      screen.queryByRole('button', { name: 'tinyfixture:135m - Ollama, runs on this device' }),
     ).not.toBeInTheDocument();
     expect(
       await screen.findByText(
-        'smollm2:135m is under 1B parameters and is hidden; pull a larger model',
+        'tinyfixture:135m is under 1B parameters and is hidden; pull a larger model',
       ),
     ).toBeInTheDocument();
   });
@@ -153,7 +153,7 @@ describe('the model picker on the desktop shell', () => {
 
     expect(
       await screen.findByText(
-        'smollm2:135m is under 1B parameters and is hidden; pull a larger model',
+        'tinyfixture:135m is under 1B parameters and is hidden; pull a larger model',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('No models loaded on this device yet.')).not.toBeInTheDocument();
