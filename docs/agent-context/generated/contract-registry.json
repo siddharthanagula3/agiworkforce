@@ -46,6 +46,7 @@
     "paywall-vocabulary",
     "places-search",
     "plugins",
+    "project-file-citations",
     "prompt-enhancement",
     "provider",
     "provider-adapter",
@@ -77,6 +78,7 @@
   ],
   "cloudContractsModules": [
     "agent-events",
+    "artifact-index",
     "capability-handshake",
     "chat-attachments",
     "cloud-agent-runs",

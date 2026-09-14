@@ -1,5 +1,13 @@
 import {
   DEVICE_STEP_DEFINITIONS,
+  MAX_DEVICE_CLICK_COUNT,
+  MAX_DEVICE_COORDINATE,
+  MAX_DEVICE_SCROLL_DELTA,
+  MAX_DEVICE_TYPE_LENGTH,
+  MAX_DEVICE_WAIT_MS,
+  DEVICE_KEY_MODIFIERS,
+  DEVICE_MOUSE_BUTTONS,
+  DEVICE_NAMED_KEYS,
   offeredDeviceStepTools,
   type DesktopHostDeclaration,
   type DeviceStepTool,
@@ -24,6 +32,15 @@ function rootChoices(declaration: DesktopHostDeclaration): {
     described: declaration.roots
       .map((root) => `${root.id} = "${root.name}" (${root.path})`)
       .join('; '),
+  };
+}
+
+const COORDINATE_RANGE = { type: 'integer', minimum: 0, maximum: MAX_DEVICE_COORDINATE } as const;
+
+function coordinate(axis: 'x' | 'y', what: string): Record<string, unknown> {
+  return {
+    ...COORDINATE_RANGE,
+    description: `${axis === 'x' ? 'Distance from the left edge' : 'Distance from the top edge'} of the last screenshot, in its own pixels, ${what}.`,
   };
 }
 
@@ -81,6 +98,128 @@ function parametersFor(
           },
         },
         required: ['rootId', 'command'],
+      };
+    case 'device_screenshot':
+      return { type: 'object', properties: {}, required: [] };
+    case 'device_zoom':
+      return {
+        type: 'object',
+        properties: {
+          region: {
+            type: 'object',
+            description: 'The rectangle to look at, in the coordinates of the last screenshot.',
+            properties: {
+              x: coordinate('x', 'of the left edge of the rectangle'),
+              y: coordinate('y', 'of the top edge of the rectangle'),
+              width: { type: 'integer', minimum: 1, maximum: MAX_DEVICE_COORDINATE },
+              height: { type: 'integer', minimum: 1, maximum: MAX_DEVICE_COORDINATE },
+            },
+            required: ['x', 'y', 'width', 'height'],
+          },
+        },
+        required: ['region'],
+      };
+    case 'device_move':
+      return {
+        type: 'object',
+        properties: {
+          x: coordinate('x', 'of the point to move to'),
+          y: coordinate('y', 'of the point to move to'),
+        },
+        required: ['x', 'y'],
+      };
+    case 'device_click':
+      return {
+        type: 'object',
+        properties: {
+          x: coordinate('x', 'of the point to click'),
+          y: coordinate('y', 'of the point to click'),
+          button: {
+            type: 'string',
+            enum: [...DEVICE_MOUSE_BUTTONS],
+            description: 'Which button to press. Defaults to left.',
+          },
+          count: {
+            type: 'integer',
+            minimum: 1,
+            maximum: MAX_DEVICE_CLICK_COUNT,
+            description: '1 for a single click, 2 to open something, 3 to select a line.',
+          },
+        },
+        required: ['x', 'y'],
+      };
+    case 'device_drag':
+      return {
+        type: 'object',
+        properties: {
+          x: coordinate('x', 'where the drag starts'),
+          y: coordinate('y', 'where the drag starts'),
+          toX: coordinate('x', 'where the drag ends'),
+          toY: coordinate('y', 'where the drag ends'),
+        },
+        required: ['x', 'y', 'toX', 'toY'],
+      };
+    case 'device_scroll':
+      return {
+        type: 'object',
+        properties: {
+          x: coordinate('x', 'of the point to scroll over'),
+          y: coordinate('y', 'of the point to scroll over'),
+          deltaY: {
+            type: 'integer',
+            minimum: -MAX_DEVICE_SCROLL_DELTA,
+            maximum: MAX_DEVICE_SCROLL_DELTA,
+            description: 'Negative scrolls up, positive scrolls down. About 300 is one screenful.',
+          },
+          deltaX: {
+            type: 'integer',
+            minimum: -MAX_DEVICE_SCROLL_DELTA,
+            maximum: MAX_DEVICE_SCROLL_DELTA,
+            description: 'Negative scrolls left, positive scrolls right.',
+          },
+        },
+        required: ['x', 'y'],
+      };
+    case 'device_type':
+      return {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            maxLength: MAX_DEVICE_TYPE_LENGTH,
+            description: 'The text to type where the keyboard focus already is.',
+          },
+        },
+        required: ['text'],
+      };
+    case 'device_key':
+      return {
+        type: 'object',
+        properties: {
+          key: {
+            type: 'string',
+            description: `One printable character, or one of: ${DEVICE_NAMED_KEYS.join(', ')}.`,
+          },
+          modifiers: {
+            type: 'array',
+            items: { type: 'string', enum: [...DEVICE_KEY_MODIFIERS] },
+            description: 'Modifiers held while the key is pressed.',
+          },
+        },
+        required: ['key'],
+      };
+    case 'device_wait':
+      return {
+        type: 'object',
+        properties: {
+          ms: {
+            type: 'integer',
+            minimum: 0,
+            maximum: MAX_DEVICE_WAIT_MS,
+            description: 'How long to wait, in milliseconds.',
+          },
+        },
+        required: ['ms'],
       };
   }
 }

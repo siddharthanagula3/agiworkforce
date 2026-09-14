@@ -79,6 +79,12 @@ import {
   type SidePanelChatMessage,
 } from './features/side-panel/chat-state';
 import { setupVoiceInput } from './features/side-panel/voice';
+import {
+  dictationLanguageChoices,
+  readDictationLanguage,
+  resolveDictationLanguage,
+  writeDictationLanguage,
+} from './features/side-panel/dictation-language';
 import { markOnboardingComplete, isOnboardingComplete } from './features/side-panel/onboarding';
 import { DATA_HANDLING_DISCLOSURES } from './features/privacy/dataHandling';
 import {
@@ -7105,6 +7111,61 @@ function buildUI(): void {
   );
   inPageSection.appendChild(inPageToggleStatus);
   drawerBody.appendChild(inPageSection);
+
+  const dictationSection = el('div', { class: 'sp-drawer-section' });
+  dictationSection.appendChild(
+    el('div', { class: 'sp-drawer-section-title' }, t('spDictationSectionTitle')),
+  );
+  const dictationRow = el('div', { class: 'sp-drawer-toggle-row' });
+  dictationRow.appendChild(
+    el('span', { class: 'sp-drawer-toggle-label' }, t('spDictationLanguageLabel')),
+  );
+  const dictationSelect = el('select', {
+    class: 'sp-wf-form-select',
+    id: 'sp-drawer-dictation-language',
+    'aria-label': t('spDictationLanguageAria'),
+    style: 'width: auto; max-width: 60%;',
+  }) as HTMLSelectElement;
+  dictationRow.appendChild(dictationSelect);
+  dictationSection.appendChild(dictationRow);
+  dictationSection.appendChild(
+    el('div', { class: 'sp-drawer-toggle-status' }, t('spDictationLanguageHelp')),
+  );
+  const dictationStatus = el('div', {
+    class: 'sp-drawer-toggle-status',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-atomic': 'true',
+  });
+  dictationSection.appendChild(dictationStatus);
+  void (async () => {
+    const stored = await readDictationLanguage();
+    const choices = dictationLanguageChoices(stored, navigator);
+    if (choices.length === 0) {
+      dictationSelect.disabled = true;
+      dictationStatus.textContent = t('spDictationLanguageUnavailable');
+      return;
+    }
+    for (const choice of choices) {
+      dictationSelect.appendChild(el('option', { value: choice.tag }, choice.label));
+    }
+    dictationSelect.value = resolveDictationLanguage(stored, navigator) ?? choices[0]!.tag;
+  })();
+  dictationSelect.addEventListener('change', async () => {
+    const next = dictationSelect.value;
+    dictationSelect.disabled = true;
+    dictationStatus.removeAttribute('data-kind');
+    try {
+      await writeDictationLanguage(next);
+      dictationStatus.textContent = t('spDictationLanguageSaved');
+    } catch {
+      dictationStatus.textContent = t('spPreferenceSaveFailed');
+      dictationStatus.setAttribute('data-kind', 'error');
+    } finally {
+      dictationSelect.disabled = false;
+    }
+  });
+  drawerBody.appendChild(dictationSection);
 
   const allowlistSection = el('div', { class: 'sp-drawer-section' });
   allowlistSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));

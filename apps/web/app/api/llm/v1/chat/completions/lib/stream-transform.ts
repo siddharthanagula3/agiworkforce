@@ -9,6 +9,7 @@ import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
+import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
   observeFreeLaneSettlement,
@@ -779,6 +780,7 @@ export async function buildStreamResponse(
   addFallbackReasonHeader(streamHeaders, processed);
   addModelEscalationHeaders(streamHeaders, processed);
   addSecretRedactionNoticeHeader(streamHeaders, processed);
+  addProjectSourcesHeader(streamHeaders, processed);
   return new NextResponse(withSseHeartbeat(reconciledStream), { headers: streamHeaders });
 }
 
@@ -1156,6 +1158,7 @@ export async function buildAdapterStreamResponse(
   addFallbackReasonHeader(streamHeaders, processed);
   addModelEscalationHeaders(streamHeaders, processed);
   addSecretRedactionNoticeHeader(streamHeaders, processed);
+  addProjectSourcesHeader(streamHeaders, processed);
   addRouteLaneHeader(streamHeaders, processed);
   return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
 }

@@ -1984,6 +1984,24 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     <div class="composer-card" id="composerCard">
       <div
         class="browse-context-strip"
+        id="projectContextStrip"
+        role="list"
+        aria-label="Active project"
+        hidden
+      >
+        <span class="attachment-chip" role="listitem">
+          <span class="codicon codicon-folder" aria-hidden="true"></span>
+          <span class="attachment-chip__name" id="projectContextName"></span>
+          <button
+            type="button"
+            class="attachment-chip__remove"
+            id="projectContextRemove"
+            aria-label="Stop using this project"
+          >&#215;</button>
+        </span>
+      </div>
+      <div
+        class="browse-context-strip"
         id="browseContextStrip"
         role="list"
         aria-label="Web browsing context"
@@ -2051,6 +2069,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     const plusMenu = document.getElementById('plusMenu');
     const plusMenuBrowse = document.getElementById('plusMenuBrowse');
     const browseContextStrip = document.getElementById('browseContextStrip');
+    const projectContextStrip = document.getElementById('projectContextStrip');
+    const projectContextName = document.getElementById('projectContextName');
+    const projectContextRemove = document.getElementById('projectContextRemove');
     const browseContextRemove = document.getElementById('browseContextRemove');
     const actionsBtn = document.getElementById('actionsBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -2872,6 +2893,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       if (browseContextStrip) browseContextStrip.hidden = !browseWebEnabled;
     }
 
+    function setActiveProject(name) {
+      var label = typeof name === 'string' ? name.trim() : '';
+      if (projectContextName) projectContextName.textContent = label;
+      if (projectContextStrip) projectContextStrip.hidden = label === '';
+    }
+
     function showTyping() {
       const div = document.createElement('div');
       div.className = 'typing-indicator';
@@ -3439,6 +3466,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       });
     }
 
+    if (projectContextRemove) {
+      projectContextRemove.addEventListener('click', function() {
+        setActiveProject(null);
+        vscode.postMessage({ type: 'clearActiveProject' });
+        userInput.focus();
+      });
+    }
+
     // Model pill opens inline model popover (v3)
     if (modelPill) {
       modelPill.addEventListener('click', (e) => {
@@ -3992,6 +4027,10 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
+      }
+
+      else if (msg.type === 'activeProject') {
+        setActiveProject(msg.payload && msg.payload.name);
       }
 
       else if (msg.type === 'conversationCleared') {
@@ -6675,6 +6714,24 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     <div class="composer-card" id="composerCard">
       <div
         class="browse-context-strip"
+        id="projectContextStrip"
+        role="list"
+        aria-label="Active project"
+        hidden
+      >
+        <span class="attachment-chip" role="listitem">
+          <span class="codicon codicon-folder" aria-hidden="true"></span>
+          <span class="attachment-chip__name" id="projectContextName"></span>
+          <button
+            type="button"
+            class="attachment-chip__remove"
+            id="projectContextRemove"
+            aria-label="Stop using this project"
+          >&#215;</button>
+        </span>
+      </div>
+      <div
+        class="browse-context-strip"
         id="browseContextStrip"
         role="list"
         aria-label="Web browsing context"
@@ -6742,6 +6799,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     const plusMenu = document.getElementById('plusMenu');
     const plusMenuBrowse = document.getElementById('plusMenuBrowse');
     const browseContextStrip = document.getElementById('browseContextStrip');
+    const projectContextStrip = document.getElementById('projectContextStrip');
+    const projectContextName = document.getElementById('projectContextName');
+    const projectContextRemove = document.getElementById('projectContextRemove');
     const browseContextRemove = document.getElementById('browseContextRemove');
     const actionsBtn = document.getElementById('actionsBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -7563,6 +7623,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       if (browseContextStrip) browseContextStrip.hidden = !browseWebEnabled;
     }
 
+    function setActiveProject(name) {
+      var label = typeof name === 'string' ? name.trim() : '';
+      if (projectContextName) projectContextName.textContent = label;
+      if (projectContextStrip) projectContextStrip.hidden = label === '';
+    }
+
     function showTyping() {
       const div = document.createElement('div');
       div.className = 'typing-indicator';
@@ -8130,6 +8196,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       });
     }
 
+    if (projectContextRemove) {
+      projectContextRemove.addEventListener('click', function() {
+        setActiveProject(null);
+        vscode.postMessage({ type: 'clearActiveProject' });
+        userInput.focus();
+      });
+    }
+
     // Model pill opens inline model popover (v3)
     if (modelPill) {
       modelPill.addEventListener('click', (e) => {
@@ -8683,6 +8757,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
+      }
+
+      else if (msg.type === 'activeProject') {
+        setActiveProject(msg.payload && msg.payload.name);
       }
 
       else if (msg.type === 'conversationCleared') {
@@ -11366,6 +11444,24 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     <div class="composer-card" id="composerCard">
       <div
         class="browse-context-strip"
+        id="projectContextStrip"
+        role="list"
+        aria-label="Active project"
+        hidden
+      >
+        <span class="attachment-chip" role="listitem">
+          <span class="codicon codicon-folder" aria-hidden="true"></span>
+          <span class="attachment-chip__name" id="projectContextName"></span>
+          <button
+            type="button"
+            class="attachment-chip__remove"
+            id="projectContextRemove"
+            aria-label="Stop using this project"
+          >&#215;</button>
+        </span>
+      </div>
+      <div
+        class="browse-context-strip"
         id="browseContextStrip"
         role="list"
         aria-label="Web browsing context"
@@ -11433,6 +11529,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     const plusMenu = document.getElementById('plusMenu');
     const plusMenuBrowse = document.getElementById('plusMenuBrowse');
     const browseContextStrip = document.getElementById('browseContextStrip');
+    const projectContextStrip = document.getElementById('projectContextStrip');
+    const projectContextName = document.getElementById('projectContextName');
+    const projectContextRemove = document.getElementById('projectContextRemove');
     const browseContextRemove = document.getElementById('browseContextRemove');
     const actionsBtn = document.getElementById('actionsBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -12254,6 +12353,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       if (browseContextStrip) browseContextStrip.hidden = !browseWebEnabled;
     }
 
+    function setActiveProject(name) {
+      var label = typeof name === 'string' ? name.trim() : '';
+      if (projectContextName) projectContextName.textContent = label;
+      if (projectContextStrip) projectContextStrip.hidden = label === '';
+    }
+
     function showTyping() {
       const div = document.createElement('div');
       div.className = 'typing-indicator';
@@ -12821,6 +12926,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       });
     }
 
+    if (projectContextRemove) {
+      projectContextRemove.addEventListener('click', function() {
+        setActiveProject(null);
+        vscode.postMessage({ type: 'clearActiveProject' });
+        userInput.focus();
+      });
+    }
+
     // Model pill opens inline model popover (v3)
     if (modelPill) {
       modelPill.addEventListener('click', (e) => {
@@ -13374,6 +13487,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
+      }
+
+      else if (msg.type === 'activeProject') {
+        setActiveProject(msg.payload && msg.payload.name);
       }
 
       else if (msg.type === 'conversationCleared') {

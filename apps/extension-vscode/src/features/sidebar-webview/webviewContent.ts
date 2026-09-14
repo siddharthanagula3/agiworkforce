@@ -2029,6 +2029,24 @@ export function getWebviewContent(
     <div class="composer-card" id="composerCard">
       <div
         class="browse-context-strip"
+        id="projectContextStrip"
+        role="list"
+        aria-label="Active project"
+        hidden
+      >
+        <span class="attachment-chip" role="listitem">
+          <span class="codicon codicon-folder" aria-hidden="true"></span>
+          <span class="attachment-chip__name" id="projectContextName"></span>
+          <button
+            type="button"
+            class="attachment-chip__remove"
+            id="projectContextRemove"
+            aria-label="Stop using this project"
+          >&#215;</button>
+        </span>
+      </div>
+      <div
+        class="browse-context-strip"
         id="browseContextStrip"
         role="list"
         aria-label="Web browsing context"
@@ -2096,6 +2114,9 @@ export function getWebviewContent(
     const plusMenu = document.getElementById('plusMenu');
     const plusMenuBrowse = document.getElementById('plusMenuBrowse');
     const browseContextStrip = document.getElementById('browseContextStrip');
+    const projectContextStrip = document.getElementById('projectContextStrip');
+    const projectContextName = document.getElementById('projectContextName');
+    const projectContextRemove = document.getElementById('projectContextRemove');
     const browseContextRemove = document.getElementById('browseContextRemove');
     const actionsBtn = document.getElementById('actionsBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -2917,6 +2938,12 @@ export function getWebviewContent(
       if (browseContextStrip) browseContextStrip.hidden = !browseWebEnabled;
     }
 
+    function setActiveProject(name) {
+      var label = typeof name === 'string' ? name.trim() : '';
+      if (projectContextName) projectContextName.textContent = label;
+      if (projectContextStrip) projectContextStrip.hidden = label === '';
+    }
+
     function showTyping() {
       const div = document.createElement('div');
       div.className = 'typing-indicator';
@@ -3484,6 +3511,14 @@ export function getWebviewContent(
       });
     }
 
+    if (projectContextRemove) {
+      projectContextRemove.addEventListener('click', function() {
+        setActiveProject(null);
+        vscode.postMessage({ type: 'clearActiveProject' });
+        userInput.focus();
+      });
+    }
+
     // Model pill opens inline model popover (v3)
     if (modelPill) {
       modelPill.addEventListener('click', (e) => {
@@ -4037,6 +4072,10 @@ export function getWebviewContent(
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
+      }
+
+      else if (msg.type === 'activeProject') {
+        setActiveProject(msg.payload && msg.payload.name);
       }
 
       else if (msg.type === 'conversationCleared') {

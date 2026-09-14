@@ -73,6 +73,72 @@ impl CloudError {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Method {
+    Get,
+    Post,
+    Put,
+    Delete,
+}
+
+impl Method {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Method::Get => "GET",
+            Method::Post => "POST",
+            Method::Put => "PUT",
+            Method::Delete => "DELETE",
+        }
+    }
+
+    fn reqwest(self) -> reqwest::Method {
+        match self {
+            Method::Get => reqwest::Method::GET,
+            Method::Post => reqwest::Method::POST,
+            Method::Put => reqwest::Method::PUT,
+            Method::Delete => reqwest::Method::DELETE,
+        }
+    }
+}
+
+/// One hosted call as a value: the method and path a command uses, stated once
+/// so a test can assert the routing without a live server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Route {
+    pub method: Method,
+    pub path: String,
+}
+
+impl Route {
+    pub fn get(path: impl Into<String>) -> Self {
+        Self {
+            method: Method::Get,
+            path: path.into(),
+        }
+    }
+
+    pub fn post(path: impl Into<String>) -> Self {
+        Self {
+            method: Method::Post,
+            path: path.into(),
+        }
+    }
+
+    pub fn put(path: impl Into<String>) -> Self {
+        Self {
+            method: Method::Put,
+            path: path.into(),
+        }
+    }
+
+    pub fn delete(path: impl Into<String>) -> Self {
+        Self {
+            method: Method::Delete,
+            path: path.into(),
+        }
+    }
+}
+
 pub struct CloudClient {
     base: String,
     jwt: String,
@@ -117,6 +183,12 @@ impl CloudClient {
     /// in must not resume another account's cursors.
     pub fn owner(&self) -> &str {
         &self.owner
+    }
+
+    /// The deployment these calls reach, so a caller can name a page on the
+    /// same host it just read from rather than assuming production.
+    pub fn base(&self) -> &str {
+        &self.base
     }
 
     fn request(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
@@ -164,6 +236,71 @@ impl CloudClient {
         body: &B,
     ) -> Result<T, CloudError> {
         Self::send(self.request(reqwest::Method::POST, path).json(body)).await
+    }
+
+    /// Send one declared [`Route`]. Commands that name their route go through
+    /// here, so the method and path they use cannot drift from what is tested.
+    pub async fn call<T: DeserializeOwned>(
+        &self,
+        route: &Route,
+        query: &[(&str, String)],
+        body: Option<&serde_json::Value>,
+    ) -> Result<T, CloudError> {
+        let mut builder = self
+            .request(route.method.reqwest(), &route.path)
+            .query(query);
+        if let Some(body) = body {
+            builder = builder.json(body);
+        }
+        Self::send(builder).await
+    }
+
+    /// POST one billable Managed Cloud operation. The key identifies the
+    /// operation so a retry settles the same reservation instead of charging
+    /// the account twice.
+    pub async fn post_idempotent<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        idempotency_key: &str,
+        body: &B,
+        timeout: Duration,
+    ) -> Result<T, CloudError> {
+        Self::send(
+            self.request(reqwest::Method::POST, path)
+                .header("Idempotency-Key", idempotency_key)
+                .timeout(timeout)
+                .json(body),
+        )
+        .await
+    }
+
+    /// Read a hosted file the account owns. Media the account stores is served
+    /// behind the same credential as the JSON APIs, so a generated image is not
+    /// reachable by URL alone.
+    pub async fn get_bytes(&self, path: &str) -> Result<Vec<u8>, CloudError> {
+        let response = self
+            .request(reqwest::Method::GET, path)
+            .header("Accept", "*/*")
+            .send()
+            .await
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let status = response.status().as_u16();
+        if status == 401 {
+            tier_cache::invalidate_tier_cache();
+            return Err(CloudError::SessionExpired);
+        }
+        if !(200..300).contains(&status) {
+            let body = response.text().await.unwrap_or_default();
+            return Err(CloudError::Api {
+                status,
+                message: api_error_message(&body),
+            });
+        }
+        response
+            .bytes()
+            .await
+            .map(|bytes| bytes.to_vec())
+            .map_err(|error| CloudError::Transport(error.to_string()))
     }
 }
 
