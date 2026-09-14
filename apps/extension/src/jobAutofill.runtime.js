@@ -727,28 +727,40 @@ function boolToText(value) {
   return value ? 'yes' : 'no';
 }
 
+const USER_TEXT_SKIP_REASON = 'already holds text entered on the page';
+
+function resolvedTextValue(resolved) {
+  if (resolved.kind === 'text') {
+    return resolved.value;
+  }
+  if (resolved.kind === 'boolean') {
+    return boolToText(resolved.value);
+  }
+  return null;
+}
+
 async function fillFieldValue(element, resolved, delayMs) {
   if (element instanceof HTMLInputElement && element.type.toLowerCase() === 'file') {
     if (resolved.kind !== 'file') {
-      return false;
+      return { filled: false };
     }
     const success = setFileInput(element, resolved.dataUrl, resolved.fileName);
     if (success && delayMs > 0) {
       await sleep(delayMs);
     }
-    return success;
+    return { filled: success };
   }
 
   if (element instanceof HTMLSelectElement) {
     if (resolved.kind !== 'text' && resolved.kind !== 'boolean') {
-      return false;
+      return { filled: false };
     }
     const selectValue = resolved.kind === 'boolean' ? boolToText(resolved.value) : resolved.value;
     const success = trySetSelectValue(element, selectValue);
     if (success && delayMs > 0) {
       await sleep(delayMs);
     }
-    return success;
+    return { filled: success };
   }
 
   if (element instanceof HTMLInputElement) {
@@ -756,12 +768,12 @@ async function fillFieldValue(element, resolved, delayMs) {
 
     if (inputType === 'radio') {
       if (resolved.kind !== 'boolean' && resolved.kind !== 'text') {
-        return false;
+        return { filled: false };
       }
 
       const selectedRadio = pickRadioForResolvedValue(element, resolved);
       if (!selectedRadio) {
-        return false;
+        return { filled: false };
       }
 
       selectedRadio.focus();
@@ -770,60 +782,43 @@ async function fillFieldValue(element, resolved, delayMs) {
       if (delayMs > 0) {
         await sleep(delayMs);
       }
-      return true;
+      return { filled: true };
     }
 
     if (inputType === 'checkbox') {
       if (resolved.kind !== 'boolean') {
-        return false;
+        return { filled: false };
       }
       element.checked = resolved.value;
       dispatchInputEvents(element);
       if (delayMs > 0) {
         await sleep(delayMs);
       }
-      return true;
+      return { filled: true };
     }
-
-    const textValue =
-      resolved.kind === 'text'
-        ? resolved.value
-        : resolved.kind === 'boolean'
-          ? boolToText(resolved.value)
-          : null;
-    if (!textValue) {
-      return false;
-    }
-
-    element.focus();
-    setInputValueWithNativeSetter(element, textValue);
-    dispatchInputEvents(element);
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-    return true;
   }
 
-  if (element instanceof HTMLTextAreaElement) {
-    const textValue =
-      resolved.kind === 'text'
-        ? resolved.value
-        : resolved.kind === 'boolean'
-          ? boolToText(resolved.value)
-          : null;
-    if (!textValue) {
-      return false;
-    }
-    element.focus();
-    setInputValueWithNativeSetter(element, textValue);
-    dispatchInputEvents(element);
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-    return true;
+  if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) {
+    return { filled: false };
   }
 
-  return false;
+  const textValue = resolvedTextValue(resolved);
+  if (!textValue) {
+    return { filled: false };
+  }
+
+  const existing = String(element.value ?? '');
+  if (existing.trim() !== '' && existing !== textValue) {
+    return { filled: false, skippedReason: USER_TEXT_SKIP_REASON };
+  }
+
+  element.focus();
+  setInputValueWithNativeSetter(element, textValue);
+  dispatchInputEvents(element);
+  if (delayMs > 0) {
+    await sleep(delayMs);
+  }
+  return { filled: true };
 }
 
 function isRequired(element) {
@@ -944,15 +939,17 @@ async function runAutofillPass(platform, profile, options, alreadyFilled, deadli
     }
 
     try {
-      const success = await fillFieldValue(field, resolved, delayMs);
-      if (success) {
+      const outcome = await fillFieldValue(field, resolved, delayMs);
+      if (outcome.filled) {
         alreadyFilled.add(fingerprint);
         filledCount += 1;
         filledFields.push(summary);
         missingRequired.delete(summary);
       } else {
         skippedCount += 1;
-        skippedFields.push(summary);
+        skippedFields.push(
+          outcome.skippedReason ? `${summary}: ${outcome.skippedReason}` : summary,
+        );
         if (isEmptyRequiredField(field)) {
           missingRequired.add(summary);
         }
