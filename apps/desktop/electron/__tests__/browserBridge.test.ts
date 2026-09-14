@@ -434,7 +434,11 @@ describe('local client routes', () => {
     // The grant is scoped to the client, so the user answers once for "agi"
     // rather than once for every program that reaches the bridge.
     expect(calls[0]?.caller.name).toBe('agi');
-    expect(calls[0]?.caller.label).toBe('agi in /work/project');
+    // The prompt asks in words: a subject the user recognises and the folder
+    // by name, with the path kept whole for the body.
+    expect(calls[0]?.caller.subject).toBe('The AGI CLI');
+    expect(calls[0]?.caller.folder).toBe('project');
+    expect(calls[0]?.caller.path).toBe('/work/project');
   });
 
   it('passes a refusal back with the code the gate chose', async () => {
@@ -520,16 +524,76 @@ describe('local client routes', () => {
     }
   });
 
-  /// A long path is identified by its end, so it is shortened from the left.
-  it('names a client by the end of its directory, not a shared prefix', async () => {
+  /// A prompt the user cannot read is not a question. The client gets a name
+  /// in words, the folder is named on its own, and the path is never cut.
+  it('describes a client in words, with the folder named and the path whole', async () => {
     const { describeLocalClient } = context.localClient;
-    expect(describeLocalClient({ name: 'agi' })).toBe('agi');
-    expect(describeLocalClient({ name: 'agi', cwd: '/work/project' })).toBe('agi in /work/project');
+    expect(describeLocalClient({ name: 'agi' })).toEqual({
+      subject: 'The AGI CLI',
+      folder: null,
+      path: null,
+      label: 'The AGI CLI',
+    });
 
-    const long = `/private/tmp/${'a'.repeat(80)}/qa-project`;
-    const described = describeLocalClient({ name: 'agi', cwd: long });
-    expect(described.endsWith('qa-project')).toBe(true);
-    expect(described.startsWith('agi in …')).toBe(true);
+    const described = describeLocalClient({ name: 'agi', cwd: '/work/qa-project' });
+    expect(described.subject).toBe('The AGI CLI');
+    expect(described.folder).toBe('qa-project');
+    expect(described.path).toBe('/work/qa-project');
+    expect(described.label).toBe('The AGI CLI in qa-project');
+
+    // Home collapses to ~, and a long path outside it is kept whole rather
+    // than cut down to the prefix every path on this machine shares.
+    const home = os.homedir();
+    expect(describeLocalClient({ name: 'agi', cwd: `${home}/work/app` }).path).toBe('~/work/app');
+    expect(describeLocalClient({ name: 'agi', cwd: home }).path).toBe('~');
+    const long = `/private/tmp/${'a'.repeat(120)}/qa-project`;
+    const longDescribed = describeLocalClient({ name: 'agi', cwd: long });
+    expect(longDescribed.path).toBe(long);
+    expect(longDescribed.folder).toBe('qa-project');
+
+    // A client this shell has no words for keeps its own name rather than
+    // being described as something it is not.
+    expect(describeLocalClient({ name: 'some-tool' }).subject).toBe('some-tool');
+  });
+
+  /// The two sides must not disagree about whether a pairing exists: a shell
+  /// that keeps its record after the browser forgets leaves every local client
+  /// offering tools that can never answer.
+  it('drops its pairing when the browser says it has unpaired', async () => {
+    pairBrowser();
+    expect(context.bridge.pairingState().paired).toBe(true);
+
+    const token = context.pairingStore.hostToken();
+    const response = await fetch(url('/native/message'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Native-Host-Token': token },
+      body: JSON.stringify({
+        extensionId: EXTENSION_ID,
+        message: { type: 'desktop_browser_unpair' },
+      }),
+    });
+    expect(((await response.json()) as Record<string, unknown>)['success']).toBe(true);
+    expect(context.bridge.pairingState().paired).toBe(false);
+
+    // And a client asking now is told which problem it has.
+    const body = (await (
+      await post('/client/command', {
+        version: 1,
+        command: 'browser_read_page',
+        args: {},
+        client: { name: 'agi' },
+      })
+    ).json()) as Record<string, unknown>;
+    expect(body['code']).toBe('not-paired');
+  });
+
+  /// A command already waiting when the pairing goes cannot ever be answered,
+  /// so it is failed with the reason rather than left to time out.
+  it('fails a waiting command when the pairing is dropped', async () => {
+    pairBrowser();
+    const pending = context.bridge.sendBrowserCommand('browser_read_page', {});
+    context.bridge.removeHostAndPairing();
+    await expect(pending).rejects.toThrow(/no longer paired/i);
   });
 
   it('records each command against the client that asked', async () => {
@@ -541,7 +605,7 @@ describe('local client routes', () => {
       client: { name: 'agi', cwd: '/work/project' },
     });
     const activity = context.bridge.listLocalClientActivity();
-    expect(activity.at(-1)?.client).toBe('agi in /work/project');
+    expect(activity.at(-1)?.client).toBe('The AGI CLI in project');
     expect(activity.at(-1)?.command).toBe('browser_read_page');
   });
 });

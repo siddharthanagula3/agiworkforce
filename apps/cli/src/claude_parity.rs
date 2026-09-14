@@ -904,6 +904,17 @@ pub(crate) fn render_chrome_state(state: &crate::browser_bridge::BrowserState) -
                     .to_string(),
             );
         }
+        BrowserAvailability::PairedNotAnswering => {
+            lines.push("  Paired, but the browser is not answering.".to_string());
+            if let Some(extension_id) = state.extension_id.as_deref() {
+                lines.push(format!("  Extension: {extension_id}"));
+            }
+            lines.push(
+                "  Open Chrome with the AGI extension enabled, or unpair from AGI Desktop if you no longer want it."
+                    .to_string(),
+            );
+            lines.push("  Until it answers this session has no browser tools.".to_string());
+        }
         BrowserAvailability::NotPaired => {
             lines.push("  AGI Desktop is running, but no browser is paired with it.".to_string());
             lines.push(
@@ -1747,6 +1758,19 @@ mod chrome_state_tests {
             "an unpaired session must not advertise tools it cannot run"
         );
 
+        let silent = render_chrome_state(&BrowserState {
+            availability: BrowserAvailability::PairedNotAnswering,
+            extension_id: Some("abcdefghijklmnopabcdefghijklmnop".to_string()),
+            app_version: None,
+        });
+        assert!(silent.contains("not answering"));
+        assert!(
+            !silent.contains("browser_read_page"),
+            "a browser that cannot answer must not advertise tools"
+        );
+        assert_ne!(silent, paired);
+        assert_ne!(silent, unpaired);
+
         let no_shell = render_chrome_state(&BrowserState {
             availability: BrowserAvailability::ShellNotRunning,
             extension_id: None,
@@ -1765,6 +1789,7 @@ mod chrome_state_tests {
     fn the_retired_claim_that_the_cli_cannot_drive_chrome_is_gone() {
         for availability in [
             BrowserAvailability::Paired,
+            BrowserAvailability::PairedNotAnswering,
             BrowserAvailability::NotPaired,
             BrowserAvailability::ShellNotRunning,
         ] {

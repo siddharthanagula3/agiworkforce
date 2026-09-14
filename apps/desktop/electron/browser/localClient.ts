@@ -104,16 +104,38 @@ export function parseLocalClientCommand(body: unknown): LocalClientCommandReques
   return isLocalClientCommandRequest(body) ? body : null;
 }
 
-/** Trim what a client says about itself before it reaches a dialog. */
-export function describeLocalClient(client: LocalClientIdentity): string {
+/**
+ * What a client is called in a dialog the user has to answer.
+ *
+ * A permission prompt is a question, and a question the user cannot read is
+ * not one. So the client gets a name in words rather than a command token, the
+ * folder is named on its own because that is what the user recognises, and the
+ * path is shown whole: a truncated path ends on the prefix every path on this
+ * machine shares, which tells the user nothing about what is asking.
+ */
+const LOCAL_CLIENT_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  agi: 'The AGI CLI',
+});
+
+export interface LocalClientDescription {
+  /** Subject of the prompt's question. */
+  subject: string;
+  /** The folder's own name, or null when the client named no directory. */
+  folder: string | null;
+  /** That folder's full path, `~` for home, never shortened. */
+  path: string | null;
+  /** One line for the activity record. */
+  label: string;
+}
+
+export function describeLocalClient(client: LocalClientIdentity): LocalClientDescription {
   const name = client.name.trim().slice(0, 60);
+  const subject = LOCAL_CLIENT_NAMES[name] ?? name;
   const cwd = client.cwd?.trim();
-  if (!cwd) return name;
+  if (!cwd) return { subject, folder: null, path: null, label: subject };
+
   const home = homedir();
-  const shown = cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd;
-  // A long path is shortened from the left, because the end is the part that
-  // identifies the directory. Cutting the tail leaves the user reading a
-  // prefix every path on the machine shares, ending mid-word.
-  const trimmed = shown.length > 64 ? `…${shown.slice(shown.length - 63)}` : shown;
-  return `${name} in ${trimmed}`;
+  const path = cwd === home ? '~' : cwd.startsWith(`${home}/`) ? `~${cwd.slice(home.length)}` : cwd;
+  const folder = path.split('/').filter(Boolean).at(-1) ?? path;
+  return { subject, folder, path, label: `${subject} in ${folder}` };
 }
