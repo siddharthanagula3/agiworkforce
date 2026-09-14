@@ -48,9 +48,11 @@ import {
 import {
   deliverPageCapture,
   pageCaptureFailureMessage,
+  PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE,
   PAGE_CAPTURE_UNAVAILABLE_MESSAGE,
   PAGE_CAPTURE_UNDELIVERED_TITLE,
 } from './features/background/page-capture';
+import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
 import {
   beginScheduledTaskRunJournal,
   canResumeScheduledTaskRunJournal,
@@ -4689,6 +4691,16 @@ async function captureCurrentPage(): Promise<void> {
 
     if (!tab?.id) {
       logger.warn('No active tab found');
+      return;
+    }
+
+    try {
+      await authorizeBrowserToolTab(tab.id);
+    } catch (error) {
+      showNotification(
+        PAGE_CAPTURE_UNDELIVERED_TITLE,
+        `${error instanceof Error ? error.message : PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE} Nothing was captured.`,
+      );
       return;
     }
 
