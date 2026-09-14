@@ -83,11 +83,13 @@ export interface DeveloperSessionConfiguration {
 let emit: DeveloperSessionEmitter = () => undefined;
 let resolveBinary: () => string = () => DEFAULT_BINARY;
 let spawnRuntime: SpawnDeveloperRuntime = nodeSpawn as SpawnDeveloperRuntime;
+let cachedStatus: { binary: string; status: DeveloperRuntimeStatus } | null = null;
 
 export function configureDeveloperSessions(configuration: DeveloperSessionConfiguration): void {
   emit = configuration.emit;
   resolveBinary = configuration.resolveBinary;
   spawnRuntime = configuration.spawn ?? (nodeSpawn as SpawnDeveloperRuntime);
+  cachedStatus = null;
   stopAllDeveloperRuntimes();
 }
 
@@ -154,8 +156,21 @@ function readVersion(binary: string): Promise<string | null> {
   });
 }
 
+/**
+ * What the shell found when it resolved the CLI, remembered for the life of the
+ * app. Resolving costs a process, and the answer only changes when the
+ * preference names a different binary, so the settings pane reads this rather
+ * than spawning on every open.
+ */
 export async function readDeveloperRuntimeStatus(): Promise<DeveloperRuntimeStatus> {
   const binary = resolveBinary().trim() || DEFAULT_BINARY;
+  if (cachedStatus?.binary === binary) return cachedStatus.status;
+  const status = await resolveRuntimeStatus(binary);
+  cachedStatus = { binary, status };
+  return status;
+}
+
+async function resolveRuntimeStatus(binary: string): Promise<DeveloperRuntimeStatus> {
   const resolved = resolveBinaryPath(binary);
   if (!resolved) {
     return { available: false, name: binary, version: null, path: null, hint: DOWNLOAD_HINT };

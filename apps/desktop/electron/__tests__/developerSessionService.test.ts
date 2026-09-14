@@ -186,6 +186,51 @@ describe('developer session runtime', () => {
     });
   });
 
+  it('resolves the CLI once and answers from that until the path changes', async () => {
+    const { service, spawn } = await loadService();
+
+    await service.readDeveloperRuntimeStatus();
+    await service.readDeveloperRuntimeStatus();
+    await service.readDeveloperRuntimeStatus();
+
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn).toHaveBeenCalledWith(
+      '/Users/qa/.cargo/bin/agi',
+      ['--version'],
+      expect.anything(),
+    );
+  });
+
+  it('resolves again when the preference names a different binary', async () => {
+    vi.resetModules();
+    const children: FakeChild[] = [];
+    let binary = 'agi';
+    const spawn = vi.fn((_command: string, args: readonly string[]) => {
+      const child = new FakeChild(defaultResponder);
+      children.push(child);
+      if (args[0] === '--version') {
+        setTimeout(() => {
+          child.stdout.emit('data', 'agi 1.7.1\n');
+          child.emit('exit', 0, null);
+        }, 0);
+      }
+      return child;
+    });
+    const service = await import('../runtime/developerSessionService');
+    service.configureDeveloperSessions({
+      emit: () => undefined,
+      resolveBinary: () => binary,
+      spawn: spawn as never,
+    });
+
+    await service.readDeveloperRuntimeStatus();
+    binary = '/opt/agi';
+    await service.readDeveloperRuntimeStatus();
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn).toHaveBeenLastCalledWith('/opt/agi', ['--version'], expect.anything());
+  });
+
   it('says the CLI is nowhere on the PATH, with the hint the surface prints', async () => {
     const { service } = await loadService();
     accessSync.mockImplementation(() => {
