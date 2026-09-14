@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildArtifactsDrawerSection } from '../src/features/side-panel/artifactsDrawer';
 import { buildSchedulesSection } from '../src/features/side-panel/schedulesSection';
+import { buildProjectsDrawerSection } from '../src/features/side-panel/projectsDrawer';
 import type { ChromeArtifact } from '../src/features/cloud-bridge/artifactsClient';
+import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
 
 // The drawer reads its copy from the extension catalogue, which only
 // `chrome.i18n` can serve, so without this it cannot be built here at all.
@@ -144,6 +146,77 @@ describe('schedules section empty state', () => {
 
     api.setActive(true);
     api.setActive(false);
+    expect(empty.hidden).toBe(true);
+  });
+});
+
+function project(id: string): ManagedCloudProject {
+  return { id, name: `Project ${id}`, conversationCount: 0 } as ManagedCloudProject;
+}
+
+function projectsDrawer(listProjects: ReturnType<typeof vi.fn>) {
+  const api = buildProjectsDrawerSection({
+    listProjects: listProjects as never,
+    getActiveProject: () => null,
+    setActiveProject: vi.fn(),
+  });
+  const empty = api.sectionEl.querySelector<HTMLElement>('.sp-drawer-projects-empty');
+  const status = api.sectionEl.querySelector<HTMLElement>('.sp-drawer-projects-status');
+  if (!empty || !status) throw new Error('drawer did not render its list states');
+  return { api, empty, status };
+}
+
+describe('projects drawer empty state', () => {
+  it('says nothing about emptiness before the first list is asked for', () => {
+    const { empty } = projectsDrawer(vi.fn());
+
+    expect(empty.hidden).toBe(true);
+  });
+
+  it('does not claim the account is empty while the list is loading', async () => {
+    let settle!: (value: { status: 'success'; projects: ManagedCloudProject[] }) => void;
+    const pending = new Promise<{ status: 'success'; projects: ManagedCloudProject[] }>(
+      (resolve) => {
+        settle = resolve;
+      },
+    );
+    const { api, empty, status } = projectsDrawer(vi.fn(() => pending));
+
+    const refreshed = api.refresh();
+    expect(status.hidden).toBe(false);
+    expect(status.textContent).toContain('Loading');
+    expect(empty.hidden).toBe(true);
+
+    settle({ status: 'success', projects: [] });
+    await refreshed;
+
+    expect(status.hidden).toBe(true);
+    expect(empty.hidden).toBe(false);
+  });
+
+  it('stays quiet once rows arrive', async () => {
+    const { api, empty } = projectsDrawer(
+      vi.fn(async () => ({ status: 'success', projects: [project('1')] })),
+    );
+
+    await api.refresh();
+
+    expect(empty.hidden).toBe(true);
+    expect(api.sectionEl.querySelectorAll('.sp-drawer-project')).toHaveLength(1);
+  });
+
+  it('shows the failure instead of an empty account when the list could not be read', async () => {
+    const { api, empty, status } = projectsDrawer(
+      vi.fn(async () => ({
+        status: 'error',
+        code: 'server_error',
+        message: 'Could not reach AGI Cloud.',
+      })),
+    );
+
+    await api.refresh();
+
+    expect(status.textContent).toContain('Could not reach AGI Cloud.');
     expect(empty.hidden).toBe(true);
   });
 });
