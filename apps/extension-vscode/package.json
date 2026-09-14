@@ -964,6 +964,12 @@
           "maximum": 500,
           "description": "Number of surrounding lines to include as context"
         },
+        "agiWorkforce.editorContext.autoAttach": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send."
+        },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
           "default": false,

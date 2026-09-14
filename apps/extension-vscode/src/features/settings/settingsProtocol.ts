@@ -64,6 +64,7 @@ const settingValueSchemas = {
   cliPath: z.string().trim().min(1).max(4096),
   'composer.followUpBehavior': z.enum(['queue', 'steer']),
   contextLines: z.number().int().min(0).max(500),
+  'editorContext.autoAttach': z.boolean(),
   telemetryEnabled: z.boolean(),
   hoverEnabled: z.boolean(),
   codeLensEnabled: z.boolean(),

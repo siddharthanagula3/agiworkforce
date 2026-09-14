@@ -1,6 +1,12 @@
 import * as vscode from 'vscode';
 import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker/modelConstants';
-import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
+import {
+  AGENT_MODE_LABEL,
+  EFFORT_LABEL,
+  toolCallStatusLabel,
+  type AgentMode,
+  type Effort,
+} from '@agiworkforce/types';
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { ComposerFollowUpBehavior } from '../../platform/config';
 import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
@@ -2314,6 +2320,8 @@ export function getWebviewContent(
           >&#215;</button>
         </span>
       </div>
+      <!-- Editor context chips, pushed by the host from the active editor -->
+      <div class="attachment-strip" id="editorContextStrip" role="list" aria-label="Editor context attached to the next message"></div>
       <!-- Attachment chips strip, populated by drag-drop / paste / +menu -->
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
@@ -4142,6 +4150,49 @@ export function getWebviewContent(
       });
     }
 
+    // ── Editor context chips ──────────────────────────────────────────────────
+    var editorContextStrip = document.getElementById('editorContextStrip');
+    var EDITOR_CONTEXT_ICONS = {
+      'active-file': 'codicon-file',
+      selection: 'codicon-selection',
+      problems: 'codicon-warning',
+    };
+
+    function renderEditorContext(chips) {
+      if (!editorContextStrip) return;
+      editorContextStrip.replaceChildren();
+      for (var i = 0; i < chips.length; i++) {
+        (function (entry) {
+          var chip = document.createElement('span');
+          chip.className = 'attachment-chip';
+          chip.setAttribute('role', 'listitem');
+
+          var icon = document.createElement('span');
+          icon.className = 'codicon ' + (EDITOR_CONTEXT_ICONS[entry.kind] || 'codicon-file');
+          icon.setAttribute('aria-hidden', 'true');
+          chip.appendChild(icon);
+
+          var label = document.createElement('span');
+          label.className = 'attachment-chip__name';
+          label.textContent = entry.label;
+          chip.appendChild(label);
+
+          var remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'attachment-chip__remove';
+          remove.setAttribute('aria-label', 'Do not send ' + entry.label);
+          remove.textContent = '\u00d7';
+          remove.addEventListener('click', function () {
+            vscode.postMessage({ type: 'dismissEditorContext', payload: { id: entry.id } });
+          });
+          chip.appendChild(remove);
+
+          editorContextStrip.appendChild(chip);
+        })(chips[i]);
+      }
+      editorContextStrip.classList.toggle('visible', chips.length > 0);
+    }
+
     // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
     var composerCard = document.getElementById('composerCard');
     var attachmentStrip = document.getElementById('attachmentStrip');
@@ -4747,6 +4798,10 @@ export function getWebviewContent(
         }
       }
 
+      else if (msg.type === 'editorContext') {
+        renderEditorContext((msg.payload && msg.payload.chips) || []);
+      }
+
       else if (msg.type === 'contextAttached') {
         if (attachmentStrip) {
           var contextChip = makeAttachmentChip(msg.payload.name, '');
@@ -5021,6 +5076,9 @@ export function getWebviewContent(
       return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
 
+    var COMPLETED_LABEL = ${JSON.stringify(toolCallStatusLabel('completed'))};
+    var RUNNING_LABEL = ${JSON.stringify(toolCallStatusLabel('running'))};
+
     function updateActivitySummary(latestSummary, terminal) {
       if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
       var total = toolCallList.querySelectorAll('.tool-call').length;
@@ -5033,12 +5091,12 @@ export function getWebviewContent(
           errors > 0
             ? errors + (errors === 1 ? ' error' : ' errors')
             : toolCallStackHasError
-              ? 'Completed with errors'
-              : 'Done'
+              ? COMPLETED_LABEL + ' with errors'
+              : COMPLETED_LABEL
         );
       } else {
-        if (running > 0) parts.push(running + ' running');
-        if (completed > 0) parts.push(completed + ' done');
+        if (running > 0) parts.push(running + ' ' + RUNNING_LABEL.toLowerCase());
+        if (completed > 0) parts.push(completed + ' ' + COMPLETED_LABEL.toLowerCase());
         if (errors > 0) parts.push(errors + (errors === 1 ? ' error' : ' errors'));
       }
       if (latestSummary) parts.push(latestSummary);

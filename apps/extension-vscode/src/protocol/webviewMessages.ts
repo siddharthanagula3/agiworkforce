@@ -176,6 +176,11 @@ const runSlashCommand = z.object({
   payload: z.object({ name: z.string().min(1).max(120) }),
 });
 
+const dismissEditorContext = z.object({
+  type: z.literal('dismissEditorContext'),
+  payload: z.object({ id: z.string().min(1).max(2048) }),
+});
+
 const removePendingAttachment = z.object({
   type: z.literal('removePendingAttachment'),
   payload: z.object({ id: z.string().min(1).max(200) }),
@@ -216,6 +221,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openPathReference,
   requestContextMenuState,
   attachContext,
+  dismissEditorContext,
   attachFiles,
   removePendingAttachment,
   clearActiveProject,
