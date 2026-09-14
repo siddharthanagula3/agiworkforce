@@ -183,6 +183,22 @@ describe('options data-handling disclosure', () => {
     expect(text).toContain('copied to your AGI account');
   });
 
+  it('describes the page attach the extension actually performs', () => {
+    const pageInjection = DATA_HANDLING_DISCLOSURES.find((entry) => entry.id === 'page-injection')!;
+
+    expect(pageInjection.body).toContain('read and change all your data on all websites');
+    expect(pageInjection.body).toContain('5,000 characters');
+    expect(pageInjection.body).toContain('redacted');
+    // The attach is explicit and per-request; the list governs the in-page
+    // surfaces. Saying it reads page text "only on approved sites" was the
+    // wrong gate and made the disclosure both narrower and untrue.
+    expect(pageInjection.body).not.toMatch(/only when you ask for it on a site you approved/);
+
+    const sidePanel = readSource('src/side_panel.ts');
+    expect(sidePanel).toContain('const PAGE_CONTEXT_MAX_CHARS = 5_000;');
+    expect(sidePanel).toContain('sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS)');
+  });
+
   it('stores the decline the sync gate reads', async () => {
     const section = createDataHandlingSection({
       get: (key) => chromeMock.storage.local.get(key) as Promise<Record<string, unknown>>,
