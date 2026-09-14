@@ -1811,8 +1811,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
     }
-    if (streamProjectSources.length > 0) {
-      metadata.projectSources = streamProjectSources;
+    const projectSources = streamProjectSources.length
+      ? streamProjectSources
+      : findConversationMessage(conversationId, assistantMessageId)?.metadata?.projectSources;
+    if (projectSources?.length) {
+      metadata.projectSources = projectSources;
     }
     // A provider that gave us character positions has already had its markers
     // renumbered onto the DELIVERED source order by withProviderCitationMarkers,
