@@ -88,7 +88,9 @@ import {
   startDeveloperSession,
   startDeveloperTurn,
   stopDeveloperRuntime,
+  syncDeveloperAccounts,
 } from './developerSessionService';
+import { reportShellIdentity } from '../shellIdentity';
 import { PathRefused } from './pathGuard';
 import { consumeSingleUse, getPermissionState, requestPermission } from './permissionManager';
 import {
@@ -722,6 +724,15 @@ async function execute(
         requestId: requireString(args, 'requestId'),
         approved: args['approved'] === true,
       });
+    case 'developer_account_report': {
+      reportShellIdentity({
+        signedIn: args['signedIn'] === true,
+        email: optionalString(args, 'email', '') || null,
+      });
+      void syncDeveloperAccounts();
+      return true;
+    }
+
     case 'browser_pairing_state':
       return pairingState();
     case 'browser_pairing_install_host':

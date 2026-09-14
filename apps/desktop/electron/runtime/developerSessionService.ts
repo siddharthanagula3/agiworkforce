@@ -27,6 +27,8 @@ import type {
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
+import { CLOUD_APP_ORIGIN } from '../config';
+import { reconcileDeveloperAccount, type DeveloperAccountBridge } from './developerAccountSync';
 import { readWorkspaceGit } from './gitService';
 import { getRoot, listRoots } from './workspaceStore';
 
@@ -83,18 +85,25 @@ export type SpawnDeveloperRuntime = (
 export interface DeveloperSessionConfiguration {
   emit: DeveloperSessionEmitter;
   resolveBinary: () => string;
+  accountBridge?: DeveloperAccountBridge;
   spawn?: SpawnDeveloperRuntime;
 }
 
 let emit: DeveloperSessionEmitter = () => undefined;
 let resolveBinary: () => string = () => DEFAULT_BINARY;
 let spawnRuntime: SpawnDeveloperRuntime = nodeSpawn as SpawnDeveloperRuntime;
+let accountBridge: DeveloperAccountBridge | null = null;
+let accountSyncError: string | null = null;
+let accountSyncChain: Promise<void> = Promise.resolve();
 let cachedStatus: { binary: string; status: DeveloperRuntimeStatus } | null = null;
 
 export function configureDeveloperSessions(configuration: DeveloperSessionConfiguration): void {
   emit = configuration.emit;
   resolveBinary = configuration.resolveBinary;
   spawnRuntime = configuration.spawn ?? (nodeSpawn as SpawnDeveloperRuntime);
+  accountBridge = configuration.accountBridge ?? null;
+  accountSyncError = null;
+  accountSyncChain = Promise.resolve();
   cachedStatus = null;
   stopAllDeveloperRuntimes();
 }
@@ -170,16 +179,23 @@ function readVersion(binary: string): Promise<string | null> {
  */
 export async function readDeveloperRuntimeStatus(): Promise<DeveloperRuntimeStatus> {
   const binary = resolveBinary().trim() || DEFAULT_BINARY;
-  if (cachedStatus?.binary === binary) return cachedStatus.status;
-  const status = await resolveRuntimeStatus(binary);
-  cachedStatus = { binary, status };
-  return status;
+  if (cachedStatus?.binary !== binary) {
+    cachedStatus = { binary, status: await resolveRuntimeStatus(binary) };
+  }
+  return { ...cachedStatus.status, accountSyncError };
 }
 
 async function resolveRuntimeStatus(binary: string): Promise<DeveloperRuntimeStatus> {
   const resolved = resolveBinaryPath(binary);
   if (!resolved) {
-    return { available: false, name: binary, version: null, path: null, hint: DOWNLOAD_HINT };
+    return {
+      available: false,
+      name: binary,
+      version: null,
+      path: null,
+      hint: DOWNLOAD_HINT,
+      accountSyncError: null,
+    };
   }
   const version = await readVersion(resolved);
   if (version === null) {
@@ -189,6 +205,7 @@ async function resolveRuntimeStatus(binary: string): Promise<DeveloperRuntimeSta
       version: null,
       path: displayPath(resolved),
       hint: DOWNLOAD_HINT,
+      accountSyncError: null,
     };
   }
   return {
@@ -197,6 +214,7 @@ async function resolveRuntimeStatus(binary: string): Promise<DeveloperRuntimeSta
     version,
     path: displayPath(resolved),
     hint: null,
+    accountSyncError: null,
   };
 }
 
@@ -385,7 +403,12 @@ function readFailure(params: Record<string, unknown>): DeveloperTurnFailure | nu
   return { code: 'unknown', message: legacy, provider: null, action: 'none', retryable: false };
 }
 
-function request(server: RunningServer, method: string, params: unknown): Promise<unknown> {
+function request(
+  server: RunningServer,
+  method: string,
+  params: unknown,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<unknown> {
   if (server.closed) {
     return Promise.reject(
       new DeveloperRuntimeUnavailableError('The AGI CLI is no longer running.'),
@@ -396,7 +419,7 @@ function request(server: RunningServer, method: string, params: unknown): Promis
     const timer = setTimeout(() => {
       server.pending.delete(id);
       reject(new Error(`The AGI CLI did not answer ${method} in time.`));
-    }, REQUEST_TIMEOUT_MS);
+    }, timeoutMs);
     server.pending.set(id, { resolve, reject, timer });
     server.child.stdin.write(
       `${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`,
@@ -428,6 +451,58 @@ function spawnFailure(
     );
   }
   return new DeveloperRuntimeUnavailableError(`The AGI CLI could not be started, ${error.message}`);
+}
+
+/**
+ * The app-server signs in to the origin this shell is showing, not to the
+ * production default the CLI would pick on its own. `AGI_AUTH_BASE` carries
+ * the `/api` prefix the device-grant endpoints sit behind; the account and
+ * tier reads take the bare origin.
+ */
+function cloudEnvironment(): Record<string, string> {
+  return {
+    AGIWORKFORCE_API_BASE: CLOUD_APP_ORIGIN,
+    AGI_AUTH_BASE: `${CLOUD_APP_ORIGIN}/api`,
+  };
+}
+
+/**
+ * Reachability is cached per app-server, so the one that reconciled is not the
+ * only one whose answer the account just changed.
+ */
+async function refreshOtherModels(source: RunningServer): Promise<void> {
+  for (const other of servers.values()) {
+    if (other === source || other.closed) continue;
+    await requestOrNull(other, 'model/list', { refresh: true });
+  }
+}
+
+function queueAccountSync(server: RunningServer): Promise<void> {
+  const bridge = accountBridge;
+  if (!bridge) return accountSyncChain;
+  accountSyncChain = accountSyncChain.then(async () => {
+    if (server.closed) return;
+    try {
+      const outcome = await reconcileDeveloperAccount(
+        (method, params, timeoutMs) => request(server, method, params, timeoutMs),
+        bridge,
+      );
+      accountSyncError = null;
+      if (outcome === 'signed-in' || outcome === 'signed-out') await refreshOtherModels(server);
+    } catch (error) {
+      // An app-server that stopped mid-sequence says nothing about the account.
+      if (server.closed) return;
+      accountSyncError = error instanceof Error ? error.message : String(error);
+    }
+  });
+  return accountSyncChain;
+}
+
+export function syncDeveloperAccounts(): Promise<void> {
+  for (const server of [...servers.values()]) {
+    if (!server.closed) queueAccountSync(server);
+  }
+  return accountSyncChain;
 }
 
 async function handshake(server: RunningServer): Promise<void> {
@@ -472,7 +547,7 @@ function ensureServer(root: WorkspaceRoot): RunningServer {
   try {
     child = spawnRuntime(binary, ['app-server'], {
       cwd: root.path,
-      env: process.env,
+      env: { ...process.env, ...cloudEnvironment() },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       detached: process.platform !== 'win32',
@@ -517,6 +592,10 @@ function ensureServer(root: WorkspaceRoot): RunningServer {
     closeServer(server, error instanceof Error ? error : new Error(String(error)));
     throw error;
   });
+  void server.ready.then(
+    () => queueAccountSync(server),
+    () => undefined,
+  );
   return server;
 }
 

@@ -102,6 +102,12 @@ export interface DeveloperRuntimeStatus {
   version: string | null;
   path: string | null;
   hint: string | null;
+  /**
+   * Why the shell could not make the CLI this account, or null when it had no
+   * reason to try. The picker keeps whatever the CLI already reported, so this
+   * row is the only place the attempt is visible.
+   */
+  accountSyncError: string | null;
 }
 
 /**

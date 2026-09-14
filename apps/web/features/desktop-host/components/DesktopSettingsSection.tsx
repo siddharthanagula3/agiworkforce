@@ -35,9 +35,13 @@ const CLI_PATH_PLACEHOLDER = 'agi';
 const CLI_MISSING = 'Not found on this computer. Install the AGI CLI to run coding sessions here.';
 const CLI_RESOLVING = 'Looking for the AGI CLI…';
 
+const CLI_ACCOUNT_FAILED = 'This account could not be given to the AGI CLI on this computer.';
+
 function cliStateLine(status: DeveloperRuntimeStatus): string {
   if (!status.available) return [CLI_MISSING, status.hint].filter(Boolean).join(' ');
-  return `Using ${status.name} ${status.version} from ${status.path}`;
+  const using = `Using ${status.name} ${status.version} from ${status.path}`;
+  if (!status.accountSyncError) return using;
+  return `${using}. ${CLI_ACCOUNT_FAILED} ${status.accountSyncError}`;
 }
 
 const SHORTCUT_ROWS: Record<HostShortcutKey, { label: string; hint: string }> = {
@@ -89,7 +93,14 @@ export function DesktopSettingsSection() {
     readDeveloperRuntimeStatus()
       .then(setCliStatus)
       .catch(() =>
-        setCliStatus({ available: false, name: '', version: null, path: null, hint: null }),
+        setCliStatus({
+          available: false,
+          name: '',
+          version: null,
+          path: null,
+          hint: null,
+          accountSyncError: null,
+        }),
       );
   }, [host]);
 
@@ -186,7 +197,9 @@ export function DesktopSettingsSection() {
           label={CLI_PATH_LABEL}
           hint={CLI_PATH_HINT}
           note={cliStatus === null ? CLI_RESOLVING : cliStateLine(cliStatus)}
-          noteIsFailure={cliStatus !== null && !cliStatus.available}
+          noteIsFailure={
+            cliStatus !== null && (!cliStatus.available || cliStatus.accountSyncError !== null)
+          }
         >
           <CliPathField
             value={preferences?.cliPath ?? ''}
