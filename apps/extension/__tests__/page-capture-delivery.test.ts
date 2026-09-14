@@ -98,7 +98,7 @@ describe('page context is never silently missing', () => {
     expect(sidePanel).toMatch(
       /function describePageContextFailure[\s\S]*cannot access[\s\S]*host permission[\s\S]*PAGE_CONTEXT_DENIED_REASON/,
     );
-    expect(sidePanel).toContain('Add this site under Approved sites in the');
+    expect(sidePanel).toContain('Approve this site under Settings, Site');
   });
 
   it('refuses a context-requiring slash command rather than answering about nothing', () => {
