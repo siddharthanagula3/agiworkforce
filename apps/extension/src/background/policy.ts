@@ -168,6 +168,13 @@ export const EXTENSION_PAGE_ONLY_MESSAGE_TYPES: ReadonlySet<string> = new Set(
 
 export const SITE_ALLOWLIST_STORAGE_KEY = 'agi_site_allowlist';
 
+/**
+ * The side panel's selected-model preference. Sticky across new chats and
+ * panel reloads, like the web's model store; cleared only on sign-out or an
+ * account switch, in transitionManagedCloudOwner, not on every new chat.
+ */
+export const SELECTED_MODEL_STORAGE_KEY = 'agi_model';
+
 export const MAX_CONTEXT_HTML_CHARS = 100_000;
 
 export const MAX_JSON_LD_BYTES = 256 * 1024;

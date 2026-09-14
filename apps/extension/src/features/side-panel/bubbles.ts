@@ -6,6 +6,7 @@ import {
 } from '@agiworkforce/client-runtime';
 import { isAllowedMapSearchProviderUrl } from '@agiworkforce/cloud-contracts';
 import {
+  agentTaskStateLabel,
   resolveInteractiveCardRenderer,
   type InteractiveCard,
   type InteractiveCardRegistry,
@@ -167,6 +168,33 @@ function buildErrorFooter(
   return footer;
 }
 
+function buildInterruptedFooter(
+  msg: ChatMessage,
+  onRetry?: (messageId: string) => void,
+): HTMLElement | null {
+  if (!msg.interrupted) return null;
+
+  const footer = el('div', { class: 'sp-bubble-interrupted-footer', role: 'status' });
+  footer.appendChild(
+    el('div', { class: 'sp-bubble-interrupted-text' }, agentTaskStateLabel('cancelled')),
+  );
+
+  if (onRetry) {
+    const retryBtn = el(
+      'button',
+      { class: 'sp-bubble-retry-btn', type: 'button' },
+      'Retry',
+    ) as HTMLButtonElement;
+    retryBtn.addEventListener('click', () => {
+      retryBtn.disabled = true;
+      onRetry(msg.id);
+    });
+    footer.appendChild(retryBtn);
+  }
+
+  return footer;
+}
+
 export function resolveManagedArtifactUrl(uri: string): string | null {
   const trimmed = uri.trim();
   if (!trimmed) return null;
@@ -199,6 +227,8 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
 
   const errorFooter = buildErrorFooter(msg, options.onRetry);
   if (errorFooter) bubble.appendChild(errorFooter);
+  const interruptedFooter = buildInterruptedFooter(msg, options.onRetry);
+  if (interruptedFooter) bubble.appendChild(interruptedFooter);
 
   appendInteractiveCards(wrapper, msg);
 
@@ -626,7 +656,13 @@ export function buildBubbleWithTools(
 
   if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, options));
 
-  if (shouldRenderTextBubble({ text: textParts.join(''), streaming: Boolean(msg.streaming) })) {
+  if (
+    shouldRenderTextBubble({
+      text: textParts.join(''),
+      streaming: Boolean(msg.streaming),
+      interrupted: Boolean(msg.interrupted),
+    })
+  ) {
     const bubble = document.createElement('div');
     bubble.className = `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`;
     bubble.id = `sp-bubble-${msg.id}`;
@@ -651,6 +687,8 @@ export function buildBubbleWithTools(
 
   const toolsErrorFooter = buildErrorFooter(msg, options.onRetry);
   if (toolsErrorFooter) wrapper.appendChild(toolsErrorFooter);
+  const toolsInterruptedFooter = buildInterruptedFooter(msg, options.onRetry);
+  if (toolsInterruptedFooter) wrapper.appendChild(toolsInterruptedFooter);
 
   const actionRow = document.createElement('div');
   actionRow.className = 'sp-bubble-actions';

@@ -97,9 +97,13 @@ export function renderMarkdown(text: string): string {
 
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
 
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Up to 3 leading spaces still opens a heading, per CommonMark; a model's
+  // first streamed token is often " #" (a leading-space artifact of its own
+  // tokenizer), and a heading that fails to parse only on that account reads
+  // as a code defect, not a quirk of the input.
+  html = html.replace(/^ {0,3}### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^ {0,3}## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^ {0,3}# (.+)$/gm, '<h1>$1</h1>');
 
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
 

@@ -11,6 +11,15 @@ export interface SidePanelChatMessage {
   role: 'user' | 'assistant';
   content: string;
   streaming?: boolean;
+  /**
+   * Hydrated from a message that was still `streaming` the last time it was
+   * saved, and never reached a `streaming: false` save afterward, so the
+   * turn that started it is gone (a reload, a closed tab, a crash), not
+   * paused. Distinct from `error`: nothing failed, the reply just never
+   * finished; the panel offers Retry the same way, not a fresh streaming
+   * cursor that will never move again.
+   */
+  interrupted?: boolean;
   error?: boolean;
   agentActivity?: AgentActivityState;
   agentEvents?: AgentEventEnvelope[];
@@ -37,6 +46,8 @@ export interface StoredSidePanelChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** Still mid-reply as of the last save; see `SidePanelChatMessage.interrupted`. */
+  streaming?: boolean;
   agentEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
@@ -130,6 +141,7 @@ export function hydrateStoredChatMessage(
       : {}),
     ...(message.runtime ? { runtime: message.runtime } : {}),
     ...(message.error ? { error: true } : {}),
+    ...(message.streaming ? { interrupted: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
   };
 }
@@ -229,8 +241,12 @@ export function shouldRebuildMessageDom(input: {
  * and the streamed reply silently fails to paint, the user sees the activity
  * timeline but no answer.
  */
-export function shouldRenderTextBubble(input: { text: string; streaming: boolean }): boolean {
-  return input.text.trim().length > 0 || input.streaming === true;
+export function shouldRenderTextBubble(input: {
+  text: string;
+  streaming: boolean;
+  interrupted?: boolean;
+}): boolean {
+  return input.text.trim().length > 0 || input.streaming === true || input.interrupted === true;
 }
 
 /** Which page the composer's attached text was read from. */
