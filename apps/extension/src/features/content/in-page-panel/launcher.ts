@@ -111,8 +111,12 @@ export function applyPosition(host: HTMLElement, pos: LauncherPosition): void {
  * reaching inside the shadow tree.
  *
  * @param onOpen Called when the user clicks the launcher button.
+ * @param onEscape Called when Escape is pressed while focus is inside the launcher.
  */
-export function createLauncher(onOpen: () => void): {
+export function createLauncher(
+  onOpen: () => void,
+  onEscape: () => void,
+): {
   host: HTMLElement;
   button: HTMLButtonElement;
 } {
@@ -144,6 +148,9 @@ export function createLauncher(onOpen: () => void): {
   tooltip.textContent = 'Ask AGI';
 
   button.addEventListener('click', onOpen);
+  host.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Escape') onEscape();
+  });
 
   shadow.appendChild(style);
   shadow.appendChild(button);

@@ -21,7 +21,7 @@ import { sanitizePageText } from '../../../background/policy';
 import type { InPagePromptOutcome, InPagePromptResponse } from '../../../types';
 import { getPageActions, truncatePageText } from './pageActions';
 import type { PageAction } from './pageActions';
-import { buildPanelStyles } from './panelStyles';
+import { buildPanelStyles, PANEL_SLIDE_MS } from './panelStyles';
 import {
   ArrowUp,
   Clock,
@@ -362,7 +362,8 @@ export function createPanel(): {
 } {
   const host = document.createElement('div');
   host.setAttribute('data-agi-panel', 'true');
-  host.style.cssText = 'all:initial;';
+  host.style.cssText =
+    'all:initial;position:fixed;top:0;left:0;width:0;height:0;overflow:visible;z-index:2147483647;';
 
   const shadow = host.attachShadow({ mode: 'closed' });
   const els = buildPanelDOM(shadow);
@@ -446,10 +447,37 @@ export function createPanel(): {
   void ctx;
 
   let isOpen = false;
+  let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function withdrawFromPage(afterSlide: boolean): void {
+    els.panel.setAttribute('inert', '');
+    els.panel.setAttribute('aria-hidden', 'true');
+    if (hideTimer !== null) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    if (!afterSlide) {
+      els.panel.classList.add('agi-panel--hidden');
+      return;
+    }
+    hideTimer = setTimeout(() => {
+      hideTimer = null;
+      els.panel.classList.add('agi-panel--hidden');
+    }, PANEL_SLIDE_MS);
+  }
+
+  withdrawFromPage(false);
 
   function open(): void {
     if (isOpen) return;
     isOpen = true;
+    if (hideTimer !== null) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    els.panel.classList.remove('agi-panel--hidden');
+    els.panel.removeAttribute('inert');
+    els.panel.removeAttribute('aria-hidden');
     els.panel.classList.add('open');
     els.textarea.focus();
   }
@@ -458,6 +486,7 @@ export function createPanel(): {
     if (!isOpen) return;
     isOpen = false;
     els.panel.classList.remove('open');
+    withdrawFromPage(true);
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
   }
 

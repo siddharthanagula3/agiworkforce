@@ -31,6 +31,7 @@ const chromeHarness = vi.hoisted(() => {
 });
 
 import { createPanel } from '../src/features/content/in-page-panel/panel';
+import { PANEL_SLIDE_MS } from '../src/features/content/in-page-panel/panelStyles';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -50,6 +51,52 @@ function createInspectablePanel() {
   if (!shadow) throw new Error('panel shadow root was not created');
   return { controller, shadow };
 }
+
+describe('in-page panel host and closed state', () => {
+  it('never joins the host page layout', () => {
+    const { controller } = createInspectablePanel();
+    const style = controller.host.style;
+    expect(style.position).toBe('fixed');
+    expect(style.top).toBe('0px');
+    expect(style.left).toBe('0px');
+    expect(style.width).toBe('0px');
+    expect(style.height).toBe('0px');
+    expect(style.overflow).toBe('visible');
+    expect(style.zIndex).not.toBe('');
+  });
+
+  it('keeps every control out of the tab order until it is opened', () => {
+    vi.useFakeTimers();
+    try {
+      const { controller, shadow } = createInspectablePanel();
+      const panel = shadow.querySelector('.agi-panel')!;
+      const controls = shadow.querySelectorAll('button, textarea');
+
+      expect(controls).toHaveLength(8);
+      expect(panel.hasAttribute('inert')).toBe(true);
+      expect(panel.getAttribute('aria-hidden')).toBe('true');
+      expect(panel.classList.contains('agi-panel--hidden')).toBe(true);
+      for (const control of controls) {
+        expect(control.closest('[inert]')).toBe(panel);
+      }
+
+      controller.open();
+      expect(panel.hasAttribute('inert')).toBe(false);
+      expect(panel.getAttribute('aria-hidden')).toBeNull();
+      expect(panel.classList.contains('agi-panel--hidden')).toBe(false);
+
+      controller.close();
+      expect(panel.hasAttribute('inert')).toBe(true);
+      expect(panel.getAttribute('aria-hidden')).toBe('true');
+      expect(panel.classList.contains('agi-panel--hidden')).toBe(false);
+
+      vi.advanceTimersByTime(PANEL_SLIDE_MS);
+      expect(panel.classList.contains('agi-panel--hidden')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe('in-page panel UI', () => {
   it('disables empty sends, labels the cloud boundary, retries errors, and restores focus', async () => {
