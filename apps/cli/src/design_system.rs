@@ -191,6 +191,38 @@ pub struct ProviderDisplay {
     pub supports_effort: bool,
 }
 
+impl ProviderId {
+    /// Classify a runtime provider. The `OpenAICompatible` and `Custom`
+    /// variants carry the vendor in their `name`, which is the same spelling
+    /// the catalog uses.
+    pub fn for_provider(provider: &crate::models::Provider) -> Option<ProviderId> {
+        use crate::models::{OllamaMode, Provider};
+        match provider {
+            Provider::ManagedCloud => Some(ProviderId::AGICloud),
+            Provider::Anthropic => Some(ProviderId::Anthropic),
+            Provider::Google => Some(ProviderId::Google),
+            Provider::Ollama(OllamaMode::Local | OllamaMode::Cloud) => Some(ProviderId::Ollama),
+            Provider::OpenAICompatible { name, .. } => ProviderId::from_catalog_name(name),
+            Provider::Custom { name, .. } => ProviderId::from_catalog_name(name),
+        }
+    }
+}
+
+/// The provider's human-readable name, the one the model picker and
+/// `agi models list` print. Falls back to the endpoint's own name for a
+/// user-defined provider the catalog does not know.
+pub fn provider_label(provider: &crate::models::Provider) -> String {
+    use crate::models::Provider;
+    if let Some(id) = ProviderId::for_provider(provider) {
+        return provider_display(id).label.to_string();
+    }
+    match provider {
+        Provider::OpenAICompatible { name, .. } => (*name).to_string(),
+        Provider::Custom { name, .. } => name.clone(),
+        other => format!("{other:?}"),
+    }
+}
+
 /// Returns the canonical display metadata for a provider.
 ///
 /// Values mirror `PROVIDER_DISPLAY` in `packages/contracts/types/src/design-system/provider-display.ts`.
