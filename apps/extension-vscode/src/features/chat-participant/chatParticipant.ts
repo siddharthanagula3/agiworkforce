@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees';
 import { normalizeSelectableConfiguredModelId } from '../model-picker/modelConstants';
@@ -14,6 +13,7 @@ import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
+import { getAccountMemoryStore } from '../../memory/accountMemoryStore';
 import { buildCustomInstructionInput } from '../instructions';
 import { buildPromptReferenceInputs } from './promptReferences';
 import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
@@ -332,7 +332,9 @@ export function createChatHandler(
         ? undefined
         : buildCustomInstructionInput({ globalState, workspaceState });
     const memoryInput =
-      workspaceState === undefined ? undefined : buildMemoryContextInput(workspaceState);
+      workspaceState === undefined
+        ? undefined
+        : buildMemoryContextInput(getAccountMemoryStore()?.cachedFacts() ?? []);
     const historicalAuthority = localThreadAuthorityFromHistory(context);
     let threadId = historicalAuthority?.id;
     let threadAuthority: LocalThreadAuthorityMetadata | undefined;

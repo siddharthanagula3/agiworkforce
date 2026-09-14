@@ -45,14 +45,7 @@ import {
   setScheduleEnabledInteractively,
   showScheduleRuns,
 } from '../features/schedules';
-import {
-  loadFacts,
-  addFact,
-  updateFact,
-  deleteFact,
-  clearFacts,
-  containsFact,
-} from '../memory/memoryStore';
+import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
@@ -1355,7 +1348,24 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
 
       if (action.detail === 'list') {
-        const facts = loadFacts(context.workspaceState);
+        const store = getAccountMemoryStore();
+        if (store === undefined) {
+          vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+          return;
+        }
+        const state = await store.refresh();
+        if (state.status === 'signed-out') {
+          vscode.window.showInformationMessage(
+            state.detail ?? 'Sign in to AGI Cloud to see your memory.',
+          );
+          return;
+        }
+        if (state.status === 'unreachable') {
+          vscode.window.showWarningMessage(
+            `AGI Workforce: showing the memory this device already had. ${state.detail ?? ''}`.trim(),
+          );
+        }
+        const facts = state.facts;
         if (facts.length === 0) {
           vscode.window.showInformationMessage('No memory facts yet. Add one to get started.');
           return;
@@ -1372,25 +1382,44 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           },
         );
         if (!pick || pick.detail === undefined) return;
-        await deleteFact(context.workspaceState, pick.detail);
-        vscode.window.showInformationMessage('Fact removed.');
+        const removal = await store.remove(pick.detail);
+        vscode.window.showInformationMessage(
+          removal.applied
+            ? 'Fact removed from your account, on every client.'
+            : `Fact not removed. ${removal.refusals.join(' ')}`,
+        );
         return;
       }
 
       if (action.detail === 'clear') {
-        const facts = loadFacts(context.workspaceState);
+        const store = getAccountMemoryStore();
+        if (store === undefined) {
+          vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+          return;
+        }
+        if (await store.signedOut()) {
+          vscode.window.showInformationMessage(
+            'Sign in to AGI Cloud to change the memory your account shares across clients.',
+          );
+          return;
+        }
+        const facts = store.cachedFacts();
         if (facts.length === 0) {
           vscode.window.showInformationMessage('No memory facts to forget.');
           return;
         }
         const confirm = await vscode.window.showWarningMessage(
-          `Delete all ${facts.length} memory ${facts.length === 1 ? 'fact' : 'facts'}? This cannot be undone.`,
+          `Delete all ${facts.length} memory ${facts.length === 1 ? 'fact' : 'facts'} from your AGI Cloud account? They disappear from the web app, the CLI and mobile too, and this cannot be undone.`,
           { modal: true },
           'Forget everything',
         );
         if (confirm === 'Forget everything') {
-          await clearFacts(context.workspaceState);
-          vscode.window.showInformationMessage('All memory facts deleted.');
+          const cleared = await store.clear();
+          vscode.window.showInformationMessage(
+            cleared.applied
+              ? 'All memory facts deleted from your account.'
+              : `Some facts were kept. ${cleared.refusals.join(' ')}`,
+          );
         }
       }
     }),
@@ -1398,7 +1427,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.memory.toggle', async () => {
       const next = !Config.memoryEnabled();
       await Config.update(context, { key: 'memory.enabled', value: next });
-      memoryTreeProvider.refresh();
+      void memoryTreeProvider.refresh();
       vscode.window.showInformationMessage(
         next
           ? 'Memory on, saved facts are included with your turns.'
@@ -1406,8 +1435,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    register('agi-workforce.memory.refresh', () => {
-      memoryTreeProvider.refresh();
+    register('agi-workforce.memory.refresh', async () => {
+      await memoryTreeProvider.refresh();
     }),
 
     register('agi-workforce.memory.create', async () => {
@@ -1428,13 +1457,27 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       });
       if (!text) return;
       const trimmed = text.trim();
-      const existing = loadFacts(context.workspaceState);
-      if (containsFact(existing, trimmed)) {
+      const store = getAccountMemoryStore();
+      if (store === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+        return;
+      }
+      if (await store.signedOut()) {
+        vscode.window.showInformationMessage(
+          'Sign in to AGI Cloud to add memory your account shares across clients.',
+        );
+        return;
+      }
+      if (store.contains(trimmed)) {
         vscode.window.showInformationMessage('That fact is already in your memory.');
         return;
       }
-      await addFact(context.workspaceState, trimmed);
-      vscode.window.showInformationMessage('Memory fact saved.');
+      const saved = await store.add(trimmed);
+      vscode.window.showInformationMessage(
+        saved.applied
+          ? 'Saved to your account, on every client.'
+          : `Not saved. ${saved.refusals.join(' ')}`,
+      );
     }),
 
     register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
@@ -1453,24 +1496,40 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
       });
       if (!newText || newText.trim() === item.fact.text) return;
-      const updated = await updateFact(context.workspaceState, item.fact.id, newText.trim());
-      if (updated) {
-        vscode.window.showInformationMessage('Memory fact updated.');
+      const store = getAccountMemoryStore();
+      if (store === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+        return;
+      }
+      const updated = await store.update(item.fact.id, newText.trim());
+      if (updated.applied) {
+        vscode.window.showInformationMessage('Updated in your account, on every client.');
       } else {
-        vscode.window.showWarningMessage('AGI Workforce: Memory fact not found.');
+        vscode.window.showWarningMessage(
+          `AGI Workforce: not updated. ${updated.refusals.join(' ')}`,
+        );
       }
     }),
 
     register('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
       if (!requireWorkspaceMemoryScope()) return;
       const confirm = await vscode.window.showWarningMessage(
-        `Delete this memory fact?\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
+        `Delete this memory from your AGI Cloud account? It disappears from the web app, the CLI and mobile too, and cannot be recovered.\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
         { modal: true },
         'Delete',
       );
       if (confirm === 'Delete') {
-        await deleteFact(context.workspaceState, item.fact.id);
-        vscode.window.showInformationMessage('Memory fact deleted.');
+        const store = getAccountMemoryStore();
+        if (store === undefined) {
+          vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+          return;
+        }
+        const removed = await store.remove(item.fact.id);
+        vscode.window.showInformationMessage(
+          removed.applied
+            ? 'Deleted from your account, on every client.'
+            : `Not deleted. ${removed.refusals.join(' ')}`,
+        );
       }
     }),
   );
