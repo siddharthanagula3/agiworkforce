@@ -4,6 +4,7 @@ import {
   type CloudAgentRun,
   type CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
+import { AGENT_TASK_STATE_LABELS } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { TIME_GROUPS } from '@/lib/constants';
 import { formatAgeLabel } from '@/src/features/artifacts/store';
@@ -36,17 +37,7 @@ export function cloudRunFilterStates(key: CloudRunFilterKey): AgentTaskState[] {
   return [...filter.states];
 }
 
-export const CLOUD_RUN_STATE_LABELS: Record<AgentTaskState, string> = {
-  queued: 'Queued',
-  running: 'Running',
-  awaiting_input: 'Waiting on you',
-  ready_for_review: 'Ready for review',
-  completed: 'Completed',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-  paused: 'Paused',
-  archived: 'Archived',
-};
+export const CLOUD_RUN_STATE_LABELS: Record<AgentTaskState, string> = AGENT_TASK_STATE_LABELS;
 
 export const CLOUD_RUN_ORIGIN_LABELS: Record<CloudAgentOriginSurface, string> = {
   web: 'Web',

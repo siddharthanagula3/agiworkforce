@@ -4,6 +4,7 @@ import {
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
+  TOOL_APPROVAL_ACTION_LABELS,
 } from '@agiworkforce/types';
 import type { CloudCodeAgentStopReason } from './services/cloud-code-api';
 
@@ -136,8 +137,8 @@ export const CODE_COPY = {
   readAloud: 'Read aloud',
   stopReading: 'Stop reading',
   approvalHeading: 'Approval required',
-  approve: 'Approve and continue',
-  reject: 'Reject',
+  approve: `${TOOL_APPROVAL_ACTION_LABELS.approve} and continue`,
+  reject: TOOL_APPROVAL_ACTION_LABELS.deny,
   agentWorking: 'Working',
   deploymentDisabled:
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENT_TASK_STATE_LABELS,
+  agentTaskStateLabel,
   RUN_STATUS_LABELS,
   runStatusLabel,
   type DispatchTaskLifecycleStatus,
 } from '../cross-device';
+import type { AgentTaskState } from '../generated/protocol/AgentTaskState';
 import {
   TOOL_CALL_STATUS_LABELS,
   toolCallStatusLabel,
@@ -78,6 +81,49 @@ describe('tool call status labels', () => {
     expect(toolCallStatusLabel('running')).toBe(runStatusLabel('running'));
     expect(toolCallStatusLabel('completed')).toBe(runStatusLabel('completed'));
     expect(toolCallStatusLabel('failed')).toBe(runStatusLabel('failed'));
+  });
+});
+
+describe('agent task state labels', () => {
+  const states = Object.keys(AGENT_TASK_STATE_LABELS) as AgentTaskState[];
+
+  it('labels every state the engine can report', () => {
+    const expected: AgentTaskState[] = [
+      'queued',
+      'running',
+      'awaiting_input',
+      'ready_for_review',
+      'completed',
+      'failed',
+      'cancelled',
+      'paused',
+      'archived',
+    ];
+    expect([...states].sort()).toEqual([...expected].sort());
+  });
+
+  it('reuses the run vocabulary for every state the two lifecycles share', () => {
+    for (const state of [
+      'queued',
+      'running',
+      'awaiting_input',
+      'ready_for_review',
+      'completed',
+      'failed',
+      'cancelled',
+    ] as const) {
+      expect(agentTaskStateLabel(state)).toBe(runStatusLabel(state));
+    }
+  });
+
+  it('has one word for a run waiting on the user, not two', () => {
+    expect(agentTaskStateLabel('awaiting_input')).toBe('Waiting for input');
+    expect(Object.values(AGENT_TASK_STATE_LABELS)).not.toContain('Waiting on you');
+  });
+
+  it('adds only the two states dispatch has no word for', () => {
+    expect(agentTaskStateLabel('paused')).toBe('Paused');
+    expect(agentTaskStateLabel('archived')).toBe('Archived');
   });
 });
 
