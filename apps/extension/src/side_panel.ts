@@ -6688,6 +6688,27 @@ function buildUI(): void {
   });
   viewsSection.appendChild(cuLaunchBtn);
 
+  const runsLaunchBtn = el('button', {
+    class: 'sp-drawer-launcher-btn',
+    id: 'sp-drawer-runs-btn',
+    title: 'Open Work runs',
+  });
+  const runsIcon = el('div', { class: 'sp-drawer-launcher-icon' });
+  runsIcon.appendChild(renderIcon(Play, 14));
+  const runsTextBlock = el('div', { class: 'sp-drawer-launcher-label' });
+  runsTextBlock.appendChild(el('div', {}, 'Work runs'));
+  runsTextBlock.appendChild(
+    el('div', { class: 'sp-drawer-launcher-desc' }, 'Runs you started on any device'),
+  );
+  runsLaunchBtn.appendChild(runsIcon);
+  runsLaunchBtn.appendChild(runsTextBlock);
+  runsLaunchBtn.appendChild(el('span', { class: 'sp-drawer-launcher-chevron' }, '\u203A'));
+  runsLaunchBtn.addEventListener('click', () => {
+    closeDrawer();
+    switchTab('cloud-runs');
+  });
+  viewsSection.appendChild(runsLaunchBtn);
+
   const pageLaunchBtn = el('button', {
     class: 'sp-drawer-launcher-btn',
     id: 'sp-drawer-page-btn',
