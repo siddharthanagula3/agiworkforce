@@ -77,7 +77,10 @@ import { ONBOARDING_SEEN_KEY } from '../onboarding/onboardingState';
 import {
   buildContextAttachment,
   resolveContextMenuState,
+  resolveEditorContext,
   type ContextMenuItemState,
+  type EditorContextChip,
+  type EditorContextSnapshot,
 } from '../../data/composerContext';
 import type { ContextAttachmentKind } from '../../protocol/webviewMessages';
 import { openPathReference, type PathReferenceTarget } from '../path-links';
@@ -161,6 +164,7 @@ export type WebviewToExtMessage =
   | { type: 'openPathReference'; payload: PathReferenceTarget }
   | { type: 'requestContextMenuState' }
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
+  | { type: 'dismissEditorContext'; payload: { id: string } }
   | {
       type: 'attachFiles';
       payload: {
@@ -320,6 +324,7 @@ export type ExtToWebviewMessage =
     }
   | { type: 'contextMenuState'; payload: { items: ContextMenuItemState[] } }
   | { type: 'contextAttached'; payload: { id: string; name: string } }
+  | { type: 'editorContext'; payload: { chips: EditorContextChip[] } }
   | { type: 'attachmentsConsumed'; payload: { ids: string[] } }
   | { type: 'attachmentsReleased'; payload: { ids: string[] } }
   | { type: 'rewindComplete' }
@@ -415,6 +420,7 @@ interface PendingChatSend {
   browseWeb: boolean;
   references: WorkspaceFileReference[];
   attachments: PendingAttachment[];
+  editorContext: EditorContextSnapshot;
 }
 
 const USAGE_METER_UPGRADE_THRESHOLD = 0.2;
@@ -544,6 +550,8 @@ export class ChatStateManager {
   private readonly _localModelProviders = new Map<string, LocalModelSummary['provider']>();
   private _runtimeReady = false;
   private readonly _cliCapabilities: CliCapabilityAdapter;
+  private readonly _dismissedEditorContext = new Set<string>();
+  private readonly _editorContextListeners: vscode.Disposable[] = [];
 
   constructor(
     private readonly _secrets: vscode.SecretStorage,
@@ -556,6 +564,11 @@ export class ChatStateManager {
   ) {
     this._activeModel = Config.model();
     this._cliCapabilities = new CliCapabilityAdapter(this._localRuntimes);
+    this._editorContextListeners.push(
+      vscode.window.onDidChangeActiveTextEditor(() => this.pushEditorContext()),
+      vscode.window.onDidChangeTextEditorSelection(() => this.pushEditorContext()),
+      vscode.languages.onDidChangeDiagnostics(() => this.pushEditorContext()),
+    );
     if (this._workspaceState !== undefined) {
       this._meterCollapsed = this._workspaceState.get<boolean>(
         'agiWorkforce.usageMeterCollapsed',
@@ -611,6 +624,7 @@ export class ChatStateManager {
         await this.refreshAccountPresentation();
         await this.pushRecentConversations();
         this.pushActiveProject();
+        this.pushEditorContext();
         if (this._loadedConversation !== undefined && this._thread !== undefined) {
           this._postLoadedConversation();
           this._postProviderBadgeForSession(
@@ -777,6 +791,8 @@ export class ChatStateManager {
         delete this._thread;
         delete this._loadedConversation;
         this._pendingAttachments.splice(0);
+        this._dismissedEditorContext.clear();
+        this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         break;
       }
@@ -812,6 +828,8 @@ export class ChatStateManager {
         delete this._thread;
         delete this._loadedConversation;
         this._pendingAttachments.splice(0);
+        this._dismissedEditorContext.clear();
+        this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         break;
       }
@@ -883,6 +901,12 @@ export class ChatStateManager {
           type: 'contextMenuState',
           payload: { items: await resolveContextMenuState() },
         });
+        break;
+      }
+
+      case 'dismissEditorContext': {
+        this._dismissedEditorContext.add(msg.payload.id);
+        this.pushEditorContext();
         break;
       }
 
@@ -1650,9 +1674,23 @@ export class ChatStateManager {
     await this.pushUsageMeter();
   }
 
+  pushEditorContext(): void {
+    this._post({
+      type: 'editorContext',
+      payload: { chips: resolveEditorContext(this._dismissedEditorContext).chips },
+    });
+  }
+
+  dispose(): void {
+    for (const listener of this._editorContextListeners) listener.dispose();
+    this._editorContextListeners.length = 0;
+  }
+
   resetConversation(): void {
     this._resumeAttemptSeq++;
     this._conversationEpoch++;
+    this._dismissedEditorContext.clear();
+    this.pushEditorContext();
     this._dropQueuedSends('Queued follow-up cancelled when the conversation was reset.');
     this._dropInFlightSend('Message cancelled when the conversation was reset.');
     this._dropSteeringSends('Steer cancelled when the conversation was reset.');
@@ -1926,7 +1964,10 @@ export class ChatStateManager {
       browseWeb,
       references: Array.isArray(references) ? references.filter(isWorkspaceFileReference) : [],
       attachments: this._pendingAttachments.splice(0),
+      editorContext: resolveEditorContext(this._dismissedEditorContext),
     };
+    this._dismissedEditorContext.clear();
+    this.pushEditorContext();
 
     if (this._turnLifecycleActive) {
       if (this._queuedSends.length + this._steeringSends.size >= MAX_QUEUED_SENDS) {
@@ -2354,13 +2395,19 @@ export class ChatStateManager {
         const attachmentInputs = attachmentEntries.map((entry) => entry.input);
         const customInstructionInput = buildCustomInstructionInput(this._context);
         const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.cachedFacts() ?? []);
-        const contextFiles = contextFilesForWorkspace(cwd);
+        const contextFiles = contextFilesForWorkspace(cwd, request.editorContext.contextFiles);
+        const editorContextInputs: UserInput[] = request.editorContext.texts.map((text) => ({
+          type: 'text',
+          text,
+          text_elements: [],
+        }));
         const startTurn = runtime.startTurn({
           threadId: thread.id,
           cwd,
           input: [
             ...(customInstructionInput === undefined ? [] : [customInstructionInput]),
             { type: 'text', text: runtimeText, text_elements: [] },
+            ...editorContextInputs,
             ...mentionInputs,
             ...(memoryInput === undefined ? [] : [memoryInput]),
             ...attachmentInputs,
@@ -2706,12 +2753,14 @@ function normalizeTranscriptMessages(
   return normalized;
 }
 
-function contextFilesForWorkspace(cwd: string): string[] {
+function contextFilesForWorkspace(cwd: string, editorFiles: readonly string[]): string[] {
   const prefix =
     cwd.endsWith('/') || cwd.endsWith('\\')
       ? cwd
       : `${cwd}${process.platform === 'win32' ? '\\' : '/'}`;
-  return (getContextPanelProvider()?.getContextFiles() ?? []).filter(
-    (filePath) => filePath === cwd || filePath.startsWith(prefix),
-  );
+  const selected = new Set([
+    ...(getContextPanelProvider()?.getContextFiles() ?? []),
+    ...editorFiles,
+  ]);
+  return [...selected].filter((filePath) => filePath === cwd || filePath.startsWith(prefix));
 }

@@ -228,6 +228,10 @@ export function activate(context: vscode.ExtensionContext): void {
         syncCodeLensProvider?.();
       }
 
+      if (e.affectsConfiguration('agiWorkforce.editorContext.autoAttach')) {
+        sidebarProvider?.pushEditorContext();
+      }
+
       if (e.affectsConfiguration('agiWorkforce.composer.followUpBehavior')) {
         sidebarProvider?.pushFollowUpBehavior();
         ChatEditorPanel.pushFollowUpBehavior();

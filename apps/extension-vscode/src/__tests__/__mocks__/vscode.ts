@@ -520,6 +520,7 @@ export const window = {
     dispose: vi.fn(),
   })),
   onDidChangeActiveTextEditor: vi.fn(() => new Disposable()),
+  onDidChangeTextEditorSelection: vi.fn(() => new Disposable()),
   onDidChangeVisibleTextEditors: vi.fn(() => new Disposable()),
   tabGroups: {
     onDidChangeTabs: vi.fn(() => new Disposable()),
@@ -568,6 +569,8 @@ export const workspace = {
 };
 
 export const languages = {
+  onDidChangeDiagnostics: vi.fn(() => new Disposable()),
+  getDiagnostics: vi.fn(() => [] as unknown[]),
   registerCodeActionsProvider: vi.fn(() => new Disposable()),
   registerHoverProvider: vi.fn(() => new Disposable()),
   registerDocumentLinkProvider: vi.fn(() => new Disposable()),

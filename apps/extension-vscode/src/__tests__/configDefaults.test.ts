@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -49,6 +48,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   model: 'agiWorkforce.model',
   composerFollowUpBehavior: 'agiWorkforce.composer.followUpBehavior',
   contextLines: 'agiWorkforce.contextLines',
+  editorContextAutoAttach: 'agiWorkforce.editorContext.autoAttach',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
   telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',
   desktopBridgeEnabled: 'agiWorkforce.desktopBridge.enabled',
