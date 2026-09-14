@@ -1713,6 +1713,22 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             description: `Plan: ${tier}`,
           },
         );
+      } else {
+        const { resolveUsageMeter, formatUsageMeterFallbackLabel } =
+          await import('../data/usageMeter');
+        const meter = await resolveUsageMeter(context.secrets, 0);
+        if (meter.source !== 'managed-plan') {
+          items.push(
+            { label: 'Cloud quota', kind: vscode.QuickPickItemKind.Separator },
+            {
+              label: `$(pulse) ${formatUsageMeterFallbackLabel(meter.source)}`,
+              description:
+                meter.source === 'user-api-key'
+                  ? 'Your provider bills these requests; no AGI plan limit applies'
+                  : 'Requests never leave this machine; no AGI plan limit applies',
+            },
+          );
+        }
       }
 
       if (tierInfo?.accountPlanTier && subscriptionNeedsAttention) {
