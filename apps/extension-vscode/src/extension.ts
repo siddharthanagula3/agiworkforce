@@ -18,7 +18,7 @@ import * as telemetry from './core/telemetry';
 import { installGlobalErrorReporting } from './core/errorReporting';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
-import { refreshAccountTierCache } from './integrations/tierResolver';
+import { refreshAccountTierCache, watchAccountTierInvalidation } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
 import { ChatEditorPanel } from './providers/chatEditorPanel';
 import {
@@ -241,6 +241,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   void checkInlineCompletionsFirstRun(context);
 
+  watchAccountTierInvalidation(context);
   void refreshAccountTierCache(context).catch(() => {});
 }
 

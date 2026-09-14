@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
@@ -219,6 +218,7 @@ describe('usage meter trust boundary (SIX-02)', () => {
     const harness = makeHarness();
     await harness.manager.handleMessage({ type: 'ready' });
     const before = meters(harness.posted).length;
+    const sourceBefore = lastMeter(harness.posted).source;
     expect(before).toBe(1);
 
     await harness.manager.handleMessage({
@@ -227,7 +227,9 @@ describe('usage meter trust boundary (SIX-02)', () => {
     });
 
     expect(meters(harness.posted).length).toBe(before);
-    expect(fetchTierInfo).toHaveBeenCalledTimes(1);
+    expect(lastMeter(harness.posted).source).toBe(sourceBefore);
+    // One read for the meter, one for the picker's entitlement revalidation.
+    expect(fetchTierInfo).toHaveBeenCalledTimes(2);
   });
 
   it('never claims Local when the boundary cannot be resolved', async () => {
