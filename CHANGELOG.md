@@ -2,9 +2,69 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-06
+Last updated: 2026-09-14
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased, web public-release audit], 2026-09-14
+
+### Added
+
+- **`WEB_PUBLIC_RELEASE_AUDIT.md`**, the canonical public-release audit of the
+  web app: route table, competitor conventions, design-system health, measured
+  performance, and every finding with its root cause and verification.
+- **`check:web-ui-invariants` scans stylesheets.** Marketing and legacy CSS
+  are held to the same tiny-type and target-size rules as TSX.
+- **`Transcript`**, one marketing primitive for the terminal transcripts that
+  five pages had each hand-rolled. The block is keyboard focusable and named,
+  so a narrow viewport can scroll it without a pointer.
+
+### Fixed
+
+- **Public routes no longer flash a loading state or serve redirects as a
+  meta-refresh page.** The root and marketing `loading.tsx` boundaries are
+  gone, retired aliases (`/register`, `/sign-in`, `/downloads`, `/resources`
+  and twelve more) are config-level redirects, and an unknown route returns a
+  real 404.
+- **Every page has exactly one `main` landmark**, so the skip link lands on the
+  content rather than on the first of two.
+- **Header, footer and mobile drawer controls meet the 24 px target minimum**,
+  and the shared Sheet close control is 32 px.
+- **Public pages no longer download the chat runtime.** App-only providers
+  (command palette, session guard, offline indicator, cloud settings sync)
+  mount on app routes only; the error-message helper and the capability
+  context import light subpaths instead of the chat and contracts barrels, and
+  `@agiworkforce/types` declares itself side-effect free so the model catalogue
+  is bundled only where it is read. English is the only language bundled up
+  front; `@agiworkforce/i18n/lazy` fetches another language's namespaces when
+  it is chosen. A legal page went from 1.6 MB of compressed script to well under
+  half of that.
+- **Marketing copy matches what has shipped.** BYOK availability is derived
+  from one surface-status register, the receipt promise is gone, the Linux
+  label names the architecture, the device mockup no longer shows a placeholder
+  token counter, and the SLA page dates itself from the legal register.
+- **Streaming shows text sooner.** The thinking-tag hold-back keeps only the
+  longest possible tag prefix, agent-activity metadata is patched only when it
+  changes, and citation rendering is memoised on the message metadata.
+- **Colour roles.** The send button uses the on-primary token, the focus ring
+  derives from the accent text token with a contrast test, and the scroll
+  feature list de-emphasises inactive steps by colour role instead of opacity,
+  which had dropped body text to 2.4:1.
+- **Settings request failures show the shared user-facing message** instead of
+  raw HTTP status text.
+- **Artifact preview**: Escape leaves fullscreen only when fullscreen is open,
+  and the fullscreen toggle stays reachable at narrow widths.
+- **Ways out.** Billing and auth error boundaries link back to chat, contact
+  and login; a published artifact's provenance links to the product; the
+  waitlist page links to the beta programme; the sitemap page lists every
+  public route.
+- **Loading and offline.** The chat loading skeleton uses the Spinner
+  primitive with an accessible label, and the offline indicator no longer
+  blocks clicks around it.
+- **Stripe loads on demand** rather than on every page that imports the
+  payments service.
+- **Em dashes** were removed from legacy page CSS, and the em-dash guard now
+  catches CSS escapes.
 
 ## [Unreleased, model developers, provider routes and marketplace discounts], 2026-09-06
 
