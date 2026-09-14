@@ -293,5 +293,21 @@ describe('Chrome side-panel sign-out ends the shared session, not just the local
     const start = source.indexOf("} from './features/cloud-bridge/clerkAuth';");
     const importBlock = source.slice(Math.max(0, start - 300), start);
     expect(importBlock).toContain('signOutClerk');
+    expect(importBlock).toContain('revokeSyncedWebSession');
+  });
+
+  it('revokes the sync host session before signing out of Clerk locally', () => {
+    const start = source.indexOf("signoutBtn.addEventListener('click'");
+    const end = source.indexOf('\n  });', start);
+    const body = source.slice(start, end);
+
+    expect(body).toContain('revokeSyncedWebSession()');
+
+    const syncHostRevokeIndex = body.indexOf('revokeSyncedWebSession()');
+    const clerkSignOutIndex = body.indexOf('signOutClerk()');
+    const localResetIndex = body.indexOf('transitionManagedCloudOwner(null)');
+    expect(syncHostRevokeIndex).toBeGreaterThan(-1);
+    expect(clerkSignOutIndex).toBeGreaterThan(syncHostRevokeIndex);
+    expect(localResetIndex).toBeGreaterThan(clerkSignOutIndex);
   });
 });
