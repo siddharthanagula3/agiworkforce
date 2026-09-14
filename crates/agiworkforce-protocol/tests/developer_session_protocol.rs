@@ -96,6 +96,7 @@ fn initialize_is_typed_and_does_not_claim_experimental_capabilities() {
                 version: "0.3.0".to_string(),
             },
             experimental_api: false,
+            protocol_version: None,
         },
     )
     .expect("serialize initialize");

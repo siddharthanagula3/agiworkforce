@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -217,6 +217,7 @@ pub enum PluginInstallOutcome {
 
 const AGIWORKFORCE_DIR: &str = ".agiworkforce";
 const PLUGINS_DIR: &str = "plugins";
+const DISABLED_PLUGINS_FILE: &str = "disabled-plugins.json";
 const MAX_PLUGIN_NAME_BYTES: usize = 128;
 
 pub fn derive_plugin_install_name(
@@ -288,14 +289,20 @@ impl Default for PluginsManager {
 
 impl PluginsManager {
     pub fn new() -> Self {
-        let global_dir = match dirs::home_dir() {
-            Some(home) => home.join(AGIWORKFORCE_DIR).join(PLUGINS_DIR),
-            None => {
-                eprintln!(
-                    "[plugins] warning: could not determine home directory, using current dir"
-                );
-                PathBuf::from(".").join(AGIWORKFORCE_DIR).join(PLUGINS_DIR)
-            }
+        // Resolve through the config root every other CLI subsystem uses, so
+        // an AGIWORKFORCE_HOME override moves plugins with skills, hooks and
+        // MCP instead of leaving them pointed at the real home directory.
+        let global_dir = match crate::config::CliConfig::config_dir() {
+            Ok(config_dir) => config_dir.join(PLUGINS_DIR),
+            Err(_) => match dirs::home_dir() {
+                Some(home) => home.join(AGIWORKFORCE_DIR).join(PLUGINS_DIR),
+                None => {
+                    eprintln!(
+                        "[plugins] warning: could not determine home directory, using current dir"
+                    );
+                    PathBuf::from(".").join(AGIWORKFORCE_DIR).join(PLUGINS_DIR)
+                }
+            },
         };
         Self {
             global_dir,
@@ -317,6 +324,7 @@ impl PluginsManager {
         Ok(&self.plugins)
     }
     fn load_from_dir(&mut self, dir: &Path, from_project_dir: bool) -> Result<()> {
+        let disabled = load_disabled_plugins();
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
             if !path.is_dir() {
@@ -386,11 +394,12 @@ impl PluginsManager {
                 .map(|m| sanitize_manifest_paths(&path, &name, "skills", &m.skills))
                 .unwrap_or_default();
 
+            let enabled = !disabled.contains(&name);
             self.plugins.push(LoadedPlugin {
                 config_name: name,
                 manifest_name: manifest.as_ref().and_then(|m| m.name.clone()),
                 root: path,
-                enabled: true,
+                enabled,
                 from_project_dir,
                 skill_roots: vec![],
                 mcp_servers: manifest
@@ -419,6 +428,18 @@ impl PluginsManager {
         &self.plugins
     }
 
+    /// Plugins the user has not turned off. A disabled plugin stays in
+    /// `plugins()` so a settings surface can list and re-enable it, but it
+    /// contributes no commands, skills, agents, MCP servers or hooks.
+    pub fn enabled_plugins(&self) -> impl Iterator<Item = &LoadedPlugin> {
+        self.plugins.iter().filter(|plugin| plugin.enabled)
+    }
+
+    /// Root the global plugin directory lives under.
+    pub fn global_dir(&self) -> &Path {
+        &self.global_dir
+    }
+
     /// Collect MCP server configs from all loaded plugins, converted to
     /// `crate::mcp::McpServerConfig` so callers can pass them to `McpManager`.
     ///
@@ -428,7 +449,7 @@ impl PluginsManager {
     /// with neither a command nor an SSE transport are skipped.
     pub fn mcp_configs(&self) -> HashMap<String, crate::mcp::McpServerConfig> {
         let mut out = HashMap::new();
-        for p in &self.plugins {
+        for p in self.enabled_plugins() {
             for (name, cfg) in &p.mcp_servers {
                 let transport_kind = cfg
                     .extra
@@ -519,8 +540,7 @@ impl PluginsManager {
     /// Loaders should walk these and register the same way user-level
     /// commands get registered.
     pub fn command_path_entries(&self) -> Vec<PluginManifestPath> {
-        self.plugins
-            .iter()
+        self.enabled_plugins()
             .flat_map(|p| {
                 p.manifest_commands
                     .iter()
@@ -538,8 +558,7 @@ impl PluginsManager {
 
     /// Return all plugin-declared skill file/dir paths, absolute.
     pub fn skill_path_entries(&self) -> Vec<PluginManifestPath> {
-        self.plugins
-            .iter()
+        self.enabled_plugins()
             .flat_map(|p| {
                 p.manifest_skills
                     .iter()
@@ -557,8 +576,7 @@ impl PluginsManager {
 
     /// Return all plugin-declared agent file paths, absolute.
     pub fn agent_path_entries(&self) -> Vec<PluginManifestPath> {
-        self.plugins
-            .iter()
+        self.enabled_plugins()
             .flat_map(|p| {
                 p.manifest_agents
                     .iter()
@@ -592,7 +610,7 @@ impl PluginsManager {
     pub fn hook_configs_with_trust(&self) -> Vec<(String, Vec<serde_json::Value>, bool)> {
         // Returns vec of (event_name, [hook_values], is_from_project_dir).
         let mut result = Vec::new();
-        for p in &self.plugins {
+        for p in self.enabled_plugins() {
             let raw = match &p.manifest_hooks {
                 Some(v) => v,
                 None => continue,
@@ -615,7 +633,7 @@ impl PluginsManager {
 
     pub fn hook_configs(&self) -> HashMap<String, Vec<serde_json::Value>> {
         let mut merged: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
-        for p in &self.plugins {
+        for p in self.enabled_plugins() {
             if p.from_project_dir {
                 // HIGH-2: project-local plugin hooks are blocked by default.
                 // Use hook_configs_with_trust() for granular control.
@@ -875,6 +893,49 @@ fn manifest_path_entry(plugin: &LoadedPlugin, rel: &Path) -> Option<PluginManife
         plugin_root: plugin.root.clone(),
         path,
     })
+}
+
+fn disabled_plugins_path() -> Option<PathBuf> {
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join(DISABLED_PLUGINS_FILE))
+}
+
+/// Plugin directory names the user turned off. Empty when the file is absent,
+/// so the default stays "every installed plugin loads".
+pub fn load_disabled_plugins() -> HashSet<String> {
+    disabled_plugins_path()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
+        .map(|names| names.into_iter().collect())
+        .unwrap_or_default()
+}
+
+fn save_disabled_plugins(disabled: &HashSet<String>) -> std::io::Result<()> {
+    let Some(path) = disabled_plugins_path() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut names: Vec<&String> = disabled.iter().collect();
+    names.sort();
+    let json = serde_json::to_string_pretty(&names).unwrap_or_else(|_| "[]".to_string());
+    std::fs::write(path, json)
+}
+
+/// Turn a plugin on or off for every surface that loads plugins.
+pub fn set_plugin_enabled(id: &str, enabled: bool) -> std::io::Result<()> {
+    let mut disabled = load_disabled_plugins();
+    let changed = if enabled {
+        disabled.remove(id)
+    } else {
+        disabled.insert(id.to_string())
+    };
+    if changed {
+        save_disabled_plugins(&disabled)?;
+    }
+    Ok(())
 }
 
 pub fn plugin_path_stays_within_root(plugin_root: &Path, candidate: &Path) -> bool {
