@@ -7,7 +7,7 @@ import type {
   InPagePromptResponse,
   ScheduledTask,
 } from './types';
-import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import { logger, originOfUrl, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
 import { timingSafeEqual } from '@agiworkforce/utils/crypto';
@@ -2806,7 +2806,7 @@ function handleMessage(
       void siteAllowlistReady.then(() => {
         if (!isAllowlistedSender(sender, msg.type)) {
           logger.warn('Rejected message from non-allowlisted sender', {
-            url: sender?.tab?.url,
+            origin: originOfUrl(sender?.tab?.url),
             type: msg.type,
           });
           sendResponse({ success: false, error: SITE_NOT_APPROVED_MESSAGE } as ExtensionResponse);
@@ -2817,7 +2817,7 @@ function handleMessage(
       return true;
     }
     logger.warn('Rejected message from non-allowlisted sender', {
-      url: sender?.tab?.url,
+      origin: originOfUrl(sender?.tab?.url),
       type: msg.type,
     });
     sendResponse({
@@ -2856,7 +2856,7 @@ function dispatchAuthorizedMessage(
       )
     ) {
       logger.warn('Rejected extension-page-only message from non-UI sender', {
-        url: sender?.tab?.url,
+        origin: originOfUrl(sender?.tab?.url),
         type: msg.type,
       });
       sendResponse({
@@ -3017,7 +3017,7 @@ async function handleMessageAsync(
   message: ExtensionMessage,
   sender: chrome.runtime.MessageSender,
 ): Promise<ExtensionResponse> {
-  logger.debug('Processing message', { type: message.type, sender: sender.url });
+  logger.debug('Processing message', { type: message.type, sender: originOfUrl(sender.url) });
 
   const tabId = resolveMessageTargetTabId(
     {
