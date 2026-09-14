@@ -241,8 +241,6 @@ pub struct CliDeveloperSessionHost {
     shutdown_started: Arc<AtomicBool>,
     lifecycle: Arc<RwLock<()>>,
     pending_logins: Arc<Mutex<HashMap<String, PendingDeviceLogin>>>,
-    /// What this host answered about model reachability, kept for the life of
-    /// the connection so a client may ask as often as it likes.
     host_models: Arc<RwLock<Option<Vec<HostModelSummary>>>>,
 }
 
@@ -608,12 +606,8 @@ impl CliDeveloperSessionHost {
         ThreadStatus::Idle
     }
 
-    /// Which models this host can reach, resolved once and reused.
-    ///
-    /// Every local runtime is probed and every route's credential looked up,
-    /// so this is not something to do per request: a client asking for the
-    /// list while typing would pay it on each keystroke. A client asks for a
-    /// fresh answer after the user signs in or starts a local server.
+    /// Held for the life of the connection: every local runtime is probed and
+    /// every route's credential looked up, so this cannot run per request.
     async fn host_models(&self, refresh: bool) -> Vec<HostModelSummary> {
         if !refresh {
             if let Some(cached) = self.host_models.read().await.clone() {
@@ -2292,14 +2286,8 @@ fn emit_agent_event(
     }
 }
 
-/// The one place a turn's assistant text leaves the agent engine.
-///
-/// It backs both halves of a reply: the `on_chunk` the first completion
-/// streams through, and the session's continuation sink, which every
-/// completion after a tool call uses. Without the second installation the
-/// agent engine falls back to writing the continuation to the terminal, and
-/// under stdio transport the terminal is the protocol channel: the client's
-/// reader hits a non-JSON line and closes the session.
+/// Backs both halves of a reply. Without the continuation sink the engine
+/// writes it to the terminal, which under stdio is the protocol channel.
 fn output_delta_callback(
     thread_id: String,
     turn_id: String,
@@ -2324,12 +2312,8 @@ fn output_delta_callback(
     })
 }
 
-/// Wire both halves of one reply to `deltas` and hand back the first
-/// completion's stream callback.
-///
-/// Installing the continuation sink is not optional for this host, so it is not
-/// a separate statement a later edit can drop: the only way to obtain the
-/// `on_chunk` a turn needs is to go through here.
+/// The only way to obtain a turn's `on_chunk`, so the continuation sink it
+/// also installs is not a separate statement a later edit can drop.
 fn install_output_deltas(
     agent: &mut AgentSession,
     deltas: Arc<dyn Fn(&str) + Send + Sync>,
@@ -3589,11 +3573,6 @@ mod tests {
 
     #[tokio::test]
     async fn a_turns_continuation_reaches_the_client_instead_of_the_protocol_stream() {
-        // Regression: this host installed no continuation sink, so the reply
-        // after a tool call fell through to the agent engine's terminal
-        // fallback and was written raw to stdout, the stdio protocol channel.
-        // The client's reader closed on the non-JSON line, and the text only
-        // ever reached it inside `turn/completed`, never as a delta.
         let (notifications, mut receiver) = broadcast::channel(8);
         let partial = Arc::new(StdMutex::new(String::new()));
         let mut agent = test_agent();
@@ -3625,8 +3604,6 @@ mod tests {
         assert_eq!(continuation.params["turnId"], "turn-1");
         assert_eq!(continuation.params["delta"], "`README.md`");
 
-        // Both halves land in the buffer `turn/completed.response` is built
-        // from, so the transcript a client rebuilds from deltas matches it.
         assert_eq!(
             partial.lock().expect("partial").as_str(),
             "First line of `README.md`"

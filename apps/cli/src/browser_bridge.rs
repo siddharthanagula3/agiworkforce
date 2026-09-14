@@ -1,23 +1,15 @@
-//! Talking to the desktop shell's browser bridge.
-//!
-//! The shell owns the pairing with the Chrome extension and the permission
-//! model around it. The CLI is one more local client: it finds the bridge
-//! through a file the shell writes into this user's config root, proves it can
-//! read that file by presenting the token inside, and asks the shell to run a
-//! page command. The shell decides; the CLI never speaks to the extension.
+//! Talking to the desktop shell's browser bridge. The shell owns the pairing
+//! and decides every command; the CLI never speaks to the extension.
 
 use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-/// Mirror of the four literals owned by
-/// `packages/contracts/types/src/browser-bridge.ts`.
-///
-/// Rust cannot import that file, so these are copied. They are not free to
-/// drift: `packages/contracts/types/src/__tests__/browser-bridge-rust-mirror.test.ts`
-/// reads this source and fails when a literal here stops matching the
-/// contract's.
+/// Mirror of four literals owned by
+/// `packages/contracts/types/src/browser-bridge.ts`. They cannot drift:
+/// `packages/contracts/types/src/__tests__/browser-bridge-rust-mirror.test.ts`
+/// reads this source and fails when one stops matching the contract's.
 pub mod contract {
     pub const LOCAL_CLIENT_BRIDGE_FILE: &str = "desktop-bridge.json";
     pub const LOCAL_CLIENT_TOKEN_HEADER: &str = "x-local-client-token";
@@ -56,13 +48,9 @@ struct BridgeFileWire {
 pub enum BrowserAvailability {
     /// No shell is running, or the file it left behind names a dead process.
     ShellNotRunning,
-    /// The shell answers, but no browser is paired with it.
     NotPaired,
-    /// A browser is paired and has stopped answering: closed, asleep, or it
-    /// has forgotten this Mac. Every command would time out, so the tools are
-    /// not offered, and the user is told which of the two problems they have.
+    /// Paired with a browser that is closed, asleep, or has forgotten this Mac.
     PairedNotAnswering,
-    /// A command can run.
     Paired,
 }
 
@@ -92,9 +80,8 @@ impl BrowserState {
 struct StateResponse {
     #[serde(default)]
     paired: bool,
-    /// Absent from a shell that predates this field; such a shell only ever
-    /// reported a pairing, so treat its silence as answering rather than
-    /// withdrawing the tools from everyone on an older build.
+    /// A shell predating this field only ever reported a pairing, so its
+    /// silence means answering rather than withdrawing the tools.
     #[serde(default = "answering_by_default")]
     answering: bool,
     #[serde(default)]
@@ -127,11 +114,6 @@ pub struct ClientIdentity {
 }
 
 impl ClientIdentity {
-    /// How the CLI names itself in the shell's prompt and activity log.
-    ///
-    /// The working directory is part of the identity because that is what
-    /// makes the prompt answerable: "agi in ~/project" is a thing the user can
-    /// recognise, "agi" is not.
     pub fn for_cli(cwd: Option<PathBuf>, thread_id: Option<String>) -> Self {
         Self {
             name: "agi".to_string(),
@@ -161,11 +143,6 @@ pub struct CommandFailure {
 }
 
 impl CommandFailure {
-    /// What the user is told, and what they can do about it.
-    ///
-    /// Each code is a different situation with a different remedy, so a single
-    /// "the browser command failed" would be useless: pair the browser, grant
-    /// the capability, nothing (they refused), wait, or restart the shell.
     pub fn user_message(&self) -> String {
         match self.code.as_str() {
             "not-paired" => {
@@ -191,7 +168,6 @@ impl CommandFailure {
     }
 }
 
-/// Where the shell advertises itself, inside the CLI's own config root.
 pub fn bridge_file_path() -> Option<PathBuf> {
     crate::config::CliConfig::config_dir()
         .ok()
@@ -215,11 +191,8 @@ fn parse_bridge_file(contents: &str) -> Option<BridgeFile> {
     })
 }
 
-/// True when a process with this id exists.
-///
-/// A shell killed with SIGKILL leaves its file behind, and the port it names
-/// can be reused by an unrelated program, so the file alone is not evidence
-/// that a shell is running.
+/// A shell killed with SIGKILL leaves its file behind and the port can be
+/// reused, so the file alone is not evidence that a shell is running.
 #[cfg(unix)]
 fn process_is_alive(pid: u32) -> bool {
     use nix::errno::Errno;
@@ -258,7 +231,6 @@ fn base_url(file: &BridgeFile) -> String {
     format!("http://{}:{}", contract::LOOPBACK_ADDRESS, file.port)
 }
 
-/// Ask the shell whether a browser command can run right now.
 pub async fn browser_state() -> BrowserState {
     let Some(file) = read_bridge_file() else {
         return BrowserState::unavailable(BrowserAvailability::ShellNotRunning);
@@ -284,8 +256,7 @@ async fn state_from(file: &BridgeFile) -> BrowserState {
         return BrowserState::unavailable(BrowserAvailability::ShellNotRunning);
     };
     if !response.status().is_success() {
-        // A refused token means this file is stale, which is the same thing to
-        // a caller as no shell at all.
+        // A refused token means a stale file, which to a caller is no shell.
         return BrowserState::unavailable(BrowserAvailability::ShellNotRunning);
     }
     let Ok(state) = response.json::<StateResponse>().await else {
@@ -302,13 +273,8 @@ async fn state_from(file: &BridgeFile) -> BrowserState {
     }
 }
 
-/// [`browser_state`] for a caller that is not async.
-///
-/// The slash-command dispatch is synchronous and may run inside the Tokio
-/// runtime, so the probe goes to its own thread with its own single-threaded
-/// runtime rather than blocking the one it was called on. Bounded by the same
-/// short state timeout, and it never sends anything when no shell has left a
-/// file behind.
+/// [`browser_state`] for a synchronous caller, which may itself be running
+/// inside the Tokio runtime this must not block.
 pub fn browser_state_blocking() -> BrowserState {
     if read_bridge_file().is_none() {
         return BrowserState::unavailable(BrowserAvailability::ShellNotRunning);
@@ -326,7 +292,6 @@ pub fn browser_state_blocking() -> BrowserState {
     .unwrap_or_else(|_| BrowserState::unavailable(BrowserAvailability::ShellNotRunning))
 }
 
-/// Run one page command through the shell.
 pub async fn run_command(
     command: &str,
     args: serde_json::Value,
@@ -430,8 +395,6 @@ mod tests {
         assert!(parse_bridge_file("not json").is_none());
     }
 
-    /// A shell killed with SIGKILL leaves its file behind. Treating that as a
-    /// live bridge would make every browser tool offer fail at call time.
     #[test]
     fn a_file_naming_a_dead_process_is_not_a_live_bridge() {
         assert!(!process_is_alive(0));
@@ -463,8 +426,6 @@ mod tests {
             );
         }
 
-        // An unrecognised code falls back to whatever the shell said rather
-        // than inventing a remedy.
         let unknown = CommandFailure {
             code: "something-new".to_string(),
             message: "the shell said this".to_string(),
@@ -488,9 +449,6 @@ mod tests {
         assert!(value.get("cwd").is_none() && value.get("threadId").is_none());
     }
 
-    /// A loopback stub standing in for the shell, so the header, the route and
-    /// every failure mapping are exercised over real HTTP rather than mocked
-    /// at the function boundary.
     struct StubBridge {
         file: BridgeFile,
         seen: Arc<StdMutex<Vec<serde_json::Value>>>,
@@ -584,9 +542,6 @@ mod tests {
         }
     }
 
-    /// A pairing whose browser has stopped answering cannot run anything, so
-    /// the tools must not be offered and the user must be told which of the
-    /// two problems they have.
     #[tokio::test]
     async fn a_paired_browser_that_stopped_answering_is_not_usable() {
         let silent = start_stub(
@@ -610,8 +565,6 @@ mod tests {
             "the extension is still named, so the user knows which pairing"
         );
 
-        // A shell that predates the field only ever reported a pairing, so its
-        // silence must not withdraw the tools from everyone on an older build.
         let older = start_stub(
             "token-5",
             serde_json::json!({ "version": 1, "paired": true }),
@@ -661,8 +614,6 @@ mod tests {
         assert!(!state.is_paired());
     }
 
-    /// A token the shell refuses means this file is stale. To a caller that is
-    /// the same as no shell at all, and it must never be reported as "paired".
     #[tokio::test]
     async fn a_refused_token_reads_as_no_shell_rather_than_as_paired() {
         let stub = start_stub(
@@ -681,8 +632,6 @@ mod tests {
         assert!(!state.is_paired());
     }
 
-    /// Nothing is listening on the port the file names, which is what a
-    /// SIGKILLed shell leaves behind.
     #[tokio::test]
     async fn a_dead_port_reads_as_no_shell() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -735,8 +684,6 @@ mod tests {
         assert_eq!(request["client"]["cwd"], "/home/me/project");
     }
 
-    /// Every refusal the shell can answer reaches the caller as its own code,
-    /// because each one needs a different thing from the user.
     #[tokio::test]
     async fn a_refusal_keeps_the_code_the_shell_chose() {
         for code in [
@@ -771,9 +718,6 @@ mod tests {
         }
     }
 
-    /// A 401 is answered before the body is read: the shell may not send one,
-    /// and the caller has to be told to re-read the file rather than that the
-    /// browser is unpaired.
     #[tokio::test]
     async fn a_401_reports_an_unauthorized_client_not_an_unpaired_browser() {
         let stub = start_stub(
