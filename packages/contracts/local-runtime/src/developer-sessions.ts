@@ -47,7 +47,7 @@ export const DEVELOPER_SESSION_TRUST_LABELS: Record<DeveloperSessionTrustMode, s
   unknown: 'Unverified',
 };
 
-export interface DeveloperSession {
+export interface LocalDeveloperSession {
   id: string;
   rootId: string;
   title: string;
@@ -76,7 +76,7 @@ export interface DeveloperSessionGroup {
   name: string;
   path: string;
   branch: string | null;
-  sessions: DeveloperSession[];
+  sessions: LocalDeveloperSession[];
   unavailable?: DeveloperRuntimeUnavailable;
 }
 
@@ -124,7 +124,7 @@ export interface DeveloperSessionList {
 }
 
 export interface DeveloperSessionTranscript {
-  session: DeveloperSession;
+  session: LocalDeveloperSession;
   messages: DeveloperMessage[];
   truncated: boolean;
 }

@@ -2,7 +2,10 @@
 
 import { Folder, Plus, TerminalSquare } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
-import type { DeveloperSession, DeveloperSessionGroup } from '@agiworkforce/local-runtime-contract';
+import type {
+  LocalDeveloperSession,
+  DeveloperSessionGroup,
+} from '@agiworkforce/local-runtime-contract';
 import { formatRelativeTime } from '@shared/utils/format';
 import {
   LOCAL_CODE_COPY,
@@ -22,7 +25,7 @@ export interface LocalSessionsSectionProps {
   error: string | null;
   unavailable: string | null;
   selectedId: string | null;
-  onSelect: (session: DeveloperSession) => void;
+  onSelect: (session: LocalDeveloperSession) => void;
   onNewSession: (rootId: string) => void;
   onAddFolder: () => void;
 }

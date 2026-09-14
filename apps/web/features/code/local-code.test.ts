@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { modelsCatalog } from '@agiworkforce/types';
 import type {
   DeveloperRuntimeModels,
-  DeveloperSession,
   DeveloperSessionGroup,
+  LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
+
+/** A real catalog entry, read at run time so no concrete id is pinned here. */
+const catalogModelId = Object.keys(modelsCatalog.models)[0] as string;
+const catalogModelName = modelsCatalog.models[catalogModelId]?.name as string;
+const OTHER_MODEL = 'qa-provider/qa-other';
+const LOCAL_MODEL = 'qa-runner/qa-local';
+const CONFIGURED_MODEL = 'qa-provider/qa-default';
 import {
   EMPTY_LOCAL_TURN,
   localModelChoices,
@@ -19,12 +27,12 @@ import {
   sharedUnavailableLine,
 } from './local-code';
 
-const session: DeveloperSession = {
+const session: LocalDeveloperSession = {
   id: 'thread-1',
   rootId: 'root-1',
   title: 'Quote the readme',
   cwd: '/work/qa-project',
-  model: 'a-model',
+  model: OTHER_MODEL,
   provider: 'a-provider',
   trustMode: 'byok',
   status: 'idle',
@@ -46,46 +54,44 @@ function group(overrides: Partial<DeveloperSessionGroup> = {}): DeveloperSession
 
 const runtime: DeveloperRuntimeModels = {
   models: [
-    { id: 'qwen2.5:1.5b', provider: 'ollama', local: true },
-    { id: 'smollm2:135m', provider: 'ollama', local: true },
+    { id: LOCAL_MODEL, provider: 'qa-runner', local: true },
+    { id: OTHER_MODEL, provider: 'qa-provider', local: true },
   ],
-  defaultModelId: 'claude-fable-5-1',
+  defaultModelId: CONFIGURED_MODEL,
   managedSignedIn: false,
 };
 
 describe('local code surface', () => {
   it('offers what the folder has used, then what is installed, then the default', () => {
     const choices = localModelChoices(runtime, [
-      { ...session, model: 'deepseek-v4-flash' },
-      { ...session, id: 'b', model: 'deepseek-v4-flash' },
+      { ...session, model: catalogModelId },
+      { ...session, id: 'b', model: catalogModelId },
     ]);
 
     expect(choices.map((choice) => [choice.id, choice.evidence])).toEqual([
-      ['deepseek-v4-flash', 'used-here'],
-      ['qwen2.5:1.5b', 'installed'],
-      ['smollm2:135m', 'installed'],
-      ['claude-fable-5-1', 'configured'],
+      [catalogModelId, 'used-here'],
+      [LOCAL_MODEL, 'installed'],
+      [OTHER_MODEL, 'installed'],
+      [CONFIGURED_MODEL, 'configured'],
     ]);
-    expect(choices[0]?.label).toBe('DeepSeek V4 Flash');
+    expect(choices[0]?.label).toBe(catalogModelName);
   });
 
   it('starts a session on the best-evidenced model rather than the configured default', () => {
-    expect(startingModelId(runtime, [{ ...session, model: 'deepseek-v4-flash' }])).toBe(
-      'deepseek-v4-flash',
-    );
-    expect(startingModelId(runtime, [])).toBe('qwen2.5:1.5b');
-    expect(startingModelId({ ...runtime, models: [] }, [])).toBe('claude-fable-5-1');
+    expect(startingModelId(runtime, [{ ...session, model: catalogModelId }])).toBe(catalogModelId);
+    expect(startingModelId(runtime, [])).toBe(LOCAL_MODEL);
+    expect(startingModelId({ ...runtime, models: [] }, [])).toBe(CONFIGURED_MODEL);
     expect(startingModelId(null, [])).toBeUndefined();
   });
 
   it('names a model once, however many sessions used it', () => {
     const choices = localModelChoices(
       {
-        models: [{ id: 'deepseek-v4-flash', provider: 'deepseek', local: false }],
-        defaultModelId: 'deepseek-v4-flash',
+        models: [{ id: OTHER_MODEL, provider: 'qa-provider', local: false }],
+        defaultModelId: OTHER_MODEL,
         managedSignedIn: true,
       },
-      [{ ...session, model: 'deepseek-v4-flash' }],
+      [{ ...session, model: OTHER_MODEL }],
     );
 
     expect(choices).toHaveLength(1);
@@ -99,24 +105,24 @@ describe('local code surface', () => {
   });
 
   it('names a model the way the catalog does', () => {
-    expect(localModelLabel('deepseek-v4-flash')).toBe('DeepSeek V4 Flash');
+    expect(localModelLabel(catalogModelId)).toBe(catalogModelName);
     expect(localModelLabel(null)).toBeNull();
   });
 
   it('keeps the id of a model the catalog does not carry', () => {
-    expect(localModelLabel('ollama/some-local-build')).toBe('ollama/some-local-build');
+    expect(localModelLabel(LOCAL_MODEL)).toBe(LOCAL_MODEL);
   });
 
   it('reads the folder, branch, model and trust into one line', () => {
-    expect(localSessionContext({ ...session, model: 'deepseek-v4-flash' }, group())).toBe(
-      'qa-project · main · DeepSeek V4 Flash · Your key',
+    expect(localSessionContext({ ...session, model: catalogModelId }, group())).toBe(
+      `qa-project · main · ${catalogModelName} · Your key`,
     );
   });
 
   it('drops a branch a folder does not have rather than printing its absence', () => {
     expect(
-      localSessionContext({ ...session, model: 'deepseek-v4-flash' }, group({ branch: null })),
-    ).toBe('qa-project · DeepSeek V4 Flash · Your key');
+      localSessionContext({ ...session, model: catalogModelId }, group({ branch: null })),
+    ).toBe(`qa-project · ${catalogModelName} · Your key`);
   });
 
   it('says a missing key in the desktop\u2019s own words', () => {

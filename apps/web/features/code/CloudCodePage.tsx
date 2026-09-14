@@ -55,7 +55,7 @@ import {
   type CodeApprovalPrompt,
   type CodeTurnRecord,
 } from './code-transcript';
-import type { DeveloperSession } from '@agiworkforce/local-runtime-contract';
+import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
 import { useLocalSessions } from './hooks/use-local-sessions';
 import { LocalSessionsSection } from './components/LocalSessionsSection';
 import { LocalSessionPanel } from './components/LocalSessionPanel';
@@ -157,7 +157,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const [railDrawerOpen, setRailDrawerOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
-  const [localSession, setLocalSession] = useState<DeveloperSession | null>(null);
+  const [localSession, setLocalSession] = useState<LocalDeveloperSession | null>(null);
   const local = useLocalSessions();
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const railTriggerRef = useRef<HTMLButtonElement>(null);

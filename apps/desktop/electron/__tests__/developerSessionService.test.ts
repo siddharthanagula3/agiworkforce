@@ -121,7 +121,7 @@ function defaultResponder(method: string): unknown {
   if (method === 'model/list') {
     return { models: [{ id: 'qwen2.5:1.5b', provider: 'ollama' }] };
   }
-  if (method === 'settings/read') return { defaultModel: 'claude-fable-5-1' };
+  if (method === 'settings/read') return { defaultModel: 'qa-provider/qa-default' };
   if (method === 'account/status') return { signedIn: true, cached: false, source: 'cli' };
   return undefined;
 }
@@ -277,7 +277,7 @@ describe('developer session runtime', () => {
 
     expect(models).toEqual({
       models: [{ id: 'qwen2.5:1.5b', provider: 'ollama', local: true }],
-      defaultModelId: 'claude-fable-5-1',
+      defaultModelId: 'qa-provider/qa-default',
       managedSignedIn: true,
     });
   });

@@ -1,15 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { DeveloperSession, DeveloperSessionGroup } from '@agiworkforce/local-runtime-contract';
+import type {
+  LocalDeveloperSession,
+  DeveloperSessionGroup,
+} from '@agiworkforce/local-runtime-contract';
 import { LocalSessionsSection, type LocalSessionsSectionProps } from './LocalSessionsSection';
 
-const session: DeveloperSession = {
+const session: LocalDeveloperSession = {
   id: 'thread-1',
   rootId: 'root-1',
   title: 'Quote the readme',
   cwd: '/work/qa-project',
-  model: 'deepseek-v4-flash',
+  model: 'qa-provider/qa-model',
   provider: 'a-provider',
   trustMode: 'byok',
   status: 'idle',
@@ -50,7 +53,7 @@ describe('on this device', () => {
     expect(screen.getByText('qa-project')).toBeInTheDocument();
     expect(screen.getByText('main')).toBeInTheDocument();
     expect(screen.getByText('Quote the readme')).toBeInTheDocument();
-    expect(screen.getByText(/^CLI · DeepSeek V4 Flash/)).toBeInTheDocument();
+    expect(screen.getByText(/^CLI · qa-provider\/qa-model/)).toBeInTheDocument();
   });
 
   it('offers a new session in each folder, and a folder to add', async () => {

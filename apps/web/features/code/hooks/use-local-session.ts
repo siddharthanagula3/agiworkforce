@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DeveloperSession } from '@agiworkforce/local-runtime-contract';
+import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperMessage } from '@agiworkforce/types/protocol';
 import {
   answerDeveloperApproval,
@@ -42,7 +42,7 @@ export interface LocalSessionState {
  * promise. When a turn ends the transcript is read again and the live turn is
  * dropped, so the reply is shown once rather than twice.
  */
-export function useLocalSession(session: DeveloperSession | null): LocalSessionState {
+export function useLocalSession(session: LocalDeveloperSession | null): LocalSessionState {
   const [messages, setMessages] = useState<DeveloperMessage[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [turn, setTurn] = useState<LocalTurn>(EMPTY_LOCAL_TURN);

@@ -1,6 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DeveloperSession, DeveloperSessionEvent } from '@agiworkforce/local-runtime-contract';
+import type {
+  LocalDeveloperSession,
+  DeveloperSessionEvent,
+} from '@agiworkforce/local-runtime-contract';
 
 const readDeveloperSession = vi.fn();
 const startDeveloperTurn = vi.fn();
@@ -23,7 +26,7 @@ vi.mock('@/features/desktop-host', () => ({
 
 const { useLocalSession } = await import('./use-local-session');
 
-const session: DeveloperSession = {
+const session: LocalDeveloperSession = {
   id: 'thread-1',
   rootId: 'root-1',
   title: 'Quote the readme',
