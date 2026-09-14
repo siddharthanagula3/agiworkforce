@@ -25,6 +25,26 @@ import {
   showCloudRunDetail,
   type CloudRunApprovalDecision,
 } from '../features/cloud-tasks';
+import type {
+  ManagedCloudScheduleTask,
+  ManagedCloudSchedulesClient,
+} from '@agiworkforce/cloud-contracts';
+import {
+  OPEN_SCHEDULE_COMMAND,
+  PAUSE_SCHEDULE_COMMAND,
+  REFRESH_SCHEDULES_COMMAND,
+  RESUME_SCHEDULE_COMMAND,
+  RUN_SCHEDULE_NOW_COMMAND,
+  SCHEDULES_VIEW_ID,
+  SHOW_SCHEDULE_RUNS_COMMAND,
+  SchedulesTreeProvider,
+  readScheduleCommandArgument,
+  resolveSchedulesClient,
+  runScheduleNowInteractively,
+  schedulesWebUrl,
+  setScheduleEnabledInteractively,
+  showScheduleRuns,
+} from '../features/schedules';
 import {
   loadFacts,
   addFact,
@@ -304,6 +324,7 @@ export interface CommandDeps {
   sidebarProvider: SidebarProvider;
   conversationTreeProvider: ConversationTreeProvider;
   cloudTasksTreeProvider: CloudTasksTreeProvider;
+  schedulesTreeProvider: SchedulesTreeProvider;
   localRuntimes: LocalRuntimePool;
   contextPanelProvider: ContextPanelProvider;
   memoryTreeProvider: MemoryTreeProvider;
@@ -317,6 +338,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     sidebarProvider,
     conversationTreeProvider,
     cloudTasksTreeProvider,
+    schedulesTreeProvider,
     localRuntimes,
     contextPanelProvider,
     memoryTreeProvider,
@@ -351,6 +373,20 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       onChanged: () => cloudTasksTreeProvider.refresh(),
     });
   };
+  const withScheduleFromItem = async (
+    item: unknown,
+    act: (client: ManagedCloudSchedulesClient, task: ManagedCloudScheduleTask) => Promise<void>,
+  ): Promise<void> => {
+    const task = readScheduleCommandArgument(item);
+    if (task === undefined) return;
+    const resolution = await resolveSchedulesClient(context.secrets);
+    if (resolution.status === 'signed-out') {
+      await vscode.commands.executeCommand('agi-workforce.signIn');
+      return;
+    }
+    await act(resolution.client, task);
+  };
+  const scheduleActionHost = { onChanged: () => schedulesTreeProvider.refresh() };
   const revealFirstPartyChat = async (): Promise<void> => {
     try {
       await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
@@ -1676,6 +1712,40 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
     register(APPROVE_CLOUD_TASK_COMMAND, (item: unknown) => decideOnCloudTask(item, 'approved')),
     register(REJECT_CLOUD_TASK_COMMAND, (item: unknown) => decideOnCloudTask(item, 'rejected')),
+    register('agi-workforce.showSchedules', async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
+      await vscode.commands.executeCommand(`${SCHEDULES_VIEW_ID}.focus`);
+      schedulesTreeProvider.refresh();
+    }),
+    register(REFRESH_SCHEDULES_COMMAND, () => {
+      schedulesTreeProvider.refresh();
+    }),
+    register('agi-workforce.openSchedulesOnWeb', async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(schedulesWebUrl(getCloudWebOrigin())));
+    }),
+    register(OPEN_SCHEDULE_COMMAND, async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(schedulesWebUrl(getCloudWebOrigin())));
+    }),
+    register(PAUSE_SCHEDULE_COMMAND, (item: unknown) =>
+      withScheduleFromItem(item, (client, task) =>
+        setScheduleEnabledInteractively(client, task, false, scheduleActionHost),
+      ),
+    ),
+    register(RESUME_SCHEDULE_COMMAND, (item: unknown) =>
+      withScheduleFromItem(item, (client, task) =>
+        setScheduleEnabledInteractively(client, task, true, scheduleActionHost),
+      ),
+    ),
+    register(RUN_SCHEDULE_NOW_COMMAND, (item: unknown) =>
+      withScheduleFromItem(item, (client, task) =>
+        runScheduleNowInteractively(client, task, scheduleActionHost),
+      ),
+    ),
+    register(SHOW_SCHEDULE_RUNS_COMMAND, (item: unknown) =>
+      withScheduleFromItem(item, (client, task) =>
+        showScheduleRuns(client, task, scheduleActionHost),
+      ),
+    ),
     register('agi-workforce.openCloudTask', async (runId: unknown) => {
       if (typeof runId !== 'string' || runId === '') return;
       const resolution = await resolveCloudAgentRunClient(context.secrets);
