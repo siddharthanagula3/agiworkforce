@@ -640,7 +640,7 @@ export function GeneralSection() {
 
           <Row
             label="Display Language"
-            hint="Translates pricing, marketing pages, and device sign-in. The chat interface is still English."
+            hint="Translates pricing, marketing pages, device sign-in, and the app's navigation. Settings field labels and your conversations are unaffected."
           >
             <LanguageSelector />
           </Row>
