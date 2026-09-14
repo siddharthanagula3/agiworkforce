@@ -39,6 +39,8 @@ import {
 } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
+import { useGeneratedFollowUps } from '../../hooks/use-generated-follow-ups';
+import { collectMessageResearchSources } from '../../utils/research-sources';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
 import { TranscriptNotice } from './TranscriptNotice';
@@ -1170,14 +1172,38 @@ const ChatMessageListComponent = ({
     return undefined;
   }, [messages]);
 
-  const showFollowUps =
-    enableFollowUpSuggestions &&
+  // A searched turn earns follow-ups whether or not the keyword matcher is on:
+  // the questions come from the answer and its sources, which is the case
+  // ChatGPT and Perplexity show related questions for.
+  const lastTurnSearched = useMemo(() => {
+    if (lastMessage?.role !== 'assistant') return false;
+    if (lastMessage.metadata?.['research']) return true;
+    return collectMessageResearchSources(lastMessage.metadata).searchSources.length > 0;
+  }, [lastMessage]);
+
+  const showFollowUps = Boolean(
+    (enableFollowUpSuggestions || lastTurnSearched) &&
     onSendMessage &&
     !isLoading &&
     lastMessage?.role === 'assistant' &&
     !lastMessage?.isStreaming &&
     lastMessage.content.length > 20 &&
-    !lastTurnFailed;
+    !lastTurnFailed,
+  );
+
+  const cachedFollowUps = useMemo(() => {
+    const stored = lastMessage?.metadata?.['followUpSuggestions'];
+    return Array.isArray(stored)
+      ? stored.filter((entry): entry is string => typeof entry === 'string')
+      : undefined;
+  }, [lastMessage]);
+
+  const generatedFollowUps = useGeneratedFollowUps({
+    conversationId,
+    messageId: lastMessage?.id,
+    enabled: showFollowUps && lastTurnSearched,
+    cached: cachedFollowUps,
+  });
 
   // `MessageSearch` was complete but never exported or mounted, and nothing
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1685,6 +1711,7 @@ const ChatMessageListComponent = ({
               isGenerating={isLoading}
               isUserTyping={isUserTyping}
               messageCount={messages.length}
+              suggestions={generatedFollowUps}
             />
           </div>
         )}
@@ -1706,6 +1733,7 @@ const ChatMessageListComponent = ({
       isLoading,
       isUserTyping,
       messages.length,
+      generatedFollowUps,
     ],
   );
 
