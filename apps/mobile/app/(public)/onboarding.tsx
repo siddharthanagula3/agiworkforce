@@ -809,8 +809,10 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontSize: 94,
-    fontWeight: '700',
-    letterSpacing: 0,
+    // Same face as the launch lockup and the chat empty state. A bold sans here
+    // made the brand change typeface between the splash and the first screen.
+    fontFamily: 'Newsreader_600SemiBold',
+    letterSpacing: 1,
     lineHeight: 108,
   },
   tagline: {
