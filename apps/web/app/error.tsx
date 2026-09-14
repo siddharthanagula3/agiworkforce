@@ -6,6 +6,8 @@ import { RefreshCw, Home, AlertTriangle } from 'lucide-react';
 import { getFriendlyError } from '@agiworkforce/utils';
 import { AgiMark } from '@agiworkforce/ui';
 import { logger } from '@shared/lib/logger';
+import { PRODUCT_HOME_PATH } from '@/features/desktop-host/lib/deep-links';
+import { useHomeHref } from '@/features/desktop-host/hooks/use-home-href';
 
 const SIGN_IN_ACTION = { label: 'Sign in', href: '/login' } as const;
 
@@ -24,6 +26,7 @@ export default function Error({
   }, [error]);
 
   const friendly = getFriendlyError(error);
+  const homeHref = useHomeHref();
   const signInAction = friendly.icon === 'auth' && friendly.title === 'Sign In Required';
 
   return (
@@ -58,11 +61,11 @@ export default function Error({
               Try again
             </button>
             <Link
-              href="/"
+              href={homeHref}
               className="inline-flex h-12 items-center justify-center rounded-full border border-border bg-card px-8 text-sm font-medium text-foreground no-underline hover:bg-muted transition-colors"
             >
               <Home className="h-4 w-4 mr-2" aria-hidden="true" />
-              Go home
+              {homeHref === PRODUCT_HOME_PATH ? 'Go to chat' : 'Go home'}
             </Link>
             {signInAction && (
               <Link
@@ -86,7 +89,7 @@ export default function Error({
         </div>
       </main>
 
-      <footer className="border-t border-border bg-background py-8">
+      <footer data-surface="web" className="border-t border-border bg-background py-8">
         <div className="container mx-auto px-4 flex flex-col items-center gap-4">
           <AgiMark size={20} mono className="text-muted-foreground" />
           <div className="text-sm text-muted-foreground">
