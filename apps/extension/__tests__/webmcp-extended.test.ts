@@ -37,6 +37,8 @@ import {
   discoverAllTools,
   watchForToolChanges,
   stopWatchingToolChanges,
+  startToolChangeReporting,
+  toolListSignature,
 } from '../src/webmcp';
 
 function clearBody(): void {
@@ -474,6 +476,59 @@ describe('watchForToolChanges, MutationObserver', () => {
     await new Promise((r) => setTimeout(r, 400));
 
     expect(callback.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('startToolChangeReporting', () => {
+  it('never observes a page that exposed no tools', async () => {
+    const report = vi.fn();
+    startToolChangeReporting([], report);
+
+    addDeclarativeForm({ toolName: 'appeared-later' });
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet while the tool list is unchanged', async () => {
+    const form = addDeclarativeForm({ toolName: 'search', toolDescription: 'Search' });
+    const report = vi.fn();
+    startToolChangeReporting(discoverAllTools().tools, report);
+
+    document.body.appendChild(document.createElement('div'));
+    form.setAttribute('tool-description', 'Search');
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('reports once the tool list actually differs', async () => {
+    addDeclarativeForm({ toolName: 'search', toolDescription: 'Search' });
+    const report = vi.fn();
+    startToolChangeReporting(discoverAllTools().tools, report);
+
+    addDeclarativeForm({ toolName: 'book', toolDescription: 'Book a table' });
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(report).toHaveBeenCalledTimes(1);
+    const reported = report.mock.calls[0][0] as Array<{ name: string }>;
+    expect(reported.map((t) => t.name).sort()).toEqual(['book', 'search']);
+  });
+});
+
+describe('toolListSignature', () => {
+  it('ignores discovery order', () => {
+    const a = { name: 'a', description: 'A', source: 'declarative' as const };
+    const b = { name: 'b', description: 'B', source: 'declarative' as const };
+    expect(toolListSignature([a, b])).toBe(toolListSignature([b, a]));
+  });
+
+  it('separates lists that differ in a description or a schema', () => {
+    const base = { name: 'a', description: 'A', source: 'declarative' as const };
+    expect(toolListSignature([base])).not.toBe(toolListSignature([{ ...base, description: 'A2' }]));
+    expect(toolListSignature([base])).not.toBe(
+      toolListSignature([{ ...base, inputSchema: { type: 'object' } }]),
+    );
   });
 });
 
