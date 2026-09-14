@@ -38,6 +38,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
 const recordSettledProviderCostMock = vi.fn(async (..._args: unknown[]) => {});
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCostMock(...args),
+  getOrganizationMonthToDateSpendCents: vi.fn(async () => 0),
 }));
 
 const reserveMock = vi.fn(async (..._args: unknown[]) => ({
