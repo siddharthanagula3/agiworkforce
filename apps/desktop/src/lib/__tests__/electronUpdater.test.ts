@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { desktopCloudInstallerDownloadUrl } from '../../electron/desktopCloudUpdate';
+import { desktopCloudInstallerDownloadUrl } from '../../../electron/desktopCloudUpdate';
 import { check } from '../tauri-electron/updater';
 import type { ElectronHostBridge } from '../tauri-electron/bridgeContract';
 
