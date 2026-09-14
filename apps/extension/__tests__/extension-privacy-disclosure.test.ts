@@ -1,9 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * The extension injects a content script into every page, holds the debugger and
- * cookies permissions, and mirrors Managed Cloud chats to the account. This file
- * proves the user is told all four things inside the extension's own UI, and that
+ * The extension injects a content script into every page, holds the debugger
+ * permission, and mirrors Managed Cloud chats to the account. This file proves
+ * the user is told all three things inside the extension's own UI, and that
  * declining the mirror actually stops the network copy.
  */
 import { readFileSync } from 'node:fs';
@@ -165,7 +165,7 @@ describe('cloud mirroring opt-out', () => {
 });
 
 describe('options data-handling disclosure', () => {
-  it('names the all-URLs script, debugger, cookies and cloud mirroring', () => {
+  it('names the all-URLs script, debugger and cloud mirroring', () => {
     const section = createDataHandlingSection({
       get: (key) => chromeMock.storage.local.get(key) as Promise<Record<string, unknown>>,
       set: (items) => chromeMock.storage.local.set(items) as Promise<void>,
@@ -175,12 +175,11 @@ describe('options data-handling disclosure', () => {
     expect(DATA_HANDLING_DISCLOSURES.map((entry) => entry.id)).toEqual([
       'page-injection',
       'debugger',
-      'cookies',
       'cloud-mirroring',
     ]);
     expect(text).toContain('every http and https page');
     expect(text).toContain('Chrome debugger permission');
-    expect(text).toContain('cookies permission');
+    expect(text).not.toContain('cookies permission');
     expect(text).toContain('copied to your AGI account');
   });
 

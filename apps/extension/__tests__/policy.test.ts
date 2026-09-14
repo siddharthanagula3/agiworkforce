@@ -111,16 +111,20 @@ describe('policy, EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
     expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has('CHAT_MESSAGE')).toBe(true);
   });
 
-  it('gates privileged tab / cookie / chat operations (no legitimate web-page sender)', () => {
+  it('gates privileged chat and tab-group operations (no legitimate web-page sender)', () => {
     for (const t of [
       'CHAT_MESSAGE',
-      'GET_ALL_TABS',
-      'CREATE_TAB',
-      'CLOSE_TAB',
-      'SWITCH_TAB',
-      'SET_COOKIE',
+      'GET_TAB_GROUP_STATE',
+      'ADD_TAB_TO_GROUP',
+      'REMOVE_TAB_FROM_GROUP',
     ]) {
       expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(t)).toBe(true);
+    }
+  });
+
+  it('has no entry for the tab and cookie commands no sender ever sent', () => {
+    for (const t of ['GET_ALL_TABS', 'CREATE_TAB', 'CLOSE_TAB', 'SWITCH_TAB', 'SET_COOKIE']) {
+      expect(MESSAGE_POLICY[t]).toBeUndefined();
     }
   });
 
