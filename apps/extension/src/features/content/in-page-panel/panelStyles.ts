@@ -1,5 +1,7 @@
 import { getExtensionTokensCssAuto } from '../../../tokens';
 
+export const PANEL_SLIDE_MS = 240;
+
 export function buildPanelStyles(): string {
   return `
     /* ── AGI design tokens follow the browser/OS colour scheme ── */
@@ -20,12 +22,13 @@ export function buildPanelStyles(): string {
       display:flex; flex-direction:column;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
       font-size:14px; color:var(--agi-ext-text);
-      transition:right 0.24s cubic-bezier(0.4,0,0.2,1);
+      transition:right ${PANEL_SLIDE_MS}ms cubic-bezier(0.4,0,0.2,1);
       overflow:hidden;
       box-sizing:border-box;
     }
 
     .agi-panel.open { right:0; }
+    .agi-panel.agi-panel--hidden { visibility:hidden; }
 
     /* ── Header ──────────────────────────────────────────────────────────── */
     .agi-header {

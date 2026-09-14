@@ -64,10 +64,13 @@ export async function setupInPagePanel(logger?: {
     const { host: panelHost } = panel;
     document.body.appendChild(panelHost);
 
-    const launcher = createLauncher(() => {
-      panel.setReturnFocus(launcher.button);
-      panel.toggle();
-    });
+    const launcher = createLauncher(
+      () => {
+        panel.setReturnFocus(launcher.button);
+        panel.toggle();
+      },
+      () => panel.close(),
+    );
     const { host: launcherHost } = launcher;
 
     const pos = await loadPosition();
