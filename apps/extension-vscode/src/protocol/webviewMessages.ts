@@ -151,6 +151,8 @@ const proposeDiff = z.object({
   }),
 });
 
+const clearActiveProject = z.object({ type: z.literal('clearActiveProject') });
+
 const removePendingAttachment = z.object({
   type: z.literal('removePendingAttachment'),
   payload: z.object({ id: z.string().min(1).max(200) }),
@@ -195,6 +197,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   attachContext,
   attachFiles,
   removePendingAttachment,
+  clearActiveProject,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;

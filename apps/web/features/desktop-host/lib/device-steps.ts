@@ -28,6 +28,17 @@ import { DesktopHostUnavailable } from './runtime-client';
 export interface DeviceStepOutcome {
   content: string;
   isError: boolean;
+  /** A screen capture, when the step produced one, for the model to look at. */
+  image?: { base64: string; mimeType: 'image/png' | 'image/jpeg' };
+}
+
+interface ScreenCaptureResult {
+  imageBase64: string;
+  mimeType: 'image/png' | 'image/jpeg';
+  width: number;
+  height: number;
+  scaleFactor: number;
+  displayName: string;
 }
 
 async function invokeDeviceCommand<T>(command: string, args: Record<string, unknown>): Promise<T> {
@@ -67,9 +78,68 @@ function describeCommandRun(result: ShellRunResult): string {
   return parts.join('\n\n');
 }
 
-async function runStep(tool: DeviceStepTool, input: Record<string, unknown>): Promise<string> {
+async function captureFor(
+  tool: 'device_screenshot' | 'device_zoom',
+  input: Record<string, unknown>,
+): Promise<DeviceStepOutcome> {
+  const capture = await invokeDeviceCommand<ScreenCaptureResult>(
+    deviceStepCommand(tool),
+    tool === 'device_zoom' ? { region: input['region'] } : {},
+  );
+  return {
+    content:
+      tool === 'device_zoom'
+        ? `A ${capture.width} by ${capture.height} close-up of ${capture.displayName} follows. Its coordinates are the region asked for, not the whole screen.`
+        : `${capture.displayName} is ${capture.width} wide and ${capture.height} tall in the coordinates every other screen step uses. The picture follows.`,
+    isError: false,
+    image: { base64: capture.imageBase64, mimeType: capture.mimeType },
+  };
+}
+
+type ActionStepTool = Exclude<DeviceStepTool, 'device_screenshot' | 'device_zoom'>;
+
+async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Promise<string> {
   const command = deviceStepCommand(tool);
   switch (tool) {
+    case 'device_move':
+      await invokeDeviceCommand<true>(command, { x: input['x'], y: input['y'] });
+      return `Moved the pointer to ${String(input['x'])}, ${String(input['y'])}.`;
+    case 'device_click':
+      await invokeDeviceCommand<true>(command, {
+        x: input['x'],
+        y: input['y'],
+        button: input['button'],
+        count: input['count'],
+      });
+      return `Clicked at ${String(input['x'])}, ${String(input['y'])}. Take a screenshot to see what changed.`;
+    case 'device_drag':
+      await invokeDeviceCommand<true>(command, {
+        x: input['x'],
+        y: input['y'],
+        toX: input['toX'],
+        toY: input['toY'],
+      });
+      return `Dragged to ${String(input['toX'])}, ${String(input['toY'])}. Take a screenshot to see what changed.`;
+    case 'device_scroll':
+      await invokeDeviceCommand<true>(command, {
+        x: input['x'],
+        y: input['y'],
+        deltaX: input['deltaX'],
+        deltaY: input['deltaY'],
+      });
+      return 'Scrolled. Take a screenshot to see what is on screen now.';
+    case 'device_type':
+      await invokeDeviceCommand<true>(command, { text: input['text'] });
+      return 'Typed the text into whatever had keyboard focus. Take a screenshot to check it landed where you meant.';
+    case 'device_key':
+      await invokeDeviceCommand<true>(command, {
+        key: input['key'],
+        modifiers: input['modifiers'],
+      });
+      return 'Pressed the key. Take a screenshot to see what changed.';
+    case 'device_wait':
+      await invokeDeviceCommand<true>(command, { ms: input['ms'] });
+      return 'Waited. Take a screenshot to see the screen now.';
     case 'device_read_file': {
       const file = await invokeDeviceCommand<FileTextContent>(command, {
         rootId: input['rootId'],
@@ -119,6 +189,9 @@ export async function executeDeviceStep(
     return { content: `"${tool}" is not a step this device runs.`, isError: true };
   }
   try {
+    if (tool === 'device_screenshot' || tool === 'device_zoom') {
+      return await captureFor(tool, input);
+    }
     return { content: cap(await runStep(tool, input)), isError: false };
   } catch (error) {
     if (error instanceof DesktopRuntimeError) {

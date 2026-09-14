@@ -139,6 +139,34 @@ describe('GET /api/library', () => {
     expect(params[2]).toEqual(['image', 'video']);
   });
 
+  it('lists a generated video under the video kind with a playable preview flag', async () => {
+    mockQuery.mockResolvedValueOnce([
+      makeRow({
+        kind: 'video',
+        mime_type: 'video/mp4',
+        prompt: 'A kite over a harbour',
+        metadata: {
+          filename: 'agi-video-1.mp4',
+          origin: 'generated',
+          surface: 'file',
+          previewable: true,
+        },
+      }),
+    ]);
+
+    const body = await parsedBody(await GET(makeRequest('?kind=video')));
+
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      kind: 'video',
+      mime_type: 'video/mp4',
+      file_name: 'agi-video-1.mp4',
+      previewable: true,
+      origin: 'generated',
+      uri: `/api/files/${ASSET_ID}`,
+    });
+  });
+
   it('rejects a kind the catalog does not define rather than ignoring it', async () => {
     const res = await GET(makeRequest('?kind=image,binary'));
     expect(res.status).toBe(400);

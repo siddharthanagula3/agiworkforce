@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
-import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
+import type {
+  CloudAgentRun,
+  ManagedCloudArtifactIndexEntry,
+  ManagedCloudAgentRunClient,
+} from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   cloudRunAgeLabel,
@@ -26,10 +30,24 @@ export type CloudRunDetailClient = Pick<
   'getRun' | 'resumeRun' | 'cancelRun'
 >;
 
-export type CloudRunAction = 'approve' | 'reject' | 'cancel' | 'open-web';
+export type CloudRunAction = 'approve' | 'reject' | 'cancel' | 'open-web' | 'open-artifact';
 
 export interface CloudRunDetailItem extends vscode.QuickPickItem {
   action?: CloudRunAction;
+  artifactId?: string;
+}
+
+/**
+ * A run's deliverables are the artifacts of the conversation it wrote into, the
+ * same association the web outputs rail reads. The index derives the project
+ * and conversation, so there is no second copy to drift.
+ */
+export function cloudRunArtifacts(
+  run: CloudAgentRun,
+  artifacts: readonly ManagedCloudArtifactIndexEntry[],
+): ManagedCloudArtifactIndexEntry[] {
+  if (run.conversationId === null) return [];
+  return artifacts.filter((artifact) => artifact.conversationId === run.conversationId);
 }
 
 const STOP_CONFIRMATION = 'Stop this task';
@@ -43,6 +61,7 @@ export function cloudRunWebUrl(run: CloudAgentRun, webOrigin: string): string {
 export function buildCloudRunDetailItems(
   run: CloudAgentRun,
   events: readonly AgentEventEnvelope[],
+  artifacts: readonly ManagedCloudArtifactIndexEntry[] = [],
 ): CloudRunDetailItem[] {
   const items: CloudRunDetailItem[] = [];
   const steps = readCloudRunSteps(events);
@@ -66,6 +85,19 @@ export function buildCloudRunDetailItems(
   if (deviceWait !== undefined) {
     items.push({ label: 'Device', kind: vscode.QuickPickItemKind.Separator });
     items.push({ label: `$(device-desktop) ${deviceWait}` });
+  }
+
+  const deliverables = cloudRunArtifacts(run, artifacts);
+  if (deliverables.length > 0) {
+    items.push({ label: 'Outputs', kind: vscode.QuickPickItemKind.Separator });
+    for (const artifact of deliverables) {
+      items.push({
+        label: `$(file-code) ${artifact.title?.trim() || `Untitled ${artifact.type}`}`,
+        description: artifact.language ?? artifact.type,
+        action: 'open-artifact',
+        artifactId: artifact.id,
+      });
+    }
   }
 
   items.push({ label: 'Actions', kind: vscode.QuickPickItemKind.Separator });
@@ -111,6 +143,8 @@ export function cloudRunDetailPlaceholder(run: CloudAgentRun): string {
 export interface CloudRunDetailHost {
   webOrigin: string;
   onChanged: () => void;
+  listArtifacts?: () => Promise<ManagedCloudArtifactIndexEntry[]>;
+  openArtifact?: (artifactId: string) => Promise<void>;
 }
 
 export async function showCloudRunDetail(
@@ -129,11 +163,27 @@ export async function showCloudRunDetail(
   }
 
   const run = snapshot.run;
-  const picked = await vscode.window.showQuickPick(buildCloudRunDetailItems(run, snapshot.events), {
-    title: cloudRunTitle(run),
-    placeHolder: cloudRunDetailPlaceholder(run),
-  });
+  /*
+   * Deliverables are a discovery aid layered on the run, so a failed or absent
+   * index read hides the Outputs section rather than failing to open the run.
+   */
+  const artifacts =
+    run.conversationId === null || host.listArtifacts === undefined
+      ? []
+      : await host.listArtifacts().catch((): ManagedCloudArtifactIndexEntry[] => []);
+  const picked = await vscode.window.showQuickPick(
+    buildCloudRunDetailItems(run, snapshot.events, artifacts),
+    {
+      title: cloudRunTitle(run),
+      placeHolder: cloudRunDetailPlaceholder(run),
+    },
+  );
   if (picked?.action === undefined) return;
+
+  if (picked.action === 'open-artifact') {
+    if (picked.artifactId !== undefined) await host.openArtifact?.(picked.artifactId);
+    return;
+  }
 
   if (picked.action === 'open-web') {
     await vscode.env.openExternal(vscode.Uri.parse(cloudRunWebUrl(run, host.webOrigin)));

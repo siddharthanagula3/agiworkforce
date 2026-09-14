@@ -2,7 +2,8 @@ import { build } from 'esbuild';
 // Imported rather than used as globals: the repo eslint config does not grant
 // Node globals to plain .mjs files.
 import console from 'node:console';
-import { cpSync, existsSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -44,4 +45,25 @@ if (existsSync(assetsSrc)) {
   console.log(`  copied assets -> ${path.relative(process.cwd(), assetsOut)}`);
 } else {
   console.warn('  no electron/assets directory; tray will fall back to a text-only icon');
+}
+
+// The macOS input helper: Electron can capture a display but cannot synthesise
+// a click, so the CGEvent half is a separate signed executable. It is built
+// into electron/dist so electron-builder ships it as an extraResource, which
+// puts it inside the bundle and under the same notarization.
+if (process.platform === 'darwin') {
+  const source = path.join(__dirname, 'native', 'macos', 'agi-input.swift');
+  const output = path.join(__dirname, 'dist', 'agi-input');
+  mkdirSync(path.dirname(output), { recursive: true });
+  const built = spawnSync('swiftc', ['-O', source, '-o', output], {
+    encoding: 'utf8',
+    stdio: 'inherit',
+  });
+  if (built.error || built.status !== 0) {
+    console.warn(
+      '  swiftc could not build the input helper; computer use will report itself unavailable',
+    );
+  } else {
+    console.log(`  built input helper -> ${path.relative(process.cwd(), output)}`);
+  }
 }
