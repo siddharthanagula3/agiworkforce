@@ -585,6 +585,22 @@
       }
     }
   },
+  "spHistoryDelete": {
+    "message": "Delete chat",
+    "description": "Conversation history delete button before the first click"
+  },
+  "spHistoryDeleteConfirm": {
+    "message": "Click again to delete this chat",
+    "description": "Conversation history delete button after the first click, waiting for confirmation"
+  },
+  "spHistoryDeleteConfirmDevice": {
+    "message": "Click delete again to remove this chat from this device. It cannot be recovered.",
+    "description": "Confirmation notice for deleting a chat stored only in this browser"
+  },
+  "spHistoryDeleteConfirmAccount": {
+    "message": "Click delete again to remove this chat from this device and from your AGI account. It cannot be recovered.",
+    "description": "Confirmation notice for deleting a chat that is also mirrored to the account"
+  },
   "spHistoryDeleteFailed": {
     "message": "Could not delete this chat. Try again.",
     "description": "Conversation history error after the account deletion could not be queued"

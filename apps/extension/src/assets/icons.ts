@@ -1,4 +1,3 @@
-
 const ATTRS =
   'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
 
@@ -109,6 +108,7 @@ const svgParser = typeof DOMParser !== 'undefined' ? new DOMParser() : null;
 export function renderIcon(svgString: string, size: number, extraClass?: string): HTMLElement {
   const wrapper = document.createElement('span');
   wrapper.className = `agi-icon${extraClass ? ' ' + extraClass : ''}`;
+  wrapper.setAttribute('aria-hidden', 'true');
   wrapper.style.cssText = `display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;flex-shrink:0;`;
 
   if (svgParser) {

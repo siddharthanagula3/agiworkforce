@@ -616,6 +616,12 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     askCheckbox.checked = items?.['agi_cu_ask_before_acting'] !== false;
   });
 
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (area !== 'local' || !('agi_cu_ask_before_acting' in changes)) return;
+    if (askCheckbox.disabled) return;
+    askCheckbox.checked = changes['agi_cu_ask_before_acting']?.newValue !== false;
+  });
+
   askCheckbox.addEventListener('change', () => {
     const next = askCheckbox.checked;
     const mutation = ++askPreferenceMutation;
