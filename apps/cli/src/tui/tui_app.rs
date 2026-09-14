@@ -3018,6 +3018,8 @@ enum SlashResult {
     RunVoice(String),
     /// Generate an image on the account and stage its file as a chip.
     RunImage(String),
+    /// Read the account's artifact index, or open one of its artifacts.
+    RunArtifacts(String),
 }
 
 fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
@@ -3106,6 +3108,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             },
             prompt => SlashResult::RunImage(prompt.to_string()),
         },
+
+        "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
 
         "/plan" => {
             let new_mode = if app.mode == InteractionMode::Plan {
@@ -4526,6 +4530,17 @@ async fn run_event_loop(
                                         }
                                         Err(error) => format!("Image generation failed: {error}"),
                                     };
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
+                            SlashResult::RunArtifacts(argument) => {
+                                let text = crate::cloud::artifacts::slash(
+                                    app.session.privacy_mode,
+                                    &argument,
+                                )
+                                .await;
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
