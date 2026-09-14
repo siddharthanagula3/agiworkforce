@@ -113,7 +113,23 @@ function defaultResponder(method: string): unknown {
     return { turn: { id: 'turn-1', threadId: thread.id, status: 'running' } };
   if (method === 'turn/interrupt' || method === 'approval/respond') return { acknowledged: true };
   if (method === 'model/list') {
-    return { models: [{ id: 'qwen2.5:1.5b', provider: 'ollama' }] };
+    return {
+      models: [{ id: 'qwen2.5:1.5b', provider: 'ollama' }],
+      hostModels: [
+        { id: 'qwen2.5:1.5b', provider: 'ollama', reachable: true, trustMode: 'local' },
+        {
+          id: 'qa-provider/qa-default',
+          provider: 'qa-provider',
+          reachable: false,
+          trustMode: 'byok',
+          unreachable: {
+            code: 'provider_auth_missing',
+            action: 'sign_in_provider',
+            provider: 'qa-provider',
+          },
+        },
+      ],
+    };
   }
   if (method === 'settings/read') return { defaultModel: 'qa-provider/qa-default' };
   if (method === 'account/status') return { signedIn: true, cached: false, source: 'cli' };
@@ -270,9 +286,42 @@ describe('developer session runtime', () => {
 
     expect(models).toEqual({
       models: [{ id: 'qwen2.5:1.5b', provider: 'ollama', local: true }],
+      hostModels: [
+        {
+          id: 'qwen2.5:1.5b',
+          provider: 'ollama',
+          reachable: true,
+          trustMode: 'local',
+          unreachable: null,
+        },
+        {
+          id: 'qa-provider/qa-default',
+          provider: 'qa-provider',
+          reachable: false,
+          trustMode: 'byok',
+          unreachable: {
+            code: 'provider_auth_missing',
+            action: 'sign_in_provider',
+            provider: 'qa-provider',
+          },
+        },
+      ],
       defaultModelId: 'qa-provider/qa-default',
       managedSignedIn: true,
     });
+  });
+
+  it('asks the CLI to re-resolve reachability only when told to refresh', async () => {
+    const asked: Array<Record<string, unknown>> = [];
+    const { service } = await loadService((method, params) => {
+      if (method === 'model/list') asked.push(params);
+      return defaultResponder(method, params);
+    });
+
+    await service.readDeveloperModels(root.id);
+    await service.readDeveloperModels(root.id, true);
+
+    expect(asked).toEqual([{}, { refresh: true }]);
   });
 
   it('still answers when the CLI serves no models, settings or account', async () => {
@@ -282,7 +331,12 @@ describe('developer session runtime', () => {
 
     const models = await service.readDeveloperModels(root.id);
 
-    expect(models).toEqual({ models: [], defaultModelId: null, managedSignedIn: false });
+    expect(models).toEqual({
+      models: [],
+      hostModels: [],
+      defaultModelId: null,
+      managedSignedIn: false,
+    });
   });
 
   it('says a folder that is gone is gone, rather than blaming the CLI', async () => {

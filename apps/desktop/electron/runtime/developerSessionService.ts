@@ -5,7 +5,9 @@ import path from 'node:path';
 import type {
   DeveloperApprovalAnswer,
   DeveloperTurnFailure,
+  DeveloperHostModel,
   DeveloperModelOption,
+  DeveloperModelUnreachable,
   DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
   LocalDeveloperSession,
@@ -585,12 +587,47 @@ async function listForRoot(root: WorkspaceRoot): Promise<DeveloperSessionGroup> 
   return group;
 }
 
-async function requestOrNull(server: RunningServer, method: string): Promise<unknown> {
+async function requestOrNull(
+  server: RunningServer,
+  method: string,
+  params: Record<string, unknown> = {},
+): Promise<unknown> {
   try {
-    return await request(server, method, {});
+    return await request(server, method, params);
   } catch {
     return null;
   }
+}
+
+function toUnreachable(raw: unknown): DeveloperModelUnreachable | null {
+  if (!isRecord(raw)) return null;
+  const code = readString(raw, 'code');
+  const action = readString(raw, 'action');
+  if (!code || !action) return null;
+  return {
+    code: code as DeveloperModelUnreachable['code'],
+    action: action as DeveloperModelUnreachable['action'],
+    provider: readString(raw, 'provider'),
+  };
+}
+
+function toHostModels(raw: unknown): DeveloperHostModel[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const id = readString(entry, 'id');
+    if (!id) return [];
+    const trustMode = readString(entry, 'trustMode') ?? 'unknown';
+    return [
+      {
+        id,
+        provider: readString(entry, 'provider') ?? '',
+        reachable: entry['reachable'] === true,
+        trustMode: trustMode as DeveloperHostModel['trustMode'],
+        unreachable: toUnreachable(entry['unreachable']),
+      },
+    ];
+  });
 }
 
 /**
@@ -598,11 +635,14 @@ async function requestOrNull(server: RunningServer, method: string): Promise<unk
  * host that does not serve models, settings or an account answers with nothing
  * rather than failing the whole call, so a chooser still gets what is there.
  */
-export async function readDeveloperModels(rootId: string): Promise<DeveloperRuntimeModels> {
+export async function readDeveloperModels(
+  rootId: string,
+  refresh = false,
+): Promise<DeveloperRuntimeModels> {
   const root = requireRoot(rootId);
   const server = await readyServer(root);
   const [modelList, settings, account] = await Promise.all([
-    requestOrNull(server, 'model/list'),
+    requestOrNull(server, 'model/list', refresh ? { refresh: true } : {}),
     requestOrNull(server, 'settings/read'),
     requestOrNull(server, 'account/status'),
   ]);
@@ -619,6 +659,7 @@ export async function readDeveloperModels(rootId: string): Promise<DeveloperRunt
 
   return {
     models,
+    hostModels: toHostModels(isRecord(modelList) ? modelList['hostModels'] : null),
     defaultModelId: isRecord(settings) ? readString(settings, 'defaultModel') : null,
     managedSignedIn: isRecord(account) && account['signedIn'] === true,
   };

@@ -113,7 +113,10 @@ import {
   resolveTier,
 } from '../integrations/tierResolver';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
-import { getActiveWorkspaceFolder } from '../platform/workspaceFolders';
+import {
+  getActiveWorkspaceFolder,
+  getActiveWorkspaceFolderSync,
+} from '../platform/workspaceFolders';
 import {
   getApiKey,
   getAccountToken,
@@ -138,7 +141,6 @@ import {
   modelDisplayLabel,
   modelLockHeading,
   modelLockReason,
-  type GroupedQuickPickItem,
   type ModelLock,
 } from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
@@ -148,6 +150,12 @@ import {
   setAgentModeWithConsent,
 } from '../features/permissions/agentModeConsent';
 import { SettingsPanel } from '../features/settings';
+import {
+  buildReachabilityQuickPickItems,
+  type HostModel,
+  type HostModelUnreachable,
+  type ReachableQuickPickItem,
+} from '../features/model-picker/reachability';
 import { openAgentConfig } from '../features/config/agentConfig';
 
 const execFileAsync = promisify(execFile);
@@ -369,6 +377,35 @@ function sessionHistoryRelativeTime(timestamp: number): string {
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
   return new Date(timestamp).toLocaleDateString();
+}
+
+async function readHostModels(
+  localRuntimes: LocalRuntimePool,
+  refresh: boolean,
+): Promise<HostModel[] | undefined> {
+  const folder = getActiveWorkspaceFolderSync();
+  if (folder === undefined) return undefined;
+  try {
+    const runtime = localRuntimes.forWorkspace(folder.uri.fsPath);
+    const response = await runtime.listLocalModels(refresh ? { refresh: true } : {});
+    const hostModels = response.hostModels;
+    return hostModels === undefined || hostModels.length === 0 ? undefined : [...hostModels];
+  } catch {
+    return undefined;
+  }
+}
+
+async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<void> {
+  if (unreachable.action === 'sign_in_provider' && unreachable.provider !== undefined) {
+    await vscode.commands.executeCommand('agi-workforce.signInProvider', unreachable.provider);
+    await vscode.commands.executeCommand('agi-workforce.selectModel', { refresh: true });
+    return;
+  }
+  if (unreachable.action === 'open_settings') {
+    await vscode.commands.executeCommand('agi-workforce.openSettings');
+    return;
+  }
+  vscode.window.showWarningMessage('AGI Workforce: that model is not set up on this machine yet.');
 }
 
 export interface CommandDeps {
@@ -886,14 +923,21 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    register('agi-workforce.selectModel', async () => {
+    register('agi-workforce.selectModel', async (options?: unknown) => {
       const currentModel = normalizeConfiguredModelId(Config.model());
 
       const pickerTier = await resolveTier(context);
-      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems(
-        pickerTier,
-        sidebarProvider.activeRoute(),
-      ).map((item: GroupedQuickPickItem) => ({
+      const route = sidebarProvider.activeRoute();
+      const refresh =
+        typeof options === 'object' &&
+        options !== null &&
+        (options as { refresh?: unknown }).refresh === true;
+      const hostModels = await readHostModels(localRuntimes, refresh);
+      const allItems: ReachableQuickPickItem[] = buildReachabilityQuickPickItems({
+        items: buildGroupedQuickPickItems(pickerTier, route),
+        ...(hostModels === undefined ? {} : { hostModels }),
+        ...(route?.trustMode === undefined ? {} : { privacyMode: route.trustMode }),
+      }).map((item) => ({
         ...item,
         picked: item.modelId !== undefined && item.modelId === currentModel,
       }));
@@ -906,6 +950,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       });
 
       if (picked === undefined || picked.modelId === undefined) return;
+
+      if (picked.unreachable !== undefined) {
+        await runUnreachableOffer(picked.unreachable);
+        return;
+      }
+      if (picked.refusedBoundary !== undefined) {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: this chat keeps its work inside one trust boundary, so it cannot switch to that model. Start a new chat to change where the work goes.',
+        );
+        return;
+      }
 
       const tier = await resolveTier(context);
       if (picked.lock !== undefined) {

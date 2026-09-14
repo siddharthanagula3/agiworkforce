@@ -721,7 +721,7 @@ async function execute(
     case 'developer_runtime_status':
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':
-      return readDeveloperModels(requireString(args, 'rootId'));
+      return readDeveloperModels(requireString(args, 'rootId'), args['refresh'] === true);
     case 'developer_session_list':
       return listDeveloperSessions();
     case 'developer_session_read':

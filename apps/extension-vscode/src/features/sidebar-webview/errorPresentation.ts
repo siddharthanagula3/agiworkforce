@@ -260,8 +260,14 @@ function failureHeadline(failure: TurnFailureShape, provider: string): string {
   }
 }
 
-function failureAction(failure: TurnFailureShape, provider: string): ChatErrorAction | undefined {
+/** The offer a failure earns, in the words every surface shows for it. */
+export function turnFailureOffer(failure: {
+  action: TurnFailureShape['action'];
+  provider?: string;
+}): ChatErrorAction | undefined {
   if (failure.action === 'sign_in_provider') {
+    const provider =
+      failure.provider === undefined ? 'the provider' : providerDisplayLabel(failure.provider);
     return {
       kind: 'sign-in-provider',
       label: `Sign in to ${provider}`,
@@ -279,7 +285,7 @@ export function presentTurnFailure(failure: TurnFailureShape): ChatErrorPresenta
     failure.provider === undefined ? 'the provider' : providerDisplayLabel(failure.provider);
   const headline = failureHeadline(failure, provider);
   const detail = failure.message.trim();
-  const action = failureAction(failure, provider);
+  const action = turnFailureOffer(failure);
   return {
     category: FAILURE_CATEGORY[failure.code] ?? 'unknown',
     headline,

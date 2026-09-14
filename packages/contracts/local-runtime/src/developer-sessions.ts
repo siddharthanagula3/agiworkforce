@@ -115,17 +115,29 @@ export interface DeveloperModelOption {
   local: boolean;
 }
 
+/** Why a model cannot run here, in the words a failed turn would use. */
+export interface DeveloperModelUnreachable {
+  code: TurnFailureCode;
+  action: TurnFailureAction;
+  provider: string | null;
+}
+
+/** What the host says about one model it knows, reachable models first. */
+export interface DeveloperHostModel {
+  id: string;
+  provider: string;
+  reachable: boolean;
+  trustMode: DeveloperSessionTrustMode;
+  unreachable: DeveloperModelUnreachable | null;
+}
+
 /**
- * What the CLI can run in one folder, as it reports it.
- *
- * Protocol 8 names the models installed on this Mac and the configured
- * default, and says whether the account is signed in; it does not say which
- * own-key providers hold a key. So a caller choosing a model for a new session
- * treats a model the folder has already used as the strongest evidence that it
- * runs here.
+ * What the CLI can run in one folder. `hostModels` is empty against a CLI that
+ * predates it, and a caller falls back to `models` there.
  */
 export interface DeveloperRuntimeModels {
   models: DeveloperModelOption[];
+  hostModels: DeveloperHostModel[];
   defaultModelId: string | null;
   managedSignedIn: boolean;
 }

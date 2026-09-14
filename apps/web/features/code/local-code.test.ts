@@ -17,6 +17,8 @@ import {
   localModelChoices,
   localFailureAction,
   localModelLabel,
+  localModelSetup,
+  localProviderSetups,
   localTurnFailureSentence,
   startingModelId,
   localSessionContext,
@@ -58,11 +60,64 @@ const runtime: DeveloperRuntimeModels = {
     { id: LOCAL_MODEL, provider: 'qa-runner', local: true },
     { id: OTHER_MODEL, provider: 'qa-provider', local: true },
   ],
+  hostModels: [],
   defaultModelId: CONFIGURED_MODEL,
   managedSignedIn: false,
 };
 
+const hostRuntime: DeveloperRuntimeModels = {
+  ...runtime,
+  hostModels: [
+    {
+      id: LOCAL_MODEL,
+      provider: 'qa-runner',
+      reachable: true,
+      trustMode: 'local',
+      unreachable: null,
+    },
+    {
+      id: OTHER_MODEL,
+      provider: 'qa-provider',
+      reachable: false,
+      trustMode: 'byok',
+      unreachable: {
+        code: 'provider_auth_missing',
+        action: 'sign_in_provider',
+        provider: 'qa-provider',
+      },
+    },
+  ],
+};
+
 describe('local code surface', () => {
+  it('offers only what the host can reach, whatever the folder has used', () => {
+    const choices = localModelChoices(hostRuntime, [{ ...session, model: catalogModelId }]);
+
+    expect(choices.map((choice) => [choice.id, choice.evidence])).toEqual([
+      [LOCAL_MODEL, 'reachable'],
+      [CONFIGURED_MODEL, 'configured'],
+    ]);
+  });
+
+  it('names a route once, however many of its models cannot run', () => {
+    const setups = localProviderSetups(hostRuntime);
+
+    expect(setups).toHaveLength(1);
+    expect(setups[0]?.provider).toBe('qa-provider');
+    expect(setups[0]?.count).toBe(1);
+    expect(setups[0]?.offer).toEqual({ kind: 'copy', text: 'agi login qa-provider' });
+  });
+
+  it('says which route a model is waiting on, and nothing for one that runs', () => {
+    expect(localModelSetup(hostRuntime, OTHER_MODEL)?.provider).toBe('qa-provider');
+    expect(localModelSetup(hostRuntime, LOCAL_MODEL)).toBeNull();
+    expect(localModelSetup(null, OTHER_MODEL)).toBeNull();
+  });
+
+  it('starts a session on a model the host can reach, never one it cannot', () => {
+    expect(startingModelId(hostRuntime, [{ ...session, model: OTHER_MODEL }])).toBe(LOCAL_MODEL);
+  });
+
   it('offers what the folder has used, then what is installed, then the default', () => {
     const choices = localModelChoices(runtime, [
       { ...session, model: catalogModelId },
@@ -89,6 +144,7 @@ describe('local code surface', () => {
     const choices = localModelChoices(
       {
         models: [{ id: OTHER_MODEL, provider: 'qa-provider', local: false }],
+        hostModels: [],
         defaultModelId: OTHER_MODEL,
         managedSignedIn: true,
       },
