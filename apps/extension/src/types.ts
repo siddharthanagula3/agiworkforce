@@ -61,7 +61,6 @@ export type NativeMessageType =
   | 'WEBMCP_DISCOVER_TOOLS'
   | 'WEBMCP_CALL_TOOL'
   | 'WEBMCP_TOOLS_CHANGED'
-  | 'NLWEB_DETECTED'
   | 'SAVE_SHORTCUT'
   | 'LIST_SHORTCUTS'
   | 'DELETE_SHORTCUT'
@@ -714,12 +713,6 @@ export interface WebMCPToolsChangedMessage extends BaseMessage {
   url?: string;
 }
 
-export interface NLWebDetectedMessage extends BaseMessage {
-  type: 'NLWEB_DETECTED';
-  nlweb: import('./nlweb').NLWebDetectionResult;
-  url?: string;
-}
-
 export interface AddTabToGroupMessage extends BaseMessage {
   type: 'ADD_TAB_TO_GROUP';
 }
@@ -1034,7 +1027,6 @@ export type ExtensionMessage =
   | WebMCPDiscoverToolsMessage
   | WebMCPCallToolMessage
   | WebMCPToolsChangedMessage
-  | NLWebDetectedMessage
   | AddTabToGroupMessage
   | GetTabGroupStateMessage
   | RemoveTabFromGroupMessage

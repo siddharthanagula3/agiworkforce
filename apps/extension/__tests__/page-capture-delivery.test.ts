@@ -68,7 +68,7 @@ describe('capture_page only counts a capture the desktop actually received', () 
     const background = readFileSync(resolve(here, '..', 'src/background.ts'), 'utf8');
     const captureFn = background.slice(
       background.indexOf('async function captureCurrentPage('),
-      background.indexOf('const MAX_PROBE_RESPONSE_BYTES'),
+      background.indexOf('async function handleChatMessage('),
     );
 
     expect(captureFn).toContain('deliverPageCapture(');

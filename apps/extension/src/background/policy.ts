@@ -86,8 +86,6 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   GET_ACCESSIBILITY_TREE: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   OPEN_SIDE_PANEL: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   IN_PAGE_PROMPT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
-  NLWEB_PROBE: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
-  NLWEB_DETECTED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   WEBMCP_TOOLS_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   START_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
@@ -167,7 +165,6 @@ export const MAX_CONTEXT_HTML_CHARS = 100_000;
 
 export const MAX_JSON_LD_BYTES = 256 * 1024;
 export const MAX_WEBMCP_SCHEMA_BYTES = 64 * 1024;
-export const MAX_NLWEB_PROBE_BYTES = 256 * 1024;
 export const MAX_WEBMCP_TOOLS = 64;
 const MAX_WEBMCP_TOOL_NAME_CHARS = 64;
 const MAX_WEBMCP_TOOL_DESCRIPTION_CHARS = 500;
