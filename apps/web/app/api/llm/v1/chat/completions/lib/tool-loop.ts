@@ -1367,6 +1367,7 @@ export async function collectProviderStream(
   const publicTextProjector = createPublicTextDeltaProjector();
   const reasoningTextProjector = createThinkingTextDeltaProjector();
   let buffer = '';
+  let frameOpen = false;
   let finishReason: string | null = null;
   let textContent = '';
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
@@ -1389,10 +1390,17 @@ export async function collectProviderStream(
 
     for (const raw of parts) {
       const line = raw.trim();
-      if (!line) continue;
+      if (!line) {
+        if (frameOpen) {
+          pushLine({ line: '\n' });
+          frameOpen = false;
+        }
+        continue;
+      }
 
       if (!line.startsWith('data: ')) {
         pushLine({ line: raw + '\n' });
+        frameOpen = true;
         continue;
       }
 
@@ -1472,13 +1480,14 @@ export async function collectProviderStream(
         }
 
         pushLine({
-          line: raw + '\n',
+          line: raw + '\n\n',
           publicTextDelta,
           reasoningDelta,
           serverToolStart,
           serverToolResults,
           searchActivity: serverToolStart !== undefined || Array.isArray(searchResultsContent),
         });
+        frameOpen = false;
 
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
         if (Array.isArray(toolCallDeltas)) {
@@ -1519,12 +1528,15 @@ export async function collectProviderStream(
         }
       } catch {
         pushLine({ line: raw + '\n' });
+        frameOpen = true;
       }
     }
   }
 
   if (buffer.trim()) {
-    pushLine({ line: buffer });
+    pushLine({ line: buffer + '\n\n' });
+  } else if (frameOpen) {
+    pushLine({ line: '\n' });
   }
 
   const pendingToolCalls: PendingToolCall[] = [];
