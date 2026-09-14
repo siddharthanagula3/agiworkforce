@@ -3,7 +3,7 @@ import { ActivityIndicator, Modal, ScrollView, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
-import { Check, Globe, Headphones, Lock, Mic, Play, Volume2, X } from 'lucide-react-native';
+import { Check, Globe, Hand, Headphones, Lock, Mic, Play, Volume2, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -19,6 +19,23 @@ import {
 import { useThemeColors } from '@/src/ui/theme';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
 import * as TTS from '@/src/features/voice/services/tts';
+
+const CONVERSATION_MODES = [
+  {
+    pushToTalk: false,
+    label: 'Hands free',
+    description: 'Listening restarts on its own. Best for quiet places.',
+    icon: Mic,
+    testID: 'voice-settings-mode-hands-free',
+  },
+  {
+    pushToTalk: true,
+    label: 'Push to talk',
+    description: 'Hold the orb to speak, release to send.',
+    icon: Hand,
+    testID: 'voice-settings-mode-push-to-talk',
+  },
+] as const;
 
 interface SpeechLanguageOption {
   code: string;
@@ -249,6 +266,8 @@ export default function VoiceSettingsScreen() {
   const setSpeechRate = useSettingsStore((s) => s.setSpeechRate);
   const speechPitch = useSettingsStore((s) => s.speechPitch);
   const setSpeechPitch = useSettingsStore((s) => s.setSpeechPitch);
+  const pushToTalk = useSettingsStore((s) => s.voicePushToTalk);
+  const setPushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
 
   const localAutoListenEnabled = useLocalSettingsStore((s) => s.autoListenEnabled);
   const localSetAutoListenEnabled = useLocalSettingsStore((s) => s.setAutoListenEnabled);
@@ -385,6 +404,53 @@ export default function VoiceSettingsScreen() {
           step={0.05}
           onValueChange={setSpeechPitch}
         />
+      </SettingsGroup>
+
+      <Text
+        style={{
+          color: colors.textMuted,
+          fontSize: 13,
+          fontWeight: '600',
+          paddingHorizontal: 2,
+          paddingBottom: 8,
+        }}
+      >
+        Mode
+      </Text>
+      <SettingsGroup>
+        {CONVERSATION_MODES.map((option, index) => {
+          const selected = option.pushToTalk === pushToTalk;
+          return (
+            <Pressable
+              key={option.label}
+              testID={option.testID}
+              onPress={() => setPushToTalk(option.pushToTalk)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`Set voice mode to ${option.label}`}
+              style={{
+                minHeight: 60,
+                paddingHorizontal: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                borderBottomWidth: index === CONVERSATION_MODES.length - 1 ? 0 : 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <option.icon size={19} color={selected ? colors.teal : colors.textSecondary} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+                  {option.label}
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+                  {option.description}
+                </Text>
+              </View>
+              {selected ? <Check size={18} color={colors.teal} /> : null}
+            </Pressable>
+          );
+        })}
       </SettingsGroup>
 
       <SettingsGroup>

@@ -134,7 +134,6 @@ const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
   'browser.site': 'browse',
   'browser.cdp': 'inspect the page internals of',
   'screen.capture': 'capture the screen',
-  'computer.use': 'control the mouse and keyboard',
   'application.control': 'control the application',
   'clipboard.read': 'read the clipboard',
   'clipboard.monitor': 'watch the clipboard continuously',

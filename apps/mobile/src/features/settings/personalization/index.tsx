@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, TextInput, Platform, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -149,9 +149,7 @@ function StyleSlider({
 export default function PersonalizationScreen() {
   const router = useRouter();
   const c = useThemeColors();
-  const { scope } = useLocalSearchParams<{ scope?: string }>();
-  const globalIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
-  const isCloud = scope === 'cloud' ? true : scope === 'local' ? false : globalIsCloud;
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
   const localPersonalization = useLocalSettingsStore((s) => s.personalization);
   const localSetPersonalization = useLocalSettingsStore((s) => s.setPersonalization);

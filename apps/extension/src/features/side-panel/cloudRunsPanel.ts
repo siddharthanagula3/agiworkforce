@@ -11,6 +11,7 @@ import {
   readChromeManagedRunJournal,
   resolveChromeManagedRunApproval,
 } from '../cloud-bridge/managedRunControl';
+import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
 import { el } from './dom';
 
 export const CLOUD_RUNS_PANEL_CSS = `
@@ -100,6 +101,22 @@ export const CLOUD_RUNS_PANEL_CSS = `
 
   .sp-runs-status[data-kind='success'] {
     color: var(--agi-ext-success);
+  }
+
+  .sp-runs-status-action {
+    margin-left: 6px;
+    padding: 0;
+    font: inherit;
+    color: var(--agi-ext-accent);
+    background: none;
+    border: none;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .sp-runs-status-action:disabled {
+    cursor: wait;
+    opacity: 0.55;
   }
 
   #sp-runs-list,
@@ -373,6 +390,10 @@ const RELATIVE_TIME_STEPS: ReadonlyArray<{ unit: Intl.RelativeTimeFormatUnit; ms
   { unit: 'second', ms: 1_000 },
 ];
 
+const SIGN_IN_ACTION_LABEL = 'Sign in';
+const SIGN_IN_OPENING_LABEL = 'Opening…';
+const SIGN_IN_FAILED = 'The sign-in tab did not open.';
+
 const RUN_REFRESH_INTERVAL_MS = 4_000;
 const MAX_RENDERED_JOURNAL_ENTRIES = 200;
 const MAX_RENDERED_TEXT_CHARACTERS = 20_000;
@@ -382,6 +403,7 @@ export interface CloudRunsPanelDependencies {
   readJournal: typeof readChromeManagedRunJournal;
   resolveApproval: typeof resolveChromeManagedRunApproval;
   cancelRun: typeof cancelChromeManagedRun;
+  signIn: typeof openClerkSignIn;
   refreshIntervalMs: number;
   now: () => number;
 }
@@ -399,6 +421,7 @@ const DEFAULT_DEPENDENCIES: CloudRunsPanelDependencies = {
   readJournal: readChromeManagedRunJournal,
   resolveApproval: resolveChromeManagedRunApproval,
   cancelRun: cancelChromeManagedRun,
+  signIn: openClerkSignIn,
   refreshIntervalMs: RUN_REFRESH_INTERVAL_MS,
   now: () => Date.now(),
 };
@@ -548,6 +571,37 @@ export function buildCloudRunsPanel(
     statusOrigin = origin;
     if (kind) statusEl.setAttribute('data-kind', kind);
     else statusEl.removeAttribute('data-kind');
+  }
+
+  function setSignInStatus(message: string, origin: StatusOrigin): void {
+    setStatus(message, undefined, origin);
+    const action = el(
+      'button',
+      { type: 'button', class: 'sp-runs-status-action' },
+      SIGN_IN_ACTION_LABEL,
+    );
+    action.addEventListener('click', () => {
+      action.setAttribute('disabled', '');
+      action.textContent = SIGN_IN_OPENING_LABEL;
+      void deps
+        .signIn()
+        .catch((error: unknown) => {
+          setStatus(error instanceof Error ? error.message : SIGN_IN_FAILED, 'error', 'action');
+        })
+        .finally(() => {
+          action.removeAttribute('disabled');
+          action.textContent = SIGN_IN_ACTION_LABEL;
+        });
+    });
+    statusEl.appendChild(action);
+  }
+
+  function reportLoadFailure(
+    result: { code: string; message: string },
+    origin: StatusOrigin,
+  ): void {
+    if (result.code === 'auth_required') setSignInStatus(result.message, origin);
+    else setStatus(result.message, 'error', origin);
   }
 
   function clearTransientStatus(): void {
@@ -835,7 +889,7 @@ export function buildCloudRunsPanel(
       if (controller.signal.aborted || disposed) return;
       if (result.status === 'error') {
         if (result.code !== 'cancelled') {
-          setStatus(result.message, 'error', 'load');
+          reportLoadFailure(result, 'load');
           if (!isEditingGuidance()) render();
         }
       } else {
@@ -864,7 +918,7 @@ export function buildCloudRunsPanel(
     if (controller.signal.aborted || disposed) return;
     if (result.status === 'error') {
       if (result.code !== 'cancelled') {
-        setStatus(result.message, 'error', 'load');
+        reportLoadFailure(result, 'load');
         if (!isEditingGuidance()) render();
       }
       scheduleRefresh();

@@ -7,6 +7,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import {
   cloudRunBlock,
   cloudRunBlockLabel,
+  cloudRunPreview,
   cloudRunStateColor,
   cloudRunTimeLabel,
   CLOUD_RUN_ORIGIN_LABELS,
@@ -49,6 +50,7 @@ export function CloudRunCard({
   const timeLabel = cloudRunTimeLabel(run);
   const originLabel = CLOUD_RUN_ORIGIN_LABELS[run.originSurface];
   const stateLabel = CLOUD_RUN_STATE_LABELS[run.state];
+  const preview = cloudRunPreview(run, title);
 
   return (
     <Pressable
@@ -83,6 +85,12 @@ export function CloudRunCard({
           <Text numberOfLines={2} style={{ color: colors.textPrimary, fontWeight: '600' }}>
             {title}
           </Text>
+
+          {preview ? (
+            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13 }}>
+              {preview}
+            </Text>
+          ) : null}
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: stateColor }} />

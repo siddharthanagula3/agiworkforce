@@ -153,7 +153,7 @@
         ".github/workflows/release-desktop-cloud.yml",
         "apps/desktop/electron-builder.yml",
         "apps/desktop/electron",
-        "apps/desktop/src/lib/desktopCloudUpdate.ts",
+        "apps/desktop/electron/desktopCloudUpdate.ts",
         "apps/desktop/src/lib/tauri-electron",
         "apps/web/app/api/releases/desktop-cloud/latest",
         "apps/web/app/api/download"

@@ -36,6 +36,7 @@ pub mod markdown;
 pub use platform::lsp;
 pub mod mcp;
 pub mod memory;
+pub mod mentions;
 #[allow(dead_code)]
 // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
 pub mod message_queue;
@@ -732,16 +733,32 @@ enum Command {
     },
     /// Compare this build against the newest published CLI release.
     ///
-    /// Reads the release feed only, it never downloads or installs anything.
+    /// Reads the release feed by default and downloads nothing. `--install`
+    /// runs the documented install command after printing it and asking.
+    ///
+    /// Installing needs a signed release: the install routes refuse an archive
+    /// without its signed checksum manifest, and no published CLI release
+    /// carries one yet, so an install can fail on provenance.
     Update {
         /// Exit non-zero when a newer release is published, for scripts.
         #[arg(long)]
         check: bool,
+        /// Run the documented install command when a newer release exists.
+        #[arg(long)]
+        install: bool,
+        /// Skip the confirmation prompt. Only meaningful with `--install`.
+        #[arg(long, short = 'y', requires = "install")]
+        yes: bool,
     },
     /// Manage the global MCP server registry (~/.agiworkforce/mcp.json).
     Mcp {
         #[command(subcommand)]
         action: McpSubcommand,
+    },
+    /// Manage the hooks the agent fires (~/.agiworkforce/hooks.json).
+    Hooks {
+        #[command(subcommand)]
+        action: Option<HooksSubcommand>,
     },
     /// Run as MCP server (stdio). Exposes no tools yet, see `agi app-server`.
     ///
@@ -1178,10 +1195,46 @@ enum McpSubcommand {
     },
     /// List registered MCP servers.
     List,
+    /// Show one registered MCP server.
+    Get {
+        /// Registry name of the server to show.
+        name: String,
+    },
+    /// Authorize a remote MCP server over OAuth and store the token.
+    Login {
+        /// Registry name of the remote server to authorize.
+        name: String,
+    },
+    /// Forget the stored OAuth token for a remote MCP server.
+    Logout {
+        /// Registry name of the remote server to sign out of.
+        name: String,
+    },
     /// Remove a registered MCP server.
     Remove {
         /// Registry name of the server to remove.
         name: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum HooksSubcommand {
+    /// Show every configured hook, plugin-declared ones included.
+    List,
+    /// Add a hook to an event. The command runs under `sh -c`.
+    Add {
+        /// Event name, e.g. PreToolUse. `agi hooks add` with an unknown event
+        /// lists every event the runner honours.
+        event: String,
+        /// Shell command to run. Quote it to keep it as one argument.
+        command: String,
+    },
+    /// Remove a hook by its 1-based position under an event.
+    Remove {
+        /// Event the hook is registered under.
+        event: String,
+        /// 1-based position, as shown by `agi hooks list`.
+        index: usize,
     },
 }
 
@@ -1832,7 +1885,71 @@ async fn models_json_with_discovery(config: &config::CliConfig) -> serde_json::V
     serde_json::Value::Array(models)
 }
 
-fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
+/// The URL of a registered remote MCP server, or an error naming why the
+/// OAuth commands do not apply to it.
+fn remote_server_url(registry: &crate::mcp::registry::McpRegistry, name: &str) -> Result<String> {
+    let Some(row) = registry.list().into_iter().find(|row| row.name == name) else {
+        anyhow::bail!(
+            "no MCP server named '{}' in the registry",
+            terminal_text::sanitize_terminal_text(name)
+        )
+    };
+    if row.kind == "stdio" {
+        anyhow::bail!(
+            "'{}' is a stdio server; OAuth applies to remote (--url) servers only",
+            terminal_text::sanitize_terminal_text(name)
+        );
+    }
+    Ok(row.target)
+}
+
+fn run_hooks_command(action: Option<&HooksSubcommand>) -> Result<()> {
+    // One implementation for `agi hooks` and the TUI's `/hooks`, so a hook
+    // added from either lands in the same file under the same event name.
+    let request = match action {
+        None | Some(HooksSubcommand::List) => "list".to_string(),
+        Some(HooksSubcommand::Add { event, command }) => format!("add {event} {command}"),
+        Some(HooksSubcommand::Remove { event, index }) => format!("remove {event} {index}"),
+    };
+    println!("{}", hooks::apply_hooks_command(&request)?);
+    Ok(())
+}
+
+/// Print what `agi update --install` will run, ask, then run it.
+fn run_update_install(running: &str, release: &update_check::CliRelease, yes: bool) -> Result<()> {
+    let plan = update_check::InstallPlan::new(running, release);
+    for line in plan.render() {
+        println!("{line}");
+    }
+    if !plan.has_work() {
+        return Ok(());
+    }
+    if !yes {
+        let confirmed = dialoguer::Confirm::new()
+            .with_prompt(format!("Run `{}` now?", plan.command))
+            .default(false)
+            .interact()
+            .unwrap_or(false);
+        if !confirmed {
+            println!("Nothing was installed.");
+            return Ok(());
+        }
+    }
+    let status = update_check::run_install_command(&plan.command)?;
+    if status.success() {
+        println!("Installed. Re-run `agi update` to confirm the new version.");
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "`{}` exited with {}. {}",
+            plan.command,
+            status.code().unwrap_or(-1),
+            update_check::INSTALL_SIGNING_NOTE
+        )
+    }
+}
+
+async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
     use crate::mcp::registry::{self, McpRegistry, TransportKind};
 
     let mut registry_file = McpRegistry::load()?;
@@ -1887,6 +2004,72 @@ fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                     terminal_text::sanitize_terminal_text(&row.target)
                 );
             }
+            Ok(())
+        }
+        McpSubcommand::Get { name } => {
+            // Reads the same `RegistryEntry` rows `list` prints, so the two
+            // commands can never describe the same server differently.
+            let Some(row) = registry_file
+                .list()
+                .into_iter()
+                .find(|row| &row.name == name)
+            else {
+                anyhow::bail!(
+                    "no MCP server named '{}' in {}. `agi mcp list` shows the registered names.",
+                    terminal_text::sanitize_terminal_text(name),
+                    McpRegistry::default_path()?.display()
+                )
+            };
+            println!(
+                "{:<10} {}",
+                "name",
+                terminal_text::sanitize_terminal_text(&row.name)
+            );
+            println!(
+                "{:<10} {}",
+                "status",
+                if row.enabled { "enabled" } else { "disabled" }
+            );
+            println!(
+                "{:<10} {}",
+                "transport",
+                terminal_text::sanitize_terminal_text(&row.kind)
+            );
+            println!(
+                "{:<10} {}",
+                "target",
+                terminal_text::sanitize_terminal_text(&row.target)
+            );
+            println!("{:<10} {}", "file", McpRegistry::default_path()?.display());
+            Ok(())
+        }
+        McpSubcommand::Login { name } => {
+            remote_server_url(&registry_file, name)?;
+            let entry = registry_file
+                .entry(name)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
+            let config: crate::mcp::McpServerConfig = serde_json::from_value(entry)
+                .with_context(|| format!("registry entry for '{name}' is not a server config"))?;
+            crate::mcp::login_to_remote_server(name, &config).await?;
+            println!(
+                "Authorized MCP server '{}'. The token is stored in the OS credential store.",
+                terminal_text::sanitize_terminal_text(name)
+            );
+            Ok(())
+        }
+        McpSubcommand::Logout { name } => {
+            let url = remote_server_url(&registry_file, name)?;
+            let had_token = crate::mcp::logout_from_remote_server(&url)?;
+            println!(
+                "{} '{}'.",
+                if had_token {
+                    "Removed the stored OAuth token for"
+                } else {
+                    "No OAuth token was stored for"
+                },
+                terminal_text::sanitize_terminal_text(name)
+            );
             Ok(())
         }
         McpSubcommand::Remove { name } => {
@@ -2764,9 +2947,16 @@ pub async fn run_main() -> Result<()> {
                 io::Write::write_all(&mut io::stderr(), &out.stderr)?;
                 std::process::exit(out.status.code().unwrap_or(1));
             }
-            Command::Update { check } => {
+            Command::Update {
+                check,
+                install,
+                yes,
+            } => {
                 let release = update_check::fetch_latest_release().await?;
                 let running = update_check::running_version();
+                if *install {
+                    return run_update_install(running, &release, *yes);
+                }
                 for line in update_check::render_verdict(
                     running,
                     &release,
@@ -2782,7 +2972,8 @@ pub async fn run_main() -> Result<()> {
                 }
                 Ok(())
             }
-            Command::Mcp { action } => run_mcp_registry_command(action),
+            Command::Hooks { action } => run_hooks_command(action.as_ref()),
+            Command::Mcp { action } => run_mcp_registry_command(action).await,
             Command::McpServer => app_server::run_mcp_server().await,
             Command::Completion { shell } => {
                 generate_shell_completion(*shell, "agi", &mut io::stdout());
@@ -3825,6 +4016,58 @@ pub struct ImageAttachment {
     pub data_b64: String,
 }
 
+impl ImageAttachment {
+    /// The multipart block a pending attachment becomes on the next turn.
+    pub fn into_image_block(self) -> models::ContentBlock {
+        models::ContentBlock::Image {
+            mime: self.mime,
+            data_b64: self.data_b64,
+        }
+    }
+}
+
+/// Read, decode and re-encode one image file for a prompt attachment.
+///
+/// The canonical encoder for every image the CLI attaches: `--file` at launch,
+/// `/attach` in the composer, and an `@image.png` mention all land here, so
+/// resize bounds and MIME resolution cannot diverge between them. Unlike
+/// [`read_file_contexts`] it returns the error instead of exiting, because the
+/// interactive paths have to keep the session alive after a bad path.
+pub fn load_image_attachment(path: &str) -> Result<ImageAttachment> {
+    use agiworkforce_utils_image::{load_for_prompt_bytes, PromptImageMode};
+    use base64::Engine as _;
+
+    let bytes = std::fs::read(path).with_context(|| format!("Failed to read image '{path}'"))?;
+    let encoded = load_for_prompt_bytes(
+        std::path::Path::new(path),
+        bytes,
+        PromptImageMode::ResizeToFit,
+    )
+    .with_context(|| format!("Failed to process image '{path}'"))?;
+    Ok(ImageAttachment {
+        path: path.to_string(),
+        mime: encoded.mime,
+        data_b64: base64::engine::general_purpose::STANDARD.encode(&encoded.bytes),
+    })
+}
+
+/// Turn a clipboard bitmap into a prompt attachment through the same encoder.
+pub fn clipboard_image_attachment(
+    width: u32,
+    height: u32,
+    rgba: Vec<u8>,
+) -> Result<ImageAttachment> {
+    use base64::Engine as _;
+
+    let encoded = agiworkforce_utils_image::encode_rgba_for_prompt(width, height, rgba)
+        .context("Failed to encode the clipboard image")?;
+    Ok(ImageAttachment {
+        path: "clipboard".to_string(),
+        mime: encoded.mime,
+        data_b64: base64::engine::general_purpose::STANDARD.encode(&encoded.bytes),
+    })
+}
+
 /// Return value from [`read_file_contexts`]: text file context and detected image
 /// attachments are separated so callers can handle them differently.
 pub struct FileContextResult {
@@ -3835,7 +4078,7 @@ pub struct FileContextResult {
 }
 
 /// Image file extensions recognised for vision attachment.
-fn is_image_extension(path: &str) -> bool {
+pub(crate) fn is_image_extension(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     matches!(
         std::path::Path::new(&lower)
@@ -3853,36 +4096,10 @@ pub fn read_file_contexts(files: &[String]) -> Result<FileContextResult> {
 
     for path in files {
         if is_image_extension(path) {
-            // Read raw bytes and encode for vision
-            match std::fs::read(path) {
-                Ok(bytes) => {
-                    use agiworkforce_utils_image::{load_for_prompt_bytes, PromptImageMode};
-                    match load_for_prompt_bytes(
-                        std::path::Path::new(path),
-                        bytes,
-                        PromptImageMode::ResizeToFit,
-                    ) {
-                        Ok(encoded) => {
-                            use base64::Engine as _;
-                            let data_b64 =
-                                base64::engine::general_purpose::STANDARD.encode(&encoded.bytes);
-                            images.push(ImageAttachment {
-                                path: path.clone(),
-                                mime: encoded.mime,
-                                data_b64,
-                            });
-                        }
-                        Err(e) => {
-                            output::print_error(&format!(
-                                "Failed to process image '{}': {}",
-                                path, e
-                            ));
-                            std::process::exit(1);
-                        }
-                    }
-                }
+            match load_image_attachment(path) {
+                Ok(attachment) => images.push(attachment),
                 Err(e) => {
-                    output::print_error(&format!("Failed to read image '{}': {}", path, e));
+                    output::print_error(&format!("{e:#}"));
                     std::process::exit(1);
                 }
             }
@@ -4221,13 +4438,9 @@ pub async fn run_oneshot(
     // blocks on the session.  The next `session.send()` call will prepend them
     // to the user message so text + images arrive in a single multipart turn.
     if !image_attachments.is_empty() {
-        use models::ContentBlock;
         session.pending_image_blocks = image_attachments
             .into_iter()
-            .map(|img| ContentBlock::Image {
-                mime: img.mime,
-                data_b64: img.data_b64,
-            })
+            .map(ImageAttachment::into_image_block)
             .collect();
     }
 

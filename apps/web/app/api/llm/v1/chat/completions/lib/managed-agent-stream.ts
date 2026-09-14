@@ -33,7 +33,10 @@ import {
   type PersistedTurnSource,
 } from './assistant-turn-sources';
 import { buildPersistedTurnResearch, type PersistedTurnResearch } from './assistant-turn-research';
-import type { PersistedResearchReport } from '@/lib/services/research-report-service';
+import {
+  recordResearchReportSettledCost,
+  type PersistedResearchReport,
+} from '@/lib/services/research-report-service';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
 
@@ -126,6 +129,7 @@ export function buildManagedAgentStream(
   let assistantText = '';
   const interactiveCards = new Map<string, InteractiveCard>();
   let turnPersisted = false;
+  let settledCostMicrousd: number | null = null;
   let citedSourceUrls: {
     sources: readonly PersistedTurnSource[] | undefined;
     citations: readonly PersistedTurnCitation[] | undefined;
@@ -149,7 +153,10 @@ export function buildManagedAgentStream(
     const generatedFiles = sourceCollector.generatedFilesSnapshot();
     const researchReport = input.getResearchReport?.() ?? null;
     const research: PersistedTurnResearch | null = researchReport
-      ? buildPersistedTurnResearch(researchReport)
+      ? buildPersistedTurnResearch(
+          researchReport,
+          settledCostMicrousd === null ? {} : { settledCostMicrousd },
+        )
       : null;
     await persistAssistantTurn({
       processed: input.processed,
@@ -242,6 +249,28 @@ export function buildManagedAgentStream(
     }
   };
 
+  /**
+   * The report row is written by the loop before the terminal event and the
+   * ledger settles after it, so the cost can only be joined to the run here.
+   */
+  const recordResearchRunCost = async (): Promise<void> => {
+    const report = input.getResearchReport?.() ?? null;
+    if (!report || settledCostMicrousd === null || !input.runJournal) return;
+    try {
+      await recordResearchReportSettledCost(input.runJournal.db, {
+        userId: input.runJournal.userId,
+        requestId: input.processed.requestId,
+        settledCostMicrousd,
+      });
+      report.settledCostMicrousd = settledCostMicrousd;
+    } catch (error) {
+      logger.warn(
+        { error, requestId: input.processed.requestId },
+        'Settled research cost could not be recorded on the report',
+      );
+    }
+  };
+
   const settle = async (reason: string, outcome: 'completed' | 'failed' | 'cancelled') => {
     if (settled) return;
     const serving = servingRequest();
@@ -262,6 +291,8 @@ export function buildManagedAgentStream(
         finalization.actualCostCents,
         input.processed.managedUsage.idempotencyKey,
       );
+      settledCostMicrousd = finalization.actualCostMicrousd ?? null;
+      await recordResearchRunCost();
     } else if (input.processed.freeTrial) {
       const inputTokens = input.usage.inputTokens;
       const outputTokens = input.usage.outputTokens;

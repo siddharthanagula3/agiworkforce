@@ -14,6 +14,12 @@ export interface FollowUpSuggestionsProps {
   isGenerating?: boolean;
   isUserTyping?: boolean;
   messageCount?: number;
+  /**
+   * Questions a model wrote from this answer and its sources. They replace the
+   * keyword matcher when present; the matcher stands in when the turn did not
+   * search or the generation failed.
+   */
+  suggestions?: readonly string[];
   className?: string;
 }
 
@@ -319,11 +325,19 @@ export function FollowUpSuggestions({
   isGenerating = false,
   isUserTyping = false,
   messageCount = 0,
+  suggestions,
   className,
 }: FollowUpSuggestionsProps) {
   const followUps = useMemo(
-    () => deriveFollowUps(lastAssistantContent, messageCount, lastUserContent),
-    [lastAssistantContent, messageCount, lastUserContent],
+    () =>
+      suggestions && suggestions.length > 0
+        ? suggestions.slice(0, 3).map((text, index) => ({
+            id: `followup-generated-${index}`,
+            text,
+            type: 'deeper' as FollowUpType,
+          }))
+        : deriveFollowUps(lastAssistantContent, messageCount, lastUserContent),
+    [suggestions, lastAssistantContent, messageCount, lastUserContent],
   );
   const [dismissed, setDismissed] = useState(false);
 
@@ -357,6 +371,7 @@ export function FollowUpSuggestions({
               role="listitem"
               className={cn(
                 'group/pill inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5',
+                'pointer-coarse:min-h-11',
                 'border border-border/40 bg-card/50 backdrop-blur-sm',
                 'text-xs font-medium text-muted-foreground',
                 'transition-all duration-150',
@@ -375,6 +390,7 @@ export function FollowUpSuggestions({
           onClick={() => setDismissed(true)}
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5',
+            'pointer-coarse:min-h-11',
             'text-xs text-muted-foreground',
             'transition-colors duration-150',
             'hover:text-muted-foreground hover:bg-muted/50',

@@ -4050,7 +4050,7 @@ export function getWebviewContent(
         freshEmpty.id = 'emptyState';
         freshEmpty.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
           '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
-          '<div class="empty-state-copy" id="emptyStateCopy">Ask about your code, edit files, run commands, and test this workspace.</div>' +
+          '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>' +
           '</div>';
         freshEmpty.querySelectorAll('.prompt-chip').forEach(function(chip) {
           chip.addEventListener('click', function() {

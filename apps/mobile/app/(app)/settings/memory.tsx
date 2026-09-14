@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { View, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { ArrowLeft, Brain, FileText, Search, X, Plus, Upload } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -34,7 +34,6 @@ function formatCount(n: number): string {
 export default function MemoryScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const { scope } = useLocalSearchParams<{ scope?: string }>();
   const currentIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const localMemoryEnabled = useLocalSettingsStore((state) => state.memoryEnabled);
@@ -71,9 +70,6 @@ export default function MemoryScreen() {
     },
     [setMemoryEnabled, setReferencePastChats],
   );
-  const scopeMismatch =
-    (scope === 'cloud' && !currentIsCloud) || (scope === 'local' && currentIsCloud);
-
   const [searchText, setSearchText] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [editingMemory, setEditingMemory] = useState<MemoryEntry | null>(null);
@@ -277,25 +273,6 @@ export default function MemoryScreen() {
           <Upload size={18} color={colors.textSecondary} />
         </Pressable>
       </View>
-
-      {scopeMismatch ? (
-        <View className="mx-4 mb-3">
-          <View
-            className="rounded-lg px-3 py-2.5"
-            style={{
-              backgroundColor: colors.surfaceElevated,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17 }}>
-              {scope === 'cloud'
-                ? "You're currently chatting in Local Mode, so this shows your Local memories, not Cloud. Switch to Cloud in chat to manage Cloud memories."
-                : "You're currently chatting in Cloud mode, so this shows your Cloud memories, not Local. Switch to Local in chat to manage Local memories."}
-            </Text>
-          </View>
-        </View>
-      ) : null}
 
       <MemoryControlsCard
         isCloud={currentIsCloud}

@@ -680,9 +680,27 @@ pub fn load_hooks_or_default() -> HooksConfig {
 }
 
 fn load_hooks_inner() -> Result<HooksConfig> {
-    let path = crate::config::CliConfig::config_dir()?.join("hooks.json");
+    let mut config = read_user_hooks_file()?;
+    merge_plugin_hooks(&mut config);
+    Ok(config)
+}
 
-    let mut config: HooksConfig = if !path.exists() {
+/// Path of the user-owned hooks file, the only file `add`/`remove` may edit.
+pub fn hooks_path() -> Result<std::path::PathBuf> {
+    Ok(crate::config::CliConfig::config_dir()?.join("hooks.json"))
+}
+
+/// Read `~/.agiworkforce/hooks.json` **without** merging plugin-declared
+/// hooks.
+///
+/// [`load_hooks`] returns the merged view the runner fires, which is the wrong
+/// thing to write back: saving it would copy every plugin's hooks into the
+/// user's file, where they would survive uninstalling the plugin. Editing
+/// commands read this instead.
+pub fn read_user_hooks_file() -> Result<HooksConfig> {
+    let path = hooks_path()?;
+
+    let config: HooksConfig = if !path.exists() {
         HooksConfig::default()
     } else {
         // Security: verify hooks.json permissions and ownership.
@@ -743,8 +761,27 @@ fn load_hooks_inner() -> Result<HooksConfig> {
         serde_json::from_str(&contents).context("Failed to parse hooks.json")?
     };
 
-    merge_plugin_hooks(&mut config);
     Ok(config)
+}
+
+/// Persist the user's hooks file at mode 600, the permission
+/// [`read_user_hooks_file`] demands on the way back in.
+pub fn save_user_hooks_file(config: &HooksConfig) -> Result<std::path::PathBuf> {
+    let path = hooks_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create {}", parent.display()))?;
+    }
+    let serialized = serde_json::to_string_pretty(config).context("Failed to serialize hooks")?;
+    std::fs::write(&path, serialized)
+        .with_context(|| format!("Failed to write {}", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("Failed to chmod 600 {}", path.display()))?;
+    }
+    Ok(path)
 }
 
 /// Sprint B6: merge plugin-declared hooks into the loaded HooksConfig.
@@ -1176,6 +1213,153 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
     }
 }
 
+/// Every canonical event, in declaration order.
+///
+/// The authority on *resolution* stays [`resolve_event_name`]; this list is
+/// what `add` validates against and what an error message enumerates.
+/// `every_declared_event_resolves` fails if the two ever drift.
+pub const ALL_EVENTS: [HookEvent; 32] = [
+    HookEvent::SessionStart,
+    HookEvent::SessionEnd,
+    HookEvent::PreToolUse,
+    HookEvent::PostToolUse,
+    HookEvent::UserPromptSubmit,
+    HookEvent::AfterMessage,
+    HookEvent::PlanModeChanged,
+    HookEvent::PreCompact,
+    HookEvent::PostCompact,
+    HookEvent::BeforeModelResolve,
+    HookEvent::BeforePromptBuild,
+    HookEvent::ToolResultPersist,
+    HookEvent::SubagentStart,
+    HookEvent::SubagentStop,
+    HookEvent::PermissionRequest,
+    HookEvent::Notification,
+    HookEvent::Stop,
+    HookEvent::CronTriggered,
+    HookEvent::WebhookReceived,
+    HookEvent::FileChanged,
+    HookEvent::DaemonStarted,
+    HookEvent::DaemonStopped,
+    HookEvent::UserPromptExpansion,
+    HookEvent::StopFailure,
+    HookEvent::PermissionDenied,
+    HookEvent::PostToolBatch,
+    HookEvent::TeammateIdle,
+    HookEvent::Setup,
+    HookEvent::WorktreeCreate,
+    HookEvent::WorktreeRemove,
+    HookEvent::Elicitation,
+    HookEvent::ElicitationResult,
+];
+
+/// Resolve an event the user typed, accepting the same canonical names and
+/// legacy aliases the loader accepts, so a hook added from the command line is
+/// stored under a name the runner fires.
+pub fn parse_event_name(name: &str) -> Result<HookEvent> {
+    resolve_event_name(name).ok_or_else(|| {
+        anyhow::anyhow!(
+            "unknown hook event \"{name}\". Events: {}",
+            ALL_EVENTS
+                .iter()
+                .map(HookEvent::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
+}
+
+/// Append a hook to an event, returning the canonical event name it landed
+/// under and its 1-based position.
+pub fn add_hook(config: &mut HooksConfig, event: &str, command: &str) -> Result<(String, usize)> {
+    let event = parse_event_name(event)?;
+    let command = command.trim();
+    if command.is_empty() {
+        anyhow::bail!("a hook needs a command to run");
+    }
+    let name = event.to_string();
+    let hooks = config.hooks.entry(name.clone()).or_default();
+    hooks.push(Hook {
+        command: command.to_string(),
+        args: Vec::new(),
+        timeout: default_timeout(),
+        blocking: default_blocking(),
+        matcher: None,
+        if_condition: None,
+    });
+    Ok((name, hooks.len()))
+}
+
+/// Remove the hook at a 1-based position under an event, returning it.
+pub fn remove_hook(config: &mut HooksConfig, event: &str, position: usize) -> Result<Hook> {
+    let event = parse_event_name(event)?;
+    let name = event.to_string();
+    let hooks = config
+        .hooks
+        .get_mut(&name)
+        .filter(|hooks| !hooks.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("no hooks configured for {name}"))?;
+    let index = position
+        .checked_sub(1)
+        .filter(|index| *index < hooks.len())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "no hook {position} under {name}; it has {} (1-{})",
+                hooks.len(),
+                hooks.len()
+            )
+        })?;
+    let removed = hooks.remove(index);
+    if hooks.is_empty() {
+        config.hooks.remove(&name);
+    }
+    Ok(removed)
+}
+
+/// Drive `list`/`add`/`remove` against the user's hooks file.
+///
+/// One implementation behind both `agi hooks <action>` and the TUI's
+/// `/hooks <action>`, so the two cannot disagree about what a hook is or where
+/// it is written.
+pub fn apply_hooks_command(args: &str) -> Result<String> {
+    let args = args.trim();
+    let (action, rest) = args.split_once(char::is_whitespace).unwrap_or((args, ""));
+    let rest = rest.trim();
+    match action {
+        "" | "list" | "ls" => Ok(format_hooks_list(&load_hooks_or_default())),
+        "add" => {
+            let (event, command) = rest
+                .split_once(char::is_whitespace)
+                .ok_or_else(|| anyhow::anyhow!("usage: hooks add <event> <command>"))?;
+            let mut config = read_user_hooks_file()?;
+            let (event, position) = add_hook(&mut config, event, command)?;
+            let path = save_user_hooks_file(&config)?;
+            Ok(format!(
+                "Added hook {position} under {event} in {}.",
+                path.display()
+            ))
+        }
+        "remove" | "rm" => {
+            let (event, position) = rest
+                .split_once(char::is_whitespace)
+                .ok_or_else(|| anyhow::anyhow!("usage: hooks remove <event> <index>"))?;
+            let position: usize = position
+                .trim()
+                .parse()
+                .map_err(|_| anyhow::anyhow!("hook index must be a number, got {position:?}"))?;
+            let mut config = read_user_hooks_file()?;
+            let removed = remove_hook(&mut config, event, position)?;
+            let path = save_user_hooks_file(&config)?;
+            Ok(format!(
+                "Removed hook {position} ({}) from {event} in {}.",
+                removed.command,
+                path.display()
+            ))
+        }
+        other => anyhow::bail!("unknown hooks action {other:?}; use list, add or remove"),
+    }
+}
+
 /// Format hooks config for display (/hooks command).
 pub fn format_hooks_list(config: &HooksConfig) -> String {
     if config.hooks.is_empty() {
@@ -1214,6 +1398,144 @@ pub fn format_hooks_list(config: &HooksConfig) -> String {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod editing_tests {
+    use super::*;
+
+    #[test]
+    fn every_declared_event_resolves_to_itself() {
+        // ALL_EVENTS is what `add` validates against and what an error lists;
+        // resolve_event_name is what the loader honours. If they drift, a hook
+        // could be added under a name the runner never fires.
+        for event in ALL_EVENTS {
+            let name = event.to_string();
+            assert_eq!(
+                resolve_event_name(&name),
+                Some(event),
+                "{name} does not resolve back to itself"
+            );
+        }
+    }
+
+    #[test]
+    fn an_added_hook_survives_the_round_trip_the_loader_takes() {
+        let mut config = HooksConfig::default();
+        let (event, position) = add_hook(&mut config, "PreToolUse", "echo before").expect("added");
+        assert_eq!((event.as_str(), position), ("PreToolUse", 1));
+
+        // Serialize and parse the way save/load do: an added hook has to come
+        // back through the same Deserialize the runner's config takes.
+        let json = serde_json::to_string(&config).expect("serializes");
+        let reloaded: HooksConfig = serde_json::from_str(&json).expect("parses");
+        let hooks = reloaded.hooks.get("PreToolUse").expect("event present");
+        assert_eq!(hooks.len(), 1);
+        assert_eq!(hooks[0].command, "echo before");
+        assert_eq!(hooks[0].timeout, default_timeout());
+        assert!(hooks[0].blocking);
+        assert!(format_hooks_list(&reloaded).contains("echo before"));
+    }
+
+    #[test]
+    fn a_second_hook_appends_rather_than_replacing() {
+        let mut config = HooksConfig::default();
+        add_hook(&mut config, "Stop", "first").expect("added");
+        let (_, position) = add_hook(&mut config, "Stop", "second").expect("added");
+        assert_eq!(position, 2);
+        let commands: Vec<&str> = config.hooks["Stop"]
+            .iter()
+            .map(|hook| hook.command.as_str())
+            .collect();
+        assert_eq!(commands, vec!["first", "second"]);
+    }
+
+    #[test]
+    fn remove_takes_the_named_position_and_leaves_the_rest() {
+        let mut config = HooksConfig::default();
+        add_hook(&mut config, "Stop", "first").expect("added");
+        add_hook(&mut config, "Stop", "second").expect("added");
+        let removed = remove_hook(&mut config, "Stop", 1).expect("removed");
+        assert_eq!(removed.command, "first");
+        assert_eq!(config.hooks["Stop"].len(), 1);
+        assert_eq!(config.hooks["Stop"][0].command, "second");
+    }
+
+    #[test]
+    fn removing_the_last_hook_drops_the_empty_event() {
+        let mut config = HooksConfig::default();
+        add_hook(&mut config, "Stop", "only").expect("added");
+        remove_hook(&mut config, "Stop", 1).expect("removed");
+        assert!(!config.hooks.contains_key("Stop"));
+        assert!(format_hooks_list(&config).contains("No hooks configured"));
+    }
+
+    #[test]
+    fn an_out_of_range_position_is_refused_without_touching_the_config() {
+        let mut config = HooksConfig::default();
+        add_hook(&mut config, "Stop", "only").expect("added");
+        assert!(remove_hook(&mut config, "Stop", 0).is_err());
+        assert!(remove_hook(&mut config, "Stop", 2).is_err());
+        assert_eq!(config.hooks["Stop"].len(), 1);
+    }
+
+    #[test]
+    fn removing_from_an_event_with_no_hooks_says_so() {
+        let mut config = HooksConfig::default();
+        let error = remove_hook(&mut config, "Stop", 1).expect_err("no hooks");
+        assert!(error.to_string().contains("no hooks configured for Stop"));
+    }
+
+    #[test]
+    fn an_unknown_event_is_refused_and_the_error_lists_the_real_ones() {
+        let mut config = HooksConfig::default();
+        let error = add_hook(&mut config, "BeforeLunch", "echo hi").expect_err("rejected");
+        let message = error.to_string();
+        assert!(message.contains("unknown hook event"));
+        assert!(message.contains("PreToolUse"));
+        assert!(config.hooks.is_empty());
+    }
+
+    #[test]
+    fn a_legacy_alias_is_stored_under_the_canonical_name_the_runner_fires() {
+        let mut config = HooksConfig::default();
+        let (event, _) = add_hook(&mut config, "BeforeToolUse", "echo legacy").expect("added");
+        assert_eq!(event, "PreToolUse");
+        assert!(config.hooks.contains_key("PreToolUse"));
+        assert!(!config.hooks.contains_key("BeforeToolUse"));
+    }
+
+    #[test]
+    fn a_hook_needs_a_command() {
+        let mut config = HooksConfig::default();
+        assert!(add_hook(&mut config, "Stop", "   ").is_err());
+    }
+
+    #[test]
+    fn an_unknown_action_names_the_ones_that_exist() {
+        let error = apply_hooks_command("enable Stop").expect_err("rejected");
+        assert!(error.to_string().contains("use list, add or remove"));
+    }
+
+    #[test]
+    fn add_and_remove_report_their_usage_when_underspecified() {
+        assert!(apply_hooks_command("add PreToolUse")
+            .expect_err("needs a command")
+            .to_string()
+            .contains("hooks add <event> <command>"));
+        assert!(apply_hooks_command("remove PreToolUse")
+            .expect_err("needs an index")
+            .to_string()
+            .contains("hooks remove <event> <index>"));
+    }
+
+    #[test]
+    fn a_non_numeric_index_is_refused() {
+        assert!(apply_hooks_command("remove PreToolUse first")
+            .expect_err("not a number")
+            .to_string()
+            .contains("hook index must be a number"));
+    }
+}
 
 #[cfg(test)]
 mod tests {

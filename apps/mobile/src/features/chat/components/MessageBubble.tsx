@@ -50,6 +50,10 @@ import { ImageFullScreen } from './ImageFullScreen';
 import { FileExportButton } from './FileExportButton';
 import { CitationChip } from './CitationChip';
 import { CollapsibleSources } from './CollapsibleSources';
+import { ResearchRunCard, type ResearchPlanDecision } from './research/ResearchRunCard';
+import { ResearchSourcesAppendix } from './research/ResearchSourcesAppendix';
+import { ResearchReportSections } from './research/ResearchReportSections';
+import { readResearchRunState } from '@/src/features/chat/utils/researchRunState';
 import { MessageEditModal } from './MessageEditModal';
 import { renderMarkdownContent } from './MessageContentRenderer';
 import { parseAssistantThinking } from '@/stores/chat/chatExecutionStore';
@@ -67,7 +71,7 @@ import {
   getMessageStreamErrorMessage,
 } from '@/src/features/chat/utils/messageStreamError';
 import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
-import type { ChatMessage, Artifact, ToolCall } from '@/types/chat';
+import type { ChatMessage, Artifact, ToolCall, ToolSearchResult } from '@/types/chat';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
 import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
 import {
@@ -114,6 +118,10 @@ interface MessageBubbleProps {
     toolCallId: string,
     decision: 'approved' | 'rejected',
   ) => void;
+  onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
+  onRetryResearch?: (messageId: string) => void;
+  onStopResearch?: () => void;
+  isResumingResearch?: boolean;
 }
 
 function MessageActionButton({
@@ -149,9 +157,32 @@ export const MessageBubble = memo(function MessageBubble({
   onEditMessage,
   onReaction,
   onResolveToolApproval,
+  onResearchPlanDecision,
+  onRetryResearch,
+  onStopResearch,
+  isResumingResearch = false,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
+  const research = isAssistant ? readResearchRunState(message.metadata?.research) : undefined;
+  const researchSources = useMemo<ToolSearchResult[]>(() => {
+    if (!research) return [];
+    const seen = new Set<string>();
+    const sources: ToolSearchResult[] = [];
+    for (const source of [
+      ...(message.citations ?? []).map((citation) => ({
+        url: citation.url,
+        title: citation.title ?? citation.url,
+        ...(citation.snippet ? { snippet: citation.snippet } : {}),
+      })),
+      ...(research.sourcesForRetry ?? []),
+    ]) {
+      if (!source.url || seen.has(source.url)) continue;
+      seen.add(source.url);
+      sources.push(source);
+    }
+    return sources;
+  }, [message.citations, research]);
   const canonicalActivity = isAssistant
     ? readAgentActivityState(message.metadata?.agentActivity)
     : undefined;
@@ -634,6 +665,22 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             )}
 
+            {research ? (
+              <ResearchRunCard
+                research={research}
+                isStreaming={message.isStreaming === true}
+                isResuming={isResumingResearch}
+                {...(onResearchPlanDecision
+                  ? {
+                      onPlanDecision: (decision: ResearchPlanDecision) =>
+                        onResearchPlanDecision(message.id, decision),
+                    }
+                  : {})}
+                {...(onStopResearch ? { onStop: onStopResearch } : {})}
+                {...(onRetryResearch ? { onRetry: () => onRetryResearch(message.id) } : {})}
+              />
+            ) : null}
+
             {/* Inline thinking chip (before main content, assistant only) */}
             {canonicalActivity ? (
               <AgentActivityTimeline
@@ -805,8 +852,16 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
+            {research?.phase === 'complete' && !message.isStreaming ? (
+              <ResearchReportSections content={message.content} />
+            ) : null}
+
+            {research && researchSources.length > 0 ? (
+              <ResearchSourcesAppendix sources={researchSources} />
+            ) : null}
+
             {/* Citations: chips for 1-3, collapsible card for 4+ */}
-            {isAssistant && message.citations && message.citations.length > 0 ? (
+            {isAssistant && !research && message.citations && message.citations.length > 0 ? (
               message.citations.length <= 3 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                   {message.citations.map((cit, i) => (

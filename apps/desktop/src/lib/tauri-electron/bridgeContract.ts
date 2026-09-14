@@ -1,5 +1,4 @@
 import type { HostBridge, HostNotifyRequest } from '@agiworkforce/local-runtime-contract';
-import type { DesktopCloudUpdateAvailability } from '../desktopCloudUpdate';
 
 export type {
   DesktopDeepLink,
@@ -79,8 +78,8 @@ export type ElectronDialogRequest =
 
 /**
  * The desktop-only half of the bridge. A page the shell merely hosts sees
- * `HostBridge`; only the renderer AGI Cloud ships drives the window, the
- * account bridge and the updater.
+ * `HostBridge`; only the renderer AGI Cloud ships drives the window and the
+ * account bridge.
  */
 export interface ElectronHostBridge extends HostBridge {
   handles(command: string): boolean;
@@ -88,8 +87,6 @@ export interface ElectronHostBridge extends HostBridge {
   windowControl(request: ElectronWindowControlRequest): Promise<boolean>;
   dialog(request: ElectronDialogRequest): Promise<string | boolean | null>;
   relaunch(): Promise<void>;
-  checkForUpdate(): Promise<DesktopCloudUpdateAvailability>;
-  openUpdateInstaller(): Promise<void>;
 }
 
 export function getElectronHostBridge(): ElectronHostBridge | undefined {

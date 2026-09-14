@@ -119,6 +119,44 @@ pub fn load_for_prompt_bytes(
     })
 }
 
+/// Encode a raw RGBA8 buffer (the shape a system clipboard hands back) as a
+/// prompt-ready image, resized to the same bounds a file attachment gets.
+///
+/// The file path exists for the clipboard: `load_for_prompt_bytes` decodes an
+/// encoded container, and a clipboard bitmap has no container to decode.
+pub fn encode_rgba_for_prompt(
+    width: u32,
+    height: u32,
+    rgba: Vec<u8>,
+) -> Result<EncodedImage, ImageProcessingError> {
+    let expected = (width as usize)
+        .saturating_mul(height as usize)
+        .saturating_mul(4);
+    if width == 0 || height == 0 || rgba.len() != expected {
+        return Err(ImageProcessingError::UnsupportedImageFormat {
+            mime: "image/rgba8".to_string(),
+        });
+    }
+    let buffer = image::RgbaImage::from_raw(width, height, rgba).ok_or(
+        ImageProcessingError::UnsupportedImageFormat {
+            mime: "image/rgba8".to_string(),
+        },
+    )?;
+    let dynamic = DynamicImage::ImageRgba8(buffer);
+    let dynamic = if width > MAX_WIDTH || height > MAX_HEIGHT {
+        dynamic.resize(MAX_WIDTH, MAX_HEIGHT, FilterType::Triangle)
+    } else {
+        dynamic
+    };
+    let (bytes, format) = encode_image(&dynamic, ImageFormat::Png)?;
+    Ok(EncodedImage {
+        bytes,
+        mime: format_to_mime(format),
+        width: dynamic.width(),
+        height: dynamic.height(),
+    })
+}
+
 fn can_preserve_source_bytes(format: ImageFormat) -> bool {
     // Public API docs explicitly call out non-animated GIF support only.
     // Preserve byte-for-byte only for formats we can safely pass through.
@@ -192,6 +230,37 @@ fn format_to_mime(format: ImageFormat) -> String {
         ImageFormat::Gif => "image/gif".to_string(),
         ImageFormat::WebP => "image/webp".to_string(),
         _ => "image/png".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod rgba_tests {
+    use super::*;
+
+    #[test]
+    fn a_clipboard_bitmap_encodes_as_png() {
+        let encoded = encode_rgba_for_prompt(2, 2, vec![255u8; 16]).expect("encodes");
+        assert_eq!(encoded.mime, "image/png");
+        assert_eq!((encoded.width, encoded.height), (2, 2));
+        assert_eq!(
+            image::guess_format(&encoded.bytes).ok(),
+            Some(ImageFormat::Png)
+        );
+    }
+
+    #[test]
+    fn an_oversize_bitmap_is_resized_to_the_upload_bounds() {
+        let width = MAX_WIDTH + 10;
+        let height = MAX_HEIGHT + 10;
+        let rgba = vec![0u8; (width as usize) * (height as usize) * 4];
+        let encoded = encode_rgba_for_prompt(width, height, rgba).expect("encodes");
+        assert!(encoded.width <= MAX_WIDTH && encoded.height <= MAX_HEIGHT);
+    }
+
+    #[test]
+    fn a_buffer_that_does_not_match_its_dimensions_is_refused() {
+        assert!(encode_rgba_for_prompt(4, 4, vec![0u8; 3]).is_err());
+        assert!(encode_rgba_for_prompt(0, 0, Vec::new()).is_err());
     }
 }
 

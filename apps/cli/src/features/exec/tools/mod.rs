@@ -523,7 +523,7 @@ fn policy_primary_argument(tool_name: &str, args: &HashMap<String, String>) -> S
         .unwrap_or_default()
 }
 
-fn workspace_policy_is_trusted(workspace_root: &std::path::Path) -> bool {
+pub(crate) fn workspace_policy_is_trusted(workspace_root: &std::path::Path) -> bool {
     let project_root = crate::project_scope::resolve_project_scope(workspace_root);
     let Ok(config_dir) = crate::config::CliConfig::config_dir() else {
         return false;
