@@ -4224,8 +4224,6 @@ function injectStyles(): void {
     #sp-cloud-gate-title { font-size: 14px; }
     #sp-cloud-gate-message { font-size: 12px; line-height: 1.5; max-width: 260px; }
     #sp-cloud-gate-action { min-height: 34px; padding: 8px 18px; border-radius: 9px; font-size: 12px; }
-    #sp-cloud-gate.visible ~ #sp-composer-shell:has(#sp-input:disabled),
-    #sp-cloud-gate.visible ~ #sp-composer-shell:has(#sp-input:disabled) ~ .sp-trust-strip { display: none; }
     #sp-drawer-header { min-height: 56px; padding: 10px 14px; }
     .sp-drawer-section { border-radius: 14px; }
 

@@ -22,7 +22,7 @@
 
 import 'server-only';
 
-import type { ResearchStep } from '@agiworkforce/types';
+import { creditsFromMicrousd, type ResearchStep } from '@agiworkforce/types';
 import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 
 /** The `MessageResearchState` fields a reloaded run can be rebuilt from. */
@@ -31,6 +31,7 @@ export interface PersistedTurnResearch {
   sources: number;
   steps?: ResearchStep[];
   elapsedMs?: number;
+  credits?: number;
   error?: string;
 }
 
@@ -48,7 +49,10 @@ function phaseOf(report: PersistedResearchReport): PersistedTurnResearch['phase'
   return 'error';
 }
 
-export function buildPersistedTurnResearch(report: PersistedResearchReport): PersistedTurnResearch {
+export function buildPersistedTurnResearch(
+  report: PersistedResearchReport,
+  settlement: { settledCostMicrousd?: number } = {},
+): PersistedTurnResearch {
   const research: PersistedTurnResearch = {
     phase: phaseOf(report),
     sources: Math.max(0, Math.trunc(report.sourcesConsulted)),
@@ -57,6 +61,10 @@ export function buildPersistedTurnResearch(report: PersistedResearchReport): Per
   if (steps.length > 0) research.steps = steps;
   if (typeof report.totalDurationMs === 'number' && Number.isFinite(report.totalDurationMs)) {
     research.elapsedMs = Math.max(0, Math.trunc(report.totalDurationMs));
+  }
+  const settledCostMicrousd = settlement.settledCostMicrousd ?? report.settledCostMicrousd;
+  if (typeof settledCostMicrousd === 'number' && Number.isFinite(settledCostMicrousd)) {
+    research.credits = creditsFromMicrousd(Math.max(0, settledCostMicrousd));
   }
   if (report.error) research.error = report.error;
   return research;

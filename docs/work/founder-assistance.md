@@ -569,7 +569,7 @@ long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Database] Apply migrations 0183 to 0190 in production before the next deploy
+## [Database] Apply migrations 0183 to 0192 in production before the next deploy
 
 **Why founder assistance is required**
 Production database credentials exist only with the founder, and the deploy job
@@ -610,19 +610,28 @@ refuses to promote while a draft migration is unapplied.
    memory import insert all name the new columns, the memory sync and
    auto-memory inserts name `(user_id, id)` as their conflict target, which the
    old single-column key cannot satisfy, and a desktop turn that reaches a device
-   step writes the checkpoint row before it pauses.
+   step writes the checkpoint row before it pauses. The ninth is
+   `0191_research_report_settled_cost.sql` (a nullable `settled_cost_microusd`
+   column on `research_reports`, so a finished Deep Research report can state
+   what the managed usage ledger settled for the run instead of leaving the
+   cost unsaid). The tenth is `0192_project_knowledge_anchors.sql` (a nullable
+   `extracted_anchors` column on `project_knowledge_files`, holding where each
+   page or heading begins in the extracted text, so a turn answering from a
+   project file can say which page it read). Apply both after 0190, 0191 first.
 
 **Where** A terminal with the production database URL, as for the 0175 batch.
 **Needed input** The production database URL and the confirm flag.
 **How to verify completion** `pnpm db:migrate -- status` against production
-lists 0190 as applied; the deploy job's migration verify step passes; importing
+lists 0192 as applied; the deploy job's migration verify step passes; importing
 the same memory text twice adds it once and a memory sync push applies rather
 than conflicts; a video
 job completion produces one notice; an artifact and a conversation can each be
 shared with the workspace, read by a member, and refused to a signed-out
 visitor holding the link; a desktop pairs and refreshes without error; and the
 GitHub connect flow reconnects an installation and still lists its
-repositories.
+repositories; a finished Deep Research report names the credits the run
+consumed; and a question answered from a multi-page PDF in a project names the
+page it was answered from.
 **What remains after founder action** Nothing in code.
 **Impact** RELEASE-BLOCKING (the deploy job refuses to promote)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
@@ -761,6 +770,37 @@ routes fail for the public right now, so this is not only about verification:
 verification path a missing file is indistinguishable from a tampered one to
 the user who is checking precisely because they do not trust the download)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Product] Decide which desktop app the public desktop page describes
+
+**Why founder assistance is required**
+Two desktop apps exist and both have release pipelines: the Electron shell
+"AGI Cloud" (`apps/desktop/electron`, tag scheme `v-cloud-desktop-*`, the app
+every workstream since 2026-09-05 has been building on, per the founder's
+"Electron is the desktop, leave Tauri alone" instruction) and the frozen Tauri
+app (`apps/desktop/src-tauri`, tag scheme `v-desktop-*`, last touched
+2026-09-09). The public page at `/desktop` still describes the Tauri app: its
+specification ledger names "Tauri 2, Rust backend", it lists native computer
+use (fourteen Tauri commands that the Electron shell does not have), and the
+Linux artifacts it links are Tauri builds. Which app the public sees is a
+product decision, not an engineering one.
+**Exact action** Say one of: (a) the Electron app is the desktop, so `/desktop`
+and the release API's default should describe and serve it and the Tauri rows
+(engine, native computer use, Linux AppImage) come off the page until the
+Electron shell has them; or (b) both stay public, with `/desktop` split into two
+named downloads and their real capability lists.
+**Where** A reply in this file's entry or in chat.
+**Needed input** The choice, and for (a) whether the Tauri Linux download stays
+linked anywhere.
+**How to verify completion** `/desktop` names one engine, lists only capabilities
+the linked build has, and the release-state guard and the surface page claim
+tests pass on the rewritten copy.
+**What remains after founder action** Engineering rewrites the page and the
+release API default in one commit; the Electron computer-use port stays tracked
+as `DESKTOP-CLOUD-COMPUTER-USE-UNPORTED-01`.
+**Impact** LAUNCH-BLOCKING for honesty (the page today promises a capability
+the app the team is shipping does not deliver)
+**Status** BLOCKED, FOUNDER DECISION REQUIRED
 
 ## [Legal] Privacy and cookie policy revision dates after a material correction
 

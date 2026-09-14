@@ -285,3 +285,70 @@ describe('applyProjectContext', () => {
     expect(chatRequest.messages).toHaveLength(2);
   });
 });
+
+describe('project knowledge anchors in the prompt', () => {
+  const longFile = (marker: string) =>
+    `${'Filler about unrelated matters. '.repeat(700)}\n\n${marker} The renewal rate reached 94 percent.\n\n${'More filler about other matters. '.repeat(700)}`;
+
+  it('names where a selected passage sits in the original document', () => {
+    const extractedText = longFile('On the third page');
+    const prompt = formatProjectSystemPrompt(
+      makeContext({
+        knowledgeFiles: [
+          {
+            fileName: 'report.pdf',
+            summary: null,
+            extractedText,
+            anchors: [
+              { start: 0, page: 1 },
+              { start: extractedText.indexOf('On the third page') - 10, page: 3 },
+            ],
+            selection: {
+              strategy: 'passages',
+              totalChars: extractedText.length,
+              passages: [
+                {
+                  start: extractedText.indexOf('On the third page'),
+                  end: extractedText.indexOf('On the third page') + 60,
+                  text: 'On the third page The renewal rate reached 94 percent.',
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(prompt).toContain('"locatedAt":"p. 3"');
+    expect(prompt).toContain('name the file and that location');
+  });
+
+  it('says nothing about a location for a file with no anchors', () => {
+    const extractedText = longFile('Somewhere');
+    const prompt = formatProjectSystemPrompt(
+      makeContext({
+        knowledgeFiles: [
+          {
+            fileName: 'notes.txt',
+            summary: null,
+            extractedText,
+            selection: {
+              strategy: 'passages',
+              totalChars: extractedText.length,
+              passages: [
+                {
+                  start: extractedText.indexOf('Somewhere'),
+                  end: extractedText.indexOf('Somewhere') + 40,
+                  text: 'Somewhere The renewal rate reached 94 pe',
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(prompt).not.toContain('locatedAt');
+    expect(prompt).not.toContain('name the file and that location');
+  });
+});

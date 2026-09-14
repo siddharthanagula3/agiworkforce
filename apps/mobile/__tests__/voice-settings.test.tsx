@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockNavigate = jest.fn();
@@ -66,6 +66,7 @@ describe('Voice settings', () => {
       selectedVoiceId: null,
       speechRate: 1,
       speechPitch: 1,
+      voicePushToTalk: false,
     });
   });
 
@@ -87,6 +88,21 @@ describe('Voice settings', () => {
     ).toBeTruthy();
     expect(queryByText("Cloud voice isn't available on mobile yet.")).toBeNull();
     expect(queryByText('Requires AGI Cloud access.')).toBeNull();
+  });
+
+  it('offers the live conversation mode the voice companion reads, on the same preference', () => {
+    const { getByLabelText } = render(<VoiceSettingsScreen />);
+
+    expect(getByLabelText('Set voice mode to Hands free').props.accessibilityState.selected).toBe(
+      true,
+    );
+
+    fireEvent.press(getByLabelText('Set voice mode to Push to talk'));
+
+    expect(useSettingsStore.getState().voicePushToTalk).toBe(true);
+    expect(getByLabelText('Set voice mode to Push to talk').props.accessibilityState.selected).toBe(
+      true,
+    );
   });
 
   it('explains that voice never keeps the microphone active in the background', () => {

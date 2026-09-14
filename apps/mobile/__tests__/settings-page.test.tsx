@@ -117,7 +117,7 @@ describe('Settings page', () => {
 
     expect(getByText('Settings')).toBeTruthy();
     expect(getByText('Device')).toBeTruthy();
-    expect(getByText('Local Mode')).toBeTruthy();
+    expect(getByText('Assistant')).toBeTruthy();
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
     expect(getByText('Personalization')).toBeTruthy();
     expect(getByText('Memory')).toBeTruthy();
@@ -156,14 +156,14 @@ describe('Settings page', () => {
     });
     useChatAppModeStore.setState({ appMode: 'cloud' });
 
-    const { getByText, queryByText } = render(<SettingsTabScreen />);
+    const { getAllByLabelText, getByText, queryByText } = render(<SettingsTabScreen />);
 
     expect(getByText('AGI Cloud')).toBeTruthy();
     expect(getByText('Sign in required')).toBeTruthy();
     expect(queryByText('Sid')).toBeNull();
     expect(queryByText('Founder')).toBeNull();
-    expect(getByText('Cloud Personalization')).toBeTruthy();
-    expect(getByText('Cloud Memory')).toBeTruthy();
+    expect(getAllByLabelText(/^Personalization/)).toHaveLength(1);
+    expect(getAllByLabelText(/^Memory/)).toHaveLength(1);
   });
 
   it('shows Clerk name/email on the first Cloud render without waiting for a reload', () => {
@@ -221,7 +221,7 @@ describe('Settings page', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     const { getByLabelText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
-    expect(getByLabelText('Cloud Personalization. Cloud')).toBeTruthy();
+    expect(getByLabelText('Connectors. Cloud')).toBeTruthy();
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
     expect(queryByText('Sign in')).toBeNull();
   });
@@ -232,24 +232,24 @@ describe('Settings page', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Cloud Personalization. Cloud'));
+    fireEvent.press(getByLabelText('Connectors. Cloud'));
 
     expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 
-  it('routes unlocked Cloud rows to their real screens instead of a dead-end alert', () => {
+  it('reaches Personalization and Memory once each, with no Local or Cloud duplicate', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
     useWaitlistStore.setState({ cloudUnlocked: true });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Cloud Personalization. Cloud'));
-    fireEvent.press(getByLabelText('Cloud Memory. Cloud'));
+    fireEvent.press(getByLabelText('Personalization'));
+    fireEvent.press(getByLabelText('Memory'));
     fireEvent.press(getByLabelText('Account Security. Cloud'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization?scope=cloud');
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory?scope=cloud');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
   });
 
@@ -267,7 +267,7 @@ describe('Settings page', () => {
   it('routes a signed-out cloud row tap to sign-in (public alpha, no invite/waitlist gate)', () => {
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Cloud Personalization. Sign in'));
+    fireEvent.press(getByLabelText('Reflect. Sign in'));
     fireEvent.press(getByLabelText('Shared Links. Sign in'));
 
     expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
