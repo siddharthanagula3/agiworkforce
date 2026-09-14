@@ -589,6 +589,11 @@ fn parse_tier_str(s: &str) -> Option<UserTier> {
     }
 }
 
+/// Canonical wire slug for a tier, the same string the server uses.
+pub fn tier_slug(tier: &UserTier) -> String {
+    tier_to_str(tier)
+}
+
 fn tier_to_str(t: &UserTier) -> String {
     match t {
         UserTier::Free => "free",

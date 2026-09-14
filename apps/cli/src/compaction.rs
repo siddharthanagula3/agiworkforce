@@ -10,7 +10,6 @@ use crate::models::Message;
 const DEFAULT_CONTEXT_LIMIT: usize = 128_000;
 const MAX_INSTRUCTION_TOKENS: usize = 10_000;
 
-#[allow(dead_code)]
 const ROOT_MARKERS: &[&str] = &[
     ".git",
     "Cargo.toml",
@@ -74,7 +73,6 @@ pub fn format_context_report(usage: &ContextUsage) -> String {
 }
 
 /// Find the project root by walking upward to the first known root marker.
-#[allow(dead_code)]
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut current = start.to_path_buf();
     loop {
@@ -91,11 +89,24 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Load `AGENTS.md`, `CLAUDE.md`, and AGI instruction files root-first from
-/// the filesystem hierarchy, stopping at the shared 10K-token budget.
-pub fn load_instructions(cwd: &Path) -> Option<String> {
+/// One instruction file that a turn in a given directory actually loads.
+#[derive(Debug, Clone)]
+pub struct InstructionSource {
+    pub path: PathBuf,
+    /// Directory the file was discovered in.
+    pub dir: PathBuf,
+    pub content: String,
+}
+
+/// The instruction files a turn in `cwd` loads, root-first, already truncated
+/// to the shared budget.
+///
+/// [`load_instructions`] is built from this, so a client preview and the turn
+/// itself can never disagree about which files were read.
+pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
     let dirs = walk_to_root(cwd);
-    let mut segments = Vec::new();
+    let mut sources = Vec::new();
+    let mut truncated = false;
     let mut total = 0usize;
 
     for dir in dirs.iter().rev() {
@@ -107,16 +118,35 @@ pub fn load_instructions(cwd: &Path) -> Option<String> {
             };
             let tokens = estimate_tokens(&content);
             if total + tokens > MAX_INSTRUCTION_TOKENS {
+                truncated = true;
                 break;
             }
             total += tokens;
-            segments.push(format!(
-                "<!-- Instructions from: {} -->\n{}",
-                path.display(),
-                content.trim()
-            ));
+            sources.push(InstructionSource {
+                path,
+                dir: dir.clone(),
+                content,
+            });
         }
     }
+
+    (sources, truncated)
+}
+
+/// Load `AGENTS.md`, `CLAUDE.md`, and AGI instruction files root-first from
+/// the filesystem hierarchy, stopping at the shared 10K-token budget.
+pub fn load_instructions(cwd: &Path) -> Option<String> {
+    let (sources, _) = instruction_sources(cwd);
+    let segments: Vec<String> = sources
+        .iter()
+        .map(|source| {
+            format!(
+                "<!-- Instructions from: {} -->\n{}",
+                source.path.display(),
+                source.content.trim()
+            )
+        })
+        .collect();
 
     (!segments.is_empty()).then(|| segments.join("\n\n"))
 }
