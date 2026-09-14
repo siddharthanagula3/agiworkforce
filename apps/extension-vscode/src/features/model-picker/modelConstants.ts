@@ -87,30 +87,112 @@ function getPickerCapabilityLabel(modelId: string, catalogDetail: string): strin
   return catalogDetail === '' ? tierLabel : catalogDetail;
 }
 
+/**
+ * What the session is actually routed through right now. The subscription tier
+ * alone cannot answer "can this route run that model": signed out of AGI Cloud
+ * the tier resolves to `byok`, which admits the whole catalog even when the
+ * only key the CLI holds is one provider's.
+ */
+export interface ModelRoute {
+  trustMode?: string;
+  provider?: string;
+}
+
+export type ModelLock =
+  | { kind: 'sign-in' }
+  | { kind: 'upgrade' }
+  | { kind: 'provider-key'; providerLabel?: string; routeLabel: string };
+
+export function modelLockHeading(lock: ModelLock): string {
+  if (lock.kind === 'sign-in') return 'Sign in to AGI Cloud';
+  if (lock.kind === 'upgrade') return 'Upgrade your AGI plan';
+  // "Add your <provider> key" rather than "Add a/an …": the article is wrong
+  // before half the provider names, and the key really is the user's own. A
+  // provider the catalog has no display name for is not given a raw id here.
+  return lock.providerLabel === undefined
+    ? 'Add another provider key'
+    : `Add your ${lock.providerLabel} key`;
+}
+
+/**
+ * The sentence the picker says when a locked row is chosen. It ends with the
+ * heading's own phrase, so the list, the sentence and the button all say the
+ * same thing and no article ever precedes a provider name.
+ */
+export function modelLockReason(modelLabel: string, lock: ModelLock): string {
+  const action = modelLockHeading(lock);
+  if (lock.kind === 'sign-in') {
+    return `${modelLabel} is not available on this session. ${action} to use it.`;
+  }
+  if (lock.kind === 'upgrade') {
+    return `${modelLabel} is not in the plan this session resolved. ${action} to use it.`;
+  }
+  return `${modelLabel} cannot run on this session's route, which uses ${lock.routeLabel}. ${action} to use it.`;
+}
+
+function lockKey(lock: ModelLock): string {
+  return lock.kind === 'provider-key' ? `provider-key:${lock.providerLabel ?? ''}` : lock.kind;
+}
+
+function planLock(tier: string | undefined): ModelLock {
+  return tier === undefined || tier === 'local' || tier === 'byok'
+    ? { kind: 'sign-in' }
+    : { kind: 'upgrade' };
+}
+
+/**
+ * `undefined` when the route can run the model today. Otherwise what the user
+ * would have to do first, so the picker can say that instead of offering a
+ * choice that ends in a failed turn.
+ */
+export function modelLockForRoute(
+  modelId: string,
+  modelProvider: string,
+  tier: string | undefined,
+  route: ModelRoute | undefined,
+): ModelLock | undefined {
+  if (!isModelReachableForTier(modelId, tier)) return planLock(tier);
+  if (route?.trustMode !== 'byok') return undefined;
+  if (route.provider === undefined || route.provider === '') return undefined;
+  const routeProvider = resolveProviderId(route.provider);
+  if (routeProvider === null) return undefined;
+  const candidate = resolveProviderId(modelProvider);
+  if (candidate === routeProvider) return undefined;
+  const providerLabel = candidate === null ? undefined : providerDisplayLabel(modelProvider);
+  return {
+    kind: 'provider-key',
+    ...(providerLabel === undefined ? {} : { providerLabel }),
+    routeLabel: providerDisplayLabel(route.provider),
+  };
+}
+
 export interface GroupedQuickPickItem extends vscode.QuickPickItem {
   modelId?: string;
   disabled?: boolean;
+  lock?: ModelLock;
 }
 
-export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[] {
-  const autoReachable = (autoId: string): boolean => isAutoReachableForTier(autoId, tier);
+export function buildGroupedQuickPickItems(
+  tier?: string,
+  route?: ModelRoute,
+): GroupedQuickPickItem[] {
+  const autoLock = isAutoReachableForTier('auto', tier) ? undefined : planLock(tier);
 
-  const withLockHint = (description: string, reachable: boolean): string =>
-    reachable ? description : `${description} · ${MODEL_LOCKED_HINT}`;
+  const usable: GroupedQuickPickItem[] = [];
+  const locked = new Map<string, { lock: ModelLock; items: GroupedQuickPickItem[] }>();
 
-  const items: GroupedQuickPickItem[] = [
-    {
-      label: '$(sparkle) Auto',
-      description: withLockHint(
-        'Routes each message to the best model for the task and your plan',
-        autoReachable('auto'),
-      ),
-      detail: 'Recommended',
-      modelId: 'auto',
-      disabled: !autoReachable('auto'),
-    },
-    { label: '', kind: vscode.QuickPickItemKind.Separator },
-  ];
+  const autoItem: GroupedQuickPickItem = {
+    label: '$(sparkle) Auto',
+    description: 'Routes each message to the best model for the task and your plan',
+    detail: 'Recommended',
+    modelId: 'auto',
+    ...(autoLock === undefined ? {} : { disabled: true, lock: autoLock }),
+  };
+  if (autoLock === undefined) {
+    usable.push(autoItem, { label: '', kind: vscode.QuickPickItemKind.Separator });
+  } else {
+    locked.set(lockKey(autoLock), { lock: autoLock, items: [autoItem] });
+  }
 
   const manualOptions = getCoreManualModelOptions();
 
@@ -128,8 +210,7 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
     const providerId = resolveProviderId(provider);
     const providerDisplay = providerId ? PROVIDER_DISPLAY[providerId] : null;
     const providerLabel = providerDisplay?.label ?? provider;
-
-    items.push({ label: providerLabel, kind: vscode.QuickPickItemKind.Separator });
+    const usableForProvider: GroupedQuickPickItem[] = [];
 
     const modelsForProvider = manualOptions.filter((o) => String(o.provider) === provider);
     for (const opt of modelsForProvider) {
@@ -146,34 +227,43 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
         if (!envResult.selectable) continue;
       }
 
-      const modelHasThinking = metadata?.capabilities.thinking ?? false;
-
       const descriptionParts: string[] = [getPickerCapabilityLabel(opt.id, opt.detail)];
-      if (modelHasThinking) {
-        descriptionParts.push('Thinking');
-      }
-      const reachable = isModelReachableForTier(opt.id, tier);
-      if (!reachable) {
-        descriptionParts.push(MODEL_LOCKED_HINT);
-      }
-      const description = descriptionParts.join(' · ');
+      if (metadata?.capabilities.thinking ?? false) descriptionParts.push('Thinking');
 
-      const codicon = reachable
-        ? providerId
-          ? codiconForProvider(providerId)
-          : '$(robot)'
-        : '$(lock)';
-
-      items.push({
+      const lock = modelLockForRoute(opt.id, provider, tier, route);
+      const codicon =
+        lock === undefined ? (providerId ? codiconForProvider(providerId) : '$(robot)') : '$(lock)';
+      const item: GroupedQuickPickItem = {
         label: `${codicon} ${opt.label}`,
-        description,
+        description: descriptionParts.join(' · '),
         detail: opt.id,
         modelId: opt.id,
-        disabled: !reachable,
-      });
+        ...(lock === undefined ? {} : { disabled: true, lock }),
+      };
+
+      if (lock === undefined) {
+        usableForProvider.push(item);
+        continue;
+      }
+      const bucket = locked.get(lockKey(lock));
+      if (bucket === undefined) locked.set(lockKey(lock), { lock, items: [item] });
+      else bucket.items.push(item);
+    }
+
+    if (usableForProvider.length > 0) {
+      usable.push({ label: providerLabel, kind: vscode.QuickPickItemKind.Separator });
+      usable.push(...usableForProvider);
     }
   }
 
+  const items = [...usable];
+  for (const bucket of locked.values()) {
+    items.push({
+      label: modelLockHeading(bucket.lock),
+      kind: vscode.QuickPickItemKind.Separator,
+    });
+    items.push(...bucket.items);
+  }
   return items;
 }
 

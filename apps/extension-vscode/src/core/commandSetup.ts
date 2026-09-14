@@ -136,7 +136,10 @@ import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
   modelDisplayLabel,
+  modelLockHeading,
+  modelLockReason,
   type GroupedQuickPickItem,
+  type ModelLock,
 } from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
 import { recordFailure } from './subsystemHealth';
@@ -505,6 +508,29 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       sidebarProvider.reveal();
     }
   };
+  /**
+   * A locked row leads to the thing that would unlock it, never to a turn that
+   * fails: the picker already said what is missing, this does it.
+   */
+  const offerModelUnlock = async (modelLabel: string, lock: ModelLock): Promise<void> => {
+    const action = modelLockHeading(lock);
+    const choice = await vscode.window.showInformationMessage(
+      modelLockReason(modelLabel, lock),
+      action,
+      'Cancel',
+    );
+    if (choice !== action) return;
+    if (lock.kind === 'sign-in') {
+      await vscode.commands.executeCommand('agi-workforce.signIn');
+      return;
+    }
+    if (lock.kind === 'upgrade') {
+      await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
+      return;
+    }
+    await vscode.commands.executeCommand('agi-workforce.openAgentConfig');
+  };
+
   const prefillFirstPartyReference = async (target: vscode.Uri): Promise<void> => {
     const validated = await validateWorkspaceContextFile(target);
     if (!validated.ok) {
@@ -864,12 +890,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const currentModel = normalizeConfiguredModelId(Config.model());
 
       const pickerTier = await resolveTier(context);
-      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems(pickerTier).map(
-        (item: GroupedQuickPickItem) => ({
-          ...item,
-          picked: item.modelId !== undefined && item.modelId === currentModel,
-        }),
-      );
+      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems(
+        pickerTier,
+        sidebarProvider.activeRoute(),
+      ).map((item: GroupedQuickPickItem) => ({
+        ...item,
+        picked: item.modelId !== undefined && item.modelId === currentModel,
+      }));
 
       const picked = await vscode.window.showQuickPick(allItems, {
         title: 'AGI Workforce, Select Model',
@@ -881,15 +908,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (picked === undefined || picked.modelId === undefined) return;
 
       const tier = await resolveTier(context);
-      if (picked.disabled === true) {
-        const choice = await vscode.window.showInformationMessage(
-          'This model is not available for your current plan or provider setup.',
-          'View plans',
-          'Cancel',
-        );
-        if (choice === 'View plans') {
-          await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
-        }
+      if (picked.lock !== undefined) {
+        await offerModelUnlock(modelDisplayLabel(picked.modelId), picked.lock);
         return;
       }
       const guardResult = guardProviderSwitch(currentModel, picked.modelId, tier);
