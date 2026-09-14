@@ -37,6 +37,10 @@ import { startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
 import { dispatch as dispatchDesktopRuntime } from './runtime/dispatcher';
 import { cancelAllShellRuns } from './runtime/shellService';
+import {
+  configureDeveloperSessions,
+  stopAllDeveloperRuntimes,
+} from './runtime/developerSessionService';
 import { stopComputerUseHelper } from './runtime/computerUseService';
 import { installAppMenu } from './appMenu';
 import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
@@ -669,6 +673,7 @@ function hostPreferencesState(): HostPreferencesState {
     preferences: {
       launchAtLogin: preferences.launchAtLogin,
       showInMenuBar: preferences.showInMenuBar,
+      cliPath: preferences.cliPath,
       quickAskShortcut: shortcuts.quickAskShortcut,
       screenshotShortcut: shortcuts.screenshotShortcut,
       voiceShortcut: shortcuts.voiceShortcut,
@@ -697,6 +702,10 @@ function writeHostPreferences(patch: Partial<HostPreferences>): HostPreferencesS
   if (Object.keys(shortcutPatch).length > 0) {
     saveSettings(shortcutPatch);
     applyGarnishShortcuts();
+  }
+
+  if (typeof patch.cliPath === 'string' && patch.cliPath.trim() !== before.cliPath) {
+    saveSettings({ cliPath: patch.cliPath.trim() });
   }
 
   if (typeof patch.showInMenuBar === 'boolean' && patch.showInMenuBar !== before.showInMenuBar) {
@@ -858,6 +867,11 @@ if (!hasSingleInstanceLock) {
     applyLaunchAtLogin();
     applyGarnishShortcuts();
 
+    configureDeveloperSessions({
+      emit: (rootId, event) => sendRuntimeEvent({ kind: 'developer-session', rootId, event }),
+      resolveBinary: () => getPreferences().cliPath,
+    });
+
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
     void startPairingBridge();
 
@@ -869,6 +883,7 @@ if (!hasSingleInstanceLock) {
   app.on('will-quit', () => {
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
+    stopAllDeveloperRuntimes();
     stopComputerUseHelper();
     void stopBrowserBridge();
   });

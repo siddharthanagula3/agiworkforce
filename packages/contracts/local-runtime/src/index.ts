@@ -44,6 +44,29 @@ export type {
   DesktopRuntimeResponse,
 } from './protocol';
 
+export {
+  DEVELOPER_SESSION_COMMANDS,
+  DEVELOPER_SESSION_ORIGINS,
+  DEVELOPER_SESSION_ORIGIN_LABELS,
+  DEVELOPER_SESSION_TRUST_LABELS,
+  DEVELOPER_TURN_OUTCOMES,
+  isDeveloperSessionCommand,
+} from './developer-sessions';
+export type {
+  DeveloperApprovalAnswer,
+  DeveloperRuntimeStatus,
+  DeveloperRuntimeUnavailable,
+  DeveloperSession,
+  DeveloperSessionCommand,
+  DeveloperSessionEvent,
+  DeveloperSessionGroup,
+  DeveloperSessionList,
+  DeveloperSessionOrigin,
+  DeveloperSessionTranscript,
+  DeveloperTurnOutcome,
+  DeveloperTurnRequest,
+} from './developer-sessions';
+
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {
   BrowserPairRequestPrompt,

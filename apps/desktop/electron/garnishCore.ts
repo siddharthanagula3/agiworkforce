@@ -211,6 +211,7 @@ export function centeredUpperPosition(
 export interface GarnishPreferences {
   launchAtLogin: boolean;
   showInMenuBar: boolean;
+  cliPath: string;
   /**
    * Chromium's zoom level, not a percentage: each step is a factor of 1.2, and
    * 0 is actual size. Held here so the window opens at the size the user last
@@ -222,6 +223,7 @@ export interface GarnishPreferences {
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
   launchAtLogin: false,
   showInMenuBar: true,
+  cliPath: '',
   zoomLevel: 0,
 };
 
@@ -246,6 +248,10 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       typeof source['showInMenuBar'] === 'boolean'
         ? source['showInMenuBar']
         : DEFAULT_PREFERENCES.showInMenuBar,
+    cliPath:
+      typeof source['cliPath'] === 'string'
+        ? source['cliPath'].trim()
+        : DEFAULT_PREFERENCES.cliPath,
     zoomLevel:
       typeof source['zoomLevel'] === 'number'
         ? clampZoomLevel(source['zoomLevel'])

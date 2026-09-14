@@ -17,11 +17,31 @@ const DEFAULT_STATE: HostPreferencesState = {
     screenshotShortcut: HOST_SHORTCUT_CHOICES.screenshot[0] as string,
     voiceShortcut: HOST_SHORTCUT_CHOICES.voice[0] as string,
     showInMenuBar: true,
+    cliPath: '',
   },
   shortcutStatus: { quickAsk: 'registered', screenshot: 'registered', voice: 'registered' },
 };
 
-function installHost(overrides: Partial<HostPreferencesState> = {}) {
+const RESOLVED_CLI = {
+  available: true,
+  name: 'agi',
+  version: '1.7.1',
+  path: '~/.cargo/bin/agi',
+  hint: null,
+};
+
+const MISSING_CLI = {
+  available: false,
+  name: 'agi',
+  version: null,
+  path: null,
+  hint: 'Install the AGI CLI from agiworkforce.com/download.',
+};
+
+function installHost(
+  overrides: Partial<HostPreferencesState> = {},
+  cli: typeof RESOLVED_CLI | typeof MISSING_CLI = RESOLVED_CLI,
+) {
   const state: HostPreferencesState = {
     preferences: { ...DEFAULT_STATE.preferences, ...overrides.preferences },
     shortcutStatus: { ...DEFAULT_STATE.shortcutStatus, ...overrides.shortcutStatus },
@@ -47,7 +67,11 @@ function installHost(overrides: Partial<HostPreferencesState> = {}) {
       onVoiceHotkey: vi.fn(() => () => undefined),
       onRuntimeEvent: vi.fn(() => () => undefined),
       onHostCommand: vi.fn(() => () => undefined),
-      invokeRuntime: vi.fn(),
+      invokeRuntime: vi.fn(async (command: string) =>
+        command === 'developer_runtime_status'
+          ? { ok: true, value: cli }
+          : { ok: false, error: { code: 'unknown-command', message: command } },
+      ),
       openExternal: vi.fn(),
       notify: vi.fn(),
     },
@@ -61,6 +85,26 @@ afterEach(() => {
 });
 
 describe('the desktop settings section', () => {
+  it('names the AGI CLI it would run, with its version and where it lives', async () => {
+    installHost();
+
+    render(<DesktopSettingsSection />);
+
+    expect(await screen.findByText('Using agi 1.7.1 from ~/.cargo/bin/agi')).toBeInTheDocument();
+  });
+
+  it('says the CLI is missing, and what to do about it', async () => {
+    installHost({}, MISSING_CLI);
+
+    render(<DesktopSettingsSection />);
+
+    expect(
+      await screen.findByText(
+        'Not found on this computer. Install the AGI CLI to run coding sessions here. Install the AGI CLI from agiworkforce.com/download.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('renders nothing in a browser', () => {
     const { container } = render(<DesktopSettingsSection />);
 
