@@ -76,8 +76,6 @@ const settingValueSchemas = {
   'agent.mode': z.enum(['ask', 'auto', 'plan', 'bypass']),
   'agent.effort': z.enum(['low', 'medium', 'high', 'max']),
   'agent.thinking': z.boolean(),
-  'desktopBridge.enabled': z.boolean(),
-  'desktopBridge.port': z.number().int().min(1024).max(65535),
   telemetryEndpoint: httpUrlSchema,
 } satisfies {
   [K in MutableConfigKey]: z.ZodType<MutableConfigValues[K]>;

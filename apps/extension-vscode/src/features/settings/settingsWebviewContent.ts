@@ -1306,43 +1306,6 @@ export function getSettingsWebviewContent(
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-heading">
-              <h3>Desktop availability bridge</h3>
-              <p>Shows authenticated Desktop availability. It does not route, send, or move IDE sessions.</p>
-            </div>
-            <div class="setting-row">
-              <div>
-                <label class="setting-name" for="setting-desktop-bridge">Enable bridge</label>
-                <span class="setting-description">Connect to the local authenticated health bridge.</span>
-              </div>
-              <label class="toggle" title="Desktop availability bridge">
-                <input
-                  id="setting-desktop-bridge"
-                  data-setting="desktopBridge.enabled"
-                  data-kind="boolean"
-                  type="checkbox"
-                />
-                <span class="toggle-track" aria-hidden="true"></span>
-              </label>
-            </div>
-            <div class="setting-row">
-              <div>
-                <label class="setting-name" for="setting-desktop-port">Bridge port</label>
-                <span class="setting-description">Local port exposed by AGI Desktop.</span>
-              </div>
-              <input
-                class="number-input"
-                id="setting-desktop-port"
-                data-setting="desktopBridge.port"
-                data-kind="number"
-                type="number"
-                min="1024"
-                max="65535"
-                step="1"
-              />
-            </div>
-          </div>
         </section>
 
         <section
@@ -1828,7 +1791,7 @@ ${capabilityAvailabilityRows}
           },
           configuration: {
             title: 'Runtime',
-            description: 'Manage the local runtime, cloud utility endpoints, and Desktop availability bridge.'
+            description: 'Manage the local runtime and the cloud utility endpoints.'
           },
           personalization: {
             title: 'Instructions & editor',
@@ -1873,8 +1836,6 @@ ${capabilityAvailabilityRows}
           'agent.mode': 'Agent mode',
           'agent.effort': 'Reasoning effort',
           'agent.thinking': 'Extended thinking',
-          'desktopBridge.enabled': 'Desktop bridge',
-          'desktopBridge.port': 'Desktop bridge port',
           telemetryEndpoint: 'Telemetry endpoint'
         };
 
