@@ -7,10 +7,12 @@ import {
   createLocalProjectKnowledgeUploadUrl,
   deleteProjectKnowledgeObject,
   getProjectKnowledgeObject,
+  sealProjectKnowledgeObject,
   storeLocalProjectKnowledgeUpload,
 } from './project-knowledge-object-storage';
 
 vi.mock('./object-storage', () => ({
+  copyPrivateObjectIfUnchanged: vi.fn(),
   isObjectStorageConfigured: () => false,
   isPrivateObjectStorageConfigured: () => false,
   getBoundedObject: vi.fn(),
@@ -72,6 +74,7 @@ describe('local project knowledge storage', () => {
     await expect(getProjectKnowledgeObject(key, bytes.byteLength)).resolves.toEqual({
       data: Buffer.from(bytes),
       contentType: 'text/plain',
+      etag: sha256Hex(bytes),
     });
     await expect(
       storeLocalProjectKnowledgeUpload({
@@ -153,5 +156,37 @@ describe('local project knowledge storage', () => {
         data: bytes,
       }),
     ).rejects.toThrow(/invalid or expired/i);
+  });
+
+  it('seals inspected local bytes and refuses a source that changed since', async () => {
+    const key = 'knowledge-files/projects/project-1/sealable.txt';
+    const sealedKey = 'knowledge-files/projects/project-1/sealed/sealable.txt';
+    const bytes = new TextEncoder().encode('inspected local source');
+    const uploadUrl = await createLocalProjectKnowledgeUploadUrl({
+      userId: 'user-1',
+      key,
+      contentType: 'text/plain',
+      byteCount: bytes.byteLength,
+      checksumSha256: sha256Hex(bytes),
+    });
+    const token = new URL(uploadUrl, 'http://localhost').searchParams.get('token')!;
+    await storeLocalProjectKnowledgeUpload({
+      token,
+      userId: 'user-1',
+      contentType: 'text/plain',
+      data: bytes,
+    });
+
+    await expect(
+      sealProjectKnowledgeObject({ key, etag: sha256Hex(new TextEncoder().encode('other bytes')) }),
+    ).resolves.toBeNull();
+    await expect(sealProjectKnowledgeObject({ key, etag: sha256Hex(bytes) })).resolves.toBe(
+      sealedKey,
+    );
+    await expect(getProjectKnowledgeObject(sealedKey, bytes.byteLength)).resolves.toEqual({
+      data: Buffer.from(bytes),
+      contentType: 'text/plain',
+      etag: sha256Hex(bytes),
+    });
   });
 });
