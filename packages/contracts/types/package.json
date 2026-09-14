@@ -4,8 +4,10 @@
   "description": "Cross-surface contracts, generated protocol bindings, and the trust-boundary invariants everything else depends on.",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./capabilities": "./src/capabilities.ts",
     "./models.json": "./src/models.json",
     "./protocol": "./src/generated/protocol/index.ts"
   },

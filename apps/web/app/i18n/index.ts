@@ -5,10 +5,12 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import {
   DEFAULT_LANGUAGE,
+  NAMESPACES,
   SUPPORTED_LANGUAGES,
-  baseInitOptions,
   languageFor,
-} from '@agiworkforce/i18n';
+} from '@agiworkforce/i18n/languages';
+import { englishResources } from '@agiworkforce/i18n/en';
+import { lazyLocaleBackend } from '@agiworkforce/i18n/lazy';
 
 export { SUPPORTED_LANGUAGES };
 export type SupportedLanguage = string;
@@ -40,10 +42,16 @@ function readLanguageCache(): string | null {
 const cachedLanguageAtLoad = readLanguageCache();
 
 i18n
+  .use(lazyLocaleBackend)
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    ...baseInitOptions,
+    resources: { [DEFAULT_LANGUAGE]: englishResources },
+    partialBundledLanguages: true,
+    fallbackLng: DEFAULT_LANGUAGE,
+    defaultNS: 'common',
+    ns: NAMESPACES,
+    interpolation: { escapeValue: false },
     lng: defaultLanguage,
     supportedLngs: SUPPORTED_LANGUAGES.map((l) => l.code),
     detection: {
