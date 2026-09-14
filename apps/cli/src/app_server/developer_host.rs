@@ -1076,21 +1076,29 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let source = source_from_client(&client);
 
         let system_context = context::gather_system_context();
-        let provider_override = if resolved_model.auto_routing.as_ref().is_some_and(|state| {
-            state.trust_mode == agiworkforce_model_registry::TrustMode::ManagedCloud
-        }) {
+        let auto_trust = resolved_model
+            .auto_routing
+            .as_ref()
+            .map(|state| state.trust_mode);
+        let auto_vendor = match auto_trust {
+            Some(agiworkforce_model_registry::TrustMode::ManagedCloud) | None => None,
+            Some(_) => models::resolve_selected_provider(&model, None)
+                .ok()
+                .map(|provider| models::provider_name(&provider).to_string()),
+        };
+        let provider_override = match auto_trust {
             // Auto resolves to an upstream provider model ID, but Managed
             // sessions must retain the AGI gateway as their provider/trust
             // authority. Detecting from the concrete model here would silently
             // turn Managed Auto into a direct BYOK route.
-            Some("managed_cloud")
-        } else {
-            models::selection_provider_override(
+            Some(agiworkforce_model_registry::TrustMode::ManagedCloud) => Some("managed_cloud"),
+            Some(_) => auto_vendor.as_deref(),
+            None => models::selection_provider_override(
                 &model,
                 &self.config.default.model,
                 &self.config.default.provider,
                 requested_provider,
-            )
+            ),
         };
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
