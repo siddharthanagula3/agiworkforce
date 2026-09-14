@@ -218,9 +218,6 @@ const extensionSendQueue = getExtensionSendQueue();
 const SP_IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 
-let _drawerSessionStart = Date.now();
-let _drawerSessionTimer: ReturnType<typeof setInterval> | null = null;
-
 let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
   /* no-op until buildUI() initialises the real implementation */
 };
@@ -3405,23 +3402,6 @@ function injectStyles(): void {
       flex-shrink: 0;
       background: var(--agi-ext-bg);
     }
-    .sp-drawer-stats-row {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-    .sp-drawer-stat {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
-      padding: 5px 10px;
-      flex: 1;
-    }
-    .sp-drawer-stat-value { font-size: 14px; font-weight: 600; color: var(--agi-ext-text); }
-    .sp-drawer-stat-label { font-size: 9px; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
     .sp-drawer-about-row {
       display: flex;
       align-items: center;
@@ -6162,7 +6142,8 @@ function buildUI(): void {
       state.status === 'ready' && state.effort !== undefined
         ? EFFORT_LABEL[state.effort]
         : t('spEffortAuto');
-    modelEffortBadge.textContent = effortLabel;
+    modelEffortBadge.textContent = state.status === 'ready' ? effortLabel : '';
+    modelEffortBadge.hidden = state.status !== 'ready';
     modelSelectorBtn.title = state.description;
     modelSelectorBtn.setAttribute(
       'aria-label',
@@ -6515,7 +6496,6 @@ function buildUI(): void {
     drawer.classList.add('open');
     drawer.removeAttribute('inert');
     showDrawerMenu();
-    void refreshDrawerStats();
     drawerClose.focus();
   }
   function closeDrawer(): void {
@@ -6991,7 +6971,6 @@ function buildUI(): void {
         refreshDrawerPairingState(),
         refreshDrawerAllowlist(),
         refreshDrawerMemory(),
-        refreshDrawerStats(),
         refreshDrawerTabInfo(),
       ]);
     } finally {
@@ -8306,31 +8285,6 @@ function buildUI(): void {
   drawer.appendChild(drawerBody);
 
   const drawerFooter = el('div', { id: 'sp-drawer-footer' });
-  const statsRow = el('div', { class: 'sp-drawer-stats-row' });
-  const tabCountStat = el('div', { class: 'sp-drawer-stat' });
-  const tabCountVal = el('div', { class: 'sp-drawer-stat-value', id: 'sp-drawer-tab-count' }, '-');
-  tabCountStat.appendChild(tabCountVal);
-  tabCountStat.appendChild(el('div', { class: 'sp-drawer-stat-label' }, 'Tabs'));
-  const actionCountStat = el('div', { class: 'sp-drawer-stat' });
-  const actionCountVal = el(
-    'div',
-    { class: 'sp-drawer-stat-value', id: 'sp-drawer-action-count' },
-    '-',
-  );
-  actionCountStat.appendChild(actionCountVal);
-  actionCountStat.appendChild(el('div', { class: 'sp-drawer-stat-label' }, 'Actions'));
-  const sessionTimeStat = el('div', { class: 'sp-drawer-stat' });
-  const sessionTimeVal = el(
-    'div',
-    { class: 'sp-drawer-stat-value', id: 'sp-drawer-session-time' },
-    '0:00',
-  );
-  sessionTimeStat.appendChild(sessionTimeVal);
-  sessionTimeStat.appendChild(el('div', { class: 'sp-drawer-stat-label' }, 'Session'));
-  statsRow.appendChild(tabCountStat);
-  statsRow.appendChild(actionCountStat);
-  statsRow.appendChild(sessionTimeStat);
-  drawerFooter.appendChild(statsRow);
 
   const aboutRow = el('div', { class: 'sp-drawer-about-row' });
   aboutRow.appendChild(el('span', {}, `v${chrome.runtime.getManifest().version}`));
@@ -8343,17 +8297,6 @@ function buildUI(): void {
   drawerFooter.appendChild(aboutRow);
   drawer.appendChild(drawerFooter);
 
-  async function refreshDrawerStats(): Promise<void> {
-    try {
-      const tabs = await chrome.tabs.query({});
-      tabCountVal.textContent = String(tabs.length);
-      const statsData = await chrome.storage.local.get('stats');
-      const count = (statsData['stats'] as { actionCount?: number } | undefined)?.actionCount ?? 0;
-      actionCountVal.textContent = String(count);
-    } catch {
-      /* ignore */
-    }
-  }
   async function refreshDrawerTabInfo(): Promise<void> {
     try {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -8378,21 +8321,6 @@ function buildUI(): void {
       /* ignore */
     }
   }
-
-  function startDrawerSessionTimer(): void {
-    if (_drawerSessionTimer !== null) return;
-    _drawerSessionStart = Date.now();
-    const update = (): void => {
-      const elapsed = Math.floor((Date.now() - _drawerSessionStart) / 1000);
-      const m = Math.floor(elapsed / 60);
-      const s = elapsed % 60;
-      const el2 = document.getElementById('sp-drawer-session-time');
-      if (el2) el2.textContent = `${m}:${s.toString().padStart(2, '0')}`;
-    };
-    update();
-    _drawerSessionTimer = setInterval(update, 1000);
-  }
-  startDrawerSessionTimer();
 
   document.body.appendChild(drawerOverlay);
   document.body.appendChild(drawer);
