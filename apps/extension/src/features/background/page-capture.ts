@@ -16,6 +16,9 @@ export const PAGE_CAPTURE_UNAVAILABLE_MESSAGE =
   'Page capture needs AGI Desktop. Install and pair it from the extension options, ' +
   'then try the shortcut again. Nothing was captured.';
 
+export const PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE =
+  'Page capture works only on sites you approved with browser control in the extension options.';
+
 export function pageCaptureFailureMessage(reason: string): string {
   const trimmed = reason.trim();
   if (!trimmed || /native host/i.test(trimmed)) {
