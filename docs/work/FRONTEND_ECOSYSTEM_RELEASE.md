@@ -189,13 +189,13 @@ extension state plus the desktop pairing record).
 
 ## 7. Screen Studio gate
 
-| Client            | Record today?                   | Visible blocker                                                                      |
-| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------ |
-| Web               | pending pass                    | theme switch fixed for signed-in users (F35); a control-driven pass is owed          |
-| Mobile            | NO                              | F37 P1s: first local send, resume, Cloud entry                                       |
-| Electron          | YES for chat and settings flows | F1 and F2 fixed; coding-session flows after desktop-code-1                           |
-| Tauri Cloud       | BLOCKED                         | decision 4.1                                                                         |
-| Tauri Local       | BLOCKED                         | decision 4.1                                                                         |
-| Chrome Extension  | YES for chat flows              | page-context flow after one human click on Chrome's permission prompt (founder item) |
-| VS Code Extension | NO                              | approval card in the chat (item C) owed; the rest landed                             |
-| CLI               | YES                             | TUI polish cb17e54eb; tool turns clean over stdio                                    |
+| Client            | Record today?                                   | Visible blocker                                                                                                                     |
+| ----------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Web               | pending pass                                    | theme switch fixed for signed-in users (F35); a control-driven pass is owed                                                         |
+| Mobile            | NO                                              | F37 P1s: first local send, resume, Cloud entry                                                                                      |
+| Electron          | YES for chat, settings and coding-session flows | shell items and the desktop coding sessions landed; the paired browser flow after browser-tool-2                                    |
+| Tauri Cloud       | BLOCKED                                         | decision 4.1                                                                                                                        |
+| Tauri Local       | BLOCKED                                         | decision 4.1                                                                                                                        |
+| Chrome Extension  | YES for chat flows                              | page-context flow after one human click on Chrome's permission prompt (founder item)                                                |
+| VS Code Extension | YES                                             | eight items landed (context, editor utilities, approval card, tool rows, slash Enter, lifetime, route-aware picker, typed failures) |
+| CLI               | YES                                             | TUI polish cb17e54eb; tool turns clean over stdio                                                                                   |
