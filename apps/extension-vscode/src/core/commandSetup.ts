@@ -1959,7 +1959,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.runCliCommand', async (commandName: unknown) => {
       const name = typeof commandName === 'string' ? commandName.trim() : '';
       if (name === '') return;
-      const result = await cliCapabilities.call('runCommand', { name });
+      const result = await cliCapabilities.call('runCommand', name);
       if (result.status === 'ok') return;
       vscode.window.showWarningMessage(`AGI Workforce: ${result.reason}`);
     }),

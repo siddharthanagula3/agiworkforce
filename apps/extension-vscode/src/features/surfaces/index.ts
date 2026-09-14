@@ -34,7 +34,12 @@ export type {
   CliCapabilityResult,
   CliLoginChallenge,
 } from './cliCapabilities';
-export { BUILT_IN_SLASH_COMMANDS, SURFACE_MENU_ITEMS } from './surfaceMenu';
+export {
+  ACCOUNT_SURFACE_COMMANDS,
+  BUILT_IN_SLASH_COMMANDS,
+  SURFACE_MENU_ITEMS,
+  commandForSurface,
+} from './surfaceMenu';
 export type { SlashCommandItem, SurfaceMenuItem } from './surfaceMenu';
 export { formatSessionAge, mergeSessionRows } from './sessionRows';
 export type { SessionRow, SessionRowInput, SessionSource } from './sessionRows';
