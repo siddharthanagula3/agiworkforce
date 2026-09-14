@@ -575,14 +575,6 @@ const webmcpToolsByTab = new Map<
   }
 >();
 const webmcpNavigationGenerationByTab = new Map<number, number>();
-const nlwebByTab = new Map<
-  number,
-  {
-    nlweb: import('./nlweb').NLWebDetectionResult;
-    url: string;
-    timestamp: number;
-  }
->();
 
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
@@ -3518,33 +3510,6 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
-    case 'NLWEB_DETECTED': {
-      const nlwebMsg = message as import('./types').NLWebDetectedMessage;
-      const nlwebTabId = sender?.tab?.id;
-      if (nlwebTabId) {
-        nlwebByTab.set(nlwebTabId, {
-          nlweb: nlwebMsg.nlweb,
-          url: nlwebMsg.url || '',
-          timestamp: Date.now(),
-        });
-        logger.info('NLWeb detected on tab', {
-          tabId: nlwebTabId,
-          url: nlwebMsg.url,
-          endpoints: nlwebMsg.nlweb.endpoints.length,
-        });
-        chrome.runtime
-          .sendMessage({
-            type: 'NLWEB_DETECTED',
-            nlweb: nlwebMsg.nlweb,
-            url: nlwebMsg.url,
-          })
-          .catch(() => {
-            // Popup / side panel may not be open; ignore
-          });
-      }
-      return { success: true } as ExtensionResponse;
-    }
-
     case 'GET_TAB_GROUP_STATE': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -3764,73 +3729,6 @@ async function handleMessageAsync(
         : undefined;
       if (response.success && journal) await abandonScheduledTaskRun(journal, credential);
       return response;
-    }
-
-    case 'NLWEB_PROBE' as ExtensionMessage['type']: {
-      const probe = message as unknown as { probeUrl?: string; method?: 'GET' | 'HEAD' };
-      const probeUrl = probe.probeUrl;
-      const method = probe.method ?? 'HEAD';
-      if (!probeUrl || typeof probeUrl !== 'string') {
-        return { success: false, error: 'Missing probeUrl' } as ExtensionResponse;
-      }
-      if (!isAllowedProbeUrl(probeUrl)) {
-        return { success: false, error: 'Probe URL not allowed' } as ExtensionResponse;
-      }
-      if (!sender.tab?.url) {
-        return {
-          success: false,
-          error: 'NLWeb probes can only originate from a content script.',
-        } as ExtensionResponse;
-      }
-      try {
-        const senderOrigin = new URL(sender.tab.url).origin;
-        const probeOrigin = new URL(probeUrl).origin;
-        if (probeOrigin !== senderOrigin) {
-          logger.warn('Rejected cross-origin NLWEB_PROBE', {
-            senderOrigin,
-            probeOrigin,
-          });
-          return {
-            success: false,
-            error: "NLWeb probes are restricted to the page's own origin.",
-          } as ExtensionResponse;
-        }
-      } catch {
-        return { success: false, error: 'Invalid probe URL' } as ExtensionResponse;
-      }
-      {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        try {
-          const resp = await fetch(probeUrl, {
-            method,
-            signal: controller.signal,
-            credentials: 'omit',
-            cache: 'no-store',
-          });
-          const headers: Record<string, string> = {};
-          resp.headers.forEach((value, key) => {
-            headers[key.toLowerCase()] = value;
-          });
-          let body: string | undefined;
-          if (method === 'GET' && resp.ok) {
-            try {
-              const raw = await resp.text();
-              body = raw.substring(0, MAX_PROBE_RESPONSE_BYTES);
-            } catch {
-              /* non-fatal */
-            }
-          }
-          return { success: true, status: resp.status, headers, body } as ExtensionResponse;
-        } catch (e) {
-          return {
-            success: false,
-            error: e instanceof Error ? e.message : 'Probe fetch failed',
-          } as ExtensionResponse;
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      }
     }
 
     case 'IN_PAGE_PROMPT': {
@@ -4665,8 +4563,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   forgetPageWatchTab(tabId);
   webmcpToolsByTab.delete(tabId);
   webmcpNavigationGenerationByTab.delete(tabId);
-  nlwebByTab.delete(tabId);
-  logger.debug('Cleaned up rate limit, webmcp tools, and nlweb for tab', { tabId });
+  logger.debug('Cleaned up rate limit and webmcp tools for tab', { tabId });
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
@@ -4688,7 +4585,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
   if (changeInfo.url === undefined && changeInfo.status !== 'loading') return;
   invalidateWebMCPToolsForNavigation(tabId);
-  nlwebByTab.delete(tabId);
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
@@ -4752,40 +4648,6 @@ async function captureCurrentPage(): Promise<void> {
       PAGE_CAPTURE_UNDELIVERED_TITLE,
       pageCaptureFailureMessage(error instanceof Error ? error.message : ''),
     );
-  }
-}
-
-const MAX_PROBE_RESPONSE_BYTES = 262_144;
-
-function isPrivateOrReservedHost(hostname: string): boolean {
-  const h = hostname.replace(/^\[|\]$/g, '');
-
-  if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fd')) return true;
-
-  if (h === 'localhost' || h === '0.0.0.0') return true;
-
-  const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
-  if (ipv4Match) {
-    const [, a, b] = ipv4Match.map(Number);
-    if (a === 10) return true;
-    if (a === 172 && b !== undefined && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 127) return true;
-    if (a === 0) return true;
-  }
-
-  return false;
-}
-
-function isAllowedProbeUrl(raw: string): boolean {
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-    if (isPrivateOrReservedHost(parsed.hostname)) return false;
-    return true;
-  } catch {
-    return false;
   }
 }
 

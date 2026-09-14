@@ -495,39 +495,6 @@ describe('H-07 pairing token shape', () => {
   });
 });
 
-describe('H-01 NLWEB_PROBE same-origin enforcement', () => {
-  function isSameOrigin(senderUrl: string, probeUrl: string): boolean {
-    try {
-      return new URL(probeUrl).origin === new URL(senderUrl).origin;
-    } catch {
-      return false;
-    }
-  }
-
-  it('allows same-origin probes', () => {
-    expect(isSameOrigin('https://example.com/a', 'https://example.com/.well-known/nlweb')).toBe(
-      true,
-    );
-  });
-
-  it('rejects cross-origin probes', () => {
-    expect(isSameOrigin('https://example.com/a', 'https://internal.corp.example.com')).toBe(false);
-    expect(isSameOrigin('https://example.com/a', 'https://attacker.example.com')).toBe(false);
-  });
-
-  it('rejects probes on a different scheme', () => {
-    expect(isSameOrigin('https://example.com/a', 'http://example.com/x')).toBe(false);
-  });
-
-  it('rejects probes on a different port', () => {
-    expect(isSameOrigin('https://example.com/a', 'https://example.com:8443/x')).toBe(false);
-  });
-
-  it('rejects malformed probe URLs', () => {
-    expect(isSameOrigin('https://example.com/a', 'not-a-url')).toBe(false);
-  });
-});
-
 const TASK_PROMPT_MAX_CHARS = 10_000;
 
 function safeTaskPrompt(prompt: string): string {
