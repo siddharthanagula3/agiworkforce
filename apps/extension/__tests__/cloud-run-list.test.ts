@@ -262,6 +262,7 @@ describe('side-panel cloud run list', () => {
       }),
       resolveApproval: vi.fn().mockResolvedValue({ status: 'success' }),
       cancelRun: vi.fn().mockResolvedValue({ status: 'success', run: run() }),
+      signIn: vi.fn().mockResolvedValue(undefined),
       refreshIntervalMs: REFRESH_INTERVAL_MS,
       now: () => Date.parse('2026-08-26T10:06:00.000Z'),
       ...overrides,
@@ -288,6 +289,37 @@ describe('side-panel cloud run list', () => {
     });
     expect(panel.panelEl.querySelector('.sp-run-badge')?.textContent).toBe('Ready for review');
     expect(panel.panelEl.querySelector('.sp-run-sub')?.textContent).toBe('Started on Desktop');
+    panel.dispose();
+  });
+
+  it('offers sign-in rather than an error when the runs list needs an account', async () => {
+    const signIn = vi.fn().mockResolvedValue(undefined);
+    const deps = panelDependencies({
+      listRuns: vi.fn().mockResolvedValue({
+        status: 'error',
+        code: 'auth_required',
+        message: 'Sign in to see your AGI Cloud runs.',
+      }),
+      signIn,
+    });
+
+    const panel = buildCloudRunsPanel(deps);
+    document.body.appendChild(panel.panelEl);
+    panel.setActive(true);
+
+    const status = await vi.waitFor(() => {
+      const found = panel.panelEl.querySelector<HTMLElement>('.sp-runs-status');
+      expect(found?.textContent).toContain('Sign in to see your AGI Cloud runs.');
+      return found!;
+    });
+    expect(status.getAttribute('data-kind')).toBeNull();
+
+    const action = status.querySelector<HTMLButtonElement>('.sp-runs-status-action');
+    expect(action).not.toBeNull();
+    action!.click();
+    await vi.waitFor(() => {
+      expect(signIn).toHaveBeenCalledTimes(1);
+    });
     panel.dispose();
   });
 
