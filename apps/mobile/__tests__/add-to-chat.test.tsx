@@ -141,7 +141,6 @@ function resetStores() {
     messages: {},
     chatMode: 'chat',
     chatStyle: 'normal',
-    toolAccess: 'auto',
     workMode: 'chat',
     features: {
       webSearch: true,
