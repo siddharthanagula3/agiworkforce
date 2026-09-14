@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   HOST_SHORTCUT_CHOICES,
   HOST_SHORTCUT_KEYS,
@@ -11,11 +11,13 @@ import {
   type HostPreferences,
   type HostPreferencesState,
   type HostShortcutKey,
+  type DeveloperRuntimeStatus,
   type HostShortcutStatus,
 } from '@agiworkforce/local-runtime-contract';
 import { Switch } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
+import { readDeveloperRuntimeStatus } from '../lib/runtime-client';
 import { DesktopUpdateRow } from './DesktopUpdateRow';
 
 const HEADING = 'General desktop settings';
@@ -27,6 +29,16 @@ const STARTUP_LABEL = 'Run on startup';
 const STARTUP_HINT = 'Start AGI Cloud when you log in to this computer.';
 const MENU_BAR_LABEL = 'Menu bar';
 const MENU_BAR_HINT = 'Show AGI Cloud in the menu bar.';
+const CLI_PATH_LABEL = 'AGI CLI path';
+const CLI_PATH_HINT = 'Leave empty to use the agi on this computer’s PATH.';
+const CLI_PATH_PLACEHOLDER = 'agi';
+const CLI_MISSING = 'Not found on this computer. Install the AGI CLI to run coding sessions here.';
+const CLI_RESOLVING = 'Looking for the AGI CLI…';
+
+function cliStateLine(status: DeveloperRuntimeStatus): string {
+  if (!status.available) return [CLI_MISSING, status.hint].filter(Boolean).join(' ');
+  return `Using ${status.name} ${status.version} from ${status.path}`;
+}
 
 const SHORTCUT_ROWS: Record<HostShortcutKey, { label: string; hint: string }> = {
   quickAsk: {
@@ -69,6 +81,21 @@ export function DesktopSettingsSection() {
   const host = useDesktopHost();
   const [state, setState] = useState<HostPreferencesState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cliStatus, setCliStatus] = useState<DeveloperRuntimeStatus | null>(null);
+
+  const resolveCli = useCallback(() => {
+    if (!host) return;
+    setCliStatus(null);
+    readDeveloperRuntimeStatus()
+      .then(setCliStatus)
+      .catch(() =>
+        setCliStatus({ available: false, name: '', version: null, path: null, hint: null }),
+      );
+  }, [host]);
+
+  useEffect(() => {
+    resolveCli();
+  }, [resolveCli]);
 
   useEffect(() => {
     if (!host) return;
@@ -155,6 +182,23 @@ export function DesktopSettingsSection() {
           );
         })}
 
+        <Row
+          label={CLI_PATH_LABEL}
+          hint={CLI_PATH_HINT}
+          note={cliStatus === null ? CLI_RESOLVING : cliStateLine(cliStatus)}
+          noteIsFailure={cliStatus !== null && !cliStatus.available}
+        >
+          <CliPathField
+            value={preferences?.cliPath ?? ''}
+            disabled={!preferences}
+            onCommit={(cliPath) => {
+              write({ cliPath });
+              resolveCli();
+            }}
+            onResolve={resolveCli}
+          />
+        </Row>
+
         <Row label={MENU_BAR_LABEL} hint={MENU_BAR_HINT}>
           <Switch
             checked={preferences?.showInMenuBar ?? false}
@@ -174,15 +218,65 @@ export function DesktopSettingsSection() {
   );
 }
 
+function CliPathField({
+  value,
+  disabled,
+  onCommit,
+  onResolve,
+}: {
+  value: string;
+  disabled: boolean;
+  onCommit: (value: string) => void;
+  onResolve: () => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const committed = useRef(value);
+
+  useEffect(() => {
+    if (value === committed.current) return;
+    committed.current = value;
+    setDraft(value);
+  }, [value]);
+
+  const commit = () => {
+    const next = draft.trim();
+    if (next === committed.current) {
+      onResolve();
+      return;
+    }
+    committed.current = next;
+    onCommit(next);
+  };
+
+  return (
+    <input
+      type="text"
+      spellCheck={false}
+      value={draft}
+      disabled={disabled}
+      aria-label={CLI_PATH_LABEL}
+      placeholder={CLI_PATH_PLACEHOLDER}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+      className="h-8 w-[220px] max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
+    />
+  );
+}
+
 function Row({
   label,
   hint,
   note,
+  noteIsFailure = true,
   children,
 }: {
   label: string;
   hint: string;
   note?: string;
+  noteIsFailure?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -191,7 +285,15 @@ function Row({
         <span className="text-sm text-[var(--text-1)]">{label}</span>
         <span className="text-xs text-[var(--text-3)]">{hint}</span>
         {note !== undefined && (
-          <span className="text-xs text-[var(--settings-destructive-text)]">{note}</span>
+          <span
+            className={
+              noteIsFailure
+                ? 'text-xs text-[var(--settings-destructive-text)]'
+                : 'text-xs text-[var(--text-3)]'
+            }
+          >
+            {note}
+          </span>
         )}
       </span>
       {children}

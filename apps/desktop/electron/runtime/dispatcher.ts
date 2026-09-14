@@ -76,6 +76,18 @@ import {
   writeTextFile,
 } from './filesystemService';
 import { readWorkspaceGit } from './gitService';
+import {
+  DeveloperRuntimeUnavailableError,
+  answerDeveloperApproval,
+  interruptDeveloperTurn,
+  listDeveloperSessions,
+  readDeveloperRuntimeStatus,
+  readDeveloperSession,
+  resumeDeveloperSession,
+  startDeveloperSession,
+  startDeveloperTurn,
+  stopDeveloperRuntime,
+} from './developerSessionService';
 import { PathRefused } from './pathGuard';
 import { consumeSingleUse, getPermissionState, requestPermission } from './permissionManager';
 import {
@@ -288,6 +300,16 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     capability: 'filesystem.read',
     reason: 'The agent wants to show a file from this folder in your file manager.',
   },
+  developer_session_start: {
+    capability: 'shell.execute',
+    reason:
+      'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.',
+  },
+  developer_turn_start: {
+    capability: 'shell.execute',
+    reason:
+      'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.',
+  },
 };
 
 const COMPUTER_USE_REASON =
@@ -498,8 +520,11 @@ async function execute(
       return pickRoot(window);
     case 'workspace_list_roots':
       return listRoots();
-    case 'workspace_revoke_root':
-      return revokeRoot(requireString(args, 'rootId'));
+    case 'workspace_revoke_root': {
+      const rootId = requireString(args, 'rootId');
+      stopDeveloperRuntime(rootId);
+      return revokeRoot(rootId);
+    }
     case 'workspace_snapshot':
       return snapshotFor(resolveRoot(args));
     case 'workspace_reveal': {
@@ -625,6 +650,41 @@ async function execute(
       return waitFor(optionalNumberOr(args, 'ms', 500));
     case 'device_host_declaration':
       return declareDeviceHost();
+    case 'developer_runtime_status':
+      return readDeveloperRuntimeStatus();
+    case 'developer_session_list':
+      return listDeveloperSessions();
+    case 'developer_session_read':
+      return readDeveloperSession(requireString(args, 'rootId'), requireString(args, 'threadId'));
+    case 'developer_session_resume':
+      return resumeDeveloperSession(requireString(args, 'rootId'), requireString(args, 'threadId'));
+    case 'developer_session_start': {
+      const model = optionalString(args, 'model', '');
+      return startDeveloperSession(requireString(args, 'rootId'), model === '' ? undefined : model);
+    }
+    case 'developer_turn_start': {
+      const model = optionalString(args, 'model', '');
+      return startDeveloperTurn({
+        rootId: requireString(args, 'rootId'),
+        threadId: requireString(args, 'threadId'),
+        text: requireString(args, 'text'),
+        ...(model === '' ? {} : { model }),
+      });
+    }
+    case 'developer_turn_interrupt':
+      return interruptDeveloperTurn(
+        requireString(args, 'rootId'),
+        requireString(args, 'threadId'),
+        requireString(args, 'turnId'),
+      );
+    case 'developer_approval_answer':
+      return answerDeveloperApproval({
+        rootId: requireString(args, 'rootId'),
+        threadId: requireString(args, 'threadId'),
+        turnId: requireString(args, 'turnId'),
+        requestId: requireString(args, 'requestId'),
+        approved: args['approved'] === true,
+      });
     case 'browser_pairing_state':
       return pairingState();
     case 'browser_pairing_install_host':
@@ -657,6 +717,9 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
   }
   if (error instanceof BrowserBridgeError) return runtimeFailure('io-error', error.message);
   if (error instanceof UnknownWorkspace) return runtimeFailure('not-found', error.message);
+  if (error instanceof DeveloperRuntimeUnavailableError) {
+    return runtimeFailure('runtime-unavailable', `${error.message} ${error.hint}`);
+  }
   if (error instanceof WorkspaceGrantRefused) {
     return runtimeFailure('permission-denied', error.message);
   }
