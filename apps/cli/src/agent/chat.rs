@@ -318,33 +318,74 @@ fn content_block_to_result(block: ContentBlock) -> ResultBlock {
     }
 }
 
+/// The channel a turn's post-tool-call continuation text is written to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContinuationTarget {
+    /// A sink installed by the surface that owns the output channel.
+    InstalledSink,
+    /// Stdout carries a machine protocol, so the text goes to stderr instead.
+    OffProtocolChannel,
+    /// The canonical SDK stream-json envelope on stdout.
+    SdkStream,
+    /// The legacy `--json-events` envelope on stdout.
+    JsonEvents,
+    /// The human transcript on stdout.
+    Transcript,
+}
+
 impl AgentSession {
-    /// Build a streaming chunk callback that is machine-output-aware.
+    /// Where the continuation after a tool call sends its text.
     ///
-    /// A surface that owns the terminal takes precedence: its own sink keeps
-    /// the continuation in the same transcript as the first completion. Then
-    /// canonical SDK stream-json over the legacy `--json-events` envelope, and
-    /// finally raw text so human output remains unaffected.
-    pub(crate) fn continuation_sink(&self) -> StreamCallback {
-        if let Some(sink) = self.on_continuation_chunk.clone() {
-            return Box::new(move |chunk: &str| (sink.0)(chunk));
+    /// A surface that owns the output channel takes precedence: its own sink
+    /// keeps the continuation in the same transcript as the first completion.
+    /// Failing that, no stdout envelope may be chosen while stdout carries a
+    /// machine protocol. Then canonical SDK stream-json over the legacy
+    /// `--json-events` envelope, and finally raw text.
+    pub(crate) fn continuation_target(&self) -> ContinuationTarget {
+        if self.on_continuation_chunk.is_some() {
+            return ContinuationTarget::InstalledSink;
         }
-        if let Some(context) = self.sdk_stream_context.clone() {
-            Box::new(move |chunk: &str| context.emit_text_delta(chunk))
-        } else if self.json_events {
-            let sid = self.json_session_id.clone();
-            Box::new(move |chunk: &str| {
-                crate::agent_events::AgentEvent::MessageDelta {
-                    session_id: sid.clone(),
-                    text: chunk.to_string(),
-                }
-                .emit_stdout();
-            })
-        } else {
+        if crate::output::stdout_is_protocol() {
+            return ContinuationTarget::OffProtocolChannel;
+        }
+        if self.sdk_stream_context.is_some() {
+            return ContinuationTarget::SdkStream;
+        }
+        if self.json_events {
+            return ContinuationTarget::JsonEvents;
+        }
+        ContinuationTarget::Transcript
+    }
+
+    /// Build a streaming chunk callback for the target above.
+    pub(crate) fn continuation_sink(&self) -> StreamCallback {
+        match (
+            self.continuation_target(),
+            self.on_continuation_chunk.clone(),
+            self.sdk_stream_context.clone(),
+        ) {
+            (ContinuationTarget::InstalledSink, Some(sink), _) => {
+                Box::new(move |chunk: &str| (sink.0)(chunk))
+            }
+            (ContinuationTarget::SdkStream, _, Some(context)) => {
+                Box::new(move |chunk: &str| context.emit_text_delta(chunk))
+            }
+            (ContinuationTarget::JsonEvents, _, _) => {
+                let sid = self.json_session_id.clone();
+                Box::new(move |chunk: &str| {
+                    crate::agent_events::AgentEvent::MessageDelta {
+                        session_id: sid.clone(),
+                        text: chunk.to_string(),
+                    }
+                    .emit_stdout();
+                })
+            }
             // Must go through `output`, not a bare `print!`: continuation text
             // is a partial line, and unflushed it loses its race with the
             // unbuffered stderr progress banners printed by the next iteration.
-            Box::new(|chunk: &str| crate::output::print_assistant_chunk(chunk))
+            // `output` is also what keeps it off a protocol stdout, so it is
+            // the safe landing for any target whose channel went missing.
+            _ => Box::new(|chunk: &str| crate::output::print_assistant_chunk(chunk)),
         }
     }
 
@@ -1170,8 +1211,6 @@ impl TurnHostAdapter<'_> {
                                          the upstream provider was not contacted.",
                                         fallback_model
                                     );
-                                    // In json-events mode emit as a MessageDelta;
-                                    // in human mode use the raw print! path.
                                     if self.session.json_events {
                                         crate::agent_events::AgentEvent::MessageDelta {
                                             session_id: self.session.json_session_id.clone(),
@@ -1179,7 +1218,7 @@ impl TurnHostAdapter<'_> {
                                         }
                                         .emit_stdout();
                                     } else {
-                                        print!("{}", demo_text);
+                                        crate::output::print_assistant_chunk(&demo_text);
                                     }
                                     Ok(crate::models::CompletionResult {
                                         text: demo_text,
@@ -2444,6 +2483,80 @@ mod tests {
             captured.lock().expect("lock").as_str(),
             "after the tool call and more"
         );
+    }
+
+    /// Regression: `agi app-server` speaks JSON-RPC on stdout, and the host
+    /// installed no continuation sink, so the reply after a tool call was
+    /// written there as raw text. The VS Code extension's reader hit the
+    /// non-JSON line and closed with "malformed JSON", killing every tool turn
+    /// from the IDE.
+    #[test]
+    fn the_continuation_never_targets_a_protocol_stdout() {
+        use std::sync::{Arc, Mutex};
+
+        let context = crate::context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let model = crate::model_catalog::fast_completion_model("anthropic");
+        let mut session = AgentSession::new(&model, &context, None);
+
+        assert_eq!(
+            session.continuation_target(),
+            ContinuationTarget::Transcript,
+            "a terminal session keeps writing its transcript to stdout"
+        );
+
+        let _claim = crate::output::ProtocolStdoutTestClaim::hold();
+
+        // Every stdout-bound target is off the table while stdout is framed,
+        // including the two machine envelopes that also write JSON there.
+        assert_eq!(
+            session.continuation_target(),
+            ContinuationTarget::OffProtocolChannel
+        );
+        session.json_events = true;
+        assert_eq!(
+            session.continuation_target(),
+            ContinuationTarget::OffProtocolChannel
+        );
+        session.sdk_stream_context = Some(crate::agent::SdkStreamContext {
+            session_id: "session".to_string(),
+            message_id: "message".to_string(),
+        });
+        assert_eq!(
+            session.continuation_target(),
+            ContinuationTarget::OffProtocolChannel
+        );
+
+        // The app-server host installs a sink, which is what carries the
+        // continuation back to the client as `turn/output_delta`.
+        let captured = Arc::new(Mutex::new(String::new()));
+        let sink_buf = Arc::clone(&captured);
+        session.on_continuation_chunk = Some(crate::agent::ContinuationSink(Arc::new(
+            move |chunk: &str| {
+                if let Ok(mut buf) = sink_buf.lock() {
+                    buf.push_str(chunk);
+                }
+            },
+        )));
+        assert_eq!(
+            session.continuation_target(),
+            ContinuationTarget::InstalledSink
+        );
+        (session.continuation_sink())("quoted first line");
+        assert_eq!(captured.lock().expect("lock").as_str(), "quoted first line");
     }
 
     #[test]
