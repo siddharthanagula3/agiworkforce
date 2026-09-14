@@ -435,6 +435,57 @@ pub fn openai_responses_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec
         .collect()
 }
 
+/// Gemini's function-declaration schema is an OpenAPI 3.0 subset, not JSON
+/// Schema: an unknown keyword anywhere in `parameters` is rejected outright
+/// with `Invalid JSON payload received. Unknown name "<keyword>"`, which fails
+/// the whole request, every tool with it. Built-in and MCP tool schemas are
+/// authored as JSON Schema, so they must be stripped down at every schema
+/// position before they go on the wire.
+pub fn sanitize_gemini_schema(schema: &Value) -> Value {
+    const UNSUPPORTED_KEYS: &[&str] = &[
+        "default",
+        "$schema",
+        "$id",
+        "$ref",
+        "$defs",
+        "definitions",
+        "additionalProperties",
+        "patternProperties",
+        "examples",
+        "const",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "not",
+    ];
+    const SUBSCHEMA_KEYS: &[&str] = &["items", "additionalItems", "contains"];
+    const SUBSCHEMA_LIST_KEYS: &[&str] = &["anyOf", "oneOf", "allOf", "prefixItems"];
+
+    let mut cleaned = schema.clone();
+    if let Some(obj) = cleaned.as_object_mut() {
+        for key in UNSUPPORTED_KEYS {
+            obj.remove(*key);
+        }
+        if let Some(props) = obj.get_mut("properties").and_then(Value::as_object_mut) {
+            for value in props.values_mut() {
+                *value = sanitize_gemini_schema(value);
+            }
+        }
+        for key in SUBSCHEMA_KEYS {
+            if let Some(value) = obj.get_mut(*key) {
+                *value = sanitize_gemini_schema(value);
+            }
+        }
+        for key in SUBSCHEMA_LIST_KEYS {
+            if let Some(list) = obj.get_mut(*key).and_then(Value::as_array_mut) {
+                for value in list.iter_mut() {
+                    *value = sanitize_gemini_schema(value);
+                }
+            }
+        }
+    }
+    cleaned
+}
+
 /// Gemini `functionDeclarations` array.
 pub fn gemini_function_declarations_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
     tool_defs
@@ -443,7 +494,7 @@ pub fn gemini_function_declarations_json(tool_defs: &[ToolDefinition]) -> Vec<Va
             serde_json::json!({
                 "name": tool.name,
                 "description": tool.description,
-                "parameters": tool.input_schema,
+                "parameters": sanitize_gemini_schema(&tool.input_schema),
             })
         })
         .collect()

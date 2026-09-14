@@ -2160,6 +2160,98 @@ mod anthropic_request_tests {
         let body = build_gemini_request_body(&req);
         assert!(body.pointer("/generationConfig/thinkingConfig").is_none());
     }
+
+    /// Gemini answers an unknown schema keyword with HTTP 400 and refuses the
+    /// whole request, so one built-in tool carrying `additionalProperties`
+    /// takes down every Google turn. The declarations must therefore be clean
+    /// at every depth, not just at the top level of `parameters`.
+    #[test]
+    fn gemini_declarations_carry_no_json_schema_keyword_gemini_rejects() {
+        let messages = vec![Message::text("user", "Plan.")];
+        let tools = vec![ToolDefinition {
+            name: "agent".to_string(),
+            description: "Run one named agent".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "additionalProperties": false,
+                "properties": {
+                    "action": {"type": "string", "enum": ["list", "run"], "default": "list"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string", "default": "x", "examples": ["a"]}
+                    },
+                    "choice": {
+                        "anyOf": [
+                            {"type": "string", "default": "a"},
+                            {"type": "integer", "const": 7, "exclusiveMinimum": 0}
+                        ]
+                    },
+                    "nested": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "patternProperties": {"^x": {"type": "string"}},
+                        "properties": {
+                            "inner": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {"leaf": {"type": "string", "default": "y"}}
+                            }
+                        }
+                    }
+                },
+                "required": ["action"]
+            }),
+            is_read_only: true,
+            is_concurrency_safe: true,
+            max_result_size_chars: None,
+            should_defer: false,
+            aliases: Vec::new(),
+            owner: String::new(),
+            permission_class: String::new(),
+            diagnostic_tags: Vec::new(),
+        }];
+        let mut req = base_request(&messages);
+        req.tools = Some(&tools);
+
+        let body = build_gemini_request_body(&req);
+        let declarations = serde_json::to_string(&body["tools"]).expect("serialize declarations");
+
+        for keyword in [
+            "additionalProperties",
+            "patternProperties",
+            "$schema",
+            "$id",
+            "$ref",
+            "$defs",
+            "definitions",
+            "default",
+            "examples",
+            "const",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+            "not",
+        ] {
+            assert!(
+                !declarations.contains(&format!("\"{keyword}\"")),
+                "Gemini rejects `{keyword}`, but it survived in {declarations}"
+            );
+        }
+
+        let params = &body["tools"][0]["functionDeclarations"][0]["parameters"];
+        assert_eq!(params["type"], "object");
+        assert_eq!(params["required"][0], "action");
+        assert_eq!(params["properties"]["action"]["enum"][1], "run");
+        assert_eq!(params["properties"]["tags"]["items"]["type"], "string");
+        assert_eq!(
+            params["properties"]["choice"]["anyOf"][1]["type"],
+            "integer"
+        );
+        assert_eq!(
+            params["properties"]["nested"]["properties"]["inner"]["properties"]["leaf"]["type"],
+            "string"
+        );
+    }
 }
 
 #[cfg(test)]

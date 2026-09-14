@@ -385,69 +385,6 @@ impl MessageNormalizer {
         format!("call{:05}", index)
     }
 
-    /// Sanitize a JSON Schema for Gemini (remove unsupported fields).
-    ///
-    /// Gemini's function-declaration schema is an OpenAPI 3.0 subset and rejects
-    /// several JSON Schema keywords. We strip the unsupported set at every level
-    /// and recurse through *all* schema-bearing positions, not just
-    /// `properties`, so array-item and union sub-schemas are sanitized too.
-    /// Otherwise tools with `items`/`anyOf`/`oneOf` sub-schemas still carry
-    /// rejected fields and fail tool registration with a 400.
-    #[allow(dead_code)] // reserved: Gemini schema sanitization (exercised by tests)
-    pub fn sanitize_gemini_schema(schema: &Value) -> Value {
-        // Keywords Gemini's function-declaration schema rejects outright.
-        const UNSUPPORTED_KEYS: &[&str] = &[
-            "default",
-            "$schema",
-            "$id",
-            "$ref",
-            "$defs",
-            "definitions",
-            "additionalProperties",
-            "patternProperties",
-            "examples",
-            "const",
-            "exclusiveMinimum",
-            "exclusiveMaximum",
-            "not",
-        ];
-        // Keys whose value is a single nested sub-schema.
-        const SUBSCHEMA_KEYS: &[&str] = &["items", "additionalItems", "contains"];
-        // Keys whose value is an array of nested sub-schemas.
-        const SUBSCHEMA_LIST_KEYS: &[&str] = &["anyOf", "oneOf", "allOf", "prefixItems"];
-
-        let mut cleaned = schema.clone();
-        if let Some(obj) = cleaned.as_object_mut() {
-            for key in UNSUPPORTED_KEYS {
-                obj.remove(*key);
-            }
-
-            // Recurse into the named property sub-schemas.
-            if let Some(props_obj) = obj.get_mut("properties").and_then(Value::as_object_mut) {
-                for (_key, val) in props_obj.iter_mut() {
-                    *val = Self::sanitize_gemini_schema(val);
-                }
-            }
-
-            // Recurse into single nested sub-schema positions.
-            for key in SUBSCHEMA_KEYS {
-                if let Some(val) = obj.get_mut(*key) {
-                    *val = Self::sanitize_gemini_schema(val);
-                }
-            }
-
-            // Recurse into arrays-of-sub-schema positions.
-            for key in SUBSCHEMA_LIST_KEYS {
-                if let Some(arr) = obj.get_mut(*key).and_then(Value::as_array_mut) {
-                    for val in arr.iter_mut() {
-                        *val = Self::sanitize_gemini_schema(val);
-                    }
-                }
-            }
-        }
-        cleaned
-    }
-
     /// Filter empty messages (some providers reject them).
     #[allow(dead_code)] // reserved: provider message normalization (exercised by tests)
     pub fn filter_empty_messages(messages: &[Value]) -> Vec<Value> {
@@ -1148,64 +1085,40 @@ mod tests {
         assert_eq!(MessageNormalizer::mistral_tool_id(0).len(), 9);
     }
 
+    /// The built-in catalog is authored as JSON Schema and several tools carry
+    /// `additionalProperties`. Gemini rejects the whole request on the first
+    /// unknown keyword, so every declaration it builds must already be clean.
     #[test]
-    fn test_sanitize_gemini_schema_recurses_all_positions() {
-        // A schema with unsupported fields buried in items, anyOf, and nested
-        // object properties, Gemini rejects `default` and `additionalProperties`
-        // at every level, so the sanitizer must strip them everywhere.
-        let schema = serde_json::json!({
-            "type": "object",
-            "default": {},
-            "additionalProperties": false,
-            "properties": {
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "default": "x"
-                    }
-                },
-                "choice": {
-                    "anyOf": [
-                        { "type": "string", "default": "a" },
-                        { "type": "integer", "const": 7 }
-                    ]
-                },
-                "nested": {
-                    "type": "object",
-                    "additionalProperties": true,
-                    "properties": {
-                        "inner": { "type": "string", "default": "y" }
-                    }
-                }
-            }
-        });
-
-        let cleaned = MessageNormalizer::sanitize_gemini_schema(&schema);
-
-        // Top-level rejected keys removed.
-        assert!(cleaned.get("default").is_none());
-        assert!(cleaned.get("additionalProperties").is_none());
-        // items sub-schema sanitized.
-        assert!(cleaned["properties"]["tags"]["items"]
-            .get("default")
-            .is_none());
-        // anyOf union members sanitized.
-        let any_of = cleaned["properties"]["choice"]["anyOf"].as_array().unwrap();
-        assert!(any_of[0].get("default").is_none());
-        assert!(any_of[1].get("const").is_none());
-        // Nested object property sanitized at depth.
-        assert!(cleaned["properties"]["nested"]
-            .get("additionalProperties")
-            .is_none());
-        assert!(cleaned["properties"]["nested"]["properties"]["inner"]
-            .get("default")
-            .is_none());
-        // Structural fields preserved.
-        assert_eq!(cleaned["properties"]["tags"]["items"]["type"], "string");
-        assert_eq!(
-            cleaned["properties"]["choice"]["anyOf"][1]["type"],
-            "integer"
+    fn built_in_tool_catalog_reaches_gemini_without_rejected_keywords() {
+        let tools = crate::platform::runtime::tool_catalog::all_builtin_tool_definitions();
+        assert!(
+            tools.iter().any(|tool| {
+                serde_json::to_string(&tool.input_schema)
+                    .expect("serialize schema")
+                    .contains("additionalProperties")
+            }),
+            "catalog must still exercise the keyword the sanitizer exists for"
         );
+
+        let declarations = serde_json::to_string(
+            &agiworkforce_llm::serialize::gemini_function_declarations_json(&tools),
+        )
+        .expect("serialize declarations");
+
+        for keyword in [
+            "additionalProperties",
+            "patternProperties",
+            "$schema",
+            "$ref",
+            "$defs",
+            "definitions",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+        ] {
+            assert!(
+                !declarations.contains(&format!("\"{keyword}\"")),
+                "Gemini rejects `{keyword}`, but a built-in tool still sends it"
+            );
+        }
     }
 }
