@@ -263,3 +263,47 @@ describe('side-panel buildToolCallEl (real render)', () => {
     expect(node.textContent).toContain('find files');
   });
 });
+
+describe('interrupted reply (reload mid-stream)', () => {
+  it('shows the shared "Cancelled" state and a Retry control, not a dead streaming cursor', () => {
+    const node = buildBubbleWithTools(
+      msg({ role: 'assistant', content: 'partial answer captured before', interrupted: true }),
+      { onRetry: vi.fn() },
+    );
+    expect(node.textContent).toContain('partial answer captured before');
+    expect(node.textContent).toContain('Cancelled');
+    expect(node.querySelector('.sp-bubble-retry-btn')).not.toBeNull();
+    expect(node.querySelector('.sp-bubble')?.className).not.toContain('sp-cursor');
+  });
+
+  it('still renders the Cancelled state and Retry with no captured text at all', () => {
+    const node = buildBubbleWithTools(msg({ role: 'assistant', content: '', interrupted: true }), {
+      onRetry: vi.fn(),
+    });
+    expect(node.textContent).toContain('Cancelled');
+    expect(node.querySelector('.sp-bubble-retry-btn')).not.toBeNull();
+  });
+
+  it('never shows the interrupted footer for an ordinary finished reply', () => {
+    const node = buildBubbleWithTools(msg({ role: 'assistant', content: 'a normal answer' }));
+    expect(node.querySelector('.sp-bubble-interrupted-footer')).toBeNull();
+  });
+
+  it('never shows the interrupted footer for a live, still-streaming reply', () => {
+    const node = buildBubbleWithTools(
+      msg({ role: 'assistant', content: 'typing...', streaming: true }),
+    );
+    expect(node.querySelector('.sp-bubble-interrupted-footer')).toBeNull();
+    expect(node.querySelector('.sp-bubble')?.className).toContain('sp-cursor');
+  });
+
+  it('retries an interrupted reply the same way a failed one retries', () => {
+    const onRetry = vi.fn();
+    const node = buildBubbleWithTools(
+      msg({ id: 'stream-9', role: 'assistant', content: '', interrupted: true }),
+      { onRetry },
+    );
+    node.querySelector<HTMLButtonElement>('.sp-bubble-retry-btn')?.click();
+    expect(onRetry).toHaveBeenCalledWith('stream-9');
+  });
+});
