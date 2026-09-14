@@ -7,6 +7,7 @@ import {
   ResearchReportValidationError,
   getResearchReportByRequestId,
   listResearchReports,
+  recordResearchReportSettledCost,
   saveResearchReport,
   type SaveResearchReportInput,
 } from './research-report-service';
@@ -41,15 +42,20 @@ const ROW = {
   completed_at: '2026-08-05T10:00:45.000Z',
 };
 
-function database(rows: unknown[] = [ROW]): DatabaseAdapter & { query: ReturnType<typeof vi.fn> } {
+function database(
+  rows: unknown[] = [ROW],
+): DatabaseAdapter & { query: ReturnType<typeof vi.fn>; execute: ReturnType<typeof vi.fn> } {
   const db = {
     query: vi.fn().mockResolvedValue(rows),
-    execute: vi.fn(),
+    execute: vi.fn().mockResolvedValue(undefined),
     transaction: vi.fn(),
     withUser: vi.fn(),
     dispose: vi.fn(),
   };
-  return db as unknown as DatabaseAdapter & { query: ReturnType<typeof vi.fn> };
+  return db as unknown as DatabaseAdapter & {
+    query: ReturnType<typeof vi.fn>;
+    execute: ReturnType<typeof vi.fn>;
+  };
 }
 
 function input(overrides: Partial<SaveResearchReportInput> = {}): SaveResearchReportInput {
@@ -265,5 +271,70 @@ describe('listResearchReports', () => {
     const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
     expect(sql).not.toContain('conversation_id');
     expect(params).toEqual(['user-1', 20]);
+  });
+});
+
+describe('settled research cost', () => {
+  it('projects the stored amount onto the report', async () => {
+    const db = database([{ ...ROW, settled_cost_microusd: '240000' }]);
+
+    const report = await getResearchReportByRequestId(db, {
+      userId: 'user-1',
+      requestId: 'agi.chat.web.send.turn-1',
+    });
+
+    expect(report?.settledCostMicrousd).toBe(240_000);
+  });
+
+  it('leaves the field absent for a run that was never settled', async () => {
+    const db = database([{ ...ROW, settled_cost_microusd: null }]);
+
+    const report = await getResearchReportByRequestId(db, {
+      userId: 'user-1',
+      requestId: 'agi.chat.web.send.turn-1',
+    });
+
+    expect(report?.settledCostMicrousd).toBeUndefined();
+  });
+
+  it('writes the settlement against the run that produced it', async () => {
+    const db = database();
+
+    await recordResearchReportSettledCost(db, {
+      userId: 'user-1',
+      requestId: 'agi.chat.web.send.turn-1',
+      settledCostMicrousd: 240_000.4,
+    });
+
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(db.execute.mock.calls[0]?.[1]).toEqual(['user-1', 'agi.chat.web.send.turn-1', 240_000]);
+  });
+
+  it('leaves the run alone when the column has not been migrated in', async () => {
+    const db = database();
+    db.execute.mockRejectedValueOnce(Object.assign(new Error('no such column'), { code: '42703' }));
+
+    await expect(
+      recordResearchReportSettledCost(db, {
+        userId: 'user-1',
+        requestId: 'agi.chat.web.send.turn-1',
+        settledCostMicrousd: 240_000,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rethrows any other write failure', async () => {
+    const db = database();
+    db.execute.mockRejectedValueOnce(
+      Object.assign(new Error('connection lost'), { code: '08006' }),
+    );
+
+    await expect(
+      recordResearchReportSettledCost(db, {
+        userId: 'user-1',
+        requestId: 'agi.chat.web.send.turn-1',
+        settledCostMicrousd: 240_000,
+      }),
+    ).rejects.toThrow('connection lost');
   });
 });
