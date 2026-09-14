@@ -58,6 +58,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   readyLocalModelIdOr,
   useModelInstallStore,
+  pickReadyLocalModelId,
 } from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
@@ -153,6 +154,9 @@ export default function ChatTabScreen() {
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
+  const defaultLocalModelDownloading = useModelInstallStore(
+    (s) => s.jobs[DEFAULT_LOCAL_MODEL_ID]?.status === 'downloading',
+  );
   const activeMode = appMode;
   const selectedSkillName =
     activeMode === 'cloud' && clerkUserId && skillSelection?.ownerId === clerkUserId
@@ -189,8 +193,20 @@ export default function ChatTabScreen() {
     }
     return executionModeForSelection(selectedModel, activeMode) === 'local'
       ? selectedModel
-      : readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID);
-  }, [activeMode, installedModelIds, readySystemModelIds, selectedModel, subscriptionTier]);
+      : (pickReadyLocalModelId(
+          DEFAULT_LOCAL_MODEL_ID,
+          installedModelIds,
+          readySystemModelIds,
+          defaultLocalModelDownloading,
+        ) ?? DEFAULT_LOCAL_MODEL_ID);
+  }, [
+    activeMode,
+    defaultLocalModelDownloading,
+    installedModelIds,
+    readySystemModelIds,
+    selectedModel,
+    subscriptionTier,
+  ]);
 
   const sendPreviewInput = useMemo<SendPreviewInput>(
     () => ({
