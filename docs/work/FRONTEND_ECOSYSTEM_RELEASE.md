@@ -23,6 +23,8 @@ shared component or the desktop shell needs it, and the cross-client
 verification once the peer hands over. Commits are pathspec-only, no amend,
 no reset, no stash, no attribution trailers, lowercase subjects.
 
+Checkpoint 2026-09-14: origin main moved from 9c8e3d2ca to 5797e009f (61 commits) after the pre-push chain ran green in a detached worktree of that sha; every commit in the range came through an approval or a lead fix. Deploys stay gated on founder approval. Landed after that sha and queued for the next push: the VS Code items G and H, the Chrome pass 3 follow-ups, the desktop items D(3) and the Code rail inset, the mobile fix package, and the paired browser proof.
+
 ## 2. Ecosystem map (as found in the repository)
 
 ```text
@@ -108,7 +110,7 @@ extension state plus the desktop pairing record).
 | F41 | Protocol 8 widened additively (1c6f257ff): `turn/failed` carries a typed `failure` (a closed code set with provider, retryable and an action such as sign_in_provider) beside the legacy string, `turn/completed` carries `failure: null`; `ThreadSummary` gains `gitBranch`, `worktreeRoot` and `client`, persisted on the managed session at start and refreshed at turn end, never computed at list time; `createdBy` gains `desktop`, derived from the client name "agi-desktop". Generated types regenerated. Live: a cheap tool turn still streams with no raw line; a credential-less turn reports `provider_auth_missing` for anthropic with `sign_in_provider`; `thread/list` shows branch `main` and client `fable_probe`. Consumers owed: VS Code (widen the source enum, render the failure action), desktop (drop its own source record, render the failure action). | VERIFIED (fixed) | reports/protocol-2.md; scratchpad cli/turn-probe-protocol2.log, fail-probe-full.log |
 | F42 | Browser tool for the CLI and VS Code through the desktop shell (wave 4): the contract gained two loopback routes, a local-client token header and a 0600 bridge file in the CLI config root; the CLI (5fec3e820) reads the file, asks the shell whether a browser is paired and offers `browser_read_page`, `browser_click`, `browser_type`, `browser_navigate` and `browser_screenshot` only then, reads auto-approve under safe reads, local privacy mode refuses the family, and `/chrome` reports the live state; the Electron shell (76ef2fd80) serves the routes under its existing capability gate with the client named in the prompt. VS Code inherits the tools through the app-server. Live against the running shell: the 0600 bridge file, `/client/state` 200 with the token and 401 without, `/client/command` answering not-paired, `/chrome` in the real TUI saying the desktop runs but no browser is paired, and a cheap-model turn confirming no browser tool is offered while unpaired. The paired end-to-end run (capability prompt naming the client, the TUI tool row, a real page title back) is owed: no AGI extension is paired with this machine's shell and the agent rightly refused to fake a pairing. The activity record exists but has no place in the shell's UI yet (needs a local-runtime event). | VERIFIED (unpaired path live; paired path by route and stub tests) | reports/BRIEF-browser-tool-1.md; apps/cli/src/browser_bridge.rs; apps/desktop/electron/browser |
 | F43 | The TypeScript provider display table and the CLI's Rust copy each claimed to mirror the other and had drifted (OpenRouter only in Rust, MiniMax only in TypeScript), so the VS Code picker printed the raw id `open_router`. Both tables now carry the same fifteen providers, a test reads the Rust source and fails on the next drift, and a provider without a vendored mark renders its brand dot. | VERIFIED (fixed, 4edb1b5e5) | `packages/contracts/types/src/__tests__/provider-display-rust-mirror.test.ts` |
-| F44 | Chrome real-site pass (chrome-3): the side panel's Site Allowlist "Add" only wrote storage and never requested the Chrome host permission, so page context failed on every approved site with an error that told the user to do what they had just done (P1, reproduced three times and at the API level); fixed by requesting and revoking the real permission from the panel's own control and saying why when Chrome declines. The Projects drawer showed "No projects" over "Loading projects…" like the two sibling drawers chrome-2 fixed (P2, fixed). Live proof that page context now attaches depends on accepting Chrome's permission prompt under Playwright; the report will say what was possible. | VERIFIED (fixes approved, committing) | reports/chrome-3-item1.md, chrome-3-item2.md |
+| F44 | Chrome real-site pass (chrome-3): the side panel's Site Allowlist "Add" only wrote storage and never requested the Chrome host permission, so page context failed on every approved site with an error that told the user to do what they had just done (P1, reproduced three times and at the API level); fixed by requesting and revoking the real permission from the panel's own control and saying why when Chrome declines. The Projects drawer showed "No projects" over "Loading projects…" like the two sibling drawers chrome-2 fixed (P2, fixed). Live proof that page context now attaches was attempted with the API wrapped: the click reaches `chrome.permissions.request`, Chrome raises its native prompt, and nothing under Playwright can answer it, so the happy path rests on the two unit suites and one human click; founder item "[Chrome QA] One click on Chrome's host-permission prompt". Both fixes landed (48bbd1432, 5ee46a64e). Also found: a reload mid-stream leaves the question with no reply and no retry (P2), the model choice resets to Best (auto) on New Chat by deliberate code while the web keeps it (P2, decided: sticky like the web), and the in-page panel once completed with "no text response" on the auto route (P2, low confidence). Keyboard, stop, retry after a forced failure, the in-page panel from its own control, history, themes and widths all passed. Follow-up package chrome-4 owns the three. | VERIFIED (fixes landed; happy path needs one human click) | reports/chrome-3-item1.md, chrome-3-item2.md |
 | F45 | Electron, `/code`: the window's traffic lights draw over the "AGI Code" wordmark. The hidden-title-bar inset is applied by `globals.css` to elements marked `data-sidebar-region` or `data-window-brand`, which the chat sidebar carries and the Code rail does not, so a second product surface put content under the traffic lights (seen in the desktop-code-1 item D captures). Routed to desktop-code-1: mark the Code rail's header from the same owner and capture both surfaces in the shell. | VERIFIED (defect) | scratchpad desktop-code/itemD-models-dark.png; apps/web/app/globals.css |
 
 ## 4. Founder decisions needed
@@ -139,6 +141,10 @@ extension state plus the desktop pairing record).
    once or setting a password for the QA user. Entry "[Mobile QA] A native
    sign-in path for the QA account" in the founder file. NON-BLOCKING for every
    other client.
+4. Chrome QA: one click on Chrome's host-permission prompt proves the side
+   panel's page context end to end; nothing under automation can answer that
+   prompt. Entry "[Chrome QA] One click on Chrome's host-permission prompt" in
+   the founder file. NON-BLOCKING.
 
 ## 5. Plan
 
@@ -179,13 +185,13 @@ extension state plus the desktop pairing record).
 
 ## 7. Screen Studio gate
 
-| Client            | Record today?                   | Visible blocker                                                             |
-| ----------------- | ------------------------------- | --------------------------------------------------------------------------- |
-| Web               | pending pass                    | theme switch fixed for signed-in users (F35); a control-driven pass is owed |
-| Mobile            | NO                              | F37 P1s: first local send, resume, Cloud entry                              |
-| Electron          | YES for chat and settings flows | F1 and F2 fixed; coding-session flows after desktop-code-1                  |
-| Tauri Cloud       | BLOCKED                         | decision 4.1                                                                |
-| Tauri Local       | BLOCKED                         | decision 4.1                                                                |
-| Chrome Extension  | YES for the side panel          | real-site pass with the fixed build owed                                    |
-| VS Code Extension | NO                              | approval card in the chat (item C) owed; the rest landed                    |
-| CLI               | YES                             | TUI polish cb17e54eb; tool turns clean over stdio                           |
+| Client            | Record today?                   | Visible blocker                                                                      |
+| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------ |
+| Web               | pending pass                    | theme switch fixed for signed-in users (F35); a control-driven pass is owed          |
+| Mobile            | NO                              | F37 P1s: first local send, resume, Cloud entry                                       |
+| Electron          | YES for chat and settings flows | F1 and F2 fixed; coding-session flows after desktop-code-1                           |
+| Tauri Cloud       | BLOCKED                         | decision 4.1                                                                         |
+| Tauri Local       | BLOCKED                         | decision 4.1                                                                         |
+| Chrome Extension  | YES for chat flows              | page-context flow after one human click on Chrome's permission prompt (founder item) |
+| VS Code Extension | NO                              | approval card in the chat (item C) owed; the rest landed                             |
+| CLI               | YES                             | TUI polish cb17e54eb; tool turns clean over stdio                                    |
