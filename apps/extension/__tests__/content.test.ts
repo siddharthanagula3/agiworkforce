@@ -123,12 +123,6 @@ vi.mock('../src/page-metadata', () => ({
   })),
 }));
 
-vi.mock('../src/nlweb', () => ({
-  detectNLWeb: vi
-    .fn()
-    .mockResolvedValue({ supported: false, endpoints: [], schemaTypes: [], url: '' }),
-}));
-
 import { automationState, handleMessage, checkConnectionStatus } from '../src/content.ts';
 
 function clearBody(): void {
