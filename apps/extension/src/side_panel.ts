@@ -103,6 +103,7 @@ import {
   DEFAULT_AGI_BRIDGE_URL,
   validateBridgeUrl,
   sanitizePageText,
+  SELECTED_MODEL_STORAGE_KEY,
 } from './background/policy';
 import {
   FilePen,
@@ -719,6 +720,15 @@ const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
 const assistantCloudIdByStreamId = new Map<string, string>();
 
+/**
+ * A save on every text delta would be a storage write per token. Throttled
+ * to once per interval instead; the placeholder pushed at stream start and
+ * the unconditional save at stream end are what keep a reload from ever
+ * landing on nothing, this only bounds how stale a mid-stream save can be.
+ */
+const STREAM_TEXT_PERSIST_INTERVAL_MS = 1_500;
+let lastStreamPersistAtMs = 0;
+
 let currentPageHostname = '';
 
 type SidePanelTab = 'chat' | 'workflows' | 'computer-use' | 'cloud-runs' | 'page';
@@ -740,6 +750,7 @@ function serializeMessagesForHistory() {
     timestamp: message.timestamp,
     ...(message.runtime ? { runtime: message.runtime } : {}),
     ...(message.error ? { error: true } : {}),
+    ...(message.role === 'assistant' && message.streaming ? { streaming: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
     ...(message.role === 'assistant' && message.agentEvents
       ? { agentEvents: message.agentEvents }
@@ -945,13 +956,15 @@ function clearStoredMessages(): void {
   _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
-  _ctx.selectedModel = 'auto';
+  // The selected model is a sticky preference, not conversation state: a new
+  // chat starts with an empty transcript, not a different model than the one
+  // just picked. Only sign-out/account switch resets it, in
+  // transitionManagedCloudOwner.
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
   refreshModelPickerUI();
   refreshEffortUI();
-  chrome.storage.local.remove('agi_model').catch(() => {});
   const owner = _ctx.managedCloudOwner;
   if (!owner) return;
   startNewConversation(owner).catch((err) => {
@@ -1008,7 +1021,13 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.activeProject = null;
   delete _ctx.pendingProjectBinding;
   refreshProjectChip();
-  _ctx.selectedModel = 'auto';
+  // A first sign-in discovering an already-restored preference must not wipe
+  // it; only a genuine sign-out or account switch (a real previous owner
+  // being replaced) resets the sticky model choice.
+  if (previousOwner) {
+    _ctx.selectedModel = 'auto';
+    chrome.storage.local.remove(SELECTED_MODEL_STORAGE_KEY).catch(() => {});
+  }
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
@@ -1373,6 +1392,23 @@ function injectStyles(): void {
     }
     .sp-bubble-retry-btn:hover:not(:disabled) { background: var(--agi-ext-hover); }
     .sp-bubble-retry-btn:disabled { opacity: 0.5; cursor: default; }
+    /* Interrupted footer: a reply cut off by a reload or a closed tab, not a
+       failure, so it takes the neutral text tone, not the danger one. */
+    .sp-bubble-interrupted-footer {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-bubble-interrupted-text {
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--agi-ext-text-muted);
+      overflow-wrap: anywhere;
+    }
     /* ── Bubble action row (timestamp + copy) ── */
     .sp-bubble-actions {
       display: flex;
@@ -4807,6 +4843,17 @@ function sendMessage(text: string): void {
 
         const history = selectModelHistory(_ctx.messages, userMsg.id);
 
+        _ctx.messages.push({
+          id: streamId,
+          role: 'assistant',
+          content: '',
+          streaming: true,
+          timestamp: Date.now(),
+          runtime: 'managed-cloud',
+        });
+        lastStreamPersistAtMs = Date.now();
+        saveMessages();
+
         chrome.runtime.sendMessage(
           {
             type: 'CHAT_MESSAGE',
@@ -4865,6 +4912,17 @@ function sendMessage(text: string): void {
   const streamId = beginManagedStream(_ctx.quickMode);
 
   const history = selectModelHistory(_ctx.messages, userMsg.id);
+
+  _ctx.messages.push({
+    id: streamId,
+    role: 'assistant',
+    content: '',
+    streaming: true,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+  });
+  lastStreamPersistAtMs = Date.now();
+  saveMessages();
 
   chrome.runtime.sendMessage(
     {
@@ -5960,6 +6018,7 @@ function buildUI(): void {
             : resolveModelEffort(m.value, _ctx.reasoningEffort);
       }
       _ctx.selectedModel = m.value;
+      chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: m.value }).catch(() => {});
       updateModelBadge(m.value);
       renderModelDropdown();
       refreshEffortUI();
@@ -6241,11 +6300,19 @@ function buildUI(): void {
       modelSelectorBtn.setAttribute('aria-expanded', 'false');
     }
   });
-  chrome.storage.local.get(['agi_thinking_enabled'], (result) => {
+  chrome.storage.local.get(['agi_thinking_enabled', SELECTED_MODEL_STORAGE_KEY], (result) => {
     if (chrome.runtime.lastError) return;
     const storedThinking = result['agi_thinking_enabled'] as boolean | undefined;
     if (storedThinking !== undefined) {
       _ctx.thinkingEnabled = storedThinking;
+    }
+    // Reconciled against real access once GET_CLOUD_AUTH_TOKEN resolves
+    // (reconcileManagedModelSelection with null access here would only ever
+    // discard it back to 'auto'); a retired or now-inaccessible model gets
+    // corrected there, not by skipping the restore.
+    const storedModel = result[SELECTED_MODEL_STORAGE_KEY] as string | undefined;
+    if (storedModel) {
+      _ctx.selectedModel = storedModel;
     }
     renderModelDropdown();
     renderModelTrigger();
@@ -7519,7 +7586,7 @@ function buildUI(): void {
     // the read access page context actually needs.
     const hostGranted = await requestApprovedSiteHostPermission(origin);
     if (!hostGranted) {
-      allowlistStatus.textContent = `Chrome did not grant access to ${origin}, so it was not approved.`;
+      allowlistStatus.textContent = t('spAllowlistHostPermissionRefused', [origin]);
       allowlistStatus.removeAttribute('hidden');
       return;
     }
@@ -10697,6 +10764,13 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     } else {
       removeThinking();
       renderMessages();
+    }
+    if (!chunk.done) {
+      const now = Date.now();
+      if (now - lastStreamPersistAtMs >= STREAM_TEXT_PERSIST_INTERVAL_MS) {
+        lastStreamPersistAtMs = now;
+        saveMessages();
+      }
     }
   }
 
