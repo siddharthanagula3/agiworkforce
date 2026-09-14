@@ -77,19 +77,7 @@ impl ToolDefinitionCatalogExt for ToolDefinition {
     }
 }
 
-/// Canonicalize reference-compatible and AGI compatibility aliases to executor names.
-/// The one sentence a surface shows for a tool call in progress.
-///
-/// Both the plain transcript and the TUI's tool row read it from here. They
-/// used to derive their own: the transcript from a string written at each
-/// tool's call site, the TUI from the tool's name with the underscores taken
-/// out, which is why a browser read announced itself as "Running browser read
-/// page" in one surface and "Read the active tab" in the other. A user moving
-/// between the two was told two different things about one action.
-///
-/// `argument` reads a named call argument, because the two callers hold their
-/// arguments in different shapes. `None` means this tool has no phrasing of
-/// its own and the caller should fall back to its own default.
+/// The line a surface shows for a tool call, or `None` when the tool has none.
 pub fn tool_status_line(
     tool_name: &str,
     argument: impl Fn(&str) -> Option<String>,
@@ -112,6 +100,7 @@ pub fn tool_status_line(
     }
 }
 
+/// Canonicalize reference-compatible and AGI compatibility aliases to executor names.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
     match tool_name {
         "Read" | "read" | "ReadFile" => "read_file",
@@ -1002,10 +991,6 @@ mod tests {
             .collect()
     }
 
-    /// Both surfaces read one sentence from here. The TUI used to build its
-    /// own from the tool's name, so a browser read announced itself as
-    /// "Running browser read page" in the transcript's neighbour surface and
-    /// "Read the active tab" in the transcript.
     #[test]
     fn one_owner_gives_both_surfaces_the_same_sentence() {
         let args: std::collections::HashMap<&str, &str> = [
@@ -1034,19 +1019,13 @@ mod tests {
             Some("cargo test")
         );
 
-        // An alias resolves to the same sentence as its canonical name, so the
-        // two spellings cannot drift apart.
         assert_eq!(
             tool_status_line("Bash", read),
             tool_status_line("run_command", read)
         );
 
-        // A tool with no phrasing of its own says so, rather than having one
-        // invented from its name here.
         assert_eq!(tool_status_line("some_new_tool", read), None);
 
-        // A named argument that is missing or blank does not produce a
-        // half-written sentence for the tools that read one directly.
         let blank = |_: &str| Some(String::new());
         assert_eq!(tool_status_line("run_command", blank), None);
     }
