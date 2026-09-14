@@ -268,8 +268,11 @@ the control-driven web pass.
   44 pt header controls, the switcher snapshot carries no conversation, a
   notifications row, one wordmark, no Android-only model on iOS.
 - Web (baseline defects only): the theme switch for signed-in users, the code
-  page's hydration flash, the appearance-settings revert on reload (in review),
-  a desktop-route button on theme classes, a shared host-bridge test stub.
+  page's hydration flash, the appearance-settings revert on reload (a pending
+  change now flushes on page hide with keepalive and a pre-warmed CSRF token,
+  b67d72270, proven live in the fast and the slow case), the display-language
+  scope copy, a desktop-route button on theme classes, a shared host-bridge
+  test stub.
 
 ### Architecture
 
@@ -325,9 +328,7 @@ zero-price router on paid plans; a native sign-in path for the QA account; the
 Clerk development instance's Native API; one click on Chrome's host-permission
 prompt; the Accessibility grant for the process that runs the agents. Not
 founder-gated but open: on-device generation on the simulator
-(needs one run on a real device), the appearance-settings flush (fixed in the
-tree, its commit waiting on one green test run on a quieter machine), and
-chrome-5's remaining items.
+(needs one run on a real device) and chrome-5's remaining items.
 
 ### Screen Studio flows
 
