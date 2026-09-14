@@ -115,6 +115,7 @@ pub mod cost_ledger;
 pub mod notebook_edit;
 pub mod powershell_tool;
 pub mod sandbox;
+pub mod schedules;
 pub mod shell_snapshot;
 pub mod sync;
 pub mod terminal_style;
@@ -854,6 +855,75 @@ enum Command {
     Onboarding,
     /// Show the account's managed allowance from the shared usage ledger.
     Usage,
+    /// Manage the account's scheduled agent tasks in AGI cloud.
+    Schedules {
+        #[command(subcommand)]
+        action: SchedulesSubcommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SchedulesSubcommand {
+    /// List the account's schedules with status, cadence and next run.
+    List {
+        /// Maximum number of schedules to return.
+        #[arg(long, default_value_t = schedules::DEFAULT_SCHEDULE_LIMIT)]
+        limit: u32,
+        /// Number of schedules to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Create a cron schedule that runs in AGI cloud.
+    Create {
+        /// Human-readable schedule name.
+        #[arg(long)]
+        name: String,
+        /// 5-field cron expression, for example "0 9 * * *".
+        #[arg(long)]
+        schedule: String,
+        /// Prompt the scheduled agent runs each time it fires.
+        #[arg(long)]
+        prompt: String,
+        /// IANA time zone the cron expression is read in. Defaults to this machine's.
+        #[arg(long)]
+        timezone: Option<String>,
+        /// Model to run it on. Defaults to the account's automatic selection.
+        #[arg(long)]
+        model: Option<String>,
+        /// Optional description stored with the schedule.
+        #[arg(long)]
+        description: Option<String>,
+        /// Create it paused instead of active.
+        #[arg(long)]
+        paused: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Delete a schedule by id or name.
+    Delete {
+        /// Schedule id, or its exact name.
+        id: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show a schedule's run history.
+    Runs {
+        /// Schedule id, or its exact name.
+        id: String,
+        /// Maximum number of runs to return.
+        #[arg(long, default_value_t = schedules::DEFAULT_RUN_LIMIT)]
+        limit: u32,
+        /// Number of runs to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
@@ -1223,6 +1293,127 @@ fn print_structured(value: &serde_json::Value, mode: StructuredOutput) -> Result
         _ => println!("{}", serde_json::to_string_pretty(value)?),
     }
     Ok(())
+}
+
+async fn handle_schedules_command(
+    action: &SchedulesSubcommand,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    let client = match schedules::SchedulesClient::connect() {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("{} {}", ts::error_label(), ts::danger(error.to_string()));
+            std::process::exit(1);
+        }
+    };
+
+    let render = |value: serde_json::Value, text: String, json_flag: bool| -> Result<()> {
+        match structured_output(json_flag, output) {
+            StructuredOutput::Text => {
+                println!("{text}");
+                Ok(())
+            }
+            mode => print_structured(&value, mode),
+        }
+    };
+
+    let result = match action {
+        SchedulesSubcommand::List {
+            limit,
+            offset,
+            json,
+        } => match client.list(*limit, *offset).await {
+            Ok(rows) => render(
+                serde_json::to_value(&rows)?,
+                schedules::render_schedules(&rows),
+                *json,
+            ),
+            Err(error) => Err(anyhow::anyhow!("{error}")),
+        },
+        SchedulesSubcommand::Create {
+            name,
+            schedule,
+            prompt,
+            timezone,
+            model,
+            description,
+            paused,
+            json,
+        } => {
+            let zone = timezone.clone().unwrap_or_else(schedules::local_timezone);
+            let request = schedules::cron_create_request(
+                name,
+                schedule,
+                prompt,
+                !*paused,
+                &zone,
+                model.as_deref(),
+                description.as_deref(),
+            );
+            match client.create(&request).await {
+                Ok(created) => render(
+                    serde_json::to_value(&created)?,
+                    schedules::render_schedules(std::slice::from_ref(&created)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
+        SchedulesSubcommand::Delete { id, yes, json } => match client.resolve_id(id).await {
+            Ok(resolved) => {
+                if !*yes
+                    && !dialoguer::Confirm::new()
+                        .with_prompt(format!(
+                            "Delete schedule {resolved}? It stops firing for every surface and its run history goes with it. This cannot be undone."
+                        ))
+                        .default(false)
+                        .interact()
+                        .unwrap_or(false)
+                {
+                    println!("Left the schedule in place.");
+                    return Ok(());
+                }
+                match client.delete(&resolved).await {
+                    Ok(()) => render(
+                        serde_json::json!({ "deleted": resolved }),
+                        format!("Deleted schedule {resolved}."),
+                        *json,
+                    ),
+                    Err(error) => Err(anyhow::anyhow!("{error}")),
+                }
+            }
+            Err(error) => Err(anyhow::anyhow!("{error}")),
+        },
+        SchedulesSubcommand::Runs {
+            id,
+            limit,
+            offset,
+            json,
+        } => {
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.runs(&resolved, *limit, *offset).await {
+                Ok(rows) => render(
+                    serde_json::to_value(&rows)?,
+                    schedules::render_runs(&rows),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
+    };
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) => schedules_command_failure(error.to_string()),
+    }
+}
+
+fn schedules_command_failure(message: String) -> Result<()> {
+    eprintln!("{} {}", ts::error_label(), ts::danger(message));
+    std::process::exit(1);
 }
 
 async fn handle_models_command(
@@ -2749,6 +2940,9 @@ pub async fn run_main() -> Result<()> {
                 println!("{}", usage_summary::account_lines().await.join("\n"));
                 Ok(())
             }
+
+            // --- Schedules ---
+            Command::Schedules { action } => handle_schedules_command(action, cli.output).await,
 
             // --- Onboarding ---
             Command::Onboarding => {

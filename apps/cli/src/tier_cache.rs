@@ -294,31 +294,43 @@ impl CachedTier {
 // Host allowlist helper
 // ---------------------------------------------------------------------------
 
-/// Resolve the API base URL, applying an allowlist that requires:
-/// - https:// scheme, AND
-/// - host that ends with `agiworkforce.com` (exact match or subdomain).
+/// Resolve the API base URL, applying an allowlist that requires either:
+/// - `https://` and a host that is `agiworkforce.com` or a subdomain of it, or
+/// - a loopback host (`localhost`, `127.0.0.1`, `[::1]`) over `http://`.
 ///
 /// This closes the JWT-exfiltration risk where an attacker-controlled
 /// `AGIWORKFORCE_API_BASE` env var would cause the CLI to send the Bearer
-/// token to an arbitrary host.
+/// token to an arbitrary host. A loopback base cannot carry the token off the
+/// machine, and is what a `next dev` web server is reached on, so it is
+/// allowed on the same terms the VS Code extension already allows it
+/// (`apps/extension-vscode/src/utils/api.ts`, `validateEndpointUrl`).
 ///
 /// Returns `None` (skip fetch, log warning) if the URL fails the allowlist.
 /// Pass `raw` as the raw env-var value (or `DEFAULT_API_BASE` as the default).
 pub fn resolve_agi_api_base(raw: &str) -> Option<String> {
-    if !raw.starts_with("https://") {
+    let after_scheme = if let Some(rest) = raw.strip_prefix("https://") {
+        rest
+    } else if let Some(rest) = raw.strip_prefix("http://") {
+        let host = host_of(rest);
+        if !is_loopback_host(host) {
+            tracing::warn!(
+                "[tier_cache] API base '{}' is not HTTPS and not a loopback host, skipping tier fetch",
+                raw
+            );
+            return None;
+        }
+        return Some(raw.trim_end_matches('/').to_string());
+    } else {
         tracing::warn!(
             "[tier_cache] API base '{}' is not HTTPS, skipping tier fetch",
             raw
         );
         return None;
-    }
+    };
 
-    // Extract the host portion: everything after "https://" up to the first "/" or end.
-    let after_scheme = &raw["https://".len()..];
-    let host = after_scheme.split('/').next().unwrap_or("");
-
-    // Host must be exactly "agiworkforce.com" or end with ".agiworkforce.com".
-    let host_ok = host == "agiworkforce.com" || host.ends_with(".agiworkforce.com");
+    let host = host_of(after_scheme);
+    let host_ok =
+        host == "agiworkforce.com" || host.ends_with(".agiworkforce.com") || is_loopback_host(host);
 
     if !host_ok {
         tracing::warn!(
@@ -329,6 +341,21 @@ pub fn resolve_agi_api_base(raw: &str) -> Option<String> {
     }
 
     Some(raw.trim_end_matches('/').to_string())
+}
+
+fn host_of(after_scheme: &str) -> &str {
+    after_scheme.split('/').next().unwrap_or("")
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    let bare = host.rsplit_once(':').map_or(host, |(head, port)| {
+        if port.chars().all(|c| c.is_ascii_digit()) && !port.is_empty() {
+            head
+        } else {
+            host
+        }
+    });
+    matches!(bare, "localhost" | "127.0.0.1" | "[::1]")
 }
 
 // ---------------------------------------------------------------------------
@@ -804,6 +831,35 @@ mod tests {
             resolve_agi_api_base("https://agiworkforce.com/"),
             Some("https://agiworkforce.com".to_string())
         );
+    }
+
+    #[test]
+    fn resolve_agi_api_base_accepts_a_loopback_dev_server() {
+        for base in [
+            "http://localhost:3100",
+            "http://127.0.0.1:3100",
+            "http://[::1]:3100",
+        ] {
+            assert_eq!(
+                resolve_agi_api_base(base),
+                Some(base.to_string()),
+                "a loopback base cannot carry the token off the machine: {base}"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_agi_api_base_rejects_a_host_that_only_looks_loopback() {
+        // The token must not reach a remote host whose name merely embeds one
+        // of the loopback spellings.
+        for base in [
+            "http://localhost.evil.com:3100",
+            "http://127.0.0.1.evil.com",
+            "http://notlocalhost",
+            "http://10.0.0.5:3100",
+        ] {
+            assert_eq!(resolve_agi_api_base(base), None, "{base} must be refused");
+        }
     }
 
     // -- reconcile_fetched_tier tests ----------------------------------------
