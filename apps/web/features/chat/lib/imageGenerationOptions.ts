@@ -135,6 +135,13 @@ export interface ImageEditRequest {
   transparentBackground?: boolean;
 }
 
+export interface ImageRevisionRequest {
+  prompt: string;
+  aspectRatio: ImageAspectRatio;
+  modelId?: string;
+  edit?: ImageEditRequest;
+}
+
 export function resolveImageGenerationRequestOptions(
   aspectRatio: ImageAspectRatio,
   modelId?: string,
@@ -165,7 +172,7 @@ export function resolveImageGenerationRequestOptions(
  * one path every browser and jsdom implement, and it hands back base64 already
  * encoded, so a multi-megapixel PNG never becomes a megabyte-long argument list.
  */
-export function readImageFileAsBase64(file: File): Promise<string> {
+export function readImageFileAsBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error ?? new Error('The image could not be read.'));
@@ -180,4 +187,10 @@ export function readImageFileAsBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+export async function readImageUrlAsBase64(url: string): Promise<string> {
+  const response = await fetch(url, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error('The generated image could not be read for editing.');
+  return readImageFileAsBase64(await response.blob());
 }

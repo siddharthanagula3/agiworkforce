@@ -111,7 +111,12 @@ import {
   isValidIanaTimeZone,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
-import type { ModelCapabilities, RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
+import type {
+  ModelCapabilities,
+  ProjectFileCitation,
+  RoutingSlot,
+  ThinkingBlock,
+} from '@agiworkforce/types';
 import {
   applyConversationContext,
   assessModelSwitchCache,
@@ -173,8 +178,8 @@ import {
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import {
   applyProjectContext,
-  formatProjectSystemPrompt,
   loadProjectContext,
+  renderProjectContext,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
 import {
@@ -733,6 +738,12 @@ export type ProcessedRequest = {
   chatRequest: ChatCompletionRequest;
   conversationId: string | undefined;
   conversationIsTemporary?: boolean;
+  /**
+   * The project passages this turn was given, with the page or heading each
+   * came from. Built once by the context load and carried so the response
+   * header and the persisted row cite the same passages the prompt carried.
+   */
+  projectSources?: readonly ProjectFileCitation[];
   assistantMessageId?: string | undefined;
   autoMemoryFacts?: string[];
   autoMemoryFactsRequireToolFreeTurn?: boolean;
@@ -2096,9 +2107,16 @@ export async function processRequest(
     .filter((text) => text.length > 0);
 
   const ownershipLeg: Promise<
-    { ok: true; isTemporary: boolean; projectId: string | null } | ProcessFailure
+    | {
+        ok: true;
+        isTemporary: boolean;
+        projectId: string | null;
+        projectSources?: ProjectFileCitation[];
+      }
+    | ProcessFailure
   > = chatRequest.conversation_id
     ? (async () => {
+        let projectSources: ProjectFileCitation[] = [];
         try {
           const scoped = await scopedDbPromise;
           if (scoped.userId !== userId) {
@@ -2168,10 +2186,11 @@ export async function processRequest(
                   ),
                 };
               }
-              const projectPrompt = formatProjectSystemPrompt(projectContext);
-              if (projectPrompt) {
-                applyProjectContext(chatRequest, projectPrompt);
+              const rendered = renderProjectContext(projectContext);
+              if (rendered.prompt) {
+                applyProjectContext(chatRequest, rendered.prompt);
               }
+              projectSources = rendered.citations;
             } catch (error) {
               logger.error(
                 {
@@ -2203,6 +2222,7 @@ export async function processRequest(
             ok: true,
             isTemporary: ownedRows[0].is_temporary,
             projectId: ownedRows[0].project_id,
+            ...(projectSources.length > 0 ? { projectSources } : {}),
           };
         } catch (error) {
           logger.error(
@@ -3941,6 +3961,9 @@ export async function processRequest(
     chatRequest,
     conversationId: chatRequest.conversation_id,
     conversationIsTemporary,
+    ...(ownership.ok && ownership.projectSources?.length
+      ? { projectSources: ownership.projectSources }
+      : {}),
     assistantMessageId: chatRequest.assistant_message_id,
     autoMemoryFacts,
     autoMemoryFactsRequireToolFreeTurn,

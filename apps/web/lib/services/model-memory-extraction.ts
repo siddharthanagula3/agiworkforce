@@ -23,18 +23,26 @@ import {
   isMemoryExtractionWorthwhile,
 } from '@agiworkforce/agent-core';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { resolveAutoRoute } from '@agiworkforce/routing';
+import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
-import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import {
+  fingerprintManagedUsageRequest,
+  finalizeManagedUsageRequest,
+  markManagedUsageProviderStarted,
+  reserveManagedUsageRequest,
+} from '@/lib/services/managed-usage-request-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { logger } from '@/lib/logger';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 export const MODEL_MEMORY_EXTRACTION_ENV = 'AGI_MODEL_MEMORY_EXTRACTION';
+
+export const MEMORY_EXTRACTION_QUOTA_FEATURE = 'memory_extraction';
 
 /** Matches the pattern path's own `slice(0, 5)`, so the flag cannot widen the write. */
 export const MAX_AUTO_MEMORY_FACTS = 5;
@@ -63,9 +71,11 @@ export function isModelMemoryExtractionEnabled(): boolean {
 }
 
 export interface ModelAutoMemoryExtractionInput {
+  db: DatabaseAdapter;
   message: string;
   userId: string;
   organizationId: string | null;
+  planTier: string;
   requestId?: string;
 }
 
@@ -101,55 +111,85 @@ export async function extractAutoMemoryFactsWithModel(
   }
   const wireMode = resolveWireMode(route.provider);
 
-  const result = await extractMemoryFactsWithModel(input.message, {
-    timeoutMs: EXTRACTION_TIMEOUT_MS,
-    maxFacts: MAX_AUTO_MEMORY_FACTS,
-    onFallback: (reason) => {
-      if (reason === 'not_worthwhile') return;
-      logger.warn(
-        { reason, provider: route.provider, userId: input.userId, requestId: input.requestId },
-        '[memory-extraction] fell back to the pattern candidates',
-      );
-    },
-    runner: async ({ systemPrompt, message }, signal) => {
-      const chatRequest = openAIWireRequestToChatRequest({
-        model: route.providerModelId,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message },
-        ],
-        max_tokens: MAX_OUTPUT_TOKENS,
-        temperature: 0,
-        stream: false,
-      });
-      const adapter = buildServerProviderAdapter(route.provider);
-      const response = await drainToLlmResponse(
-        adapter.stream(chatRequest, signal),
+  let reservation;
+  try {
+    reservation = await reserveManagedUsageRequest({
+      db: input.db,
+      userId: input.userId,
+      organizationId: input.organizationId,
+      idempotencyKey: `memory-extraction:${input.requestId ?? randomUUID()}`,
+      requestHash: fingerprintManagedUsageRequest({
+        kind: MEMORY_EXTRACTION_QUOTA_FEATURE,
+        userId: input.userId,
+        requestId: input.requestId ?? null,
+        provider: route.provider,
+        model: route.modelKey,
+      }),
+      provider: route.provider,
+      model: route.modelKey,
+      estimatedCostCents: LLMCostCalculator.estimateCost(
+        route.provider,
         route.modelKey,
-        (chunk) => toGenericUpstreamError(route.provider, chunk),
-        wireMode,
-      );
+        estimateTokens(input.message, route.modelKey) + 256,
+        MAX_OUTPUT_TOKENS,
+      ),
+      leaseSeconds: 60,
+      planTier: input.planTier,
+      isFlagship: false,
+      quotaFeature: MEMORY_EXTRACTION_QUOTA_FEATURE,
+    });
+  } catch (error) {
+    logger.warn(
+      { error, userId: input.userId, requestId: input.requestId },
+      '[memory-extraction] usage reservation refused; keeping the pattern candidates',
+    );
+    return patternFacts(input.message);
+  }
 
-      const usage = {
-        promptTokens: response.promptTokens,
-        completionTokens: response.completionTokens,
-        totalTokens: response.totalTokens,
-        cacheReadInputTokens: response.cachedInputTokens,
-        cacheCreationInputTokens: response.cacheCreationInputTokens,
-        cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
-      };
-      // Recorded as cost of goods with nothing charged to the customer: when
-      // the founder turns this on, the spend has to be visible on the very
-      // first turn rather than discovered on an invoice. A ledger failure is
-      // logged rather than thrown, because the provider call already happened
-      // and discarding its facts would not unspend it.
-      try {
-        await recordSettledProviderCost({
-          userId: input.userId,
-          organizationId: input.organizationId,
-          provider: route.provider,
-          model: route.modelKey,
-          routeId: route.routeId,
+  let settled = false;
+  try {
+    const result = await extractMemoryFactsWithModel(input.message, {
+      timeoutMs: EXTRACTION_TIMEOUT_MS,
+      maxFacts: MAX_AUTO_MEMORY_FACTS,
+      onFallback: (reason) => {
+        if (reason === 'not_worthwhile') return;
+        logger.warn(
+          { reason, provider: route.provider, userId: input.userId, requestId: input.requestId },
+          '[memory-extraction] fell back to the pattern candidates',
+        );
+      },
+      runner: async ({ systemPrompt, message }, signal) => {
+        await markManagedUsageProviderStarted(reservation);
+        const chatRequest = openAIWireRequestToChatRequest({
+          model: route.providerModelId,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: message },
+          ],
+          max_tokens: MAX_OUTPUT_TOKENS,
+          temperature: 0,
+          stream: false,
+        });
+        const adapter = buildServerProviderAdapter(route.provider);
+        const response = await drainToLlmResponse(
+          adapter.stream(chatRequest, signal),
+          route.modelKey,
+          (chunk) => toGenericUpstreamError(route.provider, chunk),
+          wireMode,
+        );
+
+        const usage = {
+          promptTokens: response.promptTokens,
+          completionTokens: response.completionTokens,
+          totalTokens: response.totalTokens,
+          cacheReadInputTokens: response.cachedInputTokens,
+          cacheCreationInputTokens: response.cacheCreationInputTokens,
+          cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
+        };
+        settled = true;
+        await finalizeManagedUsageRequest({
+          ...reservation,
+          outcome: 'completed',
           actualCostCents: LLMCostCalculator.calculateCost(
             route.provider,
             route.modelKey,
@@ -157,22 +197,27 @@ export async function extractAutoMemoryFactsWithModel(
             undefined,
             route.routeId,
           ),
-          sourceRef: `memory-extraction:${input.requestId ?? randomUUID()}`,
-          taskOutcome: 'delivered',
-          surface: 'memory_extraction',
-          customerCanonicalMicrousd: 0,
-          usage,
+          usage: { ...usage, type: MEMORY_EXTRACTION_QUOTA_FEATURE, requestId: input.requestId },
         });
-      } catch (error) {
-        logger.warn(
-          { error, userId: input.userId, requestId: input.requestId },
-          '[memory-extraction] provider cost was not recorded',
+
+        return response.content;
+      },
+    });
+
+    return result.facts;
+  } finally {
+    if (!settled) {
+      await finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'failed',
+        actualCostCents: 0,
+        usage: { type: MEMORY_EXTRACTION_QUOTA_FEATURE, requestId: input.requestId },
+      }).catch((releaseError: unknown) => {
+        logger.error(
+          { releaseError, userId: input.userId, requestId: input.requestId },
+          '[memory-extraction] reservation release failed',
         );
-      }
-
-      return response.content;
-    },
-  });
-
-  return result.facts;
+      });
+    }
+  }
 }

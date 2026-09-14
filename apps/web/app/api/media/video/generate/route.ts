@@ -841,7 +841,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   try {
     idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('Idempotency-Key'));
     const mediaIdentity = parseManagedMediaIdempotencyKey(idempotencyKey);
-    if (!mediaIdentity || mediaIdentity.operation !== 'video') {
+    if (!mediaIdentity || mediaIdentity.operation !== 'video' || mediaIdentity.surface === 'cli') {
       throw new ManagedUsageRequestError(
         'Idempotency-Key must identify one Managed Cloud video operation.',
         400,
