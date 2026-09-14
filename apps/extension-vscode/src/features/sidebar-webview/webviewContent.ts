@@ -732,6 +732,43 @@ export function getWebviewContent(
     }
     .model-pill:hover { background: var(--hover); color: var(--text-primary); }
 
+    /* Dictation */
+    .mic-chip {
+      background: none;
+      border: none;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      height: 28px;
+      width: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 12px;
+      transition: background 0.12s var(--transition), color 0.12s var(--transition);
+    }
+    .mic-chip:hover:not(:disabled) { background: var(--hover); color: var(--text-primary); }
+    .mic-chip.recording { color: var(--accent-terra); }
+    .mic-chip.recording .codicon { animation: mic-pulse 1.4s ease-in-out infinite; }
+    .mic-chip.transcribing { color: var(--text-primary); }
+
+    @keyframes mic-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+
+    .mic-status {
+      font-size: 11px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .mic-status:empty { display: none; }
+    .mic-status[data-kind="error"] { color: var(--error); }
+
     #sendBtn {
       background: var(--accent-terra);
       border: none;
@@ -1603,6 +1640,7 @@ export function getWebviewContent(
     .recent-chats-all:hover { color: var(--text-primary); background: var(--hover); }
     .plus-btn:disabled,
     .model-pill:disabled,
+    .mic-chip:disabled,
     .controls-summary:disabled,
     .prompt-chip:disabled {
       opacity: 0.42;
@@ -1610,6 +1648,7 @@ export function getWebviewContent(
     }
     .plus-btn:disabled:hover,
     .model-pill:disabled:hover,
+    .mic-chip:disabled:hover,
     .controls-summary:disabled:hover,
     .prompt-chip:disabled:hover {
       color: var(--text-secondary);
@@ -2066,6 +2105,8 @@ export function getWebviewContent(
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="menu" aria-expanded="false">+</button>
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
+        <button class="mic-chip" id="micBtn" title="Voice input" aria-label="Voice input" aria-pressed="false"><span class="codicon codicon-mic" aria-hidden="true"></span></button>
+        <span class="mic-status" id="micStatus" role="status" aria-live="polite"></span>
         <span class="context-usage" id="contextUsage"></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
@@ -2105,6 +2146,8 @@ export function getWebviewContent(
     const sessionIdentitySeparator = document.getElementById('sessionIdentitySeparator');
     const sessionProviderLabel = document.getElementById('sessionProviderLabel');
     const controlsSummary = document.getElementById('controlsSummary');
+    const micBtn = document.getElementById('micBtn');
+    const micStatus = document.getElementById('micStatus');
     const contextUsageEl = document.getElementById('contextUsage');
     const runtimeStatusEl = document.getElementById('runtimeStatus');
     const runtimeStatusTitleEl = document.getElementById('runtimeStatusTitle');
@@ -3750,6 +3793,200 @@ export function getWebviewContent(
     });
 
     // ── Messages from extension ───────────────────────────────────────────────
+    // ── Dictation ─────────────────────────────────────────────────────────────
+    const MIC_UNAVAILABLE_LABEL =
+      'Voice input unavailable: VS Code does not grant extension panels microphone access';
+    const MAX_RECORDING_MS = 120000;
+    const RECORDING_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+
+    var micRecorder = null;
+    var micStream = null;
+    var micChunks = [];
+    var micState = 'idle';
+    var micStopTimer = null;
+
+    function micLanguage() {
+      var tag = navigator.language || '';
+      var primary = tag.split('-')[0];
+      return primary && primary.length >= 2 ? primary.toLowerCase() : '';
+    }
+
+    function recordingMimeType() {
+      if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+      for (var i = 0; i < RECORDING_MIME_TYPES.length; i++) {
+        if (MediaRecorder.isTypeSupported(RECORDING_MIME_TYPES[i])) return RECORDING_MIME_TYPES[i];
+      }
+      return '';
+    }
+
+    function setMicStatus(text, kind) {
+      if (!micStatus) return;
+      micStatus.textContent = text || '';
+      if (kind) micStatus.setAttribute('data-kind', kind);
+      else micStatus.removeAttribute('data-kind');
+    }
+
+    function setMicState(state) {
+      micState = state;
+      if (!micBtn) return;
+      micBtn.classList.toggle('recording', state === 'recording');
+      micBtn.classList.toggle('transcribing', state === 'transcribing');
+      micBtn.setAttribute('aria-pressed', state === 'recording' ? 'true' : 'false');
+      if (state === 'recording') {
+        micBtn.title = 'Stop recording';
+        micBtn.setAttribute('aria-label', 'Stop recording');
+        setMicStatus('Recording…');
+      } else if (state === 'transcribing') {
+        micBtn.title = 'Transcribing…';
+        micBtn.setAttribute('aria-label', 'Transcribing');
+        setMicStatus('Transcribing…');
+      } else {
+        micBtn.title = 'Voice input';
+        micBtn.setAttribute('aria-label', 'Voice input');
+      }
+    }
+
+    function disableMic(reason) {
+      if (!micBtn) return;
+      micBtn.disabled = true;
+      micBtn.classList.remove('recording', 'transcribing');
+      micBtn.setAttribute('aria-pressed', 'false');
+      micBtn.title = reason;
+      micBtn.setAttribute('aria-label', reason);
+    }
+
+    function releaseMicCapture() {
+      if (micStopTimer) { clearTimeout(micStopTimer); micStopTimer = null; }
+      if (micStream) {
+        var tracks = micStream.getTracks ? micStream.getTracks() : [];
+        for (var i = 0; i < tracks.length; i++) tracks[i].stop();
+      }
+      micStream = null;
+      micRecorder = null;
+    }
+
+    function insertTranscript(text) {
+      if (!text) return;
+      var start = typeof userInput.selectionStart === 'number' ? userInput.selectionStart : userInput.value.length;
+      var end = typeof userInput.selectionEnd === 'number' ? userInput.selectionEnd : start;
+      var before = userInput.value.slice(0, start);
+      var after = userInput.value.slice(end);
+      var prefix = before && !/\\s$/.test(before) ? ' ' : '';
+      var suffix = after && !/^\\s/.test(after) ? ' ' : '';
+      var inserted = prefix + text + suffix;
+      userInput.value = before + inserted + after;
+      var caret = before.length + inserted.length;
+      if (typeof userInput.setSelectionRange === 'function') userInput.setSelectionRange(caret, caret);
+      autoResize();
+      userInput.dispatchEvent(new Event('input', { bubbles: true }));
+      userInput.focus();
+    }
+
+    function sendRecording(blob, mimeType) {
+      var reader = new FileReader();
+      reader.onerror = function() {
+        setMicState('idle');
+        setMicStatus('That recording could not be read. Try again.', 'error');
+      };
+      reader.onload = function() {
+        var dataUrl = typeof reader.result === 'string' ? reader.result : '';
+        if (!dataUrl || dataUrl.indexOf('data:audio/') !== 0) {
+          setMicState('idle');
+          setMicStatus('That recording could not be read. Try again.', 'error');
+          return;
+        }
+        var language = micLanguage();
+        vscode.postMessage({
+          type: 'transcribeAudio',
+          payload: language ? { dataUrl: dataUrl, language: language } : { dataUrl: dataUrl }
+        });
+      };
+      reader.readAsDataURL(blob);
+    }
+
+    function stopRecording() {
+      if (micStopTimer) { clearTimeout(micStopTimer); micStopTimer = null; }
+      if (micRecorder && micRecorder.state !== 'inactive') micRecorder.stop();
+    }
+
+    function startRecording() {
+      var mimeType = recordingMimeType();
+      if (!mimeType) {
+        disableMic('Voice input unavailable: this panel cannot record a supported audio format');
+        return;
+      }
+      setMicStatus('');
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+        micStream = stream;
+        micChunks = [];
+        try {
+          micRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+        } catch (err) {
+          releaseMicCapture();
+          setMicState('idle');
+          setMicStatus('This panel cannot record audio: ' + (err && err.message ? err.message : 'recorder unavailable'), 'error');
+          return;
+        }
+        micRecorder.ondataavailable = function(event) {
+          if (event.data && event.data.size > 0) micChunks.push(event.data);
+        };
+        micRecorder.onstop = function() {
+          var chunks = micChunks;
+          micChunks = [];
+          releaseMicCapture();
+          if (!chunks.length) {
+            setMicState('idle');
+            setMicStatus('Nothing was recorded. Try again.', 'error');
+            return;
+          }
+          setMicState('transcribing');
+          sendRecording(new Blob(chunks, { type: mimeType }), mimeType);
+        };
+        micRecorder.start();
+        setMicState('recording');
+        micStopTimer = setTimeout(function() {
+          setMicStatus('Two-minute limit reached, transcribing…');
+          stopRecording();
+        }, MAX_RECORDING_MS);
+      }).catch(function(err) {
+        releaseMicCapture();
+        setMicState('idle');
+        var name = err && err.name ? err.name : '';
+        if (name === 'NotAllowedError' || name === 'SecurityError') {
+          disableMic(MIC_UNAVAILABLE_LABEL);
+          setMicStatus(MIC_UNAVAILABLE_LABEL, 'error');
+          return;
+        }
+        if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+          setMicStatus('No microphone was found on this machine.', 'error');
+          return;
+        }
+        setMicStatus('The microphone could not be opened: ' + (err && err.message ? err.message : name || 'unknown error'), 'error');
+      });
+    }
+
+    function microphoneReachable() {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') return false;
+      if (typeof MediaRecorder === 'undefined') return false;
+      var policy = document.featurePolicy || document.permissionsPolicy;
+      if (policy && typeof policy.allowsFeature === 'function') {
+        try { return policy.allowsFeature('microphone'); } catch (err) { return false; }
+      }
+      return true;
+    }
+
+    if (micBtn) {
+      if (!microphoneReachable()) {
+        disableMic(MIC_UNAVAILABLE_LABEL);
+      } else {
+        micBtn.addEventListener('click', function() {
+          if (micState === 'transcribing') return;
+          if (micState === 'recording') stopRecording();
+          else startRecording();
+        });
+      }
+    }
+
     window.addEventListener('message', (event) => {
       const msg = event.data;
 
@@ -3985,6 +4222,17 @@ export function getWebviewContent(
         });
         autoResize();
         userInput.focus();
+      }
+
+      else if (msg.type === 'dictationResult') {
+        setMicState('idle');
+        setMicStatus('');
+        insertTranscript(msg.payload.text || '');
+      }
+
+      else if (msg.type === 'dictationError') {
+        setMicState('idle');
+        setMicStatus(msg.payload.message, 'error');
       }
 
       else if (msg.type === 'conversationLoaded') {
