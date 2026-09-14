@@ -12,7 +12,7 @@
       "origin": "generated",
       "source_surface": "web",
       "provider": "google",
-      "model": "veo-3.1-lite",
+      "model": "fixture-video-model",
       "prompt": null,
       "created_at": "2026-09-13T21:27:14.191Z"
     },
@@ -28,7 +28,7 @@
       "origin": "generated",
       "source_surface": "web",
       "provider": "google",
-      "model": "gemini-3.1-flash-lite-image",
+      "model": "fixture-image-model",
       "prompt": null,
       "created_at": "2026-09-13T21:16:43.228Z"
     },
@@ -44,7 +44,7 @@
       "origin": "generated",
       "source_surface": "web",
       "provider": "agi-managed-office",
-      "model": "gpt-5.6-sol",
+      "model": "fixture-chat-model",
       "prompt": null,
       "created_at": "2026-09-13T20:06:24.692Z"
     },
@@ -60,7 +60,7 @@
       "origin": "generated",
       "source_surface": "web",
       "provider": "agi-managed-office",
-      "model": "gpt-5.6-sol",
+      "model": "fixture-chat-model",
       "prompt": null,
       "created_at": "2026-09-13T20:05:03.105Z"
     },
@@ -76,7 +76,7 @@
       "origin": "generated",
       "source_surface": "web",
       "provider": "agi-managed-office",
-      "model": "gpt-5.6-sol",
+      "model": "fixture-chat-model",
       "prompt": null,
       "created_at": "2026-09-13T20:00:44.467Z"
     },
