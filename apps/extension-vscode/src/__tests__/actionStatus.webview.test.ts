@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { toolCallStatusLabel } from '@agiworkforce/types';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 
 function boot(): void {
@@ -153,7 +154,7 @@ describe('sidebar action status', () => {
     const summary = group.querySelector<HTMLButtonElement>('.activity-group__summary');
     expect(group.querySelector('.tool-call--done')).not.toBeNull();
     expect(group.dataset.status).toBe('done');
-    expect(activityMeta(group)).toBe('1 action · Done');
+    expect(activityMeta(group)).toBe(`1 action · ${toolCallStatusLabel('completed')}`);
     expect(group.classList.contains('activity-group--collapsed')).toBe(true);
     expect(summary?.getAttribute('aria-expanded')).toBe('false');
 
@@ -161,7 +162,7 @@ describe('sidebar action status', () => {
 
     expect(group.classList.contains('activity-group--collapsed')).toBe(false);
     expect(summary?.getAttribute('aria-expanded')).toBe('true');
-    expect(activityMeta(group)).toBe('1 action · Done');
+    expect(activityMeta(group)).toBe(`1 action · ${toolCallStatusLabel('completed')}`);
   });
 
   it('separates a terminally failed action stack from the next successful turn', () => {
@@ -205,7 +206,7 @@ describe('sidebar action status', () => {
     expect(activityMeta(stacks[0]!)).toBe('1 action · Completed with errors');
     expect(stacks[0]?.classList.contains('activity-group--collapsed')).toBe(true);
     expect(stacks[1]?.dataset.status).toBe('done');
-    expect(activityMeta(stacks[1]!)).toBe('1 action · Done');
+    expect(activityMeta(stacks[1]!)).toBe(`1 action · ${toolCallStatusLabel('completed')}`);
     expect(stacks[1]?.querySelector('.tool-call--done')).not.toBeNull();
     expect(stacks[1]?.querySelector('.tool-call--error')).toBeNull();
   });
