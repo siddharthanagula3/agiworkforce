@@ -579,11 +579,9 @@ export function getWebviewContent(
 
     .message.assistant {
       background: transparent;
-      align-self: flex-start;
+      align-self: stretch;
       color: var(--text-primary);
-      border-left: 2px solid var(--accent-teal);
-      padding-left: 10px;
-      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      padding-inline: 2px;
     }
 
     .message.error {
@@ -635,19 +633,17 @@ export function getWebviewContent(
 
     /* Outer rounded composer card */
     .composer-card {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: 16px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: 14px;
       display: flex;
       flex-direction: column;
-      min-height: 102px;
+      min-height: 84px;
       overflow: visible;
-      transition: border-color 0.15s var(--transition),
-                  box-shadow 0.15s var(--transition);
+      transition: border-color 0.15s var(--transition);
     }
     .composer-card:focus-within {
-      border-color: var(--accent-teal);
-      box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+      border-color: var(--vscode-focusBorder, var(--accent-teal));
     }
 
     .model-row { display: none; } /* hidden, model is now in bottom controls row */
@@ -693,21 +689,21 @@ export function getWebviewContent(
     .composer-bottom {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 2px;
       min-width: 0;
-      padding: 5px 7px 7px;
+      padding: 4px 6px 6px;
     }
 
     /* Plus button */
     .plus-btn {
       background: none;
-      border: 1px solid var(--border);
+      border: none;
       border-radius: 8px;
       color: var(--text-secondary);
       cursor: pointer;
-      font-size: 16px;
-      height: 26px;
-      width: 26px;
+      font-size: 18px;
+      height: 28px;
+      width: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -715,25 +711,26 @@ export function getWebviewContent(
       transition: background 0.12s var(--transition), color 0.12s var(--transition);
       line-height: 1;
     }
-    .plus-btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
+    .plus-btn:hover { background: var(--hover); color: var(--text-primary); }
 
     /* Model picker pill */
     .model-pill {
-      background: var(--bg-overlay);
-      border: 1px solid var(--border);
-      border-radius: 10px;
+      background: none;
+      border: none;
+      border-radius: 999px;
       color: var(--text-secondary);
       cursor: pointer;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 500;
-      padding: 2px 7px;
+      height: 28px;
+      padding: 0 8px;
       white-space: nowrap;
-      max-width: 110px;
+      max-width: 140px;
       overflow: hidden;
       text-overflow: ellipsis;
       transition: background 0.12s var(--transition), color 0.12s var(--transition);
     }
-    .model-pill:hover { background: var(--bg-overlay); color: var(--text-primary); }
+    .model-pill:hover { background: var(--hover); color: var(--text-primary); }
 
     #sendBtn {
       background: var(--accent-terra);
@@ -742,8 +739,8 @@ export function getWebviewContent(
       color: var(--accent-terra-foreground);
       cursor: pointer;
       font-size: 14px;
-      height: 26px;
-      width: 26px;
+      height: 28px;
+      width: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1008,37 +1005,28 @@ export function getWebviewContent(
     }
 
     .controls-summary, .model-chip {
-      background: var(--bg-overlay);
-      border: 1px solid var(--border);
-      border-radius: 12px;
+      background: none;
+      border: none;
+      border-radius: 999px;
       color: var(--text-secondary);
       cursor: pointer;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 500;
-      padding: 3px 9px;
+      height: 28px;
+      padding: 0 8px;
       transition: color 0.15s var(--transition),
-                  background 0.15s var(--transition),
-                  border-color 0.15s var(--transition);
+                  background 0.15s var(--transition);
       white-space: nowrap;
-      /*
-       * Truncate rather than clip. The composer's bottom row holds seven children
-       * and gains an eighth (Stop) while streaming; the action buttons are
-       * flex-shrink:0 and must stay, so the chips are what has to give. With
-       * nowrap and no ellipsis they were cut mid-word at the panel's default
-       * 300px width. min-width:0 is what lets the shrink actually happen.
-       */
       min-width: 0;
-      max-width: 120px;
+      max-width: 140px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .controls-summary:hover, .model-chip:hover {
-      /* Panel palette on both sides, see .copy-btn:hover. */
       color: var(--text-primary);
       background: var(--hover);
-      border-color: var(--vscode-focusBorder);
     }
-    .controls-summary { max-width: 92px; }
+    .controls-summary { max-width: 120px; }
 
     .chip-separator {
       flex: 1;
@@ -1246,21 +1234,6 @@ export function getWebviewContent(
 
     /* ── @mention dropdown ── */
     .input-wrapper { position: relative; flex: 1; }
-    .composer-hint {
-      color: var(--text-secondary);
-      font-size: 10px;
-      line-height: 1;
-      margin-top: 4px;
-      opacity: 0.72;
-      text-align: right;
-    }
-    .composer-hint kbd {
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 9px;
-      padding: 1px 3px;
-    }
     .mention-dropdown {
       position: absolute;
       bottom: 100%;
@@ -1535,69 +1508,29 @@ export function getWebviewContent(
       text-align: center;
     }
 
-    .empty-state::before {
-      position: absolute;
-      z-index: -1;
-      width: min(280px, 90vw);
-      aspect-ratio: 1;
-      border: 1px solid var(--vscode-widget-border, var(--border));
-      border-radius: 50%;
-      background: var(--vscode-editorHoverWidget-background, var(--bg-elevated));
-      content: '';
-      opacity: 0.3;
-    }
-
     .empty-state-mark {
-      width: 42px;
-      height: 42px;
-      padding: 9px;
-      border: 1px solid var(--border);
-      border-radius: 13px;
-      background: var(--bg-elevated);
-      color: var(--text-primary);
-      box-shadow: 0 10px 30px var(--vscode-widget-shadow, transparent);
+      width: 28px;
+      height: 28px;
+      color: var(--text-secondary);
+      opacity: 0.7;
       line-height: 0;
     }
     .empty-state-mark svg { width: 100%; height: 100%; }
 
     .empty-state-headline {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       color: var(--text-primary);
-      letter-spacing: -0.015em;
+      letter-spacing: -0.01em;
       line-height: 1.3;
     }
 
     .empty-state-copy {
-      max-width: 280px;
+      max-width: 250px;
       color: var(--text-secondary);
       font-size: 12px;
       line-height: 1.5;
     }
-
-    .prompt-chips {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 6px;
-      margin-top: 4px;
-    }
-
-    .prompt-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      height: 30px;
-      padding: 0 10px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--bg-elevated);
-      color: var(--text-secondary);
-      font-size: 11px;
-      cursor: pointer;
-      transition: background 0.12s, color 0.12s;
-    }
-    .prompt-chip:hover { background: var(--bg-overlay); color: var(--text-primary); }
     .plus-btn:disabled,
     .model-pill:disabled,
     .controls-summary:disabled,
@@ -1634,7 +1567,6 @@ export function getWebviewContent(
       .session-identity { max-width: calc(100vw - 108px); }
       .model-pill { max-width: 78px; min-width: 58px; }
       .controls-summary { max-width: 72px; }
-      .composer-hint { display: none; }
       .empty-state-copy { max-width: 230px; }
     }
 
@@ -1948,13 +1880,7 @@ export function getWebviewContent(
     <div class="empty-state" id="emptyState">
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
       <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
-      <div class="empty-state-copy" id="emptyStateCopy">Ask about your code, edit files, run commands, and test this workspace.</div>
-      <div class="prompt-chips">
-        <button class="prompt-chip" data-prompt="/explain ">/explain</button>
-        <button class="prompt-chip" data-prompt="/fix ">/fix</button>
-        <button class="prompt-chip" data-prompt="/tests ">/tests</button>
-        <button class="prompt-chip" data-prompt="/docs ">/docs</button>
-      </div>
+      <div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>
     </div>
   </div>
 
@@ -2064,12 +1990,11 @@ export function getWebviewContent(
             aria-controls="mentionDropdown"
             aria-expanded="false"
           ></textarea>
-          <div class="composer-hint" id="composerHint"><kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline</div>
         </div>
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="menu" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Model · Auto</button>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
         <span class="context-usage" id="contextUsage"></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
@@ -2777,7 +2702,7 @@ export function getWebviewContent(
         runtimeStatusEl.style.display = 'none';
         if (headline) headline.textContent = 'Build with AGI';
         if (copy) copy.textContent =
-          'Ask about your code, edit files, run commands, and test this workspace.';
+          'Ask about this workspace, edit files, run commands and tests.';
         if (lastUsageMeterPayload) renderUsageMeter(lastUsageMeterPayload);
       } else {
         var workspaceRequired = status === 'workspace-required';
@@ -3924,9 +3849,9 @@ export function getWebviewContent(
         }
         if (opt) {
           modelSelect.value = msg.payload.model;
-          if (modelPill) modelPill.textContent = 'Model · ' + (opt.dataset.displayLabel || opt.text);
+          if (modelPill) modelPill.textContent = opt.dataset.displayLabel || opt.text;
         } else if (modelPill) {
-          modelPill.textContent = 'Model · ' + msg.payload.model;
+          modelPill.textContent = msg.payload.model;
         }
       }
 
@@ -4041,11 +3966,6 @@ export function getWebviewContent(
         freshEmpty.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
           '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
           '<div class="empty-state-copy" id="emptyStateCopy">Ask about your code, edit files, run commands, and test this workspace.</div>' +
-          '<div class="prompt-chips">' +
-          '<button class="prompt-chip" data-prompt="/explain ">/explain</button>' +
-          '<button class="prompt-chip" data-prompt="/fix ">/fix</button>' +
-          '<button class="prompt-chip" data-prompt="/tests ">/tests</button>' +
-          '<button class="prompt-chip" data-prompt="/docs ">/docs</button>' +
           '</div>';
         freshEmpty.querySelectorAll('.prompt-chip').forEach(function(chip) {
           chip.addEventListener('click', function() {
