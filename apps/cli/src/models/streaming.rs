@@ -232,7 +232,18 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
         dialect: Dialect::OpenAiCompat(OpenAiOpts::for_url(&endpoint)),
         base_url: endpoint,
         auth: Auth::Bearer(jwt.to_string()),
-        extra_headers: vec![("X-Requested-With".to_string(), "XMLHttpRequest".to_string())],
+        // Managed Cloud refuses a request that does not name its client
+        // surface, and refuses one with no idempotency key. The key is minted
+        // per spec, and a spec is built per request, so a retry of one request
+        // reuses its key while two turns never share one.
+        extra_headers: vec![
+            ("X-Requested-With".to_string(), "XMLHttpRequest".to_string()),
+            ("X-AGI-Surface".to_string(), "cli".to_string()),
+            (
+                "Idempotency-Key".to_string(),
+                format!("agi.cli.chat.{}", uuid::Uuid::new_v4()),
+            ),
+        ],
     })
 }
 
@@ -714,6 +725,39 @@ mod tests {
         );
         assert_eq!(model_hits.load(Ordering::SeqCst), 1);
         assert_eq!(chat_hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn managed_cloud_requests_name_the_cli_surface() {
+        let spec = managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com")
+            .expect("a trusted host resolves");
+        assert!(
+            spec.extra_headers
+                .iter()
+                .any(|(name, value)| name == "X-AGI-Surface" && value == "cli"),
+            "Managed Cloud rejects a request that does not name its surface: {:?}",
+            spec.extra_headers
+        );
+    }
+
+    #[test]
+    fn each_managed_cloud_request_carries_its_own_idempotency_key() {
+        let key_of = |spec: &ProviderSpec| {
+            spec.extra_headers
+                .iter()
+                .find(|(name, _)| name == "Idempotency-Key")
+                .map(|(_, value)| value.clone())
+                .expect("Managed Cloud rejects a request with no idempotency key")
+        };
+        let first = managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com")
+            .expect("a trusted host resolves");
+        let second = managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com")
+            .expect("a trusted host resolves");
+        assert_ne!(
+            key_of(&first),
+            key_of(&second),
+            "two requests sharing one key would make the server drop the second turn"
+        );
     }
 
     #[test]
