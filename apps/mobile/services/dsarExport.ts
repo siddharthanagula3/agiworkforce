@@ -143,7 +143,6 @@ export interface DsarMobileSettings {
   chat_preferences: {
     mode: string;
     style: string;
-    tool_access: string;
     features: Record<string, boolean>;
   };
 }
