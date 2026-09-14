@@ -4296,6 +4296,13 @@ pub async fn run_main() -> Result<()> {
     let effective_permission_mode: cli_options::PermissionMode = cli
         .mode
         .or(cli.permission_mode)
+        .or_else(|| {
+            app_config
+                .default
+                .permission_mode
+                .as_deref()
+                .and_then(cli_options::persisted_permission_mode)
+        })
         .unwrap_or(cli_options::PermissionMode::Default);
     let effective_auto_approve_plan = cli.auto_approve_plan;
 

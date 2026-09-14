@@ -48,7 +48,7 @@ describe('Chrome side-panel surface ownership', () => {
 
     expect(blockedStateSource).toContain("if (blocked) {\n    blockedEl.classList.add('visible')");
     expect(sidePanelSource).toContain("role: 'status'");
-    expect(sidePanelSource).toContain('You can still chat');
+    expect(sidePanelSource).toContain('Chrome does not let extensions read or automate this page.');
   });
 
   it('cancels active cloud work before owner, new-chat, and current-delete transitions', () => {

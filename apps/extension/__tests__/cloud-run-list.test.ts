@@ -18,6 +18,14 @@ import {
   summarizeRunJournal,
 } from '../src/features/side-panel/cloudRunsPanel';
 
+// The panel's schedules section reads its copy from the extension catalogue,
+// which only `chrome.i18n` can serve. Without this the panel cannot be built
+// here at all, and every case below would fail on a missing global rather than
+// on the behaviour it is asserting.
+(globalThis as unknown as Record<string, unknown>).chrome = {
+  i18n: { getMessage: (key: string) => key },
+};
+
 const RUN_ID = '22222222-2222-4222-8222-222222222222';
 const OTHER_RUN_ID = '33333333-3333-4333-8333-333333333333';
 const REFRESH_INTERVAL_MS = 5;

@@ -63,7 +63,8 @@ async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
                     "name": "agi_vscode_test",
                     "title": "VS Code test",
                     "version": "0.0.0"
-                }
+                },
+                "protocolVersion": DEVELOPER_SESSION_PROTOCOL_VERSION
             }
         }),
     )

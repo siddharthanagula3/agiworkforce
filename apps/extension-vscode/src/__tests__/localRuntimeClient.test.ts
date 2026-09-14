@@ -10,8 +10,159 @@ import {
 
 const SYNTHETIC_RUNTIME_MODEL_ID = 'fixture-runtime-model';
 
+// One canonical answer per protocol 8 method, so every client method is
+// exercised against the shape the CLI documents rather than a hand-written
+// object per test.
+const V8_RESULTS = {
+  'account/status': {
+    signedIn: true,
+    email: 'developer@example.com',
+    tier: 'max',
+    balanceCredits: 120.5,
+    cached: true,
+    source: 'cli',
+  },
+  'account/login': {
+    loginId: 'login-1',
+    verificationUrl: 'https://agiworkforce.com/auth/device',
+    userCode: 'ABCD-EFGH',
+    expiresAt: '2026-09-14T12:15:00Z',
+  },
+  'account/login/wait': {
+    outcome: 'completed',
+    account: {
+      signedIn: true,
+      email: 'developer@example.com',
+      tier: 'max',
+      cached: false,
+      source: 'cli',
+    },
+  },
+  'account/token': { token: 'fixture-token', expiresAt: '2026-09-14T13:00:00Z' },
+  'context/instructions': {
+    files: [
+      { path: '/workspace/AGENTS.md', kind: 'AGENTS.md', bytes: 42, root: '/workspace' },
+      {
+        path: '/workspace/apps/web/CLAUDE.md',
+        kind: 'CLAUDE.md',
+        bytes: 12,
+        root: '/workspace/apps/web',
+      },
+    ],
+    projectRoot: '/workspace',
+    truncated: false,
+  },
+  'skills/list': {
+    skills: [
+      {
+        name: 'release-notes',
+        description: 'Draft release notes',
+        scope: 'user',
+        path: '/home/dev/.agiworkforce/skills/release-notes/SKILL.md',
+        enabled: true,
+        consented: true,
+      },
+    ],
+  },
+  'skills/setEnabled': {
+    skills: [
+      {
+        name: 'release-notes',
+        description: 'Draft release notes',
+        scope: 'user',
+        path: '/home/dev/.agiworkforce/skills/release-notes/SKILL.md',
+        enabled: false,
+        consented: true,
+      },
+    ],
+  },
+  'skills/consent': { consented: true, path: '/workspace/.agiworkforce/skills/.consent' },
+  'plugins/list': {
+    plugins: [
+      {
+        id: 'reviewer',
+        name: 'Reviewer',
+        version: '1.2.0',
+        enabled: true,
+        source: 'user',
+        path: '/home/dev/.agiworkforce/plugins/reviewer',
+        format: 'agi',
+      },
+    ],
+  },
+  'plugins/setEnabled': {
+    plugins: [
+      {
+        id: 'reviewer',
+        name: 'Reviewer',
+        version: '1.2.0',
+        enabled: false,
+        source: 'user',
+        path: '/home/dev/.agiworkforce/plugins/reviewer',
+        format: 'agi',
+      },
+    ],
+  },
+  'mcp/list': {
+    servers: [
+      {
+        name: 'github',
+        transport: 'http',
+        scope: 'user',
+        status: 'needs_auth',
+        url: 'https://api.githubcopilot.com/mcp',
+      },
+    ],
+  },
+  'mcp/login': { name: 'github', status: 'authorized' },
+  'hooks/list': {
+    hooks: [
+      {
+        event: 'PreToolUse',
+        command: './scripts/audit.sh',
+        scope: 'user',
+        trusted: true,
+        source: '/home/dev/.agiworkforce/hooks.json',
+      },
+    ],
+  },
+  'settings/read': {
+    defaultModel: SYNTHETIC_RUNTIME_MODEL_ID,
+    defaultEffort: 'high',
+    permissionMode: 'ask',
+    userInstructions: 'Be brief',
+    userInstructionsPath: '/home/dev/.agiworkforce/instructions.md',
+    projectInstructionsPath: '/workspace/.agiworkforce/instructions.md',
+    configPath: '/home/dev/.agiworkforce/config.toml',
+  },
+  'settings/write': {
+    defaultModel: SYNTHETIC_RUNTIME_MODEL_ID,
+    defaultEffort: 'low',
+    permissionMode: 'plan',
+    userInstructionsPath: '/home/dev/.agiworkforce/instructions.md',
+    projectInstructionsPath: '/workspace/.agiworkforce/instructions.md',
+    configPath: '/home/dev/.agiworkforce/config.toml',
+  },
+  'commands/list': {
+    commands: [
+      {
+        name: 'skills',
+        description: 'List skills',
+        source: 'builtin',
+        aliases: [],
+        runnable: true,
+      },
+    ],
+  },
+  'commands/run': { kind: 'skills', text: 'release-notes', payload: { skills: [] } },
+} as const;
+
+// A shape no v8 method declares: every client method must reject it rather
+// than hand an unvalidated object to the UI.
+const MALFORMED_V8_RESULT = { unexpected: 'shape' };
+
 function fakeRuntime(
-  protocolVersion = 7,
+  protocolVersion = 8,
   options: {
     approvals?: boolean;
     ignoreMethods?: readonly string[];
@@ -21,6 +172,7 @@ function fakeRuntime(
     serverVersion?: string;
     exitOnShutdown?: boolean;
     shutdownResult?: unknown;
+    malformedV8?: boolean;
   } = {},
 ): {
   spawn: SpawnLocalRuntime;
@@ -135,7 +287,11 @@ function fakeRuntime(
                     ? { turn: { id: 'turn-1', threadId: 'thread-1', status: 'running' } }
                     : method === 'shutdown' && options.shutdownResult !== undefined
                       ? options.shutdownResult
-                      : { acknowledged: true };
+                      : typeof method === 'string' && method in V8_RESULTS
+                        ? options.malformedV8 === true
+                          ? MALFORMED_V8_RESULT
+                          : V8_RESULTS[method as keyof typeof V8_RESULTS]
+                        : { acknowledged: true };
       stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result })}\n`);
       if (method === 'shutdown' && options.exitOnShutdown !== false) {
         setImmediate(() => activeChild?.emit('exit', 0, null));
@@ -174,12 +330,12 @@ describe('LocalRuntimeClient', () => {
       spawn: runtime.spawn,
     });
 
-    await expect(client.initialize()).rejects.toThrow('requires exactly protocol 7');
+    await expect(client.initialize()).rejects.toThrow('requires exactly protocol 8');
     await client.dispose();
   });
 
   it('rejects a future protocol until the extension explicitly supports it', async () => {
-    const runtime = fakeRuntime(8);
+    const runtime = fakeRuntime(9);
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -188,15 +344,15 @@ describe('LocalRuntimeClient', () => {
     });
 
     await expect(client.initialize()).rejects.toThrow(
-      'uses developer-session protocol 8; this extension requires exactly protocol 7',
+      'uses developer-session protocol 9; this extension requires exactly protocol 8',
     );
     await client.dispose();
   });
 
   it.each(['1.7.0', '1.7.1-beta.1', '0.1.0', 'not-semver'])(
-    'rejects an incompatible owning CLI version %s even when protocol 7 is claimed',
+    'rejects an incompatible owning CLI version %s even when protocol 8 is claimed',
     async (serverVersion) => {
-      const runtime = fakeRuntime(7, { serverVersion });
+      const runtime = fakeRuntime(8, { serverVersion });
       const client = new LocalRuntimeClient({
         cliPath: 'agi',
         cwd: '/workspace',
@@ -210,7 +366,7 @@ describe('LocalRuntimeClient', () => {
   );
 
   it('rejects a runtime that cannot carry approval decisions', async () => {
-    const runtime = fakeRuntime(7, { approvals: false });
+    const runtime = fakeRuntime(8, { approvals: false });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -223,7 +379,7 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('gives an actionable upgrade error for the legacy CLI handshake', async () => {
-    const runtime = fakeRuntime(7, { legacyInitialize: true });
+    const runtime = fakeRuntime(8, { legacyInitialize: true });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -271,7 +427,7 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('surfaces a standard null-id JSON-RPC parse error from the runtime', async () => {
-    const runtime = fakeRuntime(7, { ignoreMethods: ['initialize'] });
+    const runtime = fakeRuntime(8, { ignoreMethods: ['initialize'] });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -550,7 +706,7 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('rejects thread history that omits the protocol-v7 truncation signal', async () => {
-    const runtime = fakeRuntime(7, { omitTranscriptTruncated: true });
+    const runtime = fakeRuntime(8, { omitTranscriptTruncated: true });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -565,7 +721,7 @@ describe('LocalRuntimeClient', () => {
   it.each([`${'p'.repeat(201)}`, 'anthropic\nspoofed'])(
     'rejects unsafe provider metadata from runtime IPC',
     async (provider) => {
-      const runtime = fakeRuntime(7, { provider });
+      const runtime = fakeRuntime(8, { provider });
       const client = new LocalRuntimeClient({
         cliPath: 'agi',
         cwd: '/workspace',
@@ -738,7 +894,7 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('force-terminates a runtime that does not acknowledge shutdown', async () => {
-    const runtime = fakeRuntime(7, { ignoreMethods: ['shutdown'] });
+    const runtime = fakeRuntime(8, { ignoreMethods: ['shutdown'] });
     const terminateProcessTree = vi.fn(async (child: ChildProcessWithoutNullStreams) => {
       child.emit('exit', null, 'SIGKILL');
     });
@@ -760,7 +916,7 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('validates the shutdown acknowledgment before trusting a graceful exit', async () => {
-    const runtime = fakeRuntime(7, {
+    const runtime = fakeRuntime(8, {
       exitOnShutdown: false,
       shutdownResult: { acknowledged: 'yes' },
     });
@@ -782,7 +938,7 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('does not finish graceful disposal until the acknowledged child actually exits', async () => {
-    const runtime = fakeRuntime(7, { exitOnShutdown: false });
+    const runtime = fakeRuntime(8, { exitOnShutdown: false });
     const terminateProcessTree = vi.fn(async () => undefined);
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
@@ -920,5 +1076,69 @@ describe('LocalRuntimeClient', () => {
 
     await expect(client.initialize()).rejects.toThrow(/AGI_CLI_NOT_EXECUTABLE/u);
     await expect(client.initialize()).rejects.toThrow(/execute permission/u);
+  });
+  it('validates every protocol 8 response against its schema before returning it', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    expect(await client.accountStatus()).toMatchObject({ signedIn: true, source: 'cli' });
+    const login = await client.startAccountLogin();
+    expect(login.loginId).toBe('login-1');
+    expect(await client.waitForAccountLogin(login.loginId, 5_000)).toMatchObject({
+      outcome: 'completed',
+    });
+    expect((await client.accountToken()).token).toBe('fixture-token');
+    const instructions = await client.contextInstructions('/workspace/apps/web');
+    expect(instructions.files.map((file) => file.kind)).toEqual(['AGENTS.md', 'CLAUDE.md']);
+    expect((await client.listSkills()).skills[0]?.scope).toBe('user');
+    expect((await client.setSkillEnabled('release-notes', false)).skills[0]?.enabled).toBe(false);
+    expect(await client.setProjectSkillConsent(true)).toMatchObject({ consented: true });
+    expect((await client.listPlugins()).plugins[0]?.id).toBe('reviewer');
+    expect((await client.setPluginEnabled('reviewer', false)).plugins[0]?.enabled).toBe(false);
+    expect((await client.listMcpServers()).servers[0]?.status).toBe('needs_auth');
+    expect(await client.loginMcpServer('github', 5_000)).toMatchObject({ status: 'authorized' });
+    expect((await client.listHooks()).hooks[0]?.scope).toBe('user');
+    expect((await client.readSettings()).permissionMode).toBe('ask');
+    expect((await client.writeSettings({ defaultEffort: 'low' })).defaultEffort).toBe('low');
+    expect((await client.listCommands()).commands[0]?.runnable).toBe(true);
+    expect(await client.runCommand('skills')).toMatchObject({ kind: 'skills' });
+    await expect(client.accountLogout()).resolves.toBeUndefined();
+
+    const sent = runtime.requests.map((request) => request.method);
+    expect(sent).toContain('account/status');
+    expect(sent).toContain('settings/write');
+    expect(
+      runtime.requests.find((request) => request.method === 'initialize')?.params,
+    ).toMatchObject({ protocolVersion: 8 });
+
+    await client.dispose();
+  });
+
+  it('rejects a protocol 8 answer that does not match its declared shape', async () => {
+    const runtime = fakeRuntime(8, { malformedV8: true });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.accountStatus()).rejects.toThrow();
+    await expect(client.accountToken()).rejects.toThrow();
+    await expect(client.contextInstructions()).rejects.toThrow();
+    await expect(client.listSkills()).rejects.toThrow();
+    await expect(client.listPlugins()).rejects.toThrow();
+    await expect(client.listMcpServers()).rejects.toThrow();
+    await expect(client.listHooks()).rejects.toThrow();
+    await expect(client.readSettings()).rejects.toThrow();
+    await expect(client.listCommands()).rejects.toThrow();
+    await expect(client.runCommand('skills')).rejects.toThrow();
+
+    await client.dispose();
   });
 });

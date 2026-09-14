@@ -29,6 +29,8 @@ const THREADS = [
   thread('thread-b', 'Rename the runtime pool', '2026-09-13T10:00:00.000Z'),
   thread('thread-c', 'Fix the diff decorations', '2026-09-10T12:00:00.000Z'),
   thread('thread-d', 'Older still', '2026-09-01T12:00:00.000Z'),
+  thread('thread-e', 'Older yet', '2026-08-20T12:00:00.000Z'),
+  thread('thread-f', 'Oldest of all', '2026-08-01T12:00:00.000Z'),
 ];
 
 function makeManager(getThreads: () => Promise<ThreadSummary[]>) {
@@ -60,18 +62,25 @@ describe('sidebar recent conversations', () => {
     vi.useRealTimers();
   });
 
-  it('posts the three most recent conversations and the full total', async () => {
+  it('posts the five most recent conversations and the full total', async () => {
     const { manager, posted } = makeManager(async () => THREADS);
 
     await manager.pushRecentConversations();
 
-    expect(recentsPayload(posted)).toEqual({
-      total: 4,
-      conversations: [
-        { id: 'thread-a', title: 'Wire the usage meter', age: '4m ago' },
-        { id: 'thread-b', title: 'Rename the runtime pool', age: '2h ago' },
-        { id: 'thread-c', title: 'Fix the diff decorations', age: '3d ago' },
-      ],
+    const payload = recentsPayload(posted);
+
+    expect(payload?.total).toBe(6);
+    expect(payload?.conversations.map((entry) => entry.id)).toEqual([
+      'thread-a',
+      'thread-b',
+      'thread-c',
+      'thread-d',
+      'thread-e',
+    ]);
+    expect(payload?.conversations[0]).toEqual({
+      id: 'thread-a',
+      title: 'Wire the usage meter',
+      age: '4m ago',
     });
   });
 
@@ -107,13 +116,21 @@ describe('sidebar recent conversations', () => {
     );
   });
 
-  it('reveals the native history tree for View all', async () => {
-    const { manager } = makeManager(async () => THREADS);
+  it('answers the sessions sheet with the local rows, newest first', async () => {
+    const { manager, posted } = makeManager(async () => THREADS);
 
-    await manager.handleMessage({ type: 'revealConversationHistory' });
+    await manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-      'agi-workforce.conversations.focus',
-    );
+    const message = posted.find((entry) => entry.type === 'sessionsList');
+    expect(message?.type === 'sessionsList' && message.payload.source).toBe('local');
+    expect(message?.type === 'sessionsList' && message.payload.rows.map((row) => row.id)).toEqual([
+      'thread-a',
+      'thread-b',
+      'thread-c',
+      'thread-d',
+      'thread-e',
+      'thread-f',
+    ]);
+    expect(message?.type === 'sessionsList' && message.payload.rows[0]?.sourceLabel).toBe('Local');
   });
 });
