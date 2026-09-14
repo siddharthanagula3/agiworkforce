@@ -569,7 +569,7 @@ long transcript.
 **Impact** BLOCKS VERIFICATION, NOT THE FIXES
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Database] Apply migrations 0183 to 0189 in production before the next deploy
+## [Database] Apply migrations 0183 to 0190 in production before the next deploy
 
 **Why founder assistance is required**
 Production database credentials exist only with the founder, and the deploy job
@@ -600,18 +600,22 @@ refuses to promote while a draft migration is unapplied.
    account proved it can reach) and
    `0189_user_memories_per_user_identity.sql` (moves the `user_memories` row key
    from a global `id` to `(user_id, id)` and adds the `import_key` dedupe column,
-   so one account can no longer occupy another's memory row id). Apply all seven
-   in ascending order, 0183 first and 0189 last: each assumes the ones before it
-   have run. The deployment carrying 0187, 0188 and 0189 must not go out before
+   so one account can no longer occupy another's memory row id) and
+   `0190_device_step_checkpoint.sql` (the checkpoint row that holds a cloud turn
+   paused on a step the user's desktop must run, bound to one device, so the
+   tool loop can resume from that device and refuse any other). Apply all eight
+   in ascending order, 0183 first and 0190 last: each assumes the ones before it
+   have run. The deployment carrying 0187 to 0190 must not go out before
    they are applied: the device pairing insert, the GitHub connect flow and the
-   memory import insert all name the new columns, and the memory sync and
+   memory import insert all name the new columns, the memory sync and
    auto-memory inserts name `(user_id, id)` as their conflict target, which the
-   old single-column key cannot satisfy.
+   old single-column key cannot satisfy, and a desktop turn that reaches a device
+   step writes the checkpoint row before it pauses.
 
 **Where** A terminal with the production database URL, as for the 0175 batch.
 **Needed input** The production database URL and the confirm flag.
 **How to verify completion** `pnpm db:migrate -- status` against production
-lists 0189 as applied; the deploy job's migration verify step passes; importing
+lists 0190 as applied; the deploy job's migration verify step passes; importing
 the same memory text twice adds it once and a memory sync push applies rather
 than conflicts; a video
 job completion produces one notice; an artifact and a conversation can each be
