@@ -435,6 +435,7 @@ export interface SyncPageContextMessage extends BaseMessage {
 export interface ApproveContextHandoffMessage extends BaseMessage {
   type: 'APPROVE_CONTEXT_HANDOFF';
   handoffId: string;
+  destination?: import('./features/context-handoff').ContextHandoffDestinationId;
 }
 
 export interface CancelContextHandoffMessage extends BaseMessage {
@@ -446,7 +447,7 @@ export interface ContextHandoffResponse {
   success: boolean;
   error?: string;
   consumed?: boolean;
-  destination?: 'AGI Desktop';
+  destination?: string;
 }
 
 export interface RunPageAction {

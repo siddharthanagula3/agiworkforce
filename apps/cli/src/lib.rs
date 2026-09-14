@@ -19,6 +19,7 @@ pub mod command_registry;
 pub mod compaction;
 pub mod config;
 pub mod context;
+pub mod context_handoff;
 pub mod conversations;
 pub mod custom_commands;
 pub mod daemon;
@@ -218,6 +219,12 @@ pub struct Cli {
     /// Files to include in context
     #[arg(short = 'f', long = "file", value_name = "FILE")]
     files: Vec<String>,
+
+    /// Read a browser selection handed over from the Chrome extension
+    /// (`agi-context://v1?…`). The link carries the whole selection, nothing is
+    /// fetched.
+    #[arg(long = "context-url", value_name = "URL")]
+    context_url: Option<String>,
 
     /// System prompt override
     #[arg(long = "system-prompt", value_name = "PROMPT")]
@@ -3065,7 +3072,14 @@ pub async fn run_main() -> Result<()> {
     }
 
     // Read file contents for -f flag, text files and images are handled separately
-    let file_context_result = read_file_contexts(&cli.files)?;
+    let mut file_context_result = read_file_contexts(&cli.files)?;
+
+    if let Some(ref handoff_url) = cli.context_url {
+        let handoff = context_handoff::parse_context_handoff_url(handoff_url)?;
+        file_context_result
+            .text
+            .insert_str(0, &handoff.to_prompt_context());
+    }
 
     // Gather system context
     let sys_context = context::gather_system_context();

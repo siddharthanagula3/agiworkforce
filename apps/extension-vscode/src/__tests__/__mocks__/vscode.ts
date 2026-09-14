@@ -66,7 +66,16 @@ class Uri {
   }
 
   static parse(value: string): Uri {
-    return new Uri('file', '', value, '', '');
+    const parts =
+      /^([A-Za-z][A-Za-z0-9+.-]*):(?:\/\/([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?$/.exec(value);
+    if (parts === null) return new Uri('file', '', value, '', '');
+    return new Uri(
+      parts[1] ?? 'file',
+      parts[2] ?? '',
+      parts[3] ?? '',
+      parts[4] ?? '',
+      parts[5] ?? '',
+    );
   }
 
   constructor(
@@ -426,6 +435,7 @@ export const window = {
       return task(progress, token);
     },
   ),
+  registerUriHandler: vi.fn(() => new Disposable()),
   registerWebviewViewProvider: vi.fn(() => new Disposable()),
   registerTreeDataProvider: vi.fn(() => new Disposable()),
   createTreeView: vi.fn(() => ({

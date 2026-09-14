@@ -49,10 +49,8 @@ describe('cloud utility recovery actions', () => {
       'Upgrade',
       'Manage billing',
     );
-    expect(vscode.env.openExternal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: expect.stringMatching(/\/pricing\?.*tier=pro/u),
-      }),
+    expect(vi.mocked(vscode.env.openExternal).mock.calls[0]?.[0].toString()).toMatch(
+      /\/pricing\?.*tier=pro/u,
     );
   });
 
@@ -71,8 +69,8 @@ describe('cloud utility recovery actions', () => {
       'AGI Workforce: Request failed, Update billing.',
       'Manage billing',
     );
-    expect(vscode.env.openExternal).toHaveBeenCalledWith(
-      expect.objectContaining({ path: expect.stringContaining('/settings/billing?') }),
+    expect(vi.mocked(vscode.env.openExternal).mock.calls[0]?.[0].toString()).toContain(
+      '/settings/billing?',
     );
   });
 

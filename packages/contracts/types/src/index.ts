@@ -126,6 +126,7 @@ export * from './on-device-models';
 export * from './suite-contracts';
 
 export * from './browser-bridge';
+export * from './context-handoff-uri';
 export * from './capabilities';
 
 export * from './tool-display';

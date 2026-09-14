@@ -326,7 +326,7 @@ describe('ChatStateManager local turn lifecycle', () => {
         toString: expect.any(Function),
       }),
     );
-    expect(vi.mocked(vscode.env.openExternal).mock.calls.map(([uri]) => uri.path)).toEqual([
+    expect(vi.mocked(vscode.env.openExternal).mock.calls.map(([uri]) => uri.toString())).toEqual([
       'https://agiworkforce.com/docs?topic=permissions&from=vscode-extension',
       'https://agiworkforce.com/settings/privacy?from=vscode-extension',
     ]);

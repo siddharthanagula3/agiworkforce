@@ -46,7 +46,8 @@
   "activationEvents": [
     "onStartupFinished",
     "onChatParticipant:agiworkforce.agi",
-    "onView:agi-workforce.sidebar"
+    "onView:agi-workforce.sidebar",
+    "onUri"
   ],
   "capabilities": {
     "untrustedWorkspaces": {

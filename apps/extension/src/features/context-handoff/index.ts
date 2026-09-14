@@ -1,15 +1,57 @@
 import { sanitizePageText } from '../../background/policy';
+import {
+  buildCliContextHandoffCommand,
+  buildVsCodeContextHandoffUri,
+  MAX_CONTEXT_HANDOFF_SELECTION_CHARS,
+  MAX_CONTEXT_HANDOFF_URL_CHARS,
+} from '@agiworkforce/types';
+
+export {
+  MAX_CONTEXT_HANDOFF_SELECTION_CHARS,
+  MAX_CONTEXT_HANDOFF_URL_CHARS,
+} from '@agiworkforce/types';
 
 export const CONTEXT_HANDOFF_STORAGE_KEY = 'agi_pending_context_handoff_v1';
 export const CONTEXT_HANDOFF_TTL_MS = 5 * 60 * 1000;
-export const MAX_CONTEXT_HANDOFF_SELECTION_CHARS = 2_000;
-export const MAX_CONTEXT_HANDOFF_URL_CHARS = 2_048;
 
 export const CONTEXT_HANDOFF_DESTINATION = Object.freeze({
   id: 'agi-desktop-native' as const,
   label: 'AGI Desktop',
   detail: 'Local native messaging bridge',
 });
+
+export const CONTEXT_HANDOFF_VSCODE_DESTINATION = Object.freeze({
+  id: 'vscode-extension' as const,
+  label: 'VS Code',
+  detail: 'Local vscode:// link, opens the AGI composer',
+});
+
+export const CONTEXT_HANDOFF_CLI_DESTINATION = Object.freeze({
+  id: 'agi-cli' as const,
+  label: 'AGI CLI',
+  detail: 'Copied command, nothing leaves this machine',
+});
+
+export type ContextHandoffDestinationId =
+  | typeof CONTEXT_HANDOFF_DESTINATION.id
+  | typeof CONTEXT_HANDOFF_VSCODE_DESTINATION.id
+  | typeof CONTEXT_HANDOFF_CLI_DESTINATION.id;
+
+export function contextHandoffVsCodeUri(pending: PendingContextHandoff): string {
+  return buildVsCodeContextHandoffUri({
+    id: pending.id,
+    sourceUrl: pending.pageUrl,
+    selectedText: pending.selectedText,
+  });
+}
+
+export function contextHandoffCliCommand(pending: PendingContextHandoff): string {
+  return buildCliContextHandoffCommand({
+    id: pending.id,
+    sourceUrl: pending.pageUrl,
+    selectedText: pending.selectedText,
+  });
+}
 
 export interface PendingContextHandoff {
   version: 1;
@@ -198,6 +240,8 @@ export function toApprovedNativeSelectionMessage(
 export interface ContextHandoffPreviewOptions {
   onApprove: () => Promise<ContextHandoffActionResult> | ContextHandoffActionResult;
   onCancel: () => Promise<void> | void;
+  onOpenInVsCode: () => Promise<ContextHandoffActionResult> | ContextHandoffActionResult;
+  onCopyCliCommand: () => Promise<ContextHandoffActionResult> | ContextHandoffActionResult;
 }
 
 export interface ContextHandoffPreviewController {
@@ -224,7 +268,7 @@ export function mountContextHandoffPreview(
 
   const destination = document.createElement('p');
   destination.className = 'sp-context-handoff-destination';
-  destination.textContent = `Destination: ${CONTEXT_HANDOFF_DESTINATION.label} (${CONTEXT_HANDOFF_DESTINATION.detail.toLowerCase()})`;
+  destination.textContent = `Destinations: ${CONTEXT_HANDOFF_DESTINATION.label}, ${CONTEXT_HANDOFF_VSCODE_DESTINATION.label}, or ${CONTEXT_HANDOFF_CLI_DESTINATION.label}. All three stay on this machine.`;
 
   const explanation = document.createElement('p');
   explanation.textContent = 'Only the preview below will leave Chrome after you approve.';
@@ -253,6 +297,23 @@ export function mountContextHandoffPreview(
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
 
+  const destinations = document.createElement('div');
+  destinations.className = 'sp-context-handoff-actions sp-context-handoff-destinations';
+  const openInVsCode = document.createElement('a');
+  openInVsCode.className = 'sp-context-handoff-secondary';
+  openInVsCode.dataset['contextHandoffVscode'] = '';
+  openInVsCode.textContent = `Open in ${CONTEXT_HANDOFF_VSCODE_DESTINATION.label}`;
+  openInVsCode.title = CONTEXT_HANDOFF_VSCODE_DESTINATION.detail;
+  openInVsCode.setAttribute('role', 'button');
+  openInVsCode.href = contextHandoffVsCodeUri(pending);
+  const copyCliCommand = document.createElement('button');
+  copyCliCommand.type = 'button';
+  copyCliCommand.className = 'sp-context-handoff-secondary';
+  copyCliCommand.dataset['contextHandoffCli'] = '';
+  copyCliCommand.textContent = 'Copy CLI command';
+  copyCliCommand.title = CONTEXT_HANDOFF_CLI_DESTINATION.detail;
+  destinations.append(openInVsCode, copyCliCommand);
+
   const actions = document.createElement('div');
   actions.className = 'sp-context-handoff-actions';
   const cancel = document.createElement('button');
@@ -276,6 +337,7 @@ export function mountContextHandoffPreview(
     metadata,
     redaction,
     status,
+    destinations,
     actions,
   );
   overlay.appendChild(dialog);
@@ -283,9 +345,24 @@ export function mountContextHandoffPreview(
 
   let settled = false;
   let busy = false;
+  const destinationControls: HTMLElement[] = [openInVsCode, copyCliCommand, approve];
+  const setDestinationsDisabled = (disabled: boolean) => {
+    for (const control of destinationControls) {
+      if (control instanceof HTMLButtonElement) control.disabled = disabled;
+      else control.setAttribute('aria-disabled', String(disabled));
+    }
+  };
   const destroy = () => {
     document.removeEventListener('keydown', handleKeydown);
     overlay.remove();
+  };
+  const settle = (message: string) => {
+    settled = true;
+    status.textContent = message;
+    setDestinationsDisabled(true);
+    openInVsCode.removeAttribute('href');
+    cancel.textContent = 'Close';
+    cancel.disabled = false;
   };
   const cancelHandoff = async () => {
     if (busy) return;
@@ -294,17 +371,14 @@ export function mountContextHandoffPreview(
       return;
     }
     busy = true;
-    approve.disabled = true;
+    setDestinationsDisabled(true);
     cancel.disabled = true;
     try {
       await options.onCancel();
-      settled = true;
-      status.textContent = 'Cancelled. Nothing was sent.';
-      cancel.textContent = 'Close';
-      cancel.disabled = false;
+      settle('Cancelled. Nothing was sent.');
     } catch (error) {
       status.textContent = error instanceof Error ? error.message : 'Unable to cancel the handoff.';
-      approve.disabled = false;
+      setDestinationsDisabled(false);
       cancel.disabled = false;
     } finally {
       busy = false;
@@ -313,41 +387,69 @@ export function mountContextHandoffPreview(
   const handleKeydown = (event: KeyboardEvent) => {
     if (event.key === 'Escape') void cancelHandoff();
   };
-
-  cancel.addEventListener('click', () => void cancelHandoff());
-  approve.addEventListener('click', () => {
+  const sendTo = (
+    send: () => Promise<ContextHandoffActionResult> | ContextHandoffActionResult,
+    sendingMessage: string,
+    sentMessage: string,
+    failureMessage: string,
+  ) => {
     if (busy || settled) return;
     busy = true;
-    approve.disabled = true;
+    setDestinationsDisabled(true);
     cancel.disabled = true;
-    status.textContent = `Sending the approved preview to ${CONTEXT_HANDOFF_DESTINATION.label}…`;
-    void Promise.resolve(options.onApprove())
+    status.textContent = sendingMessage;
+    void Promise.resolve(send())
       .then((result) => {
         if (result.success) {
-          settled = true;
-          status.textContent = `Sent to ${CONTEXT_HANDOFF_DESTINATION.label}.`;
-          cancel.textContent = 'Close';
-          cancel.disabled = false;
+          settle(sentMessage);
           return;
         }
-        status.textContent = result.error ?? 'The selected context was not sent.';
         cancel.disabled = false;
         if (result.consumed) {
-          settled = true;
-          cancel.textContent = 'Close';
-        } else {
-          approve.disabled = false;
+          settle(result.error ?? failureMessage);
+          return;
         }
+        status.textContent = result.error ?? failureMessage;
+        setDestinationsDisabled(false);
       })
       .catch((error) => {
-        settled = true;
-        status.textContent = `${error instanceof Error ? error.message : 'Native handoff failed.'} Select the context again before retrying.`;
-        cancel.textContent = 'Close';
-        cancel.disabled = false;
+        settle(
+          `${error instanceof Error ? error.message : failureMessage} Select the context again before retrying.`,
+        );
       })
       .finally(() => {
         busy = false;
       });
+  };
+
+  cancel.addEventListener('click', () => void cancelHandoff());
+  approve.addEventListener('click', () => {
+    sendTo(
+      options.onApprove,
+      `Sending the approved preview to ${CONTEXT_HANDOFF_DESTINATION.label}…`,
+      `Sent to ${CONTEXT_HANDOFF_DESTINATION.label}.`,
+      'The selected context was not sent.',
+    );
+  });
+  openInVsCode.addEventListener('click', (event) => {
+    if (busy || settled) {
+      event.preventDefault();
+      return;
+    }
+    sendTo(
+      options.onOpenInVsCode,
+      `Handing the approved preview to ${CONTEXT_HANDOFF_VSCODE_DESTINATION.label}…`,
+      `Handed to ${CONTEXT_HANDOFF_VSCODE_DESTINATION.label}. If no window opened, VS Code is not installed on this machine.`,
+      `${CONTEXT_HANDOFF_VSCODE_DESTINATION.label} did not receive the selected context.`,
+    );
+  });
+  copyCliCommand.addEventListener('click', () => {
+    sendTo(
+      options.onCopyCliCommand,
+      'Copying the command…',
+      'Command copied. Paste it in a terminal to open the selection in the AGI CLI.',
+      'The command could not be copied.',
+    );
   });
   document.addEventListener('keydown', handleKeydown);
   approve.focus();
