@@ -41,6 +41,7 @@ interface ResearchReportRow {
   created_at: string | Date;
   updated_at: string | Date;
   completed_at: string | Date | null;
+  settled_cost_microusd?: number | string | null;
 }
 
 export interface SaveResearchReportInput {
@@ -60,6 +61,15 @@ export interface SaveResearchReportInput {
   error?: string | null;
   model?: string | null;
   provider?: string | null;
+}
+
+const UNDEFINED_COLUMN_CODE = '42703';
+
+// The settled-cost column arrives with migration 0191. Until it is applied the
+// write must leave the report alone rather than fail the run that produced it.
+function isSettledCostColumnUnavailable(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === UNDEFINED_COLUMN_CODE;
 }
 
 export type PersistedResearchReport = ResearchReport & {
@@ -166,7 +176,36 @@ function rowToReport(row: ResearchReportRow): PersistedResearchReport {
   if (row.provider) report.provider = row.provider;
   const completedAt = toIso(row.completed_at);
   if (completedAt) report.completedAt = completedAt;
+  const settledCostMicrousd = toCount(row.settled_cost_microusd ?? null);
+  if (settledCostMicrousd !== undefined && settledCostMicrousd >= 0) {
+    report.settledCostMicrousd = settledCostMicrousd;
+  }
   return report;
+}
+
+/**
+ * Copy the managed usage ledger's settlement onto the run it paid for. The
+ * ledger settles after the loop has written the report, so this is the only
+ * point where both halves exist.
+ */
+export async function recordResearchReportSettledCost(
+  db: DatabaseAdapter,
+  input: { userId: string; requestId: string; settledCostMicrousd: number },
+): Promise<void> {
+  const userId = input.userId?.trim();
+  const requestId = input.requestId?.trim();
+  if (!userId || !requestId) return;
+  if (!Number.isFinite(input.settledCostMicrousd) || input.settledCostMicrousd < 0) return;
+  try {
+    await db.execute(
+      `update public.research_reports
+          set settled_cost_microusd = $3, updated_at = now()
+        where user_id = $1 and request_id = $2`,
+      [userId, requestId, Math.round(input.settledCostMicrousd)],
+    );
+  } catch (error) {
+    if (!isSettledCostColumnUnavailable(error)) throw error;
+  }
 }
 
 export async function saveResearchReport(

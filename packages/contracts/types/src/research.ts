@@ -206,6 +206,9 @@ export interface ResearchReport {
 
   totalDurationMs?: number;
 
+  /** What the managed usage ledger settled for the run, in microUSD. */
+  settledCostMicrousd?: number;
+
   keyFindings?: string[];
 
   error?: string;
