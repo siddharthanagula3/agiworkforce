@@ -69,10 +69,12 @@ describe('uploadProjectKnowledgeFile', () => {
         headers: expect.objectContaining({ 'x-csrf-token': 'csrf-token' }),
         body: JSON.stringify({
           kind: 'knowledge-file',
+          uploadProtocolVersion: 2,
           projectId: 'project-1',
           fileName: 'notes.txt',
           mimeType: 'text/plain',
           byteCount: 5,
+          checksumSha256: REGISTERED_FILE.checksumSha256,
         }),
       }),
     );

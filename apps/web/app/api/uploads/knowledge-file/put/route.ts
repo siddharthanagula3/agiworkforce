@@ -7,21 +7,22 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
+import {
+  assertUploadMatchesAuthorization,
+  verifyProjectKnowledgeUploadAuthorization,
+} from '@/lib/server/project-knowledge-object-storage';
 import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 const KNOWLEDGE_FILE_SIZE_LIMIT_MESSAGE = 'Project sources are limited to 25 MiB.';
-const KNOWLEDGE_KEY_PATTERN = /^knowledge-files\/projects\/([A-Za-z0-9-]+)\/[A-Za-z0-9._-]+$/;
 
-function projectIdFromKnowledgeKey(key: string): string | null {
-  const match = KNOWLEDGE_KEY_PATTERN.exec(key);
-  if (!match || key.includes('//') || key.split('/').some((s) => s === '.' || s === '..')) {
-    return null;
-  }
-  return match[1] ?? null;
-}
-
+/**
+ * The destination comes from the authorization this route verifies, never from
+ * the request. A caller-supplied key let an object that had already passed
+ * content inspection be overwritten with anything, so the registered row
+ * described bytes the platform no longer held.
+ */
 async function handlePut(request: NextRequest): Promise<NextResponse> {
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { userId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -33,25 +34,9 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
     throw createError.internal('Object storage is not configured');
   }
 
-  const key = request.nextUrl.searchParams.get('key') ?? '';
-  const projectId = projectIdFromKnowledgeKey(key);
-  if (!projectId) {
-    throw createError.forbidden('Invalid upload destination');
-  }
-
-  const [project] = await db.query<{ id: string }>(
-    `select id
-       from user_projects
-      where id = $1
-        and user_id = $2
-        and organization_id is not distinct from $3::uuid
-        and is_archived = false
-        and deleted_at is null
-      limit 1`,
-    [projectId, userId, organizationId],
-  );
-  if (!project) {
-    throw createError.notFound('Project not found');
+  const token = request.nextUrl.searchParams.get('token');
+  if (!token) {
+    throw createError.forbidden('This upload is not authorized');
   }
 
   const contentLengthHeader = request.headers.get('content-length');
@@ -67,6 +52,17 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
   }
   if (body.byteLength > MAX_ATTACHMENT_BYTES) {
     throw createError.validation(KNOWLEDGE_FILE_SIZE_LIMIT_MESSAGE);
+  }
+
+  let key: string;
+  try {
+    const claims = await verifyProjectKnowledgeUploadAuthorization(token, userId);
+    assertUploadMatchesAuthorization(claims, { contentType, data: body });
+    key = claims.key;
+  } catch (error) {
+    throw createError.forbidden(
+      error instanceof Error ? error.message : 'This upload is not authorized',
+    );
   }
 
   await putPrivateObject({

@@ -11,6 +11,7 @@ import {
 import {
   MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH,
   ManagedCloudProjectKnowledgeListResponseSchema,
+  PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
   ManagedCloudProjectKnowledgePresignRequestSchema,
   ManagedCloudProjectKnowledgePresignResponseSchema,
   ManagedCloudProjectKnowledgeRegisterRequestSchema,
@@ -156,10 +157,12 @@ export const cloudProjectSources = {
         MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH,
         ManagedCloudProjectKnowledgePresignRequestSchema.parse({
           kind: 'knowledge-file',
+          uploadProtocolVersion: PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
           projectId,
           fileName: source.name,
           mimeType: source.mimeType,
           byteCount,
+          checksumSha256,
         }),
       ),
     );
