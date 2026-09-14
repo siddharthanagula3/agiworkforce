@@ -43,9 +43,23 @@ the ecosystem expects it.
 
 ## Install
 
+From source:
+
 ```bash
 cargo install --path apps/cli --bin agi
 ```
+
+From the published package, which is also what `agi update --install` runs:
+
+```bash
+npm install -g @agiworkforce/cli
+```
+
+`agi update` compares this build against the release feed and downloads nothing.
+`agi update --install` prints the command above, asks before running it, and
+`--yes` skips the prompt. Installing needs a signed release: the install routes
+refuse an archive without its signed checksum manifest, and no published CLI
+release carries one yet.
 
 Then sign in with your provider:
 
@@ -173,8 +187,16 @@ load automatically in later sessions for that repo.
 /context        Context window usage
 /doctor        Show local diagnostics inside the current session
 /clear          Clear conversation, keep system prompt
+/attach <path>  Stage an image on the next message (`list`, `remove [n|all]`)
+/hooks          List hooks; `add <event> <command>`, `remove <event> <index>`
 /exit           Quit
 ```
+
+Typing `@` in the composer opens a fuzzy file picker over the workspace, filtered
+by `.gitignore`. Enter inserts the path, and on send the file's contents reach the
+model as the same `<file path="…">` block `--file` builds. A trusted workspace
+inlines the contents; an untrusted one sends only the path. An `@image.png`
+mention stages the image instead, as `/attach` and Ctrl+V (clipboard bitmap) do.
 
 Custom commands can be added as markdown files under `.agiworkforce/commands`
 or `~/.agiworkforce/commands`. Nested files become namespaced commands, so
@@ -237,7 +259,7 @@ agi help
 Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 `app-server`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
 `auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`,
-`models`, `plugin`, `sync`, `marketplace`, and `ecosystem`. Managed-cloud
+`models`, `plugin`, `sync`, `marketplace`, `hooks`, and `ecosystem`. Managed-cloud
 models use the normal model/session path after the explicit privacy handoff;
 there is no separate cloud-task command.
 
@@ -251,6 +273,15 @@ plane so every AGI client consumes one account and policy source.
 ```bash
 agi doctor
 agi doctor --json
+
+agi mcp list                       # every registered server
+agi mcp get <name>                 # one server, from the same rows list prints
+agi mcp login <name>               # authorize a remote server over OAuth
+agi mcp logout <name>              # forget its stored token
+
+agi hooks list
+agi hooks add PreToolUse "echo before every tool"
+agi hooks remove PreToolUse 1
 ```
 
 ## Architecture

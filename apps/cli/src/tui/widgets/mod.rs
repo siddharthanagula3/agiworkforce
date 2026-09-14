@@ -8,6 +8,7 @@ pub mod i18n;
 pub mod interactive;
 pub mod list_selection_view;
 pub mod memories_settings;
+pub mod mention_popup;
 pub mod model_picker;
 pub mod screen_renderers;
 pub mod skills_toggle;
