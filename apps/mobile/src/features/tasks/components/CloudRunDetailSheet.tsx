@@ -2,6 +2,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import type { ManagedCloudAgentRunApprovalDecision } from '@agiworkforce/cloud-contracts';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
@@ -216,17 +217,17 @@ export function CloudRunDetailSheet({
                 ))}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <Button
-                    title="Approve"
-                    accessibilityLabel="Approve this task"
+                    title={TOOL_APPROVAL_ACTION_LABELS.approve}
+                    accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.approve} this task`}
                     loading={detail?.pendingAction === 'approve'}
                     disabled={busy}
                     onPress={() => onResolveApproval('approved')}
                     style={{ flex: 1 }}
                   />
                   <Button
-                    title="Deny"
+                    title={TOOL_APPROVAL_ACTION_LABELS.deny}
                     variant="outline"
-                    accessibilityLabel="Deny this task"
+                    accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny} this task`}
                     loading={detail?.pendingAction === 'reject'}
                     disabled={busy}
                     onPress={() => onResolveApproval('rejected')}

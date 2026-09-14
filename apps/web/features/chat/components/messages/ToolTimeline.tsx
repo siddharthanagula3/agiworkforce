@@ -27,6 +27,7 @@ import {
   parseQualifiedMcpToolName,
   describeMcpTool,
 } from '@/features/connectors/lib/mcp-tool-name';
+import { TOOL_APPROVAL_ACTION_LABELS, runStatusLabel } from '@agiworkforce/types';
 import {
   useToolPermissionsStore,
   type PermissionLevel,
@@ -457,8 +458,6 @@ function TimelineStepRow({
           {searchSources!.length} {searchSources!.length === 1 ? 'source' : 'sources'}
         </div>
       )}
-      {/* Per-tool permission quick-pick: only for a connector call awaiting
-          approval (Claude parity, allow/ask/block with a persisted decision). */}
       {showPermissionPicker && mcpTool && (
         <div className="pl-7 mt-1">
           <ToolPermissionQuickPicker
@@ -475,9 +474,9 @@ function TimelineStepRow({
 }
 
 const PERMISSION_QUICK_PICKS: { level: PermissionLevel; label: string; icon: IconComponent }[] = [
-  { level: 'allow', label: 'Always allow', icon: Check },
-  { level: 'ask', label: 'Ask', icon: HelpCircle },
-  { level: 'deny', label: 'Block', icon: Ban },
+  { level: 'allow', label: TOOL_APPROVAL_ACTION_LABELS.alwaysAllow, icon: Check },
+  { level: 'ask', label: TOOL_APPROVAL_ACTION_LABELS.ask, icon: HelpCircle },
+  { level: 'deny', label: TOOL_APPROVAL_ACTION_LABELS.deny, icon: Ban },
 ];
 
 function ToolPermissionQuickPicker({
@@ -806,14 +805,13 @@ function ToolTimeline({
                   });
                 })()}
 
-                {/* Done row: neutral outline circle-check (not green) + "Done" in normal foreground */}
                 {!hasRunning && errorCount === 0 && (
                   <div className="flex items-center gap-2 pt-1">
                     <CircleCheck
                       className="w-4 h-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <span className="text-sm text-foreground">Done</span>
+                    <span className="text-sm text-foreground">{runStatusLabel('completed')}</span>
                   </div>
                 )}
               </div>

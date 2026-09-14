@@ -12,6 +12,7 @@ import {
   Spinner,
   useConfirmAction,
 } from '@agiworkforce/ui';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { getDeclaredConnectorActions } from '@/lib/connectors/catalog';
 import { describeConnectorActions } from '../data/connectors';
@@ -64,21 +65,21 @@ const PERMISSION_LEVELS: {
 }[] = [
   {
     level: 'allow',
-    label: 'Allow',
+    label: TOOL_APPROVAL_ACTION_LABELS.allow,
     description: 'Always run without asking',
     icon: <Check className="h-3 w-3" aria-hidden="true" />,
     activeClass: 'border-success-fill bg-success-fill text-success-on-fill',
   },
   {
     level: 'ask',
-    label: 'Ask',
+    label: TOOL_APPROVAL_ACTION_LABELS.ask,
     description: 'Needs approval each time',
     icon: <HelpCircle className="h-3 w-3" aria-hidden="true" />,
     activeClass: 'border-warning-fill bg-warning-fill text-warning-on-fill',
   },
   {
     level: 'deny',
-    label: 'Deny',
+    label: TOOL_APPROVAL_ACTION_LABELS.deny,
     description: 'Never run this tool',
     icon: <Ban className="h-3 w-3" aria-hidden="true" />,
     activeClass: 'border-danger-fill bg-danger-fill text-danger-on-fill',

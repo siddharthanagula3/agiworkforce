@@ -136,6 +136,23 @@ export type DispatchTaskLifecycleStatus =
   | 'cancelled'
   | 'rejected';
 
+export const RUN_STATUS_LABELS: Readonly<Record<DispatchTaskLifecycleStatus, string>> =
+  Object.freeze({
+    accepted: 'Queued',
+    queued: 'Queued',
+    running: 'Running',
+    awaiting_input: 'Waiting for input',
+    ready_for_review: 'Ready for review',
+    completed: 'Completed',
+    failed: 'Failed',
+    cancelled: 'Cancelled',
+    rejected: 'Rejected',
+  });
+
+export function runStatusLabel(status: DispatchTaskLifecycleStatus): string {
+  return RUN_STATUS_LABELS[status];
+}
+
 export interface DispatchTaskStatusEvent {
   action: 'dispatch.task.status';
   version: 1;
