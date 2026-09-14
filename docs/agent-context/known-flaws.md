@@ -14,10 +14,9 @@ restating it.
 
 ## Web
 
-| id                          | severity | summary                                                   | where                                                             | first seen | owner     | still open because                                                                                                                                                                   |
-| --------------------------- | -------- | --------------------------------------------------------- | ----------------------------------------------------------------- | ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| WEB-SEO-PROBE-404-01        | Low      | web seo probe 404                                         | `apps/extension/src/nlweb.ts`                                     | undated    | Extension | `apps/extension/src/nlweb.ts` read 2026-09-07; the entry's own status still records the open half and the cited file is present                                                      |
-| WEB-SEC-SCAN-2026-09-09-F88 | Low      | plan gate trusts x-agi-surface for an unpinned credential | `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts` | 2026-09-09 | Web       | refusing the header claim breaks the error copy a legitimate developer-surface caller sees without closing the real hole; the fix is pinning surface into the credential at issuance |
+| id                          | severity | summary                                                   | where                                                             | first seen | owner | still open because                                                                                                                                                                   |
+| --------------------------- | -------- | --------------------------------------------------------- | ----------------------------------------------------------------- | ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| WEB-SEC-SCAN-2026-09-09-F88 | Low      | plan gate trusts x-agi-surface for an unpinned credential | `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts` | 2026-09-09 | Web   | refusing the header claim breaks the error copy a legitimate developer-surface caller sees without closing the real hole; the fix is pinning surface into the credential at issuance |
 
 ## Desktop
 
