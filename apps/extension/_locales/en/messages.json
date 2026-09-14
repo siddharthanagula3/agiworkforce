@@ -637,6 +637,30 @@
     "message": "This page could not be captured. Try again on a regular website tab.",
     "description": "Composer error when Chrome cannot capture a screenshot"
   },
+  "spDictationSectionTitle": {
+    "message": "Dictation",
+    "description": "Settings section title for side-panel voice input"
+  },
+  "spDictationLanguageLabel": {
+    "message": "Language",
+    "description": "Settings label for the dictation language"
+  },
+  "spDictationLanguageAria": {
+    "message": "Dictation language",
+    "description": "Accessible name for the dictation language control"
+  },
+  "spDictationLanguageHelp": {
+    "message": "The microphone transcribes in this language. The list is the languages this browser is set up for; add more in Chrome's language settings.",
+    "description": "Help text under the dictation language control"
+  },
+  "spDictationLanguageSaved": {
+    "message": "Dictation language saved.",
+    "description": "Status after saving the dictation language"
+  },
+  "spDictationLanguageUnavailable": {
+    "message": "This browser reports no languages for dictation.",
+    "description": "Status when the browser exposes no language tags"
+  },
   "spPageAssistantOverlay": {
     "message": "Page assistant overlay",
     "description": "Settings label for the compact in-page assistant"

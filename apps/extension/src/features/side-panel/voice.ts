@@ -1,7 +1,10 @@
 import { setChild } from '../../dom-helpers';
 import { Mic, renderIcon } from '../../assets/icons';
-
-const VOICE_IDLE_TITLE = "Voice input (audio is transcribed by Chrome's speech service)";
+import {
+  DICTATION_LANGUAGE_KEY,
+  activeDictationLanguage,
+  languageLabel,
+} from './dictation-language';
 
 type SpeechRecognitionCtor = new () => {
   lang: string;
@@ -32,6 +35,10 @@ export function describeVoiceError(code: string | undefined): string {
   return 'Voice input failed. Try again.';
 }
 
+export function micTooltip(language: string | null): string {
+  return language ? `Voice input · ${languageLabel(language)}` : 'Voice input';
+}
+
 export function setupVoiceInput(
   micBtn: HTMLButtonElement,
   inputEl: HTMLTextAreaElement,
@@ -49,10 +56,21 @@ export function setupVoiceInput(
     micBtn.setAttribute('aria-disabled', 'true');
     return;
   }
-  micBtn.title = VOICE_IDLE_TITLE;
+  micBtn.title = micTooltip(null);
 
   let recognition: InstanceType<SpeechRecognitionCtor> | null = null;
   let listening = false;
+  let language: string | null = null;
+
+  const refreshLanguage = async (): Promise<void> => {
+    language = await activeDictationLanguage();
+    if (!listening) micBtn.title = micTooltip(language);
+  };
+
+  void refreshLanguage();
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (area === 'sync' && DICTATION_LANGUAGE_KEY in changes) void refreshLanguage();
+  });
 
   micBtn.addEventListener('click', () => {
     if (listening) {
@@ -61,7 +79,7 @@ export function setupVoiceInput(
     }
 
     recognition = new SpeechRecognitionCtor();
-    recognition.lang = chrome.i18n?.getUILanguage?.() || navigator.language || 'en-US';
+    if (language) recognition.lang = language;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
@@ -91,7 +109,7 @@ export function setupVoiceInput(
       if (document.body) {
         micBtn.classList.remove('active');
         micBtn.replaceChildren(renderIcon(Mic, 14));
-        micBtn.title = VOICE_IDLE_TITLE;
+        micBtn.title = micTooltip(language);
       }
       recognition = null;
     };

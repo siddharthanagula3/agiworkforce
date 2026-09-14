@@ -632,6 +632,15 @@ describe('shared LibraryView', () => {
       mime_type: 'image/png',
       previewable: true,
     };
+    const VIDEO_ITEM = {
+      ...ITEM,
+      id: 'asset-video',
+      file_name: 'video.mp4',
+      mime_type: 'video/mp4',
+      kind: 'video',
+      uri: '/api/files/asset-video',
+      previewable: true,
+    };
 
     it('shows a Library breadcrumb naming the open file, with download and close', async () => {
       const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
@@ -663,6 +672,24 @@ describe('shared LibraryView', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
       expect(screen.getByText('125%')).toBeTruthy();
+    });
+
+    it('plays a generated video inline instead of offering only a download', async () => {
+      const transport = makeTransport({
+        listPage: pageOf([VIDEO_ITEM]),
+        inlinePreviewUri: (uri) => uri,
+      });
+      render(<LibraryView transport={transport} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Open video.mp4' }));
+      await screen.findByTestId('library-file-viewer');
+
+      const player = screen.getByTestId('library-video-player');
+      expect(player.tagName).toBe('VIDEO');
+      expect(player.getAttribute('src')).toBe('/api/files/asset-video');
+      expect(player.hasAttribute('controls')).toBe(true);
+      expect(screen.queryByText('Preview isn\u2019t available for this file inline.')).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Zoom' })).toBeNull();
     });
 
     it('falls back to a download prompt when the host has no inline preview for it', async () => {

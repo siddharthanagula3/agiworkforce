@@ -1,12 +1,24 @@
+import { DICTATION_LANGUAGE_KEY } from '../side-panel/dictation-language';
+
 export const SYNCED_PREFERENCE_KEYS = [
   'agi_task_notifications',
   'agi_thinking_enabled',
   'agi_quick_mode',
   'agi_cu_ask_before_acting',
   'in_page_panel_enabled',
+  DICTATION_LANGUAGE_KEY,
 ] as const;
 
 type SyncedPreferenceKey = (typeof SYNCED_PREFERENCE_KEYS)[number];
+
+/**
+ * What each key is allowed to hold. Mirroring is a write into the other area,
+ * so a value of the wrong shape would be copied across every device; the
+ * toggles are booleans and the dictation language is a tag string.
+ */
+function isSyncablePreferenceValue(key: SyncedPreferenceKey, value: unknown): boolean {
+  return key === DICTATION_LANGUAGE_KEY ? typeof value === 'string' : typeof value === 'boolean';
+}
 
 interface StorageAreaLike {
   get(keys: string[]): Promise<Record<string, unknown>>;
@@ -47,7 +59,8 @@ function allowedChanges(
   return Object.entries(changes).filter(
     (entry): entry is [SyncedPreferenceKey, StorageChangeLike] =>
       allowed.has(entry[0]) &&
-      (entry[1].newValue === undefined || typeof entry[1].newValue === 'boolean'),
+      (entry[1].newValue === undefined ||
+        isSyncablePreferenceValue(entry[0] as SyncedPreferenceKey, entry[1].newValue)),
   );
 }
 
@@ -86,9 +99,9 @@ async function hydratePreferences(storage: SyncedPreferenceStorage): Promise<voi
   const syncChanges: Array<[SyncedPreferenceKey, StorageChangeLike]> = [];
 
   for (const key of SYNCED_PREFERENCE_KEYS) {
-    if (owns(syncedValues, key) && typeof syncedValues[key] === 'boolean') {
+    if (owns(syncedValues, key) && isSyncablePreferenceValue(key, syncedValues[key])) {
       localChanges.push([key, { newValue: syncedValues[key] }]);
-    } else if (owns(localValues, key) && typeof localValues[key] === 'boolean') {
+    } else if (owns(localValues, key) && isSyncablePreferenceValue(key, localValues[key])) {
       syncChanges.push([key, { newValue: localValues[key] }]);
     }
   }

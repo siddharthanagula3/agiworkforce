@@ -130,14 +130,37 @@ describe('cross-device Chrome preferences', () => {
     expect(fixture.local.values['agi_cu_ask_before_acting']).toBe(false);
   });
 
-  it('keeps the allowlist limited to non-sensitive boolean preferences', () => {
+  it('keeps the allowlist limited to non-sensitive preferences', () => {
     expect(SYNCED_PREFERENCE_KEYS).toEqual([
       'agi_task_notifications',
       'agi_thinking_enabled',
       'agi_quick_mode',
       'agi_cu_ask_before_acting',
       'in_page_panel_enabled',
+      'agi_dictation_language',
     ]);
+  });
+
+  it('mirrors the dictation language and refuses a value of the wrong shape', async () => {
+    const fixture = storageFixture();
+    await initializeSyncedPreferences(fixture.storage);
+
+    fixture.emit({ agi_dictation_language: { newValue: 'fr-CA' } }, 'local');
+    await flushMirrors();
+    expect(fixture.sync.values['agi_dictation_language']).toBe('fr-CA');
+
+    fixture.emit({ agi_dictation_language: { newValue: true } }, 'local');
+    await flushMirrors();
+    expect(fixture.sync.values['agi_dictation_language']).toBe('fr-CA');
+  });
+
+  it('does not mirror a string written to a boolean preference', async () => {
+    const fixture = storageFixture();
+    await initializeSyncedPreferences(fixture.storage);
+
+    fixture.emit({ agi_quick_mode: { newValue: 'yes' } }, 'local');
+    await flushMirrors();
+    expect(fixture.sync.values).not.toHaveProperty('agi_quick_mode');
   });
 
   it('only lists keys the extension actually stores', () => {

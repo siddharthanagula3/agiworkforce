@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
+import {
+  MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH,
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
+} from '@agiworkforce/cloud-contracts';
 import { MAX_DEVICE_STEP_RESULT_LENGTH } from '@agiworkforce/local-runtime-contract';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import type {
@@ -242,6 +245,13 @@ const ResumeDeviceResultSchema = z
     toolCallId: z.string().min(1).max(256),
     content: z.string().max(MAX_DEVICE_STEP_RESULT_LENGTH),
     isError: z.boolean(),
+    image: z
+      .object({
+        base64: z.string().min(1).max(MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH),
+        mimeType: z.enum(['image/png', 'image/jpeg']),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 const resumeDeviceResultSchemaCoversResult: SameKeys<

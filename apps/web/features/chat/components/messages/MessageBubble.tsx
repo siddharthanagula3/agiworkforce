@@ -79,6 +79,7 @@ import {
   type ArtifactManifest,
   type ComputeSession,
   type GeneratedFile,
+  type ProjectFileCitation,
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
@@ -96,6 +97,7 @@ import {
   hasCanonicalToolActivity,
   hasOpenApprovalDecision,
   hasStreamError,
+  ProjectFileCitations,
   resolveModelEscalation,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
@@ -170,6 +172,7 @@ import { rendersResearchPlan } from '../../utils/research-plan';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
+import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { CodeExecutionBlock } from './CodeExecutionBlock';
 import { detectCardType } from '../cards';
 import { MessageFormatCard } from '../cards/MessageFormatCard';
@@ -498,6 +501,8 @@ interface Message {
       content: string;
       messageType?: string;
     }>;
+    /** Project knowledge passages this turn read, each with where it came from. */
+    projectSources?: ProjectFileCitation[];
     /** Web search citations from server-managed tools (e.g., Anthropic web_search) */
     citations?: Array<{
       type?: string;
@@ -618,11 +623,7 @@ interface MessageBubbleProps {
   /** True while the conversation streams: paging mid-turn is not offered. */
   isConversationStreaming?: boolean;
   /** Re-generates an image result in-place (edit/aspect-ratio change). */
-  onRegenerateImage?: (opts: {
-    prompt: string;
-    aspectRatio: ImageAspectRatio;
-    modelId?: string;
-  }) => Promise<string>;
+  onRegenerateImage?: (opts: ImageRevisionRequest) => Promise<string>;
   /** Resume status observation for an already-started durable video task. */
   onResumeVideo?: (messageId: string) => void;
   /** Start a new generation only after a durable video task is terminally failed. */
@@ -2538,6 +2539,15 @@ const MessageBubbleComponent = function MessageBubble({
                 </button>
               </div>
             )}
+
+          {!isUser && (message.metadata?.projectSources?.length ?? 0) > 0 && (
+            <div className="mt-2">
+              <ProjectFileCitations
+                citations={message.metadata?.projectSources ?? []}
+                answerText={cleanedContent}
+              />
+            </div>
+          )}
 
           {!isUser && !message.isStreaming && searchSources.length > 0 && (
             <div className="mt-2 flex justify-end">

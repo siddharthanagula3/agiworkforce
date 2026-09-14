@@ -8,10 +8,16 @@ import {
 } from './project-knowledge-passages';
 import {
   anchorAt,
+  anchorLocationAt,
   formatAnchor,
   parseKnowledgeAnchors,
   type KnowledgeAnchor,
 } from '@/lib/server/project-knowledge-anchors';
+import {
+  dedupeProjectFileCitations,
+  MAX_PROJECT_FILE_CITATION_SNIPPET_CHARS,
+  type ProjectFileCitation,
+} from '@agiworkforce/types';
 
 export interface ProjectContextDb {
   query<T>(sql: string, params?: unknown[]): Promise<T[]>;
@@ -23,6 +29,7 @@ export interface ProjectContext {
   description: string | null;
   instructions: string | null;
   knowledgeFiles: Array<{
+    fileId?: string | null;
     fileName: string;
     summary: string | null;
     extractedText: string | null;
@@ -173,6 +180,7 @@ export async function loadProjectContext(
   if (!project) return null;
 
   let files: Array<{
+    id: string;
     file_name: string;
     summary: string | null;
     extracted_text: string | null;
@@ -180,12 +188,14 @@ export async function loadProjectContext(
   }> = [];
   try {
     files = await db.query<{
+      id: string;
       file_name: string;
       summary: string | null;
       extracted_text: string | null;
       extracted_anchors: unknown;
     }>(
-      `select file_name,
+      `select id,
+              file_name,
               summary,
               to_jsonb(project_knowledge_files)->>'extracted_text' as extracted_text,
               to_jsonb(project_knowledge_files)->'extracted_anchors' as extracted_anchors
@@ -298,6 +308,7 @@ export async function loadProjectContext(
     instructions: project.instructions,
     knowledgeFiles: files
       .map((file, addedIndex) => ({
+        fileId: file.id ?? null,
         fileName: file.file_name,
         summary: file.summary,
         extractedText: file.extracted_text,
@@ -310,6 +321,7 @@ export async function loadProjectContext(
           right.relevance - left.relevance || left.file.addedIndex - right.file.addedIndex,
       )
       .map(({ file }) => ({
+        fileId: file.fileId,
         fileName: file.fileName,
         summary: file.summary,
         extractedText: file.extractedText,
@@ -334,6 +346,7 @@ export async function loadProjectContext(
 function selectPassagesFor(query: string) {
   let remaining = MAX_TOTAL_FILE_CONTENT_CHARS;
   return (file: {
+    fileId?: string | null;
     fileName: string;
     summary: string | null;
     extractedText: string | null;
@@ -354,7 +367,22 @@ function selectPassagesFor(query: string) {
  * (no instructions, no description, no files) so callers skip the turn cost.
  */
 export function formatProjectSystemPrompt(context: ProjectContext): string | null {
+  return renderProjectContext(context).prompt;
+}
+
+/**
+ * The prompt block and the citation list, built in one pass.
+ *
+ * They are one pass because they must agree: a chip that names a page the
+ * prompt never carried points at evidence the answer could not have used, and
+ * the budget walk below is the only thing that knows which passages survived.
+ */
+export function renderProjectContext(context: ProjectContext): {
+  prompt: string | null;
+  citations: ProjectFileCitation[];
+} {
   const sections: string[] = [];
+  const citations: ProjectFileCitation[] = [];
 
   sections.push(`You are working inside the user's project "${truncate(context.name, 200)}".`);
 
@@ -423,6 +451,18 @@ export function formatProjectSystemPrompt(context: ProjectContext): string | nul
         continue;
       }
 
+      if (selection.strategy === 'whole' || selection.strategy === 'head') {
+        citations.push({
+          fileName,
+          ...(file.fileId ? { fileId: file.fileId } : {}),
+          projectId: context.projectId,
+          snippet: (selection.passages[0]?.text ?? '').slice(
+            0,
+            MAX_PROJECT_FILE_CITATION_SNIPPET_CHARS,
+          ),
+        });
+      }
+
       if (selection.strategy === 'whole') {
         extractedFiles.push({ fileName, content: selection.passages[0]?.text ?? '' });
       } else if (selection.strategy === 'head') {
@@ -436,8 +476,16 @@ export function formatProjectSystemPrompt(context: ProjectContext): string | nul
           fileName,
           excerptOf: `${spent} of ${selection.totalChars} extracted characters, selected as the passages most relevant to this request; the rest of the file is not included`,
           passages: selection.passages.map((passage) => {
+            const anchor = anchorLocationAt(file.anchors ?? [], passage.start);
             const locatedAt = formatAnchor(anchorAt(file.anchors ?? [], passage.start));
             if (locatedAt) anyLocator = true;
+            citations.push({
+              fileName,
+              ...(file.fileId ? { fileId: file.fileId } : {}),
+              projectId: context.projectId,
+              snippet: passage.text.slice(0, MAX_PROJECT_FILE_CITATION_SNIPPET_CHARS),
+              ...(anchor ? { anchor } : {}),
+            });
             return {
               fromCharacter: passage.start,
               toCharacter: passage.end,
@@ -489,9 +537,9 @@ export function formatProjectSystemPrompt(context: ProjectContext): string | nul
     );
   }
 
-  if (sections.length === 1) return null;
+  if (sections.length === 1) return { prompt: null, citations: [] };
 
-  return sections.join('\n\n');
+  return { prompt: sections.join('\n\n'), citations: dedupeProjectFileCitations(citations) };
 }
 
 export function applyProjectContext(chatRequest: ChatCompletionRequest, prompt: string): void {
