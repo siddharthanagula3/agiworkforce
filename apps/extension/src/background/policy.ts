@@ -83,6 +83,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
 
   QUEUE_MESSAGE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RECONNECT_NATIVE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  UNPAIR_NATIVE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   TAB_READY: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   SYNC_PAGE_CONTEXT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
