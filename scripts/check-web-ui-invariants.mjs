@@ -30,7 +30,8 @@ const IGNORED_DIRS = new Set([
 
 const EXEMPT_PREFIXES = ['packages/ui/design-tokens/'];
 
-const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.css']);
+const STYLESHEET_EXTENSION = '.css';
 
 const PALETTE_FAMILIES = [
   'slate',
@@ -164,7 +165,10 @@ function scanSource(source, file) {
     const code = line.replace(/\/\/.*$/, '');
 
     for (const rule of RULES) {
-      if (rule.extensions && !rule.extensions.has(path.extname(file))) continue;
+      const extension = path.extname(file);
+      if (rule.extensions ? !rule.extensions.has(extension) : extension === STYLESHEET_EXTENSION) {
+        continue;
+      }
       rule.regex.lastIndex = 0;
       let match;
       while ((match = rule.regex.exec(code)) !== null) {
