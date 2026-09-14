@@ -51,8 +51,6 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   editorContextAutoAttach: 'agiWorkforce.editorContext.autoAttach',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
   telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',
-  desktopBridgeEnabled: 'agiWorkforce.desktopBridge.enabled',
-  desktopBridgePort: 'agiWorkforce.desktopBridge.port',
   currentTier: 'agiWorkforce.currentTier',
   cliPath: 'agiWorkforce.cliPath',
 };
@@ -96,11 +94,6 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
       .sort();
 
     expect([...SETTINGS_PANEL_SETTING_KEYS].sort()).toEqual(activeMutableKeys);
-  });
-
-  it('keeps the optional Desktop bridge opt-in for a clean public install', () => {
-    expect(__CONFIG_DEFAULTS.desktopBridgeEnabled).toBe(false);
-    expect(pkgSettings['agiWorkforce.desktopBridge.enabled']?.default).toBe(false);
   });
 
   it('requires an explicit opt-in before sending editor context for inline completions', () => {
@@ -151,17 +144,23 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     expect(restricted.filter((key) => pkgSettings[key] === undefined)).toEqual([]);
   });
 
-  it('restricts workspace settings that can change the model or Desktop bridge boundary', () => {
+  it('restricts the workspace settings that can change the model or the endpoint', () => {
     const restricted =
       readPackageJson().capabilities?.untrustedWorkspaces?.restrictedConfigurations ?? [];
 
     expect(restricted).toEqual(
-      expect.arrayContaining([
-        'agiWorkforce.model',
-        'agiWorkforce.desktopBridge.enabled',
-        'agiWorkforce.desktopBridge.port',
-      ]),
+      expect.arrayContaining(['agiWorkforce.model', 'agiWorkforce.apiEndpoint']),
     );
+  });
+
+  it('does not publish the retired Tauri-era desktop bridge', () => {
+    expect(pkgSettings['agiWorkforce.desktopBridge.enabled']).toBeUndefined();
+    expect(pkgSettings['agiWorkforce.desktopBridge.port']).toBeUndefined();
+    expect(
+      readPackageJson().contributes?.commands?.some(
+        (entry) => entry.command === 'agi-workforce.bridgeReconnect',
+      ),
+    ).toBe(false);
   });
 
   it('presents the legacy invite command id as sign-in, not a private-beta gate', () => {
