@@ -3,6 +3,18 @@ import { desktopCloudInstallerDownloadUrl } from '../../../electron/desktopCloud
 import { check } from '../tauri-electron/updater';
 import type { ElectronHostBridge } from '../tauri-electron/bridgeContract';
 
+const preferences: Awaited<ReturnType<ElectronHostBridge['readPreferences']>> = {
+  preferences: {
+    launchAtLogin: false,
+    quickAskShortcut: '',
+    screenshotShortcut: '',
+    voiceShortcut: '',
+    showInMenuBar: true,
+    cliPath: '',
+  },
+  shortcutStatus: { quickAsk: 'off', screenshot: 'off', voice: 'off' },
+};
+
 function installHost(openExternal: ElectronHostBridge['openExternal']): void {
   const host: ElectronHostBridge = {
     platform: 'electron-darwin',
@@ -18,6 +30,9 @@ function installHost(openExternal: ElectronHostBridge['openExternal']): void {
     onDeepLink: () => () => undefined,
     onRuntimeEvent: () => () => undefined,
     onVoiceHotkey: () => () => undefined,
+    onHostCommand: () => () => undefined,
+    readPreferences: async () => preferences,
+    writePreferences: async () => preferences,
     openExternal,
     windowControl: async () => false,
     dialog: async () => null,
