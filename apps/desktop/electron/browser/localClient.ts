@@ -14,25 +14,14 @@ import {
 } from '@agiworkforce/types';
 
 /**
- * How another program on this machine reaches the bridge.
- *
- * The CLI is not the Chrome extension and must not present the extension's
- * token: the extension proves it is the paired extension, a local client
- * proves only that it can read a file this user owns. Keeping the two grants
- * apart means a leaked bridge token cannot be replayed as a client, and a
- * client cannot impersonate the extension.
- *
- * The token lives for one run of the shell. A client that kept an old one is
- * told so (401) rather than being silently treated as unpaired, because those
- * are different problems with different fixes.
+ * A grant separate from the extension's, so a leaked bridge token cannot be
+ * replayed as a local client and a client cannot impersonate the extension.
+ * It lives for one run of the shell; a stale one answers 401, not "unpaired".
  */
 let token: string | null = null;
 let bridgeFilePath: string | null = null;
 
-/**
- * The CLI's config root, which is where the CLI looks and therefore where this
- * has to be written. `AGIWORKFORCE_HOME` overrides it for both sides.
- */
+/** The CLI's config root. `AGIWORKFORCE_HOME` overrides it for both sides. */
 export function cliConfigRoot(env: NodeJS.ProcessEnv = process.env, home?: string): string {
   const override = env['AGIWORKFORCE_HOME'];
   if (override && override.trim().length > 0) return override;
@@ -44,12 +33,9 @@ export function localClientToken(): string | null {
 }
 
 /**
- * Advertise the running bridge to local clients.
- *
- * Mode 0600 because the token in it is the whole grant: anything that can read
- * this file can ask the shell to act in the user's signed-in browser. The pid
- * is written so a client can tell a live bridge from the file a killed shell
- * left behind.
+ * Mode 0600 because the token is the whole grant: anything that can read this
+ * file can act in the user's signed-in browser. The pid lets a client tell a
+ * live bridge from the file a killed shell left behind.
  */
 export function publishLocalClientBridge(
   port: number,
@@ -76,16 +62,12 @@ export function withdrawLocalClientBridge(): void {
   try {
     rmSync(bridgeFilePath, { force: true });
   } catch {
-    // A file we cannot remove is stale rather than dangerous: its token is
-    // gone with this process, so every request it invites answers 401.
+    // A file that will not delete is harmless: its token died with this run.
   }
   bridgeFilePath = null;
 }
 
-/**
- * Constant-time comparison, so a client cannot learn the token one byte at a
- * time from how long a refusal takes.
- */
+/** Constant time, so a refusal's duration leaks nothing about the token. */
 function tokenMatches(presented: string | undefined): boolean {
   if (!token || !presented || presented.length !== token.length) return false;
   let difference = 0;
@@ -104,15 +86,7 @@ export function parseLocalClientCommand(body: unknown): LocalClientCommandReques
   return isLocalClientCommandRequest(body) ? body : null;
 }
 
-/**
- * What a client is called in a dialog the user has to answer.
- *
- * A permission prompt is a question, and a question the user cannot read is
- * not one. So the client gets a name in words rather than a command token, the
- * folder is named on its own because that is what the user recognises, and the
- * path is shown whole: a truncated path ends on the prefix every path on this
- * machine shares, which tells the user nothing about what is asking.
- */
+/** What a client is called in a dialog the user has to answer. */
 const LOCAL_CLIENT_NAMES: Readonly<Record<string, string>> = Object.freeze({
   agi: 'The AGI CLI',
 });

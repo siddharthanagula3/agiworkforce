@@ -1,10 +1,7 @@
 /**
- * Sandboxed preload for the Electron cloud shell.
- *
- * Exposes exactly the `ElectronHostBridge` contract
+ * Sandboxed preload exposing exactly the `ElectronHostBridge` contract
  * (`src/lib/tauri-electron/bridgeContract.ts`) as `window.agiHost`, the only
- * surface the renderer has beyond the DOM. No Node globals leak into the page
- * (`contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`).
+ * surface the renderer has beyond the DOM.
  */
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
@@ -142,20 +139,14 @@ const agiHost: ElectronHostBridge = {
 };
 
 /**
- * Exposed unconditionally; the main process decides who may actually call.
- *
- * An earlier version of this checked `location.origin` here and refused to
- * expose the object off-origin. It never exposed anything at all: a sandboxed
- * preload runs before the document exists, so there was no location to read.
- * `isTrustedSender` in `main.ts` is the real gate, and it is the better place
- * for one, because the main process cannot be lied to about the caller.
+ * Exposed unconditionally. A sandboxed preload runs before the document, so
+ * there is no origin to read here; `isTrustedSender` in `main.ts` is the gate.
  */
 contextBridge.exposeInMainWorld('agiHost', agiHost);
 
 /**
- * A dropped folder never reaches the page: a directory has no bytes for the
- * DOM to hand over, so the main process is told its path and asks for a
- * workspace grant. Files fall through untouched to the page's own handler.
+ * A directory has no bytes for the DOM to hand over, so its path goes to the
+ * main process for a workspace grant. Files fall through to the page.
  */
 window.addEventListener('drop', (event) => {
   const dropped = Array.from((event as DragEvent).dataTransfer?.files ?? []);
@@ -166,15 +157,9 @@ window.addEventListener('drop', (event) => {
 });
 
 /**
- * Tell the main process which theme the page settled on.
- *
- * The shell's own dialogs and menus are drawn by macOS, which picks their
- * appearance from the process, not from the page's stylesheet. Until this
- * existed, a user on the light theme got a dark permission prompt, and the
- * Settings theme control could not reach it at all.
- *
- * The page's resolved theme is whatever `data-theme` says on the html element,
- * and nothing when the user is on "system", where macOS is already right.
+ * The shell's dialogs are drawn by macOS, which takes their appearance from
+ * the process rather than the page's stylesheet. `data-theme` carries the
+ * page's choice, and is absent on "system", where macOS is already right.
  */
 function reportResolvedTheme(): void {
   const declared = document.documentElement.getAttribute('data-theme');
