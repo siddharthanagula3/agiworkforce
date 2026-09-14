@@ -1301,6 +1301,21 @@ fn resolve_resume_payload(reference: &str, fork: bool) -> Result<ResumePayload> 
     }
 }
 
+/// The model a resumed conversation continues on.
+///
+/// A conversation carries the model it was held on, and continuing it on the
+/// configured default silently moves the user to a different, often far more
+/// expensive, model. The default is the fallback for a session that records no
+/// model or one this build no longer knows.
+fn resumed_model(managed: Option<&ManagedResumeSession>, fallback: &str) -> String {
+    managed
+        .and_then(|(session, _)| session.model.as_deref())
+        .map(str::trim)
+        .filter(|model| !model.is_empty() && model_catalog::find(model).is_some())
+        .map(str::to_string)
+        .unwrap_or_else(|| fallback.to_string())
+}
+
 fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
     if let Some(resolved) = runtime::session_control::latest_managed_session()? {
         let session_id = resolved.summary.session_id.clone();
@@ -2619,7 +2634,7 @@ pub async fn run_main() -> Result<()> {
                         messages.len()
                     );
                 }
-                let model = app_config.default.model.clone();
+                let model = resumed_model(managed_session.as_ref(), &app_config.default.model);
                 repl::run_repl(
                     &mut app_config,
                     &model,
@@ -2653,7 +2668,7 @@ pub async fn run_main() -> Result<()> {
                     session_id,
                     messages.len()
                 );
-                let model = app_config.default.model.clone();
+                let model = resumed_model(managed_session.as_ref(), &app_config.default.model);
                 repl::run_repl(
                     &mut app_config,
                     &model,
@@ -4445,6 +4460,40 @@ pub async fn run_oneshot(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_resumed_conversation_keeps_the_model_it_was_held_on() {
+        let mut session = runtime::session::ManagedSession::new(
+            "11111111-1111-4111-8111-111111111111".to_string(),
+            chrono::Utc::now(),
+        );
+        let known = model_catalog::default_model().to_string();
+        session.model = Some(known.clone());
+        let managed = (session, std::path::PathBuf::from("/tmp/session.jsonl"));
+        assert_eq!(resumed_model(Some(&managed), "some-other-model"), known);
+    }
+
+    #[test]
+    fn a_resumed_conversation_with_no_model_falls_back_to_the_default() {
+        let session = runtime::session::ManagedSession::new(
+            "22222222-2222-4222-8222-222222222222".to_string(),
+            chrono::Utc::now(),
+        );
+        let managed = (session, std::path::PathBuf::from("/tmp/session.jsonl"));
+        assert_eq!(resumed_model(Some(&managed), "fallback-model"), "fallback-model");
+        assert_eq!(resumed_model(None, "fallback-model"), "fallback-model");
+    }
+
+    #[test]
+    fn a_model_this_build_no_longer_knows_falls_back_instead_of_failing() {
+        let mut session = runtime::session::ManagedSession::new(
+            "33333333-3333-4333-8333-333333333333".to_string(),
+            chrono::Utc::now(),
+        );
+        session.model = Some("a-model-that-was-retired".to_string());
+        let managed = (session, std::path::PathBuf::from("/tmp/session.jsonl"));
+        assert_eq!(resumed_model(Some(&managed), "fallback-model"), "fallback-model");
+    }
     use super::*;
 
     #[test]
