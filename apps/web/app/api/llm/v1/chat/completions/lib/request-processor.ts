@@ -13,6 +13,12 @@ import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import {
+  DEVICE_HOST_HEADER,
+  parseDesktopHostDeclaration,
+  type DesktopHostDeclaration,
+} from '@agiworkforce/local-runtime-contract';
+import { deviceStepToolDefs } from '@/lib/device-steps/device-tools';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
@@ -716,6 +722,12 @@ export function resolveManagedUsageLeaseSeconds(
 export type ProcessedRequest = {
   requestId: string;
   chatSurface: CloudChatSurface;
+  /**
+   * The desktop shell hosting this page, when one declared itself. Present only
+   * on the desktop surface, and the only thing that puts a device tool in front
+   * of the model.
+   */
+  deviceHost?: DesktopHostDeclaration;
   organizationId?: string | null;
   managedUsage?: ManagedUsageRequestReservation;
   chatRequest: ChatCompletionRequest;
@@ -2042,6 +2054,14 @@ export async function processRequest(
   creditBalancePromise?.catch(() => {});
 
   const chatSurface = resolveAuthenticatedSurface(request, auth);
+  // A declaration is a claim about the caller's own machine, never an
+  // authorization: it decides which device tools are offered, and the device
+  // refuses or prompts for every step it produces. Only the desktop surface is
+  // believed, so a browser tab cannot obtain the tools by sending the header.
+  const deviceHost =
+    chatSurface === 'desktop'
+      ? parseDesktopHostDeclaration(request.headers.get(DEVICE_HOST_HEADER))
+      : null;
   const customInstructionsPromise =
     chatSurface === 'api'
       ? null
@@ -3664,6 +3684,13 @@ export async function processRequest(
   if (placesRequirement.offered) {
     resolvedTools = [...(resolvedTools ?? []), placesSearchToolDef()];
   }
+
+  if (deviceHost) {
+    const deviceTools = deviceStepToolDefs(deviceHost);
+    if (deviceTools.length > 0) {
+      resolvedTools = [...(resolvedTools ?? []), ...deviceTools];
+    }
+  }
   const placesEnforcement = resolveRequiredPlacesEnforcement({
     required: placesRequirement.required,
     requestedToolChoice: chatRequest.tool_choice,
@@ -3907,6 +3934,7 @@ export async function processRequest(
     ok: true,
     requestId,
     chatSurface,
+    ...(deviceHost ? { deviceHost } : {}),
     organizationId,
     zeroDataRetentionOnly,
     managedUsage,
