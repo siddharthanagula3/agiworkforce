@@ -1,6 +1,7 @@
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { Prose, Section, Stack } from '@/features/marketing/components/system';
+import { NotFoundActions } from './not-found-client';
 
 const TITLE_ID = 'agi-not-found-title';
 
@@ -21,12 +22,7 @@ export default function NotFound() {
               have been mistyped. The home page lists every surface, and we answer email if you
               cannot find what you came for.
             </Prose>
-            <ButtonRow>
-              <Button href="/">Go to the home page</Button>
-              <Button href="/contact" variant="secondary">
-                Contact us
-              </Button>
-            </ButtonRow>
+            <NotFoundActions />
           </Stack>
         </Section>
       </main>

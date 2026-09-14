@@ -207,6 +207,8 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
           <a
             className="flex h-9 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground"
             href="/pricing#pricing-team-title"
+            target="_blank"
+            rel="noopener noreferrer"
           >
             Choose seats
           </a>

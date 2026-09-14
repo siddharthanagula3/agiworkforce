@@ -177,3 +177,14 @@ export {
   UNSUPPORTED_FILE_INPUT_ERROR_NAME,
   type FileInputBlock,
 } from './file-input';
+
+export {
+  AUTH_ROUTE_PREFIXES,
+  PRODUCT_ROUTE_PREFIXES,
+  SESSION_AUTH_ROUTE_PREFIXES,
+  isAuthPath,
+  isProductPath,
+  routeMatcherPatterns,
+  type AuthRoutePrefix,
+  type ProductRoutePrefix,
+} from './product-routes';
