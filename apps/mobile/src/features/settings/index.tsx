@@ -627,6 +627,7 @@ export default function SettingsTabScreen() {
     ],
     [
       accentColor,
+      accountStateValue,
       accountValue,
       appVersion,
       cloudAccessTag,
