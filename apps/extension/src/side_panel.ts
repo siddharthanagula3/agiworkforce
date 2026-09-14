@@ -146,10 +146,14 @@ import {
 import { isMemoryItem, MEMORY_STORAGE_KEY } from './background/memory-bridge';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import {
+  CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_STORAGE_KEY,
+  CONTEXT_HANDOFF_VSCODE_DESTINATION,
+  contextHandoffCliCommand,
   isPendingContextHandoff,
   mountContextHandoffPreview,
   type ContextHandoffActionResult,
+  type ContextHandoffDestinationId,
   type ContextHandoffPreviewController,
 } from './features/context-handoff';
 import {
@@ -1057,6 +1061,25 @@ function injectStyles(): void {
     .sp-context-handoff-redaction { color: var(--agi-ext-accent) !important; font-size: 12px; }
     .sp-context-handoff-status { min-height: 18px; font-size: 12px; }
     .sp-context-handoff-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .sp-context-handoff-destinations { flex-wrap: wrap; justify-content: flex-start; }
+    .sp-context-handoff-secondary {
+      min-height: 34px;
+      padding: 7px 11px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 7px;
+      cursor: pointer;
+      font: inherit;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      color: var(--agi-ext-text);
+      background: var(--agi-ext-surface);
+    }
+    .sp-context-handoff-secondary[aria-disabled='true'] { cursor: not-allowed; opacity: 0.55; }
+    .sp-context-handoff-secondary:focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
+    }
     .sp-context-handoff-actions button {
       min-height: 34px;
       padding: 7px 11px;
@@ -10718,7 +10741,50 @@ async function checkPendingContextHandoff(): Promise<void> {
         throw new Error(response?.error ?? 'Unable to cancel the context handoff.');
       }
     },
+    onOpenInVsCode: () =>
+      releaseContextHandoffTo(
+        pending.id,
+        CONTEXT_HANDOFF_VSCODE_DESTINATION.id,
+        `${CONTEXT_HANDOFF_VSCODE_DESTINATION.label} did not receive the selected context.`,
+      ),
+    onCopyCliCommand: async (): Promise<ContextHandoffActionResult> => {
+      try {
+        await navigator.clipboard.writeText(contextHandoffCliCommand(pending));
+      } catch {
+        return {
+          success: false,
+          consumed: false,
+          error: 'Chrome would not write to the clipboard. Try the copy again.',
+        };
+      }
+      return releaseContextHandoffTo(
+        pending.id,
+        CONTEXT_HANDOFF_CLI_DESTINATION.id,
+        'The command was copied but the preview could not be closed.',
+      );
+    },
   });
+}
+
+async function releaseContextHandoffTo(
+  handoffId: string,
+  destination: ContextHandoffDestinationId,
+  failure: string,
+): Promise<ContextHandoffActionResult> {
+  try {
+    const response = (await chrome.runtime.sendMessage({
+      type: 'APPROVE_CONTEXT_HANDOFF',
+      handoffId,
+      destination,
+    })) as ContextHandoffActionResult | undefined;
+    return response ?? { success: false, consumed: true, error: failure };
+  } catch (error) {
+    return {
+      success: false,
+      consumed: true,
+      error: `${error instanceof Error ? error.message : failure} Select the context again.`,
+    };
+  }
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {

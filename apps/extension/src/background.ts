@@ -102,8 +102,10 @@ import {
   type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
 import {
+  CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_DESTINATION,
   CONTEXT_HANDOFF_STORAGE_KEY,
+  CONTEXT_HANDOFF_VSCODE_DESTINATION,
   createSelectionContextHandoff,
   isPendingContextHandoff,
   toApprovedNativeSelectionMessage,
@@ -3068,6 +3070,30 @@ async function handleMessageAsync(
           success: false,
           error: 'This context preview is invalid or expired. Select the context again.',
           consumed: true,
+        } as ExtensionResponse;
+      }
+
+      if (
+        approval.destination !== undefined &&
+        approval.destination !== CONTEXT_HANDOFF_DESTINATION.id
+      ) {
+        const localDestination =
+          approval.destination === CONTEXT_HANDOFF_VSCODE_DESTINATION.id
+            ? CONTEXT_HANDOFF_VSCODE_DESTINATION
+            : approval.destination === CONTEXT_HANDOFF_CLI_DESTINATION.id
+              ? CONTEXT_HANDOFF_CLI_DESTINATION
+              : undefined;
+        if (localDestination === undefined) {
+          return {
+            success: false,
+            error: 'Unknown context handoff destination.',
+          } as ExtensionResponse;
+        }
+        await chrome.storage.session.remove(CONTEXT_HANDOFF_STORAGE_KEY);
+        return {
+          success: true,
+          consumed: true,
+          destination: localDestination.label,
         } as ExtensionResponse;
       }
 

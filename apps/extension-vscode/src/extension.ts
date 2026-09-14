@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { registerContextHandoffUriHandler } from './features/context-handoff';
 import { Config } from './platform/config';
 import { activateDesktopBridge } from './features/desktop-bridge';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
@@ -103,6 +104,23 @@ export function activate(context: vscode.ExtensionContext): void {
   }
   const sidebarProvider = chatState?.sidebarProvider;
   const conversationTreeProvider = chatState?.conversationTreeProvider;
+
+  context.subscriptions.push(
+    registerContextHandoffUriHandler(() => {
+      const provider = chatState?.sidebarProvider;
+      if (provider === undefined) return undefined;
+      return {
+        prefillComposer: (text: string) => provider.prefillComposer(text),
+        reveal: async () => {
+          try {
+            await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
+          } finally {
+            provider.reveal();
+          }
+        },
+      };
+    }),
+  );
 
   const refreshRuntimeSurfaces = (): void => {
     sidebarProvider?.refreshRuntimeStatus();
