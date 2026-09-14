@@ -151,7 +151,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 119 of 207 database-backed hosted API route files. Counted against the 207 route files that reach the database; the other 88 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 88 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-14.',
+      'Partial: 120 of 208 database-backed hosted API route files. Counted against the 208 route files that reach the database; the other 88 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 88 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-14.',
   },
   {
     label: 'Authentication and CSRF',
@@ -320,6 +320,11 @@ export default function TrustPage() {
                         label: '2026-09-12',
                         value:
                           'Pre-release claim audit of the legal surface. Two rows here were counting things that had grown since they were written. Protected route groups read six against a matcher of twelve, and /security had already been corrected to twelve while this page had not. Security event logging read seven event types against nine, omitting the content notice and the retention purge that records its own run. Both are corrected above and both counts are now derived from the deciding source by a test rather than remembered. The privacy policy was corrected in the same pass: it denied that any per-organisation conversation retention window was enforced, while a nightly job deletes workspace conversations past a window an owner sets, and it undercounted the erasure table list at 70 against 73.',
+                      },
+                      {
+                        label: '2026-09-14',
+                        value:
+                          'Re-measured after a hosted route shipped that writes follow-up questions onto the turn that earned them. It reads through the caller-scoped connection, so the row-level-isolation count moved from 119 to 120 and the database-backed total from 207 to 208. The owner-connection count and the routes excluded from both sides are unchanged at 88 each.',
                       },
                       {
                         label: '2026-09-12',

@@ -16,6 +16,11 @@ const RGBA_32BPP = 3;
 
 export interface PdfAttachmentContent {
   text: string | null;
+  /**
+   * One entry per page read, empty where a page had no text layer, so an index
+   * into this array is the page number a caller can anchor an offset to.
+   */
+  pages: string[];
   pageImages: { mimeType: 'image/png'; base64: string }[];
   /**
    * The document has more pages than `MAX_TEXT_PAGES`, so `text` covers only
@@ -156,11 +161,11 @@ export async function extractPdfAttachmentContent(
         .filter(Boolean)
         .join(' ')
         .trim();
-      if (text) pages.push(text);
+      pages.push(text);
     }
 
-    const text = boundText(pages.join('\n\n'));
-    if (text) return { text, pageImages: [], pagesOmitted };
+    const text = boundText(pages.filter(Boolean).join('\n\n'));
+    if (text) return { text, pages, pageImages: [], pagesOmitted };
 
     const pageImages: PdfAttachmentContent['pageImages'] = [];
     let imageBytes = 0;
@@ -204,7 +209,7 @@ export async function extractPdfAttachmentContent(
       }
     }
 
-    return { text: null, pageImages, pagesOmitted };
+    return { text: null, pages: [], pageImages, pagesOmitted };
   } catch (error) {
     if (error instanceof PdfAttachmentUnreadableError) throw error;
     logger.warn({ err: error, filename }, '[pdf] attachment content extraction failed');

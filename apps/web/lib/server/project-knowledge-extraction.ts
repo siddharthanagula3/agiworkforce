@@ -22,6 +22,12 @@ import {
   transcribeScannedPages,
   type TranscribeScannedPagesInput,
 } from './scanned-document-text';
+import {
+  headingAnchors,
+  joinPagesWithAnchors,
+  rebaseAnchors,
+  type KnowledgeAnchor,
+} from './project-knowledge-anchors';
 
 export const MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000;
 
@@ -84,6 +90,27 @@ function normalizeAndBoundText(value: string): string | null {
 }
 
 /**
+ * Page anchors are computed against the joined pages, and the stored text is
+ * that string trimmed and bounded, so they are moved onto the stored text here
+ * rather than left pointing into a string no reader ever sees.
+ */
+function boundWithPageAnchors(
+  pages: readonly string[],
+  prefix = '',
+): { text: string | null; anchors: KnowledgeAnchor[] } {
+  const joined = joinPagesWithAnchors(pages);
+  const body = prefix ? `${prefix}${joined.text}` : joined.text;
+  const text = normalizeAndBoundText(body);
+  if (!text) return { text: null, anchors: [] };
+  const shifted = joined.anchors.map((anchor) => ({
+    ...anchor,
+    start: anchor.start + prefix.length,
+  }));
+  const leadingTrimmed = body.length - body.replace(/\r\n?/g, '\n').trimStart().length;
+  return { text, anchors: rebaseAnchors(shifted, leadingTrimmed, text.length) };
+}
+
+/**
  * The store holds text, and a scan has none, so a scanned PDF used to land here
  * as an empty row: the file was listed, its bytes were kept, and no question
  * could ever be answered from it. The chat path already turns a text-free PDF
@@ -94,7 +121,7 @@ async function extractPdfText(
   data: Buffer,
   fileName: string,
   ocr: ScannedDocumentTranscription | undefined,
-): Promise<string | null> {
+): Promise<{ text: string | null; anchors: KnowledgeAnchor[] }> {
   let content: Awaited<ReturnType<typeof extractPdfAttachmentContent>>;
   try {
     content = await extractPdfAttachmentContent(data, fileName);
@@ -112,11 +139,14 @@ async function extractPdfText(
       'This PDF has more pages than project knowledge extraction reads. Split it and upload the parts.',
     );
   }
-  if (content.text) return normalizeAndBoundText(content.text);
-  if (!ocr || content.pageImages.length === 0) return null;
+  if (content.text) return boundWithPageAnchors(content.pages);
+  if (!ocr || content.pageImages.length === 0) return { text: null, anchors: [] };
 
   const recognised = await transcribeScannedPages({ ...ocr, pageImages: content.pageImages });
-  return recognised ? normalizeAndBoundText(`${SCANNED_DOCUMENT_OCR_NOTE}\n\n${recognised}`) : null;
+  if (!recognised) return { text: null, anchors: [] };
+  // A transcription covers the page images in the order they were rendered, so
+  // its paragraphs are the pages: the same numbering the text layer would give.
+  return boundWithPageAnchors(recognised.split(/\n{2,}/), `${SCANNED_DOCUMENT_OCR_NOTE}\n\n`);
 }
 
 function extractNotebookText(bytes: Uint8Array, fileName: string): string | null {
@@ -189,6 +219,8 @@ function extractNotebookText(bytes: Uint8Array, fileName: string): string | null
 
 export interface ProjectKnowledgeExtraction {
   extractedText: string | null;
+  /** Where each page or heading begins in `extractedText`. */
+  anchors: KnowledgeAnchor[];
   objectKey: string;
   etag: string | undefined;
 }
@@ -278,16 +310,14 @@ export async function extractProjectKnowledgeFile(
   const inspected = { objectKey, etag: object.etag };
 
   if (declaredMimeType === 'application/pdf') {
-    return {
-      ...inspected,
-      extractedText: await extractPdfText(object.data, input.fileName, input.transcribeScans),
-    };
+    const pdf = await extractPdfText(object.data, input.fileName, input.transcribeScans);
+    return { ...inspected, extractedText: pdf.text, anchors: pdf.anchors };
   }
   const officeKind = officeDocumentKind(input.fileName, declaredMimeType);
   if (officeKind) {
     try {
       const text = await extractOfficeDocumentText(object.data, input.fileName, officeKind);
-      return { ...inspected, extractedText: text || null };
+      return { ...inspected, extractedText: text || null, anchors: headingAnchors(text || '') };
     } catch (error) {
       if (!(error instanceof OfficeDocumentUnreadableError)) throw error;
       throw new ProjectKnowledgeExtractionError(
@@ -297,12 +327,15 @@ export async function extractProjectKnowledgeFile(
     }
   }
   if (declaredMimeType === 'application/x-ipynb+json') {
-    return { ...inspected, extractedText: extractNotebookText(object.data, input.fileName) };
+    const notebook = extractNotebookText(object.data, input.fileName);
+    return { ...inspected, extractedText: notebook, anchors: headingAnchors(notebook ?? '') };
   }
   if (isTextAttachmentMeta(input.fileName, declaredMimeType)) {
     try {
-      const text = new TextDecoder('utf-8', { fatal: true }).decode(object.data);
-      return { ...inspected, extractedText: normalizeAndBoundText(text) };
+      const bounded = normalizeAndBoundText(
+        new TextDecoder('utf-8', { fatal: true }).decode(object.data),
+      );
+      return { ...inspected, extractedText: bounded, anchors: headingAnchors(bounded ?? '') };
     } catch {
       throw new ProjectKnowledgeExtractionError(
         'document_unreadable',
@@ -311,5 +344,5 @@ export async function extractProjectKnowledgeFile(
     }
   }
 
-  return { ...inspected, extractedText: null };
+  return { ...inspected, extractedText: null, anchors: [] };
 }
