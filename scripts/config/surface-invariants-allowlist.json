@@ -46,11 +46,6 @@
         "id": "apps/desktop/src/features/error-handling/ErrorBoundary.tsx:agi-last-error-boundary",
         "reason": "Written and never read back, confirmed by repo-wide grep. Owned by the surface wave that owns the module; declared so no NEW write-only collection or storage key can land.",
         "trackedBy": "SIX-32"
-      },
-      {
-        "id": "apps/extension/src/background.ts:nlwebByTab",
-        "reason": "Written and never read back, confirmed by repo-wide grep. Owned by the surface wave that owns the module; declared so no NEW write-only collection or storage key can land.",
-        "trackedBy": "SIX-32"
       }
     ],
     "keybinding-tolerates-no-args": []
