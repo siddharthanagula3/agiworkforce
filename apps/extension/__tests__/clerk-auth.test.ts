@@ -4,6 +4,7 @@ const createClerkClient = vi.hoisted(() => vi.fn());
 
 vi.mock('@clerk/chrome-extension/client', () => ({ createClerkClient }));
 
+const fetchMock = vi.fn();
 const ORIGINAL_ENV = { ...process.env };
 
 async function importClerkAuth() {
@@ -14,6 +15,8 @@ describe('Clerk Chrome Extension auth', () => {
   beforeEach(() => {
     vi.resetModules();
     createClerkClient.mockReset();
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
     process.env = { ...ORIGINAL_ENV };
     delete process.env['CLERK_PUBLISHABLE_KEY'];
     delete process.env['CLERK_SYNC_HOST'];
@@ -284,5 +287,76 @@ describe('Clerk Chrome Extension auth', () => {
       }),
     ).resolves.toBe(false);
     expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('does not call the sync host to revoke a session that does not exist', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({ success: true, token: null });
+
+    const auth = await importClerkAuth();
+    await auth.revokeSyncedWebSession();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fetches a CSRF token then deletes the current session on the sync host, reading the session id from the same background relay the rest of the panel trusts', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({
+      success: true,
+      token: 'background-sync-token',
+      owner: { accountId: 'user-ada', authIncarnation: 'sess_current' },
+    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ token: 'csrf-test-token' }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: vi.fn().mockResolvedValue({}) });
+
+    const auth = await importClerkAuth();
+    await auth.revokeSyncedWebSession();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://agiworkforce.com/api/csrf',
+      expect.objectContaining({ method: 'GET', credentials: 'include' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://agiworkforce.com/api/settings/sessions/sess_current',
+      expect.objectContaining({
+        method: 'DELETE',
+        credentials: 'include',
+        headers: expect.objectContaining({
+          'x-csrf-token': 'csrf-test-token',
+          'x-requested-with': 'agiworkforce-chrome-extension',
+        }),
+      }),
+    );
+    expect(createClerkClient).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a refused session-revoke response to the caller instead of swallowing it', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({
+      success: true,
+      token: 'background-sync-token',
+      owner: { accountId: 'user-ada', authIncarnation: 'sess_current' },
+    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ token: 'csrf-test-token' }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 403, json: vi.fn().mockResolvedValue({}) });
+
+    const auth = await importClerkAuth();
+
+    await expect(auth.revokeSyncedWebSession()).rejects.toThrow(/403/);
   });
 });

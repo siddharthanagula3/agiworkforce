@@ -194,6 +194,7 @@ import {
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
   openClerkSignIn,
+  revokeSyncedWebSession,
   signOutClerk,
 } from './features/cloud-bridge/clerkAuth';
 import {
@@ -8360,7 +8361,14 @@ function buildUI(): void {
     // One identity across the web and the extension is the contract: the
     // web's own sign-out already ends the synced session for both, so this
     // control must too, not just clear the extension's own local state and
-    // leave the shared Clerk session alive on the sync host.
+    // leave the shared Clerk session alive on the sync host. This has to run
+    // before the local Clerk sign-out below, while the current session id
+    // is still live: that call tears down this client's own view of it.
+    try {
+      await revokeSyncedWebSession();
+    } catch (error) {
+      console.warn('[SidePanel] Revoking the synced web session failed:', error);
+    }
     try {
       await signOutClerk();
     } catch (error) {
