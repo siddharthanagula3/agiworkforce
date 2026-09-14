@@ -20,6 +20,7 @@
     "command-capabilities",
     "content-safety",
     "context",
+    "context-handoff-uri",
     "conversation",
     "council",
     "credits",
