@@ -1,6 +1,7 @@
 import {
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
+  type DeveloperRuntimeModels,
   type DeveloperSession,
   type DeveloperSessionGroup,
   type DeveloperTurnOutcome,
@@ -76,6 +77,75 @@ export function localTurnFailureSentence(error: string, sessionProvider: string 
     return `No ${localProviderLabel(providerId)} key on this computer. Add one in Settings, or run \`agi login ${providerId}\` in a terminal.`;
   }
   return body === '' ? error.trim() : body;
+}
+
+export interface LocalModelChoice {
+  id: string;
+  label: string;
+  /** Why this model is offered, which is also how far it has been proven. */
+  evidence: 'used-here' | 'installed' | 'configured';
+}
+
+const EVIDENCE_ORDER: Record<LocalModelChoice['evidence'], number> = {
+  'used-here': 0,
+  installed: 1,
+  configured: 2,
+};
+
+export const LOCAL_MODEL_EVIDENCE_LABELS: Record<LocalModelChoice['evidence'], string> = {
+  'used-here': 'Used in this folder',
+  installed: 'On this computer',
+  configured: 'The CLI default',
+};
+
+/**
+ * The models offered for a session in one folder, strongest evidence first.
+ *
+ * Protocol 8 does not say which own-key providers hold a key, so a model this
+ * folder's sessions already ran on is the best evidence the CLI can reach it;
+ * after that come the models installed on this Mac, and last the configured
+ * default, which may be a route that cannot run here.
+ */
+export function localModelChoices(
+  runtime: DeveloperRuntimeModels | null,
+  sessions: readonly DeveloperSession[],
+): LocalModelChoice[] {
+  const byId = new Map<string, LocalModelChoice>();
+
+  for (const session of sessions) {
+    if (!session.model || byId.has(session.model)) continue;
+    byId.set(session.model, {
+      id: session.model,
+      label: localModelLabel(session.model) ?? session.model,
+      evidence: 'used-here',
+    });
+  }
+  for (const model of runtime?.models ?? []) {
+    if (byId.has(model.id)) continue;
+    byId.set(model.id, {
+      id: model.id,
+      label: localModelLabel(model.id) ?? model.id,
+      evidence: 'installed',
+    });
+  }
+  const configured = runtime?.defaultModelId;
+  if (configured && !byId.has(configured)) {
+    byId.set(configured, {
+      id: configured,
+      label: localModelLabel(configured) ?? configured,
+      evidence: 'configured',
+    });
+  }
+
+  return [...byId.values()].sort((a, b) => EVIDENCE_ORDER[a.evidence] - EVIDENCE_ORDER[b.evidence]);
+}
+
+/** The model a session started here begins on: the best-evidenced one. */
+export function startingModelId(
+  runtime: DeveloperRuntimeModels | null,
+  sessions: readonly DeveloperSession[],
+): string | undefined {
+  return localModelChoices(runtime, sessions)[0]?.id;
 }
 
 export function newSessionLabel(folderName: string): string {

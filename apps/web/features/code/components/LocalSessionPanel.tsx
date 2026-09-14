@@ -1,16 +1,33 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ChevronLeft, Square, TerminalSquare } from '@agiworkforce/icons';
-import { Spinner } from '@agiworkforce/ui';
-import type { DeveloperSession, DeveloperSessionGroup } from '@agiworkforce/local-runtime-contract';
+import { ArrowUp, ChevronDown, ChevronLeft, Square, TerminalSquare } from '@agiworkforce/icons';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Spinner,
+} from '@agiworkforce/ui';
+import type {
+  DeveloperRuntimeModels,
+  DeveloperSession,
+  DeveloperSessionGroup,
+} from '@agiworkforce/local-runtime-contract';
 import { CODE_LIMITS } from '../code-surface';
 import {
   LOCAL_CODE_COPY,
+  LOCAL_MODEL_EVIDENCE_LABELS,
   localApprovalPrompts,
+  localModelChoices,
+  localModelLabel,
   localSessionContext,
   localTranscriptItems,
   localTurnIsRunning,
+  type LocalModelChoice,
 } from '../local-code';
 import { useLocalSession } from '../hooks/use-local-session';
 import { CodeTranscriptBody } from './CodeTranscript';
@@ -18,20 +35,72 @@ import styles from '../CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
 const SEND_GLYPH_SIZE = 16;
+const CHIP_GLYPH_SIZE = 13;
 const SUBMIT_KEY = 'Enter';
 
 export interface LocalSessionPanelProps {
   session: DeveloperSession;
-  group: Pick<DeveloperSessionGroup, 'name' | 'branch'>;
+  group: Pick<DeveloperSessionGroup, 'name' | 'branch' | 'sessions'>;
+  runtimeModels: DeveloperRuntimeModels | null;
   verbose: boolean;
   onClose: () => void;
 }
 
-export function LocalSessionPanel({ session, group, verbose, onClose }: LocalSessionPanelProps) {
+function ModelChip({
+  choices,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  choices: LocalModelChoice[];
+  selected: string;
+  disabled: boolean;
+  onSelect: (modelId: string) => void;
+}) {
+  const groupsByEvidence = [...new Set(choices.map((choice) => choice.evidence))];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={styles['controlButton']} disabled={disabled}>
+          <span>{localModelLabel(selected) ?? selected}</span>
+          <ChevronDown size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="w-64">
+        <DropdownMenuRadioGroup value={selected} onValueChange={onSelect}>
+          {groupsByEvidence.map((evidence, index) => (
+            <div key={evidence}>
+              {index > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuLabel>{LOCAL_MODEL_EVIDENCE_LABELS[evidence]}</DropdownMenuLabel>
+              {choices
+                .filter((choice) => choice.evidence === evidence)
+                .map((choice) => (
+                  <DropdownMenuRadioItem key={choice.id} value={choice.id}>
+                    {choice.label}
+                  </DropdownMenuRadioItem>
+                ))}
+            </div>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function LocalSessionPanel({
+  session,
+  group,
+  runtimeModels,
+  verbose,
+  onClose,
+}: LocalSessionPanelProps) {
   const state = useLocalSession(session);
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
+  const [model, setModel] = useState(session.model ?? '');
   const endRef = useRef<HTMLDivElement>(null);
+  const choices = localModelChoices(runtimeModels, group.sessions);
 
   const running = localTurnIsRunning(state.turn);
   const busy = running || state.sending;
@@ -45,7 +114,7 @@ export function LocalSessionPanel({ session, group, verbose, onClose }: LocalSes
     const text = draft.trim();
     if (text === '' || busy) return;
     setDraft('');
-    void state.send(text);
+    void state.send(text, model === '' || model === session.model ? undefined : model);
   };
 
   return (
@@ -161,6 +230,18 @@ export function LocalSessionPanel({ session, group, verbose, onClose }: LocalSes
                     </button>
                   )}
                 </div>
+
+                {choices.length > 0 && (
+                  <div className={styles['controlRow']}>
+                    <ModelChip
+                      choices={choices}
+                      selected={model === '' ? (choices[0]?.id ?? '') : model}
+                      disabled={busy}
+                      onSelect={setModel}
+                    />
+                    <span className={styles['controlSpacer']} />
+                  </div>
+                )}
               </div>
             </div>
           </div>

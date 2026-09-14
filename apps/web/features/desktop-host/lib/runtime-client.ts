@@ -15,6 +15,7 @@ import {
   type LocalModelSettings,
   type LocalModelSnapshot,
   type DeveloperApprovalAnswer,
+  type DeveloperRuntimeModels,
   type DeveloperRuntimeStatus,
   type DeveloperSession,
   type DeveloperSessionEvent,
@@ -346,6 +347,10 @@ export function startLocalChat(
 
 export function readDeveloperRuntimeStatus(): Promise<DeveloperRuntimeStatus> {
   return invoke<DeveloperRuntimeStatus>('developer_runtime_status');
+}
+
+export function listDeveloperModels(rootId: string): Promise<DeveloperRuntimeModels> {
+  return invoke<DeveloperRuntimeModels>('developer_model_list', { rootId });
 }
 
 export function listDeveloperSessions(): Promise<DeveloperSessionList> {

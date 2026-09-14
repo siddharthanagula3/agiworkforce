@@ -29,7 +29,7 @@ export interface LocalSessionState {
   sending: boolean;
   stopping: boolean;
   error: string | null;
-  send: (text: string) => Promise<void>;
+  send: (text: string, model?: string) => Promise<void>;
   stop: () => Promise<void>;
   decideApproval: (approved: boolean) => Promise<void>;
 }
@@ -160,13 +160,18 @@ export function useLocalSession(session: DeveloperSession | null): LocalSessionS
   }, [rootId, threadId, load]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, model?: string) => {
       if (!rootId || !threadId || text.trim() === '') return;
       setSending(true);
       setError(null);
       setTurn({ ...EMPTY_LOCAL_TURN, prompt: text });
       try {
-        const { turnId } = await startDeveloperTurn({ rootId, threadId, text });
+        const { turnId } = await startDeveloperTurn({
+          rootId,
+          threadId,
+          text,
+          ...(model ? { model } : {}),
+        });
         setTurn((current) => ({ ...current, turnId }));
       } catch (cause: unknown) {
         setError(toUserMessage(cause, LOCAL_CODE_COPY.turnFailed));

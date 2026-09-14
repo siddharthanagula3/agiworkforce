@@ -11,6 +11,7 @@ export {
   downloadThroughPairedBrowser,
   installBrowserHost,
   interruptDeveloperTurn,
+  listDeveloperModels,
   listDeveloperSessions,
   navigatePairedBrowser,
   onDeveloperSessionEvent,

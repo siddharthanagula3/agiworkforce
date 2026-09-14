@@ -887,6 +887,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
             <LocalSessionPanel
               session={localSession}
               group={localGroup}
+              runtimeModels={local.modelsFor(localGroup.rootId)}
               verbose={verbose}
               onClose={() => setLocalSession(null)}
             />
