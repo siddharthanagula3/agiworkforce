@@ -143,6 +143,11 @@ export interface CombinedChatState {
   ) => Promise<boolean>;
   stopStreaming: () => void;
   retryMessage: (conversationId: string, messageId: string) => void;
+  resumeResearch: (
+    conversationId: string,
+    assistantMessageId: string,
+    decision: 'start' | 'cancel' | 'retry',
+  ) => Promise<void>;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   resolveToolApproval: (
     conversationId: string,
@@ -217,6 +222,7 @@ function buildCombinedState(
     sendMessage: exec.sendMessage,
     stopStreaming: exec.stopStreaming,
     retryMessage: exec.retryMessage,
+    resumeResearch: exec.resumeResearch,
     editMessage: exec.editMessage,
     resolveToolApproval: exec.resolveToolApproval,
     clearError: exec.clearError,

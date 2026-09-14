@@ -430,6 +430,24 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     if (!inserted) throw new Error('No row returned');
     data = inserted;
 
+    // Written separately from the insert so a database without migration 0192
+    // still accepts the upload, with the file simply carrying no anchors.
+    if (extraction.anchors.length > 0 && typeof inserted['id'] === 'string') {
+      try {
+        await db.execute(
+          `update project_knowledge_files
+              set extracted_anchors = $1::jsonb
+            where id = $2 and project_id = $3`,
+          [JSON.stringify(extraction.anchors), inserted['id'], projectId],
+        );
+      } catch (anchorError) {
+        logger.warn(
+          { error: anchorError, projectId, fileId: inserted['id'] },
+          '[knowledge-files] extraction anchors were not stored',
+        );
+      }
+    }
+
     if (supersedes) {
       await db.query(
         `update project_knowledge_files

@@ -413,6 +413,39 @@ impl ElicitationHandler for HookFiringElicitationHandler {
     }
 }
 
+/// Authorize a registered remote MCP server and leave its token in the store
+/// every later connection reads.
+///
+/// This does not implement a second OAuth flow. The HTTP transport already
+/// runs RFC 9728 → RFC 8414 → RFC 7591 → PKCE on the first 401 and persists
+/// the result through [`KeyringTokenStore`]; `agi mcp login` just performs
+/// that first connect on demand, at a moment the user chose, instead of in the
+/// middle of a turn. The engine's flow stays the single implementation.
+pub async fn login_to_remote_server(name: &str, config: &McpServerConfig) -> Result<()> {
+    {
+        use std::io::IsTerminal;
+        if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+            bail!("`agi mcp login` needs an interactive terminal to open the browser");
+        }
+    }
+    let mut connection = McpConnection::connect(name, config)
+        .await
+        .with_context(|| format!("could not authorize MCP server '{name}'"))?;
+    let _ = connection.shutdown().await;
+    Ok(())
+}
+
+/// Forget the stored OAuth token for a remote MCP server. Returns whether a
+/// token was actually held.
+pub fn logout_from_remote_server(server_url: &str) -> Result<bool> {
+    let had_token = KeyringTokenStore.get(server_url).is_some();
+    McpServerOAuthStore::new()?.delete(server_url)?;
+    let mut legacy = McpOAuthStore::load()?;
+    legacy.remove(server_url);
+    legacy.save()?;
+    Ok(had_token)
+}
+
 /// Build the host capability bundle handed to `McpClient::connect`.
 ///
 /// The caller chooses the elicitation surface: headless flows inject

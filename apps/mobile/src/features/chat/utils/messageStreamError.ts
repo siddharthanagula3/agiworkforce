@@ -1,4 +1,3 @@
-
 interface StreamErrorLikeMetadata {
   streamError?: unknown;
   finishReason?: unknown;
@@ -33,4 +32,28 @@ export function getMessageStreamErrorMessage(
     if (typeof msg === 'string' && msg.length > 0) return msg;
   }
   return undefined;
+}
+
+export interface TurnOutputSignals {
+  content: string;
+  toolCallCount: number;
+  generatedFileCount: number;
+  interactiveCardCount: number;
+  hasResearchRun: boolean;
+  hasStreamError: boolean;
+}
+
+/**
+ * A Deep Research turn paused for plan approval streams a plan and no prose, so
+ * counting only text would report the paused plan as an empty response.
+ */
+export function turnProducedNothing(signals: TurnOutputSignals): boolean {
+  return (
+    !signals.content.trim() &&
+    signals.toolCallCount === 0 &&
+    signals.generatedFileCount === 0 &&
+    signals.interactiveCardCount === 0 &&
+    !signals.hasResearchRun &&
+    !signals.hasStreamError
+  );
 }

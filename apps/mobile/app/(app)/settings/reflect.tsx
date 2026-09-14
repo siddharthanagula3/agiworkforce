@@ -238,9 +238,7 @@ export default function ReflectScreen() {
               </Text>
               <Pressable
                 onPress={() =>
-                  router.push(
-                    '/(app)/settings/memory?scope=cloud' as Parameters<typeof router.push>[0],
-                  )
+                  router.push('/(app)/settings/memory' as Parameters<typeof router.push>[0])
                 }
                 accessibilityRole="button"
                 accessibilityLabel="Open memory settings"

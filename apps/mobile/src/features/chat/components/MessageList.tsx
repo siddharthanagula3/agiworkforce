@@ -12,6 +12,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { Reply, ChevronDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { MessageBubble } from './MessageBubble';
+import type { ResearchPlanDecision } from './research/ResearchRunCard';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
@@ -36,6 +37,10 @@ interface MessageListProps {
     toolCallId: string,
     decision: 'approved' | 'rejected',
   ) => void;
+  onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
+  onRetryResearch?: (messageId: string) => void;
+  onStopResearch?: () => void;
+  resumingResearchMessageId?: string | null;
 }
 
 export function MessageList({
@@ -51,6 +56,10 @@ export function MessageList({
   onReaction,
   onPairDesktop,
   onResolveToolApproval,
+  onResearchPlanDecision,
+  onRetryResearch,
+  onStopResearch,
+  resumingResearchMessageId = null,
 }: MessageListProps) {
   const colors = useThemeColors();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
@@ -97,6 +106,10 @@ export function MessageList({
           onEditMessage={onEditMessage}
           onReaction={onReaction}
           onResolveToolApproval={onResolveToolApproval}
+          onResearchPlanDecision={onResearchPlanDecision}
+          onRetryResearch={onRetryResearch}
+          onStopResearch={onStopResearch}
+          isResumingResearch={resumingResearchMessageId === item.id}
         />
       </SwipeReplyWrapper>
     ),
@@ -110,6 +123,10 @@ export function MessageList({
       onQuoteReply,
       onReaction,
       onResolveToolApproval,
+      onResearchPlanDecision,
+      onRetryResearch,
+      onStopResearch,
+      resumingResearchMessageId,
     ],
   );
 

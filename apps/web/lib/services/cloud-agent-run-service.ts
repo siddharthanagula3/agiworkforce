@@ -7,6 +7,7 @@ import {
   AgentTaskStateSchema,
   CloudAgentRunSchema,
   ManagedCloudAgentRunRequestIdSchema,
+  MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH,
   MAX_CLOUD_AGENT_PENDING_APPROVAL_ARGS_PREVIEW_LENGTH,
   readPersistedInteractiveCards,
   type CloudAgentOriginSurface,
@@ -41,6 +42,8 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   conversation_id: string | null;
   /** Joined by {@link listCloudAgentRuns} only; absent on every other read. */
   conversation_title?: string | null;
+  /** Joined by {@link listCloudAgentRuns} only; absent on every other read. */
+  conversation_preview?: string | null;
   origin_surface: string;
   work_mode: string;
   state: string;
@@ -327,6 +330,19 @@ export class CloudAgentApprovalCheckpointConflictError extends Error {
 
 export const APPROVAL_CHECKPOINT_TTL_HOURS = 24;
 
+const CONVERSATION_PREVIEW_LATERAL = `
+  left join lateral (
+    select left(
+             btrim(regexp_replace(message.content, '\\s+', ' ', 'g')),
+             ${MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH}
+           ) as preview
+      from public.web_messages message
+     where message.conversation_id = conversations.id
+       and message.role = 'user'
+     order by message.created_at asc, message.id asc
+     limit 1
+  ) first_prompt on true`;
+
 const PENDING_APPROVAL_LATERAL = `
   left join lateral (
     select checkpoint.created_at, checkpoint.pending_tool_calls
@@ -502,6 +518,7 @@ function mapRun(row: CloudAgentRunRow): CloudAgentRun {
     requestId: row.request_id,
     conversationId: row.conversation_id,
     ...(row.conversation_title ? { conversationTitle: row.conversation_title } : {}),
+    ...(row.conversation_preview ? { conversationPreview: row.conversation_preview } : {}),
     originSurface: row.origin_surface,
     workMode: row.work_mode,
     state: row.state,
@@ -1040,11 +1057,13 @@ export async function listCloudAgentRuns(
   // conversation, and the row is dropped when the conversation is.
   const rows = await db.query<CloudAgentRunRow>(
     `select runs.*, conversations.title as conversation_title,
+            first_prompt.preview as conversation_preview,
             ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}, ${PENDING_DEVICE_COLUMNS}
        from public.cloud_agent_runs runs
        left join public.web_conversations conversations
          on conversations.id = runs.conversation_id
         and conversations.deleted_at is null
+       ${CONVERSATION_PREVIEW_LATERAL}
        ${PENDING_APPROVAL_LATERAL}
        ${PENDING_INPUT_LATERAL}
        ${PENDING_DEVICE_LATERAL}

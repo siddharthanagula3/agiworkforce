@@ -77,6 +77,8 @@ export const CloudAgentPendingDeviceStepSchema = z.object({
     .max(8),
 });
 
+export const MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH = 200;
+
 export const CloudAgentRunUsageSchema = z.object({
   providerCalls: z.number().int().min(0),
   inputTokens: z.number().int().min(0),
@@ -97,6 +99,19 @@ export const CloudAgentRunSchema = z.object({
    * conversation is gone has none.
    */
   conversationTitle: z.string().min(1).nullable().optional(),
+  /**
+   * One line of the run's own prompt: the first thing the user asked in the
+   * conversation the run belongs to, so a list of runs shows what each one is
+   * about and not only what it is called. Same join and same caveats as
+   * {@link conversationTitle}: the list endpoint only, and absent when the
+   * conversation is gone or opened with no user turn.
+   */
+  conversationPreview: z
+    .string()
+    .min(1)
+    .max(MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH)
+    .nullable()
+    .optional(),
   originSurface: CloudAgentOriginSurfaceSchema,
   workMode: CloudAgentWorkModeSchema,
   state: AgentTaskStateSchema,

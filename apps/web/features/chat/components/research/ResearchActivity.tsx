@@ -15,7 +15,7 @@ import {
   Search,
   FileText,
 } from 'lucide-react';
-import type { ResearchStep } from '@agiworkforce/types';
+import { formatCredits, type ResearchStep } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
@@ -152,6 +152,9 @@ export function ResearchActivity({
   }
   if (typeof research.sources === 'number' && research.sources > 0) {
     counts.push(`${research.sources} source${research.sources === 1 ? '' : 's'}`);
+  }
+  if (!isActive && typeof research.credits === 'number' && Number.isFinite(research.credits)) {
+    counts.push(formatCredits(research.credits, { maximumFractionDigits: 2 }));
   }
   if (
     isActive &&

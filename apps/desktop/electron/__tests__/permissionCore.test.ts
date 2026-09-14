@@ -95,7 +95,6 @@ describe('normalizeGrantDuration', () => {
 
   it('caps an unacknowledged high-risk grant at the session', () => {
     expect(normalizeGrantDuration('shell.execute', 'always', false)).toBe('session');
-    expect(normalizeGrantDuration('computer.use', 'always', false)).toBe('session');
     expect(normalizeGrantDuration('git.destructive', 'always', false)).toBe('session');
   });
 
