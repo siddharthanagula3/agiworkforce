@@ -6,9 +6,14 @@ import { describe, it, expect } from 'vitest';
 import {
   agiPalette,
   agiCoolPalette,
+  agiBrandScale,
   agiChatCssVars,
   agiElevation,
+  agiRadii,
+  agiRadiiVar,
   agiShadows,
+  brandScaleVar,
+  type AgiBrandFamily,
 } from '@agiworkforce/design-tokens';
 
 function hexToSRGB(hex: string): [number, number, number] {
@@ -732,6 +737,38 @@ describe('the two emitters of the --chat-* contract agree', () => {
           referenced,
         );
       }
+    }
+  });
+});
+
+describe('the brand ramps have one owner', () => {
+  const declaredHues = new Map(
+    [...foundationLight.matchAll(/^\s*(--hue-[a-z0-9-]+)\s*:\s*(#[0-9a-f]{6});/gm)].map((m) => [
+      m[1] as string,
+      m[2] as string,
+    ]),
+  );
+
+  const mirrored = Object.entries(agiBrandScale).flatMap(([family, ramp]) =>
+    Object.entries(ramp).map(
+      ([step, value]) => [brandScaleVar(family as AgiBrandFamily, step), value] as const,
+    ),
+  );
+
+  for (const [name, value] of mirrored) {
+    it(`${name} is identical in foundation.css and design-tokens/src/index.ts`, () => {
+      expect(declaredHues.get(name)).toBe(value);
+    });
+  }
+
+  it('declares no --hue-* the TypeScript mirror has dropped', () => {
+    const mirroredNames = new Set<string>(mirrored.map(([name]) => name));
+    expect([...declaredHues.keys()].filter((name) => !mirroredNames.has(name))).toEqual([]);
+  });
+
+  it('resolves every radius size to the foundation rung it names', () => {
+    for (const [size, rung] of Object.entries(agiRadiiVar)) {
+      expect(agiRadii[size as keyof typeof agiRadii], `${size} is not ${rung}`).toBe(CORNERS[rung]);
     }
   });
 });
