@@ -14,6 +14,7 @@ export type TaskDockStepStatus =
   | 'pending'
   | 'running'
   | 'awaiting-approval'
+  | 'awaiting-device'
   | 'completed'
   | 'partial'
   | 'paused'

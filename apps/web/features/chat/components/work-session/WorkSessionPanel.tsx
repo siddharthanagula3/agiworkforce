@@ -121,7 +121,12 @@ function StatusIcon({ status }: { status: TaskDockStepStatus }) {
   if (status === 'failed' || status === 'cancelled') {
     return <CircleAlert className="h-3.5 w-3.5 text-danger" aria-hidden="true" />;
   }
-  if (status === 'partial' || status === 'awaiting-approval' || status === 'paused') {
+  if (
+    status === 'partial' ||
+    status === 'awaiting-approval' ||
+    status === 'awaiting-device' ||
+    status === 'paused'
+  ) {
     return <CircleAlert className="h-3.5 w-3.5 text-warning-text" aria-hidden="true" />;
   }
   return <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />;

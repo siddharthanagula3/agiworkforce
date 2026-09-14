@@ -347,6 +347,9 @@ function buildAgentActivityAnnouncement(activity: AgentActivityState, summary: s
   if (status === 'awaiting-approval') {
     return active ? `Approval needed: ${active}` : 'Approval needed';
   }
+  if (status === 'awaiting-device') {
+    return active ? `Waiting for your desktop: ${active}` : 'Waiting for your desktop';
+  }
   if (status === 'paused') return 'Agent activity paused';
   if (status === 'failed') return 'Agent activity failed';
   if (status === 'partial') return 'Agent activity finished with errors';
@@ -363,6 +366,8 @@ function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
       return 'error';
     case 'awaiting-approval':
       return 'awaiting_approval';
+    case 'awaiting-device':
+      return 'awaiting_device';
     case 'cancelled':
       return 'cancelled';
     case 'running':

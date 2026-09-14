@@ -1,4 +1,4 @@
-import { dialog, shell, type BrowserWindow } from 'electron';
+import { app, dialog, shell, type BrowserWindow } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   LocalInferenceRefused,
@@ -18,6 +18,11 @@ import {
   type WorkspaceRoot,
   type WorkspaceSnapshot,
 } from '@agiworkforce/local-runtime-contract';
+import {
+  DEVICE_STEP_TOOLS,
+  deviceStepCapability,
+  type DesktopHostDeclaration,
+} from '@agiworkforce/local-runtime-contract';
 import { isBrowserCommand } from '@agiworkforce/types';
 import {
   BrowserBridgeError,
@@ -32,6 +37,7 @@ import {
   type BrowserCommandPlan,
 } from '../browser/commandGate';
 import { openWithDefaultApplication, revealInFileManager } from './appsService';
+import { deviceIdentity } from './deviceIdentity';
 import {
   cancelLocalChat,
   listLocalModels,
@@ -365,6 +371,35 @@ async function runBrowserCommand(
   return runtimeSuccess(value);
 }
 
+/**
+ * What this machine tells a cloud turn it can be asked to do.
+ *
+ * A capability is declared when the user has not refused it on at least one
+ * granted folder, not when it is already granted: the point of the declaration
+ * is to let the model ask, and the ask is what raises the permission prompt. A
+ * refused capability is left out, so the model never spends a turn reaching a
+ * refusal this process already knows about.
+ */
+function declareDeviceHost(): DesktopHostDeclaration {
+  const roots = listRoots();
+  const identity = deviceIdentity();
+  const capabilities = [
+    ...new Set(
+      DEVICE_STEP_TOOLS.map(deviceStepCapability).filter((capability) =>
+        roots.some((root) => getPermissionState(capability, workspaceScope(root)) !== 'denied'),
+      ),
+    ),
+  ];
+  return {
+    deviceId: identity.deviceId,
+    deviceName: identity.deviceName,
+    platform: process.platform,
+    appVersion: app.getVersion(),
+    capabilities,
+    roots: roots.map((root) => ({ id: root.id, name: root.name, path: root.path })),
+  };
+}
+
 async function execute(
   window: BrowserWindow | null,
   command: string,
@@ -467,6 +502,8 @@ async function execute(
       return readLocalModelSettings();
     case 'local_model_settings_write':
       return writeLocalModelSettings(requireLocalSettings(args));
+    case 'device_host_declaration':
+      return declareDeviceHost();
     case 'browser_pairing_state':
       return pairingState();
     case 'browser_pairing_install_host':
