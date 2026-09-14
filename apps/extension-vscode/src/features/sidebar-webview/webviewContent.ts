@@ -510,11 +510,62 @@ export function getWebviewContent(
       padding-inline: 2px;
     }
 
+    /* A failed turn is a notice in the transcript, not an input-validation
+       box. The error border and the Activity row carry the signal; a saturated
+       fill behind a paragraph of prose does not. */
     .message.error {
-      background: var(--error-bg);
+      background: var(--bg-elevated);
       border: 1px solid var(--error-border);
-      color: var(--error);
+      color: var(--text-primary);
       align-self: stretch;
+      display: grid;
+      gap: 8px;
+    }
+    .error-headline {
+      color: var(--text-primary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .error-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .error-retry {
+      height: 24px;
+      padding: 0 10px;
+      border: 1px solid var(--error-border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+    }
+    .error-retry:hover { background: var(--hover); }
+    .error-details > summary {
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 11px;
+      list-style: none;
+    }
+    .error-details > summary::-webkit-details-marker { display: none; }
+    .error-details > summary::before {
+      content: '▸ ';
+      font-size: 9px;
+    }
+    .error-details[open] > summary::before { content: '▾ '; }
+    .error-detail-text {
+      margin-top: 6px;
+      max-height: 180px;
+      overflow: auto;
+      color: var(--text-secondary);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .message.system {
@@ -2918,6 +2969,9 @@ export function getWebviewContent(
     let followUpBehavior = '${followUpBehaviorLiteral}';
     let followUpStatusTimer = null;
     let clientMessageSeq = 0;
+    // The turn a Retry resends. Cleared by a new conversation so a retry can
+    // never revive a prompt from a session the user has left.
+    let lastSendPayload = null;
     let activeQueuedClientMessageId = null;
 
     function syncComposerAvailability() {
@@ -3082,6 +3136,71 @@ export function getWebviewContent(
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
         ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+    }
+
+    function addErrorMessage(presentation) {
+      var block = document.createElement('div');
+      block.className = 'message error';
+      block.setAttribute('data-error-category', presentation.category || 'unknown');
+      var headline = document.createElement('div');
+      headline.className = 'error-headline';
+      headline.textContent = presentation.headline;
+      block.appendChild(headline);
+
+      var canRetry = presentation.retryable === true && lastSendPayload !== null;
+      if (canRetry || presentation.detail) {
+        var actions = document.createElement('div');
+        actions.className = 'error-actions';
+        if (canRetry) {
+          var retry = document.createElement('button');
+          retry.type = 'button';
+          retry.className = 'error-retry';
+          retry.textContent = 'Retry';
+          retry.addEventListener('click', function() {
+            if (retry.disabled) return;
+            retry.disabled = true;
+            resendLastTurn(block);
+          });
+          actions.appendChild(retry);
+        }
+        if (presentation.detail) {
+          var details = document.createElement('details');
+          details.className = 'error-details';
+          var summary = document.createElement('summary');
+          summary.textContent = 'Details';
+          var body = document.createElement('div');
+          body.className = 'error-detail-text';
+          body.textContent = presentation.detail;
+          details.appendChild(summary);
+          details.appendChild(body);
+          actions.appendChild(details);
+        }
+        block.appendChild(actions);
+      }
+
+      messagesEl.appendChild(block);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return block;
+    }
+
+    function resendLastTurn(errorBlock) {
+      if (lastSendPayload === null || runtimeBlock !== null) return;
+      if (errorBlock && errorBlock.parentNode) errorBlock.parentNode.removeChild(errorBlock);
+      var retryPayload = {};
+      for (var key in lastSendPayload) {
+        if (Object.prototype.hasOwnProperty.call(lastSendPayload, key)) {
+          retryPayload[key] = lastSendPayload[key];
+        }
+      }
+      delete retryPayload.followUpBehavior;
+      retryPayload.clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
+      lastSendPayload = retryPayload;
+      showTyping();
+      setStreaming(true);
+      currentAssistantEl = null;
+      accumulatedContent = '';
+      activePlanCard = null;
+      vscode.postMessage({ type: 'sendMessage', payload: retryPayload });
     }
 
     function mountEmptyState() {
@@ -3493,6 +3612,7 @@ export function getWebviewContent(
             ? oneTurnBehavior
             : followUpBehavior;
       }
+      lastSendPayload = sendPayload;
       vscode.postMessage({ type: 'sendMessage', payload: sendPayload });
       pendingFileReferences = [];
       setBrowseWebEnabled(false);
@@ -4362,7 +4482,7 @@ export function getWebviewContent(
           toolCallStackHasError = true;
           finalizeToolCallStack();
         }
-        addMessage('error', msg.payload.message);
+        addErrorMessage(msg.payload);
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -4504,6 +4624,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationLoaded') {
+        lastSendPayload = null;
         clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
         invalidateAttachmentBatches();
@@ -4557,6 +4678,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationCleared') {
+        lastSendPayload = null;
         clearContextUsage();
         resetAuthoritativeSessionBoundary();
         invalidateAttachmentBatches();

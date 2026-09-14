@@ -5,6 +5,7 @@ import {
   ChatStateManager,
   type ExtToWebviewMessage,
 } from '../features/sidebar-webview/ChatStateManager';
+import { presentChatError } from '../features/sidebar-webview/errorPresentation';
 import {
   MODEL_CONTEXT_LIMITS,
   MODEL_PICKER_OPTIONS,
@@ -192,7 +193,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: 'Trust this workspace before starting a developer session.' },
+      payload: presentChatError('Trust this workspace before starting a developer session.'),
     });
   });
 
@@ -219,7 +220,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startTurn).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining(error) },
+      payload: expect.objectContaining({ headline: expect.stringContaining(error) }),
     });
   });
 
@@ -262,7 +263,9 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('when local was requested') },
+      payload: expect.objectContaining({
+        headline: expect.stringContaining('when local was requested'),
+      }),
     });
   });
 
@@ -503,7 +506,9 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('no verified Local, BYOK, or Managed boundary') },
+      payload: expect.objectContaining({
+        headline: expect.stringContaining('no verified Local, BYOK, or Managed boundary'),
+      }),
     });
   });
 
@@ -690,7 +695,9 @@ describe('ChatStateManager local turn lifecycle', () => {
     await expect(harness.manager.resumeConversation('wrong-cwd-1')).resolves.toBe(false);
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('workspace does not match') },
+      payload: expect.objectContaining({
+        headline: expect.stringContaining('workspace does not match'),
+      }),
     });
     expect(harness.posted).not.toContainEqual(
       expect.objectContaining({ type: 'conversationLoaded' }),
@@ -710,7 +717,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startTurn).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('not available') },
+      payload: expect.objectContaining({ headline: expect.stringContaining('not available') }),
     });
   });
 
@@ -2283,9 +2290,9 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: {
-        message: 'This model is not available for your current plan or provider setup.',
-      },
+      payload: presentChatError(
+        'This model is not available for your current plan or provider setup.',
+      ),
     });
     expect(harness.posted).not.toContainEqual({
       type: 'model',
@@ -2309,9 +2316,9 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: {
-        message: 'This model is not available for your current plan or provider setup.',
-      },
+      payload: presentChatError(
+        'This model is not available for your current plan or provider setup.',
+      ),
     });
   });
 
@@ -2619,7 +2626,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('too many events') },
+      payload: expect.objectContaining({ headline: expect.stringContaining('too many events') }),
     });
     await send;
   });
@@ -2711,7 +2718,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: 'approval channel closed' },
+      payload: presentChatError('approval channel closed'),
     });
     await send;
   });
@@ -2983,7 +2990,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     await vi.waitFor(() => expect(settled).toBe(true));
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: 'AGI local runtime exited' },
+      payload: presentChatError('AGI local runtime exited'),
     });
     await send;
   });
