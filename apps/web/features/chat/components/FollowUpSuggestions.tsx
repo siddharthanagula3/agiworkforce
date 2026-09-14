@@ -14,6 +14,12 @@ export interface FollowUpSuggestionsProps {
   isGenerating?: boolean;
   isUserTyping?: boolean;
   messageCount?: number;
+  /**
+   * Questions a model wrote from this answer and its sources. They replace the
+   * keyword matcher when present; the matcher stands in when the turn did not
+   * search or the generation failed.
+   */
+  suggestions?: readonly string[];
   className?: string;
 }
 
@@ -319,11 +325,19 @@ export function FollowUpSuggestions({
   isGenerating = false,
   isUserTyping = false,
   messageCount = 0,
+  suggestions,
   className,
 }: FollowUpSuggestionsProps) {
   const followUps = useMemo(
-    () => deriveFollowUps(lastAssistantContent, messageCount, lastUserContent),
-    [lastAssistantContent, messageCount, lastUserContent],
+    () =>
+      suggestions && suggestions.length > 0
+        ? suggestions.slice(0, 3).map((text, index) => ({
+            id: `followup-generated-${index}`,
+            text,
+            type: 'deeper' as FollowUpType,
+          }))
+        : deriveFollowUps(lastAssistantContent, messageCount, lastUserContent),
+    [suggestions, lastAssistantContent, messageCount, lastUserContent],
   );
   const [dismissed, setDismissed] = useState(false);
 
