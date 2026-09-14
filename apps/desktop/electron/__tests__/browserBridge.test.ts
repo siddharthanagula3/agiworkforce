@@ -484,6 +484,54 @@ describe('local client routes', () => {
     expect(context.bridge.isLoopbackAddress('10.0.0.7')).toBe(false);
   });
 
+  /// A page that refused an action and a browser that never answered need
+  /// different things from the user, so they cannot share one code.
+  it('keeps a page refusal apart from a browser that never answered', async () => {
+    pairBrowser();
+    const { BrowserBridgeError } = context.bridge;
+    for (const [thrown, expected] of [
+      [new BrowserBridgeError('site not approved', 'permission-denied'), 'permission-denied'],
+      [new BrowserBridgeError('nothing polled'), 'timeout'],
+      [new BrowserBridgeError('bridge closed', 'cancelled'), 'cancelled'],
+    ] as const) {
+      const failing = await freshBridge({
+        appVersion: '1.7.1',
+        runBrowserCommand: async () => {
+          throw thrown;
+        },
+      });
+      failing.pairingStore.savePairing(EXTENSION_ID);
+      const response = await fetch(`http://127.0.0.1:${failing.port}/client/command`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-local-client-token': failing.localClient.localClientToken() ?? '',
+        },
+        body: JSON.stringify({
+          version: 1,
+          command: 'browser_read_page',
+          args: {},
+          client: { name: 'agi' },
+        }),
+      });
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body['code']).toBe(expected);
+      await failing.bridge.stopBrowserBridge();
+    }
+  });
+
+  /// A long path is identified by its end, so it is shortened from the left.
+  it('names a client by the end of its directory, not a shared prefix', async () => {
+    const { describeLocalClient } = context.localClient;
+    expect(describeLocalClient({ name: 'agi' })).toBe('agi');
+    expect(describeLocalClient({ name: 'agi', cwd: '/work/project' })).toBe('agi in /work/project');
+
+    const long = `/private/tmp/${'a'.repeat(80)}/qa-project`;
+    const described = describeLocalClient({ name: 'agi', cwd: long });
+    expect(described.endsWith('qa-project')).toBe(true);
+    expect(described.startsWith('agi in …')).toBe(true);
+  });
+
   it('records each command against the client that asked', async () => {
     pairBrowser();
     await post('/client/command', {

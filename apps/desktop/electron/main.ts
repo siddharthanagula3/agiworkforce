@@ -33,7 +33,7 @@ import {
   type HostPreferences,
   type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
-import { startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
+import { BrowserBridgeError, startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
 import { dispatch as dispatchDesktopRuntime, runBrowserCommand } from './runtime/dispatcher';
 import { cancelAllShellRuns } from './runtime/shellService';
@@ -233,13 +233,18 @@ async function startPairingBridge(): Promise<void> {
             ? { ok: true, value: outcome.value }
             : { ok: false, error: outcome.error.message, code: outcome.error.code };
         } catch (error) {
-          // The bridge rejects when the extension never answered or the page
-          // refused. The client has to be told which kind of nothing it got,
-          // so it never surfaces as a bare transport failure.
+          // The bridge rejects when the extension never answered, when the
+          // page refused, and when the bridge closed under a waiting command.
+          // It says which; reporting all three as a timeout told the user to
+          // check that Chrome was running when the real answer was that the
+          // site was not approved.
           return {
             ok: false,
             error: error instanceof Error ? error.message : 'The browser did not answer.',
-            code: 'timeout',
+            code:
+              error instanceof BrowserBridgeError && typeof error.code === 'string'
+                ? error.code
+                : 'timeout',
           };
         }
       },
