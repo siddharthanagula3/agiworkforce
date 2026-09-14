@@ -172,6 +172,13 @@ pub struct AgentSession {
     pub on_tool_approval: Option<ToolApprovalSink>,
     pub on_tool_event: Option<ToolEventSink>,
     pub on_continuation_chunk: Option<ContinuationSink>,
+    /// Whether the desktop shell is running with a browser paired to it.
+    ///
+    /// `None` until the first turn resolves it. Resolved once per session
+    /// rather than per request: building the schema list happens on every
+    /// model call, and a round trip to the shell there would put a stall in
+    /// front of every turn.
+    pub(crate) browser_available: Option<bool>,
     pub quiet: bool,
     #[allow(dead_code)]
     pub fast_mode: bool,
@@ -617,6 +624,7 @@ impl AgentSession {
             on_tool_approval: None::<ToolApprovalSink>,
             on_tool_event: None::<ToolEventSink>,
             on_continuation_chunk: None::<ContinuationSink>,
+            browser_available: None,
             quiet: false,
             fast_mode: false,
             original_model: None,
@@ -706,12 +714,14 @@ impl AgentSession {
             .as_ref()
             .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
         let planning_locked = self.plan_mode && !self.plan_approved;
-        let mut tool_definitions = crate::runtime::tool_catalog::effective_tool_definitions(
-            planning_locked,
-            self.team_manager.is_some(),
-            self.allowed_tools.as_deref(),
-            mcp_tool_definitions.as_deref(),
-        );
+        let mut tool_definitions =
+            crate::runtime::tool_catalog::effective_tool_definitions_with_browser(
+                planning_locked,
+                self.team_manager.is_some(),
+                self.browser_available.unwrap_or(false),
+                self.allowed_tools.as_deref(),
+                mcp_tool_definitions.as_deref(),
+            );
 
         if !self.disallowed_tools.is_empty() {
             tool_definitions.retain(|tool_definition| {
@@ -725,6 +735,19 @@ impl AgentSession {
         }
 
         tool_definitions
+    }
+
+    /// Ask the desktop shell, once per session, whether a browser is paired.
+    ///
+    /// A tool the model can call and this machine cannot honour costs a turn
+    /// and teaches the model nothing, so the family is offered only when the
+    /// answer is yes. Cheap when no shell is running: there is no file to
+    /// read, so nothing is sent.
+    pub(crate) async fn refresh_browser_availability(&mut self) {
+        if self.browser_available.is_some() {
+            return;
+        }
+        self.browser_available = Some(crate::browser_bridge::browser_state().await.is_paired());
     }
 
     /// Generate an A2A AgentCard representing this session's capabilities.
