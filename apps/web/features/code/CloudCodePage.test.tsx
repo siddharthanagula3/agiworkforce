@@ -8,7 +8,7 @@ import {
 } from '@agiworkforce/types';
 import { useUIStore } from '@shared/stores/layout-store';
 import { getModelMetadata } from '@shared/config/llm';
-import { contextWindowLabel } from './code-surface';
+import { CODE_COPY, contextWindowLabel } from './code-surface';
 import {
   TOOL_APPROVAL_POLICY_OPTIONS,
   type ToolApprovalPreferences,
@@ -625,7 +625,7 @@ describe('CloudCodePage', () => {
     await openSession(user, session.title);
 
     expect(await screen.findByText('Deleting files is destructive.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: CODE_COPY.reject })).toBeEnabled();
   });
 
   it('shows the closed banner in the composer slot and no composer', async () => {
