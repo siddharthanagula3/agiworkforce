@@ -205,6 +205,20 @@ describe('Settings page', () => {
     expect(teamAccount.getByText('Workspace')).toBeTruthy();
   });
 
+  it('draws the account state in one style across all five Account rows', () => {
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    for (const label of [
+      'Email',
+      'Account Security',
+      'Subscription',
+      'Shared Links',
+      'Workspace',
+    ]) {
+      expect(getByLabelText(`${label}. Sign in`)).toBeTruthy();
+    }
+  });
+
   it('shows cloud rows as sign-in-gated instead of live account controls', () => {
     const { getByText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
@@ -246,7 +260,7 @@ describe('Settings page', () => {
 
     fireEvent.press(getByLabelText('Personalization'));
     fireEvent.press(getByLabelText('Memory'));
-    fireEvent.press(getByLabelText('Account Security. Cloud'));
+    fireEvent.press(getByLabelText('Account Security. Signed in'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
@@ -277,7 +291,7 @@ describe('Settings page', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Shared Links. Cloud'));
+    fireEvent.press(getByLabelText('Shared Links. Signed in'));
     fireEvent.press(getByLabelText('Device Integrations'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/shared-links');

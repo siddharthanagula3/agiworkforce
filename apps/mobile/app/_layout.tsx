@@ -98,12 +98,31 @@ function queueBackgroundFetchLifecycle(operation: () => Promise<void>): Promise<
   return transition;
 }
 
+// Clerk never reports `isLoaded` when its environment call fails (an offline
+// launch, a disabled instance). Everything keyed off it then reads "Checking…"
+// for the life of the process and the rows it gates do nothing when tapped.
+// Signed-out is the fail-closed answer for Cloud and it is the truthful one for
+// a Local-only session, so settle on it rather than waiting forever.
+const CLERK_LOAD_SETTLE_MS = 8_000;
+
 function ClerkTokenBridge() {
   const { getToken, userId, isSignedIn, isLoaded } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
   const setClerkUserId = useAuthStore((s) => s.setClerkUserId);
   const setClerkLoaded = useAuthStore((s) => s.setClerkLoaded);
   const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
+
+  useEffect(() => {
+    if (isLoaded) return;
+    const settle = setTimeout(() => {
+      console.warn('[RootLayout] Clerk did not load, settling on signed out');
+      setClerkUserId(null);
+      setClerkSignedIn(false);
+      setCloudAccess(false);
+      setClerkLoaded(true);
+    }, CLERK_LOAD_SETTLE_MS);
+    return () => clearTimeout(settle);
+  }, [isLoaded, setClerkLoaded, setClerkSignedIn, setClerkUserId, setCloudAccess]);
 
   useEffect(() => {
     if (!isLoaded) return;
