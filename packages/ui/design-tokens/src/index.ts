@@ -1,6 +1,86 @@
 export type AgiThemeMode = 'light' | 'dark';
 export type CssVariableMap = Record<`--${string}`, string>;
 
+/**
+ * The brand ramps, mode invariant. foundation.css declares the same values as
+ * `--hue-<family>` and `--hue-<family>-<step>` primitives; this mirror exists
+ * for hosts that cannot import a stylesheet (mobile's Tailwind config, the
+ * Chrome and VS Code panels). The two are asserted equal in both directions by
+ * apps/web/shared/components/__tests__/theme-contrast.test.ts, so neither can
+ * gain, lose or move a step alone. A surface reads these through a role, never
+ * a step: a ramp entry is a hue, not a decision about where it renders.
+ */
+export const agiBrandScale = {
+  cream: {
+    50: '#fcfcf9',
+    100: '#f9f9f6',
+    200: '#f5f5f2',
+  },
+  charcoal: {
+    700: '#363838',
+    800: '#2a2c2c',
+    900: '#1f2121',
+  },
+  'terra-cotta': {
+    DEFAULT: '#da7756',
+    50: '#f9e8e1',
+    100: '#f5d4c8',
+    200: '#ecad96',
+    300: '#e38664',
+    400: '#da7332',
+    500: '#da7756',
+    600: '#bd5d3a',
+    700: '#743924',
+    800: '#4d2618',
+    900: '#27130c',
+  },
+  'warm-peach': {
+    DEFAULT: '#f5c1a9',
+    50: '#ffffff',
+    100: '#fef9f6',
+    200: '#fce8dd',
+    300: '#fad7c4',
+    400: '#f7c9b6',
+    500: '#f5c1a9',
+    600: '#f0a481',
+    700: '#eb8759',
+    800: '#e66a31',
+    900: '#c64f14',
+  },
+  teal: {
+    DEFAULT: '#21808d',
+    50: '#8fd9e3',
+    100: '#7dd3df',
+    200: '#5ac7d7',
+    300: '#3ab5c5',
+    400: '#2d9ba8',
+    500: '#21808d',
+    600: '#196068',
+    700: '#124043',
+    800: '#0a201e',
+    900: '#000000',
+  },
+  agent: {
+    thinking: '#a855f7',
+    active: '#3b82f6',
+    success: '#10b981',
+    error: '#ef4444',
+    warning: '#f59e0b',
+  },
+} as const;
+
+export type AgiBrandFamily = keyof typeof agiBrandScale;
+
+/**
+ * The `--hue-*` custom property foundation.css declares for one ramp entry.
+ * Both the equality test and any host emitting a `var()` reference derive the
+ * name here rather than spelling it, so a renamed family cannot leave a caller
+ * pointing at a property that no longer exists.
+ */
+export function brandScaleVar(family: AgiBrandFamily, step: string): `--${string}` {
+  return step === 'DEFAULT' ? `--hue-${family}` : `--hue-${family}-${step}`;
+}
+
 export const agiPalette = {
   light: {
     surface: {
@@ -138,8 +218,9 @@ export const agiCoolPalette = {
 /**
  * Concrete rungs of the --corner-* ladder foundation.css owns, in the same
  * size-named shape chat.css exposes. Emitted literally for hosts that cannot
- * import the stylesheet, so these must equal the rungs they mirror; asserted in
- * apps/web/shared/components/__tests__/theme-contrast.test.ts.
+ * import the stylesheet, so these must equal the rungs they mirror;
+ * `agiRadiiVar` names which rung each size is, and the pair is asserted equal
+ * in apps/web/shared/components/__tests__/theme-contrast.test.ts.
  */
 export const agiRadii = {
   sm: '6px',
@@ -147,7 +228,19 @@ export const agiRadii = {
   lg: '12px',
   xl: '16px',
   '2xl': '24px',
+  '3xl': '32px',
+  full: '9999px',
 } as const;
+
+export const agiRadiiVar = {
+  sm: '--corner-control',
+  md: '--corner-field',
+  lg: '--corner-surface',
+  xl: '--corner-panel',
+  '2xl': '--corner-overlay',
+  '3xl': '--corner-hero',
+  full: '--corner-pill',
+} as const satisfies Record<keyof typeof agiRadii, `--${string}`>;
 
 /**
  * Concrete family names, never the var(--font-*) indirection chat.css uses.
