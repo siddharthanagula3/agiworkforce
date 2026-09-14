@@ -10,12 +10,24 @@ export function managedCloudProjectKnowledgeFilePath(projectId: string, fileId: 
   return `${managedCloudProjectKnowledgePath(projectId)}/${encodeURIComponent(fileId)}`;
 }
 
+export const PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION = 2;
+
+/**
+ * `checksumSha256` is what the upload is authorized against, not metadata. The
+ * server binds it into the upload authorization and refuses any body that
+ * hashes to something else, so the bytes it inspected at registration are the
+ * only bytes that key can ever hold. A request without it is refused: version 1
+ * authorized a key rather than its content, which let a registered object be
+ * rewritten after it passed inspection.
+ */
 export const ManagedCloudProjectKnowledgePresignRequestSchema = z.object({
   kind: z.literal('knowledge-file'),
+  uploadProtocolVersion: z.literal(PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION),
   projectId: z.string().min(1).max(200),
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(255),
   byteCount: z.number().int().positive(),
+  checksumSha256: z.string().regex(/^[a-f0-9]{64}$/i),
 });
 
 export const ManagedCloudProjectKnowledgePresignResponseSchema = z.object({

@@ -1,8 +1,9 @@
 import 'server-only';
 
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { objectStorageConfig } from './object-storage-runtime';
 import {
   deleteObject,
   deletePrivateObject,
@@ -13,15 +14,16 @@ import {
   StoredObjectTooLargeError,
 } from './object-storage';
 
-const LOCAL_UPLOAD_TTL_MS = 5 * 60 * 1000;
-const LOCAL_TOKEN_VERSION = 1;
+const UPLOAD_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
+const UPLOAD_TOKEN_VERSION = 2;
 
-interface LocalUploadClaims {
+export interface ProjectKnowledgeUploadClaims {
   v: number;
   userId: string;
   key: string;
   contentType: string;
   byteCount: number;
+  checksumSha256: string;
   expiresAt: number;
   nonce: string;
 }
@@ -79,11 +81,11 @@ async function localSigningSecret(): Promise<Buffer> {
   }
 }
 
-function parseClaims(value: unknown): LocalUploadClaims | null {
+function parseClaims(value: unknown): ProjectKnowledgeUploadClaims | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const claims = value as Record<string, unknown>;
   if (
-    claims['v'] !== LOCAL_TOKEN_VERSION ||
+    claims['v'] !== UPLOAD_TOKEN_VERSION ||
     typeof claims['userId'] !== 'string' ||
     !claims['userId'] ||
     typeof claims['key'] !== 'string' ||
@@ -93,6 +95,8 @@ function parseClaims(value: unknown): LocalUploadClaims | null {
     typeof claims['byteCount'] !== 'number' ||
     !Number.isSafeInteger(claims['byteCount']) ||
     claims['byteCount'] <= 0 ||
+    typeof claims['checksumSha256'] !== 'string' ||
+    !/^[a-f0-9]{64}$/i.test(claims['checksumSha256']) ||
     typeof claims['expiresAt'] !== 'number' ||
     !Number.isSafeInteger(claims['expiresAt']) ||
     typeof claims['nonce'] !== 'string' ||
@@ -100,13 +104,61 @@ function parseClaims(value: unknown): LocalUploadClaims | null {
   ) {
     return null;
   }
-  return claims as unknown as LocalUploadClaims;
+  return claims as unknown as ProjectKnowledgeUploadClaims;
+}
+
+/**
+ * The storage credential, never the raw value and never a new environment
+ * variable: it is already required wherever an upload can be authorized, so a
+ * deploy cannot arrive with this unset. The local file secret covers the
+ * development case that has no object storage at all.
+ */
+async function uploadSigningSecret(): Promise<Buffer> {
+  const storageSecret = objectStorageConfig().secretAccessKey;
+  if (storageSecret) {
+    return createHash('sha256')
+      .update(
+        `agi-project-knowledge-upload-authorization-v${UPLOAD_TOKEN_VERSION}\0${storageSecret}`,
+      )
+      .digest();
+  }
+  return localSigningSecret();
 }
 
 async function signPayload(payload: string): Promise<string> {
-  return createHmac('sha256', await localSigningSecret())
+  return createHmac('sha256', await uploadSigningSecret())
     .update(payload)
     .digest('base64url');
+}
+
+/**
+ * Binds an upload to the exact bytes the caller declared at presign. The key
+ * comes from this token rather than from the request, and a body that hashes to
+ * anything but `checksumSha256` is refused, so an object that passed content
+ * inspection cannot be rewritten under the same key afterwards.
+ */
+export async function createProjectKnowledgeUploadAuthorization(input: {
+  userId: string;
+  key: string;
+  contentType: string;
+  byteCount: number;
+  checksumSha256: string;
+}): Promise<string> {
+  if (!validKnowledgeKey(input.key)) {
+    throw new Error('The project knowledge upload destination is invalid.');
+  }
+  const claims: ProjectKnowledgeUploadClaims = {
+    v: UPLOAD_TOKEN_VERSION,
+    userId: input.userId,
+    key: input.key,
+    contentType: input.contentType,
+    byteCount: input.byteCount,
+    checksumSha256: input.checksumSha256.toLowerCase(),
+    expiresAt: Date.now() + UPLOAD_AUTHORIZATION_TTL_MS,
+    nonce: randomUUID(),
+  };
+  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
+  return `${payload}.${await signPayload(payload)}`;
 }
 
 export function isProjectKnowledgeObjectStorageConfigured(): boolean {
@@ -118,47 +170,58 @@ export async function createLocalProjectKnowledgeUploadUrl(input: {
   key: string;
   contentType: string;
   byteCount: number;
+  checksumSha256: string;
 }): Promise<string> {
-  if (!localStorageEnabled() || !validKnowledgeKey(input.key)) {
+  if (!localStorageEnabled()) {
     throw new Error('Local project knowledge storage is not available.');
   }
-  const claims: LocalUploadClaims = {
-    v: LOCAL_TOKEN_VERSION,
-    userId: input.userId,
-    key: input.key,
-    contentType: input.contentType,
-    byteCount: input.byteCount,
-    expiresAt: Date.now() + LOCAL_UPLOAD_TTL_MS,
-    nonce: randomUUID(),
-  };
-  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
-  const signature = await signPayload(payload);
-  return `/api/uploads/local-project-knowledge?token=${encodeURIComponent(`${payload}.${signature}`)}`;
+  const token = await createProjectKnowledgeUploadAuthorization(input);
+  return `/api/uploads/local-project-knowledge?token=${encodeURIComponent(token)}`;
 }
 
-async function verifyLocalUploadToken(token: string, userId: string): Promise<LocalUploadClaims> {
+export async function verifyProjectKnowledgeUploadAuthorization(
+  token: string,
+  userId: string,
+): Promise<ProjectKnowledgeUploadClaims> {
   const [payload, suppliedSignature, ...extra] = token.split('.');
   if (!payload || !suppliedSignature || extra.length > 0) {
-    throw new Error('Local upload authorization is invalid.');
+    throw new Error('This upload authorization is invalid.');
   }
   const expectedSignature = await signPayload(payload);
   const supplied = Buffer.from(suppliedSignature);
   const expected = Buffer.from(expectedSignature);
   if (supplied.byteLength !== expected.byteLength || !timingSafeEqual(supplied, expected)) {
-    throw new Error('Local upload authorization is invalid.');
+    throw new Error('This upload authorization is invalid.');
   }
 
   let decoded: unknown;
   try {
     decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   } catch {
-    throw new Error('Local upload authorization is invalid.');
+    throw new Error('This upload authorization is invalid.');
   }
   const claims = parseClaims(decoded);
   if (!claims || claims.userId !== userId || claims.expiresAt < Date.now()) {
-    throw new Error('Local upload authorization is invalid or expired.');
+    throw new Error('This upload authorization is invalid or expired.');
   }
   return claims;
+}
+
+export function assertUploadMatchesAuthorization(
+  claims: ProjectKnowledgeUploadClaims,
+  body: { contentType: string; data: Uint8Array },
+): void {
+  const contentType = body.contentType.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== claims.contentType.trim().toLowerCase()) {
+    throw new Error('The uploaded content type does not match its authorization.');
+  }
+  if (body.data.byteLength !== claims.byteCount) {
+    throw new Error('The uploaded byte count does not match its authorization.');
+  }
+  const digest = createHash('sha256').update(body.data).digest('hex');
+  if (digest !== claims.checksumSha256) {
+    throw new Error('The uploaded bytes do not match the authorized content.');
+  }
 }
 
 export async function storeLocalProjectKnowledgeUpload(input: {
@@ -168,14 +231,8 @@ export async function storeLocalProjectKnowledgeUpload(input: {
   data: Uint8Array;
 }): Promise<void> {
   if (!localStorageEnabled()) throw new Error('Local project knowledge storage is disabled.');
-  const claims = await verifyLocalUploadToken(input.token, input.userId);
-  const contentType = input.contentType.split(';', 1)[0]?.trim().toLowerCase();
-  if (contentType !== claims.contentType.trim().toLowerCase()) {
-    throw new Error('The uploaded content type does not match its authorization.');
-  }
-  if (input.data.byteLength !== claims.byteCount) {
-    throw new Error('The uploaded byte count does not match its authorization.');
-  }
+  const claims = await verifyProjectKnowledgeUploadAuthorization(input.token, input.userId);
+  assertUploadMatchesAuthorization(claims, { contentType: input.contentType, data: input.data });
   const resolved = localPathForKey(claims.key);
   if (!resolved) throw new Error('The local project knowledge path is invalid.');
 

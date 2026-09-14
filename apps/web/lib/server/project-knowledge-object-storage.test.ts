@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -23,6 +24,14 @@ vi.mock('./object-storage', () => ({
     }
   },
 }));
+vi.mock('./object-storage-runtime', () => ({
+  getObjectStore: vi.fn(),
+  objectStorageConfig: () => ({ secretAccessKey: undefined }),
+}));
+
+function sha256Hex(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
 
 describe('local project knowledge storage', () => {
   let scratch = '';
@@ -48,6 +57,7 @@ describe('local project knowledge storage', () => {
       key,
       contentType: 'text/plain',
       byteCount: bytes.byteLength,
+      checksumSha256: sha256Hex(bytes),
     });
     const token = new URL(uploadUrl, 'http://localhost').searchParams.get('token');
     expect(token).toBeTruthy();
@@ -83,6 +93,7 @@ describe('local project knowledge storage', () => {
       key,
       contentType: 'text/plain',
       byteCount: bytes.byteLength,
+      checksumSha256: sha256Hex(bytes),
     });
     const token = new URL(uploadUrl, 'http://localhost').searchParams.get('token')!;
     await storeLocalProjectKnowledgeUpload({
@@ -97,6 +108,32 @@ describe('local project knowledge storage', () => {
     );
   });
 
+  it('refuses bytes that do not hash to the authorized content, at the same length and type', async () => {
+    const key = 'knowledge-files/projects/project-1/inspected.txt';
+    const inspected = new TextEncoder().encode('inspected source');
+    const rewritten = new TextEncoder().encode('REWRITTEN SOURCE');
+    expect(rewritten.byteLength).toBe(inspected.byteLength);
+
+    const uploadUrl = await createLocalProjectKnowledgeUploadUrl({
+      userId: 'user-1',
+      key,
+      contentType: 'text/plain',
+      byteCount: inspected.byteLength,
+      checksumSha256: sha256Hex(inspected),
+    });
+    const token = new URL(uploadUrl, 'http://localhost').searchParams.get('token')!;
+
+    await expect(
+      storeLocalProjectKnowledgeUpload({
+        token,
+        userId: 'user-1',
+        contentType: 'text/plain',
+        data: rewritten,
+      }),
+    ).rejects.toThrow(/do not match the authorized content/i);
+    await expect(getProjectKnowledgeObject(key, inspected.byteLength)).resolves.toBeNull();
+  });
+
   it('rejects a token used by a different signed-in owner', async () => {
     const bytes = new TextEncoder().encode('owner-bound');
     const uploadUrl = await createLocalProjectKnowledgeUploadUrl({
@@ -104,6 +141,7 @@ describe('local project knowledge storage', () => {
       key: 'knowledge-files/projects/project-1/owner.txt',
       contentType: 'text/plain',
       byteCount: bytes.byteLength,
+      checksumSha256: sha256Hex(bytes),
     });
     const token = new URL(uploadUrl, 'http://localhost').searchParams.get('token')!;
 
