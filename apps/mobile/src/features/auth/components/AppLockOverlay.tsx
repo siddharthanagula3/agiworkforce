@@ -7,8 +7,27 @@ import { useTheme } from '@/src/ui/theme';
 // Renders ABOVE the mounted app instead of replacing it. Swapping the tree for
 // a lock screen unmounted the navigator, so every resume through the gate threw
 // away the open conversation and restarted routing at the root.
-export function AppLockOverlay({ onUnlock }: { onUnlock: () => void }) {
+export function AppLockOverlay({
+  onUnlock,
+  variant = 'locked',
+}: {
+  onUnlock: () => void;
+  variant?: 'locked' | 'cover';
+}) {
   const { colors } = useTheme();
+
+  // While the app is merely leaving the foreground there is nothing to ask the
+  // user for, so the cover is the background and nothing else.
+  if (variant === 'cover') {
+    return (
+      <View
+        testID="app-screen-cover"
+        style={[StyleSheet.absoluteFill, styles.root, { backgroundColor: colors.background }]}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
+    );
+  }
 
   return (
     <View
