@@ -194,6 +194,7 @@ import {
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
   openClerkSignIn,
+  signOutClerk,
 } from './features/cloud-bridge/clerkAuth';
 import {
   formatManagedTierLabel,
@@ -8356,6 +8357,15 @@ function buildUI(): void {
   };
 
   signoutBtn.addEventListener('click', async () => {
+    // One identity across the web and the extension is the contract: the
+    // web's own sign-out already ends the synced session for both, so this
+    // control must too, not just clear the extension's own local state and
+    // leave the shared Clerk session alive on the sync host.
+    try {
+      await signOutClerk();
+    } catch (error) {
+      console.warn('[SidePanel] Clerk sign-out failed:', error);
+    }
     await transitionManagedCloudOwner(null);
     await clearAuthToken();
     await refreshCloudAccountUI();
