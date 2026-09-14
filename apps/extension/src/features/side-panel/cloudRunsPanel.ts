@@ -12,9 +12,15 @@ import {
   resolveChromeManagedRunApproval,
 } from '../cloud-bridge/managedRunControl';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
+import {
+  buildSchedulesSection,
+  SCHEDULES_SECTION_CSS,
+  type SchedulesSectionDependencies,
+} from './schedulesSection';
 import { el } from './dom';
 
-export const CLOUD_RUNS_PANEL_CSS = `
+export const CLOUD_RUNS_PANEL_CSS =
+  `
   #sp-runs-panel {
     display: none;
     flex-direction: column;
@@ -329,7 +335,7 @@ export const CLOUD_RUNS_PANEL_CSS = `
     white-space: pre-wrap;
     word-break: break-word;
   }
-`;
+` + SCHEDULES_SECTION_CSS;
 
 type RunFilter = 'active' | 'all';
 type RunStateTone = 'active' | 'attention' | 'success' | 'danger' | 'muted';
@@ -406,6 +412,7 @@ export interface CloudRunsPanelDependencies {
   signIn: typeof openClerkSignIn;
   refreshIntervalMs: number;
   now: () => number;
+  schedules: Partial<SchedulesSectionDependencies>;
 }
 
 export interface CloudRunsPanelAPI {
@@ -424,6 +431,7 @@ const DEFAULT_DEPENDENCIES: CloudRunsPanelDependencies = {
   signIn: openClerkSignIn,
   refreshIntervalMs: RUN_REFRESH_INTERVAL_MS,
   now: () => Date.now(),
+  schedules: {},
 };
 
 function formatRelativeTime(iso: string, now: number): string {
@@ -544,6 +552,9 @@ export function buildCloudRunsPanel(
   detailEl.hidden = true;
   panelEl.appendChild(listEl);
   panelEl.appendChild(detailEl);
+
+  const schedules = buildSchedulesSection(deps.schedules);
+  panelEl.appendChild(schedules.sectionEl);
 
   let filter: RunFilter = 'active';
   let runs: CloudAgentRun[] = [];
@@ -858,6 +869,7 @@ export function buildCloudRunsPanel(
     const detailOpen = openRunId !== null;
     listEl.hidden = detailOpen;
     detailEl.hidden = !detailOpen;
+    schedules.sectionEl.hidden = detailOpen;
     activeFilterBtn.setAttribute('aria-pressed', String(filter === 'active'));
     allFilterBtn.setAttribute('aria-pressed', String(filter === 'all'));
     if (detailOpen) renderDetail();
@@ -1000,6 +1012,7 @@ export function buildCloudRunsPanel(
   function setActive(next: boolean): void {
     if (active === next) return;
     active = next;
+    schedules.setActive(next);
     if (active) void load();
     else clearRenderedRuns();
   }
@@ -1008,6 +1021,7 @@ export function buildCloudRunsPanel(
     if (disposed) return;
     disposed = true;
     active = false;
+    schedules.setActive(false);
     clearRenderedRuns();
     panelEl.ownerDocument.removeEventListener('visibilitychange', onVisibilityChange);
     panelEl.ownerDocument.defaultView?.removeEventListener('pagehide', onPageHide);
