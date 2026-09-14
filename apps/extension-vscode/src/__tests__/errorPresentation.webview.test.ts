@@ -41,6 +41,30 @@ describe('presentTurnFailure', () => {
     expect(presentation.detail).toBe('[deepseek] boom');
   });
 
+  it('asks for the AGI account rather than a vendor key when no session exists', () => {
+    const presentation = presentTurnFailure({
+      ...base,
+      code: 'account_signed_out',
+      action: 'sign_in_account',
+    });
+
+    expect(presentation.headline).toBe('Sign in to AGI to run this model on your plan.');
+    expect(presentation.category).toBe('sign-in');
+    expect(presentation.action).toEqual({ kind: 'sign-in-account', label: 'Sign in to AGI' });
+  });
+
+  it('offers the plan when the account is signed in but excludes the model', () => {
+    const presentation = presentTurnFailure({
+      ...base,
+      code: 'plan_excludes_model',
+      action: 'upgrade_plan',
+    });
+
+    expect(presentation.headline).toBe('Your plan does not include this model.');
+    expect(presentation.category).toBe('subscription');
+    expect(presentation.action).toEqual({ kind: 'upgrade-plan', label: 'Upgrade your plan' });
+  });
+
   it('separates a rejected credential from a missing one, because the remedy differs', () => {
     expect(
       presentTurnFailure({ ...base, code: 'provider_auth_invalid', action: 'sign_in_provider' })

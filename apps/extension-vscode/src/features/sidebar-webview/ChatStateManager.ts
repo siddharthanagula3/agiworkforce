@@ -174,7 +174,10 @@ export type WebviewToExtMessage =
   | { type: 'openToolDiff'; payload: { path: string } }
   | {
       type: 'resolveTurnFailure';
-      payload: { kind: 'sign-in-provider' | 'open-settings'; provider?: string };
+      payload: {
+        kind: 'sign-in-provider' | 'sign-in-account' | 'upgrade-plan' | 'open-settings';
+        provider?: string;
+      };
     }
   | { type: 'respondToApproval'; payload: { requestId: string; decision: ApprovalDecision } }
   | {
@@ -956,6 +959,14 @@ export class ChatStateManager {
             'agi-workforce.signInProvider',
             msg.payload.provider,
           );
+          break;
+        }
+        if (msg.payload.kind === 'sign-in-account') {
+          await vscode.commands.executeCommand('agi-workforce.signIn');
+          break;
+        }
+        if (msg.payload.kind === 'upgrade-plan') {
+          await vscode.commands.executeCommand('agi-workforce.openUpgrade');
           break;
         }
         await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');

@@ -129,6 +129,11 @@
         "icon": "$(sign-out)"
       },
       {
+        "command": "agi-workforce.openUpgrade",
+        "title": "AGI: Upgrade your plan",
+        "icon": "$(rocket)"
+      },
+      {
         "command": "agi-workforce.setApiKey",
         "title": "AGI Workforce: Set API Key",
         "icon": "$(key)"

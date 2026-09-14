@@ -7,7 +7,13 @@ export type ModelTrustMode = 'local' | 'byok' | 'managed' | 'unknown';
 
 export interface HostModelUnreachable {
   code: string;
-  action: 'sign_in_provider' | 'open_settings' | 'retry' | 'none';
+  action:
+    | 'sign_in_provider'
+    | 'sign_in_account'
+    | 'upgrade_plan'
+    | 'open_settings'
+    | 'retry'
+    | 'none';
   provider?: string;
 }
 
