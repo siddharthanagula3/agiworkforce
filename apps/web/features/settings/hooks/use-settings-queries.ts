@@ -19,19 +19,11 @@ import {
 import { z } from 'zod';
 import { queryKeys } from '@shared/stores/query-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import settingsService, {
-  type UserProfile,
-  type UserSettings,
-  type APIKey,
-} from '../services/user-preferences';
+import settingsService, { type UserSettings, type APIKey } from '../services/user-preferences';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
 import { TimeoutPresets, withTimeout } from '@shared/lib/error-utils';
-import {
-  requireProviderDefaultModel,
-  type AdminPolicy,
-  type BillingPlanTier,
-} from '@agiworkforce/types';
+import type { AdminPolicy, BillingPlanTier } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
@@ -58,55 +50,10 @@ export interface ChangePasswordParams {
 }
 
 /**
- * Optimistic update context for profile mutations
- */
-interface ProfileMutationContext {
-  previousProfile: UserProfile | null | undefined;
-}
-
-/**
  * Optimistic update context for settings mutations
  */
 interface SettingsMutationContext {
   previousSettings: UserSettings | undefined;
-}
-
-/**
- * Combined settings data result
- */
-export interface AllSettingsData {
-  profile: UserProfile | null | undefined;
-  settings: UserSettings | undefined;
-  apiKeys: APIKey[];
-  isLoading: boolean;
-  isError: boolean;
-  error: Error | null;
-  refetch: () => void;
-}
-
-/**
- * Fetch user profile
- *
- * @returns UseQueryResult with UserProfile or null
- */
-export function useUserProfile(): UseQueryResult<UserProfile | null, Error> {
-  return useQuery<UserProfile | null, Error>({
-    queryKey: queryKeys.settings.profile(),
-    queryFn: async (): Promise<UserProfile | null> => {
-      const { data, error } = await settingsService.getProfile();
-      if (error) {
-        logger.error('[SettingsQuery] Profile error:', error);
-        return null;
-      }
-      return data;
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes - profile rarely changes
-    gcTime: 30 * 60 * 1000, // 30 minutes
-    refetchOnWindowFocus: false,
-    meta: {
-      errorMessage: 'Failed to load user profile',
-    },
-  });
 }
 
 /**
@@ -126,32 +73,7 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
           logger.error('[SettingsQuery] Settings error:', error);
         }
         // Return default settings on error
-        return {
-          email_notifications: true,
-          push_notifications: true,
-          workflow_alerts: true,
-          employee_updates: true,
-          system_maintenance: true,
-          marketing_emails: false,
-          weekly_reports: true,
-          instant_alerts: true,
-          two_factor_enabled: false,
-          session_timeout: 60,
-          theme: 'dark',
-          auto_save: true,
-          debug_mode: false,
-          analytics_enabled: true,
-          cache_size: '1GB',
-          backup_frequency: 'daily',
-          retention_period: 30,
-          max_concurrent_jobs: 10,
-          default_ai_provider: 'openai',
-          // Model IDs come from the models.json catalog, never hardcoded.
-          default_ai_model: requireProviderDefaultModel('openai'),
-          prefer_streaming: true,
-          ai_temperature: 0.7,
-          ai_max_tokens: 4000,
-        };
+        return { two_factor_enabled: false, session_timeout: 60 };
       }
       return data;
     },
@@ -217,69 +139,6 @@ export function useAPIKeys(): UseQueryResult<APIKey[], Error> {
 }
 
 /**
- * Update user profile mutation
- *
- * @returns UseMutationResult for updating user profile
- */
-export function useUpdateProfile(): UseMutationResult<
-  Partial<UserProfile>,
-  Error,
-  Partial<UserProfile>,
-  ProfileMutationContext
-> {
-  const queryClient: QueryClient = useQueryClient();
-
-  return useMutation<Partial<UserProfile>, Error, Partial<UserProfile>, ProfileMutationContext>({
-    mutationFn: async (profile: Partial<UserProfile>): Promise<Partial<UserProfile>> => {
-      const { error } = await settingsService.updateProfile(profile);
-      if (error) {
-        throw new Error(error);
-      }
-      return profile;
-    },
-    onMutate: async (newProfile: Partial<UserProfile>): Promise<ProfileMutationContext> => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.settings.profile(),
-      });
-
-      // Snapshot previous value
-      const previousProfile = queryClient.getQueryData<UserProfile | null>(
-        queryKeys.settings.profile(),
-      );
-
-      // Optimistically update
-      queryClient.setQueryData<UserProfile | null>(queryKeys.settings.profile(), (old) =>
-        old ? { ...old, ...newProfile } : null,
-      );
-
-      return { previousProfile };
-    },
-    onSuccess: (): void => {
-      toast.success('Profile updated successfully');
-    },
-    onError: (
-      error: Error,
-      _variables: Partial<UserProfile>,
-      context: ProfileMutationContext | undefined,
-    ): void => {
-      // Rollback on error
-      if (context?.previousProfile !== undefined) {
-        queryClient.setQueryData(queryKeys.settings.profile(), context.previousProfile);
-      }
-      logger.error('Failed to save profile:', error);
-      toast.error('Failed to save profile');
-    },
-    onSettled: (): void => {
-      // Always refetch after mutation
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.profile(),
-      });
-    },
-  });
-}
-
-/**
  * Update user settings mutation
  *
  * @returns UseMutationResult for updating user settings
@@ -333,46 +192,6 @@ export function useUpdateSettings(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: queryKeys.settings.preferences(),
       });
-    },
-  });
-}
-
-/**
- * Upload avatar mutation
- *
- * @returns UseMutationResult for uploading avatar
- */
-export function useUploadAvatar(): UseMutationResult<string, Error, File> {
-  const queryClient: QueryClient = useQueryClient();
-
-  return useMutation<string, Error, File>({
-    mutationFn: async (file: File): Promise<string> => {
-      // Validate file size
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('File size must be less than 5MB');
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        throw new Error('File must be an image');
-      }
-
-      const { data: url, error } = await settingsService.uploadAvatar(file);
-      if (error) {
-        throw new Error(error);
-      }
-      return url;
-    },
-    onSuccess: (url: string): void => {
-      // Update profile with new avatar URL
-      queryClient.setQueryData<UserProfile | null>(queryKeys.settings.profile(), (old) =>
-        old ? { ...old, avatar_url: url } : null,
-      );
-      toast.success('Avatar uploaded successfully');
-    },
-    onError: (error: Error): void => {
-      logger.error('Error uploading avatar:', error);
-      toast.error(error.message || 'Failed to upload avatar');
     },
   });
 }
@@ -771,32 +590,6 @@ export function useInvalidateSettingsQueries(): () => void {
 
   return (): void => {
     queryClient.invalidateQueries({ queryKey: queryKeys.settings.all() });
-  };
-}
-
-/**
- * Combined hook for loading all settings data at once
- * Useful for settings page initialization
- *
- * @returns AllSettingsData with combined query results
- */
-export function useAllSettingsData(): AllSettingsData {
-  const profileQuery = useUserProfile();
-  const settingsQuery = useUserSettings();
-  const apiKeysQuery = useAPIKeys();
-
-  return {
-    profile: profileQuery.data,
-    settings: settingsQuery.data,
-    apiKeys: apiKeysQuery.data ?? [],
-    isLoading: profileQuery.isLoading || settingsQuery.isLoading || apiKeysQuery.isLoading,
-    isError: profileQuery.isError || settingsQuery.isError || apiKeysQuery.isError,
-    error: profileQuery.error || settingsQuery.error || apiKeysQuery.error,
-    refetch: (): void => {
-      profileQuery.refetch();
-      settingsQuery.refetch();
-      apiKeysQuery.refetch();
-    },
   };
 }
 

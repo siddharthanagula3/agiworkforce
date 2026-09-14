@@ -6,68 +6,8 @@
  */
 
 import { z } from 'zod';
-import { sanitizeUserInput, sanitizeURL } from '@shared/utils/html-sanitizer';
+import { sanitizeUserInput } from '@shared/utils/html-sanitizer';
 import { API_KEY_SCOPE_VALUES } from '@/lib/api-key-scopes';
-
-const sanitizedUrl = z
-  .string()
-  .optional()
-  .transform((val) => {
-    if (!val || val.trim() === '') return undefined;
-    const sanitized = sanitizeURL(val);
-    return sanitized || undefined;
-  });
-
-export const profileSettingsSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Name is required')
-    .min(2, 'Name must be at least 2 characters')
-    .max(100, 'Name must be less than 100 characters')
-    .transform((val) => sanitizeUserInput(val, 100)),
-
-  phone: z
-    .string()
-    .optional()
-    .transform((val) => {
-      if (!val || val.trim() === '') return undefined;
-      const sanitized = sanitizeUserInput(val, 20);
-      return sanitized;
-    })
-    .pipe(
-      z
-        .string()
-        .regex(/^[+]?[\d\s\-().]*$/, 'Phone number can only contain digits, spaces, +, -, (, and )')
-        .optional(),
-    ),
-
-  timezone: z.enum([
-    'America/New_York',
-    'America/Chicago',
-    'America/Denver',
-    'America/Los_Angeles',
-    'Europe/London',
-    'Europe/Paris',
-    'Asia/Tokyo',
-    'Asia/Shanghai',
-    'Australia/Sydney',
-  ]),
-
-  language: z.enum(['en', 'es', 'fr', 'de', 'zh', 'ja']),
-
-  bio: z
-    .string()
-    .max(500, 'Bio must be less than 500 characters')
-    .optional()
-    .transform((val) => {
-      if (!val || val.trim() === '') return undefined;
-      return sanitizeUserInput(val, 500);
-    }),
-
-  avatar_url: sanitizedUrl,
-});
-
-export type ProfileSettingsFormData = z.infer<typeof profileSettingsSchema>;
 
 export const passwordSchema = z
   .string()
@@ -100,45 +40,6 @@ export const securitySettingsSchema = z.object({
 
 export type SecuritySettingsFormData = z.infer<typeof securitySettingsSchema>;
 
-export const notificationPreferencesSchema = z.object({
-  email_notifications: z.boolean(),
-  push_notifications: z.boolean(),
-  workflow_alerts: z.boolean(),
-  employee_updates: z.boolean(),
-  system_maintenance: z.boolean(),
-  marketing_emails: z.boolean(),
-  weekly_reports: z.boolean(),
-  instant_alerts: z.boolean(),
-});
-
-export type NotificationPreferencesFormData = z.infer<typeof notificationPreferencesSchema>;
-
-export const appearanceSettingsSchema = z.object({
-  theme: z.enum(['dark', 'light', 'auto']),
-  auto_save: z.boolean(),
-  debug_mode: z.boolean(),
-  analytics_enabled: z.boolean(),
-});
-
-export type AppearanceSettingsFormData = z.infer<typeof appearanceSettingsSchema>;
-
-export const advancedSettingsSchema = z.object({
-  cache_size: z.enum(['256MB', '512MB', '1GB', '2GB', '4GB']),
-  backup_frequency: z.enum(['hourly', 'daily', 'weekly', 'monthly']),
-  retention_period: z
-    .number()
-    .int('Retention period must be a whole number')
-    .min(1, 'Retention period must be at least 1 day')
-    .max(365, 'Retention period cannot exceed 365 days'),
-  max_concurrent_jobs: z
-    .number()
-    .int('Must be a whole number')
-    .min(1, 'Must allow at least 1 concurrent job')
-    .max(100, 'Cannot exceed 100 concurrent jobs'),
-});
-
-export type AdvancedSettingsFormData = z.infer<typeof advancedSettingsSchema>;
-
 export const createApiKeySchema = z.object({
   name: z
     .string()
@@ -153,36 +54,6 @@ export const createApiKeySchema = z.object({
 });
 
 export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>;
-
-export const systemSettingsSchema = appearanceSettingsSchema.merge(advancedSettingsSchema);
-
-export type SystemSettingsFormData = z.infer<typeof systemSettingsSchema>;
-
-export const fullUserSettingsSchema = z.object({
-  email_notifications: z.boolean().optional(),
-  push_notifications: z.boolean().optional(),
-  workflow_alerts: z.boolean().optional(),
-  employee_updates: z.boolean().optional(),
-  system_maintenance: z.boolean().optional(),
-  marketing_emails: z.boolean().optional(),
-  weekly_reports: z.boolean().optional(),
-  instant_alerts: z.boolean().optional(),
-
-  two_factor_enabled: z.boolean().optional(),
-  session_timeout: z.number().int().min(15).max(1440).optional(),
-
-  theme: z.enum(['dark', 'light', 'auto']).optional(),
-  auto_save: z.boolean().optional(),
-  debug_mode: z.boolean().optional(),
-  analytics_enabled: z.boolean().optional(),
-
-  cache_size: z.enum(['256MB', '512MB', '1GB', '2GB', '4GB']).optional(),
-  backup_frequency: z.enum(['hourly', 'daily', 'weekly', 'monthly']).optional(),
-  retention_period: z.number().int().min(1).max(365).optional(),
-  max_concurrent_jobs: z.number().int().min(1).max(100).optional(),
-});
-
-export type FullUserSettingsFormData = z.infer<typeof fullUserSettingsSchema>;
 
 export function validateFormData<T>(
   schema: z.ZodSchema<T>,
