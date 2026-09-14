@@ -33,8 +33,6 @@ export type NativeMessageType =
   | 'APPROVE_CONTEXT_HANDOFF'
   | 'CANCEL_CONTEXT_HANDOFF'
   | 'RUN_PAGE_ACTIONS'
-  | 'CAPTURE_ELEMENT'
-  | 'GET_ELEMENT_INFO'
   | 'AUTO_FILL_JOB_APPLICATION'
   | 'QUEUE_MESSAGE'
   | 'CHAT_MESSAGE'
@@ -466,20 +464,6 @@ export interface RunPageActionsResponse {
   actionsPerformed?: number;
   duration?: number;
   screenshot?: string;
-  error?: string;
-}
-
-export interface CaptureElementMessage extends BaseMessage {
-  type: 'CAPTURE_ELEMENT';
-}
-
-export interface GetElementInfoMessage extends BaseMessage {
-  type: 'GET_ELEMENT_INFO';
-}
-
-export interface ElementInfoResponse {
-  success: boolean;
-  element?: Record<string, unknown>;
   error?: string;
 }
 
@@ -1024,8 +1008,6 @@ export type ExtensionMessage =
   | TabReadyMessage
   | SyncPageContextMessage
   | RunPageActionsMessage
-  | CaptureElementMessage
-  | GetElementInfoMessage
   | AutoFillJobApplicationMessage
   | QueueMessageMessage
   | ChatMessageMessage
@@ -1100,7 +1082,6 @@ export type ExtensionResponse =
   | GetCloudAuthTokenResponse
   | TabReadyResponse
   | RunPageActionsResponse
-  | ElementInfoResponse
   | AutoFillJobApplicationResponse
   | ChatMessageResponse
   | InPagePromptResponse

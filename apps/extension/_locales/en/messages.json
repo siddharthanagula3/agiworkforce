@@ -23,18 +23,6 @@
     "message": "Summarize this page",
     "description": "Context menu on the page background"
   },
-  "menuCaptureElement": {
-    "message": "Capture Element",
-    "description": "Context menu that screenshots the right-clicked element"
-  },
-  "menuGetElementInfo": {
-    "message": "Get Element Info",
-    "description": "Context menu that reports the right-clicked element's attributes"
-  },
-  "menuDiscoverWebmcpTools": {
-    "message": "Discover AI Tools on Page",
-    "description": "Context menu that scans the page for WebMCP tool declarations"
-  },
   "menuAddToTabGroup": {
     "message": "Add Tab to AGI Workforce Group",
     "description": "Context menu that moves the tab into the extension's tab group"

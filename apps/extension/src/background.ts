@@ -4530,9 +4530,6 @@ function setupContextMenu(): void {
     { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
     { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
     { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
-    { id: 'capture-element', title: t('menuCaptureElement'), contexts: ['all'] },
-    { id: 'get-element-info', title: t('menuGetElementInfo'), contexts: ['all'] },
-    { id: 'discover-webmcp-tools', title: t('menuDiscoverWebmcpTools'), contexts: ['all'] },
     { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
     // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
     // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
@@ -4552,62 +4549,7 @@ function setupContextMenu(): void {
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) return;
 
-    if (info.menuItemId === 'capture-element') {
-      chrome.tabs
-        .sendMessage(tab.id, {
-          type: 'CAPTURE_ELEMENT',
-        })
-        .catch((err: unknown) => {
-          logger.warn('Failed to send CAPTURE_ELEMENT to tab', err);
-        });
-    } else if (info.menuItemId === 'get-element-info') {
-      chrome.tabs
-        .sendMessage(tab.id, {
-          type: 'GET_ELEMENT_INFO',
-        })
-        .catch((err: unknown) => {
-          logger.warn('Failed to send GET_ELEMENT_INFO to tab', err);
-        });
-    } else if (info.menuItemId === 'discover-webmcp-tools') {
-      const discoveryTabId = tab.id;
-      const discoveryTabUrl = tab.url;
-      const navigationGeneration = currentWebMCPNavigationGeneration(discoveryTabId);
-      chrome.tabs.sendMessage(
-        discoveryTabId,
-        { type: 'WEBMCP_DISCOVER_TOOLS' },
-        (response: { tools?: unknown; url?: unknown } | undefined) => {
-          if (chrome.runtime.lastError) {
-            logger.warn('WebMCP discover failed', chrome.runtime.lastError.message);
-            return;
-          }
-          void chrome.tabs
-            .get(discoveryTabId)
-            .then((currentTab) => {
-              if (
-                typeof discoveryTabUrl !== 'string' ||
-                currentTab.url !== discoveryTabUrl ||
-                navigationGeneration !== currentWebMCPNavigationGeneration(discoveryTabId)
-              ) {
-                logger.debug('Discarded stale WebMCP context-menu discovery');
-                return;
-              }
-              const normalized = normalizeWebMCPToolsUpdate(
-                response?.tools,
-                response?.url,
-                discoveryTabUrl,
-              );
-              if (!normalized) {
-                logger.warn('WebMCP context-menu discovery returned invalid metadata');
-                return;
-              }
-              publishNormalizedWebMCPToolsUpdate(discoveryTabId, normalized, navigationGeneration);
-            })
-            .catch((error) => {
-              logger.debug('WebMCP context-menu tab lookup failed', error);
-            });
-        },
-      );
-    } else if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
+    if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
       try {
         const pending = createSelectionContextHandoff({
           selectedText: info.selectionText,
