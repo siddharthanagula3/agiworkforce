@@ -38,6 +38,7 @@ vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: (...args: unknown[]) => mocks.deleteStoredMediaObjects(...args),
 }));
 vi.mock('@/lib/server/object-storage', () => ({
+  copyPrivateObjectIfUnchanged: vi.fn(),
   deleteObject: (...args: unknown[]) => mocks.deleteObject(...args),
   isObjectStorageConfigured: () => mocks.objectStorageConfigured(),
   objectKeyFromPublicUrl: (value: string) =>

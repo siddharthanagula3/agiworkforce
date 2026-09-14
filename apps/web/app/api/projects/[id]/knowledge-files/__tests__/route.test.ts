@@ -51,6 +51,7 @@ vi.mock('@/lib/server/project-knowledge-extraction', () => ({
   ProjectKnowledgeExtractionError: MockProjectKnowledgeExtractionError,
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  getProjectKnowledgeObject: vi.fn(),
   deleteProjectKnowledgeObject: vi.fn(),
   sealProjectKnowledgeObject: mockSealProjectKnowledgeObject,
 }));
