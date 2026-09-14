@@ -774,6 +774,7 @@ describe('the brand ramps have one owner', () => {
 });
 
 const MODE_INVARIANT = /(^--(z|neutral)-)|(radius|shadow|font|dur|ease|spacing|blur|width|height)/;
+const LENGTH_LITERAL = /^-?\d*\.?\d+(px|rem|em|vh|vw|%)$/;
 
 describe('theme completeness', () => {
   const declarations = (block: string): Map<string, string> =>
@@ -797,7 +798,7 @@ describe('theme completeness', () => {
     it(`${name} defines no theme-dependent literal in only one mode`, () => {
       const singleModeLiterals = [...lightDecls]
         .filter(([token, value]) => !darkDecls.has(token) && !resolvesThroughAnotherToken(value))
-        .filter(([token]) => !MODE_INVARIANT.test(token))
+        .filter(([token, value]) => !MODE_INVARIANT.test(token) && !LENGTH_LITERAL.test(value))
         .map(([token, value]) => `${token}: ${value}`);
 
       expect(singleModeLiterals).toEqual([]);

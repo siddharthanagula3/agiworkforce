@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import { chromium, type Browser } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PRODUCT_ROUTE_PREFIXES } from '@agiworkforce/types/product-routes';
 
 const scriptsDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const webDir = dirname(scriptsDir);
@@ -29,12 +30,12 @@ let audit: AuditModule;
 
 function protectedRoutePrefixes(): string[] {
   const proxySource = readFileSync(join(webDir, 'proxy.ts'), 'utf8');
-  const matcher =
-    /const isProtectedAppRoute = (?:identityMiddleware\.)?createRouteMatcher\(\[([\s\S]*?)\]\)/.exec(
-      proxySource,
-    );
-  if (!matcher) throw new Error('isProtectedAppRoute route list not found in proxy.ts');
-  return [...matcher[1]!.matchAll(/'([^']+)'/g)].map((entry) => entry[1]!.replace(/\(\.\*\)$/, ''));
+  if (
+    !/isProtectedAppRoute = [^;]*routeMatcherPatterns\(PRODUCT_ROUTE_PREFIXES\)/.test(proxySource)
+  ) {
+    throw new Error('proxy.ts no longer builds isProtectedAppRoute from PRODUCT_ROUTE_PREFIXES');
+  }
+  return [...PRODUCT_ROUTE_PREFIXES];
 }
 
 beforeAll(async () => {
