@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detectPlatformFromUrl, runPlatformJobAutofill } from '../src/jobAutofill.runtime.js';
 
 const BASE_PROFILE = {
@@ -50,6 +50,66 @@ async function runAutofill(html, path, profile = BASE_PROFILE, options = {}) {
 }
 
 describe('runPlatformJobAutofill runtime', () => {
+  it('does not read a bare /application path as greenhouse', () => {
+    expect(detectPlatformFromUrl('https://careers.example.com/jobs/42/application')).toBe(
+      'unknown',
+    );
+    expect(detectPlatformFromUrl('https://boards.greenhouse.io/acme/jobs/42/application')).toBe(
+      'greenhouse',
+    );
+  });
+
+  it('asks before the generic flow clicks an apply button, and does not click when declined', async () => {
+    document.body.innerHTML = '<main><button type="button">Apply now</button></main>';
+    const clicked = vi.fn();
+    document.querySelector('button')!.addEventListener('click', clicked);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    const result = await runPlatformJobAutofill({}, { platform: 'generic', delayMs: 0 });
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(confirmSpy.mock.calls[0]?.[0]).toContain('Apply now');
+    expect(confirmSpy.mock.calls[0]?.[0]).toContain(window.location.host);
+    expect(clicked).not.toHaveBeenCalled();
+    expect(result.genericFlowStarted).toBe(false);
+  });
+
+  it('clicks the apply button once the user confirms', async () => {
+    document.body.innerHTML = '<main><button type="button">Apply now</button></main>';
+    const clicked = vi.fn();
+    document.querySelector('button')!.addEventListener('click', clicked);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    const result = await runPlatformJobAutofill({}, { platform: 'generic', delayMs: 0 });
+
+    expect(clicked).toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.genericFlowStarted).toBe(true);
+  });
+
+  it('asks before the submit sweep clicks a bare finish button', async () => {
+    document.body.innerHTML = `
+      <form>
+        <label for="portfolio">Portfolio URL</label>
+        <input id="portfolio" name="portfolio_url" required />
+      </form>
+      <button type="button">Finish</button>
+    `;
+    const clicked = vi.fn();
+    document.querySelector('button')!.addEventListener('click', clicked);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    const result = await runPlatformJobAutofill(
+      {},
+      { platform: 'generic', autoSubmit: true, delayMs: 0, maxSubmitSteps: 1 },
+    );
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(confirmSpy.mock.calls.at(-1)?.[0]).toContain('Finish');
+    expect(clicked).not.toHaveBeenCalled();
+    expect(result.submitted).toBe(false);
+  });
+
   it('detects greenhouse and workday URLs with broader domain coverage', () => {
     expect(detectPlatformFromUrl('https://boards.greenhouse.io/acme/jobs/123')).toBe('greenhouse');
     expect(
