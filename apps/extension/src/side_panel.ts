@@ -142,6 +142,17 @@ import {
   type BrowserToolsPanelAPI,
 } from './features/side-panel/browserToolsPanel';
 import {
+  buildProjectsDrawerSection,
+  PROJECTS_DRAWER_CSS,
+  type ActiveProjectSelection,
+  type ProjectsDrawerAPI,
+} from './features/side-panel/projectsDrawer';
+import {
+  buildArtifactsDrawerSection,
+  ARTIFACTS_DRAWER_CSS,
+  type ArtifactsDrawerAPI,
+} from './features/side-panel/artifactsDrawer';
+import {
   beginPairing,
   loadPairingState,
   storeBridgeSecret,
@@ -220,6 +231,40 @@ let refreshEffortUI: () => void = () => {
 };
 
 let openStoredConversation: (conversationId: string) => Promise<boolean> = async () => false;
+
+const ACTIVE_PROJECT_KEY = 'agi_active_project';
+const PROJECT_NAME_CACHE_KEY = 'agi_project_names';
+const MAX_CACHED_PROJECT_NAMES = 200;
+/**
+ * Names, not authority: the binding that matters is the project id on the
+ * conversation. This only lets a restored chat say which project it is in
+ * without a round trip for a list the drawer has already read.
+ */
+const projectNameById = new Map<string, string>();
+
+let refreshProjectChip: () => void = () => {
+  /* no-op until buildUI() installs the real implementation */
+};
+let adoptChatProject: (projectId: string | undefined) => void = () => {
+  /* no-op until buildUI() installs the real implementation */
+};
+
+function hydrateProjectNameCache(value: unknown): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  for (const [id, name] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof name !== 'string' || !name) continue;
+    if (projectNameById.size >= MAX_CACHED_PROJECT_NAMES) break;
+    projectNameById.set(id, name);
+  }
+}
+
+function readStoredActiveProject(value: unknown): ActiveProjectSelection | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const id = record['id'];
+  const name = record['name'];
+  return typeof id === 'string' && id && typeof name === 'string' && name ? { id, name } : null;
+}
 let historyRestoreInProgress = false;
 let historyRestoreToken = 0;
 let managedModelAccess: ManagedModelAccess | null = null;
@@ -463,6 +508,8 @@ export interface SharedSidePanelContext {
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
   reasoningEffort?: Effort;
+  activeProject: ActiveProjectSelection | null;
+  pendingProjectBinding?: string | null;
 }
 
 function createSharedSidePanelContext(): SharedSidePanelContext {
@@ -483,6 +530,7 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
     conversationGeneration: 0,
     managedCloudOwner: null,
     selectedModel: 'auto',
+    activeProject: null,
   };
 }
 
@@ -720,12 +768,22 @@ function persistMessages(): Promise<void> {
   if (!owner) return Promise.resolve();
   const conversationId = _ctx.conversationId;
   persistCurrentConversationOwner();
-  return upsertConversation(owner, conversationId, serializeMessagesForHistory(), {
-    selectedModel: _ctx.selectedModel,
-    currentModelKey: _ctx.currentModelKey,
-    previousTaskType: _ctx.previousTaskType,
-    effort: _ctx.reasoningEffort,
-  }).then((entry) => {
+  const projectBinding = _ctx.pendingProjectBinding;
+  return upsertConversation(
+    owner,
+    conversationId,
+    serializeMessagesForHistory(),
+    {
+      selectedModel: _ctx.selectedModel,
+      currentModelKey: _ctx.currentModelKey,
+      previousTaskType: _ctx.previousTaskType,
+      effort: _ctx.reasoningEffort,
+    },
+    projectBinding,
+  ).then((entry) => {
+    if (entry && _ctx.pendingProjectBinding === projectBinding) {
+      delete _ctx.pendingProjectBinding;
+    }
     if (
       entry &&
       conversationId === _ctx.conversationId &&
@@ -885,6 +943,7 @@ function clearStoredMessages(): void {
   historyRestoreToken += 1;
   _ctx.conversationGeneration += 1;
   _ctx.conversationId = createBrowserConversationId();
+  _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
   _ctx.selectedModel = 'auto';
@@ -947,6 +1006,9 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.currentStreamId = null;
   clearPendingPageContext();
   _ctx.conversationId = createBrowserConversationId();
+  _ctx.activeProject = null;
+  delete _ctx.pendingProjectBinding;
+  refreshProjectChip();
   _ctx.selectedModel = 'auto';
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
@@ -1105,6 +1167,47 @@ function injectStyles(): void {
       background: var(--agi-ext-accent) !important;
       color: var(--agi-ext-bg) !important;
       font-weight: 600;
+    }
+
+    /* ── Project chip ── */
+    #sp-project-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--agi-ext-surface);
+      border-bottom: 1px solid var(--agi-ext-border);
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    #sp-project-chip[hidden] { display: none; }
+    #sp-project-chip-label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #sp-project-chip-clear {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      line-height: 1;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 5px;
+      background: none;
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    #sp-project-chip-clear:hover {
+      color: var(--agi-ext-accent);
+      border-color: var(--agi-ext-accent);
+    }
+    #sp-project-chip-clear:focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
     }
 
     /* ── Header ── */
@@ -4285,7 +4388,11 @@ function injectStyles(): void {
         '\n' +
         CLOUD_RUNS_PANEL_CSS +
         '\n' +
-        BROWSER_TOOLS_PANEL_CSS,
+        BROWSER_TOOLS_PANEL_CSS +
+        '\n' +
+        PROJECTS_DRAWER_CSS +
+        '\n' +
+        ARTIFACTS_DRAWER_CSS,
     );
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
@@ -6249,6 +6356,71 @@ function buildUI(): void {
   header.appendChild(headerRight);
   document.body.appendChild(header);
 
+  const projectChip = el('div', { id: 'sp-project-chip', role: 'status', hidden: '' });
+  const projectChipLabel = el('span', { id: 'sp-project-chip-label' });
+  const projectChipClear = el(
+    'button',
+    {
+      type: 'button',
+      id: 'sp-project-chip-clear',
+      'aria-label': t('spProjectsChipStopUse'),
+      title: t('spProjectsChipStopUse'),
+    },
+    '\u00D7',
+  );
+  projectChip.appendChild(projectChipLabel);
+  projectChip.appendChild(projectChipClear);
+  document.body.appendChild(projectChip);
+
+  function renderProjectChip(): void {
+    const project = _ctx.activeProject;
+    if (!project) {
+      projectChip.hidden = true;
+      return;
+    }
+    projectChipLabel.textContent = t('spProjectsChip', [project.name]);
+    projectChip.hidden = false;
+  }
+
+  function rememberProjectName(project: ActiveProjectSelection): void {
+    projectNameById.set(project.id, project.name);
+    void chrome.storage.local
+      .set({ [PROJECT_NAME_CACHE_KEY]: Object.fromEntries(projectNameById) })
+      .catch(() => undefined);
+  }
+
+  function selectActiveProject(project: ActiveProjectSelection | null): void {
+    _ctx.activeProject = project;
+    _ctx.pendingProjectBinding = project?.id ?? null;
+    if (project) rememberProjectName(project);
+    void chrome.storage.local.set({ [ACTIVE_PROJECT_KEY]: project }).catch(() => undefined);
+    renderProjectChip();
+    void persistMessages().catch(() => undefined);
+  }
+
+  function adoptConversationProject(projectId: string | undefined): void {
+    if (!projectId) {
+      _ctx.activeProject = null;
+      renderProjectChip();
+      return;
+    }
+    const name = projectNameById.get(projectId);
+    _ctx.activeProject = name ? { id: projectId, name } : null;
+    renderProjectChip();
+  }
+
+  projectChipClear.addEventListener('click', () => selectActiveProject(null));
+  refreshProjectChip = renderProjectChip;
+  adoptChatProject = adoptConversationProject;
+  chrome.storage.local.get([ACTIVE_PROJECT_KEY, PROJECT_NAME_CACHE_KEY], (stored) => {
+    if (chrome.runtime.lastError) return;
+    hydrateProjectNameCache(stored[PROJECT_NAME_CACHE_KEY]);
+    const restored = readStoredActiveProject(stored[ACTIVE_PROJECT_KEY]);
+    if (!restored) return;
+    _ctx.activeProject = restored;
+    renderProjectChip();
+  });
+
   function formatHistoryDate(ts: number): string {
     const d = new Date(ts);
     const now = new Date();
@@ -6300,6 +6472,8 @@ function buildUI(): void {
       clearPendingPageContext();
       _ctx.conversationGeneration += 1;
       _ctx.conversationId = conversationOwner.conversationId;
+      adoptChatProject(entry.projectId);
+      if (conversationOwner.forked) _ctx.pendingProjectBinding = entry.projectId ?? null;
       activePersistenceEntry = conversationOwner.forked ? undefined : entry;
       updatePersistencePill();
       _ctx.selectedModel = normalizeModelId(entry.routing.selectedModel) ?? 'auto';
@@ -6397,6 +6571,8 @@ function buildUI(): void {
     void refreshDrawerPairingState();
     void refreshDrawerAllowlist();
     void refreshDrawerMemory();
+    void projectsDrawer.refresh();
+    void artifactsDrawer.refresh();
     void refreshDrawerStats();
     void refreshDrawerTabInfo();
     refreshTabGroupUI();
@@ -6734,6 +6910,15 @@ function buildUI(): void {
   });
   viewsSection.appendChild(pageLaunchBtn);
   drawerBody.appendChild(viewsSection);
+
+  const projectsDrawer: ProjectsDrawerAPI = buildProjectsDrawerSection({
+    getActiveProject: () => _ctx.activeProject,
+    setActiveProject: (project) => selectActiveProject(project),
+  });
+  drawerBody.appendChild(projectsDrawer.sectionEl);
+
+  const artifactsDrawer: ArtifactsDrawerAPI = buildArtifactsDrawerSection();
+  drawerBody.appendChild(artifactsDrawer.sectionEl);
 
   const toolsSection = el('div', { class: 'sp-drawer-section' });
   toolsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Tools'));
