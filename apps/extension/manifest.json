@@ -29,7 +29,7 @@
   ],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.agiworkforce.com https://*.agiworkforce.com https://agiworkforce.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://agiworkforce.com https://api.agiworkforce.com https://gateway.agiworkforce.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   },
   "background": {
     "service_worker": "src/background.js",
@@ -75,6 +75,5 @@
     "default_path": "src/side_panel.html"
   },
   "options_page": "src/options.html",
-  "minimum_chrome_version": "132",
-  "offline_enabled": false
+  "minimum_chrome_version": "132"
 }

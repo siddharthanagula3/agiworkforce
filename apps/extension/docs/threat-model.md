@@ -87,6 +87,15 @@ Extension pages use a restrictive CSP for scripts and objects and disallow
 framing. The current source CSP permits inline styles and `data:` images; code
 review must not assume those two classes are blocked.
 
+`connect-src` names each AGI origin exactly (`https://agiworkforce.com`,
+`https://api.agiworkforce.com`, `https://gateway.agiworkforce.com`) rather than
+a `https://*.agiworkforce.com` wildcard, so a preview, marketing or staging
+subdomain is not a reachable egress target even if something in the extension
+were persuaded to name one. The set must stay equal to
+`GATEWAY_URL_ALLOWLIST_EXACT` in [`background/policy.ts`](src/background/policy.ts);
+[`__tests__/manifest-contract.test.ts`](__tests__/manifest-contract.test.ts)
+fails the build when it is not.
+
 `connect-src` also allows `https://*.ingest.sentry.io` and
 `https://*.ingest.us.sentry.io` unconditionally. This is a static allowlist
 entry rather than a build-time or runtime-conditioned one: CSP is fixed at
