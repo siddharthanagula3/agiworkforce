@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render, within } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 
 const mockInsetBottom = 34;
@@ -102,9 +102,11 @@ jest.mock('../src/features/artifacts/store', () => ({
 }));
 
 jest.mock('../src/features/auth/store', () => ({
-  useAuthStore: (selector: (state: { clerkUserId: null }) => unknown) =>
-    selector({ clerkUserId: null }),
+  useAuthStore: (selector: (state: { clerkUserId: string }) => unknown) =>
+    selector({ clerkUserId: 'user_library_qa' }),
 }));
+
+jest.mock('@/services/api', () => ({ api: { get: jest.fn(), delete: jest.fn() } }));
 
 jest.mock('../src/features/auth/services/accountScopedUiState', () => ({
   captureAccountScopedUiState: () => ({ scope: 'local' }),
@@ -119,7 +121,27 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => ({
   ImageFullScreen: () => null,
 }));
 
+import { api } from '@/services/api';
 import { LibraryScreen } from '../src/features/library';
+
+const mockApi = api as unknown as { get: jest.Mock };
+
+const HOSTED_DOCUMENT = {
+  id: '22222222-2222-4222-8222-222222222222',
+  file_name: 'launch-plan.pdf',
+  mime_type: 'application/pdf',
+  kind: 'file',
+  byte_count: 2048,
+  uri: '/api/files/22222222-2222-4222-8222-222222222222',
+  surface: 'file',
+  previewable: false,
+  origin: 'uploaded',
+  source_surface: 'mobile',
+  provider: null,
+  model: null,
+  prompt: null,
+  created_at: '2026-07-30T10:04:00.000Z',
+};
 
 function testIDsInOrder(root: ReactTestInstance): string[] {
   const ids: string[] = [];
@@ -135,6 +157,18 @@ function testIDsInOrder(root: ReactTestInstance): string[] {
 }
 
 describe('Library bottom-anchored search', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApi.get.mockImplementation(async (path: string) => {
+      const query = new URL(`http://localhost${path}`).searchParams.get('q');
+      return {
+        items: !query || HOSTED_DOCUMENT.file_name.includes(query) ? [HOSTED_DOCUMENT] : [],
+        has_more: false,
+        next_offset: null,
+      };
+    });
+  });
+
   it('renders search below the grid, not between the chips and the grid', () => {
     const screen = render(<LibraryScreen />);
 
@@ -153,15 +187,21 @@ describe('Library bottom-anchored search', () => {
     );
   });
 
-  it('still filters the grid and clears from the moved field', () => {
+  it('still filters the grid and clears from the moved field', async () => {
     const screen = render(<LibraryScreen />);
 
-    expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    });
 
     fireEvent.changeText(screen.getByLabelText('Search library'), 'nothing matches this');
-    expect(screen.queryByText('launch-plan.pdf')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText('launch-plan.pdf')).toBeNull();
+    });
 
     fireEvent.press(screen.getByLabelText('Clear library search'));
-    expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    });
   });
 });
