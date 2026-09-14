@@ -1,4 +1,3 @@
-
 import { describe, expect, test } from 'vitest';
 import {
   ALLOWED_BRIDGE_HOSTS,
@@ -41,5 +40,10 @@ describe('L1 Security - Privacy Boundaries (gateway egress)', () => {
       expect(origin.startsWith('https://')).toBe(true);
       expect(validateGatewayUrl(origin)).toBe(origin);
     }
+  });
+
+  test('SECURITY: the staging gateway is not reachable from a shipped build', () => {
+    expect(GATEWAY_URL_ALLOWLIST_EXACT.has('https://staging-api.agiworkforce.com')).toBe(false);
+    expect(validateGatewayUrl('https://staging-api.agiworkforce.com')).toBeNull();
   });
 });
