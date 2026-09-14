@@ -390,7 +390,11 @@ mod tests {
         .unwrap();
         let registry = ProjectRegistry::load(config.path()).unwrap();
         assert_eq!(
-            registry.projects.get("/tmp/legacy").unwrap().cloud_project_id,
+            registry
+                .projects
+                .get("/tmp/legacy")
+                .unwrap()
+                .cloud_project_id,
             None
         );
     }

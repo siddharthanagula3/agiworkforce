@@ -138,7 +138,10 @@ mod tests {
     fn versions_compare_as_numbers_not_as_text() {
         assert!(version_greater("100", "99"));
         assert!(!version_greater("99", "100"));
-        assert!(version_greater("9223372036854775807", "9223372036854775806"));
+        assert!(version_greater(
+            "9223372036854775807",
+            "9223372036854775806"
+        ));
         assert!(!version_greater("7", "7"));
         assert!(version_greater("0007", "6"));
     }

@@ -160,7 +160,11 @@ impl MemoryCache {
 }
 
 fn normalize(content: &str) -> String {
-    content.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+    content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 fn truncate(value: &str, max_chars: usize) -> String {
@@ -276,7 +280,10 @@ impl<'a> MemorySync<'a> {
         Ok(merged)
     }
 
-    pub async fn push(&self, request: &MemoryPushRequest) -> Result<MemoryPushResponse, CloudError> {
+    pub async fn push(
+        &self,
+        request: &MemoryPushRequest,
+    ) -> Result<MemoryPushResponse, CloudError> {
         self.client.post(MEMORY_SYNC_PATH, request).await
     }
 }

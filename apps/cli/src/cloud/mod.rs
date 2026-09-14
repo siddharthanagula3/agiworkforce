@@ -101,8 +101,8 @@ impl CloudSession {
     }
 
     fn from_client(client: CloudClient) -> Result<Self, CloudError> {
-        let config_dir = CliConfig::config_dir()
-            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let config_dir =
+            CliConfig::config_dir().map_err(|error| CloudError::Transport(error.to_string()))?;
         let state = SyncState::load(&config_dir, client.owner());
         Ok(Self {
             client,
@@ -146,7 +146,8 @@ pub async fn sync_session(
                 project_id: None,
                 ..snapshot.clone()
             };
-            sync.push(&chat::build_push(&unfiled, &session.state)).await?
+            sync.push(&chat::build_push(&unfiled, &session.state))
+                .await?
         }
         Err(error) => return Err(error),
     };
@@ -180,9 +181,7 @@ pub async fn hosted_conversation(
 }
 
 /// Refresh the local project cache from the account and return it.
-pub async fn refresh_projects(
-    privacy: PrivacyMode,
-) -> Result<projects::ProjectCache, CloudError> {
+pub async fn refresh_projects(privacy: PrivacyMode) -> Result<projects::ProjectCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
     let sync = projects::ProjectsSync::new(&session.client);
     let response = sync.pull_all(&session.state.projects.cursor).await?;
@@ -360,8 +359,7 @@ mod tests {
 
         assert_eq!(account_memory_context(PrivacyMode::Local, dir.path()), "");
         assert_eq!(account_memory_context(PrivacyMode::Byok, dir.path()), "");
-        assert!(account_memory_context(PrivacyMode::Managed, dir.path())
-            .contains("prefers tabs"));
+        assert!(account_memory_context(PrivacyMode::Managed, dir.path()).contains("prefers tabs"));
     }
 
     #[test]
