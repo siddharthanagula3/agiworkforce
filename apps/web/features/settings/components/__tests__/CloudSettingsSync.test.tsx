@@ -51,6 +51,10 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
     preferences.savePreferenceNamespace(namespace, patch, options),
 }));
 
+vi.mock('@/lib/client/csrf', () => ({
+  getCsrfToken: vi.fn(async () => 'test-csrf-token'),
+}));
+
 const { CloudSettingsSync } = await import('@/features/settings/components/CloudSettingsSync');
 
 async function settle() {
@@ -189,7 +193,7 @@ describe('signing in', () => {
     expect(preferences.savePreferenceNamespace).toHaveBeenCalledWith(
       'language',
       { locale: 'es' },
-      { merge: true },
+      { merge: true, keepalive: true },
     );
   });
 
@@ -241,7 +245,7 @@ describe('changing a control on web', () => {
     expect(preferences.savePreferenceNamespace).toHaveBeenCalledWith(
       'appearance',
       { accentColor: 'blue' },
-      { merge: true },
+      { merge: true, keepalive: true },
     );
   });
 
@@ -294,7 +298,7 @@ describe('changing a control on web', () => {
     expect(preferences.savePreferenceNamespace).toHaveBeenLastCalledWith(
       'appearance',
       { textSize: 'small' },
-      { merge: true },
+      { merge: true, keepalive: true },
     );
   });
 });
