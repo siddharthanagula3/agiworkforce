@@ -31,7 +31,7 @@ describe('the CLI mirror of the browser bridge contract', () => {
   function rustStringConstant(name: string): string {
     const match = rust.match(new RegExp(`const ${name}: &str = "([^"]*)";`));
     expect(match, `${name} must be declared in ${RUST_MIRROR_PATH}`).toBeTruthy();
-    return match![1];
+    return match?.[1] ?? '';
   }
 
   function rustNumberConstant(name: string): number {
