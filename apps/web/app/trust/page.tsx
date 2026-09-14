@@ -151,12 +151,12 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 118 of 206 database-backed hosted API route files. Counted against the 206 route files that reach the database; the other 88 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 88 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-12.',
+      'Partial: 119 of 207 database-backed hosted API route files. Counted against the 207 route files that reach the database; the other 88 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 88 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-14.',
   },
   {
     label: 'Authentication and CSRF',
     value:
-      'Implemented. Thirteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-12.',
+      'Implemented. Thirteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-14.',
   },
   {
     label: 'Rate limiting',
@@ -171,7 +171,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Security event logging',
     value:
-      'Implemented: nine event types, written by a single module. Seven are failure and abuse events: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, admin action, failed CSRF validation, and invalid signature. Two are not failures and were missing from this row until 2026-09-12: a content notice filed against a generation, and the retention purge recording its own run so a window that did not hold is visible. There is no hosted per-tool activity journal; the desktop keeps one locally. As of 2026-09-12.',
+      'Implemented: nine event types, written by a single module. Seven are failure and abuse events: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, admin action, failed CSRF validation, and invalid signature. Two are not failures and were missing from this row until 2026-09-12: a content notice filed against a generation, and the retention purge recording its own run so a window that did not hold is visible. There is no hosted per-tool activity journal; the desktop keeps one locally. As of 2026-09-14.',
   },
   {
     label: 'Account erasure',
