@@ -666,6 +666,53 @@ extension flows above run end to end.
 **Impact** FEATURE-BLOCKING (native surfaces cannot be exercised end to end)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [Routing] The zero-price OpenRouter router on paid plans
+
+**Why founder assistance is required**
+Whether a paying customer's prompt may reach an upstream that trains on it is a
+data-handling decision, not an engineering one.
+**Exact action**
+Decide one of: keep the privacy-safe default shipped on 2026-09-14 (an explicit
+pick of the zero-price router on any plan sends `data_collection: deny`, so
+training-permitted upstreams are excluded and the router may answer "no
+endpoints" when only those are online); allow training-permitted upstreams for
+explicit picks on paid plans; or remove the router from the paid-plan pickers.
+Also change the company OpenRouter account's privacy settings at
+openrouter.ai/settings/privacy if the first option should succeed more often.
+**Where** `packages/ai/model-registry/catalog/routing-policies.json`,
+`packages/ai/providers/openrouter/src/provider-routing.ts`,
+`docs/research/free-inference-tos-workbook-2026-09-01.md`, the OpenRouter dashboard.
+**Needed input** One sentence naming the option.
+**How to verify completion** A paid-plan pick of the free router answers, and the
+registry contract test still refuses `free_` slots on paid tiers.
+**What remains after founder action** Nothing for the default; a one-line policy
+and provider change for either alternative.
+**Impact** NON-BLOCKING (the picker entry works privacy-safe by default)
+**Status** DECISION REQUESTED
+
+## [Mobile QA] A native sign-in path for the QA account
+
+**Why founder assistance is required**
+The QA user signs in with Google only (no password, a real Gmail inbox nobody on
+the team reads), and the phone cannot mint the Clerk ticket the web and Chrome
+passes use. Every mobile Cloud flow (sync, projects, account rows, shared links)
+therefore stays unverified on the simulator, and setting a credential on an
+account the founder owns is the founder's call.
+**Exact action**
+Either sign in once on the booted iPhone 17 Pro simulator with the QA Google
+account when the mobile fix package lands, or give the QA user a password in the
+Clerk dashboard (Users, the QA user, Set password) and put it in
+`apps/web/.env.local` as `MOBILE_QA_PASSWORD` (gitignored; never in the repo).
+**Where** Clerk dashboard for the development instance; the simulator.
+**Needed input** One of the two actions above.
+**How to verify completion** The mobile Cloud sign-in screen accepts the account
+and the Settings rows resolve to the account's real values.
+**What remains after founder action** Run the mobile Cloud pass (sync, projects,
+account data) and record it in the release doc's verification matrix.
+**Impact** VERIFICATION-BLOCKING (mobile Cloud mode only; Local mode and every
+other client are unaffected)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
 ## [Durability] Ship the world transport fix and end the two stranded runs
 
 **Why founder assistance is required**
