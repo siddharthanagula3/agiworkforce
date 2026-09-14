@@ -2266,10 +2266,19 @@ html[data-desktop-host^='electron-darwin'] [data-sidebar-region='rail'] {
   padding-top: var(--agi-window-title-strip);
 }
 
-/* The signed-out screens carry no header row, so the shell reserves the strip
-   for them and the brand mark steps aside the way the sidebar wordmark does. */
-html[data-desktop-host^='electron-darwin'] [data-auth-brand] {
+/* A screen with no header row of its own, the signed-out pages and the route
+   messages the shell shows in place of the marketing site, still has a brand
+   mark where the window buttons are, so it steps aside the way the sidebar
+   wordmark does. */
+html[data-desktop-host^='electron-darwin'] [data-window-brand] {
   left: var(--agi-window-title-strip-inset);
+}
+
+/* The server cannot know it is answering the shell, so it renders the browser
+   version of a route and the page swaps after hydration. This is what stops a
+   frame of the marketing site appearing in the app window in between. */
+html[data-desktop-host] [data-surface='web'] {
+  display: none;
 }
 
 html[data-desktop-host^='electron-darwin'] [data-sidebar-region='header-first-row'],
