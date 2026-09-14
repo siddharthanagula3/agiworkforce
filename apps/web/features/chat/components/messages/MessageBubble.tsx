@@ -79,6 +79,7 @@ import {
   type ArtifactManifest,
   type ComputeSession,
   type GeneratedFile,
+  type ProjectFileCitation,
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
@@ -96,6 +97,7 @@ import {
   hasCanonicalToolActivity,
   hasOpenApprovalDecision,
   hasStreamError,
+  ProjectFileCitations,
   resolveModelEscalation,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
@@ -499,6 +501,8 @@ interface Message {
       content: string;
       messageType?: string;
     }>;
+    /** Project knowledge passages this turn read, each with where it came from. */
+    projectSources?: ProjectFileCitation[];
     /** Web search citations from server-managed tools (e.g., Anthropic web_search) */
     citations?: Array<{
       type?: string;
@@ -2535,6 +2539,15 @@ const MessageBubbleComponent = function MessageBubble({
                 </button>
               </div>
             )}
+
+          {!isUser && (message.metadata?.projectSources?.length ?? 0) > 0 && (
+            <div className="mt-2">
+              <ProjectFileCitations
+                citations={message.metadata?.projectSources ?? []}
+                answerText={cleanedContent}
+              />
+            </div>
+          )}
 
           {!isUser && !message.isStreaming && searchSources.length > 0 && (
             <div className="mt-2 flex justify-end">
