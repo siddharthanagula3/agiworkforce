@@ -240,7 +240,11 @@ the control-driven web pass.
   stdio transport with the continuation streamed as deltas.
 - Protocol 8 widened additively: typed turn failures with a code, provider,
   retryable flag and action; thread summaries carrying git branch, worktree
-  root, client and a desktop source.
+  root, client and a desktop source; `model/list` naming the models this host
+  can reach, with the failure's code and offer on the ones it cannot, derived
+  from the same credential lookup, local discovery and classifier a turn uses
+  (0907f8787). The Rust CI lane now runs the app-server and protocol crates'
+  own tests, which had been silently broken since protocol-2.
 - VS Code: editor, selection and problems attached to every turn; the editor
   utilities run on the local session; approvals as one card in the transcript
   scoped per tool for the session; tool rows with command, output and exit
