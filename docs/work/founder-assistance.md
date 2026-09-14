@@ -959,3 +959,32 @@ again.
 **Impact** VERIFICATION-BLOCKING (the VS Code sidebar leg of the browser tool
 and every native-prompt proof)
 **Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
+## [Product] The CLI's OpenAI sign-in runs a ChatGPT-subscription OAuth flow
+
+**Why founder assistance is required**
+`agi login openai` authenticates "with OpenAI (ChatGPT Plus/Pro subscription)"
+by opening an OAuth authorization on OpenAI's server with a client id and a
+simplified-flow flag that belong to OpenAI's own Codex CLI, then asking the
+user to paste the callback code. Whether AGI Workforce may use another
+vendor's OAuth client to draw on a user's ChatGPT subscription is an
+authorization and terms question, and it sits against the product's own model
+(users pay AGI for a plan; a vendor API key is the optional "Your key" path).
+On 2026-09-14 the founder said VS Code and the CLI should run on the AGI Pro
+or Max subscription rather than ask for an OpenAI sign-in.
+**Exact action**
+Decide whether the ChatGPT-subscription flow stays. Recommendation: remove it,
+keep `agi login openai` as API-key entry for "Your key", and let `agi login`
+with no provider sign in to the AGI account. Until the decision, no client
+offer and no CLI copy leads to that flow (protocol-4 in the release doc).
+**Where** `apps/cli/src/oauth.rs` (the provider entry and the authorize URL),
+`apps/cli/src/auth.rs` (the ChatGPT client id and the subscription check).
+**Needed input** One decision: remove, or keep with the founder's own
+authorization on record.
+**How to verify completion** Either the two files no longer carry the ChatGPT
+client id and the subscription copy, and `agi login openai` asks for an API
+key, or a dated note records the authorization to keep the flow.
+**What remains after founder action** Nothing on removal beyond the commit;
+on keeping it, a release note stating the flow's basis.
+**Impact** NON-BLOCKING for the product; a terms exposure while it ships.
+**Status** BLOCKED, FOUNDER DECISION REQUIRED
