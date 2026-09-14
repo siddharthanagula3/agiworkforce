@@ -28,6 +28,7 @@ import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
 import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './clerkAuth';
 import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
+import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
 
 export const FREE_TRIAL_MODEL: string = getRoutingSlotModel('general_fast');
 
@@ -46,7 +47,7 @@ export const MANAGED_CHAT_MAX_SSE_FRAME_CHARS = 1_048_576;
 export const MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS = 4_194_304;
 const MANAGED_CHAT_MAX_ERROR_BODY_CHARS = 65_536;
 
-export const FREE_TRIAL_GATEWAY = 'https://agiworkforce.com';
+export const FREE_TRIAL_GATEWAY: string = configuredAgiWebOrigin() ?? DEFAULT_AGI_WEB_ORIGIN;
 export const FREE_TRIAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/chat/completions`;
 export const MANAGED_APPROVAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}${TOOL_APPROVAL_RESUME_PATH}`;
 export const MANAGED_MODELS_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/models`;
