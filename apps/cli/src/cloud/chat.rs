@@ -261,7 +261,9 @@ pub fn apply_push_response(response: &ChatPushResponse, state: &mut SyncState) {
     }
     for conflict in &response.conflicts.conversations {
         if let Some(current) = conflict.current.as_ref() {
-            state.conversations.record(&conflict.id, &current.server_version);
+            state
+                .conversations
+                .record(&conflict.id, &current.server_version);
         }
     }
     for conflict in &response.conflicts.messages {
@@ -359,7 +361,9 @@ impl<'a> ChatSync<'a> {
         };
         loop {
             let page = self.pull(&cursor).await?;
-            merged.conversations.extend(page.conversations.iter().cloned());
+            merged
+                .conversations
+                .extend(page.conversations.iter().cloned());
             merged.messages.extend(page.messages.iter().cloned());
             let advanced = page.cursor != cursor;
             cursor = page.cursor.clone();
@@ -447,10 +451,7 @@ mod tests {
             message_id_for(&conversation, 3),
             message_id_for(&conversation, 4)
         );
-        assert_ne!(
-            message_id_for(&conversation, 3),
-            message_id_for("other", 3)
-        );
+        assert_ne!(message_id_for(&conversation, 3), message_id_for("other", 3));
         assert!(Uuid::parse_str(&message_id_for(&conversation, 0)).is_ok());
     }
 
@@ -682,7 +683,10 @@ mod tests {
         assert_eq!(json["protocolVersion"], 2);
         assert!(json["conversations"][0]["baseVersion"].is_string());
         assert!(json["conversations"][0]["projectId"].is_null());
-        assert_eq!(json["messages"][0]["conversationId"], json["conversations"][0]["id"]);
+        assert_eq!(
+            json["messages"][0]["conversationId"],
+            json["conversations"][0]["id"]
+        );
         assert_eq!(json["messages"][0]["metadata"]["surface"], "cli");
     }
 }

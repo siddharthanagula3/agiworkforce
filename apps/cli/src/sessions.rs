@@ -581,10 +581,14 @@ pub fn import_hosted_session(
     session.model = model.map(str::to_string);
     session.title = Some(title.to_string());
     session.created_by = Some("cli".to_string());
-    session.routing_authority = Some(crate::platform::runtime::session::ManagedSessionRoutingAuthority {
-        privacy_mode: crate::platform::runtime::session::PrivacyMode::Managed,
-        provider: crate::models::provider_persistence_name(&crate::models::Provider::ManagedCloud),
-    });
+    session.routing_authority = Some(
+        crate::platform::runtime::session::ManagedSessionRoutingAuthority {
+            privacy_mode: crate::platform::runtime::session::PrivacyMode::Managed,
+            provider: crate::models::provider_persistence_name(
+                &crate::models::Provider::ManagedCloud,
+            ),
+        },
+    );
     session.version = crate::platform::runtime::session::MANAGED_SESSION_VERSION;
     session.touch();
     save_session_to_default_path(&conn.base_dir, &session)?;
