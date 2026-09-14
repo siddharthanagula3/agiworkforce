@@ -106,6 +106,10 @@ import {
   type TurnStartTicker,
 } from './turnStartProgress';
 import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
+import {
+  PROJECT_FILE_CITATIONS_HEADER,
+  readProjectSourcesHeaderValue,
+} from '@/lib/chat-project-sources';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
@@ -1117,6 +1121,9 @@ async function driveDeviceSteps(
       tool_call_id: step.toolCallId,
       content: outcome.content,
       is_error: outcome.isError,
+      ...(outcome.image
+        ? { image: { base64: outcome.image.base64, mime_type: outcome.image.mimeType } }
+        : {}),
     });
   }
 
@@ -1213,6 +1220,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     updateMessage(assistantMessageId, { routeLane: streamRouteLane }, conversationId);
   } else if (!isTurnContinuation) {
     updateMessage(assistantMessageId, { routeLane: undefined }, conversationId);
+  }
+  const streamProjectSources = readProjectSourcesHeaderValue(
+    response.headers.get(PROJECT_FILE_CITATIONS_HEADER),
+  );
+  if (streamProjectSources.length > 0) {
+    store.setProjectSources(assistantMessageId, streamProjectSources, conversationId);
+  } else if (!isTurnContinuation) {
+    store.setProjectSources(assistantMessageId, undefined, conversationId);
   }
   const streamSecretRedactionCount = response.headers.get(SECRET_REDACTION_COUNT_HEADER);
   if (streamSecretRedactionCount) {
@@ -1796,6 +1811,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
     }
+    if (streamProjectSources.length > 0) {
+      metadata.projectSources = streamProjectSources;
+    }
     // A provider that gave us character positions has already had its markers
     // renumbered onto the DELIVERED source order by withProviderCitationMarkers,
     // so the citation list must be that same order or [2] opens whatever happens
@@ -1881,6 +1899,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         metadata.agentActivity ||
         (metadata.generatedFiles?.length ?? 0) > 0 ||
         metadata.searchResults ||
+        (metadata.projectSources?.length ?? 0) > 0 ||
         metadata.codeExecutionResult ||
         metadata.research ||
         (metadata.interactiveCards?.length ?? 0) > 0 ||
