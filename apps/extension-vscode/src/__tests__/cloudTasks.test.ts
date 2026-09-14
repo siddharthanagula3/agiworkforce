@@ -28,6 +28,7 @@ import {
   cloudRunQuietLabel,
   readCloudRunSteps,
 } from '../features/cloud-tasks/cloudRunPresentation';
+import { CLOUD_TASK_ROW_ACTIONS } from '../features/surfaces';
 
 const NOW = Date.parse('2026-09-13T12:00:00.000Z');
 
@@ -395,21 +396,16 @@ describe('cloud task inline approval', () => {
 
   it('contributes both inline actions on a run that is waiting for one', () => {
     const manifest = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8')) as {
-      contributes: {
-        commands: { command: string; icon?: string }[];
-        menus: { 'view/item/context': { command: string; when: string; group?: string }[] };
-      };
+      contributes: { commands: { command: string; icon?: string }[] };
     };
     const declared = manifest.contributes.commands.map((entry) => entry.command);
-    const inline = manifest.contributes.menus['view/item/context'].filter(
-      (entry) =>
-        entry.when === 'view == agi-workforce.cloudTasks && viewItem == cloudRunPendingApproval',
-    );
 
     for (const command of [APPROVE_CLOUD_TASK_COMMAND, REJECT_CLOUD_TASK_COMMAND]) {
       expect(declared).toContain(command);
       expect(manifest.contributes.commands.find((e) => e.command === command)?.icon).toBeTruthy();
-      expect(inline.find((entry) => entry.command === command)?.group).toMatch(/^inline/);
+      const action = CLOUD_TASK_ROW_ACTIONS.find((entry) => entry.command === command);
+      expect(action?.matches('cloudRunPendingApproval')).toBe(true);
+      expect(action?.matches('cloudRun')).toBe(false);
     }
   });
 });

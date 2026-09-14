@@ -10,33 +10,16 @@ import { type DiffDecorationProvider } from '../providers/diffDecorationProvider
 import { WorkspaceIndexer } from '../data/workspaceIndexer';
 import { MemoryTreeProvider } from '../memory/memoryTreeProvider';
 import { AccountMemoryStore, setAccountMemoryStore } from '../memory/accountMemoryStore';
+import { CloudTasksTreeProvider, resolveCloudAgentRunClient } from '../features/cloud-tasks';
+import { SchedulesTreeProvider, resolveSchedulesClient } from '../features/schedules';
+import { ProjectsTreeProvider, resolveProjectsWorkspace } from '../features/projects';
 import {
-  CLOUD_TASKS_VIEW_ID,
-  CloudTasksTreeProvider,
-  resolveCloudAgentRunClient,
-} from '../features/cloud-tasks';
-import {
-  SCHEDULES_VIEW_ID,
-  SchedulesTreeProvider,
-  resolveSchedulesClient,
-} from '../features/schedules';
-import {
-  PROJECTS_VIEW_ID,
-  ProjectsTreeProvider,
-  resolveProjectsWorkspace,
-} from '../features/projects';
-import {
-  ARTIFACTS_VIEW_ID,
   ArtifactContentProvider,
   ARTIFACT_SCHEME,
   ArtifactsTreeProvider,
   resolveArtifactsWorkspace,
 } from '../features/artifacts';
-import {
-  CONNECTORS_VIEW_ID,
-  ConnectorsTreeProvider,
-  resolveConnectorsClient,
-} from '../features/connectors';
+import { ConnectorsTreeProvider, resolveConnectorsClient } from '../features/connectors';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 
 export interface ChatState {
@@ -77,16 +60,12 @@ export function setupChat(
     vscode.window.registerWebviewViewProvider(SidebarProvider.viewId, sidebarProvider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
-    vscode.window.registerTreeDataProvider('agi-workforce.conversations', conversationTreeProvider),
     conversationTreeProvider,
   );
 
   const contextPanelProvider = new ContextPanelProvider(context);
   setContextPanelInstance(contextPanelProvider);
-  context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('agi-workforce.contextPanel', contextPanelProvider),
-    contextPanelProvider,
-  );
+  context.subscriptions.push(contextPanelProvider);
 
   const accountMemoryStore = new AccountMemoryStore(
     context.globalState,
@@ -96,7 +75,6 @@ export function setupChat(
   setAccountMemoryStore(accountMemoryStore);
   const memoryTreeProvider = new MemoryTreeProvider(accountMemoryStore);
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('agi-workforce.memory', memoryTreeProvider),
     memoryTreeProvider,
     accountMemoryStore,
     new vscode.Disposable(() => {
@@ -108,32 +86,12 @@ export function setupChat(
   const cloudTasksTreeProvider = new CloudTasksTreeProvider(() =>
     resolveCloudAgentRunClient(context.secrets),
   );
-  const cloudTasksView = vscode.window.createTreeView(CLOUD_TASKS_VIEW_ID, {
-    treeDataProvider: cloudTasksTreeProvider,
-  });
-  cloudTasksTreeProvider.setAutoRefreshEnabled(cloudTasksView.visible);
-  context.subscriptions.push(
-    cloudTasksView.onDidChangeVisibility((event) => {
-      cloudTasksTreeProvider.setAutoRefreshEnabled(event.visible);
-    }),
-    cloudTasksView,
-    cloudTasksTreeProvider,
-  );
+  context.subscriptions.push(cloudTasksTreeProvider);
 
   const schedulesTreeProvider = new SchedulesTreeProvider(() =>
     resolveSchedulesClient(context.secrets),
   );
-  const schedulesView = vscode.window.createTreeView(SCHEDULES_VIEW_ID, {
-    treeDataProvider: schedulesTreeProvider,
-  });
-  schedulesTreeProvider.setAutoRefreshEnabled(schedulesView.visible);
-  context.subscriptions.push(
-    schedulesView.onDidChangeVisibility((event) => {
-      schedulesTreeProvider.setAutoRefreshEnabled(event.visible);
-    }),
-    schedulesView,
-    schedulesTreeProvider,
-  );
+  context.subscriptions.push(schedulesTreeProvider);
 
   const projectsTreeProvider = new ProjectsTreeProvider(async () => {
     const resolution = await resolveProjectsWorkspace(context.secrets);
@@ -141,17 +99,7 @@ export function setupChat(
       ? { status: 'signed-out' }
       : { status: 'ready', client: resolution.workspace.projects };
   });
-  const projectsView = vscode.window.createTreeView(PROJECTS_VIEW_ID, {
-    treeDataProvider: projectsTreeProvider,
-  });
-  projectsTreeProvider.setAutoRefreshEnabled(projectsView.visible);
-  context.subscriptions.push(
-    projectsView.onDidChangeVisibility((event) => {
-      projectsTreeProvider.setAutoRefreshEnabled(event.visible);
-    }),
-    projectsView,
-    projectsTreeProvider,
-  );
+  context.subscriptions.push(projectsTreeProvider);
 
   const artifactContentProvider = new ArtifactContentProvider();
   const artifactsTreeProvider = new ArtifactsTreeProvider(async () => {
@@ -160,16 +108,8 @@ export function setupChat(
       ? { status: 'signed-out' }
       : { status: 'ready', client: resolution.workspace.index };
   });
-  const artifactsView = vscode.window.createTreeView(ARTIFACTS_VIEW_ID, {
-    treeDataProvider: artifactsTreeProvider,
-  });
-  artifactsTreeProvider.setAutoRefreshEnabled(artifactsView.visible);
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(ARTIFACT_SCHEME, artifactContentProvider),
-    artifactsView.onDidChangeVisibility((event) => {
-      artifactsTreeProvider.setAutoRefreshEnabled(event.visible);
-    }),
-    artifactsView,
     artifactsTreeProvider,
     artifactContentProvider,
   );
@@ -177,17 +117,7 @@ export function setupChat(
   const connectorsTreeProvider = new ConnectorsTreeProvider(() =>
     resolveConnectorsClient(context.secrets),
   );
-  const connectorsView = vscode.window.createTreeView(CONNECTORS_VIEW_ID, {
-    treeDataProvider: connectorsTreeProvider,
-  });
-  connectorsTreeProvider.setAutoRefreshEnabled(connectorsView.visible);
-  context.subscriptions.push(
-    connectorsView.onDidChangeVisibility((event) => {
-      connectorsTreeProvider.setAutoRefreshEnabled(event.visible);
-    }),
-    connectorsView,
-    connectorsTreeProvider,
-  );
+  context.subscriptions.push(connectorsTreeProvider);
 
   const indexer = new WorkspaceIndexer(context);
   context.subscriptions.push(...indexer.registerFileWatcher());

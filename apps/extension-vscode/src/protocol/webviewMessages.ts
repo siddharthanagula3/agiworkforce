@@ -153,6 +153,31 @@ const proposeDiff = z.object({
 
 const clearActiveProject = z.object({ type: z.literal('clearActiveProject') });
 
+const openSurface = z.object({
+  type: z.literal('openSurface'),
+  payload: z.object({ surfaceId: z.string().min(1).max(64) }),
+});
+
+const requestSessions = z.object({
+  type: z.literal('requestSessions'),
+  payload: z.object({ source: z.enum(['local', 'cloud']) }),
+});
+
+const openSessionRow = z.object({
+  type: z.literal('openSessionRow'),
+  payload: z.object({
+    id: z.string().min(1).max(200),
+    source: z.enum(['local', 'cloud']),
+  }),
+});
+
+const requestSlashCommands = z.object({ type: z.literal('requestSlashCommands') });
+
+const runSlashCommand = z.object({
+  type: z.literal('runSlashCommand'),
+  payload: z.object({ name: z.string().min(1).max(120) }),
+});
+
 const removePendingAttachment = z.object({
   type: z.literal('removePendingAttachment'),
   payload: z.object({ id: z.string().min(1).max(200) }),
@@ -198,6 +223,11 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   attachFiles,
   removePendingAttachment,
   clearActiveProject,
+  openSurface,
+  requestSessions,
+  openSessionRow,
+  requestSlashCommands,
+  runSlashCommand,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;
