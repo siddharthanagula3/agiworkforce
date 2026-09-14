@@ -7,7 +7,6 @@
     "message": "Capture current page",
     "description": "chrome://extensions/shortcuts label for the capture_page command"
   },
-
   "menuAskAgi": {
     "message": "Ask AGI Workforce about \"%s\"",
     "description": "Context menu on a text selection. %s is Chrome's own selection substitution and must survive translation."
@@ -40,7 +39,6 @@
     "message": "Add Tab to AGI Workforce Group",
     "description": "Context menu that moves the tab into the extension's tab group"
   },
-
   "spNext": {
     "message": "Next",
     "description": "First-run wizard primary button, used when a step declares no label of its own"
@@ -97,7 +95,6 @@
     "message": "Could not update the current tab group. Try again.",
     "description": "Fallback error after Chrome rejects a tab-group change"
   },
-
   "spPairingIdle": {
     "message": "Not paired",
     "description": "Desktop pairing status before any pairing attempt"
@@ -150,7 +147,6 @@
     "message": "Save Bridge Token",
     "description": "Button that stores the operator-supplied desktop bridge token"
   },
-
   "spAllowlistNoSite": {
     "message": "No site to add on this page",
     "description": "Automation allowlist row when the active tab has no addable origin"
@@ -163,7 +159,6 @@
     "message": "Add",
     "description": "Button that adds the active origin to the automation allowlist"
   },
-
   "spMemoryDeleteConfirm": {
     "message": "Confirm?",
     "description": "Memory row delete button waiting for the second click"
@@ -172,15 +167,16 @@
     "message": "Delete",
     "description": "Memory row delete button in its resting state"
   },
-
   "spBridgeUrlNotAllowed": {
     "message": "Only local URLs ($HOSTS$) are allowed",
     "description": "Error shown when the desktop bridge URL points outside the allowed local hosts",
     "placeholders": {
-      "hosts": { "content": "$1", "example": "localhost, 127.0.0.1" }
+      "hosts": {
+        "content": "$1",
+        "example": "localhost, 127.0.0.1"
+      }
     }
   },
-
   "spCloudSignIn": {
     "message": "Sign in to AGI Cloud",
     "description": "Primary button of the signed-out cloud panel"
@@ -237,7 +233,6 @@
     "message": "A",
     "description": "Avatar initial when the profile carries none"
   },
-
   "spBillingPastDue": {
     "message": "Payment is past due. Update billing to restore Chrome access.",
     "description": "Quota row for a past_due subscription"
@@ -250,7 +245,10 @@
     "message": "This subscription is $STATUS$. Manage billing to restore Chrome access.",
     "description": "Quota row for any other non-entitled subscription status",
     "placeholders": {
-      "status": { "content": "$1", "example": "incomplete expired" }
+      "status": {
+        "content": "$1",
+        "example": "incomplete expired"
+      }
     }
   },
   "spBillingPaused": {
@@ -265,20 +263,28 @@
     "message": "Billing",
     "description": "Header badge while a paid subscription needs attention"
   },
-
   "spQuotaCloudUsage": {
     "message": "Cloud: $USAGE$",
     "description": "Quota row when no reset time is known",
     "placeholders": {
-      "usage": { "content": "$1", "example": "42% left" }
+      "usage": {
+        "content": "$1",
+        "example": "42% left"
+      }
     }
   },
   "spQuotaCloudUsageWithReset": {
     "message": "Cloud: $USAGE$ · $RESETS$",
     "description": "Quota row with the remaining allowance and when it resets",
     "placeholders": {
-      "usage": { "content": "$1", "example": "42% left" },
-      "resets": { "content": "$2", "example": "resets in 3 days" }
+      "usage": {
+        "content": "$1",
+        "example": "42% left"
+      },
+      "resets": {
+        "content": "$2",
+        "example": "resets in 3 days"
+      }
     }
   },
   "spQuotaPaidPlanRequired": {
@@ -309,7 +315,6 @@
     "message": "Your Managed Cloud usage limit has been reached.",
     "description": "Composer gate shown before send when no shared usage remains"
   },
-
   "spGateChecking": {
     "message": "Checking your AGI Cloud account…",
     "description": "Composer chat gate before the account has been read"
@@ -354,7 +359,10 @@
     "message": "Your paid subscription is $STATUS$.",
     "description": "Composer chat gate for any other non-entitled subscription status",
     "placeholders": {
-      "status": { "content": "$1", "example": "incomplete expired" }
+      "status": {
+        "content": "$1",
+        "example": "incomplete expired"
+      }
     }
   },
   "spGateViewPlans": {
@@ -393,7 +401,6 @@
     "message": "Failed to save shortcut",
     "description": "Save-shortcut name field placeholder after the save was rejected"
   },
-
   "spAboutBrowserPage": {
     "message": "Browser page",
     "description": "Drawer footer label for a browser-internal tab that has no meaningful hostname"
@@ -402,7 +409,6 @@
     "message": "Unknown",
     "description": "Drawer footer label when the active tab URL cannot be parsed"
   },
-
   "spShortcutSaving": {
     "message": "Saving...",
     "description": "Create-shortcut button while the shortcut is being stored"
@@ -415,7 +421,6 @@
     "message": " Play",
     "description": "Shortcut row replay button. The leading space stands in for the icon beside it."
   },
-
   "spTaskCreate": {
     "message": "Create Task",
     "description": "Scheduled-task form submit button in its resting state"
@@ -428,7 +433,6 @@
     "message": "The scheduled task could not be created.",
     "description": "Scheduled-task form error when the background reports no reason"
   },
-
   "spGroupTabAdd": {
     "message": "+ Group Tab",
     "description": "Workflows button that moves the active tab into the AGI tab group"
@@ -445,7 +449,6 @@
     "message": "Removed current tab from the AGI Workforce group.",
     "description": "Success notice after the active tab leaves AGI's tab group"
   },
-
   "spContextChipFallback": {
     "message": "page",
     "description": "Composer page-context chip before a hostname is known"
@@ -458,7 +461,6 @@
     "message": "The attached page text was dropped because this tab moved to another page. Attach the page again to include it.",
     "description": "Composer notice after the attached page context stopped matching the active page"
   },
-
   "spAutonomyAskFirst": {
     "message": "Ask first",
     "description": "Autonomy chip while every browser action is confirmed first"
@@ -483,7 +485,6 @@
     "message": "Permission mode: full access",
     "description": "Autonomy chip accessible name while the agent may act without asking"
   },
-
   "spContextBtnAttached": {
     "message": "Page context attached, click to detach",
     "description": "Composer page-context button tooltip while the page is attached"
@@ -532,20 +533,28 @@
     "message": "Continue, step $STEP$ of $TOTAL$",
     "description": "First-run onboarding primary button accessible name on a non-final step",
     "placeholders": {
-      "step": { "content": "$1", "example": "2" },
-      "total": { "content": "$2", "example": "5" }
+      "step": {
+        "content": "$1",
+        "example": "2"
+      },
+      "total": {
+        "content": "$2",
+        "example": "5"
+      }
     }
   },
   "spOnboardingDismissAria": {
     "message": "Dismiss onboarding",
     "description": "First-run onboarding primary button accessible name on the final step"
   },
-
   "spEffortButton": {
-    "message": "Advanced · $EFFORT$",
+    "message": "$EFFORT$",
     "description": "Composer reasoning-effort button",
     "placeholders": {
-      "effort": { "content": "$1", "example": "High" }
+      "effort": {
+        "content": "$1",
+        "example": "High"
+      }
     }
   },
   "spEffortAuto": {
@@ -560,17 +569,22 @@
     "message": "Reasoning effort: $VALUE$",
     "description": "Composer reasoning-effort button accessible name while an effort is selected",
     "placeholders": {
-      "value": { "content": "$1", "example": "High" }
+      "value": {
+        "content": "$1",
+        "example": "High"
+      }
     }
   },
   "spEffortAriaUnavailable": {
     "message": "Reasoning effort unavailable. $REASON$",
     "description": "Composer reasoning-effort button accessible name while no effort can be chosen",
     "placeholders": {
-      "reason": { "content": "$1", "example": "This model has a fixed reasoning budget." }
+      "reason": {
+        "content": "$1",
+        "example": "This model has a fixed reasoning budget."
+      }
     }
   },
-
   "spHistoryDeleteFailed": {
     "message": "Could not delete this chat. Try again.",
     "description": "Conversation history error after the account deletion could not be queued"
@@ -595,7 +609,6 @@
     "message": "That chat could not be opened. Please try again.",
     "description": "Conversation history error after restore fails"
   },
-
   "spAttachmentAdding": {
     "message": "Adding images… Send will be available when they are ready.",
     "description": "Composer attachment status while selected images are being read"
@@ -620,7 +633,6 @@
     "message": "This page could not be captured. Try again on a regular website tab.",
     "description": "Composer error when Chrome cannot capture a screenshot"
   },
-
   "spPageAssistantOverlay": {
     "message": "Page assistant overlay",
     "description": "Settings label for the compact in-page assistant"
@@ -649,7 +661,6 @@
     "message": "One prompt and response at a time. Open the side panel for saved conversations.",
     "description": "Settings disclosure explaining the in-page assistant is not a chat thread"
   },
-
   "spWorkflowLoadFailed": {
     "message": "Saved workflows could not be loaded. Please try again.",
     "description": "Workflows status when shortcut listing fails"
@@ -661,7 +672,12 @@
   "spWorkflowRunning": {
     "message": "Running $NAME$…",
     "description": "Workflows status while a workflow is replaying",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spWorkflowRunningButton": {
     "message": "Running…",
@@ -670,37 +686,72 @@
   "spWorkflowRunFailed": {
     "message": "$NAME$ could not run. Please try again.",
     "description": "Workflows status after replay fails",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spWorkflowCompleted": {
     "message": "$NAME$ completed.",
     "description": "Workflows status after replay completes",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spWorkflowCompletedOpen": {
     "message": "$NAME$ completed and its result is open.",
     "description": "Workflows status after a prompt workflow result opens",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spWorkflowCompletedOpenFailed": {
     "message": "$NAME$ completed, but its saved result could not be opened.",
     "description": "Workflows status when replay completes but its result cannot open",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spWorkflowDeleting": {
     "message": "Deleting $NAME$…",
     "description": "Workflows status while a shortcut or task is being deleted",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spWorkflowDeleted": {
     "message": "$NAME$ deleted.",
     "description": "Workflows status after a shortcut or task is deleted",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spWorkflowDeleteFailed": {
     "message": "$NAME$ could not be deleted. Please try again.",
     "description": "Workflows status after a shortcut or task deletion fails",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spRecordingPrivacySaving": {
     "message": "Saving recording privacy preference…",
@@ -721,44 +772,83 @@
   "spTaskEnableAria": {
     "message": "Enable scheduled task $NAME$",
     "description": "Accessible name for a disabled scheduled task toggle",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spTaskDisableAria": {
     "message": "Disable scheduled task $NAME$",
     "description": "Accessible name for an enabled scheduled task toggle",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spTaskEnabling": {
     "message": "Enabling $NAME$…",
     "description": "Workflows status while a scheduled task is enabled",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spTaskDisabling": {
     "message": "Disabling $NAME$…",
     "description": "Workflows status while a scheduled task is disabled",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spTaskEnableFailed": {
     "message": "$NAME$ could not be enabled. Please try again.",
     "description": "Workflows status after enabling a task fails",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spTaskDisableFailed": {
     "message": "$NAME$ could not be disabled. Please try again.",
     "description": "Workflows status after disabling a task fails",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spTaskEnabled": {
     "message": "$NAME$ enabled.",
     "description": "Workflows status after a task is enabled",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
   "spTaskDisabled": {
     "message": "$NAME$ disabled.",
     "description": "Workflows status after a task is disabled",
-    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   },
-
   "spQuickMode": {
     "message": "Quick",
     "description": "Composer toggle that trades reasoning depth for latency"
