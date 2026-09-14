@@ -64,6 +64,7 @@ import {
 import type { ContextAttachmentKind } from '../../protocol/webviewMessages';
 import { openPathReference, type PathReferenceTarget } from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
+import { clearActiveCloudProject, getActiveCloudProject } from '../projects/activeProject';
 import {
   buildWorkspaceReferenceInputs,
   isWorkspaceFileReference,
@@ -155,7 +156,8 @@ export type WebviewToExtMessage =
         }>;
       };
     }
-  | { type: 'removePendingAttachment'; payload: { id: string } };
+  | { type: 'removePendingAttachment'; payload: { id: string } }
+  | { type: 'clearActiveProject' };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
@@ -180,6 +182,7 @@ export type ExtToWebviewMessage =
       payload: { files: Array<WorkspaceFileReference & { label: string }> };
     }
   | { type: 'conversationCleared' }
+  | { type: 'activeProject'; payload: { name: string | null } }
   | {
       type: 'recentConversations';
       payload: {
@@ -572,6 +575,7 @@ export class ChatStateManager {
 
         await this.refreshAccountPresentation();
         await this.pushRecentConversations();
+        this.pushActiveProject();
         if (this._loadedConversation !== undefined && this._thread !== undefined) {
           this._postLoadedConversation();
           this._postProviderBadgeForSession(
@@ -580,6 +584,15 @@ export class ChatStateManager {
           );
           this._postSessionBoundary(this._thread.trustMode, this._thread.provider);
         }
+        break;
+      }
+
+      case 'clearActiveProject': {
+        if (this._workspaceState !== undefined) {
+          await clearActiveCloudProject(this._workspaceState);
+        }
+        this.pushActiveProject();
+        await vscode.commands.executeCommand('agi-workforce.refreshProjects');
         break;
       }
 
@@ -1214,6 +1227,12 @@ export class ChatStateManager {
 
   public showOnboarding(): void {
     this._post({ type: 'showOnboarding' });
+  }
+
+  public pushActiveProject(): void {
+    const active =
+      this._workspaceState === undefined ? undefined : getActiveCloudProject(this._workspaceState);
+    this._post({ type: 'activeProject', payload: { name: active?.name ?? null } });
   }
 
   public async pushRecentConversations(): Promise<void> {
