@@ -430,6 +430,9 @@ pub(super) async fn handle_slash_command(
                 return SlashResult::Voice(lang.to_string());
             }
         }
+        "/artifacts" => {
+            output::print_block(&crate::cloud::artifacts::slash(session.privacy_mode, arg).await);
+        }
         "/image" | "/imagine" => match arg {
             "" => output::print_info(
                 "/image <prompt> draws an image on your AGI Workforce account and saves it to \
