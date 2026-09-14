@@ -69,6 +69,8 @@ vi.mock('../runtime/filesystemService', () => ({
   writeTextFile: vi.fn(),
 }));
 vi.mock('../runtime/gitService', () => ({ readWorkspaceGit: vi.fn() }));
+const reportShellIdentity = vi.fn();
+const syncDeveloperAccounts = vi.fn(async () => undefined);
 vi.mock('../runtime/localInferenceService', () => ({
   listLocalServers,
   listLocalModels,
@@ -83,6 +85,12 @@ vi.mock('../runtime/localModelSettingsStore', () => ({
   readLocalModelSettings,
   readLocalBaseUrl: vi.fn(),
   writeLocalModelSettings,
+}));
+
+vi.mock('../shellIdentity', () => ({ reportShellIdentity }));
+vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  syncDeveloperAccounts,
 }));
 
 const { dispatch } = await import('../runtime/dispatcher');
@@ -509,5 +517,28 @@ describe('the browser capability prompt', () => {
     const { scope, question } = await ask();
     expect(scope).toEqual({ kind: 'global' });
     expect(question.subject).toBeUndefined();
+  });
+});
+
+describe('the account the shell hands its app-servers', () => {
+  it('passes the renderer account on and resyncs every running app-server', async () => {
+    const response = await dispatch(window, 'developer_account_report', {
+      signedIn: true,
+      email: 'qa@agiworkforce.com',
+    });
+
+    expect(response).toEqual({ ok: true, value: true });
+    expect(reportShellIdentity).toHaveBeenCalledExactlyOnceWith({
+      signedIn: true,
+      email: 'qa@agiworkforce.com',
+    });
+    expect(syncDeveloperAccounts).toHaveBeenCalledOnce();
+  });
+
+  it('passes a sign-out on with no account attached to it', async () => {
+    await dispatch(window, 'developer_account_report', { signedIn: false });
+
+    expect(reportShellIdentity).toHaveBeenCalledExactlyOnceWith({ signedIn: false, email: null });
+    expect(syncDeveloperAccounts).toHaveBeenCalledOnce();
   });
 });

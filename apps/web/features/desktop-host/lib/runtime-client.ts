@@ -349,6 +349,13 @@ export function readDeveloperRuntimeStatus(): Promise<DeveloperRuntimeStatus> {
   return invoke<DeveloperRuntimeStatus>('developer_runtime_status');
 }
 
+export function reportDesktopAccount(signedIn: boolean, email: string | null): Promise<boolean> {
+  return invoke<boolean>('developer_account_report', {
+    signedIn,
+    ...(email === null ? {} : { email }),
+  });
+}
+
 export function listDeveloperModels(
   rootId: string,
   options: { refresh?: boolean } = {},

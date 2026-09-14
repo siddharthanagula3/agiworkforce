@@ -32,6 +32,7 @@ vi.mock('node:fs', () => ({
 vi.mock('node:os', () => ({ default: { homedir: () => '/Users/qa' }, homedir: () => '/Users/qa' }));
 vi.mock('../runtime/workspaceStore', () => ({ listRoots, getRoot }));
 vi.mock('../runtime/gitService', () => ({ readWorkspaceGit }));
+vi.mock('../config', () => ({ CLOUD_APP_ORIGIN: 'http://localhost:3100' }));
 
 type Responder = (method: string, params: Record<string, unknown>) => unknown;
 
@@ -136,7 +137,13 @@ function defaultResponder(method: string): unknown {
   return undefined;
 }
 
-async function loadService(responder: Responder = defaultResponder) {
+async function loadService(
+  responder: Responder = defaultResponder,
+  accountBridge?: {
+    readShellIdentity: () => Promise<{ signedIn: boolean; email: string | null } | null>;
+    approveDeviceCode: (userCode: string) => Promise<void>;
+  },
+) {
   vi.resetModules();
   const children: FakeChild[] = [];
   const events: Array<{ rootId: string; event: DeveloperSessionEvent }> = [];
@@ -157,6 +164,7 @@ async function loadService(responder: Responder = defaultResponder) {
     emit: (rootId, event) => events.push({ rootId, event }),
     resolveBinary: () => 'agi',
     spawn: spawn as never,
+    ...(accountBridge ? { accountBridge } : {}),
   });
 
   return { service, children, events, spawn };
@@ -186,6 +194,150 @@ describe('developer session runtime', () => {
     );
   });
 
+  it('points the app-server at the origin the shell itself is signed in to', async () => {
+    const { service, spawn } = await loadService();
+
+    await service.listDeveloperSessions();
+
+    expect(spawn).toHaveBeenCalledWith(
+      'agi',
+      ['app-server'],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          AGIWORKFORCE_API_BASE: 'http://localhost:3100',
+          AGI_AUTH_BASE: 'http://localhost:3100/api',
+        }),
+      }),
+    );
+  });
+
+  it('signs a new app-server in as the shell account and refreshes its models', async () => {
+    let signedIn = false;
+    const asked: string[] = [];
+    const approveDeviceCode = vi.fn(async () => undefined);
+    const { service } = await loadService(
+      (method, params) => {
+        asked.push(method);
+        if (method === 'account/status') return { signedIn, cached: false, source: 'cli' };
+        if (method === 'account/login')
+          return {
+            loginId: 'login-1',
+            verificationUrl: 'http://localhost:3100/auth/device',
+            userCode: 'QRST-9876',
+          };
+        if (method === 'account/login/wait') {
+          signedIn = true;
+          return { outcome: 'completed', account: { signedIn: true } };
+        }
+        return defaultResponder(method, params);
+      },
+      {
+        readShellIdentity: async () => ({ signedIn: true, email: 'qa@agiworkforce.com' }),
+        approveDeviceCode,
+      },
+    );
+
+    await service.listDeveloperSessions();
+    await service.syncDeveloperAccounts();
+
+    expect(approveDeviceCode).toHaveBeenCalledExactlyOnceWith('QRST-9876');
+    expect(asked).toContain('account/login/wait');
+    expect(asked.filter((method) => method === 'model/list')).toHaveLength(1);
+    expect((await service.readDeveloperRuntimeStatus()).accountSyncError).toBeNull();
+  });
+
+  it('signs every running app-server out when the shell signs out', async () => {
+    const asked: string[] = [];
+    const { service } = await loadService(
+      (method, params) => {
+        asked.push(method);
+        if (method === 'account/logout') return null;
+        return defaultResponder(method, params);
+      },
+      {
+        readShellIdentity: async () => ({ signedIn: false, email: null }),
+        approveDeviceCode: async () => undefined,
+      },
+    );
+
+    await service.listDeveloperSessions();
+    await service.syncDeveloperAccounts();
+
+    expect(asked).toContain('account/logout');
+    expect(asked).not.toContain('account/login');
+  });
+
+  it('reports a refused approval on the CLI row and leaves the app-server running', async () => {
+    const { service } = await loadService(
+      (method, params) => {
+        if (method === 'account/status') return { signedIn: false, cached: false, source: 'cli' };
+        if (method === 'account/login')
+          return {
+            loginId: 'login-1',
+            verificationUrl: 'http://localhost:3100/auth/device',
+            userCode: 'QRST-9876',
+          };
+        return defaultResponder(method, params);
+      },
+      {
+        readShellIdentity: async () => ({ signedIn: true, email: 'qa@agiworkforce.com' }),
+        approveDeviceCode: async () => {
+          throw new Error('Device sign-in is turned off for this account.');
+        },
+      },
+    );
+
+    await service.listDeveloperSessions();
+    await service.syncDeveloperAccounts();
+
+    const status = await service.readDeveloperRuntimeStatus();
+
+    expect(status.available).toBe(true);
+    expect(status.accountSyncError).toBe('Device sign-in is turned off for this account.');
+    expect((await service.listDeveloperSessions()).groups[0]?.unavailable).toBeUndefined();
+  });
+
+  it('refreshes every folder once the account changed, not only the one that signed in', async () => {
+    const second: WorkspaceRoot = { ...root, id: 'root-2', path: '/approved/other', name: 'other' };
+    listRoots.mockReturnValue([root, second]);
+    getRoot.mockImplementation((id) => (id === second.id ? second : root));
+    let signedIn = false;
+    const refreshedPerChild: number[] = [];
+    const { service, children } = await loadService(
+      (method, params) => {
+        if (method === 'account/status') return { signedIn, cached: false, source: 'cli' };
+        if (method === 'account/login')
+          return {
+            loginId: 'login-1',
+            verificationUrl: 'http://localhost:3100/auth/device',
+            userCode: 'QRST-9876',
+          };
+        if (method === 'account/login/wait') {
+          signedIn = true;
+          return { outcome: 'completed', account: { signedIn: true } };
+        }
+        return defaultResponder(method, params);
+      },
+      {
+        readShellIdentity: async () => ({ signedIn: true, email: 'qa@agiworkforce.com' }),
+        approveDeviceCode: async () => undefined,
+      },
+    );
+
+    await service.listDeveloperSessions();
+    await service.syncDeveloperAccounts();
+
+    for (const child of children) {
+      refreshedPerChild.push(
+        child.written.filter(
+          (entry) => entry.method === 'model/list' && entry.params['refresh'] === true,
+        ).length,
+      );
+    }
+    expect(children).toHaveLength(2);
+    expect(refreshedPerChild.every((count) => count >= 1)).toBe(true);
+  });
+
   it('reads the CLI it would start, with its version and where it lives', async () => {
     const { service } = await loadService();
 
@@ -197,6 +349,7 @@ describe('developer session runtime', () => {
       version: '1.7.1',
       path: '~/.cargo/bin/agi',
       hint: null,
+      accountSyncError: null,
     });
   });
 
