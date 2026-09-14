@@ -87,6 +87,16 @@ pub struct DefaultConfig {
     #[serde(default = "default_approval_mode")]
     pub approval_mode: String,
 
+    /// Permission posture applied when no flag or client names one:
+    /// `default`, `plan`, `acceptEdits` or `dontAsk`.
+    ///
+    /// `bypassPermissions` is deliberately not storable here. A persisted
+    /// setting that disables every approval would follow a synced dotfile or a
+    /// shared checkout onto machines whose owner never chose it; bypass stays a
+    /// per-run flag or a per-turn choice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_mode: Option<String>,
+
     /// Sandbox mode: off, read-only, workspace, full-auto.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sandbox_mode: Option<String>,
@@ -161,6 +171,7 @@ impl DefaultConfig {
             fast_model: None,
             reasoning_effort: None,
             approval_mode: default_approval_mode(),
+            permission_mode: None,
             sandbox_mode: None,
             review_model: None,
             cloud_model: None,
@@ -578,6 +589,9 @@ impl CliConfig {
         // Merge reasoning_effort if set
         if other.default.reasoning_effort.is_some() {
             self.default.reasoning_effort = other.default.reasoning_effort.clone();
+        }
+        if other.default.permission_mode.is_some() {
+            self.default.permission_mode = other.default.permission_mode.clone();
         }
         // Merge sandbox_mode if set
         if other.default.sandbox_mode.is_some() {
