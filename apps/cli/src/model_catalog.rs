@@ -2306,9 +2306,7 @@ mod tests {
     #[test]
     fn no_hardcoded_model_ids_in_tui() {
         let tui_app_src = include_str!("tui/tui_app.rs");
-        let cost_hud_src = include_str!("tui/cost_hud.rs");
         assert_source_has_no_catalog_model_literals("tui_app.rs", tui_app_src);
-        assert_source_has_no_catalog_model_literals("cost_hud.rs", cost_hud_src);
     }
 
     // ── New tests for the 4 hardcoded-model-id violation fixes ──────────────

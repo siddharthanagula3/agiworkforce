@@ -605,8 +605,7 @@ impl TuiApp {
         spinner_frame(self.spinner_tick)
     }
 
-    /// AGI Agent loading verb, stable within a turn, rotating across turns.
-    /// Our own words; deliberately not copied from any reference CLI.
+    /// AGI Agent loading verb shown beside the spinner.
     fn loading_verb(&self) -> &'static str {
         loading_verb_for(self.session.turn_count)
     }
@@ -1100,20 +1099,7 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
         .split(area);
 
     let ctx = FrameCtx::from_app(app);
-    // Live cost HUD, drawn as the header block's own right-aligned title so it
-    // composes with the top border instead of painting over it.
-    let hud = super::cost_hud::CostHud {
-        in_tokens: app.session.total_input_tokens,
-        out_tokens: app.session.total_output_tokens,
-        cache_read: app.session.total_cache_read_tokens,
-        cache_creation: app.session.total_cache_creation_tokens,
-        total_usd: app.session.cost_ledger.total_usd,
-        reasoning_tokens: app.session.total_reasoning_tokens,
-        context_used: app.session.total_input_tokens as u64
-            + app.session.total_output_tokens as u64,
-        context_window: crate::model_catalog::context_window(&app.model_name) as u64,
-    };
-    render_header(frame, chunks[0], &ctx, Some(&hud));
+    render_header(frame, chunks[0], &ctx);
     render_chat(frame, chunks[1], &ctx);
     render_input(frame, chunks[2], app);
     render_status_bar(frame, chunks[3], &ctx);
@@ -1178,7 +1164,7 @@ fn draw_turn_chrome(frame: &mut ratatui::Frame, ctx: &FrameCtx) -> Rect {
         ])
         .split(area);
 
-    render_header(frame, chunks[0], ctx, None);
+    render_header(frame, chunks[0], ctx);
     render_chat(frame, chunks[1], ctx);
 
     let hint = Paragraph::new(Line::from(Span::styled(
@@ -1205,27 +1191,21 @@ fn spinner_frame(tick: u8) -> &'static str {
     FRAMES[(tick as usize) % FRAMES.len()]
 }
 
-/// AGI loading verb for a given turn, stable within a turn, rotating across.
-fn loading_verb_for(turn_count: u32) -> &'static str {
-    const VERBS: &[&str] = &[
-        "Synthesizing",
-        "Architecting",
-        "Orchestrating",
-        "Reasoning",
-        "Computing",
-        "Composing",
-        "Analyzing",
-        "Assembling",
-        "Crafting",
-        "Deliberating",
-        "Formulating",
-        "Strategizing",
-        "Calibrating",
-        "Resolving",
-        "Distilling",
-        "Engineering",
-    ];
-    VERBS[(turn_count as usize) % VERBS.len()]
+/// AGI loading verb shown beside the spinner: one plain, steady word, the same
+/// register Claude Code and Codex use, not a rotating vocabulary.
+fn loading_verb_for(_turn_count: u32) -> &'static str {
+    "Thinking"
+}
+
+/// Append a post-tool-call continuation chunk to the buffered reply. A
+/// continuation that resumes mid-sentence needs nothing; one that starts a
+/// fresh thought after a tool call needs a paragraph break, or it reads as
+/// "I'll read the file.First line:" with no separator at all.
+fn append_continuation_chunk(buf: &mut String, chunk: &str) {
+    if !buf.is_empty() && !buf.ends_with(char::is_whitespace) {
+        buf.push_str("\n\n");
+    }
+    buf.push_str(chunk);
 }
 
 /// Context-window usage percent (0..=100) for a model + token counts.
@@ -1265,7 +1245,6 @@ struct FrameCtx<'a> {
     privacy_mode: crate::agent::PrivacyMode,
     mode: InteractionMode,
     effort_label: &'a str,
-    sandbox_type: Option<crate::sandbox::SandboxType>,
     cost_str: String,
     /// Transient notice shown ahead of the optional status-bar fields.
     notice: Option<&'a str>,
@@ -1296,13 +1275,7 @@ impl<'a> FrameCtx<'a> {
             privacy_mode: app.session.privacy_mode,
             mode: app.mode,
             effort_label: app.effort.label(),
-            sandbox_type: app.sandbox_type,
-            cost_str: crate::output::format_accumulated_cost(
-                app.session.total_input_tokens,
-                app.session.total_output_tokens,
-                app.session.cost_ledger.total_usd,
-                provider_access_mode(&app.session.provider),
-            ),
+            cost_str: crate::output::format_cost_compact(app.session.cost_ledger.total_usd),
             notice: app.live_notice(),
         }
     }
@@ -1318,13 +1291,8 @@ impl TuiApp {
     }
 }
 
-fn render_header(
-    frame: &mut ratatui::Frame,
-    area: Rect,
-    ctx: &FrameCtx,
-    hud: Option<&super::cost_hud::CostHud>,
-) {
-    use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_danger, ui_muted};
+fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
+    use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_muted};
 
     let mut spans = vec![
         Span::styled(
@@ -1352,62 +1320,34 @@ fn render_header(
         ));
     }
 
-    spans.push(Span::raw(" │ "));
-    spans.push(Span::styled(
-        format!("{}% ctx", ctx.context_percent),
-        Style::default().fg(if ctx.context_percent > 80 {
-            ui_danger()
-        } else {
-            ui_muted()
-        }),
-    ));
-
     let mut header_text = Line::from(spans);
     sanitize_terminal_line(&mut header_text);
-
-    let tokens_text = format!(
-        " {}in / {}out │ Turns: {} ",
-        crate::output::format_tokens(ctx.total_input_tokens),
-        crate::output::format_tokens(ctx.total_output_tokens),
-        ctx.turn_count,
-    );
 
     // The header and the transcript are one continuous frame: the header owns
     // the top border, the transcript the sides, and the row between them is a
     // tee-junction divider, never a `└┘` that closes a box the content then
-    // carries on inside.
-    let mut block = Block::default()
+    // carries on inside. Tokens, cost, context percentage and turns render
+    // once, in the footer status line; this block carries no title and the
+    // divider no label.
+    let block = Block::default()
         .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
         .border_style(Style::default().fg(ui_muted()));
 
-    if let Some(hud) = hud {
-        let hud_line = super::cost_hud::title_line(hud, ctx.model_name);
-        if header_text.width() + hud_line.width() + 4 <= area.width as usize {
-            block = block.title_top(hud_line);
-        }
-    }
-
     frame.render_widget(Paragraph::new(header_text).block(block), area);
-    render_header_divider(frame, area, &tokens_text);
+    render_header_divider(frame, area);
 }
 
 /// Draw the header/transcript divider across the last row of the header area.
-fn render_header_divider(frame: &mut ratatui::Frame, area: Rect, tokens_text: &str) {
+fn render_header_divider(frame: &mut ratatui::Frame, area: Rect) {
     use crate::tui::terminal_palette::ui_muted;
     if area.height < 2 || area.width < 2 {
         return;
     }
     let style = Style::default().fg(ui_muted());
     let inner = area.width as usize - 2;
-    let label = if display_width(tokens_text) <= inner {
-        tokens_text
-    } else {
-        ""
-    };
     let line = Line::from(vec![
         Span::styled("├", style),
-        Span::styled(label.to_string(), style),
-        Span::styled("─".repeat(inner - display_width(label)), style),
+        Span::styled("─".repeat(inner), style),
         Span::styled("┤", style),
     ]);
     let row = Rect {
@@ -1426,12 +1366,14 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     if ctx.chat_messages.is_empty() && !ctx.is_loading {
         use crate::design_system::AccessMode;
         // Access-mode colors match the status-bar chip so the visual identity is
-        // consistent across the app.
-        let (mode_label, mode_color) = match ctx.access_mode {
-            AccessMode::Local => ("local · on-device & private", ui_success()),
-            AccessMode::Byok => ("your own key · BYOK", ui_accent()),
+        // consistent across the app. The word is the same "Local" / "Your key" /
+        // "Managed" trust-boundary vocabulary the status chip and VS Code use.
+        let (mode_tail, mode_color) = match ctx.access_mode {
+            AccessMode::Local => ("on-device & private", ui_success()),
+            AccessMode::Byok => ("billed by your provider", ui_accent()),
             AccessMode::Cloud => ("AGI cloud subscription", ui_cloud()),
         };
+        let mode_label = format!("{} · {mode_tail}", ctx.access_mode.trust_word());
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
@@ -1450,7 +1392,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             Span::styled(mode_label, Style::default().fg(mode_color)),
         ]));
         lines.push(Line::from(Span::styled(
-            "  Choose Local, BYOK, or Cloud with /model.",
+            "  Choose Local, Your key, or Managed with /model.",
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(""));
@@ -1459,7 +1401,11 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands · Shift+Tab to switch modes · Esc closes, then clears, then quits.",
+            "  Type / for commands · Shift+Tab to switch modes.",
+            Style::default().fg(ui_muted()),
+        )));
+        lines.push(Line::from(Span::styled(
+            "  Esc closes a panel or clears the composer; press it twice on an empty composer to quit.",
             Style::default().fg(ui_muted()),
         )));
     } else {
@@ -1945,41 +1891,15 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     };
     let cost_str = ctx.cost_str.clone();
 
-    // Sandbox indicator: positive when a sandbox backend is active, critical
-    // otherwise. Abbreviated at narrow widths, never omitted: a user who cannot
-    // see the sandbox state cannot tell what a tool call is allowed to touch.
-    let (sandbox_full, sandbox_short, sandbox_color) = match ctx.sandbox_type {
-        Some(crate::sandbox::SandboxType::MacosSeatbelt) => {
-            ("sandbox: seatbelt", "sb:seatbelt", ui_success())
-        }
-        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => {
-            ("sandbox: bwrap", "sb:bwrap", ui_success())
-        }
-        Some(crate::sandbox::SandboxType::LinuxLandlock) => {
-            ("sandbox: landlock", "sb:landlock", ui_success())
-        }
-        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", "no sandbox", ui_danger()),
-    };
-    let sandboxed = sandbox_color == ui_success();
-    let sandbox_indicator = move |tier: usize| match tier {
-        0 => sandbox_full,
-        1 => sandbox_short,
-        _ if sandboxed => "sb✓",
-        _ => "sb✗",
-    };
-
     // Access-mode chip: always show whether the active model is reached via
-    // LOCAL (on-device), BYOK (your own key), or CLOUD (managed subscription).
-    // Keeps AGI's core differentiator visible at all times. Purely a label,
-    // it reflects the active provider, it never changes routing.
+    // Local (on-device), Your key (a provider key the user supplied), or
+    // Managed (AGI's cloud subscription). Keeps AGI's core differentiator
+    // visible at all times. Purely a label, it reflects the active provider,
+    // it never changes routing.
     let access_span = |tier: usize| -> Span<'static> {
         use crate::agent::PrivacyMode;
         use crate::design_system::AccessMode;
-        let name = match ctx.access_mode {
-            AccessMode::Local => "local",
-            AccessMode::Byok => "byok",
-            AccessMode::Cloud => "cloud",
-        };
+        let name = ctx.access_mode.trust_word();
         let dot = if tier >= 2 { "" } else { "◉ " };
         // The session privacy mode governs whether a send is allowed; the access
         // tier only reflects where the active model routes. A Local session with
@@ -1987,7 +1907,7 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         // so the session mode is visible.
         if ctx.privacy_mode == PrivacyMode::Local && ctx.access_mode != AccessMode::Local {
             Span::styled(
-                format!("{dot}local≠{name}"),
+                format!("{dot}Local≠{name}"),
                 Style::default()
                     .fg(ui_danger())
                     .add_modifier(Modifier::BOLD),
@@ -2029,10 +1949,10 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     };
 
     // Indicators a user must be able to trust at a glance: the permission mode,
-    // the access tier, context usage, the sandbox state, the effort level and
-    // the running token/cost total. A narrow terminal abbreviates these; it
-    // never silently drops one, least of all the sandbox state. Only the
-    // keyboard hints and the opt-in fields are droppable.
+    // the access tier, context usage and the effort level. A narrow terminal
+    // abbreviates these; it never silently drops one. The sandbox backend lives
+    // in `/status` now, not here, see `footer_keeps_tokens_and_turns_at_every_width`.
+    // Only the keyboard hints and the opt-in fields are droppable.
     let sl = ctx.statusline;
     let build_essentials = |tier: usize| -> Vec<Span<'static>> {
         let gap = if tier >= 2 { " " } else { "  " };
@@ -2057,11 +1977,6 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         ));
         spans.push(Span::raw(gap));
         spans.push(Span::styled(
-            sandbox_indicator(tier).to_string(),
-            Style::default().fg(sandbox_color),
-        ));
-        spans.push(Span::raw(gap));
-        spans.push(Span::styled(
             match tier {
                 0 => format!("effort:{}", ctx.effort_label),
                 1 => format!("eff:{}", ctx.effort_label),
@@ -2074,15 +1989,26 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
 
     // The running total, tiered on its own budget: a long cost string that no
     // longer fits shrinks to bare token counts rather than abbreviating every
-    // other indicator alongside it, and it is never dropped outright.
+    // other indicator alongside it, and it is never dropped outright. Turns
+    // rides along here too, the same cluster `/cost` reports.
     let cost_forms = move |tier: usize| -> Vec<String> {
         if !sl.show_cost {
             return Vec::new();
         }
-        let short = format!("↑{} ↓{}", ctx.total_input_tokens, ctx.total_output_tokens);
-        let shortest = format!("↑{}↓{}", ctx.total_input_tokens, ctx.total_output_tokens);
+        let full = format!(
+            "T{} ↑{} ↓{} {cost_str}",
+            ctx.turn_count, ctx.total_input_tokens, ctx.total_output_tokens
+        );
+        let short = format!(
+            "T{} ↑{} ↓{}",
+            ctx.turn_count, ctx.total_input_tokens, ctx.total_output_tokens
+        );
+        let shortest = format!(
+            "T{}↑{}↓{}",
+            ctx.turn_count, ctx.total_input_tokens, ctx.total_output_tokens
+        );
         match tier {
-            0 => vec![cost_str.clone(), short, shortest],
+            0 => vec![full, short, shortest],
             1 => vec![short, shortest],
             _ => vec![shortest],
         }
@@ -2161,7 +2087,10 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     }
     if sl.show_tokens {
         optional.push(Span::styled(
-            format!("↑{} ↓{}", ctx.total_input_tokens, ctx.total_output_tokens),
+            format!(
+                "T{} ↑{} ↓{}",
+                ctx.turn_count, ctx.total_input_tokens, ctx.total_output_tokens
+            ),
             Style::default().fg(ui_muted()),
         ));
     }
@@ -3381,11 +3310,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/status" => {
             let msg = format!(
-                "Version: {}\nModel: {}\nProvider: {}\nMode: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
+                "Version: {}\nModel: {}\nProvider: {}\nMode: {}\nSandbox: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
                 env!("CARGO_PKG_VERSION"),
                 app.session.model,
                 app.provider_name,
                 app.mode.label(),
+                crate::sandbox::status_word(app.sandbox_type),
                 app.session.turn_count,
                 app.session.total_input_tokens,
                 app.session.total_output_tokens,
@@ -4114,7 +4044,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     SlashResult::SystemMessage(format!(
                         "Drafted {} continuation for provider `{provider}`. Review the exact payload before pressing Enter; edits require a fresh preview.",
                         match destination {
-                            crate::agent::PrivacyMode::Byok => "BYOK",
+                            crate::agent::PrivacyMode::Byok => destination.trust_word(),
                             crate::agent::PrivacyMode::Managed => "Managed Cloud",
                             crate::agent::PrivacyMode::Local => "Local",
                         }
@@ -4970,7 +4900,7 @@ async fn send_message_with_prompt(
         let buf = Arc::clone(&response_buf);
         let sink: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |chunk: &str| {
             if let Ok(mut buf) = buf.lock() {
-                buf.push_str(sanitize_terminal_text(chunk).as_ref());
+                append_continuation_chunk(&mut buf, sanitize_terminal_text(chunk).as_ref());
             }
         });
         app.session.on_continuation_chunk = Some(crate::agent::ContinuationSink(sink));
@@ -5033,12 +4963,7 @@ async fn send_message_with_prompt(
     let turn_count = app.session.turn_count;
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
-    let turn_cost_str = crate::output::format_accumulated_cost(
-        turn_input_tokens,
-        turn_output_tokens,
-        app.session.cost_ledger.total_usd,
-        turn_access_mode,
-    );
+    let turn_cost_str = crate::output::format_cost_compact(app.session.cost_ledger.total_usd);
     let turn_notice = app.live_notice().map(str::to_string);
 
     let result = {
@@ -5089,7 +5014,6 @@ async fn send_message_with_prompt(
                             privacy_mode: turn_privacy_mode,
                             mode: app.mode,
                             effort_label: app.effort.label(),
-                            sandbox_type: app.sandbox_type,
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
                         };
@@ -5167,7 +5091,6 @@ async fn send_message_with_prompt(
                         privacy_mode: turn_privacy_mode,
                         mode: app.mode,
                         effort_label: app.effort.label(),
-                        sandbox_type: app.sandbox_type,
                         cost_str: turn_cost_str.clone(),
                         notice: turn_notice.as_deref(),
                     };
@@ -5303,6 +5226,34 @@ mod tests {
                 ViewAction::Continue
             }
         }
+    }
+
+    /// Regression: a post-tool-call continuation landed on the same line as
+    /// the pre-tool sentence with no separator at all
+    /// ("I'll read the file.First line:").
+    #[test]
+    fn continuation_chunk_starts_a_new_paragraph() {
+        let mut buf = "I'll read the file.".to_string();
+        append_continuation_chunk(&mut buf, "First line:");
+        assert_eq!(buf, "I'll read the file.\n\nFirst line:");
+    }
+
+    #[test]
+    fn continuation_chunk_skips_the_blank_line_when_already_whitespace() {
+        let mut buf = "Reading the file.\n".to_string();
+        append_continuation_chunk(&mut buf, "Done.");
+        assert_eq!(buf, "Reading the file.\nDone.");
+
+        let mut buf = "Reading the file. ".to_string();
+        append_continuation_chunk(&mut buf, "Done.");
+        assert_eq!(buf, "Reading the file. Done.");
+    }
+
+    #[test]
+    fn continuation_chunk_into_an_empty_buffer_adds_no_leading_blank_line() {
+        let mut buf = String::new();
+        append_continuation_chunk(&mut buf, "First line:");
+        assert_eq!(buf, "First line:");
     }
 
     struct SlashActionView;
@@ -6951,6 +6902,30 @@ mod tests {
         }
     }
 
+    /// The sandbox backend moved out of the footer (see
+    /// `footer_keeps_tokens_and_turns_at_every_width`) into `/status`, using
+    /// the same word `crate::sandbox::status_word` gives the rest of the app.
+    #[test]
+    fn status_reports_the_sandbox_backend() {
+        let mut app = minimal_app();
+
+        app.sandbox_type = Some(crate::sandbox::SandboxType::MacosSeatbelt);
+        match handle_slash("/status", &mut app) {
+            SlashResult::SystemMessage(message) => {
+                assert!(message.contains("Sandbox: seatbelt"), "{message}");
+            }
+            _ => panic!("/status must report in place"),
+        }
+
+        app.sandbox_type = None;
+        match handle_slash("/status", &mut app) {
+            SlashResult::SystemMessage(message) => {
+                assert!(message.contains("Sandbox: no sandbox"), "{message}");
+            }
+            _ => panic!("/status must report in place"),
+        }
+    }
+
     #[test]
     fn approval_modal_composites_over_chrome_instead_of_blanking_it() {
         use crate::tui::widgets::approval_overlay::ApprovalOverlayState;
@@ -6983,7 +6958,6 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
             effort_label: "Medium",
-            sandbox_type: None,
             cost_str: "$0.00".to_string(),
             notice: None,
         };
@@ -7062,13 +7036,12 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Byok,
             mode: InteractionMode::Chat,
             effort_label,
-            sandbox_type: Some(crate::sandbox::SandboxType::MacosSeatbelt),
             cost_str: "Tokens: 1234 in / 567 out (billed by your provider)".to_string(),
             notice,
         }
     }
 
-    fn draw_header(width: u16, hud: Option<&super::super::cost_hud::CostHud>) -> String {
+    fn draw_header(width: u16) -> String {
         use ratatui::backend::TestBackend;
         let statusline = shipped_statusline();
         let messages: Vec<ChatMessage> = Vec::new();
@@ -7076,7 +7049,7 @@ mod tests {
         let ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
         let mut terminal = Terminal::new(TestBackend::new(width, 3)).expect("terminal");
         terminal
-            .draw(|frame| render_header(frame, Rect::new(0, 0, width, 3), &ctx, hud))
+            .draw(|frame| render_header(frame, Rect::new(0, 0, width, 3), &ctx))
             .expect("draw");
         buffer_rows(&terminal, width)
     }
@@ -7133,21 +7106,10 @@ mod tests {
         }
     }
 
-    fn layout_fixture_hud() -> super::super::cost_hud::CostHud {
-        super::super::cost_hud::CostHud {
-            in_tokens: 1_234,
-            out_tokens: 567,
-            total_usd: 0.0421,
-            context_used: 42_000,
-            context_window: 100_000,
-            ..Default::default()
-        }
-    }
-
     #[test]
     fn header_border_is_unbroken_at_every_width() {
         for width in [120u16, 80, 40] {
-            let rendered = draw_header(width, Some(&layout_fixture_hud()));
+            let rendered = draw_header(width);
             let rows: Vec<&str> = rendered.lines().collect();
             assert_eq!(rows.len(), 3, "header is three rows at {width}");
             assert!(
@@ -7174,10 +7136,9 @@ mod tests {
 
     #[test]
     fn header_snapshot_120_80_40() {
-        let hud = layout_fixture_hud();
-        insta::assert_snapshot!("header_120", draw_header(120, Some(&hud)));
-        insta::assert_snapshot!("header_80", draw_header(80, Some(&hud)));
-        insta::assert_snapshot!("header_40", draw_header(40, Some(&hud)));
+        insta::assert_snapshot!("header_120", draw_header(120));
+        insta::assert_snapshot!("header_80", draw_header(80));
+        insta::assert_snapshot!("header_40", draw_header(40));
     }
 
     #[test]
@@ -7187,22 +7148,21 @@ mod tests {
         insta::assert_snapshot!("footer_40", draw_footer(40, "High", None));
     }
 
-    /// A user who cannot see the sandbox state cannot tell what a tool call is
-    /// allowed to touch, so it abbreviates but never disappears. Same for the
-    /// running token counts.
+    /// Token counts and the turn count are the footer's own stats now that the
+    /// header and border HUD no longer duplicate them, so neither abbreviates
+    /// away to nothing. The sandbox backend moved to `/status`, see
+    /// `status_reports_the_sandbox_backend`.
     #[test]
-    fn footer_keeps_sandbox_and_tokens_at_every_width() {
+    fn footer_keeps_tokens_and_turns_at_every_width() {
         for width in [120u16, 80, 40] {
             let rendered = draw_footer(width, "High", None);
             assert!(
-                rendered.contains("sandbox: seatbelt")
-                    || rendered.contains("sb:seatbelt")
-                    || rendered.contains("sb✓"),
-                "sandbox state dropped at {width}: {rendered}"
-            );
-            assert!(
                 rendered.contains("1234") && rendered.contains("567"),
                 "token counts dropped at {width}: {rendered}"
+            );
+            assert!(
+                rendered.contains('3'),
+                "turn count dropped at {width}: {rendered}"
             );
             assert!(
                 rendered.contains("High") || rendered.contains("e:H"),
@@ -7408,7 +7368,6 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
             effort_label: "Medium",
-            sandbox_type: None,
             cost_str: "$0.00".to_string(),
             notice: None,
         };
@@ -7460,7 +7419,6 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
             effort_label: "Medium",
-            sandbox_type: None,
             cost_str: "$0.00".to_string(),
             notice: None,
         };
@@ -7577,7 +7535,6 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
             effort_label: "Medium",
-            sandbox_type: None,
             cost_str: "$0.00".to_string(),
             notice: None,
         };

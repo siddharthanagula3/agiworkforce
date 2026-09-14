@@ -2,4 +2,4 @@
 source: apps/cli/src/tui/tui_app.rs
 expression: "draw_footer(120, \"High\", None)"
 ---
- Default  ◉ byok  ctx [███░░░░░]  42%  sandbox: seatbelt  effort:High  ↑1234 ↓567  /: commands  Esc: quit
+ Default  ◉ Your key  ctx [███░░░░░]  42%  effort:High  T3 ↑1234 ↓567  /: commands  Esc: quit  Shift+Tab: mode
