@@ -157,6 +157,7 @@ export type {
   DesktopDeepLinkTarget,
   HostBridge,
   HostNotifyRequest,
+  HostUpdateAvailability,
 } from './host-bridge';
 
 export {

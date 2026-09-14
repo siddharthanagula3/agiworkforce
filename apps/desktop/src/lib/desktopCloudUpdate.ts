@@ -1,3 +1,5 @@
+import type { HostUpdateAvailability } from '@agiworkforce/local-runtime-contract';
+
 export const DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL =
   'https://agiworkforce.com/api/releases/desktop-cloud/latest';
 export type DesktopCloudMacArchitecture = 'arm64' | 'x64';
@@ -8,13 +10,7 @@ export function desktopCloudInstallerDownloadUrl(
   return `https://agiworkforce.com/api/download?platform=mac&app=cloud&arch=${architecture}`;
 }
 
-export interface DesktopCloudUpdateAvailability {
-  available: boolean;
-  currentVersion: string;
-  version: string;
-  publishedAt?: string;
-  downloadUrl: string;
-}
+export type DesktopCloudUpdateAvailability = HostUpdateAvailability;
 
 interface DesktopCloudReleasePayload {
   version: string;
