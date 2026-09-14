@@ -13,6 +13,7 @@ import {
 import {
   getGatewayHarness,
   getModelMetadataById,
+  getModelRegistryFacts,
   getRegistryRoute,
   normalizeModelId,
 } from '@agiworkforce/types';
@@ -101,6 +102,21 @@ function openRouterPriceCeiling(modelId: string): Record<string, unknown> | unde
   };
 }
 
+/**
+ * A router dispatches to whichever upstream model it picks per request, so
+ * the caller can never know or pin which one actually serves a given prompt.
+ * Every OpenRouter router is therefore always dispatched under the
+ * zero-retention requirement, whatever the workspace's own policy is: the
+ * adapter already honours the requirement per request (harness
+ * open-router/chat-completions-managed declares zeroDataRetentionOnRequest),
+ * this only decides when that requirement is mandatory rather than optional.
+ */
+function requiresZeroDataRetention(processed: ProcessedRequest, modelId: string): boolean {
+  if (processed.zeroDataRetentionOnly) return true;
+  if (!processed.provider || !OPENROUTER_DISPATCH_PROVIDERS.has(processed.provider)) return false;
+  return getModelRegistryFacts(modelId)?.isRouter === true;
+}
+
 export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest {
   const { llmRequest } = processed;
   const { functionTools, rawVendorTools } = splitTools(llmRequest.tools);
@@ -119,7 +135,8 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
 
   const chatRequest = openAIWireRequestToChatRequest(wireRequest);
   if (rawVendorTools.length > 0) chatRequest.rawVendorTools = rawVendorTools;
-  if (processed.zeroDataRetentionOnly) chatRequest.zeroDataRetentionOnly = true;
+  if (requiresZeroDataRetention(processed, llmRequest.model))
+    chatRequest.zeroDataRetentionOnly = true;
   if (processed.provider && OPENROUTER_DISPATCH_PROVIDERS.has(processed.provider)) {
     const ceiling = openRouterPriceCeiling(llmRequest.model);
     if (ceiling) chatRequest.metadata = { ...chatRequest.metadata, ...ceiling };
