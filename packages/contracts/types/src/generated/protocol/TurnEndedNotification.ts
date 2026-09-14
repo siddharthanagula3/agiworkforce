@@ -3,12 +3,9 @@ import type { TurnFailure } from './TurnFailure';
 import type { TurnStatus } from './TurnStatus';
 
 /**
- * Params of the `turn/completed` and `turn/failed` notifications.
- *
- * One shape for both so a client parses the end of a turn once. `failure` is
- * null on a completed turn and populated on a failed one; `error` carries the
- * same text as `failure.message` and stays for clients that predate the typed
- * object.
+ * Params of both `turn/completed` and `turn/failed`, one shape so a client
+ * parses the end of a turn once. `error` stays for clients that predate
+ * `failure` and carries the same text.
  */
 export type TurnEndedNotification = {
   threadId: string;

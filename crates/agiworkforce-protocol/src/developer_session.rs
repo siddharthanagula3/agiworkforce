@@ -342,23 +342,18 @@ pub struct ThreadSummary {
     pub updated_at: String,
     pub created_by: DeveloperSessionSource,
     pub status: ThreadStatus,
-    /// Checked-out branch of the thread's workspace, as it was when the host
-    /// last persisted it. A host records this at thread start and refreshes it
-    /// when a turn ends; nothing recomputes it while listing, so a list of a
-    /// hundred threads costs no git invocations.
+    /// Checked-out branch as the host last persisted it. Listing never
+    /// recomputes it, so a long list costs no git invocations.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub git_branch: Option<String>,
-    /// Top level of the thread's git worktree, persisted alongside the branch.
-    /// Distinct from `cwd`: a thread started in a subdirectory shares its
-    /// worktree root with every other thread in the same checkout.
+    /// Top level of the thread's git worktree. Distinct from `cwd`, which may
+    /// be a subdirectory of it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub worktree_root: Option<String>,
-    /// `clientInfo.name` from the `initialize` of the connection that created
-    /// the thread. `created_by` is the coarse surface; this is the exact
-    /// client, so two clients that both map to one surface stay tellable
-    /// apart.
+    /// `clientInfo.name` of the connection that created the thread, where
+    /// `created_by` is only the coarse surface.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub client: Option<String>,
@@ -642,36 +637,28 @@ pub struct TurnStartResponse {
     pub turn: TurnSummary,
 }
 
-/// Why a turn ended without completing.
-///
-/// The closed set a client may branch on. A free-text `error` string tells a
-/// user what happened; it cannot tell a client whether to offer a sign-in
-/// button, a retry, or nothing at all, because that decision cannot be made by
-/// matching on prose that changes with every provider.
+/// Why a turn ended without completing: the closed set a client may branch on,
+/// which prose that changes with every provider cannot be.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
 pub enum TurnFailureCode {
-    /// The route has no credential at all. Distinct from an invalid one: the
-    /// user has never signed in, so there is nothing to refresh.
+    /// The route has no credential at all, so there is nothing to refresh.
     ProviderAuthMissing,
     /// A credential exists and the provider rejected it.
     ProviderAuthInvalid,
     ProviderRateLimited,
-    /// The provider answered, but not with a usable response: 5xx, capacity,
-    /// or a stream that died after the handshake.
+    /// The provider answered without a usable response.
     ProviderUnavailable,
     ContextWindowExceeded,
     /// The request never reached the provider.
     Network,
-    /// A tool call was refused: by the user at the approval prompt, or by
-    /// policy.
+    /// A tool call was refused, at the approval prompt or by policy.
     ToolDenied,
     /// The user or the client stopped the turn.
     Interrupted,
     Timeout,
-    /// The turn was rejected before any provider call: bad params, an
-    /// unroutable model, a broken config, an unsupported operation.
+    /// The turn was rejected before any provider call.
     InvalidRequest,
     Unknown,
 }
@@ -722,11 +709,8 @@ impl TurnFailure {
         self
     }
 
-    /// Classify an engine error.
-    ///
-    /// The CLI carries its own richer taxonomy and classifies from that first;
-    /// this is the fallback for the shared engine's errors, so the two hosts
-    /// cannot drift into separate code sets.
+    /// Fallback for the shared engine's errors, so a host with its own richer
+    /// taxonomy cannot drift into a separate code set.
     pub fn from_agiworkforce_err(error: &crate::error::AgiworkforceErr) -> Self {
         use crate::error::AgiworkforceErr as E;
         let code = match error {
@@ -788,12 +772,9 @@ impl TurnFailureCode {
     }
 }
 
-/// Params of the `turn/completed` and `turn/failed` notifications.
-///
-/// One shape for both so a client parses the end of a turn once. `failure` is
-/// null on a completed turn and populated on a failed one; `error` carries the
-/// same text as `failure.message` and stays for clients that predate the typed
-/// object.
+/// Params of both `turn/completed` and `turn/failed`, one shape so a client
+/// parses the end of a turn once. `error` stays for clients that predate
+/// `failure` and carries the same text.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
