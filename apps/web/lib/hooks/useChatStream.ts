@@ -53,6 +53,8 @@ import {
   type WebSearchCitationDeltaWire,
 } from '@agiworkforce/types';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
+import { executeDeviceStep, readDeviceHostDeclaration } from '@/features/desktop-host';
+import { readChatHostContext } from '@/lib/device-steps/host-headers';
 import {
   AGENT_EVENT_SCHEMA_VERSION,
   createManagedCloudChatClient,
@@ -64,6 +66,7 @@ import {
   readPersistedCloudToolApproval,
   readManagedCloudAgentRunHandle,
   CloudToolApprovalProjectionSchema,
+  DEVICE_STEP_RESUME_PATH,
   TOOL_APPROVAL_RESUME_PATH,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
@@ -903,9 +906,19 @@ function autoResolvePendingApprovals(
   }
 }
 
+export interface PendingDeviceStep {
+  toolCallId: string;
+  name: string;
+  deviceId: string;
+  deviceName: string;
+  summary: string;
+  input: Record<string, unknown>;
+}
+
 interface StreamOutcome {
   suspended: boolean;
   pendingCalls: PendingApprovalCall[];
+  pendingDeviceSteps: PendingDeviceStep[];
   runHandle: ManagedCloudAgentRunHandle | null;
 }
 
@@ -1017,6 +1030,154 @@ function beginEmptyTurnRetry(
   );
 }
 
+function readDeviceStepRequest(raw: Record<string, unknown>): PendingDeviceStep | null {
+  const toolCallId = raw['tool_call_id'];
+  const name = raw['name'];
+  const deviceId = raw['device_id'];
+  const deviceName = raw['device_name'];
+  const summary = raw['summary'];
+  const input = raw['input'];
+  if (
+    typeof toolCallId !== 'string' ||
+    !toolCallId ||
+    typeof name !== 'string' ||
+    !name ||
+    typeof deviceId !== 'string' ||
+    !deviceId ||
+    typeof deviceName !== 'string' ||
+    !deviceName ||
+    typeof summary !== 'string' ||
+    !summary
+  ) {
+    return null;
+  }
+  return {
+    toolCallId,
+    name,
+    deviceId,
+    deviceName,
+    summary,
+    input:
+      input && typeof input === 'object' && !Array.isArray(input)
+        ? (input as Record<string, unknown>)
+        : {},
+  };
+}
+
+interface DeviceStepDriveContext {
+  assistantMessageId: string;
+  conversationId: string;
+  isTemporaryConversation: boolean;
+  model: string;
+  runId: string;
+  getAuthToken: AuthTokenProvider;
+  signal: AbortSignal;
+}
+
+/**
+ * Runs the steps the turn is waiting on, here, and hands the answers back.
+ *
+ * Only the machine the step was issued to can do this, which is why it lives in
+ * the chat client rather than on a server: the loop is paused until this posts
+ * a result, so every path out of a step, including a refusal at the permission
+ * prompt, has to end in one.
+ */
+async function driveDeviceSteps(
+  ctx: DeviceStepDriveContext,
+  steps: PendingDeviceStep[],
+): Promise<StreamOutcome> {
+  const { updateToolEntry } = useChatStore.getState();
+  const device = await readDeviceHostDeclaration().catch(() => null);
+  const results = [];
+  for (const step of steps) {
+    updateToolEntry(
+      ctx.assistantMessageId,
+      step.toolCallId,
+      { status: 'running' },
+      ctx.conversationId,
+    );
+    const outcome =
+      device && device.deviceId === step.deviceId
+        ? await executeDeviceStep(step.name, step.input)
+        : {
+            content: `This step is waiting on ${step.deviceName}. Open the AGI Cloud app on that machine.`,
+            isError: true,
+          };
+    updateToolEntry(
+      ctx.assistantMessageId,
+      step.toolCallId,
+      {
+        status: outcome.isError ? 'failed' : 'completed',
+        result: outcome.content,
+        ...(outcome.isError ? { error: outcome.content } : {}),
+      },
+      ctx.conversationId,
+    );
+    results.push({
+      tool_call_id: step.toolCallId,
+      content: outcome.content,
+      is_error: outcome.isError,
+    });
+  }
+
+  const hostContext = await readChatHostContext();
+  const headers = await addCsrfHeaders({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${await ctx.getAuthToken()}`,
+    'X-AGI-Surface': hostContext.surface,
+    'Idempotency-Key': createManagedChatIdempotencyKey({
+      surface: hostContext.surface,
+      purpose: 'tool-resume',
+      operationId: crypto.randomUUID(),
+    }),
+    ...hostContext.headers,
+  });
+  const response = await fetch(DEVICE_STEP_RESUME_PATH, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      run_id: ctx.runId,
+      device_id: steps[0]?.deviceId ?? '',
+      device_results: results,
+    }),
+    signal: ctx.signal,
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const { message, code, recovery, retryAt } = readChatApiErrorPayload(
+      errorData,
+      `Device step resume failed: ${response.status}`,
+    );
+    throw new ChatApiError(message, {
+      code,
+      status: response.status,
+      resetAt: readErrorResetAt(errorData, response),
+      ...(recovery ? { recovery } : {}),
+      ...(retryAt ? { retryAt } : {}),
+    });
+  }
+
+  const assistantContent =
+    findConversationMessage(ctx.conversationId, ctx.assistantMessageId)?.content ?? '';
+  const seedTools = findConversationMessage(ctx.conversationId, ctx.assistantMessageId)?.metadata
+    ?.tools;
+  const next = await consumeAssistantStream({
+    response,
+    assistantMessageId: ctx.assistantMessageId,
+    model: response.headers.get('X-AGI-Resolved-Model')?.trim() || ctx.model,
+    conversationId: ctx.conversationId,
+    isTemporaryConversation: ctx.isTemporaryConversation,
+    getAuthToken: ctx.getAuthToken,
+    seedContent: assistantContent,
+    ...(seedTools ? { seedTools: seedTools.map((tool) => ({ ...tool })) } : {}),
+  });
+
+  if (next.suspended && next.pendingDeviceSteps.length > 0 && next.runHandle) {
+    return driveDeviceSteps({ ...ctx, runId: next.runHandle.runId }, next.pendingDeviceSteps);
+  }
+  return next;
+}
+
 async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<StreamOutcome> {
   const {
     response,
@@ -1089,6 +1250,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     : [];
   const toolStartTimes = new Map<string, number>();
   const pendingCalls: PendingApprovalCall[] = [];
+  const pendingDeviceSteps: PendingDeviceStep[] = [];
   let suspended = false;
   const liveMessageMetadata = findConversationMessage(
     conversationId,
@@ -1986,7 +2148,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
-    return { suspended, pendingCalls, runHandle };
+    return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
   };
 
   const collectEventPayloads = (rawEvent: string): string[] => {
@@ -2054,7 +2216,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           persistAssistant(fullAssistantContent);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
-          return { suspended, pendingCalls, runHandle };
+          return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
         }
 
         try {
@@ -2312,6 +2474,26 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
+          const deviceStepReq = parsed.choices?.[0]?.delta?.x_device_step_request;
+          if (deviceStepReq && typeof deviceStepReq === 'object') {
+            const step = readDeviceStepRequest(deviceStepReq as Record<string, unknown>);
+            if (step) {
+              suspended = true;
+              pendingDeviceSteps.push(step);
+              const id = createToolId(step.name);
+              toolTimeline.push({
+                id,
+                name: step.name,
+                status: 'awaiting_device',
+                toolCallId: step.toolCallId,
+                summary: step.summary,
+                deviceName: step.deviceName,
+                parameters: step.input,
+              });
+              publishToolTimeline();
+            }
+          }
+
           const cardDelta = parsed.choices?.[0]?.delta?.[INTERACTIVE_CARD_DELTA_KEY];
           if (cardDelta) {
             const card = parseInteractiveCardDelta(cardDelta);
@@ -2507,7 +2689,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
-    return { suspended, pendingCalls, runHandle };
+    return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
   } catch (error) {
     const isAbort =
       typeof error === 'object' &&
@@ -2573,7 +2755,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         useChatStore.getState().setError(errorMessage, conversationId);
         stopStreaming(conversationId);
         setLoading(false, conversationId);
-        return { suspended, pendingCalls, runHandle };
+        return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
       }
     }
     flushContentBuffer(true);
@@ -3000,15 +3182,17 @@ export function useChatStream(): UseChatStreamReturn {
             }
           }
 
+          const hostContext = await readChatHostContext();
           const headers = await addCsrfHeaders({
             'Content-Type': 'application/json',
             Authorization: `Bearer ${await getAuthToken()}`,
-            'X-AGI-Surface': 'web',
+            'X-AGI-Surface': hostContext.surface,
             'Idempotency-Key': createManagedChatIdempotencyKey({
-              surface: 'web',
+              surface: hostContext.surface,
               purpose: 'send',
               operationId: retriedEmptyTurn ? `${assistantMessageId}-retry` : assistantMessageId,
             }),
+            ...hostContext.headers,
           });
           const thinkingState = useThinkingStore.getState();
           const requestedThinking = options.thinkingEnabled ?? thinkingState.enabled;
@@ -3131,22 +3315,41 @@ export function useChatStream(): UseChatStreamReturn {
             },
           });
 
-          if (outcome.suspended && outcome.pendingCalls.length > 0) {
-            if (!outcome.runHandle) {
+          let settled = outcome;
+          if (settled.suspended && settled.pendingDeviceSteps.length > 0) {
+            if (!settled.runHandle) {
+              throw new Error('The managed agent did not return a durable run handle.');
+            }
+            settled = await driveDeviceSteps(
+              {
+                assistantMessageId,
+                conversationId,
+                isTemporaryConversation,
+                model,
+                runId: settled.runHandle.runId,
+                getAuthToken,
+                signal: abortController.signal,
+              },
+              settled.pendingDeviceSteps,
+            );
+          }
+
+          if (settled.suspended && settled.pendingCalls.length > 0) {
+            if (!settled.runHandle) {
               throw new Error('The managed agent did not return a durable run handle.');
             }
             pendingTurns.set(assistantMessageId, {
-              runId: outcome.runHandle.runId,
+              runId: settled.runHandle.runId,
               model,
               conversationId,
               isTemporaryConversation,
-              calls: outcome.pendingCalls,
+              calls: settled.pendingCalls,
               decisions: new Map(),
               resolving: false,
             });
             autoResolvePendingApprovals(
               assistantMessageId,
-              outcome.pendingCalls,
+              settled.pendingCalls,
               resolveToolApproval,
             );
             break;
@@ -3640,15 +3843,17 @@ export function useResolveToolApproval(
 
       try {
         const resumeOperationId = crypto.randomUUID();
+        const hostContext = await readChatHostContext();
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
-          'X-AGI-Surface': 'web',
+          'X-AGI-Surface': hostContext.surface,
           'Idempotency-Key': createManagedChatIdempotencyKey({
-            surface: 'web',
+            surface: hostContext.surface,
             purpose: 'tool-resume',
             operationId: resumeOperationId,
           }),
+          ...hostContext.headers,
         });
         const response = await fetch(TOOL_APPROVAL_RESUME_PATH, {
           method: 'POST',
@@ -3687,22 +3892,38 @@ export function useResolveToolApproval(
           seedTools: seedTools ? seedTools.map((t) => ({ ...t })) : undefined,
         });
 
-        if (outcome.suspended && outcome.pendingCalls.length > 0) {
-          if (!outcome.runHandle) {
+        let settled = outcome;
+        if (settled.suspended && settled.pendingDeviceSteps.length > 0 && settled.runHandle) {
+          settled = await driveDeviceSteps(
+            {
+              assistantMessageId,
+              conversationId: turn.conversationId,
+              isTemporaryConversation: turn.isTemporaryConversation,
+              model: turn.model,
+              runId: settled.runHandle.runId,
+              getAuthToken,
+              signal: abortController.signal,
+            },
+            settled.pendingDeviceSteps,
+          );
+        }
+
+        if (settled.suspended && settled.pendingCalls.length > 0) {
+          if (!settled.runHandle) {
             throw new Error('The managed agent continuation lost its durable run handle.');
           }
           pendingTurns.set(assistantMessageId, {
-            runId: outcome.runHandle.runId,
+            runId: settled.runHandle.runId,
             model: turn.model,
             conversationId: turn.conversationId,
             isTemporaryConversation: turn.isTemporaryConversation,
-            calls: outcome.pendingCalls,
+            calls: settled.pendingCalls,
             decisions: new Map(),
             resolving: false,
           });
           autoResolvePendingApprovals(
             assistantMessageId,
-            outcome.pendingCalls,
+            settled.pendingCalls,
             resolveToolApproval,
           );
         } else {

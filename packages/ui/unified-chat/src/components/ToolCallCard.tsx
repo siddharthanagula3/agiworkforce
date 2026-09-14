@@ -12,6 +12,7 @@ export type ToolCallStatus =
   | 'complete'
   | 'error'
   | 'awaiting_approval'
+  | 'awaiting_device'
   | 'cancelled';
 
 export interface ToolCallCardProps {
@@ -19,6 +20,12 @@ export interface ToolCallCardProps {
   name: string;
   status: ToolCallStatus;
   requiresApproval?: boolean;
+  /**
+   * Set while this step is running on one particular machine. Naming the device
+   * is the whole point on every surface that is not it: the user has to know
+   * where to go, and a bare spinner does not say.
+   */
+  deviceStep?: { deviceName: string; onThisDevice: boolean };
   args?: Record<string, unknown>;
   commandText?: string;
   showParameters?: boolean;
@@ -264,6 +271,7 @@ function toInlineStatus(
   if (requiresApproval || status === 'awaiting_approval') {
     return expired ? 'partial' : 'awaiting-approval';
   }
+  if (status === 'awaiting_device') return expired ? 'partial' : 'awaiting-approval';
   switch (status) {
     case 'complete':
       return 'success';
@@ -326,6 +334,7 @@ const ToolCallCardComponent = ({
   name,
   status,
   requiresApproval = false,
+  deviceStep,
   args,
   commandText,
   showParameters = true,
@@ -359,6 +368,8 @@ const ToolCallCardComponent = ({
   }, [status, startedAt]);
 
   const isApprovalGated = requiresApproval || status === 'awaiting_approval';
+  const showDeviceWait = status === 'awaiting_device' && !expired;
+  const showExpiredDevice = status === 'awaiting_device' && expired;
   const showApprovalPrompt =
     isApprovalGated && !expired && (Boolean(onApprove) || Boolean(onReject));
   const showExpiredApproval = isApprovalGated && expired;
@@ -395,6 +406,8 @@ const ToolCallCardComponent = ({
   );
 
   const body =
+    showDeviceWait ||
+    showExpiredDevice ||
     showApprovalPrompt ||
     showExpiredApproval ||
     (showParameters && (hasArgs || commandText)) ||
@@ -402,6 +415,35 @@ const ToolCallCardComponent = ({
     errorDetail ||
     error ? (
       <div className="space-y-2 -m-4 p-2">
+        {showDeviceWait && (
+          <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-border">
+            <AlertCircle className="h-3.5 w-3.5 text-warning-text flex-shrink-0" />
+            <p className="flex-1 text-xs text-muted-foreground">
+              {deviceStep?.onThisDevice
+                ? 'Running on this device. Approve it if your desktop asks.'
+                : `Waiting for ${deviceStep?.deviceName ?? 'your desktop'}. Open the desktop app to continue.`}
+            </p>
+            {onCancel && (
+              <button
+                type="button"
+                onClick={() => onCancel(id)}
+                className="h-6 px-2 text-xs font-medium rounded border border-border bg-background hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        )}
+
+        {showExpiredDevice && (
+          <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-border">
+            <AlertCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            <p className="flex-1 text-xs text-muted-foreground">
+              {`This step waited too long for ${deviceStep?.deviceName ?? 'your desktop'}. Ask again on that device.`}
+            </p>
+          </div>
+        )}
+
         {showExpiredApproval && (
           <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-border">
             <AlertCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />

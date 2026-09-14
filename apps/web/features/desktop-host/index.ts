@@ -41,6 +41,11 @@ export {
   type LocalCommandOutput,
   type LocalCommandRun,
 } from './lib/runtime-client';
+export {
+  executeDeviceStep,
+  readDeviceHostDeclaration,
+  type DeviceStepOutcome,
+} from './lib/device-steps';
 export { readSelectedLocalModel, useLocalModelSelection } from './lib/local-model-selection';
 export { useLocalModels, type LocalModelsState } from './hooks/use-local-models';
 export { useDesktopDeepLinks } from './hooks/use-desktop-deep-links';
