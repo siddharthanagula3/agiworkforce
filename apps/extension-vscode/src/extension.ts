@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { registerContextHandoffUriHandler } from './features/context-handoff';
 import { Config } from './platform/config';
-import { activateDesktopBridge } from './features/desktop-bridge';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
@@ -51,17 +50,6 @@ export function activate(context: vscode.ExtensionContext): void {
   runBoot('model-metrics', () => {
     initModelMetrics(context);
   });
-
-  try {
-    context.subscriptions.push(activateDesktopBridge(context));
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    recordFailure('desktop-bridge', err);
-    vscode.window.showWarningMessage(
-      `AGI Workforce: Desktop bridge failed to initialize, ${errMsg}. ` +
-        'Some features may be unavailable.',
-    );
-  }
 
   let providerState: ProviderState | undefined;
   try {
@@ -223,9 +211,7 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.model') ||
         e.affectsConfiguration('agiWorkforce.agent.planMode') ||
         e.affectsConfiguration('agiWorkforce.agent.mode') ||
-        e.affectsConfiguration('agiWorkforce.agent.effort') ||
-        e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
-        e.affectsConfiguration('agiWorkforce.desktopBridge.port')
+        e.affectsConfiguration('agiWorkforce.agent.effort')
       ) {
         updateStatusBar();
       }
@@ -257,11 +243,7 @@ export function activate(context: vscode.ExtensionContext): void {
         ChatEditorPanel.pushFollowUpBehavior();
       }
 
-      if (
-        e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled') ||
-        e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
-        e.affectsConfiguration('agiWorkforce.desktopBridge.port')
-      ) {
+      if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
         void validateAdvancedFeatureFlags(context);
       }
     }),
