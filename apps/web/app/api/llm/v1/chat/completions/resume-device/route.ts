@@ -183,6 +183,9 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
     toolCallId: entry.tool_call_id,
     content: resultGate.texts[index] ?? entry.content,
     isError: entry.is_error,
+    ...(entry.image
+      ? { image: { base64: entry.image.base64, mimeType: entry.image.mime_type } }
+      : {}),
   }));
 
   const { db } = await getUserScopedDb(request);
