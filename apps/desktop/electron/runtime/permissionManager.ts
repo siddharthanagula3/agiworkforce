@@ -11,6 +11,7 @@ import {
   type PermissionScope,
   type PermissionState,
 } from '@agiworkforce/local-runtime-contract';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import {
   buildDecision,
   evaluatePermission,
@@ -147,9 +148,26 @@ const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
   'task.scheduled': 'run scheduled tasks',
 };
 
+/**
+ * The verb phrase a prompt asks about.
+ *
+ * An application-scoped grant names the program that is asking, not a thing
+ * being acted on, so appending the target produced "browse agi": a sentence
+ * that reads as though `agi` were a website. The asking program belongs in the
+ * subject of the question, and the caller supplies it.
+ */
 function describe(capability: DesktopCapability, scope: PermissionScope): string {
   const verb = CAPABILITY_LABELS[capability];
-  return scope.target ? `${verb} ${scope.target}` : verb;
+  if (!scope.target || scope.kind === 'application') return verb;
+  return `${verb} ${scope.target}`;
+}
+
+/** Who is being allowed, and what they are being allowed to do. */
+export interface PermissionQuestion {
+  /** Subject of the question; defaults to this app. */
+  subject?: string;
+  /** Object of the question, when the capability label alone reads wrong. */
+  objectPhrase?: string;
 }
 
 /**
@@ -163,14 +181,18 @@ export async function requestPermission(
   capability: DesktopCapability,
   scope: PermissionScope,
   reason: string,
+  question: PermissionQuestion = {},
 ): Promise<PermissionState> {
   const existing = getPermissionState(capability, scope);
   if (existing !== 'prompt') return existing;
 
   const highRisk = isHighRiskCapability(capability);
+  // The verbs come from the shared table, so this dialog cannot drift from the
+  // words every other approval surface uses for the same three answers.
+  const allowSession = `${TOOL_APPROVAL_ACTION_LABELS.allow} this session`;
   const buttons = highRisk
-    ? ['Deny', 'Allow this session']
-    : ['Deny', 'Allow this session', 'Always allow'];
+    ? [TOOL_APPROVAL_ACTION_LABELS.deny, allowSession]
+    : [TOOL_APPROVAL_ACTION_LABELS.deny, allowSession, TOOL_APPROVAL_ACTION_LABELS.alwaysAllow];
 
   const options = {
     type: highRisk ? ('warning' as const) : ('question' as const),
@@ -178,7 +200,9 @@ export async function requestPermission(
     defaultId: 0,
     cancelId: 0,
     title: 'Permission required',
-    message: `Allow AGI Workforce to ${describe(capability, scope)}?`,
+    message: `Allow ${question.subject ?? 'AGI Workforce'} to ${
+      question.objectPhrase ?? describe(capability, scope)
+    }?`,
     detail: highRisk
       ? `${reason}\n\nThis is a high-impact permission. It lasts until you quit the app; there is no permanent grant from this prompt.`
       : reason,
