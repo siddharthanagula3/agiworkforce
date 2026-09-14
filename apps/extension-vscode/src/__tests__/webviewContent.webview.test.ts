@@ -154,18 +154,16 @@ describe('getWebviewContent, structural smoke', () => {
       .map((script) => script.textContent ?? '')
       .join('\n');
 
-    expect(doc.querySelector('#modelPill')?.textContent).toBe('Model · Auto');
+    expect(doc.querySelector('#modelPill')?.textContent).toBe('Auto');
     expect(doc.querySelector('#controlsSummary')).not.toBeNull();
     expect(doc.querySelector('#controlsSummary')?.getAttribute('title')).toBe(
       'Mode and reasoning effort',
     );
     expect(doc.querySelector('#modeChip')).toBeNull();
     expect(doc.querySelector('#effortChip')).toBeNull();
-    expect(doc.querySelector('#composerHint')?.textContent).toContain('Enter to send');
-    expect(doc.querySelector('#composerHint')?.textContent).toContain('Shift+Enter for newline');
-    expect(scriptBody).toContain("'Model · ' +");
+    expect(scriptBody).toContain('function renderModelPill()');
     expect(scriptBody).toContain('function renderControlsSummary()');
-    expect(scriptBody).toContain("mode + ' · ' + effortShort");
+    expect(scriptBody).toContain("currentModelLabel + ' · ' + effortShort");
     expect(scriptBody).toContain("'Controls: ' + mode + ' mode'");
   });
 
@@ -246,9 +244,8 @@ describe('getWebviewContent, structural smoke', () => {
       'Build with AGI',
     );
     expect(doc.querySelector('#emptyState .empty-state-copy')?.textContent).toContain(
-      'edit files, run commands, and test this workspace',
+      'edit files, run commands and tests',
     );
-    expect(doc.querySelector('#composerHint')?.textContent).toContain('to send');
     expect(doc.querySelector('#plusMenuLabel')?.textContent).toBe('Add workspace context');
     expect(doc.querySelector('#plusMenuUpload')?.textContent).toContain('Workspace files');
     expect(doc.querySelector('#plusMenuBrowse')?.textContent).toContain('Browse the web');
@@ -347,7 +344,7 @@ describe('getWebviewContent, structural smoke', () => {
     expect(scriptBody).toContain("msg.type === 'modelPickerData'");
     expect(scriptBody).toContain("vscode.postMessage({ type: 'selectModel'");
     expect(scriptBody).toContain('if (options[i].disabled) continue;');
-    expect(scriptBody).toContain("modelPill.textContent = 'Model · ' + msg.payload.model");
+    expect(scriptBody).toContain('currentModelLabel = msg.payload.model; renderModelPill();');
   });
 
   it('keeps locked model guidance out of the compact composer label', () => {
