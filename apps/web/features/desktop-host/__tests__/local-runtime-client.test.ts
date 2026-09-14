@@ -12,6 +12,7 @@ import {
   readHostClipboard,
   readLocalCommandPolicy,
   revealWorkspacePath,
+  startLocalChat,
   startLocalCommand,
   writeLocalCommandPolicy,
 } from '../lib/runtime-client';
@@ -211,5 +212,74 @@ describe('clipboard', () => {
 
   it('attaches nothing for an empty clipboard', () => {
     expect(clipboardAttachments({ textTruncated: false }, 1)).toEqual([]);
+  });
+});
+
+describe('local chat client', () => {
+  it('refuses attachment bytes before anything reaches the host', () => {
+    const calls: string[] = [];
+    installHost(async (command) => {
+      calls.push(command);
+      return { ok: true, value: undefined };
+    });
+
+    expect(() =>
+      startLocalChat(
+        {
+          modelId: 'local:ollama/qwen2.5:1.5b',
+          messages: [{ role: 'user', content: 'data:image/png;base64,iVBORw0KGgo=' }],
+        },
+        () => undefined,
+      ),
+    ).toThrow('cannot read attachments');
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a message carrying an attachment field', () => {
+    const calls: string[] = [];
+    installHost(async (command) => {
+      calls.push(command);
+      return { ok: true, value: undefined };
+    });
+
+    expect(() =>
+      startLocalChat(
+        {
+          modelId: 'local:ollama/qwen2.5:1.5b',
+          messages: [
+            { role: 'user', content: 'read this', attachments: [{ name: 'a.pdf' }] },
+          ] as never,
+        },
+        () => undefined,
+      ),
+    ).toThrow('cannot read attachments');
+    expect(calls).toEqual([]);
+  });
+
+  it('starts a plain text turn', async () => {
+    installHost(async (command, args) => {
+      if (command !== 'local_chat_start') throw new Error(`unexpected ${command}`);
+      return {
+        ok: true,
+        value: {
+          runId: args?.['runId'],
+          modelId: args?.['modelId'],
+          serverId: 'ollama',
+          text: 'hi',
+          thinking: '',
+          stopReason: 'end_turn',
+          durationMs: 1,
+        },
+      };
+    });
+
+    const run = startLocalChat(
+      {
+        modelId: 'local:ollama/qwen2.5:1.5b',
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      () => undefined,
+    );
+    await expect(run.result).resolves.toMatchObject({ text: 'hi' });
   });
 });

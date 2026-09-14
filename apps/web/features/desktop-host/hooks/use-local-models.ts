@@ -1,7 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import type { LocalModel, LocalModelSnapshot } from '@agiworkforce/local-runtime-contract';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  localModelBelowMinimumReason,
+  partitionLocalModels,
+  type LocalModel,
+  type LocalModelSnapshot,
+} from '@agiworkforce/local-runtime-contract';
 import { useDesktopHost } from '../lib/host';
 import { listLocalModels, readLocalModelSnapshot } from '../lib/runtime-client';
 
@@ -9,6 +14,7 @@ export interface LocalModelsState {
   available: boolean;
   granted: boolean;
   models: LocalModel[];
+  hiddenReasons: string[];
   servers: LocalModelSnapshot['servers'];
   error: string | null;
   grant: () => Promise<void>;
@@ -62,11 +68,15 @@ export function useLocalModels(active: boolean): LocalModelsState {
     }
   }, []);
 
+  const { usable, hidden } = useMemo(() => partitionLocalModels(models), [models]);
+  const hiddenReasons = useMemo(() => hidden.map(localModelBelowMinimumReason), [hidden]);
+
   const servers = snapshot?.servers ?? [];
   return {
     available: host !== null && servers.some((server) => server.reachable),
     granted: snapshot?.granted === true,
-    models,
+    models: usable,
+    hiddenReasons,
     servers,
     error,
     grant,

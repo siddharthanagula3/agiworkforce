@@ -20,7 +20,16 @@ const LOCAL_MODEL: LocalModel = {
   sizeBillion: 1.2,
 };
 
+const TINY_MODEL: LocalModel = {
+  id: 'local:ollama/smollm2:135m',
+  serverId: 'ollama',
+  serverLabel: 'Ollama',
+  name: 'smollm2:135m',
+  sizeBillion: 0.13452,
+};
+
 let snapshot: LocalModelSnapshot;
+let listedModels: LocalModel[];
 const listCalls = vi.fn();
 
 function installHost(): void {
@@ -33,7 +42,7 @@ function installHost(): void {
       }
       if (command === 'local_model_list') {
         listCalls();
-        return { ok: true, value: [LOCAL_MODEL] as T } as DesktopRuntimeResponse<T>;
+        return { ok: true, value: listedModels as T } as DesktopRuntimeResponse<T>;
       }
       return { ok: true, value: undefined as T };
     },
@@ -57,6 +66,7 @@ const reachable = {
 beforeEach(() => {
   listCalls.mockClear();
   snapshot = { granted: false, servers: [reachable] };
+  listedModels = [LOCAL_MODEL];
   useLocalModelSelection.getState().select(null);
   vi.stubGlobal(
     'fetch',
@@ -116,6 +126,37 @@ describe('the model picker on the desktop shell', () => {
     });
     expect(row.textContent).toContain('Local');
     expect(row.textContent).toContain('Ollama · 1.2B');
+  });
+
+  it('hides a model under the minimum size and says why', async () => {
+    installHost();
+    snapshot = { granted: true, servers: [reachable] };
+    listedModels = [LOCAL_MODEL, TINY_MODEL];
+    await openPicker();
+
+    await screen.findByRole('button', { name: 'tiny-chat:1b - Ollama, runs on this device' });
+    expect(
+      screen.queryByRole('button', { name: 'smollm2:135m - Ollama, runs on this device' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'smollm2:135m is under 1B parameters and is hidden; pull a larger model',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('explains an empty section when every installed model is under the minimum', async () => {
+    installHost();
+    snapshot = { granted: true, servers: [reachable] };
+    listedModels = [TINY_MODEL];
+    await openPicker();
+
+    expect(
+      await screen.findByText(
+        'smollm2:135m is under 1B parameters and is hidden; pull a larger model',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No models loaded on this device yet.')).not.toBeInTheDocument();
   });
 
   it('puts the composer on the local model and says so on the trigger', async () => {
