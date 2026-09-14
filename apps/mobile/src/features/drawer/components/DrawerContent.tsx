@@ -16,6 +16,7 @@ import {
   Search,
   Settings,
   SquarePen,
+  Telescope,
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -45,6 +46,7 @@ type RoutePath =
   | '/(app)/artifacts'
   | '/(app)/library'
   | '/(app)/skills'
+  | '/(app)/reports'
   | '/(app)/schedules'
   | '/(app)/companion'
   | '/(app)/tasks'
@@ -56,7 +58,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'chats' | 'projects' | 'library' | 'skills' | 'schedules' | 'remote' | 'tasks';
+  key: 'chats' | 'projects' | 'library' | 'reports' | 'skills' | 'schedules' | 'remote' | 'tasks';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -92,6 +94,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
   // de-listing like Artifacts/Tasks above: FEATURES.skills is still on, the
   // /(app)/skills route and its Clerk-gated Managed Cloud catalog screen are
   // still live, and nothing replaced this row's function. Restored.
+  {
+    key: 'reports',
+    label: 'Reports',
+    icon: Telescope,
+    route: '/(app)/reports',
+    cloud: true,
+  },
   {
     key: 'skills',
     label: 'Skills',
@@ -316,6 +325,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         // mode keeps only on-device surfaces and hides every cloud-only item.
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
         if (item.key === 'skills' && !FEATURES.skills) return false;
+        if (item.key === 'reports' && !FEATURES.research) return false;
         if (item.key === 'remote' && !FEATURES.companion) return false;
         if (item.key === 'tasks') return FEATURES.cloudTasks && showAgiWork;
         if (appMode === 'cloud') return true;
@@ -331,6 +341,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'chats') return p.includes('/chats');
       if (key === 'library') return p.includes('/library');
       if (key === 'skills') return p.includes('/skills');
+      if (key === 'reports') return p.includes('/reports');
       if (key === 'schedules') return p.includes('/schedules');
       if (key === 'remote') return p.includes('/companion');
       if (key === 'tasks') return p.includes('/tasks');

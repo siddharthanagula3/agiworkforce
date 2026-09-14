@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/src/features/chat/components/MessageList';
+import type { ResearchPlanDecision } from '@/src/features/chat/components/research/ResearchRunCard';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
 import {
   TASK_CHIP_SEND_CONTEXT,
@@ -168,6 +169,7 @@ export default function ChatScreen() {
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setMessageReaction = useChatStore((s) => s.setMessageReaction);
   const retryMessage = useChatStore((s) => s.retryMessage);
+  const resumeResearch = useChatStore((s) => s.resumeResearch);
   const editMessage = useChatStore((s) => s.editMessage);
   const resolveToolApproval = useChatStore((s) => s.resolveToolApproval);
   const renameConversation = useChatStore((s) => s.renameConversation);
@@ -531,6 +533,39 @@ export default function ChatScreen() {
   const handleStop = useCallback(() => {
     stopStreaming();
   }, [stopStreaming]);
+
+  const [resumingResearchMessageId, setResumingResearchMessageId] = useState<string | null>(null);
+
+  const runResearchDecision = useCallback(
+    async (messageId: string, decision: 'start' | 'cancel' | 'retry') => {
+      if (!id) return;
+      if (decision === 'cancel') {
+        await resumeResearch(id, messageId, decision);
+        return;
+      }
+      setResumingResearchMessageId(messageId);
+      try {
+        await resumeResearch(id, messageId, decision);
+      } finally {
+        setResumingResearchMessageId(null);
+      }
+    },
+    [id, resumeResearch],
+  );
+
+  const handleResearchPlanDecision = useCallback(
+    (messageId: string, decision: ResearchPlanDecision) => {
+      void runResearchDecision(messageId, decision === 'start' ? 'start' : 'cancel');
+    },
+    [runResearchDecision],
+  );
+
+  const handleRetryResearch = useCallback(
+    (messageId: string) => {
+      void runResearchDecision(messageId, 'retry');
+    },
+    [runResearchDecision],
+  );
 
   const resolveAppMode = useCallback(
     (modelId: string): AppMode => {
@@ -1280,6 +1315,10 @@ export default function ChatScreen() {
             onDeleteMessage={handleDeleteMessage}
             onReaction={handleReaction}
             onRetryMessage={handleRetryMessage}
+            onResearchPlanDecision={handleResearchPlanDecision}
+            onRetryResearch={handleRetryResearch}
+            onStopResearch={handleStop}
+            resumingResearchMessageId={resumingResearchMessageId}
             onEditMessage={handleEditMessage}
             onRefresh={handleRefresh}
             refreshing={refreshing}

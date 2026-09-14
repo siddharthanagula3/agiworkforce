@@ -6,6 +6,7 @@ import {
   type CloudWorkMode,
   type Effort,
   type Provider,
+  type ResearchStep,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
@@ -90,6 +91,8 @@ export interface StreamDelta {
   x_agent_event?: AgentEventEnvelope;
   x_code_result?: unknown;
   x_search_results?: unknown;
+  x_research_status?: unknown;
+  x_research_plan?: unknown;
   x_generated_files?: { files?: StreamGeneratedFile[] };
   x_interactive_card?: unknown;
   x_stream_error?: { message: string; code?: string; retryable?: boolean };
@@ -181,6 +184,11 @@ interface InitialStreamRequest {
   effort?: Effort | 'none' | 'minimal';
   web_search?: boolean;
   research?: boolean;
+  research_resume?: {
+    sources?: Array<{ url: string; title?: string; snippet?: string }>;
+    steps?: ResearchStep[];
+    approved_steps?: ResearchStep[];
+  };
   code_execution?: boolean;
   office_creation?: boolean;
   work_mode?: CloudWorkMode;

@@ -44,6 +44,7 @@ export default function AppLayout() {
         <Drawer.Screen name="connectors/[id]" options={HIDDEN} />
         <Drawer.Screen name="continuity/index" options={HIDDEN} />
         <Drawer.Screen name="skills/index" options={HIDDEN} />
+        <Drawer.Screen name="reports/index" options={HIDDEN} />
 
         {/* Chat detail */}
         <Drawer.Screen name="chat/[id]" options={HIDDEN} />
