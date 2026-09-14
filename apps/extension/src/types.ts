@@ -45,11 +45,6 @@ export type NativeMessageType =
   | 'GET_COMPUTER_USE_STATE'
   | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
-  | 'SET_COOKIE'
-  | 'GET_ALL_TABS'
-  | 'CREATE_TAB'
-  | 'CLOSE_TAB'
-  | 'SWITCH_TAB'
   | 'GET_ACCESSIBILITY_TREE'
   | 'START_RECORDING'
   | 'STOP_RECORDING'
@@ -604,78 +599,6 @@ export interface OpenSidePanelMessage extends BaseMessage {
   type: 'OPEN_SIDE_PANEL';
 }
 
-export interface CookieDetails {
-  name: string;
-  value: string;
-  domain?: string;
-  path?: string;
-  secure?: boolean;
-  httpOnly?: boolean;
-  url?: string;
-}
-
-export interface SetCookieMessage extends BaseMessage {
-  type: 'SET_COOKIE';
-  cookie: CookieDetails;
-}
-
-export interface SetCookieResponse {
-  success: boolean;
-  error?: string;
-}
-
-export interface GetAllTabsMessage extends BaseMessage {
-  type: 'GET_ALL_TABS';
-}
-
-export interface TabInfo {
-  id?: number;
-  url?: string;
-  title?: string;
-  favIconUrl?: string;
-  active?: boolean;
-  windowId?: number;
-  status?: string;
-}
-
-export interface GetAllTabsResponse {
-  success: boolean;
-  data?: TabInfo[];
-  error?: string;
-}
-
-export interface CreateTabMessage extends BaseMessage {
-  type: 'CREATE_TAB';
-  url: string;
-  active?: boolean;
-}
-
-export interface CreateTabResponse {
-  success: boolean;
-  data?: TabInfo;
-  error?: string;
-}
-
-export interface CloseTabMessage extends BaseMessage {
-  type: 'CLOSE_TAB';
-  tabId: number;
-}
-
-export interface CloseTabResponse {
-  success: boolean;
-  error?: string;
-}
-
-export interface SwitchTabMessage extends BaseMessage {
-  type: 'SWITCH_TAB';
-  tabId: number;
-}
-
-export interface SwitchTabResponse {
-  success: boolean;
-  error?: string;
-}
-
 export interface GetAccessibilityTreeMessage extends BaseMessage {
   type: 'GET_ACCESSIBILITY_TREE';
 }
@@ -1111,11 +1034,6 @@ export type ExtensionMessage =
   | ResolveChatApprovalMessage
   | InPagePromptMessage
   | OpenSidePanelMessage
-  | SetCookieMessage
-  | GetAllTabsMessage
-  | CreateTabMessage
-  | CloseTabMessage
-  | SwitchTabMessage
   | GetAccessibilityTreeMessage
   | BuildAccessibilityTreeMessage
   | StartRecordingMessage
@@ -1186,11 +1104,6 @@ export type ExtensionResponse =
   | AutoFillJobApplicationResponse
   | ChatMessageResponse
   | InPagePromptResponse
-  | SetCookieResponse
-  | GetAllTabsResponse
-  | CreateTabResponse
-  | CloseTabResponse
-  | SwitchTabResponse
   | GetAccessibilityTreeResponse
   | RecordingResponse
   | WebMCPDiscoverToolsResponse

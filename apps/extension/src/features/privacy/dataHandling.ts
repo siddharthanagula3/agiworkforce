@@ -1,5 +1,5 @@
 export interface DataHandlingDisclosure {
-  id: 'page-injection' | 'debugger' | 'cookies' | 'cloud-mirroring';
+  id: 'page-injection' | 'debugger' | 'cloud-mirroring';
   label: string;
   body: string;
 }
@@ -14,11 +14,6 @@ export const DATA_HANDLING_DISCLOSURES: DataHandlingDisclosure[] = [
     id: 'debugger',
     label: 'The debugger permission drives computer use',
     body: 'AGI holds the Chrome debugger permission because computer use drives the page through the Chrome DevTools Protocol. It attaches only for one bounded action on an approved site and detaches afterward, and Chrome shows its "being debugged" banner the whole time.',
-  },
-  {
-    id: 'cookies',
-    label: 'The cookies permission only writes, never reads',
-    body: 'AGI holds the cookies permission so a run can set a cookie on a site you are working in. Only AGI’s own extension pages can ask for it, banking, government, health, cloud-console, identity and mail domains are refused outright, and AGI never reads the cookies any site has stored.',
   },
   {
     id: 'cloud-mirroring',
