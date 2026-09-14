@@ -7,4 +7,4 @@ export {
   networkErrorMessage,
   toUserMessage,
   toUserMessageWithStatus,
-} from '@agiworkforce/unified-chat';
+} from '@agiworkforce/unified-chat/network-error';

@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-import { parseSettingsHash, replaceSettingsHash } from '@/features/directory';
+import { parseSettingsHash, replaceSettingsHash } from '@/features/directory/routing';
 
 const WebSettingsModal = dynamic(
   () => import('./WebSettingsModal').then((m) => ({ default: m.WebSettingsModal })),
