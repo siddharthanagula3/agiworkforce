@@ -308,9 +308,7 @@ export function getWebviewContent(
       min-height: 0;
       padding: clamp(14px, 4vw, 24px);
       overflow: auto;
-      background:
-        radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--accent-teal) 12%, transparent), transparent 42%),
-        var(--bg-base);
+      background: var(--vscode-sideBar-background, var(--bg-base));
     }
     .onboarding-shell {
       display: flex;
@@ -350,7 +348,10 @@ export function getWebviewContent(
       background: var(--accent-teal);
     }
     .onboarding-step {
+      display: flex;
       flex: 1;
+      flex-direction: column;
+      justify-content: flex-end;
       animation: onboarding-enter 180ms var(--transition);
     }
     .onboarding-step[hidden] {
@@ -360,33 +361,19 @@ export function getWebviewContent(
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .onboarding-icon {
-      display: grid;
-      width: 42px;
-      height: 42px;
-      margin-bottom: 18px;
-      place-items: center;
-      border: 1px solid color-mix(in srgb, var(--accent-teal) 42%, var(--border));
-      border-radius: 13px;
-      background: var(--bg-elevated);
-      color: var(--accent-teal);
-      font-size: 20px;
-    }
-    .onboarding-eyebrow {
-      margin-bottom: 7px;
-      color: var(--text-secondary);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
     .onboarding h2 {
       max-width: 430px;
       color: var(--text-primary);
-      font-size: clamp(22px, 7vw, 34px);
+      font-size: clamp(19px, 6vw, 28px);
       font-weight: 650;
       letter-spacing: -0.035em;
-      line-height: 1.05;
+      line-height: 1.1;
+    }
+    /* The step heading takes focus only so a screen reader announces the new
+       step; it is not tabbable, so a ring on it reads as a defect. */
+    .onboarding h2:focus,
+    .onboarding h2:focus-visible {
+      outline: none;
     }
     .onboarding-lede {
       max-width: 490px;
@@ -394,60 +381,6 @@ export function getWebviewContent(
       color: var(--text-secondary);
       font-size: 13px;
       line-height: 1.65;
-    }
-    .onboarding-card {
-      display: grid;
-      gap: 9px;
-      margin-top: 20px;
-      padding: 14px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: var(--bg-elevated);
-    }
-    .onboarding-card strong {
-      color: var(--text-primary);
-      font-size: 12px;
-    }
-    .onboarding-card span,
-    .onboarding-card p {
-      color: var(--text-secondary);
-      font-size: 11px;
-      line-height: 1.5;
-    }
-    .onboarding-disclosures {
-      display: grid;
-      gap: 9px;
-      margin-top: 18px;
-      list-style: none;
-    }
-    .onboarding-disclosures li {
-      display: grid;
-      grid-template-columns: 22px minmax(0, 1fr);
-      gap: 9px;
-      align-items: start;
-      padding: 11px 12px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: var(--bg-elevated);
-    }
-    .onboarding-disclosures .codicon {
-      padding-top: 1px;
-      color: var(--accent-teal);
-      font-size: 15px;
-    }
-    .onboarding-disclosures strong,
-    .onboarding-disclosures span {
-      display: block;
-    }
-    .onboarding-disclosures strong {
-      margin-bottom: 2px;
-      color: var(--text-primary);
-      font-size: 11px;
-    }
-    .onboarding-disclosures span {
-      color: var(--text-secondary);
-      font-size: 10.5px;
-      line-height: 1.45;
     }
     .onboarding-inline-actions {
       display: flex;
@@ -509,15 +442,6 @@ export function getWebviewContent(
       cursor: pointer;
       font: inherit;
       font-size: 10.5px;
-    }
-    .onboarding-boundary {
-      margin-top: 12px;
-      padding: 8px 10px;
-      border-left: 2px solid var(--accent-teal);
-      background: var(--bg-elevated);
-      color: var(--text-secondary);
-      font-size: 10.5px;
-      line-height: 1.45;
     }
 
     button:focus-visible,
@@ -716,23 +640,33 @@ export function getWebviewContent(
     }
     .plus-btn:hover { background: var(--hover); color: var(--text-primary); }
 
-    /* Model picker pill */
+    /* Model picker pill. The model name is the one word a user cannot infer
+       from anywhere else in the composer, so it holds its width and the effort
+       suffix and the mode chip give theirs up first. */
     .model-pill {
+      display: inline-flex;
+      align-items: center;
       background: none;
       border: none;
       border-radius: 999px;
       color: var(--text-secondary);
       cursor: pointer;
+      flex-shrink: 1;
       font-size: 12px;
       font-weight: 500;
       height: 28px;
-      padding: 0 8px;
+      padding: 0 6px;
       white-space: nowrap;
-      max-width: 140px;
+      min-width: 72px;
+      max-width: 160px;
       overflow: hidden;
-      text-overflow: ellipsis;
       transition: background 0.12s var(--transition), color 0.12s var(--transition);
     }
+    .model-pill-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .model-pill-effort { flex-shrink: 0; }
     .model-pill:hover { background: var(--hover); color: var(--text-primary); }
 
     #sendBtn {
@@ -1029,7 +963,12 @@ export function getWebviewContent(
       color: var(--text-primary);
       background: var(--hover);
     }
-    .controls-summary { max-width: 120px; }
+    .controls-summary {
+      flex-shrink: 4;
+      min-width: 36px;
+      max-width: 120px;
+      padding: 0 6px;
+    }
 
     .chip-separator {
       flex: 1;
@@ -1230,10 +1169,6 @@ export function getWebviewContent(
     }
     .meter-dismiss-btn:hover, .meter-restore-btn:hover { color: var(--text-primary); }
 
-    .byok-icon, .local-icon {
-      font-size: 12px;
-      flex-shrink: 0;
-    }
 
     /* ── @mention dropdown ── */
     .input-wrapper { position: relative; flex: 1; }
@@ -1623,7 +1558,7 @@ export function getWebviewContent(
       background: var(--bg-overlay);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+      box-shadow: 0 6px 20px var(--vscode-widget-shadow);
     }
     .actions-menu.open { display: flex; }
 
@@ -1788,7 +1723,7 @@ export function getWebviewContent(
       background: var(--bg-overlay);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+      box-shadow: 0 6px 20px var(--vscode-widget-shadow);
     }
     .slash-menu.open { display: flex; }
 
@@ -1831,33 +1766,36 @@ export function getWebviewContent(
       font-size: 12px;
     }
 
-    .empty-state-signin {
+    .composer-status-route {
+      display: flex;
       align-items: center;
-      background: var(--vscode-button-background, var(--accent-teal));
-      border: none;
-      border-radius: var(--radius-md);
-      color: var(--button-text);
-      cursor: pointer;
-      display: inline-flex;
-      font: inherit;
-      font-size: 13px;
       gap: 6px;
-      min-height: 28px;
-      padding: 0 14px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .empty-state-signin[hidden] { display: none; }
-    .empty-state-signin:hover { background: var(--vscode-button-hoverBackground, var(--accent-teal)); }
+    .composer-status-signin {
+      margin-left: auto;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--vscode-textLink-foreground, var(--accent-teal));
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+    }
+    .composer-status-signin[hidden] { display: none; }
+    .composer-status-signin:hover { text-decoration: underline; }
     .plus-btn:disabled,
     .model-pill:disabled,
-    .controls-summary:disabled,
-    .prompt-chip:disabled {
+    .controls-summary:disabled {
       opacity: 0.42;
       cursor: not-allowed;
     }
     .plus-btn:disabled:hover,
     .model-pill:disabled:hover,
-    .controls-summary:disabled:hover,
-    .prompt-chip:disabled:hover {
+    .controls-summary:disabled:hover {
       color: var(--text-secondary);
       background: var(--bg-elevated);
     }
@@ -1867,11 +1805,12 @@ export function getWebviewContent(
      * keeps mode and effort visible without pushing Send outside the composer.
      */
     @media (max-width: 480px) {
-      .model-pill {
-        min-width: 72px;
-        max-width: min(132px, calc(100vw - 176px));
-      }
-      .controls-summary { max-width: 86px; }
+      .controls-summary { max-width: 70px; }
+    }
+
+    @media (max-width: 400px) {
+      /* Effort is one click away in the same popover; the model name is not. */
+      .model-pill-effort { display: none; }
     }
 
     @media (max-width: 340px) {
@@ -1881,8 +1820,7 @@ export function getWebviewContent(
       .header-actions { gap: 0; }
       .header-title { display: none; }
       .session-identity { max-width: calc(100vw - 108px); }
-      .model-pill { max-width: 78px; min-width: 58px; }
-      .controls-summary { max-width: 72px; }
+      .controls-summary { max-width: 54px; }
       .empty-state-copy { max-width: 230px; }
     }
 
@@ -1894,8 +1832,9 @@ export function getWebviewContent(
     }
 
     @media (max-width: 280px) {
-      .model-pill { min-width: 0; max-width: 64px; }
-      .controls-summary { min-width: 0; max-width: 64px; }
+      /* Both chips stay reachable: min-width keeps each clickable and the mode
+         chip gives up its width four times faster than the model name. */
+      .controls-summary { max-width: 46px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -2127,78 +2066,33 @@ export function getWebviewContent(
       </div>
 
       <article class="onboarding-step" data-onboarding-step="0">
-        <div class="onboarding-icon"><span class="codicon codicon-repo" aria-hidden="true"></span></div>
-        <p class="onboarding-eyebrow">Developer session</p>
         <h2 id="onboardingTitle" tabindex="-1">Build with AGI in this repository.</h2>
         <p class="onboarding-lede" id="onboardingWorkspaceLede">
-          Ask about code, attach workspace files, edit through reviewable diffs, run approved commands,
-          and test the open project.
+          Ask about code, edit through reviewable diffs, and run approved commands, all scoped to this workspace.
         </p>
-        <div class="onboarding-card">
-          <strong id="onboardingWorkspaceCardTitle">Workspace-scoped by default</strong>
-          <span id="onboardingWorkspaceCardCopy">The sidebar, editor chat, and @agi stay scoped to this workspace. The header identifies whether inference uses Local, BYOK, or Managed Cloud. Developer sessions do not silently merge into consumer Web, Mobile, or Desktop chat history.</span>
+        <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingWorkspaceAction" hidden>Open folder</button>
         </div>
       </article>
 
       <article class="onboarding-step" data-onboarding-step="1" hidden>
-        <div class="onboarding-icon"><span class="codicon codicon-server-process" aria-hidden="true"></span></div>
-        <p class="onboarding-eyebrow">Task handoff</p>
         <h2 tabindex="-1">Foreground here. Background work follows you.</h2>
         <p class="onboarding-lede">
-          VS Code developer sessions run while the editor is open. Cloud AGI Work runs started on any
-          device appear in the Cloud Tasks view, where you can follow, approve, or stop them.
+          Cloud runs started on any device appear in the Cloud Tasks view, where you can follow, approve, or stop them.
         </p>
-        <div class="onboarding-card">
-          <strong>No pretend cloud handoff</strong>
-          <span>Starting a background run stays explicit. A local prompt is never relabeled as one.</span>
-          <button type="button" class="onboarding-link" id="onboardingTasks">Show Cloud Tasks</button>
-        </div>
       </article>
 
       <article class="onboarding-step" data-onboarding-step="2" hidden>
-        <div class="onboarding-icon"><span class="codicon codicon-diff" aria-hidden="true"></span></div>
-        <p class="onboarding-eyebrow">TODO to review</p>
         <h2 tabindex="-1">Describe the intent. Inspect the change.</h2>
         <p class="onboarding-lede">
-          Attach the relevant files or share diagnostics, then ask AGI to implement the TODO.
-          Proposed code opens in VS Code's native diff view before you accept it.
+          Proposed code opens in VS Code's own diff view before you accept it.
         </p>
-        <div class="onboarding-card">
-          <strong>A useful first prompt</strong>
-          <p>“Implement the TODO in the active file, explain the tradeoffs, and add focused tests. Do not change unrelated files.”</p>
-        </div>
       </article>
 
       <article class="onboarding-step" data-onboarding-step="3" hidden>
-        <div class="onboarding-icon"><span class="codicon codicon-shield" aria-hidden="true"></span></div>
-        <p class="onboarding-eyebrow">Autonomy and trust</p>
         <h2 tabindex="-1">You choose authority. You verify the result.</h2>
-        <ul class="onboarding-disclosures">
-          <li>
-            <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
-            <div>
-              <strong>Choose the autonomy level</strong>
-              <span>Ask, Auto, Plan, or Bypass controls how much authority a session receives. Higher-risk combinations require explicit consent.</span>
-            </div>
-          </li>
-          <li>
-            <span class="codicon codicon-warning" aria-hidden="true"></span>
-            <div>
-              <strong>AGI can make mistakes</strong>
-              <span>Review generated code and every command before accepting or running it.</span>
-            </div>
-          </li>
-          <li>
-            <span class="codicon codicon-lock" aria-hidden="true"></span>
-            <div>
-              <strong>Verify the active trust boundary</strong>
-              <span>The header names Local, BYOK, or Managed Cloud. Managed Cloud also names the signed-in plan owner; BYOK provider billing stays separate.</span>
-            </div>
-          </li>
-        </ul>
-        <p class="onboarding-boundary" id="onboardingBoundary" role="status">
-          Resolving the active developer-session boundary…
+        <p class="onboarding-lede">
+          Ask, Auto, Plan, or Bypass sets how much a session may do on its own, and the header names the active trust boundary.
         </p>
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
@@ -2225,8 +2119,6 @@ export function getWebviewContent(
 
   <!-- ── Usage meter banner ── -->
   <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
-    <span class="byok-icon codicon codicon-key" id="meterByokIcon" style="display:none" aria-hidden="true"></span>
-    <span class="local-icon codicon codicon-vm" id="meterLocalIcon" style="display:none" aria-hidden="true"></span>
     <span class="codicon codicon-cloud" id="meterCloudIcon" style="display:none" aria-hidden="true"></span>
     <div class="usage-meter-bar-wrap" id="meterBarWrap" style="display:none">
       <div
@@ -2259,7 +2151,6 @@ export function getWebviewContent(
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
       <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
       <div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>
-      <button type="button" class="empty-state-signin" id="emptyStateSignIn" hidden>Sign in to AGI</button>
     </div>
   </div>
 
@@ -2401,10 +2292,13 @@ export function getWebviewContent(
       </div>
       <div class="slash-menu" id="slashMenu" role="menu" aria-label="Commands"></div>
     </div>
-    <div class="composer-status" id="composerStatus" role="status" aria-live="polite">
-      <span id="composerStatusBoundary">Local</span>
-      <span aria-hidden="true">·</span>
-      <span id="composerStatusMode">${modeLabel}</span>
+    <div class="composer-status">
+      <span class="composer-status-route" id="composerStatus" role="status" aria-live="polite">
+        <span id="composerStatusBoundary"></span>
+        <span id="composerStatusSeparator" aria-hidden="true" hidden>·</span>
+        <span id="composerStatusMode">${modeLabel}</span>
+      </span>
+      <button type="button" class="composer-status-signin" id="composerStatusSignIn" hidden>Sign in</button>
     </div>
   </div>
 
@@ -2451,8 +2345,9 @@ export function getWebviewContent(
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
     const composerStatusBoundary = document.getElementById('composerStatusBoundary');
+    const composerStatusSeparator = document.getElementById('composerStatusSeparator');
+    const composerStatusSignIn = document.getElementById('composerStatusSignIn');
     const composerStatusMode = document.getElementById('composerStatusMode');
-    const emptyStateSignIn = document.getElementById('emptyStateSignIn');
     const mentionDropdown = document.getElementById('mentionDropdown');
     const sessionIdentity = document.getElementById('sessionIdentity');
     const sessionBoundaryLabel = document.getElementById('sessionBoundaryLabel');
@@ -2469,16 +2364,12 @@ export function getWebviewContent(
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
     const onboardingProgress = document.getElementById('onboardingProgress');
-    const onboardingBoundary = document.getElementById('onboardingBoundary');
     const onboardingBack = document.getElementById('onboardingBack');
     const onboardingNext = document.getElementById('onboardingNext');
     const onboardingSkip = document.getElementById('onboardingSkip');
-    const onboardingTasks = document.getElementById('onboardingTasks');
     const onboardingPermissionDocs = document.getElementById('onboardingPermissionDocs');
     const onboardingPrivacySettings = document.getElementById('onboardingPrivacySettings');
     const onboardingWorkspaceLede = document.getElementById('onboardingWorkspaceLede');
-    const onboardingWorkspaceCardTitle = document.getElementById('onboardingWorkspaceCardTitle');
-    const onboardingWorkspaceCardCopy = document.getElementById('onboardingWorkspaceCardCopy');
     const onboardingWorkspaceAction = document.getElementById('onboardingWorkspaceAction');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
@@ -2493,8 +2384,6 @@ export function getWebviewContent(
     const meterBarWrap = document.getElementById('meterBarWrap');
     const meterProgress = document.getElementById('meterProgress');
     const meterCollapsedLabel = document.getElementById('meterCollapsedLabel');
-    const meterByokIcon = document.getElementById('meterByokIcon');
-    const meterLocalIcon = document.getElementById('meterLocalIcon');
     const meterCloudIcon = document.getElementById('meterCloudIcon');
     const meterBuckets = document.getElementById('meterBuckets');
 
@@ -2580,76 +2469,32 @@ export function getWebviewContent(
       vscode.postMessage({ type: 'completeOnboarding' });
     }
 
-    function updateOnboardingBoundary() {
-      if (!onboardingBoundary) return;
-      if (!sessionBoundaryAuthoritative) {
-        onboardingBoundary.textContent =
-          'Runtime route pending: the AGI CLI will confirm Local, BYOK, or Managed Cloud before the first turn starts.';
-        return;
-      }
-      if (activeRuntimeSource === 'user-api-key') {
-        var byokText = 'Active boundary: BYOK · requests go directly to your provider.';
-        if (activeAccountIdentity) {
-          byokText += ' AGI Cloud sign-in: ' + activeAccountIdentity.displayName +
-            ' (not used for provider billing).';
-        }
-        onboardingBoundary.textContent = byokText;
-      } else if (activeRuntimeSource === 'managed-plan') {
-        var cloudText = 'Active boundary: Managed Cloud · prompts are sent to AGI infrastructure.';
-        if (activeAccountIdentity) {
-          cloudText += ' Plan owner: ' + activeAccountIdentity.displayName;
-          if (activeAccountIdentity.email) cloudText += ' (' + activeAccountIdentity.email + ')';
-          cloudText += ' · ' + activeAccountIdentity.planName + ' plan.';
-        }
-        onboardingBoundary.textContent = cloudText;
-      } else if (activeRuntimeSource === 'managed-unavailable') {
-        onboardingBoundary.textContent =
-          'Managed Cloud developer access is not included in the current AGI plan. Local and provider BYOK remain available as separate boundaries.';
-      } else {
-        onboardingBoundary.textContent =
-          'Active developer-session boundary: Local · workspace-scoped runtime; no AGI Cloud account is required.';
-      }
-    }
-
     function renderOnboardingWorkspaceState(status) {
       if (onboardingSteps.length === 0) return;
       var heading = onboardingSteps[0].querySelector('h2');
-      if (!heading || !onboardingWorkspaceLede || !onboardingWorkspaceCardTitle ||
-          !onboardingWorkspaceCardCopy || !onboardingWorkspaceAction) return;
+      if (!heading || !onboardingWorkspaceLede || !onboardingWorkspaceAction) return;
       if (status === 'workspace-required') {
         heading.textContent = 'Open a workspace to begin.';
         onboardingWorkspaceLede.textContent =
-          'Choose a folder or workspace before AGI can read project context, attach files, or propose reviewable changes.';
-        onboardingWorkspaceCardTitle.textContent = 'No project is open';
-        onboardingWorkspaceCardCopy.textContent =
-          'Opening a workspace establishes the developer-session scope. You will choose Local, BYOK, or Managed Cloud separately.';
+          'Choose a folder before AGI can read project context, attach files, or propose reviewable changes.';
         onboardingWorkspaceAction.textContent = 'Open folder';
         onboardingWorkspaceAction.hidden = false;
       } else if (status === 'workspace-untrusted') {
         heading.textContent = 'Review this workspace first.';
         onboardingWorkspaceLede.textContent =
           'AGI keeps project files and tools disabled while VS Code is in Restricted Mode.';
-        onboardingWorkspaceCardTitle.textContent = 'Workspace Trust is required';
-        onboardingWorkspaceCardCopy.textContent =
-          'Review the folder contents, then use VS Code Workspace Trust before starting a developer session.';
         onboardingWorkspaceAction.textContent = 'Manage trust';
         onboardingWorkspaceAction.hidden = false;
       } else if (status === 'unavailable') {
         heading.textContent = 'Connect the developer runtime.';
         onboardingWorkspaceLede.textContent =
           'This workspace is open, but the local AGI runtime is not ready yet.';
-        onboardingWorkspaceCardTitle.textContent = 'Finish setup before sending';
-        onboardingWorkspaceCardCopy.textContent =
-          'Open Runtime settings to install or configure the AGI CLI. No prompt will be sent while setup is incomplete.';
         onboardingWorkspaceAction.textContent = 'Open runtime setup';
         onboardingWorkspaceAction.hidden = false;
       } else {
         heading.textContent = 'Build with AGI in this repository.';
         onboardingWorkspaceLede.textContent =
-          'Ask about code, attach workspace files, edit through reviewable diffs, run approved commands, and test the open project.';
-        onboardingWorkspaceCardTitle.textContent = 'Workspace-scoped by default';
-        onboardingWorkspaceCardCopy.textContent =
-          'The sidebar, editor chat, and @agi stay scoped to this workspace. The header identifies whether inference uses Local, BYOK, or Managed Cloud. Developer sessions do not silently merge into consumer Web, Mobile, or Desktop chat history.';
+          'Ask about code, edit through reviewable diffs, and run approved commands, all scoped to this workspace.';
         onboardingWorkspaceAction.hidden = true;
       }
     }
@@ -2672,11 +2517,6 @@ export function getWebviewContent(
       });
     }
     if (onboardingSkip) onboardingSkip.addEventListener('click', completeOnboarding);
-    if (onboardingTasks) {
-      onboardingTasks.addEventListener('click', function() {
-        vscode.postMessage({ type: 'openCloudTasks' });
-      });
-    }
     if (onboardingPermissionDocs) {
       onboardingPermissionDocs.addEventListener('click', function() {
         vscode.postMessage({ type: 'openPermissionDocs' });
@@ -2742,11 +2582,11 @@ export function getWebviewContent(
     // Managed Cloud is the only route that leaves the machine, so it is the only
     // one styled as a warning.
     var SESSION_IDENTITY_BY_SOURCE = {
-      'unbounded': { label: 'Local', boundary: 'local', title: 'Workspace-local runtime - nothing leaves this machine' },
-      'user-api-key': { label: 'BYOK', boundary: 'byok', title: 'Your own API key - requests go straight to the provider' },
-      'managed-plan': { label: 'Managed Cloud', boundary: 'cloud', title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
-      'managed-unavailable': { label: 'Cloud unavailable', boundary: 'none', title: 'The signed-in AGI plan does not currently include Managed Cloud developer access' },
-      'runtime-unavailable': { label: 'Runtime unavailable', boundary: 'none', title: 'Connect the workspace-scoped AGI CLI before selecting a Local, BYOK, or Managed Cloud boundary' },
+      'unbounded': { label: 'Local', boundary: 'local', showProvider: false, title: 'Workspace-local runtime - nothing leaves this machine' },
+      'user-api-key': { label: 'Your key', boundary: 'byok', showProvider: true, title: 'Your own API key - requests go straight to the provider' },
+      'managed-plan': { label: 'Managed', boundary: 'cloud', showProvider: false, title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
+      'managed-unavailable': { label: 'Cloud unavailable', boundary: 'none', showProvider: false, title: 'The signed-in AGI plan does not currently include Managed Cloud developer access' },
+      'runtime-unavailable': { label: 'Runtime unavailable', boundary: 'none', showProvider: false, title: 'Connect the workspace-scoped AGI CLI before selecting a Local, your-key, or Managed Cloud boundary' },
     };
 
     function renderSessionIdentity() {
@@ -2761,27 +2601,29 @@ export function getWebviewContent(
         return;
       }
       if (!sessionBoundaryAuthoritative) {
-        sessionBoundaryLabel.textContent = 'Route pending';
+        // Naming a route the CLI has not confirmed would be a claim about where
+        // the prompt goes. Say nothing until the session summary arrives.
+        sessionBoundaryLabel.textContent = '';
         sessionProviderLabel.textContent = '';
         sessionIdentitySeparator.hidden = true;
         sessionIdentity.setAttribute('data-boundary', 'none');
-        sessionIdentity.title =
-          'The AGI CLI will confirm Local, BYOK, or Managed Cloud before the first turn starts.';
-        sessionIdentity.setAttribute('aria-label', 'Runtime route pending. ' + sessionIdentity.title);
-        sessionIdentity.style.display = 'inline-flex';
-        updateOnboardingBoundary();
+        sessionIdentity.removeAttribute('title');
+        sessionIdentity.removeAttribute('aria-label');
+        sessionIdentity.style.display = 'none';
         return;
       }
       // An unrecognised source falls back to the cloud label on purpose: never
       // claim "Local" for a boundary this webview cannot identify.
       var spec = SESSION_IDENTITY_BY_SOURCE[activeRuntimeSource] || SESSION_IDENTITY_BY_SOURCE['managed-plan'];
-      var showProviderIdentity = activeRuntimeSource !== 'runtime-unavailable';
+      var showProviderIdentity = spec.showProvider;
       sessionBoundaryLabel.textContent = spec.label;
       sessionProviderLabel.textContent = showProviderIdentity ? activeProviderIdentity : '';
       sessionIdentitySeparator.hidden = !showProviderIdentity || !activeProviderIdentity;
       sessionIdentity.setAttribute('data-boundary', spec.boundary);
       var title = spec.title;
-      if (showProviderIdentity && activeProviderIdentity) title += ' · Provider: ' + activeProviderIdentity;
+      if (activeProviderIdentity && activeRuntimeSource !== 'runtime-unavailable') {
+        title += ' · Provider: ' + activeProviderIdentity;
+      }
       if (activeAccountIdentity &&
           (activeRuntimeSource === 'managed-plan' || activeRuntimeSource === 'managed-unavailable')) {
         title += ' · Account: ' + activeAccountIdentity.displayName;
@@ -2796,7 +2638,6 @@ export function getWebviewContent(
         (showProviderIdentity && activeProviderIdentity ? ' using ' + activeProviderIdentity : '') + '. ' + title);
       sessionIdentity.style.display = 'inline-flex';
       renderComposerStatus(spec.label);
-      updateOnboardingBoundary();
     }
 
     function renderNoWorkspaceIdentity() {
@@ -2935,13 +2776,11 @@ export function getWebviewContent(
       }
 
       if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
-          !meterBarWrap || !meterByokIcon || !meterLocalIcon || !meterCloudIcon) return;
+          !meterBarWrap || !meterCloudIcon) return;
 
       var bucketsPayload = null;
 
       // Reset all conditional elements
-      meterByokIcon.style.display = 'none';
-      meterLocalIcon.style.display = 'none';
       meterCloudIcon.style.display = 'none';
       meterBarWrap.style.display = 'none';
       upgradeBtn.style.display = 'none';
@@ -2973,14 +2812,14 @@ export function getWebviewContent(
         if (meterCollapsedLabel) meterCollapsedLabel.textContent = paidPlanNeedsAttention
           ? 'Billing needs attention'
           : 'Upgrade for Cloud';
-      } else if (payload.source === 'unbounded') {
-        meterLocalIcon.style.display = 'inline';
-        meterText.textContent = payload.usageLabel || 'Local model - no quota tracking';
-        meterReset.textContent = '';
-      } else if (payload.source === 'user-api-key') {
-        meterByokIcon.style.display = 'inline';
-        meterText.textContent = payload.usageLabel || 'BYOK mode - no AGI-managed quota is active';
-        meterReset.textContent = '';
+      } else if (payload.source === 'unbounded' || payload.source === 'user-api-key') {
+        // Neither route has an AGI quota, so the meter has nothing to meter.
+        // The route itself is named in the header chip and the composer status
+        // line, and the billing consequence lives in Account & usage.
+        usageMeterBanner.style.display = 'none';
+        usageMeterCollapsed.style.display = 'none';
+        renderUsageBuckets(null);
+        return;
       } else {
         // managed-plan
         bucketsPayload = payload;
@@ -3088,9 +2927,6 @@ export function getWebviewContent(
       if (modelPill) modelPill.disabled = blocked;
       if (controlsSummary) controlsSummary.disabled = blocked;
       sendBtn.disabled = blocked;
-      document.querySelectorAll('.prompt-chip').forEach(function(chip) {
-        chip.disabled = blocked;
-      });
       if (blocked) {
         closeModelPopover();
         if (plusMenu) plusMenu.classList.remove('open');
@@ -3185,8 +3021,18 @@ export function getWebviewContent(
       if (!modelPill) return;
       var effort = capitalizeControl(activeEffort);
       var effortShort = effort === 'Medium' ? 'Med' : effort;
-      modelPill.textContent = activeSupportsEffort && effortShort
-        ? currentModelLabel + ' · ' + effortShort
+      var nameEl = document.createElement('span');
+      nameEl.className = 'model-pill-name';
+      nameEl.textContent = currentModelLabel;
+      modelPill.replaceChildren(nameEl);
+      if (activeSupportsEffort && effortShort) {
+        var effortEl = document.createElement('span');
+        effortEl.className = 'model-pill-effort';
+        effortEl.textContent = ' · ' + effortShort;
+        modelPill.appendChild(effortEl);
+      }
+      modelPill.title = activeSupportsEffort && effortShort
+        ? currentModelLabel + ' · ' + effortShort + ' effort'
         : currentModelLabel;
     }
 
@@ -3236,6 +3082,17 @@ export function getWebviewContent(
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
         ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+    }
+
+    function mountEmptyState() {
+      var mounted = document.createElement('div');
+      mounted.className = 'empty-state';
+      mounted.id = 'emptyState';
+      mounted.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
+        '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
+        '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
+      messagesEl.appendChild(mounted);
+      emptyStateEl = mounted;
     }
 
     function addMessage(role, text) {
@@ -4020,7 +3877,7 @@ export function getWebviewContent(
         var icon = menuAccountAction.querySelector('.codicon');
         if (icon) icon.className = 'codicon codicon-' + (accountSignedIn ? 'sign-out' : 'sign-in');
       }
-      if (emptyStateSignIn) emptyStateSignIn.hidden = accountSignedIn;
+      if (composerStatusSignIn) composerStatusSignIn.hidden = accountSignedIn;
     }
 
     // ── Composer status line ──────────────────────────────────────────────────
@@ -4028,11 +3885,14 @@ export function getWebviewContent(
       if (composerStatusBoundary && boundaryLabel) {
         composerStatusBoundary.textContent = boundaryLabel;
       }
+      if (composerStatusSeparator && composerStatusBoundary) {
+        composerStatusSeparator.hidden = composerStatusBoundary.textContent === '';
+      }
       if (composerStatusMode) composerStatusMode.textContent = capitalizeControl(activeMode);
     }
 
-    if (emptyStateSignIn) {
-      emptyStateSignIn.addEventListener('click', function () {
+    if (composerStatusSignIn) {
+      composerStatusSignIn.addEventListener('click', function () {
         vscode.postMessage({ type: 'openSurface', payload: { surfaceId: 'signIn' } });
       });
     }
@@ -4599,7 +4459,6 @@ export function getWebviewContent(
         renderMenuAccount();
         if (lastUsageMeterPayload) renderUsageMeter(lastUsageMeterPayload);
         if (activeRuntimeSource) updateRuntimePill(activeRuntimeSource);
-        else updateOnboardingBoundary();
       }
 
       else if (msg.type === 'sessionsList') {
@@ -4666,16 +4525,6 @@ export function getWebviewContent(
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
-        var boundaryLabel = msg.payload.trustMode === 'local'
-          ? 'Local'
-          : msg.payload.trustMode === 'byok'
-            ? 'BYOK'
-            : 'Managed Cloud';
-        addMessage(
-          'system',
-          'Resumed developer session · ' + boundaryLabel +
-            (msg.payload.provider ? ' · ' + msg.payload.provider : '')
-        );
         for (var historyIndex = 0; historyIndex < msg.payload.messages.length; historyIndex++) {
           var historyMessage = msg.payload.messages[historyIndex];
           if (!historyMessage) continue;
@@ -4687,7 +4536,14 @@ export function getWebviewContent(
             addMessage('user', historyMessage.text || '');
           }
         }
-        emptyStateEl = null;
+        if (messagesEl.childElementCount === 0) {
+          // A session the CLI created can resume with nothing to replay. An
+          // empty panel says nothing; the empty state at least names the view.
+          mountEmptyState();
+          syncRecentChats();
+        } else {
+          emptyStateEl = null;
+        }
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
@@ -4706,21 +4562,7 @@ export function getWebviewContent(
         invalidateAttachmentBatches();
         messagesEl.innerHTML = '';
         activePlanCard = null;
-        var freshEmpty = document.createElement('div');
-        freshEmpty.className = 'empty-state';
-        freshEmpty.id = 'emptyState';
-        freshEmpty.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
-          '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
-          '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>' +
-          '</div>';
-        freshEmpty.querySelectorAll('.prompt-chip').forEach(function(chip) {
-          chip.addEventListener('click', function() {
-            var p = chip.dataset.prompt || '';
-            if (p) { userInput.value = p; userInput.focus(); autoResize(); freshEmpty.style.display = 'none'; }
-          });
-        });
-        messagesEl.appendChild(freshEmpty);
-        emptyStateEl = freshEmpty;
+        mountEmptyState();
         syncRecentChats();
         streaming = false;
         currentAssistantEl = null;
@@ -5314,7 +5156,6 @@ export function getWebviewContent(
       toolCallStackHasError = false;
     }
 
-    // ── Empty-state prompt chips (design-spec §8) ────────────────────────────
     var emptyStateEl = document.getElementById('emptyState');
     function hideEmptyState() {
       if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
@@ -5365,30 +5206,19 @@ export function getWebviewContent(
       var viewAll = document.createElement('button');
       viewAll.type = 'button';
       viewAll.className = 'recent-chats-all';
-      viewAll.textContent = 'More ' + recentChats.total;
+      viewAll.textContent = 'View all';
+      viewAll.setAttribute('aria-label', 'View all ' + recentChats.total + ' sessions');
       viewAll.addEventListener('click', function() {
         openSessionsSheet();
       });
       block.appendChild(viewAll);
       emptyStateEl.insertBefore(block, emptyStateEl.firstChild);
     }
-    document.querySelectorAll('.prompt-chip').forEach(function(chip) {
-      chip.addEventListener('click', function() {
-        var prompt = chip.dataset.prompt || '';
-        if (!prompt) return;
-        userInput.value = prompt;
-        userInput.focus();
-        autoResize();
-        hideEmptyState();
-      });
-    });
-
     if (onboardingEl && onboardingEl.style.display !== 'none') {
       setOnboardingVisible(true);
     } else if (onboardingEl) {
       setOnboardingVisible(false);
     }
-    updateOnboardingBoundary();
 
     // ── Signal ready ──────────────────────────────────────────────────────────
     vscode.postMessage({ type: 'ready' });

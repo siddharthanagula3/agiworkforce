@@ -336,15 +336,6 @@ describe('ChatStateManager local turn lifecycle', () => {
     ]);
   });
 
-  it('routes the background-task handoff to the in-IDE cloud task list', async () => {
-    const harness = makeHarness();
-
-    await harness.manager.handleMessage({ type: 'openCloudTasks' });
-
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.showCloudTasks');
-    expect(vscode.env.openExternal).not.toHaveBeenCalled();
-  });
-
   it('does not mislabel unresolved Auto routing as AGI Cloud', async () => {
     const harness = makeHarness();
 

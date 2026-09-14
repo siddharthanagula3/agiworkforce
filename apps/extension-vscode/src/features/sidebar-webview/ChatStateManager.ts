@@ -10,6 +10,7 @@ import {
   buildGroupedQuickPickItems,
   isModelReachableForTier,
   MODEL_CONTEXT_LIMITS,
+  providerDisplayLabel,
   UNKNOWN_PROVIDER_BRAND_COLOR,
 } from '../model-picker/modelConstants';
 import {
@@ -155,7 +156,6 @@ export type WebviewToExtMessage =
   | { type: 'completeOnboarding' }
   | { type: 'openPermissionDocs' }
   | { type: 'openPrivacySettings' }
-  | { type: 'openCloudTasks' }
   | { type: 'openRecentConversation'; payload: { threadId: string } }
   | { type: 'openPathReference'; payload: PathReferenceTarget }
   | { type: 'requestContextMenuState' }
@@ -839,11 +839,6 @@ export class ChatStateManager {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/settings/privacy?from=vscode-extension'),
         );
-        break;
-      }
-
-      case 'openCloudTasks': {
-        await vscode.commands.executeCommand('agi-workforce.showCloudTasks');
         break;
       }
 
@@ -1556,6 +1551,11 @@ export class ChatStateManager {
     return false;
   }
 
+  /**
+   * The CLI reports a provider id; the header names a provider. Resolving here
+   * keeps the catalog the single owner of that name and keeps raw ids out of
+   * the webview.
+   */
   private _postSessionBoundary(
     trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>,
     provider?: string,
@@ -1564,7 +1564,7 @@ export class ChatStateManager {
       type: 'sessionBoundary',
       payload: {
         trustMode,
-        ...(provider === undefined ? {} : { provider }),
+        ...(provider === undefined ? {} : { provider: providerDisplayLabel(provider) }),
       },
     });
   }
