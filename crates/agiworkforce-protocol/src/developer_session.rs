@@ -645,6 +645,10 @@ pub struct TurnStartResponse {
 pub enum TurnFailureCode {
     /// The route has no credential at all, so there is nothing to refresh.
     ProviderAuthMissing,
+    /// No AGI Workforce session, and no other route can run the model.
+    AccountSignedOut,
+    /// Signed in, but the account's plan does not include the model.
+    PlanExcludesModel,
     /// A credential exists and the provider rejected it.
     ProviderAuthInvalid,
     ProviderRateLimited,
@@ -670,6 +674,10 @@ pub enum TurnFailureCode {
 pub enum TurnFailureAction {
     /// Send the user to a sign-in for `provider`.
     SignInProvider,
+    /// Send the user to the AGI Workforce sign-in.
+    SignInAccount,
+    /// Send the user to the account's upgrade route.
+    UpgradePlan,
     /// Send the user to settings: the route, the model, or the config is wrong.
     OpenSettings,
     /// Running the same turn again may work.
@@ -758,6 +766,8 @@ impl TurnFailureCode {
             TurnFailureCode::ProviderAuthMissing | TurnFailureCode::ProviderAuthInvalid => {
                 TurnFailureAction::SignInProvider
             }
+            TurnFailureCode::AccountSignedOut => TurnFailureAction::SignInAccount,
+            TurnFailureCode::PlanExcludesModel => TurnFailureAction::UpgradePlan,
             TurnFailureCode::ContextWindowExceeded | TurnFailureCode::InvalidRequest => {
                 TurnFailureAction::OpenSettings
             }

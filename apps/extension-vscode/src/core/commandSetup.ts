@@ -160,6 +160,8 @@ import { openAgentConfig } from '../features/config/agentConfig';
 
 const execFileAsync = promisify(execFile);
 
+const UPGRADE_URL = 'https://agiworkforce.com/pricing';
+
 function requireWorkspaceMemoryScope(): boolean {
   if ((vscode.workspace.workspaceFolders?.length ?? 0) > 0) return true;
   void vscode.window.showWarningMessage(
@@ -396,6 +398,15 @@ async function readHostModels(
 }
 
 async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<void> {
+  if (unreachable.action === 'sign_in_account') {
+    await vscode.commands.executeCommand('agi-workforce.signIn');
+    await vscode.commands.executeCommand('agi-workforce.selectModel', { refresh: true });
+    return;
+  }
+  if (unreachable.action === 'upgrade_plan') {
+    await vscode.commands.executeCommand('agi-workforce.openUpgrade');
+    return;
+  }
   if (unreachable.action === 'sign_in_provider' && unreachable.provider !== undefined) {
     await vscode.commands.executeCommand('agi-workforce.signInProvider', unreachable.provider);
     await vscode.commands.executeCommand('agi-workforce.selectModel', { refresh: true });
@@ -562,7 +573,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       return;
     }
     if (lock.kind === 'upgrade') {
-      await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
+      await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
       return;
     }
     await vscode.commands.executeCommand('agi-workforce.openAgentConfig');
@@ -874,6 +885,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
+    register('agi-workforce.openUpgrade', async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
+    }),
+
     register('agi-workforce.signOut', async () => {
       await signOutOfAgiCloud(context.secrets);
       await clearAccountTierCache(context);
@@ -975,7 +990,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           'Cancel',
         );
         if (choice === 'Upgrade') {
-          await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
+          await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
         }
         return;
       }

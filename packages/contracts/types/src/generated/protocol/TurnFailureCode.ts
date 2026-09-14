@@ -6,6 +6,8 @@
  */
 export type TurnFailureCode =
   | 'provider_auth_missing'
+  | 'account_signed_out'
+  | 'plan_excludes_model'
   | 'provider_auth_invalid'
   | 'provider_rate_limited'
   | 'provider_unavailable'

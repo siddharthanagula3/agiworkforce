@@ -207,6 +207,195 @@ pub fn selection_provider_override<'a>(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Route selection
+// ---------------------------------------------------------------------------
+
+/// The account facts a route decision needs, read once so a caller deciding for
+/// many models does not re-read the auth store per model.
+#[derive(Debug, Clone, Default)]
+pub struct AccountRoute {
+    signed_in: bool,
+    tier: Option<crate::tier_cache::UserTier>,
+}
+
+impl AccountRoute {
+    /// A route whose account facts are given rather than read from this
+    /// machine, so a caller can decide for a state it is not in.
+    pub fn with(signed_in: bool, tier: Option<crate::tier_cache::UserTier>) -> Self {
+        Self { signed_in, tier }
+    }
+
+    pub fn load() -> Self {
+        Self {
+            signed_in: crate::tier_cache::load_jwt().is_some(),
+            tier: crate::tier_cache::read_tier_cache().map(|cached| cached.tier),
+        }
+    }
+
+    pub fn signed_in(&self) -> bool {
+        self.signed_in
+    }
+
+    fn tier_label(&self) -> String {
+        self.tier
+            .as_ref()
+            .map(|tier| tier.label().to_string())
+            .unwrap_or_else(|| "current".to_string())
+    }
+
+    /// True when the managed route can run this model. An unknown tier is not
+    /// a refusal; the server decides.
+    fn runs_managed(&self, model: &str) -> bool {
+        if !self.signed_in {
+            return false;
+        }
+        let Some(entry) = crate::model_catalog::find(model) else {
+            return false;
+        };
+        if !entry.cloud_eligible {
+            return false;
+        }
+        match self.tier.as_ref() {
+            Some(tier) => crate::model_catalog::can_access_model_for_tier(model, tier),
+            None => true,
+        }
+    }
+
+    fn cloud_eligible(model: &str) -> bool {
+        crate::model_catalog::find(model).is_some_and(|entry| entry.cloud_eligible)
+    }
+}
+
+/// What [`decide_turn_route`] chose, and why it cannot run when it cannot.
+pub enum TurnRoute {
+    Runnable(Provider),
+    Blocked {
+        provider: Option<Provider>,
+        error: anyhow::Error,
+    },
+}
+
+impl TurnRoute {
+    /// The route, whether or not it can run right now. A session is built on
+    /// this so a missing credential is reported by the turn, not by the build.
+    pub fn provider(self) -> Result<Provider> {
+        match self {
+            TurnRoute::Runnable(provider)
+            | TurnRoute::Blocked {
+                provider: Some(provider),
+                ..
+            } => Ok(provider),
+            TurnRoute::Blocked { error, .. } => Err(error),
+        }
+    }
+
+    pub fn runnable(self) -> Result<Provider> {
+        match self {
+            TurnRoute::Runnable(provider) => Ok(provider),
+            TurnRoute::Blocked { error, .. } => Err(error),
+        }
+    }
+}
+
+/// The route a turn takes for `model`, and the one the model list reports.
+///
+/// An explicit provider still wins. Otherwise the managed account comes first
+/// when it can run the model, then the vendor's own key, so a subscriber is
+/// never asked for a key their plan already covers.
+pub fn decide_turn_route(
+    config: &CliConfig,
+    account: &AccountRoute,
+    model: &str,
+    provider_override: Option<&str>,
+) -> TurnRoute {
+    if provider_override
+        .map(str::trim)
+        .is_some_and(|name| !name.is_empty())
+    {
+        return match resolve_selected_provider(model, provider_override) {
+            Ok(provider) => match resolve_key(config, &provider) {
+                Ok(_) => TurnRoute::Runnable(provider),
+                Err(error) => TurnRoute::Blocked {
+                    provider: Some(provider),
+                    error,
+                },
+            },
+            Err(error) => TurnRoute::Blocked {
+                provider: None,
+                error,
+            },
+        };
+    }
+
+    if account.runs_managed(model) {
+        return TurnRoute::Runnable(Provider::ManagedCloud);
+    }
+
+    let vendor = resolve_selected_provider(model, None);
+    if let Ok(provider) = &vendor {
+        if resolve_key(config, provider).is_ok() {
+            return TurnRoute::Runnable(provider.clone());
+        }
+    }
+
+    if AccountRoute::cloud_eligible(model) {
+        let error = if account.signed_in {
+            CliError::PlanExcludesModel {
+                model: model.to_string(),
+                tier: account.tier_label(),
+            }
+        } else {
+            CliError::AccountSignedOut {
+                model: model.to_string(),
+            }
+        };
+        return TurnRoute::Blocked {
+            provider: Some(Provider::ManagedCloud),
+            error: error.into(),
+        };
+    }
+
+    match vendor {
+        Ok(provider) => {
+            let error = resolve_key(config, &provider).err().unwrap_or_else(|| {
+                CliError::Config {
+                    message: format!("No route on this machine can run '{model}'."),
+                }
+                .into()
+            });
+            TurnRoute::Blocked {
+                provider: Some(provider),
+                error,
+            }
+        }
+        Err(error) => TurnRoute::Blocked {
+            provider: None,
+            error,
+        },
+    }
+}
+
+/// The route a turn can actually run on, or why none can.
+pub fn resolve_turn_route(
+    config: &CliConfig,
+    account: &AccountRoute,
+    model: &str,
+    provider_override: Option<&str>,
+) -> Result<Provider> {
+    decide_turn_route(config, account, model, provider_override).runnable()
+}
+
+/// The route a session is built on, which may still need a credential.
+pub fn select_turn_route(
+    config: &CliConfig,
+    account: &AccountRoute,
+    model: &str,
+    provider_override: Option<&str>,
+) -> Result<Provider> {
+    decide_turn_route(config, account, model, provider_override).provider()
+}
+
 /// Resolve the API key for a provider, returning an error if required but missing.
 pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Option<String>> {
     let name = provider_name(provider);
@@ -274,10 +463,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             if key.is_none() {
                 return Err(CliError::auth_missing(
                     pname.clone(),
-                    format!(
-                        "No API key found. Run `agi login {}` or set {}.",
-                        pname, env_var
-                    ),
+                    auth_missing_message(pname, env_var),
                 )
                 .into());
             }
@@ -295,17 +481,26 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
                 .or_else(|| env_api_key(env_var))
                 .or_else(|| auth_store_api_key(name));
             if key.is_none() {
-                return Err(CliError::auth_missing(
-                    name,
-                    format!(
-                        "No API key found. Run `agi login {}` or set {}.",
-                        name, env_var
-                    ),
-                )
-                .into());
+                return Err(
+                    CliError::auth_missing(name, auth_missing_message(name, env_var)).into(),
+                );
             }
             Ok(key)
         }
+    }
+}
+
+fn auth_missing_message(provider: &str, env_var: &str) -> String {
+    if crate::errors::login_opens_vendor_subscription(provider) {
+        format!(
+            "No API key found. Run `agi login` to use your AGI Workforce plan, or set {env_var} \
+             to use your own key."
+        )
+    } else {
+        format!(
+            "No API key found. Run `agi login` to use your AGI Workforce plan, or run \
+             `agi login {provider}` or set {env_var} to use your own key."
+        )
     }
 }
 

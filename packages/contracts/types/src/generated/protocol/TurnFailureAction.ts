@@ -3,4 +3,10 @@
 /**
  * What a client should offer the user next.
  */
-export type TurnFailureAction = 'sign_in_provider' | 'open_settings' | 'retry' | 'none';
+export type TurnFailureAction =
+  | 'sign_in_provider'
+  | 'sign_in_account'
+  | 'upgrade_plan'
+  | 'open_settings'
+  | 'retry'
+  | 'none';

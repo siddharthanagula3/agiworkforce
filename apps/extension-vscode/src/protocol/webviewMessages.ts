@@ -191,7 +191,7 @@ const respondToApproval = z.object({
 const resolveTurnFailure = z.object({
   type: z.literal('resolveTurnFailure'),
   payload: z.object({
-    kind: z.enum(['sign-in-provider', 'open-settings']),
+    kind: z.enum(['sign-in-provider', 'sign-in-account', 'upgrade-plan', 'open-settings']),
     provider: z
       .string()
       .min(1)

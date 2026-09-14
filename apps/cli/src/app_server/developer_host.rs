@@ -899,13 +899,18 @@ impl CliDeveloperSessionHost {
     fn configured_auto_trust_mode(
         &self,
     ) -> Result<agiworkforce_model_registry::TrustMode, DeveloperSessionHostError> {
-        let configured_provider = models::provider_from_name(&self.config.default.provider)
-            .ok_or_else(|| {
-                DeveloperSessionHostError::invalid_request(format!(
-                    "Unknown configured provider '{}' for Auto routing",
-                    self.config.default.provider
-                ))
-            })?;
+        let configured = self.config.default.provider.as_str();
+        if configured == crate::model_catalog::default_provider()
+            && models::AccountRoute::load().signed_in()
+        {
+            return Ok(agiworkforce_model_registry::TrustMode::ManagedCloud);
+        }
+        let configured_provider = models::provider_from_name(configured).ok_or_else(|| {
+            DeveloperSessionHostError::invalid_request(format!(
+                "Unknown configured provider '{}' for Auto routing",
+                self.config.default.provider
+            ))
+        })?;
         let trust_mode = match configured_provider {
             Provider::ManagedCloud => agiworkforce_model_registry::TrustMode::ManagedCloud,
             Provider::Ollama(OllamaMode::Local)

@@ -60,7 +60,12 @@ pub async fn run_repl(
         &config.default.provider,
         provider_override,
     );
-    let provider = crate::models::resolve_selected_provider(model, provider_override)?;
+    let provider = crate::models::select_turn_route(
+        config,
+        &crate::models::AccountRoute::load(),
+        model,
+        provider_override,
+    )?;
     let provider_str = crate::models::provider_name(&provider).to_string();
     output::print_compact_header(&provider_str);
     output::print_banner(model, &provider_str);
