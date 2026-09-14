@@ -81,23 +81,34 @@ export function useLocalSessions(): LocalSessionsState {
     const pending = groups.filter((group) => group.unavailable === undefined);
     if (pending.length === 0) return;
     let cancelled = false;
-    void Promise.all(
-      pending.map(async (group) => {
-        try {
-          return [group.rootId, await listDeveloperModels(group.rootId)] as const;
-        } catch {
-          return null;
-        }
-      }),
-    ).then((entries) => {
-      if (cancelled) return;
-      const resolved = entries.filter(
-        (entry): entry is [string, DeveloperRuntimeModels] => entry !== null,
-      );
-      if (resolved.length > 0) setModels(Object.fromEntries(resolved));
-    });
+
+    const read = (refresh: boolean) => {
+      void Promise.all(
+        pending.map(async (group) => {
+          try {
+            return [
+              group.rootId,
+              await listDeveloperModels(group.rootId, refresh ? { refresh: true } : {}),
+            ] as const;
+          } catch {
+            return null;
+          }
+        }),
+      ).then((entries) => {
+        if (cancelled) return;
+        const resolved = entries.filter(
+          (entry): entry is [string, DeveloperRuntimeModels] => entry !== null,
+        );
+        if (resolved.length > 0) setModels(Object.fromEntries(resolved));
+      });
+    };
+
+    read(false);
+    const onFocus = () => read(true);
+    window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', onFocus);
     };
   }, [groups]);
 
