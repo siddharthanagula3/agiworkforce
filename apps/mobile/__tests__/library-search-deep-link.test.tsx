@@ -109,8 +109,15 @@ jest.mock('../src/features/artifacts/store', () => ({
 }));
 
 jest.mock('../src/features/auth/store', () => ({
-  useAuthStore: (selector: (state: { clerkUserId: null }) => unknown) =>
-    selector({ clerkUserId: null }),
+  useAuthStore: (selector: (state: { clerkUserId: string }) => unknown) =>
+    selector({ clerkUserId: 'user_library_qa' }),
+}));
+
+jest.mock('@/services/api', () => ({ api: { get: jest.fn(), delete: jest.fn() } }));
+
+jest.mock('@/services/fileCreation', () => ({
+  downloadGeneratedFile: jest.fn(async () => 'file:///exports/launch-plan.pdf'),
+  shareFile: jest.fn(async () => undefined),
 }));
 
 jest.mock('../src/features/auth/services/accountScopedUiState', () => ({
@@ -136,37 +143,85 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => {
   };
 });
 
+import { api } from '@/services/api';
+import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
 import { LibraryScreen } from '../src/features/library';
 
-describe('Library global-search deep link', () => {
+const mockApi = api as unknown as { get: jest.Mock };
+
+const HOSTED_IMAGE = {
+  id: '11111111-1111-4111-8111-111111111111',
+  file_name: 'poster.png',
+  mime_type: 'image/png',
+  kind: 'image',
+  byte_count: 1024,
+  uri: '/api/files/11111111-1111-4111-8111-111111111111',
+  surface: 'file',
+  previewable: true,
+  origin: 'generated',
+  source_surface: 'web',
+  provider: null,
+  model: null,
+  prompt: 'Launch poster',
+  created_at: '2026-07-30T10:04:00.000Z',
+};
+
+const HOSTED_DOCUMENT = {
+  ...HOSTED_IMAGE,
+  id: '22222222-2222-4222-8222-222222222222',
+  file_name: 'launch-plan.pdf',
+  mime_type: 'application/pdf',
+  kind: 'file',
+  uri: '/api/files/22222222-2222-4222-8222-222222222222',
+  previewable: false,
+  origin: 'uploaded',
+  prompt: null,
+};
+
+describe('Library reads the account library, not the local transcript', () => {
   beforeEach(() => {
     mockPush.mockClear();
-  });
-
-  it('opens the exact authorized generated image', async () => {
-    const screen = render(<LibraryScreen initialImageId="image-message-1" />);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('/api/files/11111111-1111-4111-8111-111111111111')).toBeTruthy();
+    jest.clearAllMocks();
+    mockApi.get.mockImplementation(async (path: string) => {
+      const query = new URL(`http://localhost${path}`).searchParams.get('q');
+      const items = [HOSTED_IMAGE, HOSTED_DOCUMENT].filter(
+        (entry) => !query || entry.file_name.includes(query),
+      );
+      return { items, has_more: false, next_offset: null };
     });
   });
 
-  it('filters documents locally and opens the exact source chat', () => {
+  it('opens the exact authorized generated image from the hosted library', async () => {
+    const screen = render(<LibraryScreen initialImageId={HOSTED_IMAGE.id} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(HOSTED_IMAGE.uri)).toBeTruthy();
+    });
+  });
+
+  it('renders a hosted document, filters it by the search field, and shares it on press', async () => {
     const screen = render(<LibraryScreen />);
 
-    expect(screen.getByText('Documents')).toBeTruthy();
-    expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    });
 
     fireEvent.press(screen.getByText('Documents'));
     fireEvent.changeText(screen.getByLabelText('Search library'), 'missing');
-    expect(screen.queryByText('launch-plan.pdf')).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText('launch-plan.pdf')).toBeNull();
+    });
     expect(screen.getByText(/Nothing in documents matches/)).toBeTruthy();
 
     fireEvent.changeText(screen.getByLabelText('Search library'), 'launch');
-    fireEvent.press(screen.getByLabelText('Open source chat for launch-plan.pdf'));
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/(app)/chat/[id]',
-      params: { id: 'conversation-1' },
+    await waitFor(() => {
+      expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.press(screen.getByLabelText('Open launch-plan.pdf'));
+    await waitFor(() => {
+      expect(downloadGeneratedFile).toHaveBeenCalled();
+      expect(shareFile).toHaveBeenCalledWith('file:///exports/launch-plan.pdf');
     });
   });
 });
