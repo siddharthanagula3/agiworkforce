@@ -79,6 +79,7 @@ import { CLOUD_SIGN_IN_RETURN_PATH } from './(public)/age-gate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
+import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
 import '../global.css';
 
 holdLaunchSplash();
@@ -707,7 +708,9 @@ export default function RootLayout() {
                 screens follow the theme instead of the dark constants Tailwind
                 compiled in. Must wrap Slot, not sit beside it. */}
             <ThemeVars>
-              <Slot />
+              <TextScaleBoundary>
+                <Slot />
+              </TextScaleBoundary>
             </ThemeVars>
             {/* Global offline banner, renders above all content when NetInfo is offline */}
             <OfflineBanner />
