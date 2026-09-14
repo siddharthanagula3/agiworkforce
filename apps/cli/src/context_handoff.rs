@@ -83,7 +83,9 @@ pub fn parse_context_handoff_url(raw: &str) -> Result<BrowserSelectionHandoff> {
     }
 
     if version.as_deref() != Some(CONTEXT_HANDOFF_URI_VERSION) {
-        bail!("--context-url: this build reads version {CONTEXT_HANDOFF_URI_VERSION} handoff links");
+        bail!(
+            "--context-url: this build reads version {CONTEXT_HANDOFF_URI_VERSION} handoff links"
+        );
     }
     let id = id.unwrap_or_default();
     if !is_handoff_id(&id) {
@@ -94,7 +96,8 @@ pub fn parse_context_handoff_url(raw: &str) -> Result<BrowserSelectionHandoff> {
         bail!("--context-url: the handoff link carries no http or https source page");
     }
     let selected_text = selected_text.unwrap_or_default().trim().to_string();
-    if selected_text.is_empty() || selected_text.chars().count() > MAX_CONTEXT_HANDOFF_SELECTION_CHARS
+    if selected_text.is_empty()
+        || selected_text.chars().count() > MAX_CONTEXT_HANDOFF_SELECTION_CHARS
     {
         bail!("--context-url: the handoff link carries no selected text within the size limit");
     }
@@ -132,7 +135,10 @@ mod tests {
 
     #[test]
     fn refuses_a_source_page_that_is_not_http_or_https() {
-        let link = LINK.replace("https%3A%2F%2Fexample.com%2Fdocs", "file%3A%2F%2F%2Fetc%2Fpasswd");
+        let link = LINK.replace(
+            "https%3A%2F%2Fexample.com%2Fdocs",
+            "file%3A%2F%2F%2Fetc%2Fpasswd",
+        );
 
         assert!(parse_context_handoff_url(&link).is_err());
     }
