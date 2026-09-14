@@ -1531,6 +1531,76 @@ export function getWebviewContent(
       font-size: 12px;
       line-height: 1.5;
     }
+
+    .empty-state--has-recents {
+      justify-content: flex-start;
+      padding-top: 12px;
+    }
+    .empty-state--has-recents .empty-state-mark { margin-top: auto; }
+    .empty-state--has-recents .empty-state-copy { margin-bottom: auto; }
+
+    .recent-chats {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      margin-bottom: 8px;
+      text-align: left;
+    }
+
+    .recent-chats-title {
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      padding: 0 6px 4px;
+    }
+
+    .recent-chat-row {
+      align-items: center;
+      background: none;
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      font: inherit;
+      font-size: 12px;
+      gap: 8px;
+      height: 28px;
+      padding: 0 6px;
+      text-align: left;
+      width: 100%;
+    }
+    .recent-chat-row:hover { background: var(--hover); }
+
+    .recent-chat-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .recent-chat-age {
+      color: var(--text-secondary);
+      flex: 0 0 auto;
+      font-size: 11px;
+    }
+
+    .recent-chats-all {
+      align-self: flex-start;
+      background: none;
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      height: 24px;
+      padding: 0 6px;
+    }
+    .recent-chats-all:hover { color: var(--text-primary); background: var(--hover); }
     .plus-btn:disabled,
     .model-pill:disabled,
     .controls-summary:disabled,
@@ -3964,6 +4034,11 @@ export function getWebviewContent(
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
+      else if (msg.type === 'recentConversations') {
+        recentChats = msg.payload;
+        syncRecentChats();
+      }
+
       else if (msg.type === 'conversationCleared') {
         clearContextUsage();
         resetAuthoritativeSessionBoundary();
@@ -3985,6 +4060,7 @@ export function getWebviewContent(
         });
         messagesEl.appendChild(freshEmpty);
         emptyStateEl = freshEmpty;
+        syncRecentChats();
         streaming = false;
         currentAssistantEl = null;
         activeQueuedClientMessageId = null;
@@ -4581,6 +4657,59 @@ export function getWebviewContent(
     var emptyStateEl = document.getElementById('emptyState');
     function hideEmptyState() {
       if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
+    }
+
+    var recentChats = { conversations: [], total: 0 };
+
+    function buildRecentChatRow(conversation) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'recent-chat-row';
+      row.title = conversation.title;
+      var title = document.createElement('span');
+      title.className = 'recent-chat-title';
+      title.textContent = conversation.title;
+      var age = document.createElement('span');
+      age.className = 'recent-chat-age';
+      age.textContent = conversation.age;
+      row.appendChild(title);
+      row.appendChild(age);
+      row.addEventListener('click', function() {
+        vscode.postMessage({
+          type: 'openRecentConversation',
+          payload: { threadId: conversation.id },
+        });
+      });
+      return row;
+    }
+
+    function syncRecentChats() {
+      if (!emptyStateEl) return;
+      var mounted = emptyStateEl.querySelector('.recent-chats');
+      if (mounted) mounted.parentNode.removeChild(mounted);
+      emptyStateEl.classList.toggle(
+        'empty-state--has-recents',
+        recentChats.conversations.length > 0,
+      );
+      if (recentChats.conversations.length === 0) return;
+      var block = document.createElement('div');
+      block.className = 'recent-chats';
+      var heading = document.createElement('div');
+      heading.className = 'recent-chats-title';
+      heading.textContent = 'Chats';
+      block.appendChild(heading);
+      for (var i = 0; i < recentChats.conversations.length; i++) {
+        block.appendChild(buildRecentChatRow(recentChats.conversations[i]));
+      }
+      var viewAll = document.createElement('button');
+      viewAll.type = 'button';
+      viewAll.className = 'recent-chats-all';
+      viewAll.textContent = 'View all (' + recentChats.total + ')';
+      viewAll.addEventListener('click', function() {
+        vscode.postMessage({ type: 'revealConversationHistory' });
+      });
+      block.appendChild(viewAll);
+      emptyStateEl.insertBefore(block, emptyStateEl.firstChild);
     }
     document.querySelectorAll('.prompt-chip').forEach(function(chip) {
       chip.addEventListener('click', function() {
