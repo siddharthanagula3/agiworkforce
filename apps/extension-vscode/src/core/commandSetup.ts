@@ -2003,6 +2003,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await showCloudRunDetail(resolution.client, runId, {
         webOrigin: getCloudWebOrigin(),
         onChanged: () => cloudTasksTreeProvider.refresh(),
+        listArtifacts: async () => {
+          const artifacts = await resolveArtifactsWorkspace(context.secrets);
+          return artifacts.status === 'signed-out' ? [] : artifacts.workspace.index.listArtifacts();
+        },
+        openArtifact: (artifactId) =>
+          withArtifactFromId(artifactId, (workspace, artifact) =>
+            openArtifactReadOnly(workspace, artifact, { contentProvider: artifactContentProvider }),
+          ),
       });
     }),
   );
