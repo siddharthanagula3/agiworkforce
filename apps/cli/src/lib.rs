@@ -3211,7 +3211,7 @@ pub async fn run_main() -> Result<()> {
                                 }))?
                             );
                         } else {
-                            println!();
+                            output::print_assistant_end();
                         }
                         Ok(())
                     }
@@ -3236,6 +3236,7 @@ pub async fn run_main() -> Result<()> {
                                 }))?
                             );
                         } else {
+                            output::print_assistant_end();
                             eprintln!("{}", e);
                         }
                         exit_with_error(&e);
@@ -5102,9 +5103,10 @@ pub async fn run_oneshot(
 
         match result {
             Ok(_turn) => {
-                println!();
+                output::print_assistant_end();
             }
             Err(e) => {
+                output::print_assistant_end();
                 eprintln!("{}", e);
                 exit_with_error(&e);
             }

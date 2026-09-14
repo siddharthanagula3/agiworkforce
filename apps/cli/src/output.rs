@@ -1,6 +1,7 @@
 use indicatif::{ProgressBar, ProgressStyle};
 use std::borrow::Cow;
 use std::env;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::markdown::MarkdownRenderer;
@@ -216,9 +217,23 @@ pub fn print_user_prompt() {
     eprint!("{}", ts::prompt("> "));
 }
 
+/// The response is the only thing on stdout; every message below goes to
+/// stderr. While the response's last line is still open, a stderr write lands
+/// glued to it in the terminal (`cross-resume okinfo: ...`), so both streams
+/// track whether that line needs closing first.
+static ASSISTANT_LINE_OPEN: AtomicBool = AtomicBool::new(false);
+
+fn record_assistant_output(text: &str) {
+    if let Some(last) = text.chars().next_back() {
+        ASSISTANT_LINE_OPEN.store(last != '\n', Ordering::Relaxed);
+    }
+}
+
 /// Print assistant text chunk. Called incrementally during streaming (raw mode).
 pub fn print_assistant_chunk(text: &str) {
-    print!("{}", sanitize_terminal_text(text));
+    let text = sanitize_terminal_text(text);
+    print!("{}", text);
+    record_assistant_output(&text);
     flush_stdout();
 }
 
@@ -237,23 +252,31 @@ fn flush_stdout() {
     let _ = std::io::stdout().flush();
 }
 
-/// Print a newline after assistant response completes.
+/// End the assistant response on exactly one newline. Idempotent, and silent
+/// when the response already ended on one, so nothing that follows it, a cost
+/// line, a boundary notice, the next prompt, opens with a blank line.
 pub fn print_assistant_end() {
-    println!();
+    if ASSISTANT_LINE_OPEN.swap(false, Ordering::Relaxed) {
+        println!();
+        flush_stdout();
+    }
 }
 
 /// Print a system/info message.
 pub fn print_info(message: &str) {
+    print_assistant_end();
     eprintln!("{} {}", ts::info_label(), sanitize_terminal_text(message));
 }
 
 /// Print a warning message.
 pub fn print_warn(message: &str) {
+    print_assistant_end();
     eprintln!("{} {}", ts::warn_label(), sanitize_terminal_text(message));
 }
 
 /// Print an error message.
 pub fn print_error(message: &str) {
+    print_assistant_end();
     eprintln!("{} {}", ts::error_label(), sanitize_terminal_text(message));
 }
 
@@ -628,6 +651,7 @@ pub fn print_assistant_chunk_formatted(renderer: &mut MarkdownRenderer, chunk: &
     let formatted = renderer.process_chunk(chunk);
     if !formatted.is_empty() {
         print!("{}", formatted);
+        record_assistant_output(&formatted);
         flush_stdout();
     }
 }
@@ -638,6 +662,7 @@ pub fn flush_markdown(renderer: &mut MarkdownRenderer) {
     let remaining = renderer.flush();
     if !remaining.is_empty() {
         print!("{}", remaining);
+        record_assistant_output(&remaining);
         flush_stdout();
     }
 }
@@ -707,6 +732,59 @@ mod tests {
              reorder against stderr progress output): {offenders:?}. Call \
              `output::print_assistant_chunk` instead."
         );
+    }
+
+    /// `agi exec` printed `cross-resume okinfo: byok privacy mode ...`: the
+    /// response left its last line open on stdout and the boundary notice from
+    /// `cloud::report_boundary_once` was appended to it on stderr. The response
+    /// must close on exactly one newline first, and gain no blank line when it
+    /// already ended on one.
+    #[test]
+    fn a_notice_never_lands_on_the_response_line() {
+        let _guard = print_state_test_lock();
+
+        ASSISTANT_LINE_OPEN.store(false, Ordering::Relaxed);
+        record_assistant_output("cross-resume ok");
+        assert!(ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+
+        print_info("byok privacy mode keeps this conversation on this device");
+        assert!(
+            !ASSISTANT_LINE_OPEN.load(Ordering::Relaxed),
+            "the notice must close the response line before writing"
+        );
+
+        // Idempotent: a response already terminated gains no blank line, from
+        // a second notice or from the one-shot terminator that follows it.
+        print_assistant_end();
+        print_warn("this turn is saved on this device");
+        assert!(!ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+
+        // A response whose own last chunk ended on a newline needs nothing.
+        record_assistant_output("gemini tools ok\n");
+        assert!(!ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+
+        // The formatted path shares the state, and its flush already ends the
+        // response on a newline, so the one-shot terminator must add nothing.
+        let mut renderer = MarkdownRenderer::new();
+        print_assistant_chunk_formatted(&mut renderer, "plain answer");
+        flush_markdown(&mut renderer);
+        assert!(
+            !ASSISTANT_LINE_OPEN.load(Ordering::Relaxed),
+            "flush_markdown terminates the response, so nothing may follow it with a blank line"
+        );
+
+        // An error reported over an open response line closes it the same way.
+        record_assistant_output("partial answer");
+        print_error("stream failed");
+        assert!(!ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+    }
+
+    fn print_state_test_lock() -> MutexGuard<'static, ()> {
+        static PRINT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        PRINT_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("print state test lock")
     }
 
     fn env_test_lock() -> MutexGuard<'static, ()> {
