@@ -24,7 +24,6 @@ const EXPECTED_PERMISSIONS = [
   'contextMenus',
   'sidePanel',
   'scripting',
-  'cookies',
   'notifications',
   'tabGroups',
   'debugger',

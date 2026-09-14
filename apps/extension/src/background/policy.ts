@@ -62,11 +62,6 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   WEBMCP_DISCOVER_TOOLS: { senderClass: 'extension-page-only', allowsCrossTab: true },
   WEBMCP_CALL_TOOL: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_CLOUD_AUTH_TOKEN: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  GET_ALL_TABS: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  CREATE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  CLOSE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  SWITCH_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  SET_COOKIE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   SYNC_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
