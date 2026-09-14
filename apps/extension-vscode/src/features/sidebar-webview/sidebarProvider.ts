@@ -114,6 +114,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     void this._deliverComposerDraft();
   }
 
+  public askInChat(text: string): void {
+    this._pendingComposerDraft = {
+      type: 'composerDraft',
+      payload: { text, references: [], submit: true },
+    };
+    void this._deliverComposerDraft();
+  }
+
   private async _deliverComposerDraft(): Promise<void> {
     const draft = this._pendingComposerDraft;
     const view = this._view;

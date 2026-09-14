@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { isContainedIn } from '@agiworkforce/utils/path-containment';
 import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
+import { buildExplainTerminalPrompt, runEditorUtility } from '../features/editor-utilities';
 import {
   getActiveWorkspaceFolderSync,
   getWorkspaceDisplayName,
@@ -751,33 +752,9 @@ export class TerminalProvider implements vscode.Disposable {
     return `the AGI Workforce terminal is in ${cwd}, outside the workspace. cd back into the workspace before running an AI-suggested command.`;
   }
 
-  async captureAndExplain(cancellationToken: vscode.CancellationToken): Promise<string> {
+  async captureOutput(): Promise<string> {
     const terminal = vscode.window.activeTerminal ?? this.getOrCreateTerminal();
-    const output = await this._captureOutput(terminal);
-
-    if (output === undefined || output.trim() === '') {
-      vscode.window.showWarningMessage('AGI Workforce: No terminal output to explain.');
-      return '';
-    }
-
-    const messages: LlmChatMessage[] = [
-      {
-        role: 'system',
-        content:
-          'You are AGI Workforce, an expert at explaining terminal output. ' +
-          'Given the terminal output below, provide a clear and concise explanation. ' +
-          'If there are errors, explain what went wrong and suggest how to fix them. ' +
-          'If the output looks normal, summarize what happened. ' +
-          'Use Markdown formatting.',
-      },
-      {
-        role: 'user',
-        content: 'Explain the following terminal output:\n\n' + '```\n' + output + '\n```',
-      },
-    ];
-
-    const explanation = await chatCompletion(this._secrets, messages, cancellationToken);
-    return explanation;
+    return (await this._captureOutput(terminal)) ?? '';
   }
 
   async suggestCommand(
@@ -1000,43 +977,7 @@ export function activateTerminal(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.explainTerminal', async () => {
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'AGI Workforce: Explaining terminal output…',
-          cancellable: true,
-        },
-        async (_progress, progressToken) => {
-          const cancelSource = new vscode.CancellationTokenSource();
-          progressToken.onCancellationRequested(() => cancelSource.cancel());
-
-          try {
-            const explanation = await provider.captureAndExplain(cancelSource.token);
-            cancelSource.dispose();
-
-            if (explanation === '') {
-              return;
-            }
-
-            const doc = await vscode.workspace.openTextDocument({
-              content: `# Terminal Output Explanation\n\n${explanation}`,
-              language: 'markdown',
-            });
-            await vscode.window.showTextDocument(doc, { preview: true });
-          } catch (err) {
-            cancelSource.dispose();
-
-            if (err instanceof Error && err.message.includes('CANCELLED')) {
-              return;
-            }
-
-            await showCloudUtilityErrorActions(err, {
-              title: 'AGI Workforce: Failed to explain terminal output',
-              retry: () => vscode.commands.executeCommand('agi-workforce.explainTerminal'),
-            });
-          }
-        },
-      );
+      await runEditorUtility(buildExplainTerminalPrompt(await provider.captureOutput()));
     }),
   );
 
@@ -1073,13 +1014,13 @@ export function activateTerminal(
 
       contextParts.push(`User request: ${userContext.trim()}`);
 
-      await vscode.window.withProgress(
+      const failure = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: 'AGI Workforce: Generating command suggestions…',
           cancellable: true,
         },
-        async (_progress, progressToken) => {
+        async (_progress, progressToken): Promise<unknown> => {
           const cancelSource = new vscode.CancellationTokenSource();
           progressToken.onCancellationRequested(() => cancelSource.cancel());
 
@@ -1093,20 +1034,20 @@ export function activateTerminal(
             if (result !== undefined) {
               vscode.window.showInformationMessage(`AGI Workforce: Running "${result}"`);
             }
+            return undefined;
           } catch (err) {
             cancelSource.dispose();
-
-            if (err instanceof Error && err.message.includes('CANCELLED')) {
-              return;
-            }
-
-            await showCloudUtilityErrorActions(err, {
-              title: 'AGI Workforce: Failed to suggest command',
-              retry: () => vscode.commands.executeCommand('agi-workforce.suggestCommand'),
-            });
+            return err;
           }
         },
       );
+
+      if (failure === undefined) return;
+      if (failure instanceof Error && failure.message.includes('CANCELLED')) return;
+      await showCloudUtilityErrorActions(failure, {
+        title: 'AGI Workforce: Failed to suggest command',
+        retry: () => vscode.commands.executeCommand('agi-workforce.suggestCommand'),
+      });
     }),
   );
 }

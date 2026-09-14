@@ -281,6 +281,18 @@ export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
 ];
 
 /**
+ * The one place a model id becomes a name a user reads. Every surface that
+ * shows the active model, the composer chip, the status bar and an error
+ * headline, resolves through here so a raw catalog id never reaches the UI.
+ * A local model has no catalog entry, and its own id is the only name it has.
+ */
+export function modelDisplayLabel(modelId: string): string {
+  const option = MODEL_PICKER_OPTIONS.find((entry) => entry.id === modelId);
+  if (option !== undefined) return option.label;
+  return getModelMetadataById(modelId)?.name ?? modelId;
+}
+
+/**
  * VSCODE-PICKER-TIER-01. Tier-aware view of {@link MODEL_PICKER_OPTIONS} for the
  * sidebar webview `<select>`, which renders from the static array rather than
  * through {@link buildGroupedQuickPickItems}. Without this the webview picker

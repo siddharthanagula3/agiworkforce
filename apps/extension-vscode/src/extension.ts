@@ -21,6 +21,7 @@ import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache, watchAccountTierInvalidation } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
 import { ChatEditorPanel } from './providers/chatEditorPanel';
+import { setEditorUtilityChat } from './features/editor-utilities';
 import {
   initializeAgentModeConsent,
   reconcileAgentControlConsent,
@@ -121,6 +122,20 @@ export function activate(context: vscode.ExtensionContext): void {
       };
     }),
   );
+
+  setEditorUtilityChat(
+    sidebarProvider === undefined
+      ? undefined
+      : async (prompt: string) => {
+          sidebarProvider.askInChat(prompt);
+          try {
+            await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
+          } finally {
+            sidebarProvider.reveal();
+          }
+        },
+  );
+  context.subscriptions.push({ dispose: () => setEditorUtilityChat(undefined) });
 
   const refreshRuntimeSurfaces = (): void => {
     sidebarProvider?.refreshRuntimeStatus();
