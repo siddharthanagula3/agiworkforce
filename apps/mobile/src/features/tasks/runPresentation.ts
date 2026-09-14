@@ -89,12 +89,31 @@ export function cloudRunStateColor(state: AgentTaskState, colors: ColorScheme): 
   }
 }
 
-export type CloudRunBlock = 'approval' | 'input';
+export type CloudRunBlock = 'approval' | 'input' | 'device';
 
 export function cloudRunBlock(run: CloudAgentRun): CloudRunBlock | null {
   if (run.pendingApproval) return 'approval';
   if (run.pendingInput) return 'input';
+  if (run.pendingDeviceStep) return 'device';
   return null;
+}
+
+/**
+ * What is holding the run up, in words. A device block names the machine
+ * because this phone cannot answer it: the only thing the reader can do is go
+ * to that computer or stop the task.
+ */
+export function cloudRunBlockLabel(run: CloudAgentRun): string | null {
+  switch (cloudRunBlock(run)) {
+    case 'approval':
+      return 'Waiting for your approval';
+    case 'input':
+      return 'Waiting for connector input';
+    case 'device':
+      return `Waiting for ${run.pendingDeviceStep?.deviceName ?? 'your desktop'}`;
+    case null:
+      return null;
+  }
 }
 
 export function isCloudRunSteerable(run: CloudAgentRun): boolean {

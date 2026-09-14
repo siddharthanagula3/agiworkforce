@@ -14,6 +14,7 @@ export type {
 } from './store';
 export {
   cloudRunBlock,
+  cloudRunBlockLabel,
   cloudRunFilterStates,
   cloudRunStateColor,
   cloudRunTextDelta,
