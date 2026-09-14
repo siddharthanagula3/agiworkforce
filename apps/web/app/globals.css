@@ -2259,7 +2259,11 @@ html[data-desktop-host^='electron-darwin'] [data-sidebar-region='header'] {
 html[data-desktop-host^='electron-darwin'] [data-sidebar-region='header-first-row'] {
   min-height: var(--agi-window-title-strip);
   margin-bottom: 0;
-  padding-left: calc(var(--agi-window-title-strip-inset) - var(--chat-sidebar-header-padding));
+  padding-bottom: 0;
+  padding-left: calc(
+    var(--agi-window-title-strip-inset) -
+      var(--agi-window-title-strip-region-padding, var(--chat-sidebar-header-padding))
+  );
 }
 
 html[data-desktop-host^='electron-darwin'] [data-sidebar-region='rail'] {
@@ -2272,6 +2276,10 @@ html[data-desktop-host^='electron-darwin'] [data-sidebar-region='rail'] {
    wordmark does. */
 html[data-desktop-host^='electron-darwin'] [data-window-brand] {
   left: var(--agi-window-title-strip-inset);
+}
+
+html[data-desktop-host^='electron-darwin'] [data-window-edge='left'] {
+  padding-left: var(--agi-window-title-strip-inset);
 }
 
 /* The server cannot know it is answering the shell, so it renders the browser
