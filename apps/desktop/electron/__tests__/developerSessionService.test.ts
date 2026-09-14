@@ -118,6 +118,11 @@ function defaultResponder(method: string): unknown {
   if (method === 'turn/start')
     return { turn: { id: 'turn-1', threadId: thread.id, status: 'running' } };
   if (method === 'turn/interrupt' || method === 'approval/respond') return { acknowledged: true };
+  if (method === 'model/list') {
+    return { models: [{ id: 'qwen2.5:1.5b', provider: 'ollama' }] };
+  }
+  if (method === 'settings/read') return { defaultModel: 'claude-fable-5-1' };
+  if (method === 'account/status') return { signedIn: true, cached: false, source: 'cli' };
   return undefined;
 }
 
@@ -263,6 +268,28 @@ describe('developer session runtime', () => {
     expect(list.groups[0]?.sessions).toEqual([]);
     expect(list.groups[0]?.unavailable?.message).toContain('not on this app');
     expect(list.groups[0]?.unavailable?.hint).toContain('agiworkforce.com/download');
+  });
+
+  it('reads the models, the configured default and the account in one call', async () => {
+    const { service } = await loadService();
+
+    const models = await service.readDeveloperModels(root.id);
+
+    expect(models).toEqual({
+      models: [{ id: 'qwen2.5:1.5b', provider: 'ollama', local: true }],
+      defaultModelId: 'claude-fable-5-1',
+      managedSignedIn: true,
+    });
+  });
+
+  it('still answers when the CLI serves no models, settings or account', async () => {
+    const { service } = await loadService((method) =>
+      method === 'initialize' ? HANDSHAKE : { error: 'unsupported' },
+    );
+
+    const models = await service.readDeveloperModels(root.id);
+
+    expect(models).toEqual({ models: [], defaultModelId: null, managedSignedIn: false });
   });
 
   it('says a folder that is gone is gone, rather than blaming the CLI', async () => {

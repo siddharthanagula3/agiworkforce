@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type {
   DeveloperApprovalAnswer,
+  DeveloperModelOption,
+  DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
   DeveloperSession,
   DeveloperSessionEvent,
@@ -558,6 +560,45 @@ async function listForRoot(root: WorkspaceRoot): Promise<DeveloperSessionGroup> 
   }
 
   return group;
+}
+
+async function requestOrNull(server: RunningServer, method: string): Promise<unknown> {
+  try {
+    return await request(server, method, {});
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the CLI can run in one folder. Each of the three reads is optional: a
+ * host that does not serve models, settings or an account answers with nothing
+ * rather than failing the whole call, so a chooser still gets what is there.
+ */
+export async function readDeveloperModels(rootId: string): Promise<DeveloperRuntimeModels> {
+  const root = requireRoot(rootId);
+  const server = await readyServer(root);
+  const [modelList, settings, account] = await Promise.all([
+    requestOrNull(server, 'model/list'),
+    requestOrNull(server, 'settings/read'),
+    requestOrNull(server, 'account/status'),
+  ]);
+
+  const rawModels = isRecord(modelList) ? modelList['models'] : null;
+  const models: DeveloperModelOption[] = Array.isArray(rawModels)
+    ? rawModels.flatMap((entry) => {
+        if (!isRecord(entry)) return [];
+        const id = readString(entry, 'id');
+        if (!id) return [];
+        return [{ id, provider: readString(entry, 'provider') ?? '', local: true }];
+      })
+    : [];
+
+  return {
+    models,
+    defaultModelId: isRecord(settings) ? readString(settings, 'defaultModel') : null,
+    managedSignedIn: isRecord(account) && account['signedIn'] === true,
+  };
 }
 
 export async function listDeveloperSessions(): Promise<DeveloperSessionList> {
