@@ -7,7 +7,7 @@ import type {
   DeveloperModelOption,
   DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
-  DeveloperSession,
+  LocalDeveloperSession,
   DeveloperSessionEvent,
   DeveloperSessionGroup,
   DeveloperSessionList,
@@ -507,7 +507,7 @@ function sessionOrigin(threadId: string, storedSource: unknown): DeveloperSessio
   return storedSource === 'vscode' ? 'vscode' : 'cli';
 }
 
-function toSession(rootId: string, raw: unknown): DeveloperSession | null {
+function toSession(rootId: string, raw: unknown): LocalDeveloperSession | null {
   if (!isRecord(raw)) return null;
   const id = readString(raw, 'id');
   if (!id) return null;
@@ -526,7 +526,7 @@ function toSession(rootId: string, raw: unknown): DeveloperSession | null {
   };
 }
 
-function requireSession(rootId: string, raw: unknown): DeveloperSession {
+function requireSession(rootId: string, raw: unknown): LocalDeveloperSession {
   const session = toSession(rootId, isRecord(raw) ? raw['thread'] : null);
   if (!session) throw new Error('The AGI CLI returned a session this app could not read.');
   return session;
@@ -549,7 +549,7 @@ async function listForRoot(root: WorkspaceRoot): Promise<DeveloperSessionGroup> 
     if (Array.isArray(threads)) {
       group.sessions = threads
         .map((thread) => toSession(root.id, thread))
-        .filter((session): session is DeveloperSession => session !== null)
+        .filter((session): session is LocalDeveloperSession => session !== null)
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     }
   } catch (error) {
@@ -624,7 +624,7 @@ export async function readDeveloperSession(
 export async function resumeDeveloperSession(
   rootId: string,
   threadId: string,
-): Promise<DeveloperSession> {
+): Promise<LocalDeveloperSession> {
   const root = requireRoot(rootId);
   const server = await readyServer(root);
   return requireSession(rootId, await request(server, 'thread/resume', { threadId }));
@@ -633,7 +633,7 @@ export async function resumeDeveloperSession(
 export async function startDeveloperSession(
   rootId: string,
   model?: string,
-): Promise<DeveloperSession> {
+): Promise<LocalDeveloperSession> {
   const root = requireRoot(rootId);
   const server = await readyServer(root);
   const result = await request(server, 'thread/start', {

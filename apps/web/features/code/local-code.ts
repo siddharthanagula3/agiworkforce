@@ -2,7 +2,7 @@ import {
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
   type DeveloperRuntimeModels,
-  type DeveloperSession,
+  type LocalDeveloperSession,
   type DeveloperSessionGroup,
   type DeveloperTurnOutcome,
 } from '@agiworkforce/local-runtime-contract';
@@ -108,7 +108,7 @@ export const LOCAL_MODEL_EVIDENCE_LABELS: Record<LocalModelChoice['evidence'], s
  */
 export function localModelChoices(
   runtime: DeveloperRuntimeModels | null,
-  sessions: readonly DeveloperSession[],
+  sessions: readonly LocalDeveloperSession[],
 ): LocalModelChoice[] {
   const byId = new Map<string, LocalModelChoice>();
 
@@ -143,7 +143,7 @@ export function localModelChoices(
 /** The model a session started here begins on: the best-evidenced one. */
 export function startingModelId(
   runtime: DeveloperRuntimeModels | null,
-  sessions: readonly DeveloperSession[],
+  sessions: readonly LocalDeveloperSession[],
 ): string | undefined {
   return localModelChoices(runtime, sessions)[0]?.id;
 }
@@ -152,11 +152,11 @@ export function newSessionLabel(folderName: string): string {
   return `${LOCAL_CODE_COPY.newSessionPrefix} ${folderName}`;
 }
 
-export function localSessionOriginLabel(session: DeveloperSession): string {
+export function localSessionOriginLabel(session: LocalDeveloperSession): string {
   return DEVELOPER_SESSION_ORIGIN_LABELS[session.origin];
 }
 
-export function localSessionTrustLabel(session: DeveloperSession): string {
+export function localSessionTrustLabel(session: LocalDeveloperSession): string {
   return DEVELOPER_SESSION_TRUST_LABELS[session.trustMode];
 }
 
@@ -166,7 +166,7 @@ export function localSessionTrustLabel(session: DeveloperSession): string {
  * rather than printed as an absence.
  */
 export function localSessionContext(
-  session: DeveloperSession,
+  session: LocalDeveloperSession,
   group: Pick<DeveloperSessionGroup, 'name' | 'branch'>,
 ): string {
   return [group.name, group.branch, localModelLabel(session.model), localSessionTrustLabel(session)]

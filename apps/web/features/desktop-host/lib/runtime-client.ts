@@ -17,7 +17,7 @@ import {
   type DeveloperApprovalAnswer,
   type DeveloperRuntimeModels,
   type DeveloperRuntimeStatus,
-  type DeveloperSession,
+  type LocalDeveloperSession,
   type DeveloperSessionEvent,
   type DeveloperSessionList,
   type DeveloperSessionTranscript,
@@ -367,12 +367,15 @@ export function readDeveloperSession(
 export function resumeDeveloperSession(
   rootId: string,
   threadId: string,
-): Promise<DeveloperSession> {
-  return invoke<DeveloperSession>('developer_session_resume', { rootId, threadId });
+): Promise<LocalDeveloperSession> {
+  return invoke<LocalDeveloperSession>('developer_session_resume', { rootId, threadId });
 }
 
-export function startDeveloperSession(rootId: string, model?: string): Promise<DeveloperSession> {
-  return invoke<DeveloperSession>('developer_session_start', {
+export function startDeveloperSession(
+  rootId: string,
+  model?: string,
+): Promise<LocalDeveloperSession> {
+  return invoke<LocalDeveloperSession>('developer_session_start', {
     rootId,
     ...(model ? { model } : {}),
   });
