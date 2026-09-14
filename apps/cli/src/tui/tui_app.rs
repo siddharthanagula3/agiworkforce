@@ -601,6 +601,15 @@ impl TuiApp {
         self.provider_name = crate::design_system::provider_label(&self.session.provider);
     }
 
+    /// Discard the conversation: what `/clear` does, and what the
+    /// `clear_chat` keybinding action does when a config binds it.
+    fn discard_conversation(&mut self) {
+        self.session.clear();
+        self.chat_messages.clear();
+        self.scroll_offset = 0;
+        self.sync_stats();
+    }
+
     fn spinner_char(&self) -> &str {
         spinner_frame(self.spinner_tick)
     }
@@ -2226,6 +2235,7 @@ enum InputAction {
     ScrollUp,
     ScrollDown,
     Redraw,
+    ClearChat,
     CycleMode,
 }
 
@@ -2343,6 +2353,12 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         .matches(crate::keybindings::KeybindingAction::Redraw, key)
     {
         return InputAction::Redraw;
+    }
+    if app
+        .keybindings
+        .matches(crate::keybindings::KeybindingAction::ClearChat, key)
+    {
+        return InputAction::ClearChat;
     }
     if app.input.is_empty()
         && app.cursor == 0
@@ -3154,10 +3170,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/exit" | "/quit" | "/q" => SlashResult::Quit,
 
         "/clear" => {
-            app.session.clear();
-            app.chat_messages.clear();
-            app.scroll_offset = 0;
-            app.sync_stats();
+            app.discard_conversation();
             SlashResult::SystemMessage("Context cleared.".to_string())
         }
 
@@ -4740,9 +4753,15 @@ async fn run_event_loop(
 
                 // Repaint every cell. This is the escape hatch when anything
                 // has written over the frame; it must never be the conversation
-                // that gets discarded, which is what `/clear` is for.
+                // that gets discarded, which is what `/clear` and the
+                // (unbound by default) `clear_chat` action are for.
                 InputAction::Redraw => {
                     terminal.clear()?;
+                }
+
+                InputAction::ClearChat => {
+                    app.discard_conversation();
+                    app.status_notice = Some(("context cleared".to_string(), Instant::now()));
                 }
 
                 InputAction::None => {}
@@ -6411,6 +6430,38 @@ mod tests {
             handle_slash("/clear", &mut app),
             SlashResult::SystemMessage(_)
         ));
+        assert_eq!(app.session.turn_count, 0);
+        assert!(app.chat_messages.is_empty());
+    }
+
+    /// `clear_chat` ships with no default chord, so a fresh install never
+    /// binds it; a config that opts in gets a key that discards the
+    /// conversation, the same effect as `/clear`.
+    #[test]
+    fn clear_chat_discards_the_conversation_when_a_project_binds_it() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = minimal_app();
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::User,
+            text: "CLEAR_CHAT_MARKER_27182".to_string(),
+        });
+        app.session.turn_count = 3;
+
+        let unbound_key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL);
+        assert!(matches!(
+            handle_key_event(&mut app, unbound_key),
+            InputAction::None
+        ));
+        assert_eq!(app.chat_messages.len(), 1, "unbound by default");
+
+        app.keybindings = crate::keybindings::Keybindings::from_config(
+            &std::collections::BTreeMap::from([("clear_chat".to_string(), "ctrl+k".to_string())]),
+        );
+        let action = handle_key_event(&mut app, unbound_key);
+        assert!(matches!(action, InputAction::ClearChat));
+
+        app.discard_conversation();
         assert_eq!(app.session.turn_count, 0);
         assert!(app.chat_messages.is_empty());
     }

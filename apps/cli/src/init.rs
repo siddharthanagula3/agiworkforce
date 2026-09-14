@@ -61,7 +61,7 @@ fn write_default_config(home: &Path) -> Result<()> {
 # [ui.keybindings]
 # open_palette = "ctrl+p"
 # quit = "ctrl+q"
-# Actions: quit, cycle_mode, redraw, clear_input, open_palette
+# Actions: quit, cycle_mode, redraw, clear_chat, clear_input, open_palette
 #
 # [default]
 # temperature = 0.7
