@@ -1,3 +1,5 @@
+import { agiRadii } from '@agiworkforce/design-tokens';
+
 const mobileNativeColors = {
   light: {
     terraCotta: '#111111',
@@ -252,14 +254,16 @@ export const spacing = {
   '4xl': 40,
 } as const;
 
+const rung = (size: keyof typeof agiRadii): number => Number.parseInt(agiRadii[size], 10);
+
 export const radii = {
-  sm: 6,
-  md: 8,
-  lg: 12,
-  xl: 16,
-  '2xl': 24,
-  '3xl': 32,
-  full: 9999,
+  sm: rung('sm'),
+  md: rung('md'),
+  lg: rung('lg'),
+  xl: rung('xl'),
+  '2xl': rung('2xl'),
+  '3xl': rung('3xl'),
+  full: rung('full'),
 } as const;
 
 export const cardRadius = radii['2xl'];
