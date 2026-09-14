@@ -3,6 +3,7 @@ import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cl
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   cloudRunAgeLabel,
+  cloudRunDeviceWaitLabel,
   cloudRunLatestError,
   cloudRunOriginLabel,
   cloudRunQuietLabel,
@@ -59,6 +60,12 @@ export function buildCloudRunDetailItems(
   if (failure !== undefined) {
     items.push({ label: 'Error', kind: vscode.QuickPickItemKind.Separator });
     items.push({ label: `$(error) ${failure}` });
+  }
+
+  const deviceWait = cloudRunDeviceWaitLabel(run);
+  if (deviceWait !== undefined) {
+    items.push({ label: 'Device', kind: vscode.QuickPickItemKind.Separator });
+    items.push({ label: `$(device-desktop) ${deviceWait}` });
   }
 
   items.push({ label: 'Actions', kind: vscode.QuickPickItemKind.Separator });
