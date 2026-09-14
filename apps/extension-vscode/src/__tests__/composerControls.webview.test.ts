@@ -76,13 +76,15 @@ describe('compact composer controls', () => {
     bootWebview();
 
     const controls = document.getElementById('controlsSummary');
-    expect(controls?.textContent).toBe('Auto · Med');
+    expect(controls?.textContent).toBe('Auto');
+    expect(document.getElementById('modelPill')?.textContent).toBe('Auto · Med');
     expect(controls?.getAttribute('aria-label')).toBe('Controls: Auto mode, Medium effort');
     expect(document.getElementById('plusMenuActions')).toBeNull();
 
     postHostMessage('modeChanged', { mode: 'plan' });
     postHostMessage('effortChanged', { effort: 'high', supportsEffort: true });
-    expect(controls?.textContent).toBe('Plan · High');
+    expect(controls?.textContent).toBe('Plan');
+    expect(document.getElementById('modelPill')?.textContent).toBe('Auto · High');
     expect(controls?.getAttribute('aria-label')).toBe('Controls: Plan mode, High effort');
 
     postHostMessage('effortChanged', { effort: 'low', supportsEffort: false });
