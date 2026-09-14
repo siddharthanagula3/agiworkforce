@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -21,7 +22,12 @@ export const metadata = buildMetadata({
   path: '/sla',
 });
 
-const LAST_REVIEWED = '4 September 2026';
+const LAST_REVIEWED = new Date(`${POLICY_LAST_UPDATED.sla}T00:00:00Z`).toLocaleDateString('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
 
 const UPTIME: readonly LedgerRow[] = [
   { label: 'Web (agiworkforce.com)', value: '99.9% target · monthly window' },

@@ -1,3 +1,4 @@
+import type React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PublishedArtifactView } from './PublishedArtifactView';
@@ -22,6 +23,22 @@ vi.mock('@/features/chat/components/SandboxedIframe', () => ({
   ),
 }));
 
+vi.mock('next/link', () => ({
+  default: ({
+    children,
+    href,
+    className,
+  }: {
+    children: React.ReactNode;
+    href: string;
+    className?: string;
+  }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock('@agiworkforce/unified-chat', () => ({
   MarkdownContent: ({ content }: { content: string }) => (
     <div data-testid="markdown">{content}</div>
@@ -35,6 +52,21 @@ const BASE = {
 };
 
 describe('PublishedArtifactView', () => {
+  it('offers a way into the product from the provenance line', () => {
+    render(<PublishedArtifactView {...BASE} kind="markdown" content="# Title" />);
+    expect(screen.getByRole('link', { name: 'Shared from AGI' })).toHaveAttribute('href', '/');
+  });
+
+  it('sends a workspace-shared artifact back to the app rather than the marketing home', () => {
+    render(
+      <PublishedArtifactView {...BASE} kind="markdown" content="# Title" audience="organization" />,
+    );
+    expect(screen.getByRole('link', { name: 'Shared with your workspace' })).toHaveAttribute(
+      'href',
+      '/chat',
+    );
+  });
+
   it('serves html through the sandbox frame, never inline', () => {
     render(
       <PublishedArtifactView

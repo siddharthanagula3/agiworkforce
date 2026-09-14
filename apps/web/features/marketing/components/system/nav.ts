@@ -1,4 +1,4 @@
-import { SURFACE_STATUS } from '@/lib/marketing-constants';
+import { SURFACE_STATUS } from '@/lib/surface-status';
 
 export const WEB_ENTRY_HREF = '/login?redirectTo=%2F';
 export const CHAT_ROOT_HREF = '/chat';
@@ -117,6 +117,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
       },
       { href: '/use-cases', label: 'Use cases', description: 'What teams run on AGI today' },
     ],
+    footer: { href: '/solutions', label: 'All solutions' },
   },
   {
     label: 'Developers',
@@ -149,14 +150,6 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
     ],
   },
 ];
-
-export const HEADER_LINKS = [
-  { href: '/features', label: 'Product' },
-  { href: '/enterprise', label: 'Solutions' },
-  { href: '/docs', label: 'Developers' },
-  { href: '/about', label: 'Company' },
-  { href: '/pricing', label: 'Pricing' },
-] as const;
 
 export const FOOTER_COLUMNS = [
   {
@@ -201,6 +194,7 @@ export const FOOTER_COLUMNS = [
       { href: '/about', label: 'About' },
       { href: '/docs', label: 'Docs' },
       { href: '/help', label: 'Help' },
+      { href: '/support', label: 'Support' },
       { href: '/faq', label: 'FAQ' },
       { href: '/blog', label: 'Blog' },
       { href: '/careers', label: 'Careers' },
@@ -219,4 +213,5 @@ export const FOOTER_LEGAL = [
   { href: '/security', label: 'Security' },
   { href: '/trust', label: 'Trust centre' },
   { href: '/accessibility', label: 'Accessibility' },
+  { href: '/sitemap-page', label: 'Sitemap' },
 ] as const;

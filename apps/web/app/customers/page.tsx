@@ -9,6 +9,8 @@ import {
   Prose,
   Section,
   Stack,
+  Transcript,
+  type TranscriptLine,
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { BILLING_PLAN_PRICING, BILLING_PLAN_PRODUCT_LIMITS } from '@agiworkforce/types';
@@ -24,7 +26,7 @@ export const metadata = buildMetadata({
 const BASIC_SCHEDULES = BILLING_PLAN_PRODUCT_LIMITS.basic.maxScheduledTasks;
 const PRO_SCHEDULES = BILLING_PLAN_PRODUCT_LIMITS.pro.maxScheduledTasks;
 
-const HERO_TRANSCRIPT = [
+const HERO_TRANSCRIPT: TranscriptLine[] = [
   { kind: 'cmd', text: 'agi models status' },
   { kind: 'out', text: 'every local server it can reach, and the models on each' },
   { kind: 'dim', text: 'a base URL that is not loopback never gets a request built for it' },
@@ -176,17 +178,11 @@ export default function CustomersPage() {
             { href: '/pricing', label: 'See what a plan includes', variant: 'secondary' },
           ]}
           visual={
-            <pre
-              className="agi-lp-terminal"
-              aria-label={HERO_TRANSCRIPT_LABEL}
+            <Transcript
+              label={HERO_TRANSCRIPT_LABEL}
+              lines={HERO_TRANSCRIPT}
               style={{ alignSelf: 'start' }}
-            >
-              {HERO_TRANSCRIPT.map((line) => (
-                <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
-                  {line.text}
-                </span>
-              ))}
-            </pre>
+            />
           }
         />
 

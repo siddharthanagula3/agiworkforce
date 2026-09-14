@@ -7,6 +7,8 @@ import {
   Ledger,
   MarketingFooter,
   Prose,
+  Transcript,
+  type TranscriptLine,
 } from '@/features/marketing/components/system';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { PLATFORM_AVAILABILITY_CONSENT_PURPOSES } from '@/lib/consent-purposes';
@@ -47,7 +49,7 @@ $ ${COSIGN_COMMAND}
 $ codesign -d --verbose=4 "${CLOUD_APP_PATH}"
 $ xcrun stapler validate ~/Downloads/${CLOUD_INSTALLER}`;
 
-const HERO_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
+const HERO_TRANSCRIPT: TranscriptLine[] = [
   { kind: 'cmd', text: `shasum -a 256 -c ${CHECKSUM_FILE}` },
   { kind: 'out', text: `${SAMPLE_ARCHIVE}: OK` },
   { kind: 'cmd', text: './agi doctor' },
@@ -107,13 +109,7 @@ export default function DownloadPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <pre className="agi-lp-terminal" aria-label="A real installer verification session">
-                {HERO_TRANSCRIPT.map((line, index) => (
-                  <span className="agi-lp-terminal-line" data-kind={line.kind} key={index}>
-                    {line.text}
-                  </span>
-                ))}
-              </pre>
+              <Transcript label="A real installer verification session" lines={HERO_TRANSCRIPT} />
             </div>
           </div>
         </section>

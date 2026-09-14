@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 import { SandboxedIframe } from '@/features/chat/components/SandboxedIframe';
@@ -70,9 +71,14 @@ export function PublishedArtifactView({
           {publishedLabel
             ? `${t('artifactPublish.publishedOn', 'Published {{date}}', { date: publishedLabel })} · `
             : ''}
-          {audience === 'organization'
-            ? t('artifactPublish.sharedWithWorkspace', 'Shared with your workspace')
-            : t('artifactPublish.sharedFrom', 'Shared from AGI')}
+          <Link
+            href={audience === 'organization' ? '/chat' : '/'}
+            className="underline-offset-2 hover:underline"
+          >
+            {audience === 'organization'
+              ? t('artifactPublish.sharedWithWorkspace', 'Shared with your workspace')
+              : t('artifactPublish.sharedFrom', 'Shared from AGI')}
+          </Link>
         </p>
       </header>
 

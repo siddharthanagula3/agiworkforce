@@ -171,6 +171,7 @@ describe('previously clipped strings render in full', () => {
     expect(html).toContain('Ask a follow-up…');
     expect(html).toContain('Searched the web');
     expect(html).toContain('Enter to send · Shift+Enter for newline');
-    expect(html).toContain('3,740 / 128,000');
+    expect(html).not.toContain('128,000');
+    expect(html).not.toContain('$0.00');
   });
 });

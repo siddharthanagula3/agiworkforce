@@ -102,7 +102,7 @@ export function MarketingLanding() {
                 'Artifacts workbench',
                 'Scheduled tasks and background agents',
               ],
-              platforms: 'Linux x64 assets · installer verification pending',
+              platforms: 'Linux x64',
               status: SURFACE_STATUS.desktop,
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Workforce', badge: 'Local' },
@@ -348,7 +348,7 @@ export function MarketingLanding() {
               points: [
                 'Every admitted model behind one selector, with Auto as the default',
                 'Projects, memory, artifacts and web search on the first day',
-                'A served-by receipt under every reply',
+                'Every reply names the model that answered it',
                 'Desktop, CLI and the extensions on the same account',
               ],
               cta: { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },

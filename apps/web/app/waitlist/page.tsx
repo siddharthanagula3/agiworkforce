@@ -88,7 +88,12 @@ export default function WaitlistPage() {
               </Link>
               . This list is for <strong>enterprise early access</strong>: advanced org controls,
               SSO, custom retention, and centralized governance beyond the self-serve team scope.
-              Leave your email and we will reach out as those land.
+              Leave your email and we will reach out as those land. If you want builds before they
+              ship instead,{' '}
+              <Link href="/beta" className="agi-ds-link">
+                apply to the beta programme
+              </Link>
+              .
             </>
           }
           ctas={[]}

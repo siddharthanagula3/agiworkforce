@@ -199,7 +199,7 @@ export default function FeaturesPage() {
                   points: [
                     'Every admitted model behind one selector',
                     'Projects, memory, artifacts and research from the first day',
-                    'A served-by receipt under every reply',
+                    'Every reply names the model that answered it',
                   ],
                   cta: { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
                 },

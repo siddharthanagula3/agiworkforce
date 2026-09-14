@@ -1165,7 +1165,7 @@
   margin: 0 0 16px;
 }
 [data-design='agi'] .agi-section-eyebrow::before {
-  content: '\2014 ';
+  content: '\2013 ';
   color: var(--agi-ink-faint);
 }
 [data-design='agi'] .agi-section-h2 {
@@ -2356,7 +2356,7 @@
 }
 
 [data-design='agi'] .agi-fl-eyebrow::before {
-  content: '\2014 ';
+  content: '\2013 ';
   color: var(--agi-ink-faint);
 }
 

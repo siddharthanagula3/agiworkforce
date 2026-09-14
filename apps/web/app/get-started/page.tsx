@@ -10,13 +10,15 @@ import {
   Section,
   Stack,
   SurfaceStatus,
+  Transcript,
+  type TranscriptLine,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 const HERO_TRANSCRIPT_LABEL = 'Three commands that reach a working chat';
 
-const HERO_TRANSCRIPT = [
+const HERO_TRANSCRIPT: TranscriptLine[] = [
   { kind: 'dim', text: '# local: models on this machine' },
   { kind: 'cmd', text: 'agi models scan' },
   { kind: 'cmd', text: 'agi --provider ollama --model <model>' },
@@ -50,17 +52,11 @@ export default function GetStartedPage() {
             { href: '/cli', label: 'CLI reference', variant: 'secondary' },
           ]}
           visual={
-            <pre
-              className="agi-lp-terminal"
-              aria-label={HERO_TRANSCRIPT_LABEL}
+            <Transcript
+              label={HERO_TRANSCRIPT_LABEL}
+              lines={HERO_TRANSCRIPT}
               style={{ alignSelf: 'start' }}
-            >
-              {HERO_TRANSCRIPT.map((line) => (
-                <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
-                  {line.text}
-                </span>
-              ))}
-            </pre>
+            />
           }
         />
 

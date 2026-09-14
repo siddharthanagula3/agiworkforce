@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { COMING_SOON_LABEL } from '@/lib/marketing-constants';
+import { COMING_SOON_LABEL } from '@/lib/surface-status';
 
 export type SurfaceStatusProps =
   | { state: 'live'; name: string; detail: string; action?: { label: string; href: string } }
