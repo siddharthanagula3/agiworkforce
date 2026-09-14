@@ -321,3 +321,71 @@ describe('runToolLoop, provider lines reach the client while the step is still r
     expect(reader.seen()).toContain('data: [DONE]');
   });
 });
+
+function strictSseEvents(body: string): string[] {
+  const events: string[] = [];
+  for (const block of body.split('\n\n')) {
+    if (!block) continue;
+    const data = block
+      .split('\n')
+      .filter((field) => field.startsWith('data:'))
+      .map((field) => field.replace(/^data:\s?/, ''))
+      .join('\n');
+    if (data) events.push(data);
+  }
+  return events;
+}
+
+describe('runToolLoop, forwarded provider frames are terminated for a strict SSE decoder', () => {
+  beforeEach(() => {
+    mockBuildToolLoopStream.mockReset();
+  });
+
+  it('separates two consecutive provider text deltas with a blank line so each parses alone', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      closedStream([
+        chunk({ content: 'sse frames' }),
+        chunk({ content: ' ok' }),
+        chunk({}, 'stop'),
+      ]),
+    );
+
+    const reader = consume(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+    await reader.done;
+
+    const body = reader.seen();
+    expect(body).not.toMatch(/^data:.*\ndata:/m);
+
+    const events = strictSseEvents(body);
+    const contents: string[] = [];
+    for (const event of events) {
+      if (event === '[DONE]') continue;
+      const frame = JSON.parse(event) as {
+        choices?: Array<{ delta?: { content?: unknown } }>;
+      };
+      const content = frame.choices?.[0]?.delta?.content;
+      if (typeof content === 'string' && content) contents.push(content);
+    }
+
+    expect(contents).toEqual(['sse frames', ' ok']);
+    expect(events[events.length - 1]).toBe('[DONE]');
+  });
+
+  it('terminates the tail frame when the provider stream ends without a trailing newline', async () => {
+    const provider = openStream();
+    mockBuildToolLoopStream.mockResolvedValueOnce(provider.stream);
+
+    const reader = consume(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+    provider.push(chunk({ content: 'tail' }).trimEnd());
+    provider.close();
+    await reader.done;
+
+    const body = reader.seen();
+    expect(body).not.toMatch(/^data:.*\ndata:/m);
+    const events = strictSseEvents(body);
+    for (const event of events) {
+      if (event === '[DONE]') continue;
+      expect(() => JSON.parse(event)).not.toThrow();
+    }
+  });
+});
