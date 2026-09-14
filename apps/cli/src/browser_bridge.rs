@@ -58,6 +58,10 @@ pub enum BrowserAvailability {
     ShellNotRunning,
     /// The shell answers, but no browser is paired with it.
     NotPaired,
+    /// A browser is paired and has stopped answering: closed, asleep, or it
+    /// has forgotten this Mac. Every command would time out, so the tools are
+    /// not offered, and the user is told which of the two problems they have.
+    PairedNotAnswering,
     /// A command can run.
     Paired,
 }
@@ -88,10 +92,19 @@ impl BrowserState {
 struct StateResponse {
     #[serde(default)]
     paired: bool,
+    /// Absent from a shell that predates this field; such a shell only ever
+    /// reported a pairing, so treat its silence as answering rather than
+    /// withdrawing the tools from everyone on an older build.
+    #[serde(default = "answering_by_default")]
+    answering: bool,
     #[serde(default)]
     extension_id: Option<String>,
     #[serde(default)]
     app_version: Option<String>,
+}
+
+fn answering_by_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -279,10 +292,10 @@ async fn state_from(file: &BridgeFile) -> BrowserState {
         return BrowserState::unavailable(BrowserAvailability::ShellNotRunning);
     };
     BrowserState {
-        availability: if state.paired {
-            BrowserAvailability::Paired
-        } else {
-            BrowserAvailability::NotPaired
+        availability: match (state.paired, state.answering) {
+            (true, true) => BrowserAvailability::Paired,
+            (true, false) => BrowserAvailability::PairedNotAnswering,
+            (false, _) => BrowserAvailability::NotPaired,
         },
         extension_id: state.extension_id,
         app_version: state.app_version,
@@ -571,6 +584,47 @@ mod tests {
         }
     }
 
+    /// A pairing whose browser has stopped answering cannot run anything, so
+    /// the tools must not be offered and the user must be told which of the
+    /// two problems they have.
+    #[tokio::test]
+    async fn a_paired_browser_that_stopped_answering_is_not_usable() {
+        let silent = start_stub(
+            "token-4",
+            serde_json::json!({
+                "version": 1,
+                "paired": true,
+                "answering": false,
+                "extensionId": "abcdefghijklmnopabcdefghijklmnop"
+            }),
+            serde_json::json!({}),
+            200,
+        )
+        .await;
+        let state = state_from(&silent.file).await;
+        assert_eq!(state.availability, BrowserAvailability::PairedNotAnswering);
+        assert!(!state.is_paired(), "no tool may be offered for it");
+        assert_eq!(
+            state.extension_id.as_deref(),
+            Some("abcdefghijklmnopabcdefghijklmnop"),
+            "the extension is still named, so the user knows which pairing"
+        );
+
+        // A shell that predates the field only ever reported a pairing, so its
+        // silence must not withdraw the tools from everyone on an older build.
+        let older = start_stub(
+            "token-5",
+            serde_json::json!({ "version": 1, "paired": true }),
+            serde_json::json!({}),
+            200,
+        )
+        .await;
+        assert_eq!(
+            state_from(&older.file).await.availability,
+            BrowserAvailability::Paired
+        );
+    }
+
     #[tokio::test]
     async fn a_paired_shell_answers_paired_and_an_unpaired_one_does_not() {
         let stub = start_stub(
@@ -578,6 +632,7 @@ mod tests {
             serde_json::json!({
                 "version": 1,
                 "paired": true,
+                "answering": true,
                 "extensionId": "abcdefghijklmnopabcdefghijklmnop",
                 "appVersion": "1.7.1"
             }),

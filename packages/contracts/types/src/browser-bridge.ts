@@ -121,7 +121,17 @@ export interface LocalClientCommandResponse extends Omit<BrowserCommandResult, '
 /** What `clientState` answers: whether a command can run at all, and why not. */
 export interface LocalClientStateResponse {
   version: typeof LOCAL_CLIENT_PROTOCOL_VERSION;
+  /** A pairing record exists on this Mac. */
   paired: boolean;
+  /**
+   * The paired browser has answered recently.
+   *
+   * Separate from `paired` because they fail differently and a client has to
+   * tell them apart: a pairing whose browser is closed, or has forgotten this
+   * Mac, still reads as paired here while no command it sends can ever be
+   * carried out. A client offers browser tools on this, not on `paired`.
+   */
+  answering?: boolean;
   extensionId?: string;
   appVersion?: string;
 }
@@ -198,6 +208,15 @@ export function extensionIdFromLaunchOrigin(origin: string | undefined): string 
  */
 export const NATIVE_BROWSER_POLL_MESSAGE = 'desktop_browser_poll';
 export const NATIVE_BROWSER_RESULT_MESSAGE = 'desktop_browser_result';
+
+/**
+ * The browser telling the shell it is no longer paired.
+ *
+ * Without it the two sides disagree: the extension forgets the pairing and the
+ * shell keeps its record, so a client asks for a browser that will never
+ * answer and the user is offered tools that cannot work.
+ */
+export const NATIVE_BROWSER_UNPAIR_MESSAGE = 'desktop_browser_unpair';
 export const BROWSER_COMMAND_PROTOCOL_VERSION = 1;
 export const BROWSER_COMMAND_POLL_WINDOW_MS = 20_000;
 export const BROWSER_COMMAND_TIMEOUT_MS = 45_000;

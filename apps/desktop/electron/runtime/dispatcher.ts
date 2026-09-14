@@ -447,9 +447,41 @@ async function approveBrowserCommand(
  * is what the prompt says out loud ("agi in ~/project").
  */
 export interface BrowserCommandCaller {
+  /** Scope key, so the user answers once per client rather than once per program. */
   name: string;
-  label: string;
+  /** Subject of the prompt's question, in words. */
+  subject: string;
+  /** The folder the client is working in, by name. */
+  folder: string | null;
+  /** That folder's full path, never shortened. */
+  path: string | null;
 }
+
+/**
+ * What the prompt says, for a browser action another program asked for.
+ *
+ * Three things the user needs and one they do not. They need to know who is
+ * asking, where it is working, and that the extension's own approved-sites
+ * list still stands. They do not need to be asked twice: the client already
+ * put this tool call through its own approval, so the shell says that rather
+ * than raising a second dialog for every action.
+ */
+function browserPromptReason(caller: BrowserCommandCaller): string {
+  const where = caller.folder ? ` running in ${caller.folder}` : '';
+  const at = caller.path && caller.path !== caller.folder ? `\n\n${caller.path}` : '';
+  return (
+    `${caller.subject}${where} is asking.${at}\n\n` +
+    'It already asked you before making this tool call, under its own permission rules, ' +
+    'so AGI Desktop will not ask again for each action.\n\n' +
+    'The paired Chrome extension still carries the action out under its own approved-sites list.'
+  );
+}
+
+/** The object of the question: the browser, not the program that asked. */
+const BROWSER_OBJECT_PHRASES: Readonly<Record<string, string>> = Object.freeze({
+  'browser.site': 'use the paired browser',
+  'browser.cdp': "read the paired browser's page internals",
+});
 
 export async function runBrowserCommand(
   window: BrowserWindow | null,
@@ -465,11 +497,26 @@ export async function runBrowserCommand(
     ? { kind: 'application', target: caller.name }
     : { kind: 'global' };
   const reason = caller
-    ? `${caller.label} is asking. It already asked you before making this tool call, under its own permission rules, so AGI Desktop will not ask again for each action. The paired Chrome extension still carries the action out under its own approved-sites list.`
+    ? browserPromptReason(caller)
     : 'The paired Chrome extension carries out the action, under its own approved-sites list.';
   const state =
     getPermissionState(plan.capability, scope) === 'prompt'
-      ? await requestPermission(window, plan.capability, scope, reason)
+      ? await requestPermission(
+          window,
+          plan.capability,
+          scope,
+          reason,
+          caller
+            ? {
+                // The title names the client as the user would type it; the
+                // body says who that is in words. Putting the prose name in
+                // the title gives "Allow The AGI CLI to…", a capital mid
+                // sentence.
+                subject: caller.name,
+                objectPhrase: BROWSER_OBJECT_PHRASES[plan.capability],
+              }
+            : {},
+        )
       : getPermissionState(plan.capability, scope);
 
   if (state !== 'granted') {

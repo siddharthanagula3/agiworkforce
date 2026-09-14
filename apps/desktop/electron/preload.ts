@@ -164,3 +164,34 @@ window.addEventListener('drop', (event) => {
   if (paths.length === 0) return;
   void ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.workspaceDrop, paths);
 });
+
+/**
+ * Tell the main process which theme the page settled on.
+ *
+ * The shell's own dialogs and menus are drawn by macOS, which picks their
+ * appearance from the process, not from the page's stylesheet. Until this
+ * existed, a user on the light theme got a dark permission prompt, and the
+ * Settings theme control could not reach it at all.
+ *
+ * The page's resolved theme is whatever `data-theme` says on the html element,
+ * and nothing when the user is on "system", where macOS is already right.
+ */
+function reportResolvedTheme(): void {
+  const declared = document.documentElement.getAttribute('data-theme');
+  const theme = declared === 'dark' || declared === 'light' ? declared : 'system';
+  void ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.rendererTheme, theme).catch(() => undefined);
+}
+
+function watchResolvedTheme(): void {
+  reportResolvedTheme();
+  new MutationObserver(reportResolvedTheme).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  });
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', watchResolvedTheme, { once: true });
+} else {
+  watchResolvedTheme();
+}
