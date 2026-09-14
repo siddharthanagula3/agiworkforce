@@ -15,6 +15,7 @@ import {
 } from '@/lib/server/object-storage';
 import {
   createLocalProjectKnowledgeUploadUrl,
+  createProjectKnowledgeUploadAuthorization,
   deleteProjectKnowledgeObject,
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
@@ -27,6 +28,7 @@ import { secureFilenameSegment } from '@/lib/secure-random';
 import { randomUUID } from 'node:crypto';
 import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION } from '@agiworkforce/cloud-contracts';
 
 const PresignRequestSchema = z.object({
   kind: z.enum(['avatar', 'knowledge-file', 'chat-attachment']),
@@ -34,6 +36,11 @@ const PresignRequestSchema = z.object({
   mimeType: z.string().min(1).max(255),
   byteCount: z.number().int().positive(),
   projectId: z.string().min(1).max(200).optional(),
+  uploadProtocolVersion: z.number().int().optional(),
+  checksumSha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i)
+    .optional(),
 });
 const CleanupRequestSchema = z.object({
   kind: z.literal('knowledge-file'),
@@ -78,6 +85,10 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid request body');
   }
   const { kind, fileName, mimeType, byteCount, projectId } = parsed.data;
+  const checksumSha256 = parsed.data.checksumSha256?.toLowerCase();
+  if (kind === 'knowledge-file' && !checksumSha256) {
+    return knowledgeUploadProtocolUpgradeRequired();
+  }
 
   const storageConfigured =
     kind === 'chat-attachment'
@@ -163,6 +174,7 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
             key,
             contentType: mimeType,
             byteCount,
+            checksumSha256: checksumSha256!,
           }),
           request.nextUrl.origin,
         ).toString(),
@@ -177,7 +189,15 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
       : proxyKnowledgeFileUpload
         ? {
             uploadUrl: new URL(
-              `/api/uploads/knowledge-file/put?key=${encodeURIComponent(key)}`,
+              `/api/uploads/knowledge-file/put?token=${encodeURIComponent(
+                await createProjectKnowledgeUploadAuthorization({
+                  userId,
+                  key,
+                  contentType: mimeType,
+                  byteCount,
+                  checksumSha256: checksumSha256!,
+                }),
+              )}`,
               request.nextUrl.origin,
             ).toString(),
           }
@@ -207,6 +227,24 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     ...('publicUrl' in upload ? { publicUrl: upload.publicUrl } : {}),
     expiresAt: new Date(Date.now() + 300 * 1000).toISOString(),
   });
+}
+
+/**
+ * Version 1 authorized a storage key and nothing about its content, so a client
+ * that still sends that shape is refused rather than served an unbound upload
+ * url. The upgrade is one field the client already computes for registration.
+ */
+function knowledgeUploadProtocolUpgradeRequired(): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: 'UPLOAD_PROTOCOL_UPGRADE_REQUIRED',
+        message: 'Upgrade this client before uploading a project source.',
+      },
+      requiredUploadProtocolVersion: PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
+    },
+    { status: 409 },
+  );
 }
 
 async function handleCleanup(request: NextRequest): Promise<NextResponse> {

@@ -4,6 +4,7 @@ import {
   MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH,
   ManagedCloudProjectKnowledgeDeleteResponseSchema,
   ManagedCloudProjectKnowledgeListResponseSchema,
+  PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
   ManagedCloudProjectKnowledgePresignRequestSchema,
   ManagedCloudProjectKnowledgePresignResponseSchema,
   ManagedCloudProjectKnowledgeRegisterRequestSchema,
@@ -169,10 +170,12 @@ export function createManagedCloudProjectKnowledgeClient(
 
       const presignBody = ManagedCloudProjectKnowledgePresignRequestSchema.parse({
         kind: 'knowledge-file',
+        uploadProtocolVersion: PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
         projectId,
         fileName: file.name,
         mimeType,
         byteCount: file.size,
+        checksumSha256,
       });
       const presignResponse = await request(MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH, {
         method: 'POST',

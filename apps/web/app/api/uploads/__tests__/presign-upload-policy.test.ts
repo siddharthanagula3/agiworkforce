@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -44,8 +45,15 @@ vi.mock('@/lib/server/object-storage', () => ({
   getBoundedPrivateObject: vi.fn(),
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
 }));
+vi.mock('@/lib/server/object-storage-runtime', () => ({
+  getObjectStore: vi.fn(),
+  objectStorageConfig: () => ({ secretAccessKey: 'test-object-storage-secret' }),
+}));
 
 import { POST } from '@/app/api/uploads/presign/route';
+import { PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION } from '@agiworkforce/cloud-contracts';
+
+const CHECKSUM = createHash('sha256').update('project source bytes').digest('hex');
 
 type PresignBody = {
   kind: 'avatar' | 'knowledge-file' | 'chat-attachment';
@@ -53,6 +61,8 @@ type PresignBody = {
   mimeType: string;
   byteCount: number;
   projectId?: string;
+  uploadProtocolVersion?: number;
+  checksumSha256?: string;
 };
 
 function presignRequest(body: PresignBody, origin = 'http://localhost:3000'): NextRequest {
@@ -60,10 +70,18 @@ function presignRequest(body: PresignBody, origin = 'http://localhost:3000'): Ne
   // policy allowlists (see scripts/r2-apply-cors.mjs); any other origin now
   // gets routed through the same-origin chat-attachment or knowledge-file
   // upload proxy instead of a direct presigned URL.
+  const authorized: PresignBody =
+    body.kind === 'knowledge-file'
+      ? {
+          uploadProtocolVersion: PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
+          checksumSha256: CHECKSUM,
+          ...body,
+        }
+      : body;
   return new NextRequest(`${origin}/api/uploads/presign`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(authorized),
   });
 }
 
@@ -194,8 +212,9 @@ describe('POST /api/uploads/presign · type policy', () => {
     expect(response.status).toBe(200);
     expect(mockGetPresignedPrivateUploadUrl).not.toHaveBeenCalled();
     expect(body.uploadUrl).toMatch(
-      /^http:\/\/localhost:3100\/api\/uploads\/knowledge-file\/put\?key=knowledge-files%2Fprojects%2Fproj-1%2F/,
+      /^http:\/\/localhost:3100\/api\/uploads\/knowledge-file\/put\?token=/,
     );
+    expect(body.uploadUrl).not.toContain('key=');
     expect(body.uploadHeaders).toHaveProperty('x-csrf-token');
   });
 
@@ -220,6 +239,46 @@ describe('POST /api/uploads/presign · type policy', () => {
     );
     expect(mockGetPresignedUploadUrl).not.toHaveBeenCalled();
     expect(body).not.toHaveProperty('publicUrl');
+  });
+
+  it('refuses the version 1 presign shape, which authorized a key and not its content', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/uploads/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'knowledge-file',
+          fileName: 'spec.pdf',
+          mimeType: 'application/pdf',
+          byteCount: 900_000,
+          projectId: 'proj-1',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'UPLOAD_PROTOCOL_UPGRADE_REQUIRED' },
+      requiredUploadProtocolVersion: PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
+    });
+    expect(mockGetPresignedPrivateUploadUrl).not.toHaveBeenCalled();
+    expect(mockGetPresignedUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it('refuses a checksum that is not a sha256 digest', async () => {
+    const response = await POST(
+      presignRequest({
+        kind: 'knowledge-file',
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 900_000,
+        projectId: 'proj-1',
+        checksumSha256: 'not-a-digest',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockGetPresignedPrivateUploadUrl).not.toHaveBeenCalled();
   });
 
   it('does not sign a knowledge upload for a project outside the active workspace', async () => {

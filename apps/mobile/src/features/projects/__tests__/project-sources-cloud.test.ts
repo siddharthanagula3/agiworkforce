@@ -115,10 +115,12 @@ describe('adding sources to a cloud project', () => {
 
     expect(api.post).toHaveBeenCalledWith('/api/uploads/presign', {
       kind: 'knowledge-file',
+      uploadProtocolVersion: 2,
       projectId: CLOUD_PROJECT_ID,
       fileName: 'notes.md',
       mimeType: 'text/markdown',
       byteCount: 1,
+      checksumSha256: FILE_SHA256,
     });
     expect(mockUploadAsync).toHaveBeenCalledTimes(1);
     expect(api.post).toHaveBeenCalledWith(managedCloudProjectKnowledgePath(CLOUD_PROJECT_ID), {
