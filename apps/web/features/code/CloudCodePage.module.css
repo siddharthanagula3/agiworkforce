@@ -11,12 +11,14 @@
 /* ---------- left column ---------- */
 
 .rail {
+  --code-rail-padding: 10px;
+
   display: flex;
   flex-direction: column;
   gap: 2px;
   width: 290px;
   min-height: 0;
-  padding: 10px 10px 12px;
+  padding: var(--code-rail-padding) var(--code-rail-padding) 12px;
   background: var(--chat-sidebar-bg);
 }
 
@@ -42,6 +44,22 @@
   gap: 10px;
   min-height: 34px;
   padding: 0 4px 8px;
+}
+
+/* The shell hides the native title bar and floats the window buttons over the
+   top --agi-window-title-strip of the window, so whatever this surface puts in
+   that corner has to step aside. The tokens are the desktop host's, read here
+   rather than restated, and a browser carries neither the attribute nor the
+   tokens. */
+html[data-desktop-host^='electron-darwin'] .railTop {
+  min-height: var(--agi-window-title-strip);
+  padding-left: calc(var(--agi-window-title-strip-inset) - var(--code-rail-padding));
+}
+
+/* With the rail collapsed the main column starts at the window's left edge, so
+   its header inherits the same corner. */
+html[data-desktop-host^='electron-darwin'] [data-code-rail='collapsed'] .header {
+  padding-left: var(--agi-window-title-strip-inset);
 }
 
 .railTitle {
