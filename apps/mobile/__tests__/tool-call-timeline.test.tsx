@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
@@ -130,7 +129,7 @@ describe('ToolCallTimeline', () => {
       />,
     );
 
-    expect(getByText('Decision saved: allow')).toBeTruthy();
+    expect(getByText('Decision saved: Allowed')).toBeTruthy();
     expect(getByText('Allowed')).toBeTruthy();
   });
 
