@@ -23,6 +23,27 @@ pub enum PermissionMode {
     DontAsk,
 }
 
+/// Read a permission mode that was persisted in configuration.
+///
+/// `bypassPermissions` is refused on purpose: a stored setting must not be
+/// able to disable every approval on a machine whose owner never chose it.
+/// Anything unrecognized returns `None` so configuration never widens
+/// permissions by accident.
+pub(crate) fn persisted_permission_mode(raw: &str) -> Option<PermissionMode> {
+    match raw
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['-', '_'], "")
+        .as_str()
+    {
+        "default" | "ask" | "suggest" => Some(PermissionMode::Default),
+        "plan" => Some(PermissionMode::Plan),
+        "acceptedits" | "auto" => Some(PermissionMode::AcceptEdits),
+        "dontask" => Some(PermissionMode::DontAsk),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CliOptions {
     pub(crate) permission_mode: Option<PermissionMode>,

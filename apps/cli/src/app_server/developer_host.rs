@@ -4,13 +4,19 @@ use agiworkforce_protocol::agent_events::{
     AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
 };
 use agiworkforce_protocol::developer_session::{
-    agent_event_notification, task_state_notification, AppServerCapabilities, AppServerClientInfo,
-    AppServerNotification, ApprovalResponseParams, DeveloperAgentMode, DeveloperMessage,
-    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionSource,
-    DeveloperSessionTrustMode, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
-    ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadStartParams, ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams,
-    TurnStatus, TurnSteerParams, TurnSummary,
+    agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
+    AccountLoginWaitParams, AccountLoginWaitResponse, AccountSource, AccountStatusParams,
+    AccountStatusResponse, AccountTokenResponse, AppServerCapabilities, AppServerClientInfo,
+    AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
+    ContextInstructionsResponse, DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort,
+    DeveloperRoutingTaskType, DeveloperSessionSource, DeveloperSessionTrustMode, HookListResponse,
+    LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpLoginParams,
+    McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse, PluginListResponse,
+    PluginSetEnabledParams, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus,
+    ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -24,6 +30,8 @@ use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::{broadcast, oneshot, Mutex, RwLock, RwLockReadGuard};
 use uuid::Uuid;
 
+use super::account;
+use super::surfaces;
 use crate::agent::{AgentSession, ToolApprovalSink, ToolEventSink};
 use crate::config::CliConfig;
 use crate::context;
@@ -77,6 +85,18 @@ const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// value times that cap. Without it the multiplier is however many threads a
 /// client chooses to drive at once.
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
+
+fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse {
+    AccountStatusResponse {
+        signed_in: snapshot.signed_in,
+        email: snapshot.email,
+        tier: snapshot.tier,
+        balance_credits: snapshot.balance_credits,
+        purchased_credits: snapshot.purchased_credits,
+        cached: snapshot.cached,
+        source: AccountSource::Cli,
+    }
+}
 
 #[derive(Clone, Debug)]
 struct PreparedInput {
@@ -218,6 +238,15 @@ pub struct CliDeveloperSessionHost {
     notifications: broadcast::Sender<AppServerNotification>,
     shutdown_started: Arc<AtomicBool>,
     lifecycle: Arc<RwLock<()>>,
+    pending_logins: Arc<Mutex<HashMap<String, PendingDeviceLogin>>>,
+}
+
+/// A device grant this host started and has not yet resolved.
+struct PendingDeviceLogin {
+    api_base: String,
+    device_code: String,
+    interval: std::time::Duration,
+    deadline: std::time::Instant,
 }
 
 impl CliDeveloperSessionHost {
@@ -254,6 +283,7 @@ impl CliDeveloperSessionHost {
             notifications,
             shutdown_started: Arc::new(AtomicBool::new(false)),
             lifecycle: Arc::new(RwLock::new(())),
+            pending_logins: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -278,6 +308,13 @@ impl CliDeveloperSessionHost {
             checkpoints: false,
             worktrees: false,
             models: true,
+            account: true,
+            instructions: true,
+            skills: true,
+            plugins: true,
+            hooks: true,
+            settings: true,
+            commands: true,
         }
     }
 
@@ -1776,6 +1813,229 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     "Approval request ended before the response was delivered",
                 )
             })
+    }
+
+    async fn account_status(
+        &self,
+        params: AccountStatusParams,
+    ) -> Result<AccountStatusResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        Ok(account_response(
+            account::account_status(params.refresh).await,
+        ))
+    }
+
+    async fn account_login(&self) -> Result<AccountLoginResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let api_base = account::device_auth_base();
+        let device = crate::oauth::start_device_code_login(&api_base)
+            .await
+            .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
+
+        let login_id = Uuid::new_v4().to_string();
+        let expires_in = std::time::Duration::from_secs(device.expires_in_secs);
+        self.pending_logins.lock().await.insert(
+            login_id.clone(),
+            PendingDeviceLogin {
+                api_base,
+                device_code: device.device_code.clone(),
+                interval: std::time::Duration::from_secs(device.interval_secs),
+                deadline: std::time::Instant::now() + expires_in,
+            },
+        );
+
+        let expires_at = account::epoch_millis_to_rfc3339(
+            chrono::Utc::now().timestamp_millis() + (device.expires_in_secs as i64 * 1000),
+        );
+        Ok(AccountLoginResponse {
+            login_id,
+            verification_url: device.verification_url,
+            user_code: Some(device.user_code),
+            expires_at,
+        })
+    }
+
+    async fn account_login_wait(
+        &self,
+        params: AccountLoginWaitParams,
+    ) -> Result<AccountLoginWaitResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let pending = self
+            .pending_logins
+            .lock()
+            .await
+            .remove(&params.login_id)
+            .ok_or_else(|| {
+                DeveloperSessionHostError::not_found(
+                    "No login is in flight for that id; start one with account/login",
+                )
+            })?;
+
+        loop {
+            if std::time::Instant::now() >= pending.deadline {
+                return Ok(AccountLoginWaitResponse {
+                    outcome: AccountLoginOutcome::Expired,
+                    message: Some("The device code expired before it was approved".to_string()),
+                    account: account_response(account::account_status(false).await),
+                });
+            }
+            tokio::time::sleep(pending.interval).await;
+            let poll = crate::oauth::poll_device_code(&pending.api_base, &pending.device_code)
+                .await
+                .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
+            match poll {
+                crate::oauth::DeviceCodePoll::Pending => continue,
+                crate::oauth::DeviceCodePoll::Expired => {
+                    return Ok(AccountLoginWaitResponse {
+                        outcome: AccountLoginOutcome::Expired,
+                        message: Some("The device code expired before it was approved".to_string()),
+                        account: account_response(account::account_status(false).await),
+                    });
+                }
+                crate::oauth::DeviceCodePoll::Authorized(entry) => {
+                    account::save_device_grant(*entry)
+                        .map_err(|error| DeveloperSessionHostError::internal(error.to_string()))?;
+                    return Ok(AccountLoginWaitResponse {
+                        outcome: AccountLoginOutcome::Completed,
+                        message: None,
+                        account: account_response(account::account_status(false).await),
+                    });
+                }
+            }
+        }
+    }
+
+    async fn account_logout(&self) -> Result<(), DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        self.pending_logins.lock().await.clear();
+        account::logout().map_err(|error| DeveloperSessionHostError::internal(error.to_string()))
+    }
+
+    async fn account_token(&self) -> Result<AccountTokenResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let (token, expires_ms) = account::managed_credential().ok_or_else(|| {
+            DeveloperSessionHostError::not_found(
+                "This machine holds no AGI Workforce credential; call account/login first",
+            )
+        })?;
+        if let Some(expires_ms) = expires_ms {
+            if expires_ms <= chrono::Utc::now().timestamp_millis() {
+                return Err(DeveloperSessionHostError::unavailable(
+                    "The stored AGI Workforce credential has expired; call account/login again",
+                ));
+            }
+        }
+        Ok(AccountTokenResponse {
+            token,
+            expires_at: expires_ms.and_then(account::epoch_millis_to_rfc3339),
+        })
+    }
+
+    async fn context_instructions(
+        &self,
+        params: ContextInstructionsParams,
+    ) -> Result<ContextInstructionsResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        self.validate_requested_cwd(params.cwd.as_deref())?;
+        Ok(surfaces::context_instructions(&self.workspace_root))
+    }
+
+    async fn list_skills(&self) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        Ok(surfaces::list_skills(&self.workspace_root))
+    }
+
+    async fn set_skill_enabled(
+        &self,
+        params: SkillSetEnabledParams,
+    ) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::set_skill_enabled(&self.workspace_root, &params.name, params.enabled)
+    }
+
+    async fn set_skill_consent(
+        &self,
+        params: SkillConsentParams,
+    ) -> Result<SkillConsentResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::set_skill_consent(&self.workspace_root, params.granted)
+    }
+
+    async fn list_plugins(&self) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        Ok(surfaces::list_plugins(&self.workspace_root))
+    }
+
+    async fn set_plugin_enabled(
+        &self,
+        params: PluginSetEnabledParams,
+    ) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::set_plugin_enabled(&self.workspace_root, &params.id, params.enabled)
+    }
+
+    async fn list_mcp_servers(&self) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        Ok(surfaces::list_mcp_servers(&self.workspace_root))
+    }
+
+    async fn login_mcp_server(
+        &self,
+        params: McpLoginParams,
+    ) -> Result<McpLoginResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let server = crate::mcp::discover_servers(&self.workspace_root)
+            .into_iter()
+            .find(|server| server.name == params.name)
+            .ok_or_else(|| {
+                DeveloperSessionHostError::not_found(format!(
+                    "No MCP server named '{}' is configured for this workspace",
+                    params.name
+                ))
+            })?;
+
+        let state = crate::mcp::login_to_remote_server_for_client(&server.name, &server.config)
+            .await
+            .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
+        Ok(McpLoginResponse {
+            name: server.name,
+            status: match state {
+                crate::mcp::McpCredentialState::Authorized => McpServerConfiguredStatus::Authorized,
+                crate::mcp::McpCredentialState::NeedsAuth => McpServerConfiguredStatus::NeedsAuth,
+                crate::mcp::McpCredentialState::Configured => McpServerConfiguredStatus::Configured,
+            },
+        })
+    }
+
+    async fn list_hooks(&self) -> Result<HookListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        Ok(surfaces::list_hooks(&self.workspace_root))
+    }
+
+    async fn read_settings(&self) -> Result<SettingsReadResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::read_settings(&self.workspace_root)
+    }
+
+    async fn write_settings(
+        &self,
+        params: SettingsWriteParams,
+    ) -> Result<SettingsReadResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::write_settings(&self.workspace_root, params)
+    }
+
+    async fn list_commands(&self) -> Result<SlashCommandListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        Ok(surfaces::list_commands(&self.workspace_root))
+    }
+
+    async fn run_command(
+        &self,
+        params: SlashCommandRunParams,
+    ) -> Result<SlashCommandRunResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::run_command(&self.workspace_root, &params.name, params.args.as_deref())
     }
 
     async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {

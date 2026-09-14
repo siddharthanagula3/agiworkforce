@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { createdQuickPicks } from './__mocks__/vscode';
 import { setupCommands, type CommandDeps } from '../core/commandSetup';
 import { type MemoryFact } from '../memory/memoryStore';
 import {
@@ -70,7 +71,10 @@ function mockConfiguration(values: Record<string, unknown>): {
   return { update };
 }
 
-function registerMemoryCommands(workspaceState: ReturnType<typeof makeWorkspaceState>): {
+function registerMemoryCommands(
+  workspaceState: ReturnType<typeof makeWorkspaceState>,
+  memoryRows: vscode.TreeItem[] = [],
+): {
   handlers: Map<string, Handler>;
   refresh: ReturnType<typeof vi.fn>;
 } {
@@ -98,7 +102,10 @@ function registerMemoryCommands(workspaceState: ReturnType<typeof makeWorkspaceS
       conversationTreeProvider: stub,
       localRuntimes: stub,
       contextPanelProvider: stub,
-      memoryTreeProvider: { refresh } as unknown as CommandDeps['memoryTreeProvider'],
+      memoryTreeProvider: {
+        refresh,
+        getChildren: () => memoryRows,
+      } as unknown as CommandDeps['memoryTreeProvider'],
       diffDecorationProvider: stub,
       diagnosticsProvider: stub,
       nativeChatAvailable: false,
@@ -211,32 +218,46 @@ describe('memory enable/disable controls', () => {
   it('keeps stored facts readable while memory is off', async () => {
     const values: Record<string, unknown> = { 'memory.enabled': false };
     mockConfiguration(values);
-    const { handlers } = registerMemoryCommands(makeWorkspaceState());
+    const fact = new vscode.TreeItem('Prefer Rust');
+    fact.contextValue = 'memoryFact';
+    const { handlers } = registerMemoryCommands(makeWorkspaceState(), [fact]);
     installAccountMemory({
       facts: [{ id: 'mem_1', text: 'Prefer Rust', createdAt: '2026-01-01T00:00:00.000Z' }],
     });
-    const showQuickPick = vi.mocked(vscode.window.showQuickPick);
-    showQuickPick.mockResolvedValue({ detail: 'list' } as never);
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValue({ detail: 'list' } as never);
+    createdQuickPicks.length = 0;
 
-    await handlers.get('agi-workforce.memory')?.();
+    const pending = handlers.get('agi-workforce.memory')?.();
+    await vi.waitFor(() => {
+      expect(createdQuickPicks.at(-1)?.items.length).toBe(1);
+    });
+    const surface = createdQuickPicks.at(-1);
+    surface?.hide();
+    await pending;
 
-    expect(showQuickPick.mock.calls[1]?.[0]).toEqual([
-      expect.objectContaining({ label: 'Prefer Rust' }),
-    ]);
+    expect(surface?.title).toBe('AGI Workforce, Memory');
+    expect(surface?.items).toEqual([expect.objectContaining({ label: 'Prefer Rust' })]);
   });
 
   it('offers sign-in instead of an empty memory list while signed out', async () => {
     mockConfiguration({ 'memory.enabled': true });
-    const { handlers } = registerMemoryCommands(makeWorkspaceState());
+    const signedOut = new vscode.TreeItem('Sign in to see your memory');
+    signedOut.contextValue = 'memorySignedOut';
+    const { handlers } = registerMemoryCommands(makeWorkspaceState(), [signedOut]);
     installAccountMemory({ signedOut: true });
-    const showQuickPick = vi.mocked(vscode.window.showQuickPick);
-    showQuickPick.mockResolvedValue({ detail: 'list' } as never);
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValue({ detail: 'list' } as never);
+    createdQuickPicks.length = 0;
 
-    await handlers.get('agi-workforce.memory')?.();
+    const pending = handlers.get('agi-workforce.memory')?.();
+    await vi.waitFor(() => {
+      expect(createdQuickPicks.at(-1)?.items.length).toBe(1);
+    });
+    const surface = createdQuickPicks.at(-1);
+    surface?.hide();
+    await pending;
 
-    expect(showQuickPick).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls[0]?.[0]).toContain(
-      'Sign in to AGI Cloud',
-    );
+    expect(surface?.items).toEqual([
+      expect.objectContaining({ label: 'Sign in to see your memory' }),
+    ]);
   });
 });

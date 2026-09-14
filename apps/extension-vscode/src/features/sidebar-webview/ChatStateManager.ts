@@ -47,7 +47,23 @@ import {
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
-import { fetchAccountIdentity, getAccountAuthState, type AccountIdentity } from '../../utils/api';
+import {
+  fetchAccountIdentity,
+  getAccountAuthState,
+  getCloudWebOrigin,
+  type AccountIdentity,
+} from '../../utils/api';
+import {
+  BUILT_IN_SLASH_COMMANDS,
+  CliCapabilityAdapter,
+  commandForSurface,
+  mergeSessionRows,
+  type SessionRow,
+  type SessionRowInput,
+  type SessionSource,
+} from '../surfaces';
+import { resolveProjectsWorkspace } from '../projects/projectsClient';
+import { resolveAccountPresence } from '../surfaces/accountAccess';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { getAccountMemoryStore } from '../../memory/accountMemoryStore';
 import {
@@ -92,7 +108,7 @@ type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
 const RUNTIME_SETUP_ERROR_MARKERS = [CLI_NOT_FOUND_MARKER, CLI_NOT_EXECUTABLE_MARKER] as const;
 const RUNTIME_SETUP_ERROR_MAX_LENGTH = 320;
 
-const RECENT_CONVERSATION_LIMIT = 3;
+const RECENT_CONVERSATION_LIMIT = 5;
 const MAX_QUEUED_SENDS = 20;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const PRE_START_EVENT_OVERFLOW_MESSAGE =
@@ -141,7 +157,6 @@ export type WebviewToExtMessage =
   | { type: 'openPrivacySettings' }
   | { type: 'openCloudTasks' }
   | { type: 'openRecentConversation'; payload: { threadId: string } }
-  | { type: 'revealConversationHistory' }
   | { type: 'openPathReference'; payload: PathReferenceTarget }
   | { type: 'requestContextMenuState' }
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
@@ -157,7 +172,12 @@ export type WebviewToExtMessage =
       };
     }
   | { type: 'removePendingAttachment'; payload: { id: string } }
-  | { type: 'clearActiveProject' };
+  | { type: 'clearActiveProject' }
+  | { type: 'openSurface'; payload: { surfaceId: string } }
+  | { type: 'requestSessions'; payload: { source: SessionSource } }
+  | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
+  | { type: 'requestSlashCommands' }
+  | { type: 'runSlashCommand'; payload: { name: string } };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
@@ -308,6 +328,18 @@ export type ExtToWebviewMessage =
         status: 'signed-in' | 'signed-out' | 'expired';
         identity?: AccountIdentity;
       };
+    }
+  | {
+      type: 'sessionsList';
+      payload: {
+        source: SessionSource;
+        rows: SessionRow[];
+        unavailable?: string;
+      };
+    }
+  | {
+      type: 'slashCommands';
+      payload: { items: Array<{ name: string; description: string }> };
     }
   | { type: 'showOnboarding' }
   | { type: 'hideOnboarding' };
@@ -510,6 +542,7 @@ export class ChatStateManager {
   private _clientMessageSeq = 0;
   private readonly _localModelProviders = new Map<string, LocalModelSummary['provider']>();
   private _runtimeReady = false;
+  private readonly _cliCapabilities: CliCapabilityAdapter;
 
   constructor(
     private readonly _secrets: vscode.SecretStorage,
@@ -521,6 +554,7 @@ export class ChatStateManager {
     private readonly _diffDecorationProvider?: DiffDecorationProvider,
   ) {
     this._activeModel = Config.model();
+    this._cliCapabilities = new CliCapabilityAdapter(this._localRuntimes);
     if (this._workspaceState !== undefined) {
       this._meterCollapsed = this._workspaceState.get<boolean>(
         'agiWorkforce.usageMeterCollapsed',
@@ -762,11 +796,6 @@ export class ChatStateManager {
         break;
       }
 
-      case 'revealConversationHistory': {
-        await vscode.commands.executeCommand('agi-workforce.conversations.focus');
-        break;
-      }
-
       case 'openRecentConversation': {
         await vscode.commands.executeCommand(
           'agi-workforce.openConversation',
@@ -815,6 +844,39 @@ export class ChatStateManager {
 
       case 'openCloudTasks': {
         await vscode.commands.executeCommand('agi-workforce.showCloudTasks');
+        break;
+      }
+
+      case 'openSurface': {
+        const command = commandForSurface(msg.payload.surfaceId);
+        if (command === undefined) break;
+        await vscode.commands.executeCommand(command);
+        break;
+      }
+
+      case 'requestSessions': {
+        await this._pushSessions(msg.payload.source);
+        break;
+      }
+
+      case 'openSessionRow': {
+        if (msg.payload.source === 'local') {
+          await vscode.commands.executeCommand('agi-workforce.openConversation', msg.payload.id);
+          break;
+        }
+        await vscode.env.openExternal(
+          vscode.Uri.parse(`${getCloudWebOrigin()}/chat/${msg.payload.id}?from=vscode-extension`),
+        );
+        break;
+      }
+
+      case 'requestSlashCommands': {
+        await this._pushSlashCommands();
+        break;
+      }
+
+      case 'runSlashCommand': {
+        await this._runSlashCommand(msg.payload.name);
         break;
       }
 
@@ -1194,6 +1256,25 @@ export class ChatStateManager {
   public async pushAccountStatus(shouldPost: () => boolean = () => true): Promise<void> {
     const state = await getAccountAuthState(this._secrets);
     if (state.status !== 'signed-in') {
+      const cli = await resolveAccountPresence(this._secrets, this._cliCapabilities);
+      if (cli.source === 'cli' && cli.cli !== undefined) {
+        if (shouldPost()) {
+          this._post({
+            type: 'accountStatus',
+            payload: {
+              status: 'signed-in',
+              identity: {
+                displayName: cli.cli.email ?? 'AGI CLI account',
+                email: cli.cli.email ?? null,
+                accountType: 'Personal account',
+                planName: cli.cli.tier ?? 'Unknown',
+                tier: cli.cli.tier ?? 'unknown',
+              },
+            },
+          });
+        }
+        return;
+      }
       if (shouldPost()) this._post({ type: 'accountStatus', payload: { status: state.status } });
       return;
     }
@@ -1254,6 +1335,73 @@ export class ChatStateManager {
         })),
       },
     });
+  }
+
+  private async _pushSessions(source: SessionSource): Promise<void> {
+    if (source === 'local') {
+      const threads = (await this._conversationTreeProvider?.getThreads()) ?? [];
+      const inputs: SessionRowInput[] = threads.map((thread) => ({
+        id: thread.id,
+        title: thread.title,
+        updatedAt: thread.updatedAt,
+        source: 'local',
+      }));
+      this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
+      return;
+    }
+
+    const resolution = await resolveProjectsWorkspace(this._secrets);
+    if (resolution.status === 'signed-out') {
+      this._post({
+        type: 'sessionsList',
+        payload: { source, rows: [], unavailable: 'Sign in to AGI Cloud to see cloud chats.' },
+      });
+      return;
+    }
+    try {
+      const page = await resolution.workspace.chat.listConversations({ limit: 50 });
+      const inputs: SessionRowInput[] = page.conversations.map((conversation) => ({
+        id: conversation.id,
+        title: conversation.title,
+        updatedAt: conversation.updatedAt,
+        source: 'cloud',
+      }));
+      this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
+    } catch (error) {
+      this._post({
+        type: 'sessionsList',
+        payload: {
+          source,
+          rows: [],
+          unavailable: error instanceof Error ? error.message : 'Cloud chats are unavailable.',
+        },
+      });
+    }
+  }
+
+  private async _pushSlashCommands(): Promise<void> {
+    const listed = await this._cliCapabilities.listEntries('commands');
+    const items =
+      listed.status === 'ok' && listed.value.length > 0
+        ? listed.value.map((entry) => ({
+            name: entry.label.startsWith('/') ? entry.label : `/${entry.label}`,
+            description: entry.description ?? '',
+          }))
+        : BUILT_IN_SLASH_COMMANDS.map((entry) => ({
+            name: entry.name,
+            description: entry.description,
+          }));
+    this._post({ type: 'slashCommands', payload: { items } });
+  }
+
+  private async _runSlashCommand(name: string): Promise<void> {
+    const normalized = name.startsWith('/') ? name : `/${name}`;
+    const builtIn = BUILT_IN_SLASH_COMMANDS.find((entry) => entry.name === normalized);
+    if (builtIn !== undefined) {
+      await vscode.commands.executeCommand(builtIn.command);
+      return;
+    }
+    await vscode.commands.executeCommand('agi-workforce.runCliCommand', normalized.slice(1));
   }
 
   public pushFollowUpBehavior(): void {
