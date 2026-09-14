@@ -273,3 +273,25 @@ describe('Chrome side-panel tab-group state', () => {
     expect(source).not.toContain('let isGrouped = false');
   });
 });
+
+describe('Chrome side-panel sign-out ends the shared session, not just the local one', () => {
+  it('signs out of Clerk before clearing the extension-local auth state', () => {
+    const start = source.indexOf("signoutBtn.addEventListener('click'");
+    const end = source.indexOf('\n  });', start);
+    const body = source.slice(start, end);
+
+    expect(body).toContain('signOutClerk()');
+    expect(body).toContain('transitionManagedCloudOwner(null)');
+
+    const clerkSignOutIndex = body.indexOf('signOutClerk()');
+    const localResetIndex = body.indexOf('transitionManagedCloudOwner(null)');
+    expect(clerkSignOutIndex).toBeGreaterThan(-1);
+    expect(localResetIndex).toBeGreaterThan(clerkSignOutIndex);
+  });
+
+  it('imports the sign-out helper from the same Clerk auth module as sign-in', () => {
+    const start = source.indexOf("} from './features/cloud-bridge/clerkAuth';");
+    const importBlock = source.slice(Math.max(0, start - 300), start);
+    expect(importBlock).toContain('signOutClerk');
+  });
+});
