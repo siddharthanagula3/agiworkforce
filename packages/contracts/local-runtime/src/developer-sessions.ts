@@ -6,6 +6,7 @@ import type {
 
 export const DEVELOPER_SESSION_COMMANDS = [
   'developer_runtime_status',
+  'developer_model_list',
   'developer_session_list',
   'developer_session_read',
   'developer_session_resume',
@@ -90,6 +91,32 @@ export interface DeveloperRuntimeStatus {
   version: string | null;
   path: string | null;
   hint: string | null;
+}
+
+/**
+ * A model the CLI reported for one folder. `local` marks a model installed on
+ * this Mac that the CLI says is ready now; everything else is a route the CLI
+ * would have to reach over the network.
+ */
+export interface DeveloperModelOption {
+  id: string;
+  provider: string;
+  local: boolean;
+}
+
+/**
+ * What the CLI can run in one folder, as it reports it.
+ *
+ * Protocol 8 names the models installed on this Mac and the configured
+ * default, and says whether the account is signed in; it does not say which
+ * own-key providers hold a key. So a caller choosing a model for a new session
+ * treats a model the folder has already used as the strongest evidence that it
+ * runs here.
+ */
+export interface DeveloperRuntimeModels {
+  models: DeveloperModelOption[];
+  defaultModelId: string | null;
+  managedSignedIn: boolean;
 }
 
 export interface DeveloperSessionList {

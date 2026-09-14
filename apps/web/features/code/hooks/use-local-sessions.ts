@@ -1,8 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { DeveloperSession, DeveloperSessionGroup } from '@agiworkforce/local-runtime-contract';
+import type {
+  DeveloperRuntimeModels,
+  DeveloperSession,
+  DeveloperSessionGroup,
+} from '@agiworkforce/local-runtime-contract';
 import {
+  listDeveloperModels,
   listDeveloperSessions,
   onDeveloperSessionEvent,
   pickWorkspaceRoot,
@@ -10,7 +15,7 @@ import {
   useDesktopHost,
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
-import { LOCAL_CODE_COPY, sharedUnavailableLine } from '../local-code';
+import { LOCAL_CODE_COPY, sharedUnavailableLine, startingModelId } from '../local-code';
 
 export interface LocalSessionsState {
   supported: boolean;
@@ -22,6 +27,7 @@ export interface LocalSessionsState {
   refresh: () => void;
   addFolder: () => Promise<void>;
   startSession: (rootId: string) => Promise<DeveloperSession | null>;
+  modelsFor: (rootId: string) => DeveloperRuntimeModels | null;
 }
 
 /**
@@ -36,6 +42,7 @@ export function useLocalSessions(): LocalSessionsState {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [models, setModels] = useState<Record<string, DeveloperRuntimeModels>>({});
 
   const refresh = useCallback(() => setReloadKey((key) => key + 1), []);
 
@@ -70,6 +77,30 @@ export function useLocalSessions(): LocalSessionsState {
     });
   }, [supported, refresh]);
 
+  useEffect(() => {
+    const pending = groups.filter((group) => group.unavailable === undefined);
+    if (pending.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      pending.map(async (group) => {
+        try {
+          return [group.rootId, await listDeveloperModels(group.rootId)] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      const resolved = entries.filter(
+        (entry): entry is [string, DeveloperRuntimeModels] => entry !== null,
+      );
+      if (resolved.length > 0) setModels(Object.fromEntries(resolved));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [groups]);
+
   const addFolder = useCallback(async () => {
     setAdding(true);
     setError(null);
@@ -86,8 +117,10 @@ export function useLocalSessions(): LocalSessionsState {
   const startSession = useCallback(
     async (rootId: string) => {
       setError(null);
+      const group = groups.find((candidate) => candidate.rootId === rootId);
+      const model = startingModelId(models[rootId] ?? null, group?.sessions ?? []);
       try {
-        const session = await startDeveloperSession(rootId);
+        const session = await startDeveloperSession(rootId, model);
         refresh();
         return session;
       } catch (cause: unknown) {
@@ -95,12 +128,15 @@ export function useLocalSessions(): LocalSessionsState {
         return null;
       }
     },
-    [refresh],
+    [refresh, groups, models],
   );
+
+  const modelsFor = useCallback((rootId: string) => models[rootId] ?? null, [models]);
 
   return {
     supported,
     groups,
+    modelsFor,
     loading,
     adding,
     error,

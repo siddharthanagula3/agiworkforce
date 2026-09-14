@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { DeveloperSession, DeveloperSessionGroup } from '@agiworkforce/local-runtime-contract';
+import type {
+  DeveloperRuntimeModels,
+  DeveloperSession,
+  DeveloperSessionGroup,
+} from '@agiworkforce/local-runtime-contract';
 import {
   EMPTY_LOCAL_TURN,
+  localModelChoices,
   localModelLabel,
   localTurnFailureSentence,
+  startingModelId,
   localSessionContext,
   localSessionOriginLabel,
   localTranscriptItems,
@@ -38,7 +44,54 @@ function group(overrides: Partial<DeveloperSessionGroup> = {}): DeveloperSession
   };
 }
 
+const runtime: DeveloperRuntimeModels = {
+  models: [
+    { id: 'qwen2.5:1.5b', provider: 'ollama', local: true },
+    { id: 'smollm2:135m', provider: 'ollama', local: true },
+  ],
+  defaultModelId: 'claude-fable-5-1',
+  managedSignedIn: false,
+};
+
 describe('local code surface', () => {
+  it('offers what the folder has used, then what is installed, then the default', () => {
+    const choices = localModelChoices(runtime, [
+      { ...session, model: 'deepseek-v4-flash' },
+      { ...session, id: 'b', model: 'deepseek-v4-flash' },
+    ]);
+
+    expect(choices.map((choice) => [choice.id, choice.evidence])).toEqual([
+      ['deepseek-v4-flash', 'used-here'],
+      ['qwen2.5:1.5b', 'installed'],
+      ['smollm2:135m', 'installed'],
+      ['claude-fable-5-1', 'configured'],
+    ]);
+    expect(choices[0]?.label).toBe('DeepSeek V4 Flash');
+  });
+
+  it('starts a session on the best-evidenced model rather than the configured default', () => {
+    expect(startingModelId(runtime, [{ ...session, model: 'deepseek-v4-flash' }])).toBe(
+      'deepseek-v4-flash',
+    );
+    expect(startingModelId(runtime, [])).toBe('qwen2.5:1.5b');
+    expect(startingModelId({ ...runtime, models: [] }, [])).toBe('claude-fable-5-1');
+    expect(startingModelId(null, [])).toBeUndefined();
+  });
+
+  it('names a model once, however many sessions used it', () => {
+    const choices = localModelChoices(
+      {
+        models: [{ id: 'deepseek-v4-flash', provider: 'deepseek', local: false }],
+        defaultModelId: 'deepseek-v4-flash',
+        managedSignedIn: true,
+      },
+      [{ ...session, model: 'deepseek-v4-flash' }],
+    );
+
+    expect(choices).toHaveLength(1);
+    expect(choices[0]?.evidence).toBe('used-here');
+  });
+
   it('names the surface that opened a session', () => {
     expect(localSessionOriginLabel(session)).toBe('VS Code');
     expect(localSessionOriginLabel({ ...session, origin: 'cli' })).toBe('CLI');
