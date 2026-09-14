@@ -4,6 +4,7 @@ export {
   MAX_CUSTOM_INSTRUCTION_CHARS,
   buildCustomInstructionInput,
   buildInstructionContextSnapshot,
+  buildTurnPrelude,
   formatCustomInstructionPrelude,
   getStoredCustomInstructions,
   saveCustomInstructions,

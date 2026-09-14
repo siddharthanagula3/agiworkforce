@@ -29,7 +29,7 @@ import type {
   CloudToolApprovalProjection,
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
-import type { InteractiveCard, ResearchStep } from '@agiworkforce/types';
+import type { InteractiveCard, ProjectFileCitation, ResearchStep } from '@agiworkforce/types';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type {
   PaywallSlot,
@@ -251,6 +251,11 @@ export interface MessageMetadata {
   isSearching?: boolean;
   /** Web search results from server-managed tools */
   searchResults?: WebSearchResults;
+  /**
+   * Project knowledge passages this turn was given, each with the page or
+   * heading trail it came from. Server-decided, so the client only carries it.
+   */
+  projectSources?: ProjectFileCitation[];
   /**
    * The client's post-stream metadata save failed and was not retried, so what
    * is on screen is richer than what a reload will show.
@@ -759,6 +764,11 @@ interface ChatState {
   appendToMessage: (id: string, content: string, conversationId?: string) => void;
   appendToThinking: (id: string, thinking: string, conversationId?: string) => void;
   setSearching: (id: string, isSearching: boolean, conversationId?: string) => void;
+  setProjectSources: (
+    id: string,
+    sources: ProjectFileCitation[] | undefined,
+    conversationId?: string,
+  ) => void;
   setSearchResults: (
     id: string,
     results: Array<{ url: string; title: string; snippet: string }>,
@@ -1352,6 +1362,13 @@ export const useChatStore = create<ChatState>()(
             (state) => patchMessageMetadata(state, conversationId, id, { isSearching }),
             undefined,
             'chat/setSearching',
+          ),
+
+        setProjectSources: (id, sources, conversationId) =>
+          set(
+            (state) => patchMessageMetadata(state, conversationId, id, { projectSources: sources }),
+            undefined,
+            'chat/setProjectSources',
           ),
 
         setSearchResults: (id, results, conversationId) =>

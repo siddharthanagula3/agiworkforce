@@ -112,6 +112,7 @@ import {
   planDeviceStep,
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
+import { DEVICE_SCREENSHOT_MESSAGE_PREFIX } from '@agiworkforce/cloud-contracts';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
@@ -352,6 +353,8 @@ export interface ResumeDeviceResult {
   toolCallId: string;
   content: string;
   isError: boolean;
+  /** A screen capture the step produced, which the model has to actually see. */
+  image?: { base64: string; mimeType: 'image/png' | 'image/jpeg' };
 }
 
 export interface ResumeApproval {
@@ -2012,6 +2015,26 @@ function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
     });
   }
   return out;
+}
+
+/**
+ * Strips the pixels from every screen capture already in the history.
+ *
+ * Only the newest picture describes the screen the model is about to act on, so
+ * the earlier ones are left as their sentence and their image dropped. Without
+ * this a ten-step session would carry ten full-screen captures into every
+ * later request and into every checkpoint row.
+ */
+function dropStaleDeviceScreenshots(messages: ProcessedRequest['llmRequest']['messages']): void {
+  for (const message of messages) {
+    if (
+      message.role === 'user' &&
+      message.multimodal_content !== undefined &&
+      message.content.startsWith(DEVICE_SCREENSHOT_MESSAGE_PREFIX)
+    ) {
+      delete message.multimodal_content;
+    }
+  }
 }
 
 export function isToolOffered(
@@ -3748,6 +3771,22 @@ export async function* runToolLoop(
             toolResultEvent(p.id, p.qualifiedName, content, deviceResult.isError, responseModel),
           );
           messages.push({ role: 'tool', content, tool_call_id: p.id });
+          if (deviceResult.image) {
+            dropStaleDeviceScreenshots(messages);
+            messages.push({
+              role: 'user',
+              content: `${DEVICE_SCREENSHOT_MESSAGE_PREFIX}. ${content}`,
+              multimodal_content: [
+                { type: 'text', text: `${DEVICE_SCREENSHOT_MESSAGE_PREFIX}. ${content}` },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${deviceResult.image.mimeType};base64,${deviceResult.image.base64}`,
+                  },
+                },
+              ],
+            });
+          }
           continue;
         }
         if (resumeInputByCallId.has(p.id)) {

@@ -144,6 +144,39 @@ describe('useMediaGeneration', () => {
     expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(expect.objectContaining({ size: '3:4' }));
   });
 
+  it('serializes a mask edit of an image the caller already holds', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        images: [{ url: 'https://cdn.example/edited.png' }],
+        provider: GOOGLE_IMAGE_MODEL.provider,
+        catalog_model: GOOGLE_IMAGE_MODEL.id,
+      }),
+    } as Response);
+    const { result } = renderHook(() => useMediaGeneration());
+
+    await act(async () => {
+      await expect(
+        result.current.generateImage('repaint the sky', {
+          provider: 'google',
+          model: GOOGLE_IMAGE_MODEL.id,
+          operation: 'inpaint',
+          sourceImageBase64: 'c291cmNl',
+          maskImageBase64: 'bWFzaw==',
+        }),
+      ).resolves.toMatchObject({ imageUrl: 'https://cdn.example/edited.png' });
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      prompt: 'repaint the sky',
+      provider: 'google',
+      model: GOOGLE_IMAGE_MODEL.id,
+      operation: 'inpaint',
+      source_image: { b64_json: 'c291cmNl' },
+      mask_image: { b64_json: 'bWFzaw==' },
+    });
+  });
+
   it('rejects an asset whose response omits canonical model provenance', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,

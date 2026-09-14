@@ -841,6 +841,7 @@ function FileViewerOverlay({
   const [question, setQuestion] = useState('');
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const previewUri = isImageItem(item) ? inlinePreviewUri?.(item.uri) : undefined;
+  const playbackUri = isVideoItem(item) ? (inlinePreviewUri?.(item.uri) ?? item.uri) : undefined;
 
   useEffect(() => {
     setContainer(containerId ? document.getElementById(containerId) : null);
@@ -943,6 +944,16 @@ function FileViewerOverlay({
             src={previewUri}
             alt={item.file_name}
             style={{ transform: `scale(${zoom / 100})` }}
+            className="max-h-full max-w-full object-contain"
+          />
+        ) : playbackUri ? (
+          <video
+            src={playbackUri}
+            data-testid="library-video-player"
+            controls
+            playsInline
+            preload="metadata"
+            aria-label={item.file_name}
             className="max-h-full max-w-full object-contain"
           />
         ) : (
