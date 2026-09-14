@@ -156,29 +156,43 @@ export function pickReadyLocalModelId(
   selectedModelId: string,
   installedModelIds: readonly string[],
   readySystemModelIds: readonly string[],
+  isDownloading = false,
 ): string | null {
   if (isCloudManagedModelId(selectedModelId) || isAutoMode(selectedModelId)) return null;
   if (readySystemModelIds.includes(selectedModelId)) return null;
   if (installedModelIds.includes(selectedModelId)) return null;
+  // A download in flight is a choice the user just made. Moving off it would
+  // undo that choice and leave the finished model unselected.
+  if (isDownloading) return null;
   return readySystemModelIds[0] ?? installedModelIds[0] ?? null;
 }
 
 // Resolve the local model to run now: the given id when it is on disk, else a
 // ready one.
 export function readyLocalModelIdOr(fallbackModelId: string): string {
-  const { installedModelIds, readySystemModelIds } = useModelInstallStore.getState();
+  const { installedModelIds, readySystemModelIds, jobs } = useModelInstallStore.getState();
   return (
-    pickReadyLocalModelId(fallbackModelId, installedModelIds, readySystemModelIds) ??
-    fallbackModelId
+    pickReadyLocalModelId(
+      fallbackModelId,
+      installedModelIds,
+      readySystemModelIds,
+      jobs[fallbackModelId]?.status === 'downloading',
+    ) ?? fallbackModelId
   );
 }
 
 function activateReadyLocalModel(
   installedModelIds: readonly string[],
   readySystemModelIds: readonly string[],
+  jobs: Record<string, ModelInstallJob>,
 ): void {
   const { selectedModel, setModel } = useModelStore.getState();
-  const replacement = pickReadyLocalModelId(selectedModel, installedModelIds, readySystemModelIds);
+  const replacement = pickReadyLocalModelId(
+    selectedModel,
+    installedModelIds,
+    readySystemModelIds,
+    jobs[selectedModel]?.status === 'downloading',
+  );
   if (replacement) setModel(replacement);
 }
 
@@ -201,7 +215,7 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
       readySystemModelIds,
       totalRAMMB: caps?.totalRAMMB ?? null,
     });
-    activateReadyLocalModel(installedModelIds, readySystemModelIds);
+    activateReadyLocalModel(installedModelIds, readySystemModelIds, get().jobs);
   },
 
   prepareModel: async (model) => {
