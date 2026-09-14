@@ -12,12 +12,12 @@ use agiworkforce_protocol::developer_session::{
     HookListResponse, HookSummary, InitializeParams, InitializeResponse, InstructionFile,
     InstructionFileKind, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
     McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
-    McpServerScope, McpServerSummary, PluginListResponse, PluginScope, PluginSetEnabledParams,
-    PluginSummary, SettingsReadResponse, SettingsWriteParams, SkillCatalogScope,
-    SkillConsentParams, SkillConsentResponse, SkillListResponse, SkillSetEnabledParams,
-    SkillSummary, SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunParams,
-    SlashCommandRunResponse, SlashCommandSummary, ThreadForkParams, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
+    McpServerScope, McpServerSummary, ModelListParams, PluginListResponse, PluginScope,
+    PluginSetEnabledParams, PluginSummary, SettingsReadResponse, SettingsWriteParams,
+    SkillCatalogScope, SkillConsentParams, SkillConsentResponse, SkillListResponse,
+    SkillSetEnabledParams, SkillSummary, SlashCommandListResponse, SlashCommandResultKind,
+    SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary, ThreadForkParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
     ThreadStartResponse, ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams,
     TurnStartResponse, TurnStatus, TurnSteerParams, TurnSummary,
     DEVELOPER_SESSION_PROTOCOL_VERSION, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
@@ -72,6 +72,9 @@ fn thread(id: &str) -> ThreadSummary {
         cwd: Some("/workspace".to_string()),
         provider: Some("ollama".to_string()),
         trust_mode: DeveloperSessionTrustMode::Local,
+        git_branch: None,
+        worktree_root: None,
+        client: None,
         created_at: "2026-07-14T12:00:00Z".to_string(),
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
@@ -109,12 +112,16 @@ impl DeveloperSessionHost for FakeHost {
         })
     }
 
-    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+    async fn list_local_models(
+        &self,
+        _params: ModelListParams,
+    ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
         Ok(LocalModelListResponse {
             models: vec![LocalModelSummary {
                 id: "fixture-local-model".to_string(),
                 provider: LocalModelProvider::Ollama,
             }],
+            host_models: Vec::new(),
         })
     }
 
@@ -726,8 +733,14 @@ impl DeveloperSessionHost for SurfaceHost {
         })
     }
 
-    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
-        Ok(LocalModelListResponse { models: Vec::new() })
+    async fn list_local_models(
+        &self,
+        _params: ModelListParams,
+    ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+        Ok(LocalModelListResponse {
+            models: Vec::new(),
+            host_models: Vec::new(),
+        })
     }
 
     async fn resume_thread(

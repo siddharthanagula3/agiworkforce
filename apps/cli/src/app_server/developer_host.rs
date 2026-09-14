@@ -10,14 +10,15 @@ use agiworkforce_protocol::developer_session::{
     AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort,
     DeveloperRoutingTaskType, DeveloperSessionSource, DeveloperSessionTrustMode, HookListResponse,
-    LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpLoginParams,
-    McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse, PluginListResponse,
-    PluginSetEnabledParams, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
-    SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus,
-    ThreadSummary, TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
-    TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
+    ModelListParams, PluginListResponse, PluginSetEnabledParams, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
+    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams, TurnStartParams,
+    TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -240,6 +241,9 @@ pub struct CliDeveloperSessionHost {
     shutdown_started: Arc<AtomicBool>,
     lifecycle: Arc<RwLock<()>>,
     pending_logins: Arc<Mutex<HashMap<String, PendingDeviceLogin>>>,
+    /// What this host answered about model reachability, kept for the life of
+    /// the connection so a client may ask as often as it likes.
+    host_models: Arc<RwLock<Option<Vec<HostModelSummary>>>>,
 }
 
 /// A device grant this host started and has not yet resolved.
@@ -285,6 +289,7 @@ impl CliDeveloperSessionHost {
             shutdown_started: Arc::new(AtomicBool::new(false)),
             lifecycle: Arc::new(RwLock::new(())),
             pending_logins: Arc::new(Mutex::new(HashMap::new())),
+            host_models: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -601,6 +606,23 @@ impl CliDeveloperSessionHost {
             return ThreadStatus::Running;
         }
         ThreadStatus::Idle
+    }
+
+    /// Which models this host can reach, resolved once and reused.
+    ///
+    /// Every local runtime is probed and every route's credential looked up,
+    /// so this is not something to do per request: a client asking for the
+    /// list while typing would pay it on each keystroke. A client asks for a
+    /// fresh answer after the user signs in or starts a local server.
+    async fn host_models(&self, refresh: bool) -> Vec<HostModelSummary> {
+        if !refresh {
+            if let Some(cached) = self.host_models.read().await.clone() {
+                return cached;
+            }
+        }
+        let resolved = crate::model_reachability::host_models(&self.config).await;
+        *self.host_models.write().await = Some(resolved.clone());
+        resolved
     }
 
     async fn thread_summary(&self, summary: ManagedSessionSummary) -> ThreadSummary {
@@ -1010,8 +1032,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         env!("CARGO_PKG_VERSION")
     }
 
-    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+    async fn list_local_models(
+        &self,
+        params: ModelListParams,
+    ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        let host_models = self.host_models(params.refresh).await;
         let probes = crate::local_models::discover_all(&self.config).await;
         let models = crate::local_models::discovered_models(&probes)
             .into_iter()
@@ -1027,7 +1053,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 })
             })
             .collect();
-        Ok(LocalModelListResponse { models })
+        Ok(LocalModelListResponse {
+            models,
+            host_models,
+        })
     }
 
     async fn start_thread(
