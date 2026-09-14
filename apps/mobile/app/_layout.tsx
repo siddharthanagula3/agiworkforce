@@ -221,7 +221,7 @@ export default function RootLayout() {
       themeMode === 'dark' ? 'dark' : themeMode === 'light' ? 'light' : 'unspecified',
     );
   }, [themeMode]);
-  const { isUnlocked, isReady: isBiometricReady, authenticate } = useBiometricGate();
+  const { isUnlocked, isCovered, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
   const openSecureStorage = useCallback(() => {
     setStorageStatus('pending');
@@ -716,7 +716,9 @@ export default function RootLayout() {
             <OfflineBanner />
             {/* The lock covers the app, it does not replace it: unmounting the
                 navigator on every resume discarded the open conversation. */}
-            {isUnlocked ? null : <AppLockOverlay onUnlock={authenticate} />}
+            {isUnlocked && !isCovered ? null : (
+              <AppLockOverlay onUnlock={authenticate} variant={isUnlocked ? 'cover' : 'locked'} />
+            )}
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </CapabilityProvider>
