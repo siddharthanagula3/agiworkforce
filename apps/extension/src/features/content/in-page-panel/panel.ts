@@ -330,11 +330,14 @@ interface PageContext {
 }
 
 const MAX_PAGE_TITLE_CHARS = 300;
+const MIN_MAIN_REGION_CHARS = 200;
 
 function readVisiblePageText(): string {
   if (!isDomSmallEnoughToRead()) return '';
   const main = document.querySelector<HTMLElement>('main, article, [role="main"]');
-  const raw = main?.innerText ?? document.body?.innerText ?? '';
+  const mainText = main?.innerText.trim() ?? '';
+  const raw =
+    mainText.length >= MIN_MAIN_REGION_CHARS ? mainText : (document.body?.innerText ?? '');
   return sanitizePageText(truncatePageText(raw));
 }
 
