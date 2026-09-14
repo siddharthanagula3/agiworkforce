@@ -234,9 +234,6 @@ struct TuiApp {
     status_notice: Option<(String, Instant)>,
     model_name: String,
     provider_name: String,
-    turn_count: u32,
-    total_input_tokens: u32,
-    total_output_tokens: u32,
     mode: InteractionMode,
     /// Detected sandbox backend for the footer indicator.
     /// `None` means sandboxing was explicitly disabled via `--no-sandbox`.
@@ -324,7 +321,7 @@ impl TuiApp {
         crate::tui::terminal_palette::set_active_theme(theme_choice as u8);
 
         let model_name = session.model.clone();
-        let provider_name = format!("{:?}", session.provider).to_lowercase();
+        let provider_name = crate::design_system::provider_label(&session.provider);
 
         // Resume support: `run()` loads a resumed session's prior turns into
         // `session.messages`/`session.turn_count` *before* constructing
@@ -336,7 +333,6 @@ impl TuiApp {
         // follow-up prompt) had the full prior history. Hydrate the
         // transcript widget state from the same `session.messages` here so
         // the first render already shows the resumed conversation.
-        let turn_count = session.turn_count;
         let chat_messages: Vec<ChatMessage> = session
             .messages
             .iter()
@@ -429,9 +425,6 @@ impl TuiApp {
             status_notice: None,
             model_name,
             provider_name,
-            turn_count,
-            total_input_tokens: 0,
-            total_output_tokens: 0,
             mode: InteractionMode::Chat,
             sandbox_type,
             agent_picker: super::widgets::agent_picker::AgentPickerState::default(),
@@ -604,11 +597,8 @@ impl TuiApp {
     }
 
     fn sync_stats(&mut self) {
-        self.turn_count = self.session.turn_count;
-        self.total_input_tokens = self.session.total_input_tokens;
-        self.total_output_tokens = self.session.total_output_tokens;
         self.model_name = self.session.model.clone();
-        self.provider_name = format!("{:?}", self.session.provider).to_lowercase();
+        self.provider_name = crate::design_system::provider_label(&self.session.provider);
     }
 
     fn spinner_char(&self) -> &str {
@@ -618,14 +608,14 @@ impl TuiApp {
     /// AGI Agent loading verb, stable within a turn, rotating across turns.
     /// Our own words; deliberately not copied from any reference CLI.
     fn loading_verb(&self) -> &'static str {
-        loading_verb_for(self.turn_count)
+        loading_verb_for(self.session.turn_count)
     }
 
     fn context_percent(&self) -> u8 {
         context_percent_for(
-            &self.model_name,
-            self.total_input_tokens,
-            self.total_output_tokens,
+            &self.session.model,
+            self.session.total_input_tokens,
+            self.session.total_output_tokens,
         )
     }
 
@@ -637,12 +627,12 @@ impl TuiApp {
         self.active_overlay = Some(view);
     }
 
-    /// Route a key to the active overlay. Returns `true` when the overlay
-    /// consumed the key (caller must not forward it to the composer), `false`
-    /// when there is no active overlay.
-    fn dispatch_key_to_overlay(&mut self, key: crossterm::event::KeyEvent) -> bool {
+    /// Route a key to the active overlay. Returns the action the overlay asked
+    /// for when it consumed the key (the caller must not forward it to the
+    /// composer), and `None` when there is no active overlay.
+    fn dispatch_key_to_overlay(&mut self, key: crossterm::event::KeyEvent) -> Option<InputAction> {
         let Some(ov) = self.active_overlay.as_mut() else {
-            return false;
+            return None;
         };
         let action = crossterm_to_keyaction(key);
         use crate::tui::widgets::interactive::ViewAction;
@@ -657,12 +647,29 @@ impl TuiApp {
                     self.overlay_scroll = self.overlay_scroll.saturating_sub(5);
                 }
             }
+            // Enter on the command palette runs the command, the way one Enter
+            // does in the composer. Tab is the completion key and fills the
+            // composer instead, for a command still owed arguments.
             ViewAction::SideAction(tag) if tag.starts_with("slash:") => {
-                let name = tag.trim_start_matches("slash:");
-                self.input = format!("/{name}");
+                let command = format!("/{}", tag.trim_start_matches("slash:"));
+                self.input.clear();
+                self.cursor = 0;
+                self.scroll_offset = 0;
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+                return Some(InputAction::SendMessage(command));
+            }
+            ViewAction::SideAction(tag) if tag.starts_with("complete:") => {
+                self.input = format!("/{}", tag.trim_start_matches("complete:"));
                 self.cursor = self.input.len();
                 self.overlay_scroll = 0;
                 self.active_overlay = None;
+            }
+            ViewAction::SideAction(tag) if tag.starts_with("resume:") => {
+                let reference = tag.trim_start_matches("resume:").to_string();
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+                resume_session(&reference, self);
             }
             ViewAction::SideAction(tag) if tag.starts_with("mention:") => {
                 let path = tag.trim_start_matches("mention:").to_string();
@@ -697,7 +704,7 @@ impl TuiApp {
                 self.active_overlay = None;
             }
         }
-        true
+        Some(InputAction::None)
     }
 
     /// Apply a committed overlay result to live app state. Central place so new
@@ -1096,13 +1103,14 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
     // Live cost HUD, drawn as the header block's own right-aligned title so it
     // composes with the top border instead of painting over it.
     let hud = super::cost_hud::CostHud {
-        in_tokens: app.total_input_tokens,
-        out_tokens: app.total_output_tokens,
+        in_tokens: app.session.total_input_tokens,
+        out_tokens: app.session.total_output_tokens,
         cache_read: app.session.total_cache_read_tokens,
         cache_creation: app.session.total_cache_creation_tokens,
         total_usd: app.session.cost_ledger.total_usd,
         reasoning_tokens: app.session.total_reasoning_tokens,
-        context_used: app.total_input_tokens as u64 + app.total_output_tokens as u64,
+        context_used: app.session.total_input_tokens as u64
+            + app.session.total_output_tokens as u64,
         context_window: crate::model_catalog::context_window(&app.model_name) as u64,
     };
     render_header(frame, chunks[0], &ctx, Some(&hud));
@@ -1272,9 +1280,9 @@ impl<'a> FrameCtx<'a> {
             statusline: &app.statusline_config,
             provider_name: &app.provider_name,
             git_branch: app.git_branch.as_deref(),
-            total_input_tokens: app.total_input_tokens,
-            total_output_tokens: app.total_output_tokens,
-            turn_count: app.turn_count,
+            total_input_tokens: app.session.total_input_tokens,
+            total_output_tokens: app.session.total_output_tokens,
+            turn_count: app.session.turn_count,
             context_percent: app.context_percent(),
             chat_messages: &app.chat_messages,
             tool_cells: &app.tool_cells,
@@ -1317,10 +1325,6 @@ fn render_header(
     hud: Option<&super::cost_hud::CostHud>,
 ) {
     use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_danger, ui_muted};
-    let provider_display = match ctx.provider_name {
-        "ollama" => "Local",
-        other => other,
-    };
 
     let mut spans = vec![
         Span::styled(
@@ -1337,7 +1341,7 @@ fn render_header(
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Span::raw(" │ "),
-        Span::styled(provider_display, Style::default().fg(ui_accent())),
+        Span::styled(ctx.provider_name, Style::default().fg(ui_accent())),
     ];
 
     if let Some(branch) = ctx.git_branch {
@@ -1455,7 +1459,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands · Shift+Tab to switch modes · Esc clears, then quits.",
+            "  Type / for commands · Shift+Tab to switch modes · Esc closes, then clears, then quits.",
             Style::default().fg(ui_muted()),
         )));
     } else {
@@ -1685,9 +1689,9 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
             ),
             Span::styled(
                 if exit_armed {
-                    "Press Ctrl-C again to exit"
+                    "Press the same key again to exit"
                 } else {
-                    "Message AGI...  Enter to send · Shift+Enter for newline · / for commands · @ for files"
+                    "Message AGI...  Enter sends · Ctrl-J newline · / commands · @ files"
                 },
                 Style::default().fg(ui_muted()),
             ),
@@ -2068,14 +2072,55 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         spans
     };
 
-    let avail = area.width as usize;
-    let mut spans = build_essentials(0);
-    for tier in 1..=2 {
-        if row_width(&spans) <= avail {
-            break;
+    // The running total, tiered on its own budget: a long cost string that no
+    // longer fits shrinks to bare token counts rather than abbreviating every
+    // other indicator alongside it, and it is never dropped outright.
+    let cost_forms = move |tier: usize| -> Vec<String> {
+        if !sl.show_cost {
+            return Vec::new();
         }
-        spans = build_essentials(tier);
-    }
+        let short = format!("↑{} ↓{}", ctx.total_input_tokens, ctx.total_output_tokens);
+        let shortest = format!("↑{}↓{}", ctx.total_input_tokens, ctx.total_output_tokens);
+        match tier {
+            0 => vec![cost_str.clone(), short, shortest],
+            1 => vec![short, shortest],
+            _ => vec![shortest],
+        }
+    };
+
+    // Keyboard hints in descending usefulness. The slash hint is the one that
+    // teaches the app, so it is the last to go; each has a compact form, since
+    // a hint that only appears at 180 columns is a hint most users never see.
+    let hints = move |tier: usize| -> [&'static str; 3] {
+        if tier == 0 {
+            ["/: commands", "Esc: quit", "Shift+Tab: mode"]
+        } else {
+            ["/ cmds", "esc quit", "⇧⇥ mode"]
+        }
+    };
+
+    let avail = area.width as usize;
+
+    // Pick the lowest tier that still leaves room for the cost readout and the
+    // slash hint. The untiered row put the indicators first and silently
+    // dropped both below 180 columns, with no ellipsis to say so; abbreviating
+    // an indicator is a smaller loss than a user never learning `/` exists.
+    const HINTS_WORTH_ABBREVIATING_FOR: usize = 1;
+    let row_target = |tier: usize| -> usize {
+        let mut width = row_width(&build_essentials(tier));
+        // The cost readout degrades on its own budget below, so the tier only
+        // has to leave room for its shortest form.
+        if let Some(form) = cost_forms(tier).last() {
+            width += display_width(form) + 2;
+        }
+        for hint in hints(tier).iter().take(HINTS_WORTH_ABBREVIATING_FOR) {
+            width += display_width(hint) + 2;
+        }
+        width
+    };
+    let tier = (0..=2).find(|tier| row_target(*tier) <= avail).unwrap_or(2);
+
+    let mut spans = build_essentials(tier);
     let mut used = row_width(&spans);
 
     // A transient notice outranks the droppable fields: it is the only thing on
@@ -2095,23 +2140,13 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         }
     }
 
-    // The running total is tiered on its own budget: a long cost string that no
-    // longer fits shrinks to bare token counts rather than abbreviating every
-    // other indicator alongside it, and it is never dropped outright.
-    if sl.show_cost {
-        let forms = [
-            cost_str.clone(),
-            format!("↑{} ↓{}", ctx.total_input_tokens, ctx.total_output_tokens),
-            format!("↑{}↓{}", ctx.total_input_tokens, ctx.total_output_tokens),
-        ];
-        if let Some(form) = forms
-            .into_iter()
-            .find(|form| used + display_width(form) + 2 <= avail)
-        {
-            used += display_width(&form) + 2;
-            spans.push(Span::raw("  "));
-            spans.push(Span::styled(form, Style::default().fg(ui_muted())));
-        }
+    if let Some(form) = cost_forms(tier)
+        .into_iter()
+        .find(|form| used + display_width(form) + 2 <= avail)
+    {
+        used += display_width(&form) + 2;
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(form, Style::default().fg(ui_muted())));
     }
 
     // Droppable extras in descending priority. A field that does not fit is
@@ -2138,7 +2173,7 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             ));
         }
     }
-    for hint in ["Shift+Tab: mode", "/: commands", "Esc: quit"] {
+    for hint in hints(tier) {
         optional.push(Span::styled(
             hint.to_string(),
             Style::default().fg(ui_muted()),
@@ -2254,20 +2289,21 @@ fn render_overlay(
 // Event handling
 // ---------------------------------------------------------------------------
 
+#[derive(Debug)]
 enum InputAction {
     None,
     SendMessage(String),
     Quit,
     ScrollUp,
     ScrollDown,
-    ClearChat,
+    Redraw,
     CycleMode,
 }
 
 fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     // Overlay intercepts every key first.
-    if app.dispatch_key_to_overlay(key) {
-        return InputAction::None;
+    if let Some(action) = app.dispatch_key_to_overlay(key) {
+        return action;
     }
 
     // Agent picker mode
@@ -2316,16 +2352,27 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         .keybindings
         .matches(crate::keybindings::KeybindingAction::Quit, key)
     {
-        // Quit is bound to a single Esc. Ending the session on the first press
-        // means one stray keystroke destroys a half-written message, so a
-        // non-empty composer absorbs it: Esc clears, Esc again exits.
+        // Esc closes what is open before it closes the session: a panel first,
+        // then a half-written composer. Only on an empty composer with nothing
+        // open does it quit, and then only on a second press, because a single
+        // stray Esc used to end the session with no warning at all.
         if !app.input.is_empty() {
             app.input.clear();
             app.cursor = 0;
             app.exit_armed_at = None;
+            app.status_notice = Some(("cleared the composer".to_string(), Instant::now()));
             return InputAction::None;
         }
-        return InputAction::Quit;
+        if app
+            .exit_armed_at
+            .is_some_and(|armed| armed.elapsed() <= EXIT_CONFIRM_WINDOW)
+        {
+            app.exit_armed_at = None;
+            return InputAction::Quit;
+        }
+        app.exit_armed_at = Some(Instant::now());
+        app.status_notice = Some(("press Esc again to quit".to_string(), Instant::now()));
+        return InputAction::None;
     }
     if app
         .keybindings
@@ -2364,9 +2411,9 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
     if app
         .keybindings
-        .matches(crate::keybindings::KeybindingAction::ClearChat, key)
+        .matches(crate::keybindings::KeybindingAction::Redraw, key)
     {
-        return InputAction::ClearChat;
+        return InputAction::Redraw;
     }
     if app.input.is_empty()
         && app.cursor == 0
@@ -2411,6 +2458,24 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.status_notice = Some((notice, Instant::now()));
             InputAction::None
         }
+
+        // Ctrl-J is the terminal's own newline: 0x0A reaches crossterm as
+        // Ctrl+J, and it is the only multi-line key a terminal without the
+        // keyboard protocol can send, where Shift+Enter never arrives.
+        KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            insert_char_at_cursor(&mut app.input, &mut app.cursor, '\n');
+            InputAction::None
+        }
+
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            kill_to_line_start(&mut app.input, &mut app.cursor);
+            InputAction::None
+        }
+
+        // Every remaining control chord is a command this build does not bind.
+        // Falling through to the insert arm below typed its letter into the
+        // message instead, so Ctrl-J and Ctrl-U read as "j" and "u".
+        KeyCode::Char(_) if key.modifiers.contains(KeyModifiers::CONTROL) => InputAction::None,
 
         KeyCode::Char(c) => {
             insert_char_at_cursor(&mut app.input, &mut app.cursor, c);
@@ -2574,6 +2639,104 @@ fn register_mcp_prompt_commands(registry: &mut CommandRegistry, prompts: &[crate
     }
 }
 
+/// Open the session picker over the chat area. `/history` and a bare `/resume`
+/// both land here: the listing is a panel Esc can close, not a stderr dump that
+/// leaves Esc falling through to the global quit.
+fn open_session_picker(app: &mut TuiApp) {
+    use crate::tui::widgets::session_picker::{SessionEntry, SessionPickerView};
+
+    let entries = match crate::platform::runtime::session_control::list_managed_sessions() {
+        Ok(summaries) => summaries
+            .iter()
+            .map(|summary| SessionEntry {
+                id: summary.session_id.clone(),
+                label: format!(
+                    "{}  {}  {}{}",
+                    &summary.session_id[..summary.session_id.len().min(8)],
+                    summary.updated_at.format("%Y-%m-%d %H:%M"),
+                    crate::output::format_message_count(summary.message_count as i64),
+                    summary
+                        .title
+                        .as_deref()
+                        .map(|title| format!("  {title}"))
+                        .unwrap_or_default(),
+                ),
+            })
+            .collect(),
+        Err(error) => {
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!("Could not list sessions: {error:#}"),
+            });
+            return;
+        }
+    };
+
+    app.open_overlay(Box::new(SessionPickerView::new(entries)));
+}
+
+/// Adopt a session by id and report what happened in the transcript. The REPL
+/// handler reports through stderr, which is invisible under the alternate
+/// screen, so its "Loaded ..." line would be a claim the user never sees.
+fn resume_session(reference: &str, app: &mut TuiApp) {
+    use crate::platform::runtime::session_control as sessions;
+
+    let text = match sessions::resolve_managed_session_reference(reference) {
+        Ok(resolved) => match sessions::load_managed_session(reference) {
+            Ok(managed) => {
+                let session_id = managed.session_id.clone();
+                let messages = managed.messages.clone();
+                let count = messages.len();
+                match app.session.adopt_managed_session(managed, resolved.path) {
+                    Ok(()) => {
+                        app.session.messages = messages;
+                        app.session.turn_count = app
+                            .session
+                            .messages
+                            .iter()
+                            .filter(|message| message.role == "user")
+                            .count() as u32;
+                        app.sync_stats();
+                        rebuild_transcript_from_session(app);
+                        format!("Resumed session {session_id} ({count} messages).")
+                    }
+                    Err(error) => format!(
+                        "Refusing to resume a session with unknown or incompatible routing authority: {error:#}"
+                    ),
+                }
+            }
+            Err(error) => format!("Could not load session: {error:#}"),
+        },
+        Err(error) => format!("No session matches `{reference}`: {error:#}"),
+    };
+
+    app.chat_messages.push(ChatMessage {
+        role: ChatRole::System,
+        text,
+    });
+}
+
+/// Rebuild the visible transcript from the session's own messages, so what the
+/// screen shows and what the model was sent cannot drift apart.
+fn rebuild_transcript_from_session(app: &mut TuiApp) {
+    app.chat_messages = app
+        .session
+        .messages
+        .iter()
+        .filter_map(|message| {
+            let role = match message.role.as_str() {
+                "user" => ChatRole::User,
+                "assistant" => ChatRole::Assistant,
+                _ => return None,
+            };
+            let text = message.text_content();
+            (!text.trim().is_empty()).then_some(ChatMessage { role, text })
+        })
+        .collect();
+    app.tool_cells.clear();
+    app.scroll_offset = 0;
+}
+
 fn open_command_popup(app: &mut TuiApp) {
     use crate::tui::widgets::command_popup::{CommandPopup, RegistryCommand as PopupCmd};
 
@@ -2678,6 +2841,19 @@ fn handle_paste_text(app: &mut TuiApp, text: &str) {
         &mut app.cursor,
         sanitize_terminal_text(text).as_ref(),
     );
+}
+
+/// Delete from the cursor back to the start of its line, the readline `Ctrl-U`
+/// kill. Line-scoped rather than buffer-scoped so it matches `Home` in a
+/// multi-line composer.
+fn kill_to_line_start(input: &mut String, cursor: &mut usize) {
+    let end = floor_char_boundary(input, *cursor);
+    let start = input[..end].rfind('\n').map(|at| at + 1).unwrap_or(0);
+    if start == end {
+        return;
+    }
+    input.replace_range(start..end, "");
+    *cursor = start;
 }
 
 fn backspace_at_cursor(input: &mut String, cursor: &mut usize) {
@@ -3205,10 +3381,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/status" => {
             let msg = format!(
-                "Version: {}\nModel: {}\nProvider: {:?}\nMode: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
+                "Version: {}\nModel: {}\nProvider: {}\nMode: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
                 env!("CARGO_PKG_VERSION"),
                 app.session.model,
-                app.session.provider,
+                app.provider_name,
                 app.mode.label(),
                 app.session.turn_count,
                 app.session.total_input_tokens,
@@ -3220,7 +3396,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/context" => {
             let ctx = crate::model_catalog::context_window(&app.model_name);
-            let used = app.total_input_tokens + app.total_output_tokens;
+            let used = app.session.total_input_tokens + app.session.total_output_tokens;
             SlashResult::SystemMessage(format!(
                 "Context: {}% used ({} / {} tokens)",
                 app.context_percent(), used, ctx
@@ -3348,18 +3524,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/compact" => SlashResult::RunCompact(arg.to_string()),
 
         "/history" | "/sessions" => {
-            crate::repl::handle_history();
-            SlashResult::SystemMessage("Sessions listed above.".to_string())
+            open_session_picker(app);
+            SlashResult::SystemMessage(String::new())
         }
 
         "/resume" => {
             if arg.is_empty() {
-                SlashResult::SystemMessage("Usage: /resume <session_id>".to_string())
+                open_session_picker(app);
             } else {
-                crate::repl::handle_load(arg, &mut app.session);
-                app.sync_stats();
-                SlashResult::SystemMessage(format!("Resumed session: {arg}"))
+                resume_session(arg, app);
             }
+            SlashResult::SystemMessage(String::new())
         }
 
         // Both arms report the outcome themselves rather than trusting the
@@ -3670,7 +3845,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // ── Context (alias) ──
         "/ctx" => {
             let ctx = crate::model_catalog::context_window(&app.model_name);
-            let used = app.total_input_tokens + app.total_output_tokens;
+            let used = app.session.total_input_tokens + app.session.total_output_tokens;
             SlashResult::SystemMessage(format!(
                 "Context: {}% used ({} / {} tokens)",
                 app.context_percent(), used, ctx
@@ -4633,12 +4808,11 @@ async fn run_event_loop(
                     app.scroll_offset = app.scroll_offset.saturating_sub(3);
                 }
 
-                InputAction::ClearChat => {
-                    app.session.clear();
-                    app.chat_messages.clear();
-                    app.tool_cells.clear();
-                    app.scroll_offset = 0;
-                    app.sync_stats();
+                // Repaint every cell. This is the escape hatch when anything
+                // has written over the frame; it must never be the conversation
+                // that gets discarded, which is what `/clear` is for.
+                InputAction::Redraw => {
+                    terminal.clear()?;
                 }
 
                 InputAction::None => {}
@@ -4657,6 +4831,22 @@ async fn run_event_loop(
     }
 
     Ok(())
+}
+
+/// Settle every cell the turn left mid-flight. A cancelled turn, or a tool
+/// whose completion event never arrived, otherwise leaves a `Running` row whose
+/// glyph is the spinner frame, and the spinner only advances while a turn is in
+/// flight, so it sits frozen in the transcript for the rest of the session.
+fn settle_running_tool_cells(cells: &mut [ToolCell]) {
+    use crate::tui::transcript_cell::TranscriptCellState;
+    for cell in cells.iter_mut() {
+        if matches!(
+            cell.state,
+            TranscriptCellState::Running | TranscriptCellState::Pending
+        ) {
+            cell.state = TranscriptCellState::Cancelled;
+        }
+    }
 }
 
 /// Apply a tool lifecycle event to a tool-cell list: `ToolStarted` adds a
@@ -4772,6 +4962,20 @@ async fn send_message_with_prompt(
     let buf_for_callback = Arc::clone(&response_buf);
     let buf_for_display = Arc::clone(&response_buf);
 
+    // One reply, one buffer. The agentic loop streams every completion after a
+    // tool call through its own sink, which otherwise falls back to `print!`
+    // and writes past ratatui, so the model's answer landed on the frame's
+    // borders instead of in the transcript.
+    {
+        let buf = Arc::clone(&response_buf);
+        let sink: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |chunk: &str| {
+            if let Ok(mut buf) = buf.lock() {
+                buf.push_str(sanitize_terminal_text(chunk).as_ref());
+            }
+        });
+        app.session.on_continuation_chunk = Some(crate::agent::ContinuationSink(sink));
+    }
+
     // Share buffer with the render loop so partial output is visible
     let config_clone = app.config.clone();
 
@@ -4826,9 +5030,12 @@ async fn send_message_with_prompt(
     // them while the rest of `FrameCtx` is built from disjoint `app` fields.
     let turn_access_mode = provider_access_mode(&app.session.provider);
     let turn_privacy_mode = app.session.privacy_mode;
+    let turn_count = app.session.turn_count;
+    let turn_input_tokens = app.session.total_input_tokens;
+    let turn_output_tokens = app.session.total_output_tokens;
     let turn_cost_str = crate::output::format_accumulated_cost(
-        app.session.total_input_tokens,
-        app.session.total_output_tokens,
+        turn_input_tokens,
+        turn_output_tokens,
         app.session.cost_ledger.total_usd,
         turn_access_mode,
     );
@@ -4862,13 +5069,13 @@ async fn send_message_with_prompt(
                             statusline: &app.statusline_config,
                             provider_name: &app.provider_name,
                             git_branch: app.git_branch.as_deref(),
-                            total_input_tokens: app.total_input_tokens,
-                            total_output_tokens: app.total_output_tokens,
-                            turn_count: app.turn_count,
+                            total_input_tokens: turn_input_tokens,
+                            total_output_tokens: turn_output_tokens,
+                            turn_count,
                             context_percent: context_percent_for(
                                 &app.model_name,
-                                app.total_input_tokens,
-                                app.total_output_tokens,
+                                turn_input_tokens,
+                                turn_output_tokens,
                             ),
                             chat_messages: &app.chat_messages,
                             tool_cells: &tool_cells,
@@ -4876,7 +5083,7 @@ async fn send_message_with_prompt(
                             stream_start: app.stream_start,
                             stream_buffer: &app.stream_buffer,
                             spinner_char: spinner_frame(app.spinner_tick),
-                            loading_verb: loading_verb_for(app.turn_count),
+                            loading_verb: loading_verb_for(turn_count),
                             scroll_offset: app.scroll_offset,
                             access_mode: turn_access_mode,
                             privacy_mode: turn_privacy_mode,
@@ -4887,6 +5094,10 @@ async fn send_message_with_prompt(
                             notice: turn_notice.as_deref(),
                         };
                         let choice = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
+                        // The modal ran its own key loop over frames ratatui
+                        // drew; force the next frame to repaint every cell so
+                        // nothing the prompt covered survives it.
+                        terminal.clear()?;
                         broker
                             .complete(req.id, approval_choice_to_decision(choice))
                             .await;
@@ -4936,13 +5147,13 @@ async fn send_message_with_prompt(
                         statusline: &app.statusline_config,
                         provider_name: &app.provider_name,
                         git_branch: app.git_branch.as_deref(),
-                        total_input_tokens: app.total_input_tokens,
-                        total_output_tokens: app.total_output_tokens,
-                        turn_count: app.turn_count,
+                        total_input_tokens: turn_input_tokens,
+                        total_output_tokens: turn_output_tokens,
+                        turn_count,
                         context_percent: context_percent_for(
                             &app.model_name,
-                            app.total_input_tokens,
-                            app.total_output_tokens,
+                            turn_input_tokens,
+                            turn_output_tokens,
                         ),
                         chat_messages: &app.chat_messages,
                         tool_cells: &tool_cells,
@@ -4950,7 +5161,7 @@ async fn send_message_with_prompt(
                         stream_start: app.stream_start,
                         stream_buffer: &app.stream_buffer,
                         spinner_char: spinner_frame(app.spinner_tick),
-                        loading_verb: loading_verb_for(app.turn_count),
+                        loading_verb: loading_verb_for(turn_count),
                         scroll_offset: app.scroll_offset,
                         access_mode: turn_access_mode,
                         privacy_mode: turn_privacy_mode,
@@ -4990,6 +5201,8 @@ async fn send_message_with_prompt(
         apply_tool_event(&mut tool_cells, ev);
     }
     app.session.on_tool_event = None;
+    app.session.on_continuation_chunk = None;
+    settle_running_tool_cells(&mut tool_cells);
     app.tool_cells = tool_cells;
 
     // Copy final streamed content into stream_buffer for last render
@@ -5392,6 +5605,51 @@ mod tests {
         assert_eq!(cells.len(), 2);
     }
 
+    /// Regression: a tool whose completion event never arrived kept a `Running`
+    /// cell, and `Running` renders the spinner frame while the spinner only
+    /// advances during a turn, so a frozen glyph sat in the transcript forever.
+    #[test]
+    fn a_turn_that_ends_mid_tool_leaves_no_spinning_cell() {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+        use crate::tui::transcript_cell::TranscriptCellState;
+
+        let mut cells: Vec<ToolCell> = Vec::new();
+        for call_id in ["1", "2"] {
+            apply_tool_event(
+                &mut cells,
+                TuiAppEvent::ToolStarted {
+                    call_id: call_id.into(),
+                    name: "read_file".into(),
+                    summary: "a.rs".into(),
+                    input: serde_json::json!({ "path": "a.rs" }),
+                },
+            );
+        }
+        apply_tool_event(
+            &mut cells,
+            TuiAppEvent::ToolCompleted {
+                call_id: "1".into(),
+                name: "read_file".into(),
+                status: ToolStatus::Succeeded,
+                output: "ok".into(),
+                duration_ms: 10,
+            },
+        );
+
+        settle_running_tool_cells(&mut cells);
+
+        assert!(matches!(cells[0].state, TranscriptCellState::Complete));
+        assert!(
+            matches!(cells[1].state, TranscriptCellState::Cancelled),
+            "an unfinished tool must settle instead of spinning forever"
+        );
+        let rendered = tool_cell_lines(&cells[1], "⠙")
+            .iter()
+            .map(|line| line.to_string())
+            .collect::<String>();
+        assert!(!rendered.contains('⠙'), "got: {rendered}");
+    }
+
     #[test]
     fn compact_tool_output_preview_uses_first_non_empty_line_and_truncates() {
         assert_eq!(
@@ -5739,12 +5997,12 @@ mod tests {
 
         // Down, consumed by overlay, not forwarded
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Down));
-        assert!(consumed);
+        assert!(consumed.is_some());
         assert!(app.active_overlay.is_some(), "overlay stays open on Down");
 
         // Enter, overlay should close and slot cleared
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
-        assert!(consumed);
+        assert!(consumed.is_some());
         assert!(app.active_overlay.is_none(), "overlay cleared after Submit");
     }
 
@@ -5755,7 +6013,7 @@ mod tests {
         assert!(app.active_overlay.is_some());
 
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Esc));
-        assert!(consumed);
+        assert!(consumed.is_some());
         assert!(app.active_overlay.is_none());
     }
 
@@ -5775,7 +6033,7 @@ mod tests {
         app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Char(' ')));
         // Enter saves.
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
-        assert!(consumed);
+        assert!(consumed.is_some());
         assert!(app.active_overlay.is_none(), "overlay cleared after save");
         assert!(
             app.statusline_config.show_model,
@@ -5856,7 +6114,7 @@ mod tests {
         assert!(app.active_overlay.is_none());
 
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
-        assert!(!consumed, "no overlay → dispatch returns false");
+        assert!(consumed.is_none(), "no overlay → dispatch returns None");
     }
 
     #[test]
@@ -6073,11 +6331,13 @@ mod tests {
 
     #[test]
     fn esc_clears_a_written_composer_before_it_will_quit() {
+        use crossterm::event::KeyCode;
+
         let mut app = minimal_app();
         app.input = "half a question".to_string();
         app.cursor = app.input.len();
 
-        let action = handle_key_event(&mut app, make_key(crossterm::event::KeyCode::Esc));
+        let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
         assert!(
             matches!(action, InputAction::None),
             "the first Esc must not end a session that has unsent text in it"
@@ -6085,11 +6345,123 @@ mod tests {
         assert_eq!(app.input, "");
         assert_eq!(app.cursor, 0);
 
-        let action = handle_key_event(&mut app, make_key(crossterm::event::KeyCode::Esc));
+        // Even empty, Esc arms the exit and says so; only the second press ends
+        // the session. A single stray Esc used to end it with no warning.
+        let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
+        assert!(matches!(action, InputAction::None));
+        assert_eq!(app.live_notice(), Some("press Esc again to quit"));
+
+        let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
+        assert!(matches!(action, InputAction::Quit));
+    }
+
+    /// Regression: Esc on the `/history` listing fell straight through to the
+    /// global quit, ending the session with a Session Summary instead of
+    /// closing the panel. Esc closes the topmost panel first.
+    #[test]
+    fn esc_closes_the_session_picker_instead_of_quitting() {
+        use crate::tui::widgets::session_picker::{SessionEntry, SessionPickerView};
+        use crossterm::event::KeyCode;
+
+        let mut app = minimal_app();
+        app.open_overlay(Box::new(SessionPickerView::new(vec![SessionEntry {
+            id: "abc123".to_string(),
+            label: "abc123  2026-09-14 09:47  3 msgs".to_string(),
+        }])));
+
+        let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
         assert!(
-            matches!(action, InputAction::Quit),
-            "Esc on an empty composer still quits"
+            matches!(action, InputAction::None),
+            "Esc on an open panel must never reach the global quit"
         );
+        assert!(app.active_overlay.is_none(), "the panel closed");
+        assert!(
+            app.exit_armed_at.is_none(),
+            "closing a panel must not arm the exit either"
+        );
+
+        // The session is still live: the next Esc only arms the exit.
+        let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
+        assert!(matches!(action, InputAction::None));
+    }
+
+    /// An expired arm must not carry over: Esc pressed minutes apart is two
+    /// stray keystrokes, not a confirmed quit.
+    #[test]
+    fn an_expired_esc_arm_does_not_quit() {
+        use crossterm::event::KeyCode;
+
+        let mut app = minimal_app();
+        handle_key_event(&mut app, make_key(KeyCode::Esc));
+        app.exit_armed_at = Some(Instant::now() - EXIT_CONFIRM_WINDOW - Duration::from_secs(1));
+
+        let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
+        assert!(matches!(action, InputAction::None));
+    }
+
+    /// Regression: a terminal without the keyboard protocol never sends
+    /// Shift+Enter, and Ctrl-J (0x0A) and Ctrl-U (0x15) reach crossterm as
+    /// `Char('j')`/`Char('u')` with CONTROL, so both typed their letter into
+    /// the message instead of inserting a newline and killing the line.
+    #[test]
+    fn ctrl_j_inserts_a_newline_and_ctrl_u_kills_to_line_start() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let ctrl = |c: char| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL);
+        let mut app = minimal_app();
+
+        for c in "first".chars() {
+            handle_key_event(&mut app, make_key(KeyCode::Char(c)));
+        }
+        handle_key_event(&mut app, ctrl('j'));
+        for c in "second".chars() {
+            handle_key_event(&mut app, make_key(KeyCode::Char(c)));
+        }
+        assert_eq!(app.input, "first\nsecond");
+        assert_eq!(app.cursor, app.input.len());
+
+        handle_key_event(&mut app, ctrl('u'));
+        assert_eq!(
+            app.input, "first\n",
+            "Ctrl-U kills the line, not the buffer"
+        );
+        assert_eq!(app.cursor, app.input.len());
+
+        // No stray letter from either chord, and an unbound control chord types
+        // nothing at all rather than inserting its own letter.
+        handle_key_event(&mut app, ctrl('q'));
+        assert_eq!(app.input, "first\n");
+    }
+
+    /// Regression: Ctrl-L is advertised as "clear screen" and instead discarded
+    /// the conversation, which then reported `0 turns` in the session summary.
+    /// Clearing the conversation is what `/clear` is for.
+    #[test]
+    fn ctrl_l_repaints_the_screen_and_keeps_the_conversation() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = minimal_app();
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::User,
+            text: "REDRAW_MARKER_16180".to_string(),
+        });
+        app.session.turn_count = 3;
+
+        let action = handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL),
+        );
+        assert!(matches!(action, InputAction::Redraw));
+        assert_eq!(app.session.turn_count, 3, "Ctrl-L must not reset the count");
+        assert_eq!(app.chat_messages.len(), 1, "the transcript stays");
+
+        // `/clear` is still the way to discard it.
+        assert!(matches!(
+            handle_slash("/clear", &mut app),
+            SlashResult::SystemMessage(_)
+        ));
+        assert_eq!(app.session.turn_count, 0);
+        assert!(app.chat_messages.is_empty());
     }
 
     #[test]
@@ -6190,17 +6562,70 @@ mod tests {
         assert!(app.input.is_empty());
     }
 
+    /// Regression: `/help` then Enter sat inert in the composer, because the
+    /// palette's Enter only accepted the completion and a *second* Enter
+    /// submitted it. One Enter runs the command, the way it does everywhere else.
     #[test]
-    fn slash_palette_selection_fills_composer_once() {
+    fn one_enter_runs_the_command_the_palette_has_highlighted() {
         let mut app = minimal_app();
         app.open_overlay(Box::new(SlashActionView));
 
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
 
-        assert!(consumed);
+        assert!(matches!(consumed, Some(InputAction::SendMessage(ref text)) if text == "/plan"));
         assert!(app.active_overlay.is_none());
-        assert_eq!(app.input, "/plan");
+        assert!(
+            app.input.is_empty(),
+            "the composer keeps nothing to re-send"
+        );
+        assert_eq!(app.cursor, 0);
+    }
+
+    /// Typing the whole command and pressing Enter once must run it, through
+    /// the real `CommandPopup` rather than a stub side-action.
+    #[test]
+    fn typing_a_command_into_the_palette_runs_it_on_the_first_enter() {
+        use crossterm::event::KeyCode;
+
+        let mut app = minimal_app();
+        assert!(matches!(
+            handle_key_event(&mut app, make_key(KeyCode::Char('/'))),
+            InputAction::None
+        ));
+        assert!(app.active_overlay.is_some(), "`/` opens the palette");
+
+        for c in "help".chars() {
+            assert!(matches!(
+                handle_key_event(&mut app, make_key(KeyCode::Char(c))),
+                InputAction::None
+            ));
+        }
+
+        let action = handle_key_event(&mut app, make_key(KeyCode::Enter));
+        assert!(
+            matches!(action, InputAction::SendMessage(ref text) if text == "/help"),
+            "one Enter must submit, got {action:?}"
+        );
+        assert!(app.active_overlay.is_none());
+    }
+
+    /// Tab stays the completion key so a command that still needs arguments can
+    /// be filled into the composer without running first.
+    #[test]
+    fn tab_fills_the_composer_instead_of_running_the_command() {
+        use crossterm::event::KeyCode;
+
+        let mut app = minimal_app();
+        handle_key_event(&mut app, make_key(KeyCode::Char('/')));
+        for c in "rename".chars() {
+            handle_key_event(&mut app, make_key(KeyCode::Char(c)));
+        }
+
+        let action = handle_key_event(&mut app, make_key(KeyCode::Tab));
+        assert!(matches!(action, InputAction::None));
+        assert_eq!(app.input, "/rename");
         assert_eq!(app.cursor, app.input.len());
+        assert!(app.active_overlay.is_none());
     }
 
     #[test]
@@ -6220,11 +6645,11 @@ mod tests {
         app.open_overlay(Box::new(StubView::new(false)));
 
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::PageDown));
-        assert!(consumed);
+        assert!(consumed.is_some());
         assert_eq!(app.overlay_scroll, 5);
 
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::PageUp));
-        assert!(consumed);
+        assert!(consumed.is_some());
         assert_eq!(app.overlay_scroll, 0);
     }
 
@@ -6378,6 +6803,154 @@ mod tests {
     /// against a `TestBackend` and asserts the rendered buffer contains BOTH
     /// the chrome (header title + a distinctive transcript message) AND the
     /// approval box, proving compositing rather than full-frame replacement.
+    /// Regression: the BYOK privacy notice reached the screen through
+    /// `output::print_info`'s `eprintln!` while ratatui owned the terminal, so
+    /// it landed outside the frame buffer and the diff renderer never repainted
+    /// those cells. Live captures showed it splicing letters into the reply
+    /// ("Blaeberry", "fromgyousnow") and breaking the transcript border.
+    #[test]
+    fn a_notice_raised_under_the_tui_lands_in_the_transcript_not_on_stderr() {
+        let mut app = minimal_app();
+        let _ = crate::tui::drain_tui_notices();
+
+        crate::tui::set_tui_active(true);
+        crate::output::print_info("PRIVACY_NOTICE_MARKER_271828");
+        crate::output::print_warn("WARN_NOTICE_MARKER_161803");
+        let queued = crate::tui::drain_tui_notices();
+        crate::tui::set_tui_active(false);
+
+        assert_eq!(
+            queued,
+            vec![
+                "PRIVACY_NOTICE_MARKER_271828".to_string(),
+                "WARN_NOTICE_MARKER_161803".to_string()
+            ],
+            "every notice must reach the TUI's own sink while it owns the terminal"
+        );
+
+        for text in queued {
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text,
+            });
+        }
+        let rendered = draw_app(&app, 100, 30);
+        assert!(
+            rendered.contains("PRIVACY_NOTICE_MARKER_271828"),
+            "the notice must be part of the frame:\n{rendered}"
+        );
+
+        // Without a TUI the same call belongs on stderr, or the exec and REPL
+        // surfaces lose every warning they print into a queue nothing drains.
+        crate::output::print_info("STDERR_ONLY_MARKER_141421");
+        assert!(crate::tui::drain_tui_notices().is_empty());
+    }
+
+    /// Regression: every overlay drew over whatever the transcript had left on
+    /// those cells, so `/model`, `/history` and `/theme` all showed fragments of
+    /// old status lines and replies bleeding through the popup.
+    #[test]
+    fn an_overlay_draws_over_a_cleared_region() {
+        use crate::tui::widgets::session_picker::{SessionEntry, SessionPickerView};
+
+        let mut app = minimal_app();
+        for i in 0..40 {
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::Assistant,
+                text: format!("TRANSCRIPT_BLEED_MARKER_{i} ").repeat(6),
+            });
+        }
+        let without_overlay = draw_app(&app, 100, 30);
+        assert!(without_overlay.contains("TRANSCRIPT_BLEED_MARKER_"));
+
+        app.open_overlay(Box::new(SessionPickerView::new(
+            (0..12)
+                .map(|i| SessionEntry {
+                    id: format!("id-{i}"),
+                    label: format!("id-{i}  2026-09-14 09:47  3 msgs"),
+                })
+                .collect(),
+        )));
+        let rendered = draw_app(&app, 100, 30);
+
+        let overlay_rows: Vec<&str> = rendered
+            .lines()
+            .filter(|row| row.contains('│') && row.contains("id-"))
+            .collect();
+        assert!(
+            !overlay_rows.is_empty(),
+            "overlay must be drawn:\n{rendered}"
+        );
+        for row in overlay_rows {
+            assert!(
+                !row.contains("TRANSCRIPT_BLEED_MARKER_"),
+                "transcript bleeds through the popup: {row:?}"
+            );
+        }
+    }
+
+    /// Regression: a resize was reported as resetting the transcript to the
+    /// welcome state. The view has to survive every width it is drawn at.
+    #[test]
+    fn the_transcript_survives_a_resize() {
+        let mut app = minimal_app();
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::User,
+            text: "RESIZE_MARKER_57721".to_string(),
+        });
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::Assistant,
+            text: "RESIZE_REPLY_57721".to_string(),
+        });
+
+        for (width, height) in [(100u16, 30u16), (60, 20), (100, 30), (180, 50)] {
+            let rendered = draw_app(&app, width, height);
+            assert!(
+                rendered.contains("RESIZE_REPLY_57721"),
+                "transcript lost at {width}x{height}:\n{rendered}"
+            );
+            assert!(
+                !rendered.contains("Welcome to AGI"),
+                "a live conversation must never fall back to the welcome state"
+            );
+        }
+    }
+
+    /// Regression: the header and `/status` printed the provider as a Rust
+    /// `Debug` dump, complete with the base URL and the key's env var name, and
+    /// each one cased it differently.
+    #[test]
+    fn the_provider_reads_as_a_display_name_in_the_header_and_status() {
+        use crate::design_system::provider_label;
+
+        let deepseek = crate::models::deepseek_provider();
+        assert_eq!(provider_label(&deepseek), "DeepSeek");
+        assert_eq!(provider_label(&crate::models::openai_provider()), "OpenAI");
+        assert_eq!(provider_label(&crate::models::xai_provider()), "xAI");
+        assert_eq!(
+            provider_label(&crate::models::Provider::ManagedCloud),
+            "AGI Cloud"
+        );
+
+        let mut app = minimal_app();
+        app.session.provider = deepseek;
+        app.sync_stats();
+
+        let rendered = draw_app(&app, 100, 30);
+        assert!(rendered.contains("DeepSeek"), "{rendered}");
+        for leak in ["OpenAICompatible", "api_key_env", "base_url"] {
+            assert!(!rendered.contains(leak), "header leaks {leak}:\n{rendered}");
+        }
+
+        match handle_slash("/status", &mut app) {
+            SlashResult::SystemMessage(message) => {
+                assert!(message.contains("Provider: DeepSeek"), "{message}");
+                assert!(!message.contains("api_key_env"), "{message}");
+            }
+            _ => panic!("/status must report in place"),
+        }
+    }
+
     #[test]
     fn approval_modal_composites_over_chrome_instead_of_blanking_it() {
         use crate::tui::widgets::approval_overlay::ApprovalOverlayState;
@@ -6521,6 +7094,18 @@ mod tests {
         buffer_rows(&terminal, width)
     }
 
+    /// Draw the whole idle frame the way `render` does, against a `TestBackend`.
+    fn draw_app(app: &TuiApp, width: u16, height: u16) -> String {
+        use ratatui::backend::TestBackend;
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                draw_app_frame(frame, app);
+            })
+            .expect("draw");
+        buffer_rows(&terminal, width)
+    }
+
     fn buffer_rows(terminal: &Terminal<ratatui::backend::TestBackend>, width: u16) -> String {
         let symbols: Vec<String> = terminal
             .backend()
@@ -6628,6 +7213,33 @@ mod tests {
                 "footer overflows {width} columns: {rendered}"
             );
         }
+    }
+
+    /// Regression: at 100 and 60 columns the footer showed neither the cost
+    /// readout nor the `/` and `Esc` hints, with no ellipsis to say anything was
+    /// hidden, so a user on a normal terminal never learned they existed.
+    #[test]
+    fn the_cost_and_the_slash_hint_survive_a_normal_terminal_width() {
+        for width in [180u16, 120, 100, 60] {
+            let rendered = draw_footer(width, "High", None);
+            assert!(
+                rendered.contains("1234") && rendered.contains("567"),
+                "cost readout dropped at {width}: {rendered}"
+            );
+            assert!(
+                rendered.contains("/: commands") || rendered.contains("/ cmds"),
+                "slash hint dropped at {width}: {rendered}"
+            );
+            assert!(
+                display_width(&rendered) <= width as usize,
+                "footer overflows {width} columns: {rendered}"
+            );
+        }
+
+        // At 60 the row abbreviates rather than dropping, and buys back the
+        // quit hint as well.
+        let narrow = draw_footer(60, "High", None);
+        assert!(narrow.contains("esc quit"), "{narrow}");
     }
 
     /// The footer reports the session's own effort, not a hardcoded default.

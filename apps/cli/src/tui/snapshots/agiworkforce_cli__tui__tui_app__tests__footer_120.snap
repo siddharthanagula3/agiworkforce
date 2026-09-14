@@ -1,6 +1,5 @@
 ---
 source: apps/cli/src/tui/tui_app.rs
-assertion_line: 5968
 expression: "draw_footer(120, \"High\", None)"
 ---
- Default  ◉ byok  ctx [███░░░░░]  42%  sandbox: seatbelt  effort:High  ↑1234 ↓567  Shift+Tab: mode  /: commands
+ Default  ◉ byok  ctx [███░░░░░]  42%  sandbox: seatbelt  effort:High  ↑1234 ↓567  /: commands  Esc: quit
