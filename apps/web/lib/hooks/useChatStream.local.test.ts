@@ -9,6 +9,7 @@ import type {
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useLocalModelSelection } from '@features/desktop-host';
 import { useChatStream } from './useChatStream';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: authMocks.getToken }) }));
@@ -34,6 +35,7 @@ function emit(event: DesktopRuntimeEvent): void {
 
 function installHost(): void {
   const host: HostBridge = {
+    ...hostBridgeStub(),
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     async invokeRuntime<T>(command: string, args?: Record<string, unknown>) {

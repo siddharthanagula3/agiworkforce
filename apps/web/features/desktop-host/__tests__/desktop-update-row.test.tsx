@@ -3,9 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import { DesktopUpdateRow } from '../components/DesktopUpdateRow';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 function installHost(overrides: Partial<HostBridge> = {}): HostBridge {
   const host: HostBridge = {
+    ...hostBridgeStub(),
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     invokeRuntime: async () => ({
