@@ -111,5 +111,9 @@ export function describeLocalClient(client: LocalClientIdentity): string {
   if (!cwd) return name;
   const home = homedir();
   const shown = cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd;
-  return `${name} in ${shown.slice(0, 120)}`;
+  // A long path is shortened from the left, because the end is the part that
+  // identifies the directory. Cutting the tail leaves the user reading a
+  // prefix every path on the machine shares, ending mid-word.
+  const trimmed = shown.length > 64 ? `…${shown.slice(shown.length - 63)}` : shown;
+  return `${name} in ${trimmed}`;
 }

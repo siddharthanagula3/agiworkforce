@@ -9,6 +9,7 @@ import {
   BROWSER_BRIDGE_LOOPBACK_ADDRESS,
   BROWSER_BRIDGE_ROUTES,
   LOCAL_CLIENT_PROTOCOL_VERSION,
+  type LocalClientFailureCode,
   BROWSER_COMMAND_POLL_WINDOW_MS,
   BROWSER_COMMAND_PROTOCOL_VERSION,
   BROWSER_COMMAND_TIMEOUT_MS,
@@ -22,6 +23,7 @@ import {
   PAIR_CODE_LENGTH,
   PAIR_REQUEST_TTL_MS,
   isBrowserCommandResult,
+  isLocalClientFailureCode,
   isValidExtensionId,
   isValidPairCode,
   normalizePairCode,
@@ -86,7 +88,22 @@ const queuedCommands: BrowserCommandRequest[] = [];
 const pollWaiters: PollWaiter[] = [];
 const pendingResults = new Map<string, PendingResult>();
 
-export class BrowserBridgeError extends Error {}
+/**
+ * A bridge failure, carrying why rather than only what.
+ *
+ * Every one of these used to reach a local client as `timeout`, so a page that
+ * refused an action ("that site is not on your approved list") was reported to
+ * the user as a browser that never answered. Those need different things from
+ * the user, so they cannot share a code.
+ */
+export class BrowserBridgeError extends Error {
+  constructor(
+    message: string,
+    readonly code: LocalClientFailureCode = 'timeout',
+  ) {
+    super(message);
+  }
+}
 
 function extraDirectories(): readonly string[] {
   return deps?.extraManifestDirectories ?? [];
@@ -362,7 +379,12 @@ function handleCommandResult(body: Record<string, unknown>): void {
   if (result.ok) {
     pending.resolve(result.value);
   } else {
-    pending.reject(new BrowserBridgeError(result.error ?? 'The browser refused that action.'));
+    pending.reject(
+      new BrowserBridgeError(
+        result.error ?? 'The browser refused that action.',
+        'permission-denied',
+      ),
+    );
   }
 }
 
@@ -460,10 +482,26 @@ async function handleLocalClientCommandRoute(
 
   const label = describeLocalClient(parsed.client);
   recordLocalClientActivity(label, parsed.command);
-  const outcome = await run(parsed.command, parsed.args, {
-    name: parsed.client.name.trim().slice(0, 60),
-    label,
-  });
+  // A throw is answered here rather than left to the caller: an uncaught one
+  // becomes a plain-text 500, and a client parsing JSON reads that as a broken
+  // connection instead of the refusal it actually was.
+  let outcome: { ok: boolean; value?: unknown; error?: string; code?: string };
+  try {
+    outcome = await run(parsed.command, parsed.args, {
+      name: parsed.client.name.trim().slice(0, 60),
+      label,
+    });
+  } catch (error) {
+    // Read the code off the error rather than testing its class: `instanceof`
+    // is per module instance, so an error thrown by another copy of this
+    // module would silently lose its code and read as a timeout.
+    const code = (error as { code?: unknown } | null)?.code;
+    outcome = {
+      ok: false,
+      error: error instanceof Error ? error.message : 'The browser did not answer.',
+      code: isLocalClientFailureCode(code) ? code : 'timeout',
+    };
+  }
   sendJson(response, 200, {
     version: LOCAL_CLIENT_PROTOCOL_VERSION,
     ...outcome,
@@ -586,7 +624,7 @@ export async function stopBrowserBridge(): Promise<void> {
   for (const waiter of pollWaiters.splice(0)) waiter(null);
   for (const [, pending] of pendingResults) {
     clearTimeout(pending.timer);
-    pending.reject(new BrowserBridgeError('AGI Cloud closed the browser bridge.'));
+    pending.reject(new BrowserBridgeError('AGI Cloud closed the browser bridge.', 'cancelled'));
   }
   pendingResults.clear();
   queuedCommands.length = 0;
@@ -610,7 +648,10 @@ export function sendBrowserCommand(
   const pairing = readPairing();
   if (!pairing) {
     return Promise.reject(
-      new BrowserBridgeError('No browser is paired with AGI Cloud yet. Pair one in Settings.'),
+      new BrowserBridgeError(
+        'No browser is paired with AGI Cloud yet. Pair one in Settings.',
+        'not-paired',
+      ),
     );
   }
 
