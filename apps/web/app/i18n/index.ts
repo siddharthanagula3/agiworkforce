@@ -33,14 +33,11 @@ function readLanguageCache(): string | null {
   }
 }
 
-// Read before init(): the detector caches the language it detects, so a moment
-// later every device looks like it has an explicit choice.
+// Read before init(). init() with an explicit `lng` fires languageChanged, and
+// the detector caches that, overwriting the choice this device had stored: the
+// display language did not survive a reload until the bootstrap below put the
+// captured value back.
 const cachedLanguageAtLoad = readLanguageCache();
-
-/** The language this device had chosen before the detector cached anything. */
-export function readCachedLanguage(): string | null {
-  return cachedLanguageAtLoad;
-}
 
 i18n
   .use(LanguageDetector)
@@ -74,7 +71,7 @@ function applyDocumentLanguage(code: string): void {
 if (typeof window !== 'undefined') {
   i18n.on('languageChanged', applyDocumentLanguage);
   window.setTimeout(() => {
-    void i18n.changeLanguage();
+    void i18n.changeLanguage(cachedLanguageAtLoad ?? undefined);
   }, 0);
 }
 
