@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
@@ -12,16 +11,31 @@ import { requireCatalogModel } from './catalogModelFixtures';
 const FIRST_PROVIDER_MODEL = requireCatalogModel('anthropic').id;
 const SECOND_PROVIDER_MODEL = requireCatalogModel('openai').id;
 
-function makeContext(cachedTier?: string): vscode.ExtensionContext {
+function makeContext(cachedTier?: string, cachedAtMs?: number): vscode.ExtensionContext {
+  const state = new Map<string, unknown>();
+  if (cachedTier !== undefined) state.set('tierStatus.cachedTier', cachedTier);
+  if (cachedAtMs !== undefined) state.set('tierStatus.cachedAtMs', cachedAtMs);
   return {
+    secrets: { get: vi.fn(), store: vi.fn(), delete: vi.fn() },
     globalState: {
-      get: (key: string) => (key === 'tierStatus.cachedTier' ? cachedTier : undefined),
-      update: vi.fn(),
-      keys: () => [],
+      get: (key: string) => state.get(key),
+      update: vi.fn((key: string, value: unknown) => {
+        if (value === undefined) state.delete(key);
+        else state.set(key, value);
+        return Promise.resolve();
+      }),
+      keys: () => [...state.keys()],
       setKeysForSync: vi.fn(),
     },
   } as unknown as vscode.ExtensionContext;
 }
+
+/** Every fresh-cache case pins the TTL stamp so no case reaches the network. */
+function fresh(cachedTier?: string): vscode.ExtensionContext {
+  return makeContext(cachedTier, Date.now());
+}
+
+const neverLoads = () => Promise.resolve(undefined);
 
 function stubConfiguration(): void {
   vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
@@ -47,13 +61,13 @@ describe('resolveTier account-owned entitlement', () => {
       update: vi.fn(),
     } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
 
-    await expect(resolveTier(makeContext())).resolves.toBe('byok');
+    await expect(resolveTier(fresh(), neverLoads)).resolves.toBe('byok');
   });
 
   it('uses the cached account tier', async () => {
     stubConfiguration();
 
-    await expect(resolveTier(makeContext('basic'))).resolves.toBe('basic');
+    await expect(resolveTier(fresh('basic'), neverLoads)).resolves.toBe('basic');
   });
 
   it.each(['free', 'max_15x', 'team', 'enterprise'] as const)(
@@ -61,13 +75,13 @@ describe('resolveTier account-owned entitlement', () => {
     async (tier) => {
       stubConfiguration();
 
-      await expect(resolveTier(makeContext(tier))).resolves.toBe(tier);
+      await expect(resolveTier(fresh(tier), neverLoads)).resolves.toBe(tier);
     },
   );
 
   it('keeps cross-provider switching locked without an account entitlement', async () => {
     stubConfiguration();
-    const tier = await resolveTier(makeContext());
+    const tier = await resolveTier(fresh(), neverLoads);
 
     expect(guardProviderSwitch(FIRST_PROVIDER_MODEL, SECOND_PROVIDER_MODEL, tier)).toBe(
       'upgrade-required',

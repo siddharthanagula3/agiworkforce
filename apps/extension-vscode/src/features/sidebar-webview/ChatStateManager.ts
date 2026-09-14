@@ -39,7 +39,11 @@ import {
   isSameWorkspacePath,
 } from '../../integrations/developerSessionValidation';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
-import { clearAccountTierCache, resolveTier } from '../../integrations/tierResolver';
+import {
+  clearAccountTierCache,
+  recordAccountIdentityTier,
+  resolveTier,
+} from '../../integrations/tierResolver';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
@@ -1190,6 +1194,7 @@ export class ChatStateManager {
       }
       return;
     }
+    if (identity) await recordAccountIdentityTier(this._context, identity.tier);
     if (!shouldPost()) return;
     this._post({
       type: 'accountStatus',
