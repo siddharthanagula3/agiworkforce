@@ -167,10 +167,10 @@ settlement is idempotent and concurrency-safe.
 ### `AGI-SEC-API-2026-09-09` What the api security scan found, and what is left
 
 **Severity:** P1
-**Status:** 55 of 57 findings fixed; 2 registered in
-`docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-*`. F21, F23,
-F35, F38, F93 and F94 closed on 2026-09-13 and their rows were deleted; what is
-left is F88 and a narrowed F91. F31 and F39 closed on 2026-09-12: compaction now routes
+**Status:** 56 of 57 findings fixed; 1 registered in
+`docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-F88`. F21, F23,
+F35, F38, F91, F93 and F94 closed on 2026-09-13 and their rows were deleted; what
+is left is F88. F31 and F39 closed on 2026-09-12: compaction now routes
 under the turn's own admission, and a scheduled run declares the project context
 it carries. Closing F39 also found that the gate's attachment leg could never
 fire, because `buildLlmRequest` moves array content into `multimodal_content`
@@ -206,20 +206,11 @@ personal` switched off require-MFA, the IP allow list, zero-data-retention,
    persisted on the conversation row.
 6. Four controls existed on one handler and not on its siblings.
 
-**What is left and why.** Two rows. F88 is a founder decision, not an
+**What is left and why.** One row. F88 is a founder decision, not an
 engineering one, and the founder file states the three options and how to verify
-whichever is chosen. F91 is narrowed to the direct-to-bucket upload: the same
-presigned url stays writable for its whole 300 second lifetime, so the uploader
-can replace their own object after registration inspected it. Closing that needs
-either the bucket to enforce the declared checksum on write, or the register
-step to copy the inspected bytes, only while their entity tag still matches, to
-a key no upload route can name. Both are unverifiable against a fake and want a
-run against the real bucket, which is why this pass stopped at the half it could
-prove.
+whichever is chosen.
 
-**Next step.** Choose between bucket-enforced checksums and promote-on-inspect
-for F91, and prove whichever is chosen against the real bucket rather than the
-in-memory store.
+**Next step.** None on this scan beyond the founder's F88 decision.
 
 **Closed 2026-09-13, second pass.** F93 and F94 were one problem: `user_memories.id`
 was a global primary key the client chose, and the import derived it from an
@@ -234,7 +225,31 @@ and the auto-memory insert now name `(user_id, id)` as their conflict target.
 Reproduced against the development database before the migration, where the
 victim's insert returned zero rows, and after it, where both rows exist.
 
-The same pass closed the half of F91 that was reachable from any environment.
+**Closed 2026-09-13, third pass.** F91 in full, by promote-on-inspect, the same
+shape chat attachments already use. After extraction passes, the register step
+copies the inspected object to a sealed key under the project, `.../<projectId>/sealed/<name>`, and the copy
+carries the entity tag the inspection read. A source rewritten inside the
+presigned url's remaining lifetime therefore fails the precondition, the
+registration is refused with the same wording chat attachments use, and the
+writable key is deleted either way. The sealed shape has one more path segment
+than any presign, upload authorization or upload cleanup can name, so nothing
+that can write may ever name what is stored, and `storage_uri` holds the sealed
+key, which is what extraction, download, deletion and erasure all read.
+Verified against the real bucket, not a fake: a copy pinned to the inspected
+entity tag succeeded, the same copy after a rewrite was refused `412
+PreconditionFailed`, and a source uploaded through a project's Sources panel
+left exactly one object, the sealed one, downloaded its own bytes back, and lost
+that object when the source was deleted.
+
+The same probes corrected an assumption this register carried: the bucket does
+enforce a declared SHA-256 on a write, refusing a mismatch with `400 BadDigest`.
+Bucket-enforced checksums were therefore also available, and would need the
+presign to sign a checksum header the client already computes. Promoting the
+inspected bytes was still the better answer, because it is what the chat path
+does and because it moves what is served out of every key an upload can name,
+rather than only constraining what may be written there.
+
+The second pass closed the half of F91 that was reachable from any environment.
 `/api/uploads/knowledge-file/put` took its destination from a query parameter,
 so a caller who knew a registered object's key could overwrite it with anything
 and the row kept describing bytes the platform no longer held. The presign now
