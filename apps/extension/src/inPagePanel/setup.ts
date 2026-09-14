@@ -24,29 +24,26 @@ export async function isPanelEnabled(): Promise<boolean> {
  * Safe to call on any http/https page. Skips non-http(s) protocols and
  * idempotently does nothing if the launcher has already been injected.
  *
+ * @param originApproved Whether this origin carries the user's approval. The
+ *   content script reads it once per document and shares that one read with
+ *   every gate, so this takes the shared promise as well as a plain boolean.
  * @param logger Optional logger with debug/warn methods (injected by content.ts
  *   to avoid circular imports).
  */
-export async function setupInPagePanel(logger?: {
-  debug: (msg: string, ...args: unknown[]) => void;
-  warn: (msg: string, ...args: unknown[]) => void;
-}): Promise<void> {
+export async function setupInPagePanel(
+  originApproved: boolean | Promise<boolean>,
+  logger?: {
+    debug: (msg: string, ...args: unknown[]) => void;
+    warn: (msg: string, ...args: unknown[]) => void;
+  },
+): Promise<void> {
   if (!/^https?:/.test(location.protocol)) return;
 
   if (document.querySelector('[data-agi-launcher]') || document.querySelector('[data-agi-panel]')) {
     return;
   }
 
-  let allowlist: Set<string>;
-  try {
-    const res = await chrome.storage.local.get('agi_site_allowlist');
-    const list = (res as Record<string, unknown>)['agi_site_allowlist'];
-    allowlist = new Set(Array.isArray(list) ? (list as string[]) : []);
-  } catch (err) {
-    logger?.debug('Could not read agi_site_allowlist for in-page panel gating', err);
-    return;
-  }
-  if (!allowlist.has(window.location.origin)) {
+  if (!(await originApproved)) {
     logger?.debug('in-page panel skipped, origin not on user allowlist', {
       origin: window.location.origin,
     });

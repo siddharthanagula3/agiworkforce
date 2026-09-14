@@ -39,6 +39,7 @@ import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
 import { discoverAllTools, callTool, startToolChangeReporting } from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
+import { isDomSmallEnoughToRead } from './dom-helpers';
 import {
   validateShortcutActions,
   MAX_CONTEXT_HTML_CHARS,
@@ -46,22 +47,13 @@ import {
   SITE_ALLOWLIST_STORAGE_KEY,
 } from './background/policy';
 
-const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
-const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
-
 function extractPageHtmlSafely(): string {
   try {
-    const elementCount = document.querySelectorAll('*').length;
-    if (elementCount > MAX_DOM_ELEMENTS_FOR_EXTRACTION) {
-      logger.debug('Skipping page-text extraction, DOM too large', { elementCount });
+    if (!isDomSmallEnoughToRead()) {
+      logger.debug('Skipping page-text extraction, DOM too large');
       return '';
     }
-    const extractStart = Date.now();
     const rawText = document.body?.innerText ?? document.documentElement?.innerText ?? '';
-    if (Date.now() - extractStart >= PAGE_EXTRACTION_TIMEOUT_MS) {
-      logger.warn('Page-text extraction timed out, using empty content');
-      return '';
-    }
     const collapsed = rawText
       .replace(/[\t \u00a0]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
@@ -111,8 +103,19 @@ const originApproved: Promise<boolean> = (async () => {
   }
 })();
 
+interface ContentScriptScope {
+  __agiWorkforceContentScriptReady?: boolean;
+}
+
 function initialize(): void {
-  void setupInPagePanel(logger);
+  const scope = window as Window & ContentScriptScope;
+  if (scope.__agiWorkforceContentScriptReady) {
+    logger.debug('Content script already initialized in this frame, skipping re-injection');
+    return;
+  }
+  scope.__agiWorkforceContentScriptReady = true;
+
+  void setupInPagePanel(originApproved, logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);
 
