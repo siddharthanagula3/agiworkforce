@@ -46,6 +46,7 @@ export const ELECTRON_IPC_CHANNELS = {
   deepLink: 'agi:deep-link',
   voiceHotkey: 'agi:voice-hotkey',
   hostCommand: 'agi:host-command',
+  hostPreferences: 'agi:host-preferences',
   checkUpdate: 'agi:check-update',
   workspaceDrop: 'agi:workspace-drop',
   openUpdateInstaller: 'agi:open-update-installer',

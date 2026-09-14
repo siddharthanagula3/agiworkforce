@@ -30,6 +30,8 @@ import {
   type BrowserPairRequestPrompt,
   type BrowserPairingState,
   type HostCommand,
+  type HostPreferences,
+  type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
 import { startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
@@ -37,7 +39,7 @@ import { dispatch as dispatchDesktopRuntime } from './runtime/dispatcher';
 import { cancelAllShellRuns } from './runtime/shellService';
 import { stopComputerUseHelper } from './runtime/computerUseService';
 import { installAppMenu } from './appMenu';
-import { applyLaunchAtLogin } from './launchAtLogin';
+import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
 import {
   CLOUD_APP_ORIGIN,
   DEEP_LINK_SCHEME,
@@ -48,12 +50,22 @@ import {
   RENDERER_ORIGIN,
   RENDERER_SCHEME,
 } from './config';
-import { ZOOM_LEVEL_STEP, clampZoomLevel, pickableCaptureSources } from './garnishCore';
+import {
+  SHORTCUT_KEYS,
+  ZOOM_LEVEL_STEP,
+  clampZoomLevel,
+  hostShortcutKeyFor,
+  pickableCaptureSources,
+} from './garnishCore';
 import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
 import { captureToChat } from './screenshot';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
-import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcuts';
-import { createTray } from './tray';
+import {
+  registerGarnishShortcuts,
+  shortcutRegistrations,
+  unregisterGarnishShortcuts,
+} from './shortcuts';
+import { createTray, destroyTray } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
 import { applyRemoteWindowPolicy, openExternally } from './windowPolicy';
 import { pageBackgroundColor, titleBarChrome } from './windowChrome';
@@ -389,6 +401,15 @@ function registerIpcHandlers(): void {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     await shell.openExternal(desktopCloudInstallerDownloadUrl(installedMacArchitecture()));
   });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.hostPreferences, async (event, patch) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (patch === null || patch === undefined) return hostPreferencesState();
+    if (typeof patch !== 'object' || Array.isArray(patch)) {
+      throw new Error('A preferences write takes an object.');
+    }
+    return writeHostPreferences(patch as Partial<HostPreferences>);
+  });
 }
 
 // Both modes attach a preload, so both have an IPC receiver for a deep link.
@@ -614,6 +635,79 @@ function openLogsFolder(): void {
   void shell.openPath(app.getPath('logs'));
 }
 
+const garnishHandlers = {
+  onOpen: showMainWindow,
+  onNewChat: openNewChat,
+  onQuickAsk: () => toggleQuickAsk(mainWindow),
+  onScreenshot: () => void captureToChat(mainWindow),
+  onVoice: () => void toggleGlobalDictation(mainWindow),
+  onCheckForUpdates: () => void checkForCloudUpdate(),
+};
+
+function applyGarnishShortcuts(): void {
+  unregisterGarnishShortcuts();
+  registerGarnishShortcuts({
+    onQuickAsk: garnishHandlers.onQuickAsk,
+    onScreenshot: garnishHandlers.onScreenshot,
+    onVoice: garnishHandlers.onVoice,
+  });
+}
+
+/**
+ * What the hosted settings panel sees.
+ *
+ * The status is read back from the registration rather than assumed from the
+ * write: a chord the OS refused is a preference that saved and a shortcut that
+ * does not work, and the panel has to be able to say which.
+ */
+function hostPreferencesState(): HostPreferencesState {
+  const preferences = getPreferences();
+  const shortcuts = getShortcuts();
+  const registrations = shortcutRegistrations();
+
+  return {
+    preferences: {
+      launchAtLogin: preferences.launchAtLogin,
+      showInMenuBar: preferences.showInMenuBar,
+      quickAskShortcut: shortcuts.quickAskShortcut,
+      screenshotShortcut: shortcuts.screenshotShortcut,
+      voiceShortcut: shortcuts.voiceShortcut,
+    },
+    shortcutStatus: Object.fromEntries(
+      SHORTCUT_KEYS.map((key) => [
+        hostShortcutKeyFor(key),
+        shortcuts[key] === ''
+          ? 'off'
+          : (registrations.find((registration) => registration.key === key)?.status ?? 'off'),
+      ]),
+    ) as HostPreferencesState['shortcutStatus'],
+  };
+}
+
+function writeHostPreferences(patch: Partial<HostPreferences>): HostPreferencesState {
+  const before = getPreferences();
+
+  if ('launchAtLogin' in patch && typeof patch.launchAtLogin === 'boolean') {
+    setLaunchAtLogin(patch.launchAtLogin);
+  }
+
+  const shortcutPatch = Object.fromEntries(
+    SHORTCUT_KEYS.filter((key) => typeof patch[key] === 'string').map((key) => [key, patch[key]]),
+  );
+  if (Object.keys(shortcutPatch).length > 0) {
+    saveSettings(shortcutPatch);
+    applyGarnishShortcuts();
+  }
+
+  if (typeof patch.showInMenuBar === 'boolean' && patch.showInMenuBar !== before.showInMenuBar) {
+    saveSettings({ showInMenuBar: patch.showInMenuBar });
+    if (patch.showInMenuBar) createTray(garnishHandlers);
+    else destroyTray();
+  }
+
+  return hostPreferencesState();
+}
+
 function openSupport(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
 }
@@ -740,15 +834,7 @@ if (!hasSingleInstanceLock) {
 
     createMainWindow();
 
-    const garnishHandlers = {
-      onOpen: showMainWindow,
-      onNewChat: openNewChat,
-      onQuickAsk: () => toggleQuickAsk(mainWindow),
-      onScreenshot: () => void captureToChat(mainWindow),
-      onVoice: () => void toggleGlobalDictation(mainWindow),
-      onCheckForUpdates: () => void checkForCloudUpdate(),
-    };
-    createTray(garnishHandlers);
+    if (getPreferences().showInMenuBar) createTray(garnishHandlers);
     installAppMenu(
       {
         newChat: garnishHandlers.onNewChat,
@@ -770,11 +856,7 @@ if (!hasSingleInstanceLock) {
       },
     );
     applyLaunchAtLogin();
-    registerGarnishShortcuts({
-      onQuickAsk: garnishHandlers.onQuickAsk,
-      onScreenshot: garnishHandlers.onScreenshot,
-      onVoice: garnishHandlers.onVoice,
-    });
+    applyGarnishShortcuts();
 
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
     void startPairingBridge();

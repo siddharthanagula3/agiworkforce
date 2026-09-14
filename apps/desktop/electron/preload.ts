@@ -13,6 +13,8 @@ import {
   type DesktopRuntimeEvent,
   type DesktopRuntimeResponse,
   type HostCommand,
+  type HostPreferences,
+  type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
 import {
   ELECTRON_BRIDGE_COMMANDS,
@@ -91,6 +93,20 @@ const agiHost: ElectronHostBridge = {
     return () => {
       ipcRenderer.removeListener(DESKTOP_RUNTIME_EVENT_CHANNEL, listener);
     };
+  },
+
+  async readPreferences(): Promise<HostPreferencesState> {
+    return (await ipcRenderer.invoke(
+      ELECTRON_IPC_CHANNELS.hostPreferences,
+      null,
+    )) as HostPreferencesState;
+  },
+
+  async writePreferences(patch: Partial<HostPreferences>): Promise<HostPreferencesState> {
+    return (await ipcRenderer.invoke(
+      ELECTRON_IPC_CHANNELS.hostPreferences,
+      patch,
+    )) as HostPreferencesState;
   },
 
   async openExternal(url: string): Promise<void> {
