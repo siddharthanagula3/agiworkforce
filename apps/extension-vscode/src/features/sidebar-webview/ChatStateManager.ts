@@ -26,6 +26,7 @@ import {
   type UserInput,
 } from '@agiworkforce/types';
 import { Config, type ComposerFollowUpBehavior } from '../../platform/config';
+import { DictationError, transcribeDictation } from '../dictation/dictationClient';
 import {
   CLI_NOT_EXECUTABLE_MARKER,
   cliAcquisitionHint,
@@ -155,7 +156,8 @@ export type WebviewToExtMessage =
         }>;
       };
     }
-  | { type: 'removePendingAttachment'; payload: { id: string } };
+  | { type: 'removePendingAttachment'; payload: { id: string } }
+  | { type: 'transcribeAudio'; payload: { dataUrl: string; language?: string } };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
@@ -307,7 +309,9 @@ export type ExtToWebviewMessage =
       };
     }
   | { type: 'showOnboarding' }
-  | { type: 'hideOnboarding' };
+  | { type: 'hideOnboarding' }
+  | { type: 'dictationResult'; payload: { text: string } }
+  | { type: 'dictationError'; payload: { message: string } };
 
 type ConversationLoadedPayload = Extract<
   ExtToWebviewMessage,
@@ -1128,6 +1132,52 @@ export class ChatStateManager {
         this._removeOwnedAttachment(this._inFlightSend, id);
         for (const queued of this._queuedSends) this._removeOwnedAttachment(queued, id);
         for (const steering of this._steeringSends) this._removeOwnedAttachment(steering, id);
+        break;
+      }
+
+      case 'transcribeAudio': {
+        const { dataUrl, language } = (
+          msg as { type: 'transcribeAudio'; payload: { dataUrl: string; language?: string } }
+        ).payload;
+        const commaIndex = dataUrl.indexOf(',');
+        const meta = commaIndex < 0 ? '' : dataUrl.slice('data:'.length, commaIndex);
+        if (commaIndex < 0 || !/;base64$/iu.test(meta)) {
+          this._post({
+            type: 'dictationError',
+            payload: { message: 'That recording could not be read. Try again.' },
+          });
+          break;
+        }
+        let audio: Buffer;
+        try {
+          audio = Buffer.from(dataUrl.slice(commaIndex + 1), 'base64');
+        } catch {
+          this._post({
+            type: 'dictationError',
+            payload: { message: 'That recording could not be read. Try again.' },
+          });
+          break;
+        }
+        try {
+          const text = await transcribeDictation(this._secrets, {
+            audio,
+            mimeType: meta.slice(0, meta.length - ';base64'.length),
+            ...(language === undefined ? {} : { language }),
+          });
+          this._post({ type: 'dictationResult', payload: { text } });
+        } catch (err) {
+          this._post({
+            type: 'dictationError',
+            payload: {
+              message:
+                err instanceof DictationError
+                  ? err.message
+                  : err instanceof Error
+                    ? err.message
+                    : 'That recording could not be transcribed.',
+            },
+          });
+        }
         break;
       }
 
