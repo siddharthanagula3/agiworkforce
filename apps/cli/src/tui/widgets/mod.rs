@@ -11,6 +11,7 @@ pub mod memories_settings;
 pub mod mention_popup;
 pub mod model_picker;
 pub mod screen_renderers;
+pub mod session_picker;
 pub mod skills_toggle;
 pub mod statusline_setup;
 pub mod terminal_title_setup;
