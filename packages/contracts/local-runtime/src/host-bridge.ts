@@ -46,13 +46,31 @@ export interface HostNotifyRequest {
 }
 
 /**
+ * What a build of this app offers the page it hosts, and what it installs over
+ * itself to become a newer one.
+ *
+ * `available` false with `version` equal to `currentVersion` is the answer
+ * before any release is published, not a failure: the release route reports no
+ * signed installer and the shell says so rather than throwing.
+ */
+export interface HostUpdateAvailability {
+  available: boolean;
+  currentVersion: string;
+  version: string;
+  publishedAt?: string;
+  downloadUrl: string;
+}
+
+/**
  * What the desktop shell offers a page it hosts.
  *
  * `apps/web` runs unchanged in a browser, where `window.agiHost` is absent and
  * every desktop-only control stays unrendered. The Electron preload adds
- * members beyond these; they stay in the desktop's own contract because a
- * hosted page has no business driving the window, the account bridge, or the
- * updater.
+ * members beyond these; those stay in the desktop's own contract because a
+ * hosted page has no business driving the window or the account bridge. The
+ * updater is here instead, because the page is the shell's only settings
+ * surface and a check reachable solely from the tray is one most users never
+ * find.
  */
 export interface HostBridge {
   readonly platform: string;
@@ -70,6 +88,8 @@ export interface HostBridge {
   onRuntimeEvent(callback: (event: DesktopRuntimeEvent) => void): () => void;
   openExternal(url: string): Promise<void>;
   notify(request: HostNotifyRequest): Promise<void>;
+  checkForUpdate(): Promise<HostUpdateAvailability>;
+  openUpdateInstaller(): Promise<void>;
 }
 
 declare global {

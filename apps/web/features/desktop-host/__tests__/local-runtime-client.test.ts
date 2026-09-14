@@ -33,6 +33,13 @@ function installHost(invoke: Invoke) {
     },
     openExternal: async () => undefined,
     notify: async () => undefined,
+    checkForUpdate: async () => ({
+      available: false,
+      currentVersion: '1.2.0',
+      version: '1.2.0',
+      downloadUrl: '',
+    }),
+    openUpdateInstaller: async () => undefined,
   } satisfies HostBridge;
   window.agiHost = host;
   return {

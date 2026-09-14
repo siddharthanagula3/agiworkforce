@@ -23,6 +23,7 @@ import { ApiKeysManager } from '../components/Settings/ApiKeys';
 import { RecentActivityPanel } from '@features/settings/components/RecentActivityPanel';
 import { LinkedDevicesPanel } from '../components/LinkedDevicesPanel';
 import { CopyableIdField } from '../components/CopyableIdField';
+import { DesktopUpdateRow } from '@/features/desktop-host';
 import {
   useOrganizationOverview,
   useDeleteAccount,
@@ -509,6 +510,8 @@ export function AccountSection() {
                 />
               </div>
             ) : null}
+
+            <DesktopUpdateRow />
           </div>
 
           <LinkedDevicesPanel />

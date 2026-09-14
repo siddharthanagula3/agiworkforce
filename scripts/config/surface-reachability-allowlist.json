@@ -10,6 +10,10 @@
         {
           "pathPrefix": "apps/desktop/src/lib/tauri-electron/",
           "reason": "Electron-build shims aliased over @tauri-apps/* only when the build target is electron (apps/desktop/vite.config.ts:35,60-61), so they are unreachable from the Tauri renderer entry by design. Mirrors the tauri-web/ entry above."
+        },
+        {
+          "pathPrefix": "apps/desktop/src/lib/desktopCloudUpdate.ts",
+          "reason": "The AGI Cloud update check and installer URL, reached from the Electron main process (apps/desktop/electron/main.ts) and from the tray, never from the Tauri renderer entry. The renderer sees the result through window.agiHost, not this module."
         }
       ],
       "unreachableDebt": {

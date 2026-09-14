@@ -53,6 +53,7 @@ export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
 export { DesktopHostMount } from './components/DesktopHostMount';
 export { BrowserPairingSection } from './components/BrowserPairingSection';
 export { BrowserToolsDialog, type BrowserToolsDialogProps } from './components/BrowserToolsDialog';
+export { DesktopUpdateRow } from './components/DesktopUpdateRow';
 export { LocalAccessSection } from './components/LocalAccessSection';
 export { LocalCommandDialog, type LocalCommandDialogProps } from './components/LocalCommandDialog';
 export {

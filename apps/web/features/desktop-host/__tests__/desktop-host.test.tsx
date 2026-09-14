@@ -18,6 +18,13 @@ function installHost(overrides: Partial<HostBridge> = {}): HostBridge {
     onRuntimeEvent: () => () => undefined,
     openExternal: async () => undefined,
     notify: async () => undefined,
+    checkForUpdate: async () => ({
+      available: false,
+      currentVersion: '1.2.0',
+      version: '1.2.0',
+      downloadUrl: '',
+    }),
+    openUpdateInstaller: async () => undefined,
     ...overrides,
   };
   window.agiHost = host;
