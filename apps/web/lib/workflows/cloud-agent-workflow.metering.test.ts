@@ -54,6 +54,7 @@ vi.mock('./cloud-agent-workflow-stream', () => ({
   projectCloudAgentWorkflowChunk: mocks.projectChunk,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  saveCloudAgentDeviceCheckpoint: vi.fn(),
   appendCloudAgentEvent: mocks.appendEvent,
   appendCloudAgentEvents: vi.fn(),
   getCloudAgentRun: vi.fn(),
