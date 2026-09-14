@@ -159,6 +159,16 @@
     "message": "Add",
     "description": "Button that adds the active origin to the automation allowlist"
   },
+  "spAllowlistHostPermissionRefused": {
+    "message": "Chrome did not grant access to $ORIGIN$, so it was not approved.",
+    "description": "Shown when the user declines Chrome's host-permission prompt for a site being added to the allowlist",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
   "spMemoryDeleteConfirm": {
     "message": "Confirm?",
     "description": "Memory row delete button waiting for the second click"

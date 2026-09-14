@@ -18,6 +18,7 @@ import {
   MAX_PENDING_PAIR_REQUESTS,
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
+  NATIVE_BROWSER_UNPAIR_MESSAGE,
   NATIVE_HOST_TOKEN_HEADER,
   PAIR_CODE_ALPHABET,
   PAIR_CODE_LENGTH,
@@ -74,7 +75,7 @@ export interface BridgeDependencies {
   runBrowserCommand?: (
     command: string,
     args: Record<string, unknown>,
-    caller: { name: string; label: string },
+    caller: { name: string; subject: string; folder: string | null; path: string | null },
   ) => Promise<{ ok: boolean; value?: unknown; error?: string; code?: string }>;
 }
 
@@ -425,6 +426,14 @@ function handleNativeMessageRoute(
   if (!wasConnected) publishState();
 
   const type = (message as Record<string, unknown>)['type'];
+  if (type === NATIVE_BROWSER_UNPAIR_MESSAGE) {
+    // The browser has forgotten this Mac. Keeping the record would leave every
+    // local client offering tools that can never answer, so the pairing and
+    // the host manifests go with it.
+    removeHostAndPairing();
+    sendJson(response, 200, { success: true });
+    return;
+  }
   if (type === NATIVE_BROWSER_POLL_MESSAGE) {
     handlePoll(response);
     return;
@@ -480,8 +489,8 @@ async function handleLocalClientCommandRoute(
     return;
   }
 
-  const label = describeLocalClient(parsed.client);
-  recordLocalClientActivity(label, parsed.command);
+  const described = describeLocalClient(parsed.client);
+  recordLocalClientActivity(described.label, parsed.command);
   // A throw is answered here rather than left to the caller: an uncaught one
   // becomes a plain-text 500, and a client parsing JSON reads that as a broken
   // connection instead of the refusal it actually was.
@@ -489,7 +498,7 @@ async function handleLocalClientCommandRoute(
   try {
     outcome = await run(parsed.command, parsed.args, {
       name: parsed.client.name.trim().slice(0, 60),
-      label,
+      ...described,
     });
   } catch (error) {
     // Read the code off the error rather than testing its class: `instanceof`
@@ -562,6 +571,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       sendJson(response, 200, {
         version: LOCAL_CLIENT_PROTOCOL_VERSION,
         paired: state.paired,
+        answering: state.connected,
         ...(state.extensionId ? { extensionId: state.extensionId } : {}),
         ...(deps?.appVersion ? { appVersion: deps.appVersion } : {}),
       });
@@ -693,7 +703,24 @@ export function installHostForPairedExtension(): string[] {
   return manifestPaths;
 }
 
+/**
+ * Drop the pairing and everything that depended on it.
+ *
+ * The shell's own Unpair control and the browser telling us it has unpaired
+ * both land here, so the two can never leave different state behind. Commands
+ * already waiting are failed rather than left to time out: nothing is coming,
+ * and a client should be told which of the two it is.
+ */
 export function removeHostAndPairing(): void {
+  for (const waiter of pollWaiters.splice(0)) waiter(null);
+  for (const [, pending] of pendingResults) {
+    clearTimeout(pending.timer);
+    pending.reject(
+      new BrowserBridgeError('The browser is no longer paired with this Mac.', 'not-paired'),
+    );
+  }
+  pendingResults.clear();
+  queuedCommands.length = 0;
   uninstallNativeHost(extraDirectories(), deps?.home);
   clearPairing();
   lastSeenMs = 0;
