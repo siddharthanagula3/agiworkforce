@@ -989,6 +989,25 @@ function currentWebMCPNavigationGeneration(tabId: number): number {
   return webmcpNavigationGenerationByTab.get(tabId) ?? 0;
 }
 
+/**
+ * Records the tab as watched so the navigation listeners keep invalidating it
+ * while a discovery is in flight. Without the entry the tab-event early-out
+ * would skip the generation bump that makes a stale discovery detectable.
+ */
+function watchWebMCPNavigation(tabId: number): number {
+  const generation = currentWebMCPNavigationGeneration(tabId);
+  webmcpNavigationGenerationByTab.set(tabId, generation);
+  return generation;
+}
+
+function hasWatchedTabWork(): boolean {
+  return (
+    computerUseRuns.getActive() !== null ||
+    webmcpToolsByTab.size > 0 ||
+    webmcpNavigationGenerationByTab.size > 0
+  );
+}
+
 function sendAuthenticatedWebMCPNativeUpdate(
   tabId: number,
   normalized: NormalizedWebMCPToolsUpdate,
@@ -3434,7 +3453,7 @@ async function handleMessageAsync(
       if (!resolvedTabId) {
         return { success: false, error: 'No tab ID' } as ExtensionResponse;
       }
-      const navigationGeneration = currentWebMCPNavigationGeneration(resolvedTabId);
+      const navigationGeneration = watchWebMCPNavigation(resolvedTabId);
       const targetBefore = await chrome.tabs.get(resolvedTabId);
       const targetUrl = targetBefore.url;
       const response = await forwardToContentScript(resolvedTabId, message);
@@ -4563,10 +4582,14 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   forgetPageWatchTab(tabId);
   webmcpToolsByTab.delete(tabId);
   webmcpNavigationGenerationByTab.delete(tabId);
-  logger.debug('Cleaned up rate limit and webmcp tools for tab', { tabId });
 });
 
+// chrome.tabs.onUpdated takes no filter argument (the UpdateFilter overload is
+// Firefox-only), so every favicon, title and audible change on every open tab
+// reaches this listener. The first line is the cheapest possible answer for the
+// common case: nothing is being driven and no tab's tools are cached.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!hasWatchedTabWork()) return;
   const lease = computerUseRuns.getActive();
   if (
     lease?.tabId === tabId &&
@@ -4589,8 +4612,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   const lease = computerUseRuns.getActive();
+  if (!lease) return;
   if (
-    !lease ||
     lease.windowId === undefined ||
     activeInfo.windowId !== lease.windowId ||
     activeInfo.tabId === lease.tabId
