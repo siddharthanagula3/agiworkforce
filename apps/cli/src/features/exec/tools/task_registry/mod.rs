@@ -19,7 +19,9 @@ use super::ToolResult;
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// M18: Session-scoped team / cron registry
+// Session-scoped team registry. Schedules are not session state: they live in
+// the account's hosted schedules service, the same records the web and mobile
+// surfaces read.
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -29,26 +31,14 @@ struct SessionTeam {
     created_at: String,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-struct SessionCron {
-    id: String,
-    name: String,
-    schedule: String,
-    prompt: String,
-    enabled: bool,
-    created_at: String,
-}
-
 struct SessionRegistry {
     teams: std::sync::RwLock<std::collections::HashMap<String, SessionTeam>>,
-    crons: std::sync::RwLock<std::collections::HashMap<String, SessionCron>>,
 }
 
 impl SessionRegistry {
     fn new() -> Self {
         Self {
             teams: std::sync::RwLock::new(std::collections::HashMap::new()),
-            crons: std::sync::RwLock::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -61,10 +51,6 @@ fn session_registry() -> &'static SessionRegistry {
 
 fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339()
-}
-
-fn new_uuid() -> String {
-    uuid::Uuid::new_v4().to_string()
 }
 
 pub(super) async fn execute_team_create(args: &HashMap<String, String>) -> Result<ToolResult> {
@@ -147,117 +133,215 @@ pub(super) async fn execute_team_delete(args: &HashMap<String, String>) -> Resul
     }
 }
 
-pub(super) async fn execute_cron_create(args: &HashMap<String, String>) -> Result<ToolResult> {
-    let name = match args.get("name").filter(|n| !n.is_empty()) {
-        Some(n) => n.clone(),
-        None => {
-            return Ok(ToolResult {
-                tool_name: "cron_create".into(),
-                success: false,
-                output: "Missing required argument: name".into(),
-            })
-        }
+pub(super) async fn execute_cron_create(
+    args: &HashMap<String, String>,
+    privacy_mode: crate::agent::PrivacyMode,
+) -> Result<ToolResult> {
+    let client = match hosted_schedules(privacy_mode, "cron_create") {
+        Ok(client) => client,
+        Err(result) => return Ok(result),
     };
-    let schedule = match args.get("schedule").filter(|s| !s.is_empty()) {
-        Some(s) => s.clone(),
-        None => {
-            return Ok(ToolResult {
-                tool_name: "cron_create".into(),
-                success: false,
-                output: "Missing required argument: schedule".into(),
-            })
-        }
+    let name = match required_arg(args, "name", "cron_create") {
+        Ok(value) => value,
+        Err(result) => return Ok(result),
     };
-    let prompt = match args.get("prompt").filter(|p| !p.is_empty()) {
-        Some(p) => p.clone(),
-        None => {
-            return Ok(ToolResult {
-                tool_name: "cron_create".into(),
-                success: false,
-                output: "Missing required argument: prompt".into(),
-            })
-        }
+    let schedule = match required_arg(args, "schedule", "cron_create") {
+        Ok(value) => value,
+        Err(result) => return Ok(result),
+    };
+    let prompt = match required_arg(args, "prompt", "cron_create") {
+        Ok(value) => value,
+        Err(result) => return Ok(result),
     };
     let enabled = args.get("enabled").map(|v| v != "false").unwrap_or(true);
-    let id = new_uuid();
-    let cron = SessionCron {
-        id: id.clone(),
-        name,
-        schedule,
-        prompt,
-        enabled,
-        created_at: now_iso(),
-    };
-    session_registry()
-        .crons
-        .write()
-        .unwrap()
-        .insert(id.clone(), cron.clone());
-    print_tool_status("cron_create", &format!("id={}", id));
-    Ok(ToolResult {
-        tool_name: "cron_create".into(),
-        success: true,
-        output: serde_json::to_string_pretty(&cron).unwrap_or(id),
-    })
-}
+    let timezone = args
+        .get("timezone")
+        .map(String::to_string)
+        .filter(|zone| !zone.trim().is_empty())
+        .unwrap_or_else(crate::schedules::local_timezone);
 
-pub(super) async fn execute_cron_delete(args: &HashMap<String, String>) -> Result<ToolResult> {
-    let id_or_name = match args.get("id").filter(|i| !i.is_empty()) {
-        Some(i) => i.clone(),
-        None => {
-            return Ok(ToolResult {
-                tool_name: "cron_delete".into(),
-                success: false,
-                output: "Missing required argument: id".into(),
+    let request = crate::schedules::cron_create_request(
+        &name, &schedule, &prompt, enabled, &timezone, None, None,
+    );
+    match client.create(&request).await {
+        Ok(created) => {
+            print_tool_status("cron_create", &format!("id={}", created.id));
+            Ok(ToolResult {
+                tool_name: "cron_create".into(),
+                success: true,
+                output: serde_json::to_string_pretty(&created).unwrap_or(created.id),
             })
         }
+        Err(error) => Ok(schedule_failure("cron_create", error)),
+    }
+}
+
+pub(super) async fn execute_cron_delete(
+    args: &HashMap<String, String>,
+    privacy_mode: crate::agent::PrivacyMode,
+) -> Result<ToolResult> {
+    let client = match hosted_schedules(privacy_mode, "cron_delete") {
+        Ok(client) => client,
+        Err(result) => return Ok(result),
     };
-    let mut guard = session_registry().crons.write().unwrap();
-    let key = if guard.contains_key(&id_or_name) {
-        Some(id_or_name.clone())
-    } else {
-        guard
-            .values()
-            .find(|c| c.name == id_or_name)
-            .map(|c| c.id.clone())
+    let id_or_name = match required_arg(args, "id", "cron_delete") {
+        Ok(value) => value,
+        Err(result) => return Ok(result),
     };
-    match key {
-        Some(k) => {
-            guard.remove(&k);
-            drop(guard);
-            print_tool_status("cron_delete", &format!("id={}", k));
+    let resolved = match client.resolve_id(&id_or_name).await {
+        Ok(resolved) => resolved,
+        Err(error) => return Ok(schedule_failure("cron_delete", error)),
+    };
+    match client.delete(&resolved).await {
+        Ok(()) => {
+            print_tool_status("cron_delete", &format!("id={resolved}"));
             Ok(ToolResult {
                 tool_name: "cron_delete".into(),
                 success: true,
-                output: format!("Deleted cron trigger '{}'.", id_or_name),
+                output: format!("Deleted schedule '{resolved}'."),
             })
         }
-        None => Ok(ToolResult {
-            tool_name: "cron_delete".into(),
+        Err(error) => Ok(schedule_failure("cron_delete", error)),
+    }
+}
+
+pub(super) async fn execute_cron_list(
+    args: &HashMap<String, String>,
+    privacy_mode: crate::agent::PrivacyMode,
+) -> Result<ToolResult> {
+    let _ = args;
+    let client = match hosted_schedules(privacy_mode, "cron_list") {
+        Ok(client) => client,
+        Err(result) => return Ok(result),
+    };
+    match client
+        .list(crate::schedules::DEFAULT_SCHEDULE_LIMIT, 0)
+        .await
+    {
+        Ok(schedules) if schedules.is_empty() => Ok(ToolResult {
+            tool_name: "cron_list".into(),
+            success: true,
+            output: "No schedules on this account.".into(),
+        }),
+        Ok(schedules) => Ok(ToolResult {
+            tool_name: "cron_list".into(),
+            success: true,
+            output: serde_json::to_string_pretty(&schedules)
+                .unwrap_or_else(|_| format!("{} schedule(s)", schedules.len())),
+        }),
+        Err(error) => Ok(schedule_failure("cron_list", error)),
+    }
+}
+
+/// A scheduled task runs in AGI cloud on the account's own ledger, so the
+/// prompt and its results leave the device. A Local session must not reach it,
+/// and a signed-out session must not be told a schedule was created.
+fn hosted_schedules(
+    privacy_mode: crate::agent::PrivacyMode,
+    tool_name: &str,
+) -> Result<crate::schedules::SchedulesClient, ToolResult> {
+    if privacy_mode == crate::agent::PrivacyMode::Local {
+        return Err(schedule_failure(
+            tool_name,
+            crate::schedules::ScheduleError::LocalPrivacy,
+        ));
+    }
+    crate::schedules::SchedulesClient::connect().map_err(|error| schedule_failure(tool_name, error))
+}
+
+fn schedule_failure(tool_name: &str, error: crate::schedules::ScheduleError) -> ToolResult {
+    ToolResult {
+        tool_name: tool_name.into(),
+        success: false,
+        output: error.to_string(),
+    }
+}
+
+fn required_arg(
+    args: &HashMap<String, String>,
+    key: &str,
+    tool_name: &str,
+) -> Result<String, ToolResult> {
+    match args
+        .get(key)
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) => Ok(value.to_string()),
+        None => Err(ToolResult {
+            tool_name: tool_name.into(),
             success: false,
-            output: format!("Cron trigger '{}' not found.", id_or_name),
+            output: format!("Missing required argument: {key}"),
         }),
     }
 }
 
-pub(super) async fn execute_cron_list(args: &HashMap<String, String>) -> Result<ToolResult> {
-    let _ = args;
-    let guard = session_registry().crons.read().unwrap();
-    if guard.is_empty() {
-        return Ok(ToolResult {
-            tool_name: "cron_list".into(),
-            success: true,
-            output: "No cron triggers registered.".into(),
-        });
+#[cfg(test)]
+mod hosted_schedule_tests {
+    use std::collections::HashMap;
+
+    use super::{execute_cron_create, execute_cron_delete, execute_cron_list, required_arg};
+    use crate::agent::PrivacyMode;
+
+    fn cron_args() -> HashMap<String, String> {
+        HashMap::from([
+            ("name".to_string(), "Morning digest".to_string()),
+            ("schedule".to_string(), "0 9 * * *".to_string()),
+            ("prompt".to_string(), "Summarize my inbox".to_string()),
+        ])
     }
-    let mut crons: Vec<SessionCron> = guard.values().cloned().collect();
-    crons.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-    Ok(ToolResult {
-        tool_name: "cron_list".into(),
-        success: true,
-        output: serde_json::to_string_pretty(&crons)
-            .unwrap_or_else(|_| format!("{} trigger(s)", crons.len())),
-    })
+
+    /// A scheduled task runs in AGI cloud, so a Local session must be refused
+    /// before the prompt reaches the network, and must never be told a
+    /// schedule was created.
+    #[tokio::test]
+    async fn every_schedule_tool_is_blocked_in_local_privacy_mode() {
+        let create = execute_cron_create(&cron_args(), PrivacyMode::Local)
+            .await
+            .expect("returns Ok");
+        assert!(!create.success, "{}", create.output);
+        assert!(
+            create.output.contains("Local privacy mode"),
+            "{}",
+            create.output
+        );
+        assert!(
+            create.output.contains("must leave this device"),
+            "the refusal must say where the prompt would go: {}",
+            create.output
+        );
+
+        let list = execute_cron_list(&HashMap::new(), PrivacyMode::Local)
+            .await
+            .expect("returns Ok");
+        assert!(!list.success, "{}", list.output);
+
+        let delete = execute_cron_delete(
+            &HashMap::from([("id".to_string(), "anything".to_string())]),
+            PrivacyMode::Local,
+        )
+        .await
+        .expect("returns Ok");
+        assert!(!delete.success, "{}", delete.output);
+    }
+
+    #[test]
+    fn a_missing_or_blank_argument_is_reported_before_any_request() {
+        let args = HashMap::from([("name".to_string(), "   ".to_string())]);
+        let failure = match required_arg(&args, "name", "cron_create") {
+            Ok(value) => panic!("a blank argument must not resolve, got '{value}'"),
+            Err(failure) => failure,
+        };
+        assert!(!failure.success);
+        assert_eq!(failure.output, "Missing required argument: name");
+        assert_eq!(failure.tool_name, "cron_create");
+
+        assert_eq!(
+            required_arg(&cron_args(), "schedule", "cron_create")
+                .unwrap_or_else(|_| { panic!("a present argument must resolve") }),
+            "0 9 * * *"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

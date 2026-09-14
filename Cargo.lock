@@ -165,6 +165,7 @@ dependencies = [
  "futures-util",
  "glob",
  "hound",
+ "iana-time-zone",
  "indicatif",
  "insta",
  "keyring 2.3.3",

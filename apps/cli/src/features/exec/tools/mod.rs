@@ -482,9 +482,9 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "read_many_files" => execute_read_many_files(&call.args).await,
         "team_create" => execute_team_create(&call.args).await,
         "team_delete" => execute_team_delete(&call.args).await,
-        "cron_create" => execute_cron_create(&call.args).await,
-        "cron_delete" => execute_cron_delete(&call.args).await,
-        "cron_list" => execute_cron_list(&call.args).await,
+        "cron_create" => execute_cron_create(&call.args, opts.privacy_mode).await,
+        "cron_delete" => execute_cron_delete(&call.args, opts.privacy_mode).await,
+        "cron_list" => execute_cron_list(&call.args, opts.privacy_mode).await,
         "advisor" => execute_advisor(&call.args, opts.privacy_mode).await,
         "enter_worktree" => {
             execute_enter_worktree(&call.args, require_confirm, opts.approval_callback.as_ref())

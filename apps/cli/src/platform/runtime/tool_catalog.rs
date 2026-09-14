@@ -543,33 +543,42 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
         // -----------------------------------------------------------------------
         def(
             "cron_create",
-            "Register a new cron-style scheduled trigger. The schedule is a standard 5-field \
-             cron expression (minute hour day month weekday). Returns a trigger ID.",
+            "Create a scheduled task on the signed-in AGI Workforce account. The task runs in \
+             AGI cloud on the account's own schedule, not on this machine and not in this \
+             session, so it keeps firing after the CLI exits and is visible on every surface. \
+             The schedule is a standard 5-field cron expression (minute hour day month weekday). \
+             Requires `agi login`, and cannot schedule local-only work. Returns the account-wide \
+             schedule ID.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Human-readable trigger name."},
+                    "name": {"type": "string", "description": "Human-readable schedule name."},
                     "schedule": {"type": "string", "description": "5-field cron expression, e.g. \"0 9 * * *\" for 9 AM daily."},
-                    "prompt": {"type": "string", "description": "Prompt to run when the trigger fires."},
-                    "enabled": {"type": "boolean", "description": "Whether to enable immediately (default true)."}
+                    "prompt": {"type": "string", "description": "Prompt the scheduled agent runs each time it fires."},
+                    "enabled": {"type": "boolean", "description": "Whether to activate it immediately (default true)."},
+                    "timezone": {"type": "string", "description": "IANA time zone the cron expression is read in. Defaults to this machine's."}
                 },
                 "required": ["name", "schedule", "prompt"]
             }),
         ).with_size_cap(2_000).deferred(),
         def(
             "cron_delete",
-            "Remove a cron trigger by its ID or name. Any pending fire for that trigger is cancelled.",
+            "Delete a scheduled task from the signed-in AGI Workforce account by its ID or exact \
+             name. It stops firing on every surface and its run history goes with it. This cannot \
+             be undone.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "id": {"type": "string", "description": "Trigger ID (returned by cron_create) or name."}
+                    "id": {"type": "string", "description": "Schedule ID (returned by cron_create) or its exact name."}
                 },
                 "required": ["id"]
             }),
         ).with_size_cap(2_000).deferred(),
         def(
             "cron_list",
-            "List all registered cron triggers with their schedule, enabled status, and last-fired time.",
+            "List the signed-in AGI Workforce account's scheduled tasks with their cadence, \
+             status, next run and last run. These are the same schedules the web and mobile \
+             apps show.",
             serde_json::json!({
                 "type": "object",
                 "properties": {},
