@@ -493,4 +493,27 @@ describe('conversation cloud sync', () => {
     ).resolves.toBe(false);
     expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual(before);
   });
+  it('files the created cloud conversation under the project the panel selected', async () => {
+    respond = (request) => {
+      if (request.url.endsWith('/messages')) {
+        return jsonResponse({ message: { id: String(request.body['id'] ?? 'srv') } });
+      }
+      return jsonResponse({
+        conversation: {
+          ...CONVERSATION_WIRE,
+          id: String(request.body['id']),
+          project_id: String(request.body['projectId'] ?? ''),
+        },
+      });
+    };
+
+    await upsertConversation(OWNER, 'conv-project', cloudMessages(4_000), undefined, 'project-42');
+    await flushConversation(OWNER, 'conv-project');
+
+    expect(conversationPosts()).toHaveLength(1);
+    expect(conversationPosts()[0]!.body['projectId']).toBe('project-42');
+    // The server's answer is what the chat is filed under, so an accepted
+    // binding must not be re-asserted on every later flush.
+    expect(requests.filter((request) => 'projectId' in request.body)).toHaveLength(1);
+  });
 });

@@ -191,7 +191,26 @@ describe('getWebviewContent, structural smoke', () => {
     expect(doc.querySelector('#accountStatusDot')).toBeNull();
     expect(doc.querySelector('#historyBtn')).toBeNull();
     expect(doc.querySelector('#actionsBtn')?.getAttribute('title')).toBe('More');
-    expect(scriptBody).toContain("vscode.postMessage({ type: 'openActionSheet' })");
+    expect(doc.querySelector('#actionsMenu')?.getAttribute('role')).toBe('menu');
+    expect(
+      Array.from(doc.querySelectorAll('#actionsMenu [data-surface]')).map(
+        (item) => (item as HTMLElement).dataset.surface,
+      ),
+    ).toEqual([
+      'sessions',
+      'projects',
+      'artifacts',
+      'work',
+      'connectors',
+      'memory',
+      'skills',
+      'plugins',
+      'mcp',
+      'hooks',
+      'instructions',
+      'settings',
+      'account',
+    ]);
     expect(scriptBody).toContain("msg.type === 'accountStatus'");
     expect(scriptBody).toContain('activeAccountIdentity.displayName');
     expect(scriptBody).toContain('activeAccountIdentity.email');

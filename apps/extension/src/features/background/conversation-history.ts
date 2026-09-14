@@ -44,6 +44,7 @@ const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CONVERSATION_STORE_LOCK = 'agi-browser-conversation-store-v2';
 const MAX_BACKGROUND_MESSAGES = 100;
 const MAX_CONVERSATION_TITLE_CHARS = 80;
+const MAX_CONVERSATION_PROJECT_ID_CHARS = 128;
 const BACKGROUND_DELIVERY_ID_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
   '\n\n[Answer truncated because it exceeded the browser-local history limit.]';
@@ -80,6 +81,7 @@ export interface ConversationCloudSyncState {
   organizationId?: string | null;
   createAcknowledged?: boolean;
   syncedTitle?: string;
+  syncedProjectId?: string | null;
   state: 'idle' | 'pending' | 'error' | 'blocked';
   blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
   lastError?: string;
@@ -94,6 +96,7 @@ export interface ConversationEntry {
   messages: HistoryMessage[];
   savedAt: number;
   routing: ConversationRoutingState;
+  projectId?: string;
   cloudSync?: ConversationCloudSyncState;
 }
 
@@ -429,6 +432,19 @@ function normalizeRoutingState(value: unknown): ConversationRoutingState {
   return normalized;
 }
 
+function normalizeConversationProjectId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (
+    !trimmed ||
+    trimmed.length > MAX_CONVERSATION_PROJECT_ID_CHARS ||
+    containsControlCharacter(trimmed)
+  ) {
+    return undefined;
+  }
+  return trimmed;
+}
+
 function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const raw = value as Record<string, unknown>;
@@ -456,6 +472,12 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
     !containsControlCharacter(raw['syncedTitle'])
   ) {
     normalized.syncedTitle = raw['syncedTitle'];
+  }
+  if (raw['syncedProjectId'] === null) {
+    normalized.syncedProjectId = null;
+  } else {
+    const syncedProjectId = normalizeConversationProjectId(raw['syncedProjectId']);
+    if (syncedProjectId) normalized.syncedProjectId = syncedProjectId;
   }
   if (
     raw['blockedReason'] === 'non-cloud-runtime' ||
@@ -529,6 +551,7 @@ function normalizeConversationEntry(
   const title = entry['title'].trim();
   if (!title) return undefined;
   const cloudSync = normalizeCloudSyncState(entry['cloudSync']);
+  const projectId = normalizeConversationProjectId(entry['projectId']);
   const normalized: ConversationEntry = {
     id: entry['id'],
     owner,
@@ -536,6 +559,7 @@ function normalizeConversationEntry(
     messages,
     savedAt: entry['savedAt'],
     routing: normalizeRoutingState(entry['routing']),
+    ...(projectId ? { projectId } : {}),
     ...(cloudSync ? { cloudSync } : {}),
   };
   commitHistoryNormalizationBudget(budget, entryBudget);
@@ -651,6 +675,24 @@ function createConversation(
     savedAt: Date.now(),
     routing: normalizeRoutingState(routing),
   };
+}
+
+/**
+ * `undefined` leaves the recorded project alone, a string binds the chat to that
+ * project, and `null` unbinds it. The third case is what lets "no project" be
+ * stated rather than merely omitted.
+ */
+function applyConversationProject(
+  entry: ConversationEntry,
+  projectId: string | null | undefined,
+): ConversationEntry {
+  if (projectId === undefined) return entry;
+  const normalized = projectId === null ? undefined : normalizeConversationProjectId(projectId);
+  if (normalized === entry.projectId) return entry;
+  const next = { ...entry };
+  if (normalized) next.projectId = normalized;
+  else delete next.projectId;
+  return next;
 }
 
 async function storageGet(keys: string[]): Promise<Record<string, unknown>> {
@@ -1018,6 +1060,7 @@ export async function upsertConversation(
   conversationId: string,
   messages: HistoryMessage[],
   routing: ConversationRoutingState = { selectedModel: 'auto' },
+  projectId?: string | null,
 ): Promise<ConversationEntry | undefined> {
   assertManagedCloudOwner(owner);
   if (!isSafeConversationId(conversationId)) {
@@ -1033,7 +1076,7 @@ export async function upsertConversation(
     const carried = existing
       ? carryForwardCloudSyncState(existing.messages, normalizedMessages)
       : normalizedMessages;
-    const entry: ConversationEntry = existing
+    const base: ConversationEntry = existing
       ? {
           ...existing,
           title: deriveTitle(carried),
@@ -1042,6 +1085,7 @@ export async function upsertConversation(
           routing: normalizeRoutingState(routing),
         }
       : createConversation(owner, carried, routing, conversationId);
+    const entry = applyConversationProject(base, projectId);
     store.activeConversationId = conversationId;
     store.activeOwner = { ...owner };
     store.conversations = [
@@ -1282,6 +1326,12 @@ export function pendingCloudMessages(entry: ConversationEntry): HistoryMessage[]
   );
 }
 
+export function conversationProjectNeedsSync(entry: ConversationEntry): boolean {
+  if (entry.cloudSync?.conversationId === undefined) return false;
+  const synced = entry.cloudSync.syncedProjectId;
+  return (entry.projectId ?? null) !== (synced === undefined ? null : synced);
+}
+
 export async function listConversationsNeedingCloudSync(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry[]> {
@@ -1301,6 +1351,7 @@ export async function listConversationsNeedingCloudSync(
       pendingCloudMessages(entry).length > 0 ||
       (entry.cloudSync?.conversationId !== undefined &&
         (entry.cloudSync.syncedTitle !== entry.title ||
+          conversationProjectNeedsSync(entry) ||
           entry.cloudSync.organizationId === undefined ||
           entry.cloudSync.createAcknowledged !== true))
     );

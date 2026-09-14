@@ -16,7 +16,13 @@ const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8'
   unknown
 >;
 
-const LOCALIZED_SOURCES = ['src/side_panel.ts', 'src/background.ts'] as const;
+const LOCALIZED_SOURCES = [
+  'src/side_panel.ts',
+  'src/background.ts',
+  'src/features/side-panel/projectsDrawer.ts',
+  'src/features/side-panel/artifactsDrawer.ts',
+  'src/features/side-panel/schedulesSection.ts',
+] as const;
 
 function read(relativePath: string): string {
   return readFileSync(join(APP_ROOT, relativePath), 'utf8');

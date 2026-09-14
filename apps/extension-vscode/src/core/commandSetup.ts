@@ -16,7 +16,6 @@ import {
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
 import {
   APPROVE_CLOUD_TASK_COMMAND,
-  CLOUD_TASKS_VIEW_ID,
   CloudTasksTreeProvider,
   REJECT_CLOUD_TASK_COMMAND,
   decideCloudRunApprovalInteractively,
@@ -36,7 +35,6 @@ import {
   REFRESH_SCHEDULES_COMMAND,
   RESUME_SCHEDULE_COMMAND,
   RUN_SCHEDULE_NOW_COMMAND,
-  SCHEDULES_VIEW_ID,
   SHOW_SCHEDULE_RUNS_COMMAND,
   SchedulesTreeProvider,
   readScheduleCommandArgument,
@@ -51,7 +49,6 @@ import {
   DELETE_PROJECT_COMMAND,
   CLEAR_ACTIVE_PROJECT_COMMAND,
   OPEN_PROJECT_COMMAND,
-  PROJECTS_VIEW_ID,
   ProjectsTreeProvider,
   REFRESH_PROJECTS_COMMAND,
   USE_PROJECT_IN_CHAT_COMMAND,
@@ -67,7 +64,6 @@ import {
   type ProjectsWorkspace,
 } from '../features/projects';
 import {
-  ARTIFACTS_VIEW_ID,
   ArtifactContentProvider,
   ArtifactsTreeProvider,
   OPEN_ARTIFACT_COMMAND,
@@ -84,7 +80,6 @@ import {
   type ArtifactsWorkspace,
 } from '../features/artifacts';
 import {
-  CONNECTORS_VIEW_ID,
   ConnectorsTreeProvider,
   MANAGE_CONNECTORS_COMMAND,
   REFRESH_CONNECTORS_COMMAND,
@@ -93,6 +88,19 @@ import {
 import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
+import {
+  CliCapabilityAdapter,
+  openArtifactsSurface,
+  openCapabilitySurface,
+  openCloudTasksSurface,
+  openConnectorsSurface,
+  openContextSurface,
+  openMemorySurface,
+  openProjectsSurface,
+  openSchedulesSurface,
+  openWorkSurface,
+} from '../features/surfaces';
+import { signIn as signInPreferringCli } from '../features/surfaces/accountAccess';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
@@ -114,7 +122,7 @@ import {
   fetchAccountIdentity,
   getCloudWebOrigin,
 } from '../utils/api';
-import { signInToAgiCloud, signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
+import { signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
 import {
   buildAccountIdentityItems,
   buildTrustReviewItems,
@@ -392,6 +400,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     diagnosticsProvider,
     nativeChatAvailable,
   } = deps;
+
+  const cliCapabilities = new CliCapabilityAdapter(localRuntimes);
 
   type CommandHandler = Parameters<typeof vscode.commands.registerCommand>[1];
   const failedCommandIds: string[] = [];
@@ -787,7 +797,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.signIn', async () => {
-      const ok = await signInToAgiCloud(context.secrets);
+      const ok = await signInPreferringCli(context.secrets, cliCapabilities);
       if (ok) {
         await refreshAccountTierCache(context);
         sidebarProvider.refreshAccountPresentation();
@@ -1454,46 +1464,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
 
       if (action.detail === 'list') {
-        const store = getAccountMemoryStore();
-        if (store === undefined) {
-          vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
-          return;
-        }
-        const state = await store.refresh();
-        if (state.status === 'signed-out') {
-          vscode.window.showInformationMessage(
-            state.detail ?? 'Sign in to AGI Cloud to see your memory.',
-          );
-          return;
-        }
-        if (state.status === 'unreachable') {
-          vscode.window.showWarningMessage(
-            `AGI Workforce: showing the memory this device already had. ${state.detail ?? ''}`.trim(),
-          );
-        }
-        const facts = state.facts;
-        if (facts.length === 0) {
-          vscode.window.showInformationMessage('No memory facts yet. Add one to get started.');
-          return;
-        }
-        const pick = await vscode.window.showQuickPick(
-          facts.map((f) => ({
-            label: f.text,
-            description: `Added ${new Date(f.createdAt).toLocaleDateString()}`,
-            detail: f.id,
-          })),
-          {
-            title: 'AGI Workforce, Memory facts',
-            placeHolder: 'Select a fact to remove (Esc to keep all)',
-          },
-        );
-        if (!pick || pick.detail === undefined) return;
-        const removal = await store.remove(pick.detail);
-        vscode.window.showInformationMessage(
-          removal.applied
-            ? 'Fact removed from your account, on every client.'
-            : `Fact not removed. ${removal.refusals.join(' ')}`,
-        );
+        await memoryTreeProvider.refresh();
+        await openMemorySurface(memoryTreeProvider);
         return;
       }
 
@@ -1862,11 +1834,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       sidebarProvider.reveal();
       sidebarProvider.showOnboarding();
     }),
-    register('agi-workforce.showCloudTasks', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${CLOUD_TASKS_VIEW_ID}.focus`);
-      cloudTasksTreeProvider.refresh();
-    }),
+    register('agi-workforce.showCloudTasks', () => openCloudTasksSurface(cloudTasksTreeProvider)),
+    register('agi-workforce.showWork', () =>
+      openWorkSurface(cloudTasksTreeProvider, schedulesTreeProvider),
+    ),
     register('agi-workforce.refreshCloudTasks', () => {
       cloudTasksTreeProvider.refresh();
     }),
@@ -1877,11 +1848,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
     register(APPROVE_CLOUD_TASK_COMMAND, (item: unknown) => decideOnCloudTask(item, 'approved')),
     register(REJECT_CLOUD_TASK_COMMAND, (item: unknown) => decideOnCloudTask(item, 'rejected')),
-    register('agi-workforce.showSchedules', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${SCHEDULES_VIEW_ID}.focus`);
-      schedulesTreeProvider.refresh();
-    }),
+    register('agi-workforce.showSchedules', () => openSchedulesSurface(schedulesTreeProvider)),
     register(REFRESH_SCHEDULES_COMMAND, () => {
       schedulesTreeProvider.refresh();
     }),
@@ -1911,11 +1878,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         showScheduleRuns(client, task, scheduleActionHost),
       ),
     ),
-    register('agi-workforce.showProjects', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${PROJECTS_VIEW_ID}.focus`);
-      projectsTreeProvider.refresh();
-    }),
+    register('agi-workforce.showProjects', () => openProjectsSurface(projectsTreeProvider)),
     register(REFRESH_PROJECTS_COMMAND, () => {
       projectsTreeProvider.refresh();
     }),
@@ -1960,11 +1923,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       projectsTreeProvider.refresh();
       sidebarProvider.pushActiveProject();
     }),
-    register('agi-workforce.showArtifacts', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${ARTIFACTS_VIEW_ID}.focus`);
-      artifactsTreeProvider.refresh();
-    }),
+    register('agi-workforce.showArtifacts', () => openArtifactsSurface(artifactsTreeProvider)),
     register(REFRESH_ARTIFACTS_COMMAND, () => {
       artifactsTreeProvider.refresh();
     }),
@@ -1986,10 +1945,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (published === null || typeof published !== 'object') return;
       await openPublishedArtifact(published as Parameters<typeof openPublishedArtifact>[0]);
     }),
-    register('agi-workforce.showConnectors', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${CONNECTORS_VIEW_ID}.focus`);
-      connectorsTreeProvider.refresh();
+    register('agi-workforce.showConnectors', () => openConnectorsSurface(connectorsTreeProvider)),
+    register('agi-workforce.showContextFiles', () => openContextSurface(contextPanelProvider)),
+    register('agi-workforce.showSkills', () => openCapabilitySurface(cliCapabilities, 'skills')),
+    register('agi-workforce.showPlugins', () => openCapabilitySurface(cliCapabilities, 'plugins')),
+    register('agi-workforce.showMcpServers', () =>
+      openCapabilitySurface(cliCapabilities, 'mcpServers'),
+    ),
+    register('agi-workforce.showHooks', () => openCapabilitySurface(cliCapabilities, 'hooks')),
+    register('agi-workforce.showInstructions', () =>
+      openCapabilitySurface(cliCapabilities, 'instructions'),
+    ),
+    register('agi-workforce.runCliCommand', async (commandName: unknown) => {
+      const name = typeof commandName === 'string' ? commandName.trim() : '';
+      if (name === '') return;
+      const result = await cliCapabilities.call('runCommand', name);
+      if (result.status === 'ok') return;
+      vscode.window.showWarningMessage(`AGI Workforce: ${result.reason}`);
     }),
     register(REFRESH_CONNECTORS_COMMAND, () => {
       connectorsTreeProvider.refresh();
