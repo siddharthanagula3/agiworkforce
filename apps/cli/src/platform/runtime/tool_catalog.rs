@@ -895,6 +895,44 @@ mod tests {
         }
     }
 
+    /// Every provider rejects the whole request, not the one tool, when a name
+    /// breaks `^[a-zA-Z0-9_-]+$`. A built-in renamed with a dot, space or colon
+    /// would take down every route at once, so the catalog is checked whole,
+    /// aliases included, rather than tool by tool at each call site.
+    #[test]
+    fn every_catalog_tool_name_and_alias_is_provider_safe() {
+        let provider_safe = |name: &str| {
+            !name.is_empty()
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        };
+
+        let definitions = all_builtin_tool_definitions();
+        assert!(!definitions.is_empty());
+        for definition in &definitions {
+            assert!(
+                provider_safe(&definition.name),
+                "tool `{}` breaks the provider tool-name pattern",
+                definition.name
+            );
+            for alias in &definition.aliases {
+                assert!(
+                    provider_safe(alias),
+                    "alias `{alias}` of tool `{}` breaks the provider tool-name pattern",
+                    definition.name
+                );
+            }
+            for alias in tool_aliases(&definition.name) {
+                assert!(
+                    provider_safe(alias),
+                    "alias `{alias}` of tool `{}` breaks the provider tool-name pattern",
+                    definition.name
+                );
+            }
+        }
+    }
+
     #[test]
     fn placeholder_task_lifecycle_is_not_advertised() {
         let definitions = all_builtin_tool_definitions();

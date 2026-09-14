@@ -205,10 +205,39 @@ fn mcp_transport_allowed(
         || matches!(config.as_transport(), McpTransport::Stdio { .. })
 }
 
+/// Provider APIs constrain a tool name to `^[a-zA-Z0-9_-]+$`, and reject the
+/// whole request when one tool breaks it: OpenAI-compatible routes (DeepSeek
+/// among them) answer `Invalid 'tools[n].function.name': string does not match
+/// pattern`, Google and Anthropic refuse it the same way. MCP server and tool
+/// names are free-form, so a dot, colon or slash in either half has to go
+/// before the name reaches any request builder.
+fn provider_safe_name_part(part: &str) -> String {
+    part.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// The model-visible name of an MCP tool, in the `mcp__<server>__<tool>`
+/// convention the rest of the product already reads.
+pub fn mcp_tool_name(server_name: &str, tool_name: &str) -> String {
+    format!(
+        "mcp__{}__{}",
+        provider_safe_name_part(server_name),
+        provider_safe_name_part(tool_name)
+    )
+}
+
 /// MCP tool discovered from a server.
 #[derive(Debug, Clone)]
 pub struct McpTool {
-    /// Namespaced tool name: mcp_{server}_{tool}
+    /// Model-visible tool name: `mcp__{server}__{tool}`, provider-safe and
+    /// unique across every connected server.
     pub namespaced_name: String,
     /// Original tool name from server
     pub original_name: String,
@@ -715,7 +744,7 @@ impl McpConnection {
             }
 
             tools.push(McpTool {
-                namespaced_name: format!("mcp_{}_{}", self.server_name, name),
+                namespaced_name: mcp_tool_name(&self.server_name, name),
                 original_name: name.to_string(),
                 server_name: self.server_name.clone(),
                 description: description.to_string(),
@@ -1044,7 +1073,7 @@ impl McpManager {
     pub(crate) fn with_discovered_stdio_tool_for_test(server_name: &str, tool_name: &str) -> Self {
         let mut manager = Self::new();
         manager.tools.push(McpTool {
-            namespaced_name: format!("mcp_{server_name}_{tool_name}"),
+            namespaced_name: mcp_tool_name(server_name, tool_name),
             original_name: tool_name.to_string(),
             server_name: server_name.to_string(),
             description: "Test MCP tool".to_string(),
@@ -1099,7 +1128,11 @@ impl McpManager {
         // terminal, otherwise these lines bleed into and corrupt the display.
         // In exec / non-TUI mode the flag is false and they render normally.
         let quiet = crate::tui::tui_active();
-        for (name, config) in configs {
+        // Sorted, so a name a collision forced apart is the same name on the
+        // next run: the model's allowlists and transcripts stay valid.
+        let mut ordered: Vec<(&String, &McpServerConfig)> = configs.iter().collect();
+        ordered.sort_by(|left, right| left.0.cmp(right.0));
+        for (name, config) in ordered {
             let is_remote = !matches!(config.as_transport(), McpTransport::Stdio { .. });
             if is_remote {
                 self.remote_servers.insert(name.clone());
@@ -1119,7 +1152,7 @@ impl McpManager {
                 Ok(mut conn) => match conn.list_tools().await {
                     Ok(tools) => {
                         let count = tools.len();
-                        self.tools.extend(tools);
+                        self.register_discovered_tools(tools);
                         match conn.list_prompts().await {
                             Ok(prompts) => {
                                 if !prompts.is_empty() && !quiet {
@@ -1221,6 +1254,27 @@ impl McpManager {
             .filter(|prompt| self.server_allowed(&prompt.server_name, privacy_mode))
             .cloned()
             .collect()
+    }
+
+    /// Register discovered tools under names no other connected server has
+    /// already taken. Two servers can publish names that sanitize to the same
+    /// string, and a duplicate would make the reverse lookup in
+    /// [`Self::tool_identity`] resolve every call to whichever tool was
+    /// discovered first.
+    fn register_discovered_tools(&mut self, discovered: Vec<McpTool>) {
+        for mut tool in discovered {
+            let base = tool.namespaced_name.clone();
+            let mut suffix = 2usize;
+            while self
+                .tools
+                .iter()
+                .any(|existing| existing.namespaced_name == tool.namespaced_name)
+            {
+                tool.namespaced_name = format!("{base}_{suffix}");
+                suffix += 1;
+            }
+            self.tools.push(tool);
+        }
     }
 
     /// Convert MCP tools to ToolDefinitions for the LLM.
@@ -1569,14 +1623,107 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_namespacing() {
-        let tool = McpTool {
-            namespaced_name: "mcp_myserver_read_file".to_string(),
-            original_name: "read_file".to_string(),
-            server_name: "myserver".to_string(),
-            description: "Read a file".to_string(),
-            input_schema: serde_json::json!({"type": "object"}),
+        assert_eq!(
+            mcp_tool_name("myserver", "read_file"),
+            "mcp__myserver__read_file"
+        );
+        // Free-form MCP names: everything outside `[A-Za-z0-9_-]` becomes `_`,
+        // and the hyphen a provider does accept is kept.
+        assert_eq!(
+            mcp_tool_name("brave-search", "search.web"),
+            "mcp__brave-search__search_web"
+        );
+        assert_eq!(
+            mcp_tool_name("io.github/acme", "files:read"),
+            "mcp__io_github_acme__files_read"
+        );
+    }
+
+    /// The VS Code extension over `agi app-server` loaded 11 MCP servers and
+    /// DeepSeek refused the turn:
+    /// `Invalid 'tools[12].function.name': string does not match pattern`.
+    /// One free-form MCP name fails the whole request, on every route, so the
+    /// name the manager hands the builders must already be legal, and the call
+    /// that comes back under it must still reach the server's own name.
+    #[test]
+    fn an_mcp_tool_name_is_provider_safe_in_every_builder_and_still_dispatches() {
+        use agiworkforce_llm::serialize::{
+            anthropic_tools_json, gemini_function_declarations_json, openai_function_tools_json,
+            openai_responses_function_tools_json,
         };
-        assert_eq!(tool.namespaced_name, "mcp_myserver_read_file");
+
+        let manager = McpManager::with_discovered_stdio_tool_for_test("brave-search", "search.web");
+        let definitions = manager.tool_definitions(crate::agent::PrivacyMode::Byok);
+        assert_eq!(definitions.len(), 1);
+        assert_eq!(definitions[0].name, "mcp__brave-search__search_web");
+
+        let openai = openai_function_tools_json(&definitions);
+        let responses = openai_responses_function_tools_json(&definitions);
+        let gemini = gemini_function_declarations_json(&definitions);
+        let anthropic = anthropic_tools_json(&definitions);
+        // DeepSeek speaks the OpenAI-compatible dialect, so `openai` is the
+        // payload that produced the reported 400.
+        for name in [
+            &openai[0]["function"]["name"],
+            &responses[0]["name"],
+            &gemini[0]["name"],
+            &anthropic[0]["name"],
+        ] {
+            assert_eq!(name, "mcp__brave-search__search_web");
+        }
+
+        let (server_name, original_name) = manager
+            .tool_identity(
+                "mcp__brave-search__search_web",
+                crate::agent::PrivacyMode::Byok,
+            )
+            .expect("the safe name must resolve back to the server's own name");
+        assert_eq!(server_name, "brave-search");
+        assert_eq!(original_name, "search.web");
+    }
+
+    /// Two servers can publish names that sanitize to the same string. Without
+    /// disambiguation the reverse lookup resolves every call to whichever tool
+    /// was discovered first, silently routing to the wrong server.
+    #[test]
+    fn sanitized_name_collisions_are_broken_apart_and_stay_resolvable() {
+        let mut manager = McpManager::new();
+        manager.register_discovered_tools(vec![
+            McpTool {
+                namespaced_name: mcp_tool_name("docs", "search.web"),
+                original_name: "search.web".to_string(),
+                server_name: "docs".to_string(),
+                description: "Dotted".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+            },
+            McpTool {
+                namespaced_name: mcp_tool_name("docs", "search:web"),
+                original_name: "search:web".to_string(),
+                server_name: "docs".to_string(),
+                description: "Colonned".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+            },
+        ]);
+
+        let names: Vec<&str> = manager
+            .tools()
+            .iter()
+            .map(|tool| tool.namespaced_name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            vec!["mcp__docs__search_web", "mcp__docs__search_web_2"]
+        );
+
+        for (namespaced, original) in [
+            ("mcp__docs__search_web", "search.web"),
+            ("mcp__docs__search_web_2", "search:web"),
+        ] {
+            let (_, resolved) = manager
+                .tool_identity(namespaced, crate::agent::PrivacyMode::Byok)
+                .expect("every registered name resolves");
+            assert_eq!(resolved, original);
+        }
     }
 
     #[test]
@@ -1726,7 +1873,7 @@ mod tests {
         let mut manager = McpManager::new();
         manager.remote_servers.insert("remote".to_string());
         manager.tools.push(McpTool {
-            namespaced_name: "mcp_remote_search".to_string(),
+            namespaced_name: "mcp__remote__search".to_string(),
             original_name: "search".to_string(),
             server_name: "remote".to_string(),
             description: "Search remotely".to_string(),
@@ -1745,7 +1892,7 @@ mod tests {
 
         let error = manager
             .execute_tool(
-                "mcp_remote_search",
+                "mcp__remote__search",
                 serde_json::json!({"query": "private context"}),
                 crate::agent::PrivacyMode::Local,
             )
@@ -1761,7 +1908,7 @@ mod tests {
         let mut manager = McpManager::new();
         manager.remote_servers.insert("remote".to_string());
         manager.tools.push(McpTool {
-            namespaced_name: "mcp_remote_search".to_string(),
+            namespaced_name: "mcp__remote__search".to_string(),
             original_name: "search".to_string(),
             server_name: "remote".to_string(),
             description: "Search remotely".to_string(),
@@ -1843,7 +1990,7 @@ mod tests {
     }
 
     /// Facade transport-shaping proof: `McpConnection` (thin adapter over the
-    /// engine) must still namespace tools `mcp_{server}_{tool}` and text-extract
+    /// engine) must still namespace tools `mcp__{server}__{tool}` and text-extract
     /// tool results. Uses a python stdio MCP server (skips when python3 absent).
     #[tokio::test]
     async fn facade_namespaces_tools_and_extracts_call_text() {
@@ -1902,7 +2049,7 @@ while True:
 
         let tools = conn.list_tools().await.expect("list_tools");
         assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].namespaced_name, "mcp_myserver_echo");
+        assert_eq!(tools[0].namespaced_name, "mcp__myserver__echo");
         assert_eq!(tools[0].original_name, "echo");
 
         let out = conn
