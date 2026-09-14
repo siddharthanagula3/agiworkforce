@@ -141,6 +141,39 @@ describe('artifacts tree', () => {
   });
 });
 
+describe('cloud task outputs rail', () => {
+  it('lists only the artifacts of the conversation the run wrote into', async () => {
+    const { cloudRunArtifacts } = await import('../features/cloud-tasks/cloudRunDetail');
+    const run = { conversationId: CONVERSATION_ID } as Parameters<typeof cloudRunArtifacts>[0];
+    const mine = makeArtifact();
+    const other = makeArtifact({ id: 'artifact_2', conversationId: 'someone-elses' });
+
+    expect(cloudRunArtifacts(run, [mine, other]).map((a) => a.id)).toEqual(['artifact_1']);
+  });
+
+  it('has no outputs when the run never opened a conversation', async () => {
+    const { cloudRunArtifacts } = await import('../features/cloud-tasks/cloudRunDetail');
+    const run = { conversationId: null } as Parameters<typeof cloudRunArtifacts>[0];
+
+    expect(cloudRunArtifacts(run, [makeArtifact()])).toEqual([]);
+  });
+
+  it('offers each deliverable as an item that opens that artifact', async () => {
+    const { buildCloudRunDetailItems } = await import('../features/cloud-tasks/cloudRunDetail');
+    const run = {
+      conversationId: CONVERSATION_ID,
+      state: 'completed',
+      pendingApproval: undefined,
+    } as Parameters<typeof buildCloudRunDetailItems>[0];
+
+    const items = buildCloudRunDetailItems(run, [], [makeArtifact()]);
+    const output = items.find((item) => item.action === 'open-artifact');
+
+    expect(output?.label).toContain('Invoice page');
+    expect(output?.artifactId).toBe('artifact_1');
+  });
+});
+
 describe('artifact content and language', () => {
   it('re-derives content from the source message under the indexed id', async () => {
     const workspace = {
