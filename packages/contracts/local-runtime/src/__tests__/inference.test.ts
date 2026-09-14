@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LOCAL_ATTACHMENT_REFUSAL,
   LocalInferenceRefused,
+  assertLocalModelMeetsMinimum,
+  assertLocalTurnCarriesNoAttachments,
+  formatLocalModelSize,
+  isLocalModelBelowMinimum,
   isLocalModelId,
   isLoopbackBaseUrl,
+  localModelBelowMinimumReason,
   localModelId,
   normalizeLocalBaseUrl,
   normalizeLocalModelSettings,
   parseLocalModelId,
+  partitionLocalModels,
+  type LocalModel,
 } from '../inference';
 
 const DEFAULTS = {
@@ -84,5 +92,104 @@ describe('normalizeLocalModelSettings', () => {
     );
     expect(settings.baseUrls.ollama).toBe(DEFAULTS.ollama);
     expect(settings.baseUrls.lmstudio).toBe('http://127.0.0.1:1234/v1');
+  });
+});
+
+describe('local model minimum size', () => {
+  it('hides a model whose size is under the minimum', () => {
+    expect(isLocalModelBelowMinimum({ sizeBillion: 0.494 })).toBe(true);
+    expect(isLocalModelBelowMinimum({ sizeBillion: 0.87344 })).toBe(true);
+  });
+
+  it('keeps a model at or above the minimum', () => {
+    expect(isLocalModelBelowMinimum({ sizeBillion: 1 })).toBe(false);
+    expect(isLocalModelBelowMinimum({ sizeBillion: 1.5 })).toBe(false);
+  });
+
+  it('keeps a model whose size the server never published', () => {
+    expect(isLocalModelBelowMinimum({})).toBe(false);
+  });
+
+  it('names the hidden model and what to do about it', () => {
+    expect(localModelBelowMinimumReason({ name: 'smollm2:135m' })).toBe(
+      'smollm2:135m is under 1B parameters and is hidden; pull a larger model',
+    );
+  });
+
+  it('splits a discovered list into what the picker shows and what it explains', () => {
+    const models: LocalModel[] = [
+      {
+        id: 'local:ollama/a',
+        serverId: 'ollama',
+        serverLabel: 'Ollama',
+        name: 'a',
+        sizeBillion: 1.5,
+      },
+      {
+        id: 'local:ollama/b',
+        serverId: 'ollama',
+        serverLabel: 'Ollama',
+        name: 'b',
+        sizeBillion: 0.5,
+      },
+      { id: 'local:lmstudio/c', serverId: 'lmstudio', serverLabel: 'LM Studio', name: 'c' },
+    ];
+    const { usable, hidden } = partitionLocalModels(models);
+    expect(usable.map((model) => model.name)).toEqual(['a', 'c']);
+    expect(hidden.map((model) => model.name)).toEqual(['b']);
+  });
+
+  it('refuses a turn on a model under the minimum', () => {
+    expect(() =>
+      assertLocalModelMeetsMinimum({ name: 'qwen2.5:0.5b', sizeBillion: 0.494 }),
+    ).toThrow(LocalInferenceRefused);
+    expect(() =>
+      assertLocalModelMeetsMinimum({ name: 'qwen2.5:1.5b', sizeBillion: 1.5 }),
+    ).not.toThrow();
+  });
+
+  it('writes a size the way the model servers do', () => {
+    expect(formatLocalModelSize(0.494)).toBe('0.5B');
+    expect(formatLocalModelSize(1.5)).toBe('1.5B');
+    expect(formatLocalModelSize(12.3)).toBe('12B');
+  });
+});
+
+describe('assertLocalTurnCarriesNoAttachments', () => {
+  it('allows a plain text turn', () => {
+    expect(() =>
+      assertLocalTurnCarriesNoAttachments([
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'hi' },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('refuses a message carrying an attachment field', () => {
+    expect(() =>
+      assertLocalTurnCarriesNoAttachments([
+        { role: 'user', content: 'read this', attachments: [{ name: 'a.pdf' }] },
+      ]),
+    ).toThrow(LOCAL_ATTACHMENT_REFUSAL);
+  });
+
+  it('refuses content that is not plain text', () => {
+    expect(() =>
+      assertLocalTurnCarriesNoAttachments([
+        { role: 'user', content: [{ type: 'image', source: { data: 'AAAA' } }] },
+      ]),
+    ).toThrow(LOCAL_ATTACHMENT_REFUSAL);
+  });
+
+  it('refuses attachment bytes smuggled into the text as a data url', () => {
+    expect(() =>
+      assertLocalTurnCarriesNoAttachments([
+        { role: 'user', content: 'look: data:image/png;base64,iVBORw0KGgo=' },
+      ]),
+    ).toThrow(LOCAL_ATTACHMENT_REFUSAL);
+  });
+
+  it('refuses an entry that is not a message at all', () => {
+    expect(() => assertLocalTurnCarriesNoAttachments(['hello'])).toThrow(LOCAL_ATTACHMENT_REFUSAL);
   });
 });

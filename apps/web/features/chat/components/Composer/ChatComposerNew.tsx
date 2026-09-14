@@ -45,7 +45,10 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
-import { DesktopRuntimeError } from '@agiworkforce/local-runtime-contract';
+import {
+  DesktopRuntimeError,
+  LOCAL_ATTACHMENT_REFUSAL,
+} from '@agiworkforce/local-runtime-contract';
 import {
   BrowserToolsDialog,
   LocalCommandDialog,
@@ -54,7 +57,9 @@ import {
   readHostClipboard,
   useDesktopHost,
   useDesktopVoiceHotkey,
+  useLocalModelSelection,
 } from '@/features/desktop-host';
+import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
 import { AttachmentPreview } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
@@ -1065,6 +1070,9 @@ const ChatComposerNewComponent = ({
   // read a source image.
   const attachmentsUnavailable = videoMode || (imageMode && !imageModelSupportsEdit);
   const mediaAttachmentConflict = videoMode && attachments.length > 0;
+  const localSelection = useLocalModelSelection((state) => state.selected);
+  const { leaveLocalModel, dialog: leaveLocalModelDialog } = useLeaveLocalModel();
+  const localAttachmentConflict = localSelection !== null && attachments.length > 0;
   const compatibleModels = getSelectableModels().filter(
     (model) => model.capabilities.vision && isModelAllowedForTier(model.id, entitlementTier),
   );
@@ -2325,6 +2333,7 @@ const ChatComposerNewComponent = ({
     if (!message.trim() && attachments.length === 0) return;
     if (disabled) return;
     if (hasAttachmentConflict) return;
+    if (localAttachmentConflict) return;
     if (trialExhausted) {
       onUpgradeRequest?.();
       return;
@@ -2592,6 +2601,7 @@ const ChatComposerNewComponent = ({
     isTurnActive,
     disabled,
     hasAttachmentConflict,
+    localAttachmentConflict,
     trialExhausted,
     onUpgradeRequest,
     imageMode,
@@ -3054,6 +3064,7 @@ const ChatComposerNewComponent = ({
   return (
     <div className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
       <DragDropOverlay onDrop={handleFileDrop} />
+      {leaveLocalModelDialog}
 
       {localNotice && (
         <div
@@ -3283,6 +3294,34 @@ const ChatComposerNewComponent = ({
               className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
             >
               Leave {mediaModeNoun.toLowerCase()} mode
+            </button>
+          </div>
+        </div>
+      )}
+
+      {localAttachmentConflict && (
+        <div
+          role="alert"
+          data-testid="local-attachment-conflict"
+          className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+        >
+          <p className="text-foreground">{LOCAL_ATTACHMENT_REFUSAL}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-testid="local-attachment-switch-cloud"
+              onClick={() => leaveLocalModel()}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+            >
+              Switch to a cloud model
+            </button>
+            <button
+              type="button"
+              data-testid="local-attachment-remove"
+              onClick={clearAttachments}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
+            >
+              {attachments.length === 1 ? 'Remove attachment' : 'Remove attachments'}
             </button>
           </div>
         </div>
@@ -4344,6 +4383,7 @@ const ChatComposerNewComponent = ({
                     (sendButtonMode !== 'stop' &&
                       (hasAttachmentConflict ||
                         mediaAttachmentConflict ||
+                        localAttachmentConflict ||
                         selectedMediaModelUnavailable))
                   }
                   onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}

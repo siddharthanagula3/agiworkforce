@@ -365,6 +365,38 @@ describe('dispatch, local models', () => {
     });
   });
 
+  it('refuses a turn whose messages carry an attachment', async () => {
+    getPermissionState.mockReturnValue('granted');
+
+    const response = await dispatch(window, 'local_chat_start', {
+      runId: 'run-attach',
+      modelId: 'local:ollama/tiny-chat:1b',
+      messages: [{ role: 'user', content: 'read this', attachments: [{ name: 'a.pdf' }] }],
+    });
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('cannot read attachments') },
+    });
+    expect(runLocalChat).not.toHaveBeenCalled();
+  });
+
+  it('refuses a turn whose text carries attachment bytes', async () => {
+    getPermissionState.mockReturnValue('granted');
+
+    const response = await dispatch(window, 'local_chat_start', {
+      runId: 'run-bytes',
+      modelId: 'local:ollama/tiny-chat:1b',
+      messages: [{ role: 'user', content: 'data:image/png;base64,iVBORw0KGgo=' }],
+    });
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('cannot read attachments') },
+    });
+    expect(runLocalChat).not.toHaveBeenCalled();
+  });
+
   it('refuses a turn with no messages before it starts', async () => {
     getPermissionState.mockReturnValue('granted');
 

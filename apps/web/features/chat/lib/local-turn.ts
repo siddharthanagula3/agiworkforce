@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  LOCAL_ATTACHMENT_REFUSAL,
   LOCAL_MODEL_SERVER_LABELS,
   parseLocalModelId,
   type LocalChatMessage,
@@ -10,8 +11,7 @@ import { cancelLocalChat, startLocalChat } from '@features/desktop-host';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 
-export const LOCAL_ATTACHMENTS_UNSUPPORTED =
-  'Files are not sent to a model on this device yet. Remove the attachment, or pick a cloud model.';
+export const LOCAL_ATTACHMENTS_UNSUPPORTED = LOCAL_ATTACHMENT_REFUSAL;
 export const LOCAL_TURN_IN_CLOUD_CHAT =
   'This chat already holds answers from a model on this device. Start a new chat to continue with a cloud model, so nothing local is uploaded.';
 

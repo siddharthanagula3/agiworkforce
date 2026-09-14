@@ -107,20 +107,28 @@ export type {
 } from './shell';
 
 export {
+  LOCAL_ATTACHMENT_REFUSAL,
   LOCAL_CHAT_TIMEOUT_DEFAULT_MS,
   LOCAL_CHAT_TIMEOUT_MAX_MS,
   LOCAL_INFERENCE_COMMANDS,
   LOCAL_MODEL_ID_PREFIX,
+  LOCAL_MODEL_MIN_SIZE_BILLION,
   LOCAL_MODEL_SERVERS,
   LOCAL_MODEL_SERVER_LABELS,
   LocalInferenceRefused,
+  assertLocalModelMeetsMinimum,
+  assertLocalTurnCarriesNoAttachments,
+  formatLocalModelSize,
+  isLocalModelBelowMinimum,
   isLocalModelId,
   isLocalModelServerId,
   isLoopbackBaseUrl,
+  localModelBelowMinimumReason,
   localModelId,
   normalizeLocalBaseUrl,
   normalizeLocalModelSettings,
   parseLocalModelId,
+  partitionLocalModels,
 } from './inference';
 export type {
   LocalChatMessage,
@@ -129,6 +137,7 @@ export type {
   LocalChatStopReason,
   LocalInferenceCommand,
   LocalModel,
+  LocalModelPartition,
   LocalModelRef,
   LocalModelServerId,
   LocalModelServerStatus,

@@ -235,3 +235,69 @@ describe('proxying a turn', () => {
     expect(cancelLocalChat('no-such-run')).toBe(false);
   });
 });
+
+describe('local turn guards', () => {
+  it('counts only models the picker will show', async () => {
+    ollamaCatalog.mockResolvedValue([
+      { id: 'qwen2.5:1.5b', name: 'qwen2.5:1.5b', provider: 'ollama', sizeBillion: 1.5 },
+      { id: 'qwen2.5:0.5b', name: 'qwen2.5:0.5b', provider: 'ollama', sizeBillion: 0.494 },
+    ]);
+    const servers = await listLocalServers();
+    expect(servers.find((server) => server.id === 'ollama')?.modelCount).toBe(1);
+  });
+
+  it('refuses a turn on a model under the minimum size', async () => {
+    ollamaCatalog.mockResolvedValue([
+      { id: 'qwen2.5:0.5b', name: 'qwen2.5:0.5b', provider: 'ollama', sizeBillion: 0.494 },
+    ]);
+    await expect(
+      runLocalChat(
+        {
+          runId: 'run-small',
+          modelId: 'local:ollama/qwen2.5:0.5b',
+          messages: [{ role: 'user', content: 'hello' }],
+        },
+        () => undefined,
+      ),
+    ).rejects.toThrow('under 1B parameters');
+    expect(streamChunks).not.toHaveBeenCalled();
+  });
+
+  it('runs a turn on a model at or above the minimum size', async () => {
+    ollamaCatalog.mockResolvedValue([
+      { id: 'qwen2.5:1.5b', name: 'qwen2.5:1.5b', provider: 'ollama', sizeBillion: 1.5 },
+    ]);
+    streamChunks.mockImplementation(() =>
+      chunks([
+        { type: 'text-delta', delta: 'hi' },
+        { type: 'stop', reason: 'end_turn' },
+      ]),
+    );
+    const result = await runLocalChat(
+      {
+        runId: 'run-big',
+        modelId: 'local:ollama/qwen2.5:1.5b',
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      () => undefined,
+    );
+    expect(result.text).toBe('hi');
+  });
+
+  it('refuses attachment bytes smuggled into a message', async () => {
+    ollamaCatalog.mockResolvedValue([
+      { id: 'qwen2.5:1.5b', name: 'qwen2.5:1.5b', provider: 'ollama', sizeBillion: 1.5 },
+    ]);
+    await expect(
+      runLocalChat(
+        {
+          runId: 'run-attach',
+          modelId: 'local:ollama/qwen2.5:1.5b',
+          messages: [{ role: 'user', content: 'data:image/png;base64,iVBORw0KGgo=' }],
+        },
+        () => undefined,
+      ),
+    ).rejects.toThrow('cannot read attachments');
+    expect(streamChunks).not.toHaveBeenCalled();
+  });
+});

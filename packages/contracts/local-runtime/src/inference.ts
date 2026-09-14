@@ -113,11 +113,76 @@ export interface LocalChatResult {
 }
 
 export class LocalInferenceRefused extends Error {
-  readonly reason: 'unknown-model' | 'not-loopback' | 'invalid-base-url' | 'no-messages';
+  readonly reason:
+    | 'unknown-model'
+    | 'not-loopback'
+    | 'invalid-base-url'
+    | 'no-messages'
+    | 'attachments'
+    | 'model-too-small';
   constructor(reason: LocalInferenceRefused['reason'], message: string) {
     super(message);
     this.name = 'LocalInferenceRefused';
     this.reason = reason;
+  }
+}
+
+export const LOCAL_MODEL_MIN_SIZE_BILLION = 1;
+
+export const LOCAL_ATTACHMENT_REFUSAL =
+  'Local models on this device cannot read attachments. Switch to a cloud model or remove the attachment.';
+
+export function formatLocalModelSize(sizeBillion: number): string {
+  return `${Number(sizeBillion.toFixed(sizeBillion < 10 ? 1 : 0))}B`;
+}
+
+export function isLocalModelBelowMinimum(model: Pick<LocalModel, 'sizeBillion'>): boolean {
+  return model.sizeBillion !== undefined && model.sizeBillion < LOCAL_MODEL_MIN_SIZE_BILLION;
+}
+
+export function localModelBelowMinimumReason(model: Pick<LocalModel, 'name'>): string {
+  return `${model.name} is under ${LOCAL_MODEL_MIN_SIZE_BILLION}B parameters and is hidden; pull a larger model`;
+}
+
+export interface LocalModelPartition {
+  usable: LocalModel[];
+  hidden: LocalModel[];
+}
+
+export function partitionLocalModels(models: readonly LocalModel[]): LocalModelPartition {
+  const usable: LocalModel[] = [];
+  const hidden: LocalModel[] = [];
+  for (const model of models) {
+    if (isLocalModelBelowMinimum(model)) hidden.push(model);
+    else usable.push(model);
+  }
+  return { usable, hidden };
+}
+
+export function assertLocalModelMeetsMinimum(
+  model: Pick<LocalModel, 'name' | 'sizeBillion'>,
+): void {
+  if (!isLocalModelBelowMinimum(model)) return;
+  throw new LocalInferenceRefused('model-too-small', localModelBelowMinimumReason(model));
+}
+
+const LOCAL_MESSAGE_FIELDS: readonly string[] = ['role', 'content'];
+
+const EMBEDDED_ATTACHMENT_BYTES = /data:[\w.+-]+\/[\w.+-]+;base64,/i;
+
+export function assertLocalTurnCarriesNoAttachments(messages: readonly unknown[]): void {
+  for (const message of messages) {
+    if (typeof message !== 'object' || message === null || Array.isArray(message)) {
+      throw new LocalInferenceRefused('attachments', LOCAL_ATTACHMENT_REFUSAL);
+    }
+    const record = message as Record<string, unknown>;
+    if (Object.keys(record).some((key) => !LOCAL_MESSAGE_FIELDS.includes(key))) {
+      throw new LocalInferenceRefused('attachments', LOCAL_ATTACHMENT_REFUSAL);
+    }
+    const content = record['content'];
+    if (typeof content !== 'string' || EMBEDDED_ATTACHMENT_BYTES.test(content)) {
+      throw new LocalInferenceRefused('attachments', LOCAL_ATTACHMENT_REFUSAL);
+    }
   }
 }
 

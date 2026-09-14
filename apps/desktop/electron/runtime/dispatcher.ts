@@ -3,6 +3,7 @@ import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   LocalInferenceRefused,
   ShellCommandRefused,
+  assertLocalTurnCarriesNoAttachments,
   runtimeFailure,
   runtimeSuccess,
   type DesktopCapability,
@@ -115,6 +116,7 @@ function requireLocalMessages(args: Args): LocalChatMessage[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new InvalidArguments('"messages" must be a non-empty list of turns.');
   }
+  assertLocalTurnCarriesNoAttachments(value);
   return value.map((entry) => {
     if (!entry || typeof entry !== 'object') {
       throw new InvalidArguments('Every message must be an object.');
