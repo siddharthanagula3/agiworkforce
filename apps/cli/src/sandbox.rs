@@ -43,6 +43,18 @@ impl SandboxType {
     }
 }
 
+/// The word `/status` and the TUI status bar show for the active sandbox
+/// backend. An absent detection result reads the same as an explicit
+/// `SandboxType::None`: either way nothing is enforced.
+pub fn status_word(sandbox_type: Option<SandboxType>) -> &'static str {
+    match sandbox_type {
+        Some(SandboxType::MacosSeatbelt) => "seatbelt",
+        Some(SandboxType::LinuxBubblewrap) => "bwrap",
+        Some(SandboxType::LinuxLandlock) => "landlock",
+        Some(SandboxType::None) | None => "no sandbox",
+    }
+}
+
 /// Actionable diagnosis for a host where `SandboxType::detect()` found nothing.
 /// The Linux branch names bubblewrap as the hard runtime dependency it is: the
 /// in-process seccomp module (`platform::policy::linux_sandbox`) is not compiled
@@ -553,6 +565,18 @@ mod tests {
     }
     use super::*;
     use std::path::PathBuf;
+
+    /// `/status` and the footer must describe the same backend with the same
+    /// word; an absent detection result reads identically to an explicit
+    /// `SandboxType::None`.
+    #[test]
+    fn status_word_matches_the_backend() {
+        assert_eq!(status_word(Some(SandboxType::MacosSeatbelt)), "seatbelt");
+        assert_eq!(status_word(Some(SandboxType::LinuxBubblewrap)), "bwrap");
+        assert_eq!(status_word(Some(SandboxType::LinuxLandlock)), "landlock");
+        assert_eq!(status_word(Some(SandboxType::None)), "no sandbox");
+        assert_eq!(status_word(None), "no sandbox");
+    }
 
     // -----------------------------------------------------------------------
     // CRIT-2: Seatbelt path injection prevention

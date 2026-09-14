@@ -161,6 +161,18 @@ impl AccessMode {
         }
     }
 
+    /// The trust-boundary word shown to a person in the welcome banner and the
+    /// status-bar chip: "Local" / "Your key" / "Managed", the same vocabulary
+    /// the VS Code extension uses. `label`/`tagline` stay full-sentence forms
+    /// for the model picker's section headers.
+    pub fn trust_word(self) -> &'static str {
+        match self {
+            AccessMode::Local => "Local",
+            AccessMode::Byok => "Your key",
+            AccessMode::Cloud => "Managed",
+        }
+    }
+
     /// One-line value-prop tagline shown under the section header. Kept short so
     /// it fits beside the label inside a narrow (≈70-col) picker without
     /// truncating.
@@ -489,6 +501,18 @@ mod tests {
             assert_eq!(d.id, id);
             assert!(!d.label.is_empty());
             assert!(d.brand_color.starts_with('#'));
+        }
+    }
+
+    /// The welcome banner and status chip must read for a person: no bare
+    /// "BYOK" acronym, matching the words the VS Code extension shows.
+    #[test]
+    fn access_mode_trust_words_have_no_jargon() {
+        assert_eq!(AccessMode::Local.trust_word(), "Local");
+        assert_eq!(AccessMode::Byok.trust_word(), "Your key");
+        assert_eq!(AccessMode::Cloud.trust_word(), "Managed");
+        for &mode in AccessMode::ORDER {
+            assert!(!mode.trust_word().to_uppercase().contains("BYOK"));
         }
     }
 

@@ -71,6 +71,19 @@ impl PrivacyMode {
         }
     }
 
+    /// The trust-boundary word shown to a person: "Local" / "Your key" /
+    /// "Managed", the same vocabulary the VS Code extension and the TUI's
+    /// `AccessMode::trust_word` use. `label` stays the lowercase config value
+    /// (persisted project settings, `--privacy` arg parsing) and must not
+    /// change to match.
+    pub fn trust_word(self) -> &'static str {
+        match self {
+            Self::Local => "Local",
+            Self::Byok => "Your key",
+            Self::Managed => "Managed",
+        }
+    }
+
     pub fn description(self) -> &'static str {
         match self {
             Self::Local => "no prompt, chat, or file context should leave this device",
@@ -717,6 +730,20 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use std::path::PathBuf;
     use tempfile::tempdir;
+
+    /// The config value (`label`) and the person-facing word (`trust_word`)
+    /// must never collapse into the same string: the boundary notice in
+    /// `cloud::client::CloudError` reads `trust_word`, while persisted project
+    /// settings and `--privacy` parsing read `label`.
+    #[test]
+    fn label_stays_the_config_value_trust_word_reads_for_a_person() {
+        assert_eq!(PrivacyMode::Local.label(), "local");
+        assert_eq!(PrivacyMode::Byok.label(), "byok");
+        assert_eq!(PrivacyMode::Managed.label(), "managed");
+        assert_eq!(PrivacyMode::Local.trust_word(), "Local");
+        assert_eq!(PrivacyMode::Byok.trust_word(), "Your key");
+        assert_eq!(PrivacyMode::Managed.trust_word(), "Managed");
+    }
 
     fn sample_messages() -> Vec<Message> {
         vec![

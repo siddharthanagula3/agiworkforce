@@ -78,6 +78,19 @@ pub fn format_tokens(count: u32) -> String {
     }
 }
 
+/// Compact dollar figure for a single-line status chip: full cents above a
+/// dollar, four decimals below so a sub-cent session total does not just
+/// read `$0.00`.
+///
+/// Examples: `0.0421` → `"$0.0421"`, `1.2345` → `"$1.23"`.
+pub fn format_cost_compact(total_usd: f64) -> String {
+    if total_usd >= 1.0 {
+        format!("${total_usd:.2}")
+    } else {
+        format!("${total_usd:.4}")
+    }
+}
+
 /// Format a duration in milliseconds to a human-readable string.
 ///
 /// Examples: `250` → `"250ms"`, `3400` → `"3.4s"`, `125000` → `"2m 5s"`.
@@ -1249,6 +1262,20 @@ mod tests {
         assert_eq!(format_tokens(1_000_000), "1.0M");
         assert_eq!(format_tokens(2_400_000), "2.4M");
         assert_eq!(format_tokens(128_000_000), "128.0M");
+    }
+
+    // -- format_cost_compact tests -------------------------------------------
+
+    #[test]
+    fn test_format_cost_compact_sub_dollar_keeps_four_decimals() {
+        assert_eq!(format_cost_compact(0.0), "$0.0000");
+        assert_eq!(format_cost_compact(0.0421), "$0.0421");
+    }
+
+    #[test]
+    fn test_format_cost_compact_dollar_and_above_uses_two_decimals() {
+        assert_eq!(format_cost_compact(1.0), "$1.00");
+        assert_eq!(format_cost_compact(12.345), "$12.35");
     }
 
     // -- format_duration_ms tests ------------------------------------------
