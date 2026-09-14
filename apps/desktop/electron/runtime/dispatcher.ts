@@ -21,7 +21,11 @@ import {
 import {
   DEVICE_STEP_TOOLS,
   deviceStepCapability,
+  deviceStepScope,
   type DesktopHostDeclaration,
+  type DeviceKeyModifier,
+  type DeviceMouseButton,
+  type DeviceStepRegion,
 } from '@agiworkforce/local-runtime-contract';
 import { isBrowserCommand } from '@agiworkforce/types';
 import {
@@ -37,6 +41,19 @@ import {
   type BrowserCommandPlan,
 } from '../browser/commandGate';
 import { openWithDefaultApplication, revealInFileManager } from './appsService';
+import {
+  ComputerUseRefused,
+  captureRegion,
+  captureScreen,
+  clickPointer,
+  computerUseAvailability,
+  dragPointer,
+  movePointer,
+  pressKey,
+  scrollPointer,
+  typeText,
+  waitFor,
+} from './computerUseService';
 import { deviceIdentity } from './deviceIdentity';
 import {
   cancelLocalChat,
@@ -113,6 +130,58 @@ function optionalString(args: Args, key: string, fallback: string): string {
     throw new InvalidArguments(`"${key}" must be a string.`);
   }
   return value;
+}
+
+function requireNumber(args: Args, key: string): number {
+  const value = args[key];
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new InvalidArguments(`"${key}" must be a number.`);
+  }
+  return Math.round(value);
+}
+
+function optionalNumberOr(args: Args, key: string, fallback: number): number {
+  const value = args[key];
+  if (value === undefined || value === null) return fallback;
+  return requireNumber(args, key);
+}
+
+function requireMouseButton(args: Args): DeviceMouseButton {
+  const value = args['button'];
+  if (value === undefined || value === null) return 'left';
+  if (value !== 'left' && value !== 'right') {
+    throw new InvalidArguments('"button" must be left or right.');
+  }
+  return value;
+}
+
+function requireModifiers(args: Args): DeviceKeyModifier[] {
+  const value = args['modifiers'];
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new InvalidArguments('"modifiers" must be a list.');
+  return value.map((entry) => {
+    if (entry !== 'command' && entry !== 'control' && entry !== 'option' && entry !== 'shift') {
+      throw new InvalidArguments('"modifiers" must be command, control, option or shift.');
+    }
+    return entry;
+  });
+}
+
+function requireRegion(args: Args): DeviceStepRegion {
+  const value = args['region'];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvalidArguments('"region" must be an object with x, y, width and height.');
+  }
+  return requireRegionFields(value as Args);
+}
+
+function requireRegionFields(region: Args): DeviceStepRegion {
+  return {
+    x: requireNumber(region, 'x'),
+    y: requireNumber(region, 'y'),
+    width: requireNumber(region, 'width'),
+    height: requireNumber(region, 'height'),
+  };
 }
 
 class InvalidArguments extends Error {}
@@ -221,6 +290,9 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
   },
 };
 
+const COMPUTER_USE_REASON =
+  'The agent moves the pointer, clicks and types on this Mac as if you were doing it, and reads the screen to decide where. It can reach anything already open, including apps and pages you are signed into.';
+
 /**
  * Capabilities that are not about one folder. The clipboard belongs to the
  * session rather than to a workspace, so it carries a global scope and asks
@@ -244,6 +316,15 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
     reason:
       'The conversation is answered by a model running on this Mac. Nothing in it reaches AGI Cloud or any provider.',
   },
+  computer_screenshot: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_zoom: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_move: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_click: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_drag: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_scroll: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_type: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_key: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_wait: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
 };
 
 async function snapshotFor(root: WorkspaceRoot): Promise<WorkspaceSnapshot> {
@@ -383,11 +464,18 @@ async function runBrowserCommand(
 function declareDeviceHost(): DesktopHostDeclaration {
   const roots = listRoots();
   const identity = deviceIdentity();
+  const screenUsable = computerUseAvailability().supported;
   const capabilities = [
     ...new Set(
-      DEVICE_STEP_TOOLS.map(deviceStepCapability).filter((capability) =>
-        roots.some((root) => getPermissionState(capability, workspaceScope(root)) !== 'denied'),
-      ),
+      DEVICE_STEP_TOOLS.filter((tool) =>
+        deviceStepScope(tool) === 'screen'
+          ? screenUsable &&
+            getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
+          : roots.some(
+              (root) =>
+                getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
+            ),
+      ).map(deviceStepCapability),
     ),
   ];
   return {
@@ -502,6 +590,39 @@ async function execute(
       return readLocalModelSettings();
     case 'local_model_settings_write':
       return writeLocalModelSettings(requireLocalSettings(args));
+    case 'computer_screenshot':
+      return captureScreen();
+    case 'computer_zoom':
+      return captureRegion(requireRegion(args));
+    case 'computer_move':
+      return movePointer(requireNumber(args, 'x'), requireNumber(args, 'y'));
+    case 'computer_click':
+      return clickPointer(
+        requireNumber(args, 'x'),
+        requireNumber(args, 'y'),
+        requireMouseButton(args),
+        optionalNumberOr(args, 'count', 1),
+      );
+    case 'computer_drag':
+      return dragPointer(
+        requireNumber(args, 'x'),
+        requireNumber(args, 'y'),
+        requireNumber(args, 'toX'),
+        requireNumber(args, 'toY'),
+      );
+    case 'computer_scroll':
+      return scrollPointer(
+        requireNumber(args, 'x'),
+        requireNumber(args, 'y'),
+        optionalNumberOr(args, 'deltaX', 0),
+        optionalNumberOr(args, 'deltaY', 0),
+      );
+    case 'computer_type':
+      return typeText(requireString(args, 'text'));
+    case 'computer_key':
+      return pressKey(requireString(args, 'key'), requireModifiers(args));
+    case 'computer_wait':
+      return waitFor(optionalNumberOr(args, 'ms', 500));
     case 'device_host_declaration':
       return declareDeviceHost();
     case 'browser_pairing_state':
@@ -540,6 +661,15 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure('permission-denied', error.message);
   }
   if (error instanceof Cancelled) return runtimeFailure('cancelled', error.message);
+  if (error instanceof ComputerUseRefused) {
+    const code =
+      error.reason === 'permission'
+        ? 'permission-denied'
+        : error.reason === 'unsupported'
+          ? 'unsupported-platform'
+          : 'io-error';
+    return runtimeFailure(code, error.message);
+  }
   if (error instanceof LocalInferenceRefused) {
     return runtimeFailure(
       error.reason === 'unknown-model' ? 'not-found' : 'invalid-arguments',
