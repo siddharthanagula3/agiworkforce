@@ -857,7 +857,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   return (
     <WebAppShell narrowHeaderSlot={narrowHeaderSlot} rail={false}>
       {confirmDialog}
-      <div className={styles['surface']}>
+      <div
+        className={styles['surface']}
+        data-code-rail={railCollapsed && !narrow ? 'collapsed' : undefined}
+      >
         {!railCollapsed && (
           <div className={`${styles['rail']} ${styles['railDocked']}`}>
             <CodeRail {...railProps} onCollapse={() => setRailCollapsed(true)} />
