@@ -36,7 +36,7 @@ import {
 } from './features/content/autofill/filler';
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
-import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
+import { discoverAllTools, callTool, startToolChangeReporting } from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
 import {
@@ -1720,45 +1720,42 @@ async function checkConnectionStatus(): Promise<void> {
   }
 }
 
+function sendWebMCPTools(tools: import('./webmcp').WebMCPToolInfo[], url: string): void {
+  chrome.runtime
+    .sendMessage({
+      type: 'WEBMCP_TOOLS_CHANGED',
+      tools,
+      url,
+      timestamp: Date.now(),
+    })
+    .catch((err) => {
+      logger.debug('WebMCP tools notification failed', err);
+    });
+}
+
 function initWebMCP(): void {
   setTimeout(() => {
+    let discoveredTools: import('./webmcp').WebMCPToolInfo[] = [];
     try {
       const discovery = discoverAllTools();
+      discoveredTools = discovery.tools;
       if (discovery.tools.length > 0) {
         logger.info(`WebMCP: discovered ${discovery.tools.length} tool(s)`, {
           tools: discovery.tools.map((t) => t.name),
           url: discovery.url,
         });
-        chrome.runtime
-          .sendMessage({
-            type: 'WEBMCP_TOOLS_CHANGED',
-            tools: discovery.tools,
-            url: discovery.url,
-            timestamp: Date.now(),
-          })
-          .catch(() => {
-            // Background may not be listening yet
-          });
+        sendWebMCPTools(discovery.tools, discovery.url);
       }
     } catch (err) {
       logger.debug('WebMCP tool discovery failed (non-fatal)', err);
     }
 
     try {
-      watchForToolChanges((tools) => {
-        chrome.runtime
-          .sendMessage({
-            type: 'WEBMCP_TOOLS_CHANGED',
-            tools,
-            url: window.location.href,
-            timestamp: Date.now(),
-          })
-          .catch((err) => {
-            logger.debug('WebMCP tools changed notification failed', err);
-          });
+      startToolChangeReporting(discoveredTools, (tools) => {
+        sendWebMCPTools(tools, window.location.href);
       });
     } catch (err) {
-      logger.debug('WebMCP watchForToolChanges failed (non-fatal)', err);
+      logger.debug('WebMCP startToolChangeReporting failed (non-fatal)', err);
     }
   }, 1000);
 }
