@@ -460,6 +460,21 @@
       "file": "apps/web/lib/services/cloud-agent-run-service.ts",
       "migration": 190,
       "reason": "the founder-assistance entry for migrations 0183 to 0190 applies this migration before the deployment that carries this file; the device-step checkpoint column is written only when a desktop turn pauses on a device step"
+    },
+    {
+      "file": "apps/web/lib/services/research-report-service.ts",
+      "migration": 191,
+      "reason": "the founder-assistance entry for migrations 0183 to 0191 applies this migration before the deployment that carries this file; until it runs the settled-cost write is caught as an undefined column and the report simply states no cost"
+    },
+    {
+      "file": "apps/web/app/api/projects/[id]/knowledge-files/route.ts",
+      "migration": 192,
+      "reason": "the founder-assistance entry for migrations 0183 to 0192 applies this migration before the deployment that carries this file; until it runs the anchor write is caught and logged and the upload still succeeds with no anchors"
+    },
+    {
+      "file": "apps/web/lib/services/project-context-service.ts",
+      "migration": 192,
+      "reason": "the founder-assistance entry for migrations 0183 to 0192 applies this migration before the deployment that carries this file; the anchors are read through to_jsonb, which yields null rather than failing on a database without the column"
     }
   ]
 }
