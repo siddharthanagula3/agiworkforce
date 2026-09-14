@@ -47,6 +47,29 @@ describe('the worker is only woken when there is work', () => {
     );
   });
 
+  it('rebuilds the context menus on install, not on every worker start', () => {
+    expect(background).toMatch(
+      /chrome\.runtime\.onInstalled\.addListener\(\(\) => \{\s*void rebuildContextMenus\(\);/,
+    );
+    expect(background).toMatch(
+      /async function rebuildContextMenus\(\)[\s\S]*?await chrome\.contextMenus\.removeAll\(\)[\s\S]*?chrome\.contextMenus\.create\(item/,
+    );
+    const initialize = background.slice(
+      background.indexOf('function initialize(): void {'),
+      background.indexOf('function handleManagedChatKeepalivePort('),
+    );
+    expect(initialize).not.toContain('ContextMenu');
+  });
+
+  it('registers the context-menu click listener at module evaluation', () => {
+    expect(background).toContain(
+      'chrome.contextMenus?.onClicked?.addListener(handleContextMenuClick);',
+    );
+    expect(background).not.toMatch(
+      /function [A-Za-z]+\([\s\S]*?chrome\.contextMenus\.onClicked\.addListener/,
+    );
+  });
+
   it('re-arms when work is queued that the worker may not live to finish', () => {
     const syncHandler = background.slice(
       background.indexOf("case 'SYNC_CONVERSATION'"),
