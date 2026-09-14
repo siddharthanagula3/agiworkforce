@@ -3240,13 +3240,13 @@ const ChatComposerNewComponent = ({
           surfaces without the picker. */}
       {!projectPicker && canUseWorkingDirectory && folderName && (
         <div className="mb-2 flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-warning-fill/40 bg-warning-fill/10 px-2.5 py-1 text-xs text-warning-text">
             <FolderOpen className="h-3 w-3 shrink-0" />
             {folderName}
             <button
               type="button"
               onClick={clearFolder}
-              className="rounded-full p-0.5 hover:bg-amber-500/20"
+              className="rounded-full p-0.5 hover:bg-warning-fill/20"
               aria-label="Clear working folder"
             >
               <X className="h-2.5 w-2.5" />
@@ -3270,7 +3270,7 @@ const ChatComposerNewComponent = ({
       {mediaAttachmentConflict && (
         <div
           role="alert"
-          className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+          className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm"
           data-testid="media-attachment-conflict"
         >
           <p className="text-foreground">
@@ -3303,7 +3303,7 @@ const ChatComposerNewComponent = ({
         <div
           role="alert"
           data-testid="local-attachment-conflict"
-          className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+          className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm"
         >
           <p className="text-foreground">{LOCAL_ATTACHMENT_REFUSAL}</p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -3330,7 +3330,7 @@ const ChatComposerNewComponent = ({
       {hasAttachmentConflict && (
         <div
           role="alert"
-          className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+          className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm"
         >
           <p className="text-foreground">
             {attachmentConflictKind === 'image'
@@ -4012,7 +4012,7 @@ const ChatComposerNewComponent = ({
                           </button>
                         ))}
                         {imageMaskFile === undefined && (
-                          <p className="px-3 py-1.5 text-[11px] text-muted-foreground">
+                          <p className="px-3 py-1.5 text-xs text-muted-foreground">
                             Attach a second image, black where the model should redraw, to mask an
                             edit.
                           </p>
