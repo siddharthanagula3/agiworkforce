@@ -19,6 +19,7 @@ import {
   type CloudWorkMode,
   type InteractiveCard,
 } from '@agiworkforce/types';
+import { MAX_DEVICE_STEP_RESULT_LENGTH } from '@agiworkforce/local-runtime-contract';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -56,6 +57,9 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   pending_input_tool_calls?: unknown;
   pending_input_requests?: unknown;
   pending_input_request_state?: unknown;
+  pending_device_requested_at?: string | Date | null;
+  pending_device_tool_calls?: unknown;
+  pending_device_step?: unknown;
   settled_usage?: unknown;
   /** Pre-update state, returned only by the two statements that move `state`. */
   previous_state?: string | null;
@@ -150,7 +154,21 @@ const PendingToolCallSchema = z.object({
 });
 
 const CheckpointStateSchema = z.enum(['pending', 'resuming', 'resolved', 'failed']);
-const CheckpointKindSchema = z.enum(['approval', 'input']);
+const CheckpointKindSchema = z.enum(['approval', 'input', 'device']);
+
+const DeviceStepBindingSchema = z.object({
+  deviceId: z.string().min(1).max(200),
+  deviceName: z.string().min(1).max(200),
+  steps: z
+    .array(
+      z.object({
+        toolCallId: z.string().min(1).max(256),
+        summary: z.string().min(1).max(400),
+      }),
+    )
+    .min(1)
+    .max(8),
+});
 
 const InputRequestsMapSchema = z.record(z.string(), z.record(z.string(), z.unknown()));
 const RequestStateEntrySchema = z.object({
@@ -346,6 +364,26 @@ const PENDING_INPUT_COLUMNS = `
   pending_input.input_requests as pending_input_requests,
   pending_input.request_state as pending_input_request_state`;
 
+const DEVICE_CHECKPOINT_TTL_MINUTES = 15;
+
+const PENDING_DEVICE_LATERAL = `
+  left join lateral (
+    select checkpoint.created_at, checkpoint.pending_tool_calls, checkpoint.device_step
+      from public.cloud_agent_approval_checkpoints checkpoint
+     where checkpoint.run_id = runs.id
+       and checkpoint.user_id = runs.user_id
+       and checkpoint.checkpoint_kind = 'device'
+       and checkpoint.state = 'pending'
+       and checkpoint.created_at > now() - make_interval(mins => ${DEVICE_CHECKPOINT_TTL_MINUTES})
+     order by checkpoint.version desc
+     limit 1
+  ) pending_device on true`;
+
+const PENDING_DEVICE_COLUMNS = `
+  pending_device.created_at as pending_device_requested_at,
+  pending_device.pending_tool_calls as pending_device_tool_calls,
+  pending_device.device_step as pending_device_step`;
+
 function mapPendingApproval(row: CloudAgentRunRow): CloudAgentRun['pendingApproval'] {
   const requestedAt = toIsoTimestamp(row.pending_approval_requested_at ?? null);
   if (!requestedAt) return undefined;
@@ -392,6 +430,30 @@ function mapPendingInput(row: CloudAgentRunRow): CloudAgentRun['pendingInput'] {
   };
 }
 
+function mapPendingDeviceStep(row: CloudAgentRunRow): CloudAgentRun['pendingDeviceStep'] {
+  const requestedAt = toIsoTimestamp(row.pending_device_requested_at ?? null);
+  if (!requestedAt) return undefined;
+  const calls = z
+    .array(PendingToolCallSchema)
+    .min(1)
+    .max(8)
+    .safeParse(row.pending_device_tool_calls);
+  const binding = DeviceStepBindingSchema.safeParse(row.pending_device_step);
+  if (!calls.success || !binding.success) return undefined;
+  const summaries = new Map(binding.data.steps.map((step) => [step.toolCallId, step.summary]));
+  const steps = calls.data.flatMap((call) => {
+    const summary = summaries.get(call.id);
+    return summary ? [{ toolCallId: call.id, name: call.qualifiedName, summary }] : [];
+  });
+  if (steps.length === 0) return undefined;
+  return {
+    requestedAt,
+    deviceId: binding.data.deviceId,
+    deviceName: binding.data.deviceName,
+    steps,
+  };
+}
+
 const SettledUsageEntrySchema = z.object({
   providerCalls: z.number().int().min(0),
   inputTokens: z.number().int().min(0),
@@ -428,10 +490,12 @@ function mapSettledUsage(row: CloudAgentRunRow): CloudAgentRun['usage'] {
 function mapRun(row: CloudAgentRunRow): CloudAgentRun {
   const pendingApproval = mapPendingApproval(row);
   const pendingInput = mapPendingInput(row);
+  const pendingDeviceStep = mapPendingDeviceStep(row);
   const usage = mapSettledUsage(row);
   return CloudAgentRunSchema.parse({
     ...(pendingApproval ? { pendingApproval } : {}),
     ...(pendingInput ? { pendingInput } : {}),
+    ...(pendingDeviceStep ? { pendingDeviceStep } : {}),
     ...(usage ? { usage } : {}),
     id: row.id,
     userId: row.user_id,
@@ -918,10 +982,11 @@ export async function getCloudAgentRun(
   input: { userId: string; runId: string; afterSequence?: number; limit?: number },
 ): Promise<CloudAgentRunSnapshot | null> {
   const runRows = await db.query<CloudAgentRunRow>(
-    `select runs.*, ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}
+    `select runs.*, ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}, ${PENDING_DEVICE_COLUMNS}
        from public.cloud_agent_runs runs
        ${PENDING_APPROVAL_LATERAL}
        ${PENDING_INPUT_LATERAL}
+       ${PENDING_DEVICE_LATERAL}
       where runs.id = $1 and runs.user_id = $2
       limit 1`,
     [input.runId, input.userId],
@@ -975,13 +1040,14 @@ export async function listCloudAgentRuns(
   // conversation, and the row is dropped when the conversation is.
   const rows = await db.query<CloudAgentRunRow>(
     `select runs.*, conversations.title as conversation_title,
-            ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}
+            ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}, ${PENDING_DEVICE_COLUMNS}
        from public.cloud_agent_runs runs
        left join public.web_conversations conversations
          on conversations.id = runs.conversation_id
         and conversations.deleted_at is null
        ${PENDING_APPROVAL_LATERAL}
        ${PENDING_INPUT_LATERAL}
+       ${PENDING_DEVICE_LATERAL}
       where runs.user_id = $1
         and runs.state = any($2::text[])
         and ($3::text is null or runs.request_id = $3)
@@ -1631,6 +1697,327 @@ export function completeCloudAgentInputCheckpoint(
 }
 
 export function releaseCloudAgentInputCheckpoint(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string; checkpointId: string; leaseToken: string },
+): Promise<CloudAgentApprovalCheckpoint> {
+  return releaseCloudAgentApprovalCheckpoint(db, input);
+}
+
+export interface CloudAgentDeviceStepBinding {
+  deviceId: string;
+  deviceName: string;
+  steps: Array<{ toolCallId: string; summary: string }>;
+}
+
+export interface CloudAgentDeviceCheckpoint extends CloudAgentApprovalCheckpoint {
+  deviceStep: CloudAgentDeviceStepBinding;
+}
+
+export interface CloudAgentDeviceStepResult {
+  toolCallId: string;
+  content: string;
+  isError: boolean;
+}
+
+export interface ClaimedCloudAgentDeviceCheckpoint {
+  checkpoint: CloudAgentDeviceCheckpoint;
+  results: CloudAgentDeviceStepResult[];
+  leaseToken: string;
+}
+
+export class CloudAgentDeviceStepResultError extends Error {
+  constructor(message = 'Device results do not match the paused device step') {
+    super(message);
+    this.name = 'CloudAgentDeviceStepResultError';
+  }
+}
+
+export class CloudAgentDeviceMismatchError extends Error {
+  constructor(message = 'This device step was issued to a different device') {
+    super(message);
+    this.name = 'CloudAgentDeviceMismatchError';
+  }
+}
+
+export { DEVICE_CHECKPOINT_TTL_MINUTES };
+
+function mapDeviceCheckpoint(row: CloudAgentApprovalCheckpointRow): CloudAgentDeviceCheckpoint {
+  return {
+    ...mapApprovalCheckpoint(row),
+    deviceStep: DeviceStepBindingSchema.parse(row['device_step']),
+  };
+}
+
+function requireDeviceCheckpoint(
+  rows: CloudAgentApprovalCheckpointRow[],
+  error: Error = new CloudAgentApprovalCheckpointNotFoundError(),
+): CloudAgentDeviceCheckpoint {
+  const row = rows[0];
+  if (!row) throw error;
+  return mapDeviceCheckpoint(row);
+}
+
+/**
+ * Persist a durable pause on a step only the user's own machine can carry out.
+ *
+ * Same server-owned boundary as an approval: the transcript, the event cursor
+ * and the paused calls stay tenant-owned, and the client supplies nothing but
+ * what the step produced. The event boundary must be exactly one
+ * `device-step-requested` per paused call, then `task-state-changed:awaiting_input`,
+ * then `lifecycle:paused`.
+ */
+export async function saveCloudAgentDeviceCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    runId: string;
+    sessionId: string;
+    turnId: string;
+    nextEventSequence: number;
+    completedSteps: number;
+    request: Record<string, unknown>;
+    messages: unknown[];
+    pendingToolCalls: unknown[];
+    deviceStep: CloudAgentDeviceStepBinding;
+    events: unknown[];
+  },
+): Promise<CloudAgentDeviceCheckpoint> {
+  const request = z.record(z.string(), z.unknown()).parse(input.request);
+  const messages = z.array(CheckpointMessageSchema).parse(input.messages);
+  const pendingToolCalls = z
+    .array(PendingToolCallSchema)
+    .min(1)
+    .max(8)
+    .parse(input.pendingToolCalls);
+  const deviceStep = DeviceStepBindingSchema.parse(input.deviceStep);
+  const nextEventSequence = z.number().int().nonnegative().parse(input.nextEventSequence);
+  const completedSteps = z.number().int().nonnegative().parse(input.completedSteps);
+  const events = z.array(AgentEventEnvelopeSchema).min(3).max(10).parse(input.events);
+  const hasContinuousEventCursor = events.every(
+    (event, index) =>
+      event.sessionId === input.sessionId &&
+      event.turnId === input.turnId &&
+      (index === 0 || event.sequence === events[index - 1]!.sequence + 1),
+  );
+  if (!hasContinuousEventCursor || events[events.length - 1]!.sequence + 1 !== nextEventSequence) {
+    throw new CloudAgentDeviceStepResultError(
+      'Device checkpoint events do not match the durable event cursor',
+    );
+  }
+  const stepEvents = events.slice(0, -2);
+  const awaitingInputEvent = events.at(-2)?.event;
+  const pausedEvent = events.at(-1)?.event;
+  const pendingIds = new Set(pendingToolCalls.map((call) => call.id));
+  const requestedIds = new Set(
+    stepEvents.flatMap((event) =>
+      event.event.type === 'device-step-requested' ? [event.event.toolCallId] : [],
+    ),
+  );
+  const boundIds = new Set(deviceStep.steps.map((step) => step.toolCallId));
+  const hasCompleteDeviceBoundary =
+    stepEvents.length === pendingIds.size &&
+    requestedIds.size === pendingIds.size &&
+    boundIds.size === pendingIds.size &&
+    [...requestedIds].every((id) => pendingIds.has(id)) &&
+    [...boundIds].every((id) => pendingIds.has(id)) &&
+    stepEvents.every(
+      (event) =>
+        event.event.type === 'device-step-requested' &&
+        event.event.deviceId === deviceStep.deviceId,
+    ) &&
+    awaitingInputEvent?.type === 'task-state-changed' &&
+    awaitingInputEvent.state === 'awaiting_input' &&
+    pausedEvent?.type === 'lifecycle' &&
+    pausedEvent.phase === 'paused';
+  if (!hasCompleteDeviceBoundary) {
+    throw new CloudAgentDeviceStepResultError(
+      'Device checkpoint events do not form a complete device boundary',
+    );
+  }
+
+  const checkpoint = await db.transaction(async (tx) => {
+    const ownedRun = await tx.query<{ id: string }>(
+      `select id from public.cloud_agent_runs
+        where id = $1 and user_id = $2
+        for update`,
+      [input.runId, input.userId],
+    );
+    if (!ownedRun[0]) throw new CloudAgentRunNotFoundError();
+
+    await tx.query(
+      `update public.cloud_agent_approval_checkpoints
+          set state = 'resolved',
+              resolved_at = coalesce(resolved_at, now()),
+              lease_expires_at = null,
+              updated_at = now()
+        where run_id = $1 and user_id = $2 and state = 'resuming'`,
+      [input.runId, input.userId],
+    );
+
+    const versionRows = await tx.query<{ next_version: number | string }>(
+      `select coalesce(max(version), 0) + 1 as next_version
+         from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2`,
+      [input.runId, input.userId],
+    );
+    const version = z.coerce.number().int().positive().parse(versionRows[0]?.next_version);
+
+    const checkpointRows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `insert into public.cloud_agent_approval_checkpoints (
+         run_id, user_id, version, session_id, turn_id, next_event_sequence,
+         completed_steps, request, messages, pending_tool_calls, state,
+         checkpoint_kind, device_step
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, 'pending',
+         'device', $11::jsonb)
+       returning *`,
+      [
+        input.runId,
+        input.userId,
+        version,
+        input.sessionId,
+        input.turnId,
+        nextEventSequence,
+        completedSteps,
+        JSON.stringify(request),
+        JSON.stringify(messages),
+        JSON.stringify(pendingToolCalls),
+        JSON.stringify(deviceStep),
+      ],
+    );
+
+    await appendCloudAgentEventsWithinTransaction(tx, {
+      userId: input.userId,
+      runId: input.runId,
+      envelopes: events,
+    });
+
+    await tx.query<CloudAgentRunRow>(
+      `update public.cloud_agent_runs
+          set state = 'awaiting_input', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2
+        returning *`,
+      [input.runId, input.userId],
+    );
+    return requireDeviceCheckpoint(checkpointRows);
+  });
+
+  await announceAgentRunEvent(db, {
+    userId: input.userId,
+    runId: input.runId,
+    event: 'input_required',
+    toolName: pendingToolCalls[0]?.qualifiedName ?? null,
+  });
+  return checkpoint;
+}
+
+/**
+ * Claim a device pause on behalf of the device that was asked.
+ *
+ * A step answered by a second machine, or after the pause expired, is refused
+ * before anything is written: the caller turns those into the 409 and 410 the
+ * approval resume already uses, so a client never mistakes "someone else took
+ * this" for "your answer was accepted".
+ */
+export async function claimCloudAgentDeviceCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    runId: string;
+    deviceId: string;
+    results: CloudAgentDeviceStepResult[];
+    leaseSeconds?: number;
+  },
+): Promise<ClaimedCloudAgentDeviceCheckpoint> {
+  const results = z
+    .array(
+      z.object({
+        toolCallId: z.string().min(1).max(256),
+        content: z.string().max(MAX_DEVICE_STEP_RESULT_LENGTH),
+        isError: z.boolean(),
+      }),
+    )
+    .min(1)
+    .max(8)
+    .parse(input.results);
+  const leaseSeconds = Math.min(3_600, Math.max(60, Math.trunc(input.leaseSeconds ?? 300)));
+
+  return db.transaction(async (tx) => {
+    const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `select * from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2 and checkpoint_kind = 'device' and state = 'pending'
+          and created_at > now() - make_interval(mins => $3)
+        order by version desc
+        limit 1
+        for update`,
+      [input.runId, input.userId, DEVICE_CHECKPOINT_TTL_MINUTES],
+    );
+    if (!rows[0]) {
+      const expiredRows = await tx.query<{ id: string }>(
+        `select id from public.cloud_agent_approval_checkpoints
+          where run_id = $1 and user_id = $2 and checkpoint_kind = 'device' and state = 'pending'
+          limit 1`,
+        [input.runId, input.userId],
+      );
+      if (expiredRows[0]) throw new CloudAgentApprovalCheckpointExpiredError();
+    }
+    const checkpoint = requireDeviceCheckpoint(rows);
+    if (checkpoint.deviceStep.deviceId !== input.deviceId) {
+      throw new CloudAgentDeviceMismatchError();
+    }
+    const pendingIds = new Set(checkpoint.pendingToolCalls.map((call) => call.id));
+    const resultIds = new Set(results.map((entry) => entry.toolCallId));
+    const exactMatch =
+      resultIds.size === results.length &&
+      resultIds.size === pendingIds.size &&
+      [...resultIds].every((id) => pendingIds.has(id));
+    if (!exactMatch) throw new CloudAgentDeviceStepResultError();
+
+    const leaseToken = randomUUID();
+    const claimedRows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `update public.cloud_agent_approval_checkpoints
+          set state = 'resuming',
+              lease_token = $3,
+              lease_expires_at = now() + make_interval(secs => $4),
+              updated_at = now()
+        where id = $1 and user_id = $2 and state = 'pending'
+        returning *`,
+      [checkpoint.id, input.userId, leaseToken, leaseSeconds],
+    );
+    const claimed = requireDeviceCheckpoint(
+      claimedRows,
+      new CloudAgentApprovalCheckpointConflictError(),
+    );
+    const resumedRuns = await tx.query<CloudAgentRunRow>(
+      `update public.cloud_agent_runs
+          set state = 'running', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2
+          and state in ('queued', 'running', 'awaiting_input', 'paused')
+        returning *`,
+      [input.runId, input.userId],
+    );
+    if (!resumedRuns[0]) {
+      throw new CloudAgentApprovalCheckpointConflictError('Cloud agent run is no longer resumable');
+    }
+    if (!claimed.leaseToken) throw new CloudAgentApprovalCheckpointConflictError();
+    return { checkpoint: claimed, results, leaseToken: claimed.leaseToken };
+  });
+}
+
+// The lease lifecycle is kind-agnostic: a device checkpoint completes and
+// releases through the same versioned lease machinery as an approval one.
+export function completeCloudAgentDeviceCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    checkpointId: string;
+    leaseToken: string;
+    outcome?: 'resolved' | 'failed';
+  },
+): Promise<CloudAgentApprovalCheckpoint> {
+  return completeCloudAgentApprovalCheckpoint(db, input);
+}
+
+export function releaseCloudAgentDeviceCheckpoint(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; checkpointId: string; leaseToken: string },
 ): Promise<CloudAgentApprovalCheckpoint> {
