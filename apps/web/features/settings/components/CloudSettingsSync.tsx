@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSession } from '@/lib/identity/client';
-import { readCachedLanguage, SUPPORTED_LANGUAGES } from '@/app/i18n/index';
+import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useAppTheme } from '@shared/hooks/useAppTheme';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import {
@@ -60,6 +60,8 @@ export function CloudSettingsSync() {
 
   const language = i18n.language;
   const currentLocale = language.split('-')[0] ?? language;
+  const localeRef = useRef(currentLocale);
+  localeRef.current = currentLocale;
 
   const write = useCallback<(namespace: string, patch: Record<string, unknown>) => void>(
     (namespace, patch) => {
@@ -104,8 +106,9 @@ export function CloudSettingsSync() {
         if (storedTheme) setTheme(storedTheme);
 
         const storedLocale = readStoredLocale(storedLanguage, SUPPORTED_LOCALES);
-        if (storedLocale && !readCachedLanguage())
+        if (storedLocale && storedLocale !== localeRef.current) {
           await i18nRef.current.changeLanguage(storedLocale);
+        }
         if (cancelled) return;
         acknowledgedLocale.current = storedLocale;
 
