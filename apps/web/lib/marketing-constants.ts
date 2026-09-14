@@ -1,4 +1,12 @@
 import { BILLING_PLAN_PRICING, modelsCatalogJson } from '@agiworkforce/types';
+import { COMING_SOON_LABEL, SURFACE_STATUS } from './surface-status';
+
+export {
+  AVAILABLE_NOW_LABEL,
+  COMING_SOON_LABEL,
+  NOTIFY_CTA,
+  SURFACE_STATUS,
+} from './surface-status';
 
 export const MARKETING_MODEL_PILLS = [
   'OpenAI',
@@ -13,23 +21,6 @@ export const LAUNCH = {
   ctaLabel: 'Get launch access',
 } as const;
 
-export const COMING_SOON_LABEL = 'Coming soon';
-export const AVAILABLE_NOW_LABEL = 'Available now';
-
-export const SURFACE_STATUS = {
-  web: AVAILABLE_NOW_LABEL,
-  desktop: 'Linux assets · v1.2.0',
-  cli: AVAILABLE_NOW_LABEL,
-  mobile: COMING_SOON_LABEL,
-  vscode: COMING_SOON_LABEL,
-  chrome: COMING_SOON_LABEL,
-} as const;
-
-export const NOTIFY_CTA = {
-  label: 'Get notified',
-  href: '/download',
-} as const;
-
 export const POSITIONING = {
   wedge: 'Try AGI on the web. Local and BYOK for serious work. Managed cloud, open by default.',
   trustBoundary:
@@ -38,9 +29,28 @@ export const POSITIONING = {
     'Managed cloud is open by default; higher capacity is a paid subscription, not an invite.',
 } as const;
 
+const BYOK_SURFACE_NAMES = { desktop: 'Desktop', cli: 'the CLI', vscode: 'VS Code' } as const;
+
+function joinSurfaceNames(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+const shippedByokSurfaces = (['desktop', 'cli', 'vscode'] as const)
+  .filter((surface) => SURFACE_STATUS[surface] !== COMING_SOON_LABEL)
+  .map((surface) => BYOK_SURFACE_NAMES[surface]);
+const pendingByokSurfaces = (['desktop', 'cli', 'vscode'] as const)
+  .filter((surface) => SURFACE_STATUS[surface] === COMING_SOON_LABEL)
+  .map((surface) => BYOK_SURFACE_NAMES[surface]);
+
 export const BYOK_SURFACES = {
   label: 'Desktop, CLI, and VS Code',
   compact: 'Desktop · CLI · VS Code',
+  shipped: joinSurfaceNames(shippedByokSurfaces),
+  availability:
+    pendingByokSurfaces.length > 0
+      ? `${joinSurfaceNames(shippedByokSurfaces)} have published releases. ${joinSurfaceNames(pendingByokSurfaces)} is coming soon.`
+      : `${joinSurfaceNames(shippedByokSurfaces)} have published releases.`,
   exclusion:
     'Web, Mobile, Chrome, and the managed-only Electron shell do not accept provider keys.',
 } as const;
@@ -179,5 +189,5 @@ export const MARKETING = {
 export function approximateCount(count: number): string {
   if (count >= HUNDRED) return `${Math.floor(count / HUNDRED) * HUNDRED}+`;
   if (count >= TEN) return `${Math.floor(count / TEN) * TEN}+`;
-  return `${Math.max(count - 1, 1)}+`;
+  return String(count);
 }

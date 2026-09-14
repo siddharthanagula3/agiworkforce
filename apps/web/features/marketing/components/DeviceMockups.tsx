@@ -37,7 +37,7 @@ interface RouteReceipt {
 export const ROUTE_RECEIPTS: Record<RouteMode, RouteReceipt> = {
   local: { lane: 'Local', provider: LOCAL_RUNTIME_LABEL, cost: '$0.00' },
   byok: { lane: 'BYOK', provider: 'your provider', cost: 'billed to your key' },
-  managed: { lane: 'AGI Cloud', provider: 'Auto route', cost: '$0.004' },
+  managed: { lane: 'AGI Cloud', provider: 'Auto route', cost: 'metered in credits' },
 };
 
 function deviceStyle(type: DeviceType): CSSProperties {
@@ -307,7 +307,6 @@ export function WebWindow({
             extra={
               <span className="agi-mk-composer-meta">
                 <span>Enter to send · Shift+Enter for newline</span>
-                <span>3,740 / 128,000</span>
               </span>
             }
           />

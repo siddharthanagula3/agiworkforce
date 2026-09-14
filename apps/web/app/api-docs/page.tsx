@@ -1,3 +1,4 @@
+import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -125,7 +126,7 @@ export default function ApiDocsPage() {
             points={[
               'Stream tokens back with stream: true',
               'model: "auto" routes per request; name a model to pin it',
-              'BYOK on Desktop, CLI and VS Code never touches this gateway',
+              `BYOK on ${BYOK_SURFACES.shipped} never touches this gateway`,
             ]}
             visual={
               <CodeTabs tabs={CREDENTIAL_TABS} title="Which credential each endpoint takes" />

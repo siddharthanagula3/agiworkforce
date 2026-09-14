@@ -71,7 +71,7 @@ export const POLICY_LAST_UPDATED = {
   subprocessors: '2026-09-12',
   security: '2026-08-14',
   trust: '2026-09-12',
-  sla: '2026-08-05',
+  sla: '2026-09-04',
   refunds: '2026-08-13',
   accessibility: '2026-08-05',
   euRepresentative: '2026-08-05',
