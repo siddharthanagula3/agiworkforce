@@ -1238,6 +1238,7 @@ export default function ChatScreen() {
           {/* Hamburger, opens drawer */}
           <Pressable
             onPress={handleOpenDrawer}
+            hitSlop={6}
             style={({ pressed }) => ({
               width: 32,
               height: 32,
@@ -1261,6 +1262,7 @@ export default function ChatScreen() {
                   params: { id: activeProjectId },
                 })
               }
+              hitSlop={6}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -1301,6 +1303,7 @@ export default function ChatScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Pressable
               onPress={handleNewChat}
+              hitSlop={6}
               style={({ pressed }) => ({
                 width: 32,
                 height: 32,
@@ -1316,6 +1319,7 @@ export default function ChatScreen() {
             </Pressable>
             <Pressable
               onPress={handleMenuPress}
+              hitSlop={6}
               style={({ pressed }) => ({
                 width: 32,
                 height: 32,
