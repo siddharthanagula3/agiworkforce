@@ -135,6 +135,7 @@ import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
+  modelDisplayLabel,
   type GroupedQuickPickItem,
 } from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
@@ -872,7 +873,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       const picked = await vscode.window.showQuickPick(allItems, {
         title: 'AGI Workforce, Select Model',
-        placeHolder: `Current: ${currentModel}`,
+        placeHolder: `Current: ${modelDisplayLabel(currentModel)}`,
         matchOnDescription: true,
         matchOnDetail: true,
       });
@@ -1192,7 +1193,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         { label: 'Model', kind: vscode.QuickPickItemKind.Separator },
         {
           label: '$(symbol-color) Switch model…',
-          description: `Current: ${currentModel}`,
+          description: `Current: ${modelDisplayLabel(currentModel)}`,
           action: 'switch-model',
         },
         {

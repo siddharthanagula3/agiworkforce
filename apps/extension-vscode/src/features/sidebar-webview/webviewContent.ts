@@ -1801,6 +1801,7 @@ export function getWebviewContent(
       text-align: left;
     }
     .slash-menu-item:hover,
+    .slash-menu-item.highlighted,
     .slash-menu-item:focus-visible { background: var(--hover); outline: none; }
     .slash-menu-item-name { font-weight: 600; }
     .slash-menu-item-description {
@@ -3590,6 +3591,7 @@ export function getWebviewContent(
       if (!text) return;
 
       hideEmptyState();
+      closeSlashMenu();
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
@@ -3635,6 +3637,31 @@ export function getWebviewContent(
     }
 
     userInput.addEventListener('keydown', (e) => {
+      // The slash popup owns Enter while it is open: the highlighted command
+      // runs instead of the literal "/name" being sent as a chat message.
+      if (slashMenuIsOpen()) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          highlightSlashItem(slashHighlight + 1);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          highlightSlashItem(slashHighlight - 1);
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeSlashMenu();
+          return;
+        }
+        if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+          e.preventDefault();
+          if (runHighlightedSlashCommand()) return;
+          closeSlashMenu();
+          return;
+        }
+      }
       // @mention dropdown navigation
       if (mentionDropdown.classList.contains('visible')) {
         var items = mentionDropdown.querySelectorAll('.mention-item');
@@ -3900,11 +3927,46 @@ export function getWebviewContent(
     // ── Slash commands ────────────────────────────────────────────────────────
     var slashCommands = [];
     var slashRequested = false;
+    var slashHighlight = -1;
 
     function closeSlashMenu() {
       if (!slashMenu) return;
       slashMenu.classList.remove('open');
+      slashHighlight = -1;
+      userInput.removeAttribute('aria-activedescendant');
       if (slashBtn) slashBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function slashMenuIsOpen() {
+      return slashMenu !== null && slashMenu.classList.contains('open');
+    }
+
+    function slashMenuItems() {
+      return slashMenu ? slashMenu.querySelectorAll('.slash-menu-item') : [];
+    }
+
+    function highlightSlashItem(index) {
+      var items = slashMenuItems();
+      if (items.length === 0) {
+        slashHighlight = -1;
+        userInput.removeAttribute('aria-activedescendant');
+        return;
+      }
+      slashHighlight = ((index % items.length) + items.length) % items.length;
+      for (var i = 0; i < items.length; i++) {
+        items[i].classList.toggle('highlighted', i === slashHighlight);
+      }
+      var active = items[slashHighlight];
+      userInput.setAttribute('aria-activedescendant', active.id);
+      if (active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+    }
+
+    function runHighlightedSlashCommand() {
+      var items = slashMenuItems();
+      var target = items[slashHighlight];
+      if (!target) return false;
+      target.click();
+      return true;
     }
 
     function renderSlashMenu(filter) {
@@ -3919,6 +3981,7 @@ export function getWebviewContent(
         empty.className = 'slash-menu-empty';
         empty.textContent = slashCommands.length === 0 ? 'Loading commands…' : 'No matching command';
         slashMenu.appendChild(empty);
+        highlightSlashItem(0);
         return;
       }
       for (var i = 0; i < visible.length; i++) {
@@ -3948,6 +4011,11 @@ export function getWebviewContent(
           slashMenu.appendChild(item);
         })(visible[i]);
       }
+      var rendered = slashMenuItems();
+      for (var idIndex = 0; idIndex < rendered.length; idIndex++) {
+        rendered[idIndex].id = 'slashItem' + idIndex;
+      }
+      highlightSlashItem(0);
     }
 
     function openSlashMenu(filter) {
@@ -3980,6 +4048,11 @@ export function getWebviewContent(
           openSlashMenu(value);
           return;
         }
+        closeSlashMenu();
+      });
+      userInput.addEventListener('blur', function (event) {
+        // Clicking an item blurs the textarea first; that click must still land.
+        if (event.relatedTarget && slashMenu.contains(event.relatedTarget)) return;
         closeSlashMenu();
       });
     }
