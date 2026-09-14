@@ -2421,16 +2421,12 @@ export async function* runToolLoop(
     toolCall: PendingToolCall,
     batch: readonly PendingToolCall[] = [],
   ): ToolCallGate {
-    // A device step is authorized on the device, by the permission prompt the
-    // local runtime raises before it runs anything. Asking a second time in the
-    // chat would gate the same action twice and, because a turn holds only one
-    // pause, would leave the step unreachable behind its own approval.
+    const saved = connectorPermissions.levelFor(toolCall.qualifiedName);
+    if (saved === 'deny') return { verdict: 'deny', reason: 'blocked_by_user_permission' };
+
     if (deviceHost && isDeviceStepTool(toolCall.qualifiedName)) {
       return { verdict: 'allow', reason: 'auto_approval_mode' };
     }
-
-    const saved = connectorPermissions.levelFor(toolCall.qualifiedName);
-    if (saved === 'deny') return { verdict: 'deny', reason: 'blocked_by_user_permission' };
 
     // A whole batch is gated before any of it runs, while the flag below is only
     // set once a result comes back, so one turn asking for url_fetch and an
