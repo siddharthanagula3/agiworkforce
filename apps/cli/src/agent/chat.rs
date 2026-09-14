@@ -607,6 +607,11 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        // Whether the paired browser is reachable decides whether the browser
+        // family is in this turn's schema list, and it is resolved here
+        // because this is the one place every surface passes through.
+        self.refresh_browser_availability().await;
+
         // Consent creates and adopts a new durable session before the reviewed
         // prompt can leave Local mode. The source file/session stays untouched.
         self.complete_pending_privacy_handoff(user_input)?;

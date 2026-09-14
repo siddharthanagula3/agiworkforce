@@ -869,16 +869,61 @@ pub fn render_agents(arg: &str) -> String {
     crate::agents::render_agents_command(arg)
 }
 
+/// Report what is actually true right now, and what to do about it.
+///
+/// This used to print the same five lines whatever the state of the machine,
+/// including the claim that the CLI cannot drive Chrome, which stopped being
+/// true when the browser tool family landed. A status command that cannot be
+/// wrong is a status command that cannot be useful.
 pub fn render_chrome() -> String {
-    [
-        "Chrome integration",
-        "  Browser context and page actions belong to the AGI Chrome extension, which talks to",
-        "  the AGI Desktop app over the com.agiworkforce.browser native-messaging host.",
-        "  The CLI ships no browser-control tool and cannot drive Chrome itself.",
-        "  Install or inspect the extension from apps/extension or the Chrome listing when packaged.",
-        "  CLI engine compatibility: MCP, tools, permissions, and session context remain owned by the Rust CLI.",
-    ]
-    .join("\n")
+    render_chrome_state(&crate::browser_bridge::browser_state_blocking())
+}
+
+pub(crate) fn render_chrome_state(state: &crate::browser_bridge::BrowserState) -> String {
+    use crate::browser_bridge::BrowserAvailability;
+
+    let mut lines = vec!["Chrome integration".to_string()];
+    match state.availability {
+        BrowserAvailability::Paired => {
+            lines.push(
+                "  Paired. This session can read and act in the browser you are looking at."
+                    .to_string(),
+            );
+            if let Some(extension_id) = state.extension_id.as_deref() {
+                lines.push(format!("  Extension: {extension_id}"));
+            }
+            if let Some(app_version) = state.app_version.as_deref() {
+                lines.push(format!("  AGI Desktop: {app_version}"));
+            }
+            lines.push(
+                "  Tools: browser_read_page, browser_click, browser_type, browser_navigate, browser_screenshot."
+                    .to_string(),
+            );
+            lines.push(
+                "  The desktop app asks before the first action and records each one in its activity."
+                    .to_string(),
+            );
+        }
+        BrowserAvailability::NotPaired => {
+            lines.push("  AGI Desktop is running, but no browser is paired with it.".to_string());
+            lines.push(
+                "  Install the AGI Chrome extension, then confirm the pair code the desktop app shows."
+                    .to_string(),
+            );
+            lines.push("  Until then this session has no browser tools.".to_string());
+        }
+        BrowserAvailability::ShellNotRunning => {
+            lines.push("  Not available: AGI Desktop is not running.".to_string());
+            lines.push(
+                "  The browser is driven through the desktop app, which owns the pairing with the Chrome extension and asks you before each kind of action."
+                    .to_string(),
+            );
+            lines.push(
+                "  Start AGI Desktop, pair the extension, then run /chrome again.".to_string(),
+            );
+        }
+    }
+    lines.join("\n")
 }
 
 pub fn render_ide() -> String {
@@ -1666,6 +1711,72 @@ mod tests {
                 assert!(prompt.contains("next concrete actions"));
             }
             other => panic!("expected prompt, got {other:?}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod chrome_state_tests {
+    use super::render_chrome_state;
+    use crate::browser_bridge::{BrowserAvailability, BrowserState};
+
+    /// The old output said the same thing whatever was true, including that
+    /// the CLI cannot drive Chrome. Each state now says what is the case and
+    /// what the user can do next, and the three never read alike.
+    #[test]
+    fn each_state_says_something_different_and_actionable() {
+        let paired = render_chrome_state(&BrowserState {
+            availability: BrowserAvailability::Paired,
+            extension_id: Some("abcdefghijklmnopabcdefghijklmnop".to_string()),
+            app_version: Some("1.7.1".to_string()),
+        });
+        assert!(paired.contains("Paired"));
+        assert!(paired.contains("browser_read_page"));
+        assert!(paired.contains("abcdefghijklmnopabcdefghijklmnop"));
+        assert!(paired.contains("1.7.1"));
+
+        let unpaired = render_chrome_state(&BrowserState {
+            availability: BrowserAvailability::NotPaired,
+            extension_id: None,
+            app_version: None,
+        });
+        assert!(unpaired.contains("no browser is paired"));
+        assert!(unpaired.contains("pair code"));
+        assert!(
+            !unpaired.contains("browser_read_page"),
+            "an unpaired session must not advertise tools it cannot run"
+        );
+
+        let no_shell = render_chrome_state(&BrowserState {
+            availability: BrowserAvailability::ShellNotRunning,
+            extension_id: None,
+            app_version: None,
+        });
+        assert!(no_shell.contains("AGI Desktop is not running"));
+        assert!(no_shell.contains("Start AGI Desktop"));
+
+        assert_ne!(paired, unpaired);
+        assert_ne!(unpaired, no_shell);
+        assert_ne!(paired, no_shell);
+    }
+
+    /// A paired session must not carry the old claim, which is now false.
+    #[test]
+    fn the_retired_claim_that_the_cli_cannot_drive_chrome_is_gone() {
+        for availability in [
+            BrowserAvailability::Paired,
+            BrowserAvailability::NotPaired,
+            BrowserAvailability::ShellNotRunning,
+        ] {
+            let rendered = render_chrome_state(&BrowserState {
+                availability,
+                extension_id: None,
+                app_version: None,
+            });
+            assert!(
+                !rendered.contains("cannot drive Chrome"),
+                "{availability:?} still claims the CLI cannot drive Chrome"
+            );
         }
     }
 }
