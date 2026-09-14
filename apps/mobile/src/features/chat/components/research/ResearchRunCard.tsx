@@ -236,7 +236,7 @@ export function ResearchRunCard({
       {interrupted ? (
         <Text style={{ fontSize: 11, color: colors.textMuted }}>Stopped before it finished.</Text>
       ) : null}
-      {failed && research.error ? (
+      {failed && research.error && research.error !== label ? (
         <Text style={{ fontSize: 11, color: colors.textSecondary }}>{research.error}</Text>
       ) : null}
 
