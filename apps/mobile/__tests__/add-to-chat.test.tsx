@@ -504,6 +504,15 @@ describe('AddToChatSheet', () => {
   });
 
   describe('config links', () => {
+    it('marks the tapped handoff row busy while the sheet closes', () => {
+      const { getByText, queryByTestId, getByTestId } = renderSheet();
+
+      expect(queryByTestId('config-link-pending-Model')).toBeNull();
+      fireEvent.press(getByText('Project'));
+      expect(getByTestId('config-link-pending-Project')).toBeTruthy();
+      expect(queryByTestId('config-link-pending-Model')).toBeNull();
+    });
+
     it('renders the local-safe config links', () => {
       const { getByText, queryByText } = renderSheet();
 
