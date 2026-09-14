@@ -14,11 +14,17 @@ import {
   CloudTasksTreeProvider,
   resolveCloudAgentRunClient,
 } from '../features/cloud-tasks';
+import {
+  SCHEDULES_VIEW_ID,
+  SchedulesTreeProvider,
+  resolveSchedulesClient,
+} from '../features/schedules';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 
 export interface ChatState {
   conversationTreeProvider: ConversationTreeProvider;
   cloudTasksTreeProvider: CloudTasksTreeProvider;
+  schedulesTreeProvider: SchedulesTreeProvider;
   sidebarProvider: SidebarProvider;
   contextPanelProvider: ContextPanelProvider;
   memoryTreeProvider: MemoryTreeProvider;
@@ -81,12 +87,28 @@ export function setupChat(
     cloudTasksTreeProvider,
   );
 
+  const schedulesTreeProvider = new SchedulesTreeProvider(() =>
+    resolveSchedulesClient(context.secrets),
+  );
+  const schedulesView = vscode.window.createTreeView(SCHEDULES_VIEW_ID, {
+    treeDataProvider: schedulesTreeProvider,
+  });
+  schedulesTreeProvider.setAutoRefreshEnabled(schedulesView.visible);
+  context.subscriptions.push(
+    schedulesView.onDidChangeVisibility((event) => {
+      schedulesTreeProvider.setAutoRefreshEnabled(event.visible);
+    }),
+    schedulesView,
+    schedulesTreeProvider,
+  );
+
   const indexer = new WorkspaceIndexer(context);
   context.subscriptions.push(...indexer.registerFileWatcher());
 
   return {
     conversationTreeProvider,
     cloudTasksTreeProvider,
+    schedulesTreeProvider,
     sidebarProvider,
     contextPanelProvider,
     memoryTreeProvider,
