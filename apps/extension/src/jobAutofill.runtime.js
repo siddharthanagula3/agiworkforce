@@ -23,6 +23,7 @@ const SUBMIT_BUTTON_KEYWORDS = [
   'finish',
 ];
 const PROGRESS_BUTTON_KEYWORDS = ['next', 'continue', 'review', 'proceed'];
+const AMBIGUOUS_SUBMIT_LABELS = ['finish', 'apply now'];
 const START_APPLICATION_BUTTON_KEYWORDS = [
   'easy apply',
   'quick apply',
@@ -90,10 +91,7 @@ export function detectPlatformFromUrl(url) {
 
     if (
       hostMatches(host, 'greenhouse.io') ||
-      hostMatches(host, 'boards.greenhouse.io') ||
-      hostMatches(host, 'job-boards.greenhouse.io') ||
       path.includes('/job_app') ||
-      path.includes('/application') ||
       query.includes('gh_jid=')
     ) {
       return 'greenhouse';
@@ -994,12 +992,38 @@ function buttonLabel(button) {
   return normalize(text);
 }
 
+function buttonDisplayLabel(button) {
+  const text =
+    button.textContent ||
+    button.getAttribute('aria-label') ||
+    button.getAttribute('value') ||
+    button.getAttribute('data-automation-id') ||
+    '';
+  return String(text).replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+
+function confirmApplyClick(button) {
+  const label = buttonDisplayLabel(button);
+  return {
+    label,
+    confirmed: window.confirm(
+      `AGI Workforce: click "${label}" on ${window.location.host}?\n\n` +
+        'This button can start or send a job application. Click OK to click it, or Cancel to ' +
+        'leave the page alone.',
+    ),
+  };
+}
+
 function isNegativeButton(label) {
   return NEGATIVE_BUTTON_KEYWORDS.some((keyword) => label.includes(keyword));
 }
 
 function isSubmitButton(label) {
   return SUBMIT_BUTTON_KEYWORDS.some((keyword) => label.includes(keyword));
+}
+
+function needsApplyConfirmation(label) {
+  return AMBIGUOUS_SUBMIT_LABELS.includes(label.trim());
 }
 
 function isProgressButton(label) {
@@ -1101,7 +1125,7 @@ function getGenericFlowButtons() {
 }
 
 function clickElement(element) {
-  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
   element.click();
 }
 
@@ -1119,6 +1143,15 @@ async function startGenericApplicationFlow(delayMs, deadlineEpochMs) {
   const preferred = buttons.find((entry) => entry.label.includes('easy apply')) || buttons[0];
   if (!preferred) {
     return { started: false, clickedLabel: null };
+  }
+
+  const { label, confirmed } = confirmApplyClick(preferred.button);
+  if (!confirmed) {
+    return {
+      started: false,
+      clickedLabel: null,
+      skippedReason: `Declined to click "${label}"`,
+    };
   }
 
   clickElement(preferred.button);
@@ -1145,6 +1178,10 @@ async function runGenericSubmitSweep(delayMs, deadlineEpochMs, maxClicks = 2) {
       .find((entry) => isSubmitButton(entry.label));
 
     if (!candidate) {
+      break;
+    }
+
+    if (needsApplyConfirmation(candidate.label) && !confirmApplyClick(candidate.button).confirmed) {
       break;
     }
 
