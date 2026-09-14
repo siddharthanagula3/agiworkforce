@@ -1,25 +1,5 @@
 'use client';
 
-/**
- * ImageGenerationCard
- *
- * Renders the full inline image-generation experience inside an assistant
- * message bubble.  Four states:
- *
- *  A. Generating  – animated placeholder card while the image is in-flight.
- *  B. Result      – inline image with overlay New version/Share controls + action bar.
- *  C. New-version panel – full-height right-side panel (mirrors ArtifactsPanel
- *                   layout) with aspect-ratio re-generate + a change composer.
- *  D. Share modal – centered modal with copy-link, X, LinkedIn, Reddit, Download.
- *
- * This panel does NOT edit pixels. Every control in it calls `onRegenerate`,
- * which runs a fresh text-to-image generation from a rewritten prompt, the
- * source image is never sent to the provider. The copy below says exactly that.
- * `POST /api/media/image/generate` does implement real provider-side edits
- * (`operation` + `source_image` + `mask_image`), but no web client sends those
- * fields yet, so naming this "Edit" would describe behaviour that is not wired.
- */
-
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   X,
@@ -38,15 +18,20 @@ import {
   getImageAspectOptionsForModel,
   getImageModelLabel,
   normalizeImageAspectRatioForModel,
+  readImageFileAsBase64,
+  readImageUrlAsBase64,
   type ImageAspectRatio,
+  type ImageEditRequest,
+  type ImageRevisionRequest,
 } from '../lib/imageGenerationOptions';
+import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import { toUserMessage } from '@/lib/user-error-message';
 
 // ---------------------------------------------------------------------------
 // Re-export the shared media option type for existing card consumers.
 // ---------------------------------------------------------------------------
 
-export type { ImageAspectRatio } from '../lib/imageGenerationOptions';
+export type { ImageAspectRatio, ImageRevisionRequest } from '../lib/imageGenerationOptions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,11 +63,7 @@ interface ImageGenerationCardProps {
    * The parent is responsible for injecting the in-place update and calling
    * the API; it returns a Promise<string> that resolves to the new imageUrl.
    */
-  onRegenerate?: (opts: {
-    prompt: string;
-    aspectRatio: ImageAspectRatio;
-    modelId?: string;
-  }) => Promise<string>;
+  onRegenerate?: (opts: ImageRevisionRequest) => Promise<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -378,11 +359,7 @@ interface EditPanelProps {
   retryLabel?: string;
   onClose: () => void;
   onShare: () => void;
-  onRegenerate?: (opts: {
-    prompt: string;
-    aspectRatio: ImageAspectRatio;
-    modelId?: string;
-  }) => Promise<string>;
+  onRegenerate?: (opts: ImageRevisionRequest) => Promise<string>;
   /** Called when the panel regenerates and produces a new imageUrl */
   onImageUpdated: (newUrl: string, newAspect: ImageAspectRatio, newPrompt: string) => void;
 }
@@ -405,29 +382,29 @@ function EditPanel({
     normalizeImageAspectRatioForModel(modelId, aspectRatio),
   );
   const [editText, setEditText] = useState('');
+  const [maskFile, setMaskFile] = useState<File | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [showAspectMenu, setShowAspectMenu] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const maskInputRef = useRef<HTMLInputElement>(null);
   const aspectOptions = getImageAspectOptionsForModel(modelId);
+  const { admissionFor } = useMediaModelAvailability();
+  const supportsEdit = modelId ? admissionFor(modelId)?.supports_edit === true : false;
 
   const titleText = currentPrompt.length > 36 ? currentPrompt.slice(0, 36) + '...' : currentPrompt;
 
-  const handleAspectChange = useCallback(
-    async (newAspect: ImageAspectRatio) => {
-      setShowAspectMenu(false);
+  const runRevision = useCallback(
+    async (request: ImageRevisionRequest) => {
       if (!onRegenerate || retryBlocked) return;
-      setCurrentAspect(newAspect);
       setGenerating(true);
       setGenError(null);
       try {
-        const newUrl = await onRegenerate({
-          prompt: currentPrompt,
-          aspectRatio: newAspect,
-          modelId,
-        });
+        const newUrl = await onRegenerate(request);
         setCurrentUrl(newUrl);
-        onImageUpdated(newUrl, newAspect, currentPrompt);
+        setCurrentAspect(request.aspectRatio);
+        setCurrentPrompt(request.prompt);
+        onImageUpdated(newUrl, request.aspectRatio, request.prompt);
       } catch (err) {
         const msg = toUserMessage(err, String(err));
         setGenError(msg.includes('upgrade') || msg.includes('403') ? 'Upgrade required' : msg);
@@ -435,33 +412,95 @@ function EditPanel({
         setGenerating(false);
       }
     },
-    [onRegenerate, retryBlocked, currentPrompt, modelId, onImageUpdated],
+    [onRegenerate, retryBlocked, onImageUpdated],
+  );
+
+  const buildEdit = useCallback(
+    async (operation: ImageEditRequest['operation']): Promise<ImageEditRequest> => {
+      const [sourceImageBase64, maskImageBase64] = await Promise.all([
+        readImageUrlAsBase64(currentUrl),
+        operation === 'inpaint' && maskFile
+          ? readImageFileAsBase64(maskFile)
+          : Promise.resolve(undefined),
+      ]);
+      return {
+        operation,
+        sourceImageBase64,
+        ...(maskImageBase64 ? { maskImageBase64 } : {}),
+      };
+    },
+    [currentUrl, maskFile],
+  );
+
+  const handleAspectChange = useCallback(
+    async (newAspect: ImageAspectRatio) => {
+      setShowAspectMenu(false);
+      setCurrentAspect(newAspect);
+      await runRevision({ prompt: currentPrompt, aspectRatio: newAspect, modelId });
+    },
+    [runRevision, currentPrompt, modelId],
   );
 
   const handleDescribeEdit = useCallback(async () => {
     const text = editText.trim();
     if (!text || !onRegenerate || retryBlocked) return;
+    const combinedPrompt = `${currentPrompt}. Edit: ${text}`;
+    if (!supportsEdit) {
+      setEditText('');
+      await runRevision({ prompt: combinedPrompt, aspectRatio: currentAspect, modelId });
+      return;
+    }
     setGenerating(true);
     setGenError(null);
-    // Combine original prompt with edit instruction
-    const combinedPrompt = `${currentPrompt}. Edit: ${text}`;
+    let edit: ImageEditRequest;
     try {
-      const newUrl = await onRegenerate({
-        prompt: combinedPrompt,
-        aspectRatio: currentAspect,
-        modelId,
-      });
-      setCurrentUrl(newUrl);
-      setCurrentPrompt(combinedPrompt);
-      setEditText('');
-      onImageUpdated(newUrl, currentAspect, combinedPrompt);
+      edit = await buildEdit(maskFile ? 'inpaint' : 'edit');
     } catch (err) {
-      const msg = toUserMessage(err, String(err));
-      setGenError(msg.includes('upgrade') || msg.includes('403') ? 'Upgrade required' : msg);
-    } finally {
+      setGenError(toUserMessage(err, String(err)));
       setGenerating(false);
+      return;
     }
-  }, [editText, onRegenerate, retryBlocked, currentPrompt, currentAspect, modelId, onImageUpdated]);
+    setGenerating(false);
+    setEditText('');
+    setMaskFile(null);
+    await runRevision({ prompt: combinedPrompt, aspectRatio: currentAspect, modelId, edit });
+  }, [
+    editText,
+    onRegenerate,
+    retryBlocked,
+    supportsEdit,
+    currentPrompt,
+    currentAspect,
+    modelId,
+    maskFile,
+    buildEdit,
+    runRevision,
+  ]);
+
+  const handleVariation = useCallback(async () => {
+    if (!onRegenerate || retryBlocked || !supportsEdit) return;
+    setGenerating(true);
+    setGenError(null);
+    let edit: ImageEditRequest;
+    try {
+      edit = await buildEdit('variation');
+    } catch (err) {
+      setGenError(toUserMessage(err, String(err)));
+      setGenerating(false);
+      return;
+    }
+    setGenerating(false);
+    await runRevision({ prompt: currentPrompt, aspectRatio: currentAspect, modelId, edit });
+  }, [
+    onRegenerate,
+    retryBlocked,
+    supportsEdit,
+    buildEdit,
+    currentPrompt,
+    currentAspect,
+    modelId,
+    runRevision,
+  ]);
 
   const handleDownload = useCallback(
     () => void downloadImage(currentUrl, `ai-image-${Date.now()}`),
@@ -490,7 +529,7 @@ function EditPanel({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Generate a new version of this image"
+        aria-label="Revise this image"
         className={cn(
           'flex flex-col border-l border-border/30',
           'bg-card/95 backdrop-blur-xl',
@@ -596,16 +635,81 @@ function EditPanel({
           )}
         </div>
 
-        {/* Toolbar: honest disclosure + describe-a-change composer.
-            A disabled "Select region to edit: coming soon" strip used to sit
-            here. Region/mask editing is not scheduled and nothing in this
-            client sends `mask_image`, so the strip advertised a capability no
-            code backs; it is gone rather than left as a permanent promise. */}
         <div className="border-t border-border/30 p-3 space-y-2">
           <p className="px-1 text-[12px] leading-snug text-muted-foreground">
-            Describing a change generates a new image from the updated description. The image above
-            is not modified.
+            {supportsEdit
+              ? 'Describing a change edits the image above. Attach a mask to redraw only part of it.'
+              : 'Describing a change generates a new image from the updated description. The image above is not modified.'}
           </p>
+
+          <div className="flex flex-wrap items-center gap-2 px-1">
+            <button
+              type="button"
+              onClick={() => void handleVariation()}
+              disabled={!supportsEdit || generating || retryBlocked}
+              title={
+                supportsEdit
+                  ? 'A new take on the image above'
+                  : 'This image model cannot revise an existing image'
+              }
+              className={cn(
+                'flex h-7 items-center rounded-lg border border-border/40 px-2.5 text-xs text-muted-foreground transition-colors',
+                !supportsEdit || generating || retryBlocked
+                  ? 'cursor-not-allowed opacity-50'
+                  : 'hover:bg-muted/60 hover:text-foreground',
+              )}
+            >
+              Variation
+            </button>
+
+            {supportsEdit ? (
+              <>
+                <input
+                  ref={maskInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  aria-label="Mask image"
+                  onChange={(e) => {
+                    setMaskFile(e.target.files?.[0] ?? null);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => maskInputRef.current?.click()}
+                  disabled={generating || retryBlocked}
+                  title="Attach an image, black where the model should redraw"
+                  className={cn(
+                    'flex h-7 items-center rounded-lg border border-border/40 px-2.5 text-xs text-muted-foreground transition-colors',
+                    generating || retryBlocked
+                      ? 'cursor-not-allowed opacity-50'
+                      : 'hover:bg-muted/60 hover:text-foreground',
+                  )}
+                >
+                  {maskFile ? 'Replace mask' : 'Add mask'}
+                </button>
+                {maskFile ? (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span className="max-w-[160px] truncate">{maskFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setMaskFile(null)}
+                      aria-label="Remove mask"
+                      className="rounded-full p-0.5 hover:bg-muted/60 hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                This model cannot edit an existing image
+              </span>
+            )}
+          </div>
+
           {retryBlocked && retryLabel ? (
             <p
               className="px-1 text-xs font-medium text-amber-700 dark:text-amber-300"
@@ -628,7 +732,11 @@ function EditPanel({
                   void handleDescribeEdit();
                 }
               }}
-              placeholder="Describe a change to generate a new version..."
+              placeholder={
+                supportsEdit
+                  ? 'Describe a change to this image...'
+                  : 'Describe a change to generate a new version...'
+              }
               disabled={generating || retryBlocked}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
             />
@@ -642,7 +750,11 @@ function EditPanel({
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                   : 'text-muted-foreground cursor-not-allowed',
               )}
-              aria-label="Generate a new version with this change"
+              aria-label={
+                supportsEdit
+                  ? 'Apply this change to the image'
+                  : 'Generate a new version with this change'
+              }
             >
               <Send className="h-3.5 w-3.5" />
             </button>
@@ -743,7 +855,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
                 type="button"
                 onClick={onEdit}
                 className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25"
-                title="Generate a new version from a changed description"
+                title="Revise this image"
               >
                 <Pencil className="h-3 w-3" />
                 New version
