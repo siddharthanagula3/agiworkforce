@@ -18,6 +18,7 @@
  */
 
 import { sanitizePageText } from '../../../background/policy';
+import { isDomSmallEnoughToRead } from '../../../dom-helpers';
 import type { InPagePromptOutcome, InPagePromptResponse } from '../../../types';
 import { getPageActions, truncatePageText } from './pageActions';
 import type { PageAction } from './pageActions';
@@ -322,32 +323,46 @@ function autoResizeTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
 }
 
-function capturePageContext(): {
+interface PageContext {
   url: string;
   title: string;
   pageText: string;
-  actions: PageAction[];
-} {
-  const url = window.location.href;
-  const title = truncatePageText(sanitizePageText(document.title || 'Untitled'), 300);
-  const pageText = truncatePageText(sanitizePageText(document.body?.innerText ?? ''));
-  const actions = getPageActions(url);
-  return { url, title, pageText, actions };
+}
+
+const MAX_PAGE_TITLE_CHARS = 300;
+
+function readVisiblePageText(): string {
+  if (!isDomSmallEnoughToRead()) return '';
+  const main = document.querySelector<HTMLElement>('main, article, [role="main"]');
+  const raw = main?.innerText ?? document.body?.innerText ?? '';
+  return sanitizePageText(truncatePageText(raw));
+}
+
+function capturePageContext(): PageContext {
+  return {
+    url: window.location.href,
+    title: sanitizePageText(truncatePageText(document.title || 'Untitled', MAX_PAGE_TITLE_CHARS)),
+    pageText: readVisiblePageText(),
+  };
 }
 
 function updateDisclosure(
   disclosure: HTMLElement,
-  context: ReturnType<typeof capturePageContext>,
+  url: string,
+  capturedChars: number | null,
 ): void {
   let source = 'this approved page';
   try {
-    source = new URL(context.url).hostname || source;
+    source = new URL(url).hostname || source;
   } catch {
     // The page URL is only a label; an unparsable URL must not hide the notice.
   }
+  const volume =
+    capturedChars === null
+      ? 'up to 30,000 characters of visible text'
+      : `${capturedChars.toLocaleString()} characters of visible text (30,000 maximum)`;
   disclosure.textContent =
-    `This panel can send visible text from ${source} ` +
-    `(${context.pageText.length.toLocaleString()} characters; 30,000 maximum) to ` +
+    `This panel can send ${volume} from ${source} to ` +
     'AGI Managed Cloud with your requests. The extension redacts patterns that resemble ' +
     'secrets; review page content before sending. Each response replaces the previous one here; ' +
     'open the side panel for a saved conversation.';
@@ -368,7 +383,6 @@ export function createPanel(): {
   const shadow = host.attachShadow({ mode: 'closed' });
   const els = buildPanelDOM(shadow);
 
-  let ctx = capturePageContext();
   let requestInFlight = false;
   let returnFocus: HTMLElement | null = null;
 
@@ -397,13 +411,17 @@ export function createPanel(): {
     );
   }
 
+  function refreshContext(): PageContext {
+    const fresh = capturePageContext();
+    updateDisclosure(els.disclosure, fresh.url, fresh.pageText.length);
+    return fresh;
+  }
+
   function rebuildChips(): void {
-    ctx = capturePageContext();
-    updateDisclosure(els.disclosure, ctx);
-    buildActionChips(ctx.actions, els.actionsRow, (action) => {
-      const fresh = capturePageContext();
-      ctx = fresh;
-      updateDisclosure(els.disclosure, fresh);
+    const url = window.location.href;
+    updateDisclosure(els.disclosure, url, null);
+    buildActionChips(getPageActions(url), els.actionsRow, (action) => {
+      const fresh = refreshContext();
       runPrompt(
         action.buildPrompt(fresh.title, ''),
         `Page title: ${fresh.title}\n\nVisible page text:\n${fresh.pageText}`,
@@ -414,18 +432,15 @@ export function createPanel(): {
   rebuildChips();
 
   window.addEventListener('popstate', rebuildChips);
-  const _origPushState = history.pushState.bind(history);
-  history.pushState = function (...args: Parameters<typeof history.pushState>) {
-    _origPushState(...args);
-    rebuildChips();
-  };
+  (window as Window & { navigation?: EventTarget }).navigation?.addEventListener(
+    'currententrychange',
+    rebuildChips,
+  );
 
   function submitComposer(): void {
     const text = els.textarea.value.trim();
     if (!text || requestInFlight) return;
-    const fresh = capturePageContext();
-    ctx = fresh;
-    updateDisclosure(els.disclosure, fresh);
+    const fresh = refreshContext();
     els.textarea.value = '';
     autoResizeTextarea(els.textarea);
     syncComposerState();
@@ -443,8 +458,6 @@ export function createPanel(): {
     autoResizeTextarea(els.textarea);
     syncComposerState();
   });
-
-  void ctx;
 
   let isOpen = false;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -479,6 +492,7 @@ export function createPanel(): {
     els.panel.removeAttribute('inert');
     els.panel.removeAttribute('aria-hidden');
     els.panel.classList.add('open');
+    refreshContext();
     els.textarea.focus();
   }
 
