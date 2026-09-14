@@ -151,6 +151,12 @@ export const ollamaAdapterFactory: ProviderAdapterFactory = (config) =>
   createOllamaAdapter(config as OllamaAdapterConfig);
 
 export { fetchOllamaCatalog, OLLAMA_DEFAULT_BASE_URL } from './catalog';
+export {
+  OLLAMA_PARAMETER_COUNT_KEY,
+  ollamaModelSizeBillion,
+  parseOllamaParameterCount,
+  parseOllamaParameterSize,
+} from './model-size';
 export { translateChatRequest } from './translate';
 export { parseOllamaStream, translateOllamaStream } from './stream';
 export type {

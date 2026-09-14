@@ -1,15 +1,34 @@
 import type { ModelInfo } from '@agiworkforce/types';
 
-import type { OllamaTagsResponse } from './types';
+import { ollamaModelSizeBillion, parseOllamaParameterCount } from './model-size';
+import type { OllamaShowResponse, OllamaTagsResponse } from './types';
 
 export const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434';
 
-function parseParameterSizeBillion(text: string | undefined): number | undefined {
-  if (!text) return undefined;
-  const match = /^(\d+(?:\.\d+)?)b$/i.exec(text.trim());
-  if (!match || !match[1]) return undefined;
-  const num = Number(match[1]);
-  return Number.isFinite(num) ? num : undefined;
+async function showModelSizeBillion(
+  baseUrl: string,
+  fetchFn: typeof fetch,
+  model: string,
+  signal: AbortSignal | undefined,
+): Promise<number | undefined> {
+  try {
+    const res = await fetchFn(`${baseUrl}/api/show`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model }),
+      ...(signal ? { signal } : {}),
+    });
+    if (!res.ok) return undefined;
+    const json = (await res.json()) as OllamaShowResponse;
+    return (
+      ollamaModelSizeBillion({
+        parameterSize: json.details?.parameter_size,
+        modelInfo: json.model_info,
+      }) ?? parseOllamaParameterCount(json.model_info?.['parameter_count'])
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 export async function fetchOllamaCatalog(params: {
@@ -35,13 +54,17 @@ export async function fetchOllamaCatalog(params: {
   if (!Array.isArray(json.models)) {
     return [];
   }
-  return json.models.map((m) => {
-    const parameterSizeBillion = parseParameterSizeBillion(m.details.parameter_size);
-    return {
-      id: m.model,
-      name: m.name,
-      provider: 'ollama' as const,
-      ...(parameterSizeBillion !== undefined ? { sizeBillion: parameterSizeBillion } : {}),
-    } satisfies ModelInfo;
-  });
+  return Promise.all(
+    json.models.map(async (m) => {
+      const sizeBillion =
+        ollamaModelSizeBillion({ parameterSize: m.details?.parameter_size }) ??
+        (await showModelSizeBillion(baseUrl, fetchFn, m.model, params.signal));
+      return {
+        id: m.model,
+        name: m.name,
+        provider: 'ollama' as const,
+        ...(sizeBillion !== undefined ? { sizeBillion } : {}),
+      } satisfies ModelInfo;
+    }),
+  );
 }

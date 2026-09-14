@@ -2,6 +2,7 @@
 
 import {
   DesktopRuntimeError,
+  assertLocalTurnCarriesNoAttachments,
   getHostBridge,
   type ApplicationOpenResult,
   type BrowserPairingState,
@@ -309,6 +310,7 @@ export function startLocalChat(
   input: { modelId: string; messages: LocalChatMessage[]; timeoutMs?: number },
   onDelta: (delta: LocalChatDelta) => void,
 ): LocalChatRun {
+  assertLocalTurnCarriesNoAttachments(input.messages);
   const host = getHostBridge();
   if (!host) throw new DesktopHostUnavailable();
 

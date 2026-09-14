@@ -4,8 +4,11 @@ import {
   LOCAL_MODEL_SERVERS,
   LOCAL_MODEL_SERVER_LABELS,
   LocalInferenceRefused,
+  assertLocalModelMeetsMinimum,
+  assertLocalTurnCarriesNoAttachments,
   localModelId,
   parseLocalModelId,
+  partitionLocalModels,
   type LocalChatRequest,
   type LocalChatResult,
   type LocalChatStopReason,
@@ -61,16 +64,29 @@ export async function listLocalServers(): Promise<LocalModelServerStatus[]> {
       const baseUrl = baseUrls[serverId];
       const models = await catalogFor(serverId, baseUrl).catch(() => []);
       const reachable = models.length > 0 ? true : await isListening(baseUrl);
+      const { usable } = partitionLocalModels(toLocalModels(serverId, models));
       return {
         id: serverId,
         label: LOCAL_MODEL_SERVER_LABELS[serverId],
         baseUrl,
         reachable,
-        modelCount: models.length,
-        ...(reachable && models.length === 0
+        modelCount: usable.length,
+        ...(reachable && usable.length === 0
           ? { message: `${LOCAL_MODEL_SERVER_LABELS[serverId]} is running with no models loaded.` }
           : {}),
       };
+    }),
+  );
+}
+
+function toLocalModels(serverId: LocalModelServerId, models: readonly ModelInfo[]): LocalModel[] {
+  return models.map(
+    (model): LocalModel => ({
+      id: localModelId(serverId, model.id),
+      serverId,
+      serverLabel: LOCAL_MODEL_SERVER_LABELS[serverId],
+      name: model.name ?? model.id,
+      ...(model.sizeBillion !== undefined ? { sizeBillion: model.sizeBillion } : {}),
     }),
   );
 }
@@ -80,15 +96,7 @@ export async function listLocalModels(): Promise<LocalModel[]> {
   const perServer = await Promise.all(
     LOCAL_MODEL_SERVERS.map(async (serverId) => {
       const models = await catalogFor(serverId, baseUrls[serverId]).catch(() => []);
-      return models.map(
-        (model): LocalModel => ({
-          id: localModelId(serverId, model.id),
-          serverId,
-          serverLabel: LOCAL_MODEL_SERVER_LABELS[serverId],
-          name: model.name ?? model.id,
-          ...(model.sizeBillion !== undefined ? { sizeBillion: model.sizeBillion } : {}),
-        }),
-      );
+      return toLocalModels(serverId, models);
     }),
   );
   return perServer.flat();
@@ -123,8 +131,17 @@ export async function runLocalChat(
   if (input.messages.length === 0) {
     throw new LocalInferenceRefused('no-messages', 'A local turn needs at least one message.');
   }
+  assertLocalTurnCarriesNoAttachments(input.messages);
 
   const baseUrl = readLocalBaseUrl(ref.serverId);
+  const discovered = await catalogFor(ref.serverId, baseUrl).catch((): ModelInfo[] => []);
+  const known = discovered.find((model) => model.id === ref.name);
+  if (known) {
+    assertLocalModelMeetsMinimum({
+      name: known.name ?? known.id,
+      ...(known.sizeBillion !== undefined ? { sizeBillion: known.sizeBillion } : {}),
+    });
+  }
   const adapter = adapterFor(ref.serverId, baseUrl);
   const request: ChatRequest = {
     model: ref.name,
