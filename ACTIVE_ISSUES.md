@@ -108,10 +108,10 @@ issue turned out to be is in the commit that closed it.
   carries on top of it (22, tip `24c5c9feb`) checked against this file and
   `known-flaws.md`. `origin/main` is green at `9ab4a616b`. The production
   deploy is not blocked on code: it is waiting on a founder approval, and on
-  migrations `0183` to `0188` being applied in production first, because the
+  migrations `0183` to `0189` being applied in production first, because the
   deploy job refuses to promote while a draft migration is unapplied. Both are
   tracked as founder-assistance items in `docs/work/founder-assistance.md`
-  ("[Database] Apply migrations 0183 to 0188 in production before the next
+  ("[Database] Apply migrations 0183 to 0189 in production before the next
   deploy", "[QA] Somewhere to exercise this work before it ships"). `AGI-10`
   closed on 2026-09-13 for both artifacts and conversations (0184-0186 are its
   migrations); the citation and research-reload half of `AGI-28` closed the
@@ -167,10 +167,10 @@ settlement is idempotent and concurrency-safe.
 ### `AGI-SEC-API-2026-09-09` What the api security scan found, and what is left
 
 **Severity:** P1
-**Status:** 53 of 57 findings fixed; 4 registered in
+**Status:** 55 of 57 findings fixed; 2 registered in
 `docs/agent-context/known-flaws.md` as `WEB-SEC-SCAN-2026-09-09-*`. F21, F23,
-F35 and F38 closed on 2026-09-13 and their rows were deleted; what is left is
-F88, F91, F93 and F94. F31 and F39 closed on 2026-09-12: compaction now routes
+F35, F38, F93 and F94 closed on 2026-09-13 and their rows were deleted; what is
+left is F88 and a narrowed F91. F31 and F39 closed on 2026-09-12: compaction now routes
 under the turn's own admission, and a scheduled run declares the project context
 it carries. Closing F39 also found that the gate's attachment leg could never
 fire, because `buildLlmRequest` moves array content into `multimodal_content`
@@ -206,17 +206,46 @@ personal` switched off require-MFA, the IP allow list, zero-data-retention,
    persisted on the conversation row.
 6. Four controls existed on one handler and not on its siblings.
 
-**What is left and why.** Four rows, each naming its own blocker. F88 is a
-founder decision, not an engineering one, and the founder file states the three
-options and how to verify whichever is chosen. F91 changes the presign contract
-the client already ships against. F93 is a primary-key change and wants its own
-migration. F94's registered fix wants a deployment secret that does not exist;
-its other option, a random UUID with a per-user unique index, would fold F93
-into the same migration and needs no secret, so the two should be retriaged
-together rather than separately.
+**What is left and why.** Two rows. F88 is a founder decision, not an
+engineering one, and the founder file states the three options and how to verify
+whichever is chosen. F91 is narrowed to the direct-to-bucket upload: the same
+presigned url stays writable for its whole 300 second lifetime, so the uploader
+can replace their own object after registration inspected it. Closing that needs
+either the bucket to enforce the declared checksum on write, or the register
+step to copy the inspected bytes, only while their entity tag still matches, to
+a key no upload route can name. Both are unverifiable against a fake and want a
+run against the real bucket, which is why this pass stopped at the half it could
+prove.
 
-**Next step.** F93 and F94 as one pass, because they are the same row identity
-problem seen from two ends. Nothing unblocked is left in this entry.
+**Next step.** Choose between bucket-enforced checksums and promote-on-inspect
+for F91, and prove whichever is chosen against the real bucket rather than the
+in-memory store.
+
+**Closed 2026-09-13, second pass.** F93 and F94 were one problem: `user_memories.id`
+was a global primary key the client chose, and the import derived it from an
+unkeyed sha256 of the owner's user id, the source slug and the normalised memory
+text. Knowing a victim's user id and guessing their wording was therefore enough
+to occupy the row they were about to write, which silently dropped their import
+and answered whether that id already existed. Migration `0189` makes the key
+`(user_id, id)`, so the same id under two accounts is two rows, and moves import
+dedupe onto a new `import_key` column unique per `(user_id, source)`, which lets
+imported rows take a random uuid and needs no deployment secret. The sync push
+and the auto-memory insert now name `(user_id, id)` as their conflict target.
+Reproduced against the development database before the migration, where the
+victim's insert returned zero rows, and after it, where both rows exist.
+
+The same pass closed the half of F91 that was reachable from any environment.
+`/api/uploads/knowledge-file/put` took its destination from a query parameter,
+so a caller who knew a registered object's key could overwrite it with anything
+and the row kept describing bytes the platform no longer held. The presign now
+mints a signed authorization that binds the owner, the key, the content type,
+the byte count and the sha256 of the exact bytes; the route takes the key from
+that authorization and refuses a body that hashes to anything else, including a
+rewrite of the same length and type. The presign request gained
+`checksumSha256`, which every client already computed for registration, and a
+request without it is refused with `UPLOAD_PROTOCOL_UPGRADE_REQUIRED` rather
+than served an unbound url. The signing key is derived from the object-storage
+credential, so no new deployment secret appears.
 
 **Closed 2026-09-13.** F21: removing a member from one workspace revoked every
 device credential and API key on that account, because neither revocation had a
