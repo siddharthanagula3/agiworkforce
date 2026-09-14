@@ -17,6 +17,7 @@ because code, tests and CI cite their IDs directly:
 | `docs/agent-context/known-flaws.md` | one row per open defect, cited by ID      | PR template, `ci.yml`, tests |
 | `audit/capability-gaps.csv`         | `CAP-*` product capability backlog        | `check:capability-gaps`      |
 | `audit/ui-gaps.csv`                 | `GAP-*` UI parity rows, monotonic ratchet | `check:ui-gaps`              |
+| `PRODUCT_GAPS.md`                   | `PG-*` product completeness findings      | `check:doc-registry`         |
 
 Those registers hold rows. This file holds root causes. One root cause here may
 retire several rows there. Do not copy long narrative into a register, and do
