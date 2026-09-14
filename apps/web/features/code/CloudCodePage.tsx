@@ -857,12 +857,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   return (
     <WebAppShell narrowHeaderSlot={narrowHeaderSlot} rail={false}>
       {confirmDialog}
-      <div
-        className={styles['surface']}
-        data-code-rail={railCollapsed && !narrow ? 'collapsed' : undefined}
-      >
+      <div className={styles['surface']}>
         {!railCollapsed && (
-          <div className={`${styles['rail']} ${styles['railDocked']}`}>
+          <div className={`${styles['rail']} ${styles['railDocked']}`} data-sidebar-region="header">
             <CodeRail {...railProps} onCollapse={() => setRailCollapsed(true)} />
           </div>
         )}
@@ -878,7 +875,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
               }}
             >
               <SheetTitle className="sr-only">{CODE_COPY.surface}</SheetTitle>
-              <div className={`${styles['rail']} ${styles['railDrawer']}`}>
+              <div
+                className={`${styles['rail']} ${styles['railDrawer']}`}
+                data-sidebar-region="header"
+              >
                 <CodeRail {...railProps} />
               </div>
             </SheetContent>
@@ -897,7 +897,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           ) : (
             <>
               {(selectedSession || (railCollapsed && !narrow)) && (
-                <header className={styles['header']}>
+                <header
+                  className={styles['header']}
+                  data-window-edge={railCollapsed && !narrow ? 'left' : undefined}
+                >
                   {!narrow && railCollapsed && (
                     <button
                       type="button"
