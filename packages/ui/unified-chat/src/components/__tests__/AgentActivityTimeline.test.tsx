@@ -341,8 +341,8 @@ describe('AgentActivityTimeline', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Allow' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
 
     expect(onApprove).toHaveBeenCalledWith('shell-1');
     expect(onReject).toHaveBeenCalledWith('shell-1');
@@ -392,7 +392,7 @@ describe('AgentActivityTimeline', () => {
     expect(screen.getByRole('region', { name: 'Running code details' }).textContent).toContain(
       'rows: 42',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Allow' }));
     expect(onApprove).toHaveBeenCalledWith('call-2');
   });
 
