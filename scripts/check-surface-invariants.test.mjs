@@ -76,6 +76,44 @@ test('a handler shape that cannot be proved safe fails rather than passing silen
   assert.match(violations[0].detail, /could not be proved to tolerate a zero-argument call/);
 });
 
+test('a handler referenced by name resolves to its declaration in the same file', () => {
+  const arities = collectCommandArities(
+    new Map([
+      [
+        'src/a.ts',
+        [
+          "register('ext.explain', explainCommand);",
+          "register('ext.ask', askCommand);",
+          "register('ext.typed', typedHandler);",
+          'async function explainCommand(): Promise<void> {}',
+          'const askCommand = async (question: string) => question;',
+          'const typedHandler: Handler = () => undefined;',
+        ].join('\n'),
+      ],
+    ]),
+  );
+  assert.deepEqual(
+    [arities.get('ext.explain').arity, arities.get('ext.explain').shape],
+    [0, 'named-function'],
+  );
+  assert.deepEqual(
+    [arities.get('ext.ask').arity, arities.get('ext.ask').shape],
+    [1, 'named-arrow'],
+  );
+  assert.equal(arities.get('ext.typed').arity, 0);
+
+  const violations = analyzeKeybindings({
+    surface: 'vscode',
+    keybindings: [
+      { command: 'ext.explain', key: 'ctrl+e' },
+      { command: 'ext.ask', key: 'ctrl+a' },
+    ],
+    arities,
+  });
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].detail, /ext\.ask/);
+});
+
 test('requiredArity stops at the first optional parameter', () => {
   assert.equal(requiredArity('a: string, b: number'), 2);
   assert.equal(requiredArity('a: string, b?: number'), 1);
