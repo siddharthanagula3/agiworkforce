@@ -20,6 +20,16 @@ if (typeof CSS.escape !== 'function') {
   CSS.escape = (value: string) => value.replace(/([^\w-])/g, '\\$1');
 }
 
+const documentListenerTypes = vi.hoisted(() => {
+  const recorded: string[] = [];
+  const original = document.addEventListener.bind(document);
+  document.addEventListener = ((type: string, ...rest: unknown[]) => {
+    recorded.push(type);
+    return (original as (...args: unknown[]) => void)(type, ...rest);
+  }) as typeof document.addEventListener;
+  return recorded;
+});
+
 const chromeMock = vi.hoisted(() => {
   const mock = {
     runtime: {
@@ -142,6 +152,12 @@ beforeEach(() => {
 
 afterEach(() => {
   clearBody();
+});
+
+describe('content-script initialization', () => {
+  it('does not track the pointer on every page', () => {
+    expect(documentListenerTypes).not.toContain('mousemove');
+  });
 });
 
 describe('handleMessage, invalid messages are rejected', () => {
@@ -658,14 +674,13 @@ describe('handleMessage, additional message types routing', () => {
     expect(response).toMatchObject({ success: true });
   });
 
-  it('CAPTURE_ELEMENT: returns error when no element is under pointer', async () => {
-    const response = await dispatchMessage({ type: 'CAPTURE_ELEMENT' });
-    expect(response).toMatchObject({ success: false, error: 'No element under pointer' });
-  });
-
-  it('GET_ELEMENT_INFO: returns error when no active element', async () => {
-    const response = await dispatchMessage({ type: 'GET_ELEMENT_INFO' });
-    expect(typeof (response as Record<string, unknown>).success).toBe('boolean');
+  it('CAPTURE_ELEMENT and GET_ELEMENT_INFO are no longer accepted message types', async () => {
+    for (const type of ['CAPTURE_ELEMENT', 'GET_ELEMENT_INFO']) {
+      expect(await dispatchMessage({ type })).toMatchObject({
+        success: false,
+        error: 'Invalid message',
+      });
+    }
   });
 
   it('FILL_FORM: returns success with fieldsFilled count', async () => {
