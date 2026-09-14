@@ -9,6 +9,7 @@ import {
 import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { WorkspaceIndexer } from '../data/workspaceIndexer';
 import { MemoryTreeProvider } from '../memory/memoryTreeProvider';
+import { AccountMemoryStore, setAccountMemoryStore } from '../memory/accountMemoryStore';
 import {
   CLOUD_TASKS_VIEW_ID,
   CloudTasksTreeProvider,
@@ -66,11 +67,22 @@ export function setupChat(
     contextPanelProvider,
   );
 
-  const memoryTreeProvider = new MemoryTreeProvider(context.workspaceState);
+  const accountMemoryStore = new AccountMemoryStore(
+    context.globalState,
+    context.secrets,
+    context.workspaceState,
+  );
+  setAccountMemoryStore(accountMemoryStore);
+  const memoryTreeProvider = new MemoryTreeProvider(accountMemoryStore);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('agi-workforce.memory', memoryTreeProvider),
     memoryTreeProvider,
+    accountMemoryStore,
+    new vscode.Disposable(() => {
+      setAccountMemoryStore(undefined);
+    }),
   );
+  void memoryTreeProvider.refresh();
 
   const cloudTasksTreeProvider = new CloudTasksTreeProvider(() =>
     resolveCloudAgentRunClient(context.secrets),

@@ -1,17 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as vscode from 'vscode';
 import { MemoryFactItem, MemoryTreeProvider } from '../memory/memoryTreeProvider';
-import { MEMORY_STORE_KEY, addFact, type MemoryFact } from '../memory/memoryStore';
+import { type MemoryFact } from '../memory/memoryStore';
+import type { AccountMemoryState, AccountMemoryStore } from '../memory/accountMemoryStore';
 
-function makeWorkspaceState(initial?: MemoryFact[]) {
-  const store = new Map<string, unknown>();
-  if (initial !== undefined) store.set(MEMORY_STORE_KEY, initial);
+function makeStore(initial: MemoryFact[] = [], state: AccountMemoryState['status'] = 'ready') {
+  let facts = [...initial];
+  const listeners: Array<() => void> = [];
+  const fire = (): void => {
+    for (const listener of listeners) listener();
+  };
   return {
-    get: <T>(key: string): T | undefined => store.get(key) as T | undefined,
-    update: vi.fn(async (key: string, value: unknown) => {
-      store.set(key, value);
-    }),
-    keys: () => [...store.keys()] as readonly string[],
+    store: {
+      cachedFacts: () => facts,
+      onDidChange: (listener: () => void) => {
+        listeners.push(listener);
+        return new vscode.Disposable(() => undefined);
+      },
+      refresh: vi.fn(async (): Promise<AccountMemoryState> => {
+        return {
+          status: state,
+          facts,
+          ...(state === 'ready' ? {} : { detail: 'the account could not be read' }),
+        };
+      }),
+    } as unknown as AccountMemoryStore,
+    write(next: MemoryFact[]): void {
+      facts = next;
+      fire();
+    },
   };
 }
 
@@ -56,9 +73,8 @@ describe('MemoryFactItem', () => {
   });
 
   it('shows the updated timestamp only when it differs from creation', () => {
-    const updated = new MemoryFactItem(
-      fact({ updatedAt: '2026-01-16T12:00:00.000Z' }),
-    ).tooltip as vscode.MarkdownString;
+    const updated = new MemoryFactItem(fact({ updatedAt: '2026-01-16T12:00:00.000Z' }))
+      .tooltip as vscode.MarkdownString;
     expect(updated.value).toContain('Updated:');
 
     const untouched = new MemoryFactItem(fact({ updatedAt: fact().createdAt }))
@@ -77,8 +93,8 @@ describe('MemoryTreeProvider', () => {
     mockMemoryEnabled(true);
   });
 
-  it('lists stored facts at the root and nothing beneath them', () => {
-    const provider = new MemoryTreeProvider(makeWorkspaceState([fact()]));
+  it('lists the account facts at the root and nothing beneath them', () => {
+    const provider = new MemoryTreeProvider(makeStore([fact()]).store);
     const children = provider.getChildren();
 
     expect(children.map((child) => child.label)).toEqual(['I prefer TypeScript over JavaScript']);
@@ -86,9 +102,9 @@ describe('MemoryTreeProvider', () => {
     provider.dispose();
   });
 
-  it('heads the view with an off notice that still lists what is stored', () => {
+  it('heads the view with an off notice that still lists what the account holds', () => {
     mockMemoryEnabled(false);
-    const provider = new MemoryTreeProvider(makeWorkspaceState([fact()]));
+    const provider = new MemoryTreeProvider(makeStore([fact()]).store);
     const children = provider.getChildren();
 
     expect(children.map((child) => child.label)).toEqual([
@@ -100,8 +116,31 @@ describe('MemoryTreeProvider', () => {
     provider.dispose();
   });
 
-  it('refreshes on explicit refresh, on store writes, and on the memory setting changing', async () => {
-    const workspaceState = makeWorkspaceState();
+  it('offers sign-in instead of an empty list when the account is not reachable as this user', async () => {
+    const provider = new MemoryTreeProvider(makeStore([fact()], 'signed-out').store);
+    await provider.refresh();
+    const children = provider.getChildren();
+
+    expect(children.map((child) => child.label)).toEqual(['Sign in to see your memory']);
+    expect(children[0]?.command?.command).toBe('agi-workforce.signIn');
+    provider.dispose();
+  });
+
+  it('says the list is the cached copy when the account could not be read', async () => {
+    const provider = new MemoryTreeProvider(makeStore([fact()], 'unreachable').store);
+    await provider.refresh();
+    const children = provider.getChildren();
+
+    expect(children.map((child) => child.label)).toEqual([
+      'Showing the memory this device already had',
+      'I prefer TypeScript over JavaScript',
+    ]);
+    expect(children[0]?.contextValue).toBe('memoryUnreachable');
+    provider.dispose();
+  });
+
+  it('refreshes on explicit refresh, on account writes, and on the memory setting changing', async () => {
+    const harness = makeStore();
     const configListeners: Array<(event: vscode.ConfigurationChangeEvent) => void> = [];
     vi.mocked(vscode.workspace.onDidChangeConfiguration).mockImplementation(((
       listener: (event: vscode.ConfigurationChangeEvent) => void,
@@ -110,14 +149,14 @@ describe('MemoryTreeProvider', () => {
       return new vscode.Disposable(() => undefined);
     }) as never);
 
-    const provider = new MemoryTreeProvider(workspaceState);
+    const provider = new MemoryTreeProvider(harness.store);
     const changed = vi.fn();
     const subscription = provider.onDidChangeTreeData(changed);
 
-    provider.refresh();
+    await provider.refresh();
     expect(changed).toHaveBeenCalledTimes(1);
 
-    await addFact(workspaceState, 'Prefer Rust');
+    harness.write([fact({ text: 'Prefer Rust' })]);
     expect(changed).toHaveBeenCalledTimes(2);
 
     for (const listener of configListeners) {

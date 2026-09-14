@@ -1,6 +1,6 @@
-
 import * as vscode from 'vscode';
-import { type MemoryFact, loadFacts, onMemoryDidChange } from './memoryStore';
+import { type MemoryFact } from './memoryStore';
+import type { AccountMemoryStatus, AccountMemoryStore } from './accountMemoryStore';
 import { Config } from '../platform/config';
 
 const MAX_LABEL_CHARS = 60;
@@ -29,6 +29,29 @@ export class MemoryFactItem extends vscode.TreeItem {
   }
 }
 
+export class MemorySignedOutItem extends vscode.TreeItem {
+  constructor() {
+    super('Sign in to see your memory', vscode.TreeItemCollapsibleState.None);
+    this.description = 'Memory lives in your AGI Cloud account';
+    this.tooltip =
+      'Your memory is shared with the web app, the CLI and mobile. Sign in to read and change it here.';
+    this.iconPath = new vscode.ThemeIcon('account');
+    this.contextValue = 'memorySignedOut';
+    this.command = { command: 'agi-workforce.signIn', title: 'Sign in to AGI Cloud' };
+  }
+}
+
+export class MemoryUnreachableItem extends vscode.TreeItem {
+  constructor(detail: string) {
+    super('Showing the memory this device already had', vscode.TreeItemCollapsibleState.None);
+    this.description = 'Your account could not be reached';
+    this.tooltip = detail;
+    this.iconPath = new vscode.ThemeIcon('cloud-offline');
+    this.contextValue = 'memoryUnreachable';
+    this.command = { command: 'agi-workforce.memory.refresh', title: 'Retry' };
+  }
+}
+
 export class MemoryDisabledItem extends vscode.TreeItem {
   constructor() {
     super('Memory is off', vscode.TreeItemCollapsibleState.None);
@@ -51,9 +74,11 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
 
   private readonly _storeChangeDisposable: vscode.Disposable;
   private readonly _configChangeDisposable: vscode.Disposable;
+  private _status: AccountMemoryStatus = 'ready';
+  private _detail = '';
 
-  constructor(private readonly workspaceState: vscode.ExtensionContext['workspaceState']) {
-    this._storeChangeDisposable = onMemoryDidChange(() => {
+  constructor(private readonly store: AccountMemoryStore) {
+    this._storeChangeDisposable = store.onDidChange(() => {
       this._onDidChangeTreeData.fire();
     });
     this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
@@ -63,7 +88,11 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
     });
   }
 
-  refresh(): void {
+  /** Pull the account's memory, then redraw with whatever state that left. */
+  async refresh(): Promise<void> {
+    const state = await this.store.refresh();
+    this._status = state.status;
+    this._detail = state.detail ?? '';
     this._onDidChangeTreeData.fire();
   }
 
@@ -73,8 +102,12 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
     if (element !== undefined) return [];
-    const facts = loadFacts(this.workspaceState).map((f) => new MemoryFactItem(f));
-    return Config.memoryEnabled() ? facts : [new MemoryDisabledItem(), ...facts];
+    if (this._status === 'signed-out') return [new MemorySignedOutItem()];
+    const facts = this.store.cachedFacts().map((fact) => new MemoryFactItem(fact));
+    const banners: vscode.TreeItem[] = [];
+    if (this._status === 'unreachable') banners.push(new MemoryUnreachableItem(this._detail));
+    if (!Config.memoryEnabled()) banners.push(new MemoryDisabledItem());
+    return [...banners, ...facts];
   }
 
   dispose(): void {
