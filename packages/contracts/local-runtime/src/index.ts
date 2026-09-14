@@ -46,7 +46,6 @@ export type {
 
 export {
   DEVELOPER_SESSION_COMMANDS,
-  DEVELOPER_SESSION_ORIGINS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
   DEVELOPER_TURN_OUTCOMES,
@@ -63,8 +62,8 @@ export type {
   DeveloperSessionEvent,
   DeveloperSessionGroup,
   DeveloperSessionList,
-  DeveloperSessionOrigin,
   DeveloperSessionTranscript,
+  DeveloperTurnFailure,
   DeveloperTurnOutcome,
   DeveloperTurnRequest,
 } from './developer-sessions';

@@ -17,8 +17,6 @@ const root: WorkspaceRoot = {
 const listRoots = vi.fn<() => WorkspaceRoot[]>(() => [root]);
 const getRoot = vi.fn<(id: string) => WorkspaceRoot | undefined>(() => root);
 const readWorkspaceGit = vi.fn(async () => ({ branch: 'main' }));
-const rememberSessionStartedHere = vi.fn();
-const wasSessionStartedHere = vi.fn<(id: string) => boolean>(() => false);
 
 const statSync = vi.fn(() => ({ isDirectory: () => true }));
 const accessSync = vi.fn();
@@ -34,10 +32,6 @@ vi.mock('node:fs', () => ({
 vi.mock('node:os', () => ({ default: { homedir: () => '/Users/qa' }, homedir: () => '/Users/qa' }));
 vi.mock('../runtime/workspaceStore', () => ({ listRoots, getRoot }));
 vi.mock('../runtime/gitService', () => ({ readWorkspaceGit }));
-vi.mock('../runtime/developerSessionStore', () => ({
-  rememberSessionStartedHere,
-  wasSessionStartedHere,
-}));
 
 type Responder = (method: string, params: Record<string, unknown>) => unknown;
 
@@ -156,7 +150,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   listRoots.mockReturnValue([root]);
   getRoot.mockReturnValue(root);
-  wasSessionStartedHere.mockReturnValue(false);
   statSync.mockReturnValue({ isDirectory: () => true });
   accessSync.mockReturnValue(undefined);
   process.env['PATH'] = '/Users/qa/.cargo/bin:/usr/bin';
@@ -321,14 +314,29 @@ describe('developer session runtime', () => {
     });
   });
 
-  it('calls a session this shell started Desktop', async () => {
-    const { service } = await loadService();
-    wasSessionStartedHere.mockImplementation((id) => id === 'thread-new');
+  it('reports the surface the CLI recorded, which is this shell for its own', async () => {
+    const { service } = await loadService((method) =>
+      method === 'initialize'
+        ? HANDSHAKE
+        : method === 'thread/start'
+          ? { thread: { ...thread, id: 'thread-new', createdBy: 'desktop' } }
+          : defaultResponder(method),
+    );
 
     const started = await service.startDeveloperSession(root.id);
 
-    expect(rememberSessionStartedHere).toHaveBeenCalledWith('thread-new');
     expect(started.origin).toBe('desktop');
+  });
+
+  it('names this shell agi-desktop at initialize, which is what the CLI records', async () => {
+    const { service, children } = await loadService();
+
+    await service.listDeveloperSessions();
+
+    expect(children[0]?.written[0]).toMatchObject({
+      method: 'initialize',
+      params: { clientInfo: { name: 'agi-desktop' } },
+    });
   });
 
   it('streams a turn as started, deltas and a finish', async () => {
@@ -348,6 +356,7 @@ describe('developer session runtime', () => {
       turnId,
       status: 'completed',
       response: 'desktop leg ok',
+      failure: null,
     });
 
     expect(turnId).toBe('turn-1');
@@ -398,6 +407,50 @@ describe('developer session runtime', () => {
     expect(events.map((entry) => entry.event.type)).toEqual(['tool-started', 'tool-finished']);
     expect(events[0]?.event).toMatchObject({ summary: 'Read README.md', toolCallId: 'call-1' });
     expect(events[1]?.event).toMatchObject({ output: '# QA project', isError: false });
+  });
+
+  it('carries the structured failure the CLI sends through to the surface', async () => {
+    const { service, children, events } = await loadService();
+
+    await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'ping' });
+    children[0]?.notify('turn/failed', {
+      threadId: thread.id,
+      turnId: 'turn-1',
+      status: 'failed',
+      response: '',
+      error: '[a-provider] Authentication failed.',
+      failure: {
+        code: 'provider_auth_missing',
+        message: '[a-provider] Authentication failed.',
+        provider: 'a-provider',
+        action: 'sign_in_provider',
+        retryable: false,
+      },
+    });
+
+    expect(events.at(-1)?.event).toMatchObject({
+      type: 'turn-finished',
+      outcome: 'failed',
+      failure: { code: 'provider_auth_missing', provider: 'a-provider', retryable: false },
+    });
+  });
+
+  it('builds a failure from the legacy string when a CLI sends no failure object', async () => {
+    const { service, children, events } = await loadService();
+
+    await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'ping' });
+    children[0]?.notify('turn/failed', {
+      threadId: thread.id,
+      turnId: 'turn-1',
+      status: 'failed',
+      response: '',
+      error: 'Something went wrong.',
+    });
+
+    expect(events.at(-1)?.event).toMatchObject({
+      type: 'turn-finished',
+      failure: { code: 'unknown', message: 'Something went wrong.', action: 'none' },
+    });
   });
 
   it('surfaces an approval request and sends the answer back', async () => {

@@ -1,7 +1,10 @@
 import type {
   DeveloperMessage,
+  DeveloperSessionSource,
   DeveloperSessionTrustMode,
   ThreadStatus,
+  TurnFailureAction,
+  TurnFailureCode,
 } from '@agiworkforce/types/protocol';
 
 export const DEVELOPER_SESSION_COMMANDS = [
@@ -23,18 +26,11 @@ export function isDeveloperSessionCommand(value: string): value is DeveloperSess
 }
 
 /**
- * Which surface opened a session.
- *
- * The CLI stores `cli` for every client whose name is not VS Code, so a
- * session this shell started is indistinguishable in the shared store. The
- * shell keeps its own record of what it started and reports `desktop` for
- * those; anything it has no record of is reported exactly as the store has it.
+ * Which surface opened a session, as the CLI recorded it from the client name
+ * given at `initialize`. This shell calls itself `agi-desktop`, which is what
+ * makes its own sessions say `desktop`.
  */
-export const DEVELOPER_SESSION_ORIGINS = ['cli', 'vscode', 'desktop'] as const;
-
-export type DeveloperSessionOrigin = (typeof DEVELOPER_SESSION_ORIGINS)[number];
-
-export const DEVELOPER_SESSION_ORIGIN_LABELS: Record<DeveloperSessionOrigin, string> = {
+export const DEVELOPER_SESSION_ORIGIN_LABELS: Record<DeveloperSessionSource, string> = {
   cli: 'CLI',
   vscode: 'VS Code',
   desktop: 'Desktop',
@@ -58,7 +54,22 @@ export interface LocalDeveloperSession {
   status: ThreadStatus;
   createdAt: string;
   updatedAt: string;
-  origin: DeveloperSessionOrigin;
+  origin: DeveloperSessionSource;
+}
+
+/**
+ * Why a turn ended without completing, as the CLI classified it.
+ *
+ * `code` and `action` are the closed sets a surface may branch on; `message` is
+ * the CLI's own line, which reads for a terminal and is shown only where this
+ * surface has nothing better to say.
+ */
+export interface DeveloperTurnFailure {
+  code: TurnFailureCode;
+  message: string;
+  provider: string | null;
+  action: TurnFailureAction;
+  retryable: boolean;
 }
 
 /**
@@ -142,7 +153,7 @@ export type DeveloperSessionEvent =
       turnId: string;
       outcome: DeveloperTurnOutcome;
       response: string;
-      error: string | null;
+      failure: DeveloperTurnFailure | null;
     }
   | {
       type: 'tool-started';

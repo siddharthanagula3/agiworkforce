@@ -78,7 +78,7 @@ describe('one local session', () => {
       turnId: 'turn-1',
       outcome: 'completed',
       response: 'desktop leg ok',
-      error: null,
+      failure: null,
     });
 
     await waitFor(() => expect(result.current.messages).toHaveLength(2));
@@ -99,11 +99,17 @@ describe('one local session', () => {
       turnId: 'turn-1',
       outcome: 'failed',
       response: '',
-      error: '[a-provider] Authentication failed.',
+      failure: {
+        code: 'provider_auth_missing',
+        message: '[a-provider] Authentication failed.',
+        provider: 'a-provider',
+        action: 'sign_in_provider',
+        retryable: false,
+      },
     });
 
     await waitFor(() => expect(result.current.turn.outcome).toBe('failed'));
-    expect(result.current.turn.error).toBe('[a-provider] Authentication failed.');
+    expect(result.current.turn.failure?.code).toBe('provider_auth_missing');
     expect(result.current.turn.prompt).toBe('ping');
     expect(readDeveloperSession).toHaveBeenCalledTimes(1);
   });
@@ -125,7 +131,7 @@ describe('one local session', () => {
       turnId: 'turn-1',
       outcome: 'interrupted',
       response: '',
-      error: null,
+      failure: null,
     });
 
     expect(interruptDeveloperTurn).toHaveBeenCalledWith('root-1', 'thread-1', 'turn-1');

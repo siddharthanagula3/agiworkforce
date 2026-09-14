@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type {
   DeveloperApprovalAnswer,
+  DeveloperTurnFailure,
   DeveloperModelOption,
   DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
@@ -11,7 +12,6 @@ import type {
   DeveloperSessionEvent,
   DeveloperSessionGroup,
   DeveloperSessionList,
-  DeveloperSessionOrigin,
   DeveloperSessionTranscript,
   DeveloperTurnOutcome,
   DeveloperTurnRequest,
@@ -19,12 +19,14 @@ import type {
 } from '@agiworkforce/local-runtime-contract';
 import type {
   DeveloperMessage,
+  DeveloperSessionSource,
   DeveloperSessionTrustMode,
   ThreadStatus,
+  TurnFailureAction,
+  TurnFailureCode,
 } from '@agiworkforce/types/protocol';
 import { readWorkspaceGit } from './gitService';
 import { getRoot, listRoots } from './workspaceStore';
-import { rememberSessionStartedHere, wasSessionStartedHere } from './developerSessionStore';
 
 const PROTOCOL_VERSION = 8;
 const CLIENT_NAME = 'agi-desktop';
@@ -351,8 +353,34 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     turnId,
     outcome,
     response: readString(params, 'response') ?? '',
-    error: readString(params, 'error'),
+    failure: readFailure(params),
   });
+}
+
+/**
+ * The structured failure, or one built from the legacy string.
+ *
+ * A CLI that predates the failure object still sends `error`, and dropping that
+ * would leave a turn failing in silence. It classifies as `unknown`, which is
+ * exactly what the surface knows about it.
+ */
+function readFailure(params: Record<string, unknown>): DeveloperTurnFailure | null {
+  const raw = params['failure'];
+  if (isRecord(raw)) {
+    const message = readString(raw, 'message');
+    if (message) {
+      return {
+        code: (readString(raw, 'code') ?? 'unknown') as TurnFailureCode,
+        message,
+        provider: readString(raw, 'provider'),
+        action: (readString(raw, 'action') ?? 'none') as TurnFailureAction,
+        retryable: raw['retryable'] === true,
+      };
+    }
+  }
+  const legacy = readString(params, 'error');
+  if (!legacy) return null;
+  return { code: 'unknown', message: legacy, provider: null, action: 'none', retryable: false };
 }
 
 function request(server: RunningServer, method: string, params: unknown): Promise<unknown> {
@@ -502,11 +530,6 @@ function requireRoot(rootId: string): WorkspaceRoot {
   return root;
 }
 
-function sessionOrigin(threadId: string, storedSource: unknown): DeveloperSessionOrigin {
-  if (wasSessionStartedHere(threadId)) return 'desktop';
-  return storedSource === 'vscode' ? 'vscode' : 'cli';
-}
-
 function toSession(rootId: string, raw: unknown): LocalDeveloperSession | null {
   if (!isRecord(raw)) return null;
   const id = readString(raw, 'id');
@@ -522,7 +545,7 @@ function toSession(rootId: string, raw: unknown): LocalDeveloperSession | null {
     status: (readString(raw, 'status') ?? 'idle') as ThreadStatus,
     createdAt: readString(raw, 'createdAt') ?? '',
     updatedAt: readString(raw, 'updatedAt') ?? '',
-    origin: sessionOrigin(id, raw['createdBy']),
+    origin: (readString(raw, 'createdBy') ?? 'cli') as DeveloperSessionSource,
   };
 }
 
@@ -640,9 +663,7 @@ export async function startDeveloperSession(
     cwd: root.path,
     ...(model ? { model } : {}),
   });
-  const session = requireSession(rootId, result);
-  rememberSessionStartedHere(session.id);
-  return { ...session, origin: 'desktop' };
+  return requireSession(rootId, result);
 }
 
 export async function startDeveloperTurn(input: DeveloperTurnRequest): Promise<{ turnId: string }> {

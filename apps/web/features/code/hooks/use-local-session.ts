@@ -147,7 +147,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
           ...current,
           outcome: event.outcome,
           reply: current.reply === '' ? event.response : current.reply,
-          error: event.error,
+          failure: event.failure,
         }));
         // A completed turn is in the store, so the transcript is read again and
         // the live copy dropped. A turn that failed or was stopped is not: its
