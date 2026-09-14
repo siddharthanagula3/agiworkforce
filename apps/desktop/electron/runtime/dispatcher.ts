@@ -81,6 +81,7 @@ import {
   answerDeveloperApproval,
   interruptDeveloperTurn,
   listDeveloperSessions,
+  readDeveloperModels,
   readDeveloperRuntimeStatus,
   readDeveloperSession,
   resumeDeveloperSession,
@@ -438,21 +439,37 @@ async function approveBrowserCommand(
   return result.response === 1;
 }
 
-async function runBrowserCommand(
+/**
+ * Another program on this machine asking for the browser, rather than this
+ * shell's own renderer.
+ *
+ * `name` scopes the grant so the user answers once per client, and `label`
+ * is what the prompt says out loud ("agi in ~/project").
+ */
+export interface BrowserCommandCaller {
+  name: string;
+  label: string;
+}
+
+export async function runBrowserCommand(
   window: BrowserWindow | null,
   command: string,
   args: Args,
+  caller?: BrowserCommandCaller,
 ): Promise<DesktopRuntimeResponse> {
   const plan = planBrowserCommand(command, args);
-  const scope: PermissionScope = { kind: 'global' };
+  // A local client is its own permission subject: the user grants "agi" the
+  // browser, not every client at once, and revoking one does not revoke the
+  // renderer.
+  const scope: PermissionScope = caller
+    ? { kind: 'application', target: caller.name }
+    : { kind: 'global' };
+  const reason = caller
+    ? `${caller.label} is asking. It already asked you before making this tool call, under its own permission rules, so AGI Desktop will not ask again for each action. The paired Chrome extension still carries the action out under its own approved-sites list.`
+    : 'The paired Chrome extension carries out the action, under its own approved-sites list.';
   const state =
     getPermissionState(plan.capability, scope) === 'prompt'
-      ? await requestPermission(
-          window,
-          plan.capability,
-          scope,
-          'The paired Chrome extension carries out the action, under its own approved-sites list.',
-        )
+      ? await requestPermission(window, plan.capability, scope, reason)
       : getPermissionState(plan.capability, scope);
 
   if (state !== 'granted') {
@@ -465,7 +482,11 @@ async function runBrowserCommand(
       },
     );
   }
-  if (!(await approveBrowserCommand(window, plan))) {
+  // The per-action dialog is the renderer's second gate. A local client already
+  // put the tool call through its own approval, so asking again here would be
+  // the same question twice with no new information, and would make a tool the
+  // model can call one the user has to babysit.
+  if (!caller && !(await approveBrowserCommand(window, plan))) {
     return runtimeFailure('cancelled', 'That browser action was not run.');
   }
 
@@ -652,6 +673,8 @@ async function execute(
       return declareDeviceHost();
     case 'developer_runtime_status':
       return readDeveloperRuntimeStatus();
+    case 'developer_model_list':
+      return readDeveloperModels(requireString(args, 'rootId'));
     case 'developer_session_list':
       return listDeveloperSessions();
     case 'developer_session_read':
