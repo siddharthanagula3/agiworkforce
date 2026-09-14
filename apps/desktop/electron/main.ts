@@ -15,7 +15,7 @@ import {
   checkDesktopCloudUpdate,
   desktopCloudInstallerDownloadUrl,
   type DesktopCloudMacArchitecture,
-} from '../src/lib/desktopCloudUpdate';
+} from './desktopCloudUpdate';
 import {
   ELECTRON_IPC_CHANNELS,
   isElectronBridgeCommand,
