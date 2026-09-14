@@ -483,15 +483,15 @@ describe('formUtils', () => {
       expect(form.requestSubmit).toHaveBeenCalled();
     });
 
-    it('submits the first form when no form argument is given (L-02)', () => {
+    it('never submits a form it was not handed', () => {
       document.body.innerHTML = '<form id="first"></form><form id="second"></form>';
       const first = document.getElementById('first') as HTMLFormElement;
       const second = document.getElementById('second') as HTMLFormElement;
       first.requestSubmit = vi.fn();
       second.requestSubmit = vi.fn();
 
-      formUtils.submitForm(null);
-      expect(first.requestSubmit).toHaveBeenCalled();
+      expect(formUtils.submitForm(null)).toBe(false);
+      expect(first.requestSubmit).not.toHaveBeenCalled();
       expect(second.requestSubmit).not.toHaveBeenCalled();
     });
 
@@ -504,8 +504,8 @@ describe('formUtils', () => {
       expect(form.submit).toHaveBeenCalled();
     });
 
-    it('returns true even when no form is present in the document', () => {
-      expect(formUtils.submitForm(null)).toBe(true);
+    it('reports failure when there is no form to submit', () => {
+      expect(formUtils.submitForm(null)).toBe(false);
     });
   });
 });

@@ -52,7 +52,6 @@ import {
   PAGE_CAPTURE_UNAVAILABLE_MESSAGE,
   PAGE_CAPTURE_UNDELIVERED_TITLE,
 } from './features/background/page-capture';
-import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
 import {
   beginScheduledTaskRunJournal,
   canResumeScheduledTaskRunJournal,
@@ -3059,7 +3058,8 @@ async function handleMessageAsync(
       if (
         !state.isNativeConnected &&
         !_bgCtx.nativeHandshakeInFlight &&
-        !_bgCtx.nativeReconnectGaveUp
+        !_bgCtx.nativeReconnectGaveUp &&
+        (await shouldAutoConnectToDesktop())
       ) {
         connectToNativeHost();
       }
