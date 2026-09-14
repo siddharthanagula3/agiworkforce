@@ -713,6 +713,53 @@ account data) and record it in the release doc's verification matrix.
 other client are unaffected)
 **Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
 
+## [Mobile] Enable the Native API on the Clerk development instance
+
+**Why founder assistance is required**
+The iOS app's Cloud sign-in screen renders a heading and no fields: the Clerk
+instance answers `native_api_disabled` ("The Native API is disabled for this
+instance. Visit the Clerk Dashboard to enable it.") to the app's environment
+call, so the native SDK has no sign-in strategies to draw and Clerk never
+reports loaded. This is an instance setting in the Clerk Dashboard, not app
+code, and it also means the item above (a password for the QA user) cannot
+help until it is on.
+**Exact action**
+In the Clerk Dashboard for the development instance (`handy-jawfish-73`), open
+Native applications and enable the Native API; add the iOS bundle id
+`com.agiworkforce.app` if the page asks for one. Repeat on the production
+instance before a store build.
+**Where** Clerk Dashboard, development instance, then production.
+**Needed input** One toggle per instance.
+**How to verify completion** A fresh launch of the iOS app shows sign-in
+fields on the Cloud Account screen and the Settings rows resolve from "Sign
+in" to the account's values after signing in.
+**What remains after founder action** Run the mobile Cloud pass (sync,
+projects, account data) and record it in the release doc's matrix.
+**Impact** VERIFICATION-BLOCKING (mobile Cloud mode; Local mode is unaffected)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
+## [Chrome QA] One click on Chrome's host-permission prompt
+
+**Why founder assistance is required**
+The side panel's Site Allowlist "Add" now asks Chrome for read access to the
+site (it used to write storage only, so page context never worked). Chrome
+answers with its own native prompt, which is browser chrome: Playwright cannot
+see or click it, and the computer-use tools are read-only over browsers. The
+happy path therefore has unit coverage and no live proof.
+**Exact action**
+Load the extension from `apps/extension/dist` (or the store build), open the side
+panel on any site, choose Settings, Site Allowlist, click Add, click Allow on
+Chrome's prompt, turn on "Add the browser page" and ask "What is this page
+about?". One minute.
+**Where** Chrome on the founder's machine.
+**Needed input** One click on Allow, then a yes or no.
+**How to verify completion** The reply describes the page and the outgoing
+message carries page context; a refusal still shows the panel's own sentence.
+**What remains after founder action** Record the result in the release doc's
+verification matrix and the Screen Studio gate.
+**Impact** VERIFICATION-BLOCKING (page context in the side panel only)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
 ## [Durability] Ship the world transport fix and end the two stranded runs
 
 **Why founder assistance is required**
