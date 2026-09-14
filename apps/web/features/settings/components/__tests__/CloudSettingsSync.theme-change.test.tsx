@@ -35,6 +35,10 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
     preferences.savePreferenceNamespace(namespace, patch, options),
 }));
 
+vi.mock('@/lib/client/csrf', () => ({
+  getCsrfToken: vi.fn(async () => 'test-csrf-token'),
+}));
+
 const { CloudSettingsSync } = await import('@/features/settings/components/CloudSettingsSync');
 
 const setters: Array<(theme: string) => void> = [];
