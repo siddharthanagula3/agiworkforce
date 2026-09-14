@@ -1,22 +1,42 @@
 import { setChild } from '../../dom-helpers';
 import { Mic, renderIcon } from '../../assets/icons';
 
+const VOICE_IDLE_TITLE = "Voice input (audio is transcribed by Chrome's speech service)";
+
 type SpeechRecognitionCtor = new () => {
   lang: string;
   interimResults: boolean;
   maxAlternatives: number;
   onstart: (() => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
   onresult: ((event: { results: Array<Array<{ transcript: string }>> }) => void) | null;
   start(): void;
   stop(): void;
 };
 
+const VOICE_ERROR_MESSAGES: Record<string, string> = {
+  'not-allowed':
+    'Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again.',
+  'service-not-allowed': 'Voice recognition is not available in this browser profile.',
+  'audio-capture': 'No microphone was found.',
+  'no-speech': 'No speech was heard. Try again and speak after the button starts pulsing.',
+  network: 'Voice recognition needs a network connection.',
+  aborted: '',
+};
+
+export function describeVoiceError(code: string | undefined): string {
+  if (code === undefined) return 'Voice input failed. Try again.';
+  const known = VOICE_ERROR_MESSAGES[code];
+  if (known !== undefined) return known;
+  return 'Voice input failed. Try again.';
+}
+
 export function setupVoiceInput(
   micBtn: HTMLButtonElement,
   inputEl: HTMLTextAreaElement,
   autoResize: (el: HTMLTextAreaElement) => void,
+  onError: (message: string) => void = () => {},
 ): void {
   const w = window as unknown as Record<string, unknown>;
   const SpeechRecognitionCtor: SpeechRecognitionCtor | undefined =
@@ -24,11 +44,12 @@ export function setupVoiceInput(
     (w['webkitSpeechRecognition'] as SpeechRecognitionCtor | undefined);
 
   if (!SpeechRecognitionCtor) {
-    micBtn.title = 'Voice input not supported in this browser';
-    micBtn.style.opacity = '0.4';
-    micBtn.style.cursor = 'not-allowed';
+    micBtn.title = 'Voice input is not supported in this browser';
+    micBtn.disabled = true;
+    micBtn.setAttribute('aria-disabled', 'true');
     return;
   }
+  micBtn.title = VOICE_IDLE_TITLE;
 
   let recognition: InstanceType<SpeechRecognitionCtor> | null = null;
   let listening = false;
@@ -40,7 +61,7 @@ export function setupVoiceInput(
     }
 
     recognition = new SpeechRecognitionCtor();
-    recognition.lang = 'en-US';
+    recognition.lang = chrome.i18n?.getUILanguage?.() || navigator.language || 'en-US';
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
@@ -60,8 +81,9 @@ export function setupVoiceInput(
       }
     };
 
-    recognition.onerror = () => {
-      /* ignore */
+    recognition.onerror = (event) => {
+      const message = describeVoiceError(event?.error);
+      if (message) onError(message);
     };
 
     recognition.onend = () => {
@@ -69,7 +91,7 @@ export function setupVoiceInput(
       if (document.body) {
         micBtn.classList.remove('active');
         micBtn.replaceChildren(renderIcon(Mic, 14));
-        micBtn.title = 'Voice input';
+        micBtn.title = VOICE_IDLE_TITLE;
       }
       recognition = null;
     };

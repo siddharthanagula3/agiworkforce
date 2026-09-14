@@ -86,7 +86,10 @@ import {
   readCloudMirroringEnabled,
   watchCloudMirroringEnabled,
 } from './features/privacy/cloudMirroring';
-import { getChromeSurfaceAvailability } from './features/side-panel/surface-policy';
+import {
+  getChromeSurfaceAvailability,
+  isRestrictedPageUrl,
+} from './features/side-panel/surface-policy';
 import { ManagedCloudOwnerRequestFence } from './features/side-panel/managed-owner-request-fence';
 import {
   ALLOWED_BRIDGE_HOSTS,
@@ -382,6 +385,7 @@ function setManagedCloudChatState(
     actionLabel?: string;
   } = {},
 ): void {
+  const becameReady = state === 'ready' && managedCloudChatState !== 'ready';
   managedCloudChatState = state;
   managedCloudGateMessage =
     options.message ??
@@ -412,6 +416,7 @@ function setManagedCloudChatState(
     else if (state === 'unavailable') input.placeholder = t('spComposerPlaceholderNoAccess');
   }
   updateSendButton();
+  if (becameReady) checkPendingChat();
 }
 
 type ChatMessage = SidePanelChatMessage;
@@ -664,6 +669,7 @@ const ownerByStreamId = new Map<string, ManagedCloudOwner>();
 const assistantCloudIdByStreamId = new Map<string, string>();
 
 let currentPageHostname = '';
+let activePageSource: PageContextSource | null = null;
 
 type SidePanelTab = 'chat' | 'workflows' | 'computer-use' | 'cloud-runs' | 'page';
 
@@ -3278,6 +3284,7 @@ function injectStyles(): void {
     }
     .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
     .sp-drawer-memory-item-delete-btn.is-confirm { color: white; background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+    .sp-drawer-history-delete.is-confirm { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger); background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent); }
     .sp-drawer-memory-item-textarea {
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
@@ -4200,7 +4207,7 @@ function injectStyles(): void {
       border-radius: 14px;
       box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
     }
-    #sp-model-dropdown { margin-top: 8px; min-width: 232px; }
+    #sp-model-dropdown { margin-top: 8px; min-width: min(232px, calc(100vw - 24px)); }
     .sp-model-option,
     .sp-attach-menu-item,
     .sp-slash-item,
@@ -4457,10 +4464,13 @@ function updateStreamingBubble(id: string, fullText: string, done: boolean): voi
 const PAGE_CONTEXT_MAX_CHARS = 5_000;
 
 const PAGE_CONTEXT_DENIED_REASON =
-  'Chrome would not let the extension read this page. Add this site under Approved sites in the ' +
-  'extension options, reload the page, and try again.';
+  "Chrome does not let extensions read this page. That covers Chrome's own pages, the Web Store, " +
+  'and pages an administrator has restricted. Open an ordinary site and try again.';
 
 const PAGE_CONTEXT_EMPTY_REASON = 'This page had no readable text to attach.';
+
+const PAGE_CONTEXT_CHANGED_REASON =
+  'The active page changed before it could be read. Go back to the page you asked about and try again.';
 
 export type PageContextCapture =
   | { ok: true; text: string; source: PageContextSource }
@@ -4497,7 +4507,12 @@ async function capturePageContext(): Promise<PageContextCapture> {
       chrome.scripting.executeScript(
         {
           target: { tabId: tab.id },
-          func: () => (document.body?.innerText ?? '').slice(0, 5000),
+          func: () => {
+            const main = document.querySelector('main, article, [role="main"]');
+            const mainText = main instanceof HTMLElement ? main.innerText.trim() : '';
+            const text = mainText.length >= 200 ? mainText : (document.body?.innerText ?? '');
+            return text.slice(0, 5000);
+          },
         },
         (results) => {
           const scriptFailure = chrome.runtime.lastError?.message;
@@ -4814,10 +4829,18 @@ function sendMessage(text: string): void {
     renderMessages();
 
     const streamId = beginManagedStream(_ctx.quickMode);
+    const pageAtAdmission = activePageSource;
 
     capturePageContext()
       .then((capture) => {
         if (_ctx.currentStreamId !== streamId) return;
+        if (
+          capture.ok &&
+          !pageContextStillDescribes(pageAtAdmission, capture.source.tabId, capture.source.url)
+        ) {
+          handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+          return;
+        }
         const pageCtx = capture.ok ? capture.text : pageContextAtAdmission;
         if (!pageCtx) {
           // This command is about the page. Answering without it would be an
@@ -4920,16 +4943,18 @@ function retryFailedMessage(messageId: string): void {
   if (failedIndex < 0) return;
 
   let promptText = '';
+  let promptIndex = -1;
   for (let i = failedIndex - 1; i >= 0; i--) {
     const candidate = _ctx.messages[i];
     if (candidate?.role === 'user') {
       promptText = candidate.content;
+      promptIndex = i;
       break;
     }
   }
   if (!promptText) return;
 
-  _ctx.messages.splice(failedIndex, 1);
+  _ctx.messages.splice(promptIndex, failedIndex - promptIndex + 1);
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
@@ -5313,20 +5338,15 @@ function dropPageContextOnNavigation(tabId: number | undefined, url: string): vo
 
 function updateActivePage(url: string, tabId?: number): void {
   dropPageContextOnNavigation(tabId, url);
+  activePageSource = typeof tabId === 'number' ? { tabId, url } : null;
   currentPageHostname = pageChipLabel(url);
-  setBlockedState(isRestrictedUrl(url));
+  setBlockedState(isRestrictedPageUrl(url));
   updateContextButton();
 }
 
 function autoResizeInput(ta: HTMLTextAreaElement): void {
   ta.style.height = 'auto';
   ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
-}
-
-function isRestrictedUrl(url: string): boolean {
-  if (!url) return false;
-  const RESTRICTED = ['chrome://', 'chrome-extension://', 'edge://', 'about:', 'data:', 'file:///'];
-  return RESTRICTED.some((prefix) => url.startsWith(prefix));
 }
 
 function setBlockedState(blocked: boolean): void {
@@ -6515,11 +6535,33 @@ function buildUI(): void {
       item.appendChild(openButton);
 
       const delBtn = iconButton(
-        { class: 'sp-drawer-history-delete', title: 'Delete' },
+        { class: 'sp-drawer-history-delete', title: t('spHistoryDelete') },
         Trash2,
       ) as HTMLButtonElement;
+      let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (!delBtn.classList.contains('is-confirm')) {
+          delBtn.classList.add('is-confirm');
+          delBtn.title = t('spHistoryDeleteConfirm');
+          delBtn.setAttribute('aria-label', t('spHistoryDeleteConfirm'));
+          drawerHistoryError.textContent = entry.cloudSync?.conversationId
+            ? t('spHistoryDeleteConfirmAccount')
+            : t('spHistoryDeleteConfirmDevice');
+          drawerHistoryError.removeAttribute('hidden');
+          deleteConfirmTimer = setTimeout(() => {
+            delBtn.classList.remove('is-confirm');
+            delBtn.title = t('spHistoryDelete');
+            delBtn.removeAttribute('aria-label');
+            drawerHistoryError.setAttribute('hidden', '');
+            deleteConfirmTimer = null;
+          }, DRAWER_DELETE_CONFIRM_MS);
+          return;
+        }
+        if (deleteConfirmTimer !== null) {
+          clearTimeout(deleteConfirmTimer);
+          deleteConfirmTimer = null;
+        }
         const deletingCurrentConversation = entry.id === _ctx.conversationId;
         const deletionGeneration = _ctx.conversationGeneration;
         if (deletingCurrentConversation) cancelCurrentManagedStream(false);
@@ -7112,7 +7154,7 @@ function buildUI(): void {
     el(
       'p',
       { class: 'sp-drawer-allowlist-help' },
-      'Approved origins can run AGI browser automation in their tab. The optional page assistant can also send up to 30,000 characters of redacted visible page text from an approved origin to AGI Managed Cloud. Add the current site, then reload it.',
+      'Approved sites are where the in-page assistant, page tools and job autofill can run. The in-page assistant can send up to 30,000 characters of redacted visible page text from an approved site to AGI Cloud. Browser control for computer use is granted per site in Settings. Add the current site, then reload it.',
     ),
   );
 
@@ -7261,7 +7303,6 @@ function buildUI(): void {
     }
   });
 
-  const DRAWER_DELETE_CONFIRM_MS = 3000;
   const memorySection = el('div', { class: 'sp-drawer-section' });
   memorySection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Memory'));
   memorySection.appendChild(
@@ -8386,7 +8427,7 @@ function buildUI(): void {
     createElementWith({
       tag: 'div',
       id: 'sp-blocked-desc',
-      text: "You can still chat, but AGI can't read or automate browser-internal pages.",
+      text: "You can still chat, but Chrome does not let extensions read or automate this page. That covers Chrome's own pages, the Web Store, and pages an administrator has restricted.",
     }),
   );
   blockedState.appendChild(blockedCopy);
@@ -9134,10 +9175,6 @@ function buildUI(): void {
       );
       switchTab('computer-use');
 
-      await chrome.storage.local.set({
-        agi_cu_ask_before_acting: cuPanel.isAskBeforeActing(),
-      });
-
       const requestedRunId = `cu_run_${crypto.randomUUID()}`;
       cuPanel.setRunState(true, requestedRunId);
 
@@ -9399,7 +9436,7 @@ function buildUI(): void {
     updateSendButton();
   });
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       const text = inputEl.value;
       if (!canAdmitComposerMessage(text)) return;
@@ -9852,12 +9889,14 @@ function buildUI(): void {
     id: 'sp-quick-mode-toggle',
     title: 'Quick mode: prioritize lower latency for each reply',
     'data-active': 'false',
+    'aria-pressed': 'false',
   });
   quickModeToggle.textContent = t('spQuickMode');
   chrome.storage.local.get({ agi_quick_mode: false }, (items) => {
     const active = items['agi_quick_mode'] === true;
     _ctx.quickMode = active;
     quickModeToggle.setAttribute('data-active', active ? 'true' : 'false');
+    quickModeToggle.setAttribute('aria-pressed', active ? 'true' : 'false');
     quickModeToggle.classList.toggle('sp-quick-mode-active', active);
     refreshEffortUI();
   });
@@ -9866,6 +9905,7 @@ function buildUI(): void {
     const next = !current;
     _ctx.quickMode = next;
     quickModeToggle.setAttribute('data-active', next ? 'true' : 'false');
+    quickModeToggle.setAttribute('aria-pressed', next ? 'true' : 'false');
     quickModeToggle.classList.toggle('sp-quick-mode-active', next);
     refreshEffortUI();
     chrome.runtime
@@ -9875,12 +9915,14 @@ function buildUI(): void {
         _ctx.quickMode = current;
         refreshEffortUI();
         quickModeToggle.setAttribute('data-active', current ? 'true' : 'false');
+        quickModeToggle.setAttribute('aria-pressed', current ? 'true' : 'false');
         quickModeToggle.classList.toggle('sp-quick-mode-active', current);
       })
       .catch((err: unknown) => {
         _ctx.quickMode = current;
         refreshEffortUI();
         quickModeToggle.setAttribute('data-active', current ? 'true' : 'false');
+        quickModeToggle.setAttribute('aria-pressed', current ? 'true' : 'false');
         quickModeToggle.classList.toggle('sp-quick-mode-active', current);
         console.warn('[SidePanel] Failed to set quick mode:', err);
       });
@@ -9965,6 +10007,8 @@ function buildUI(): void {
 
   buildOnboardingOverlay(() => {
     void probeBridgeStatus();
+    checkPendingChat();
+    void checkPendingBackgroundResult();
   });
 
   composerShell.addEventListener('dragover', (event: DragEvent) => {
@@ -9984,7 +10028,10 @@ function buildUI(): void {
     acceptIncomingComposerFiles(filesFromDataTransfer(event.dataTransfer));
   });
 
-  setupVoiceInput(micBtn, inputEl, autoResizeInput);
+  setupVoiceInput(micBtn, inputEl, autoResizeInput, (message) => {
+    composerContextNotice = message;
+    updateAttachmentPreview();
+  });
   renderMessages();
 
   switchTab('chat');
@@ -10752,26 +10799,53 @@ async function checkPendingBackgroundResult(): Promise<void> {
   await openStoredConversation(conversationId);
 }
 
+const DRAWER_DELETE_CONFIRM_MS = 3000;
+
+const PENDING_CHAT_TTL_MS = 5 * 60_000;
+
+function pendingChatPrompt(pending: { type: string; text: string }): string {
+  switch (pending.type) {
+    case 'explain':
+      return `Explain the following:\n\n"${pending.text}"`;
+    case 'translate':
+      return `Translate the following to English (or if already English, to Spanish):\n\n"${pending.text}"`;
+    default:
+      return pending.text;
+  }
+}
+
 function checkPendingChat(): void {
   chrome.storage.session.get('agi_pending_chat', (result) => {
     if (chrome.runtime.lastError) return;
     const pending = result['agi_pending_chat'] as
       | { type: string; text: string; url: string; timestamp: number }
       | undefined;
-    if (!pending || Date.now() - pending.timestamp > 30_000) return;
+    if (!pending || Date.now() - pending.timestamp > PENDING_CHAT_TTL_MS) {
+      if (pending) chrome.storage.session.remove('agi_pending_chat').catch(() => {});
+      return;
+    }
+
+    const summarizePrompt = SLASH_COMMANDS['/summarize']!.prompt;
+    const admissionProbe = pending.type === 'summarize' ? summarizePrompt : pending.text;
+    if (!canAdmitComposerMessage(admissionProbe)) {
+      const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+      if (input && !input.value.trim()) {
+        input.value = pending.type === 'summarize' ? '/summarize' : pendingChatPrompt(pending);
+        autoResizeInput(input);
+        updateSendButton();
+        chrome.storage.session.remove('agi_pending_chat').catch(() => {});
+      }
+      return;
+    }
 
     chrome.storage.session.remove('agi_pending_chat').catch(() => {});
 
     let prompt = '';
     switch (pending.type) {
       case 'ask':
-        prompt = pending.text;
-        break;
       case 'explain':
-        prompt = `Explain the following:\n\n"${pending.text}"`;
-        break;
       case 'translate':
-        prompt = `Translate the following to English (or if already English, to Spanish):\n\n"${pending.text}"`;
+        prompt = pendingChatPrompt(pending);
         break;
       case 'summarize':
         capturePageContext()
@@ -10784,7 +10858,7 @@ function checkPendingChat(): void {
             _ctx.pendingPageContext = capture.text;
             _ctx.pendingPageContextSource = capture.source;
             composerContextNotice = null;
-            sendMessage(SLASH_COMMANDS['/summarize']!.prompt);
+            sendMessage(summarizePrompt);
           })
           .catch((err) => {
             console.error('[SidePanel] Failed to capture page context for summarize:', err);
