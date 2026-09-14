@@ -63,7 +63,6 @@ const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
 const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
 const openPrivacySettings = z.object({ type: z.literal('openPrivacySettings') });
 const openCloudTasks = z.object({ type: z.literal('openCloudTasks') });
-const revealConversationHistory = z.object({ type: z.literal('revealConversationHistory') });
 const openRecentConversation = z.object({
   type: z.literal('openRecentConversation'),
   payload: z.object({ threadId: z.string().min(1) }),
@@ -215,7 +214,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openPermissionDocs,
   openPrivacySettings,
   openCloudTasks,
-  revealConversationHistory,
   openRecentConversation,
   openPathReference,
   requestContextMenuState,

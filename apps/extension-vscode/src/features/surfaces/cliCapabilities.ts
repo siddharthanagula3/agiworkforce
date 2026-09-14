@@ -8,14 +8,14 @@ export const CLI_CAPABILITY_METHODS = {
   plugins: 'listPlugins',
   mcpServers: 'listMcpServers',
   hooks: 'listHooks',
-  instructions: 'readContextInstructions',
+  instructions: 'contextInstructions',
   commands: 'listCommands',
   runCommand: 'runCommand',
   readSettings: 'readSettings',
   writeSettings: 'writeSettings',
-  accountStatus: 'readAccountStatus',
+  accountStatus: 'accountStatus',
   accountLogin: 'startAccountLogin',
-  accountToken: 'readAccountToken',
+  accountToken: 'accountToken',
 } as const;
 
 export type CliCapability = keyof typeof CLI_CAPABILITY_METHODS;

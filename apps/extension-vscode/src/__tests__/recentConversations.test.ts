@@ -116,13 +116,21 @@ describe('sidebar recent conversations', () => {
     );
   });
 
-  it('reveals the native history tree for View all', async () => {
-    const { manager } = makeManager(async () => THREADS);
+  it('answers the sessions sheet with the local rows, newest first', async () => {
+    const { manager, posted } = makeManager(async () => THREADS);
 
-    await manager.handleMessage({ type: 'revealConversationHistory' });
+    await manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-      'agi-workforce.conversations.focus',
-    );
+    const message = posted.find((entry) => entry.type === 'sessionsList');
+    expect(message?.type === 'sessionsList' && message.payload.source).toBe('local');
+    expect(message?.type === 'sessionsList' && message.payload.rows.map((row) => row.id)).toEqual([
+      'thread-a',
+      'thread-b',
+      'thread-c',
+      'thread-d',
+      'thread-e',
+      'thread-f',
+    ]);
+    expect(message?.type === 'sessionsList' && message.payload.rows[0]?.sourceLabel).toBe('Local');
   });
 });
