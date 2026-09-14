@@ -142,6 +142,7 @@ import { getConversationMessageStore } from './conversationRepository';
 import { useChatCloudMessageStore } from './chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
+import { turnProducedNothing } from '@/src/features/chat/utils/messageStreamError';
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import {
   generatedFileArtifactsFromWire,
@@ -1869,11 +1870,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
             const finalContent = msgs.find((m) => m.id === assistantMessageId)?.content ?? '';
             if (
-              !finalContent.trim() &&
-              finalToolCalls.length === 0 &&
-              turnGeneratedFiles.length === 0 &&
-              turnInteractiveCards.length === 0 &&
-              !turnStreamError
+              turnProducedNothing({
+                content: finalContent,
+                toolCallCount: finalToolCalls.length,
+                generatedFileCount: turnGeneratedFiles.length,
+                interactiveCardCount: turnInteractiveCards.length,
+                hasResearchRun: turnResearch !== undefined,
+                hasStreamError: turnStreamError !== undefined,
+              })
             ) {
               turnStreamError = {
                 message: 'AGI Cloud returned an empty response. Try again.',
