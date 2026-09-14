@@ -11,11 +11,91 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { requireCatalogModel } from './catalogModelFixtures';
 
-import { presentChatError } from '../features/sidebar-webview/errorPresentation';
+import {
+  presentChatError,
+  presentTurnFailure,
+} from '../features/sidebar-webview/errorPresentation';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 
 const DEEPSEEK_400 =
   "[deepseek] API error (HTTP 400): Invalid 'tools[12].function.name': string does not match pattern. Expected a string that matches the pattern '^[a-zA-Z0-9_-]+$'.";
+
+describe('presentTurnFailure', () => {
+  const base = { message: '[deepseek] boom', provider: 'deepseek', retryable: false } as const;
+
+  it('offers a provider sign-in for a missing credential, without matching on prose', () => {
+    const presentation = presentTurnFailure({
+      ...base,
+      code: 'provider_auth_missing',
+      action: 'sign_in_provider',
+    });
+
+    expect(presentation.headline).toBe('AGI has no DeepSeek key to run this with.');
+    expect(presentation.category).toBe('sign-in');
+    expect(presentation.action).toEqual({
+      kind: 'sign-in-provider',
+      label: 'Sign in to DeepSeek',
+      provider: 'deepseek',
+    });
+    expect(presentation.retryable).toBe(false);
+    expect(presentation.detail).toBe('[deepseek] boom');
+  });
+
+  it('separates a rejected credential from a missing one, because the remedy differs', () => {
+    expect(
+      presentTurnFailure({ ...base, code: 'provider_auth_invalid', action: 'sign_in_provider' })
+        .headline,
+    ).toBe('Your DeepSeek key was rejected.');
+  });
+
+  it('carries the runtime own retryable flag rather than guessing from the text', () => {
+    const limited = presentTurnFailure({
+      ...base,
+      code: 'provider_rate_limited',
+      retryable: true,
+      action: 'retry',
+    });
+
+    expect(limited.headline).toBe('DeepSeek is rate limiting this account.');
+    expect(limited.category).toBe('rate-limit');
+    expect(limited.retryable).toBe(true);
+    expect(limited.action).toBeUndefined();
+  });
+
+  it('offers nothing at all for an interrupt', () => {
+    const stopped = presentTurnFailure({
+      code: 'interrupted',
+      message: 'stopped',
+      retryable: false,
+      action: 'none',
+    });
+
+    expect(stopped.headline).toBe('The turn was stopped.');
+    expect(stopped.action).toBeUndefined();
+    expect(stopped.retryable).toBe(false);
+  });
+
+  it('names the provider by its catalog name, never by the id the CLI printed', () => {
+    expect(
+      presentTurnFailure({ ...base, code: 'provider_unavailable', action: 'none' }).headline,
+    ).toBe('DeepSeek could not be reached.');
+    expect(
+      presentTurnFailure({
+        code: 'provider_unavailable',
+        message: 'down',
+        retryable: true,
+        action: 'retry',
+      }).headline,
+    ).toBe('the provider could not be reached.');
+  });
+
+  it('sends an unnamed code to the same sentence as an unclassified string', () => {
+    expect(
+      presentTurnFailure({ code: 'unknown', message: 'x', retryable: false, action: 'none' })
+        .headline,
+    ).toBe("AGI couldn't finish the reply.");
+  });
+});
 
 describe('presentChatError', () => {
   it.each([
@@ -208,6 +288,47 @@ describe('the chat webview error block', () => {
   afterEach(() => {
     Reflect.deleteProperty(globalThis, 'acquireVsCodeApi');
     vi.restoreAllMocks();
+  });
+
+  it('offers the action the runtime named, and posts the provider with it', () => {
+    const postMessage = boot();
+    deliver({
+      type: 'error',
+      payload: presentTurnFailure({
+        code: 'provider_auth_missing',
+        message: '[deepseek] Authentication failed: No API key found.',
+        provider: 'deepseek',
+        retryable: false,
+        action: 'sign_in_provider',
+      }),
+    });
+
+    const button = errorBlock()?.querySelector(
+      '[data-action="sign-in-provider"]',
+    ) as HTMLButtonElement | null;
+    expect(button?.textContent).toBe('Sign in to DeepSeek');
+
+    postMessage.mockClear();
+    button?.click();
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'resolveTurnFailure',
+      payload: { kind: 'sign-in-provider', provider: 'deepseek' },
+    });
+  });
+
+  it('offers no action button when the runtime named none', () => {
+    boot();
+    deliver({
+      type: 'error',
+      payload: presentTurnFailure({
+        code: 'interrupted',
+        message: 'stopped',
+        retryable: false,
+        action: 'none',
+      }),
+    });
+
+    expect(errorBlock()?.querySelector('[data-action]')).toBeNull();
   });
 
   it('leads with the sentence and keeps the provider text collapsed', () => {

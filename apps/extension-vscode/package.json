@@ -209,6 +209,11 @@
         "icon": "$(terminal)"
       },
       {
+        "command": "agi-workforce.signInProvider",
+        "title": "AGI Workforce: Sign In to a Provider",
+        "icon": "$(key)"
+      },
+      {
         "command": "agi-workforce.explainTerminal",
         "title": "AGI Workforce: Explain Terminal Output",
         "icon": "$(output)"

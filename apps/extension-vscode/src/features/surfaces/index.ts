@@ -42,7 +42,7 @@ export {
 } from './surfaceMenu';
 export type { SlashCommandItem, SurfaceMenuItem } from './surfaceMenu';
 export { formatSessionAge, mergeSessionRows } from './sessionRows';
-export type { SessionRow, SessionRowInput, SessionSource } from './sessionRows';
+export type { SessionOrigin, SessionRow, SessionRowInput, SessionSource } from './sessionRows';
 
 type TreeSource = Pick<vscode.TreeDataProvider<vscode.TreeItem>, 'getChildren'> & {
   onDidChangeTreeData?: vscode.Event<vscode.TreeItem | undefined | null | void>;

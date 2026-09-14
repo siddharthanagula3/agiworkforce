@@ -155,8 +155,8 @@ describe('buildGroupedQuickPickItems, route grouping', () => {
 
     expect(lock).toEqual({ kind: 'provider-key', routeLabel: 'DeepSeek' });
     expect(lock === undefined ? '' : modelLockHeading(lock)).toBe('Add another provider key');
-    expect(lock === undefined ? '' : modelLockReason('Amazon: Nova 2 Lite', lock)).toBe(
-      "Amazon: Nova 2 Lite cannot run on this session's route, which uses DeepSeek. Add another provider key to use it.",
+    expect(lock === undefined ? '' : modelLockReason('Fixture Catalog Model', lock)).toBe(
+      "Fixture Catalog Model cannot run on this session's route, which uses DeepSeek. Add another provider key to use it.",
     );
   });
 
@@ -167,11 +167,11 @@ describe('buildGroupedQuickPickItems, route grouping', () => {
     });
 
     expect(lock).toBeDefined();
-    expect(modelLockReason('GPT-6 Astra', lock!)).toBe(
-      "GPT-6 Astra cannot run on this session's route, which uses DeepSeek. Add your OpenAI key to use it.",
+    expect(modelLockReason('Fixture Premium Model', lock!)).toBe(
+      "Fixture Premium Model cannot run on this session's route, which uses DeepSeek. Add your OpenAI key to use it.",
     );
-    expect(modelLockReason('GPT-6 Astra', { kind: 'sign-in' })).toBe(
-      'GPT-6 Astra is not available on this session. Sign in to AGI Cloud to use it.',
+    expect(modelLockReason('Fixture Premium Model', { kind: 'sign-in' })).toBe(
+      'Fixture Premium Model is not available on this session. Sign in to AGI Cloud to use it.',
     );
   });
 });

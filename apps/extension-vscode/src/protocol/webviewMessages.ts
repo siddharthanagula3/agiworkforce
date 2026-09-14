@@ -188,6 +188,19 @@ const respondToApproval = z.object({
   }),
 });
 
+const resolveTurnFailure = z.object({
+  type: z.literal('resolveTurnFailure'),
+  payload: z.object({
+    kind: z.enum(['sign-in-provider', 'open-settings']),
+    provider: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[A-Za-z0-9_-]+$/u)
+      .optional(),
+  }),
+});
+
 const openToolDiff = z.object({
   type: z.literal('openToolDiff'),
   payload: z.object({ path: z.string().min(1).max(4096) }),
@@ -240,6 +253,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   attachContext,
   dismissEditorContext,
   openToolDiff,
+  resolveTurnFailure,
   respondToApproval,
   attachFiles,
   removePendingAttachment,

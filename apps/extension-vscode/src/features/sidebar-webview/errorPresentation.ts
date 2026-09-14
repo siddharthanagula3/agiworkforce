@@ -26,6 +26,13 @@ export type ChatErrorCategory =
   | 'runtime'
   | 'unknown';
 
+/** What the error block should offer besides Retry, when the runtime named one. */
+export interface ChatErrorAction {
+  kind: 'sign-in-provider' | 'open-settings';
+  label: string;
+  provider?: string;
+}
+
 export interface ChatErrorPresentation {
   category: ChatErrorCategory;
   /** One human sentence. Never the provider's own text. */
@@ -34,6 +41,7 @@ export interface ChatErrorPresentation {
   detail?: string;
   /** True only when resending the identical turn could plausibly succeed. */
   retryable: boolean;
+  action?: ChatErrorAction;
 }
 
 type Classification = Omit<ChatErrorPresentation, 'detail'>;
@@ -195,6 +203,90 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   }
 
   return null;
+}
+
+/**
+ * The typed failure the app-server now sends. A closed code is the only thing
+ * a client can branch on: the prose changes with every provider, so matching it
+ * could never decide whether to offer a sign-in, a retry, or nothing.
+ * `presentChatError` stays for a runtime that predates the object.
+ */
+export interface TurnFailureShape {
+  code: string;
+  message: string;
+  provider?: string;
+  retryable: boolean;
+  action: 'sign_in_provider' | 'open_settings' | 'retry' | 'none';
+}
+
+const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.freeze({
+  provider_auth_missing: 'sign-in',
+  provider_auth_invalid: 'sign-in',
+  provider_rate_limited: 'rate-limit',
+  provider_unavailable: 'provider',
+  context_window_exceeded: 'provider',
+  network: 'network',
+  tool_denied: 'permission',
+  interrupted: 'unknown',
+  timeout: 'network',
+  invalid_request: 'runtime',
+  unknown: 'unknown',
+});
+
+function failureHeadline(failure: TurnFailureShape, provider: string): string {
+  switch (failure.code) {
+    case 'provider_auth_missing':
+      return `AGI has no ${provider} key to run this with.`;
+    case 'provider_auth_invalid':
+      return `Your ${provider} key was rejected.`;
+    case 'provider_rate_limited':
+      return `${provider} is rate limiting this account.`;
+    case 'provider_unavailable':
+      return `${provider} could not be reached.`;
+    case 'context_window_exceeded':
+      return 'This conversation is longer than the model can read at once.';
+    case 'network':
+      return 'This machine could not reach the provider.';
+    case 'tool_denied':
+      return 'The turn stopped because a tool was not allowed to run.';
+    case 'interrupted':
+      return 'The turn was stopped.';
+    case 'timeout':
+      return `${provider} took too long to answer.`;
+    case 'invalid_request':
+      return `AGI sent ${provider} a request it refused.`;
+    default:
+      return "AGI couldn't finish the reply.";
+  }
+}
+
+function failureAction(failure: TurnFailureShape, provider: string): ChatErrorAction | undefined {
+  if (failure.action === 'sign_in_provider') {
+    return {
+      kind: 'sign-in-provider',
+      label: `Sign in to ${provider}`,
+      ...(failure.provider === undefined ? {} : { provider: failure.provider }),
+    };
+  }
+  if (failure.action === 'open_settings') {
+    return { kind: 'open-settings', label: 'Open settings' };
+  }
+  return undefined;
+}
+
+export function presentTurnFailure(failure: TurnFailureShape): ChatErrorPresentation {
+  const provider =
+    failure.provider === undefined ? 'the provider' : providerDisplayLabel(failure.provider);
+  const headline = failureHeadline(failure, provider);
+  const detail = failure.message.trim();
+  const action = failureAction(failure, provider);
+  return {
+    category: FAILURE_CATEGORY[failure.code] ?? 'unknown',
+    headline,
+    ...(detail === '' || detail === headline ? {} : { detail }),
+    retryable: failure.retryable,
+    ...(action === undefined ? {} : { action }),
+  };
 }
 
 export function presentChatError(raw: string, activeProvider?: string): ChatErrorPresentation {

@@ -1953,6 +1953,82 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('presents a typed turn failure and ignores the legacy string when both arrive', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'turn_failed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'failed',
+      response: '',
+      inputTokens: 0,
+      outputTokens: 0,
+      error: '[deepseek] Authentication failed: No API key found. Run `agi login deepseek`.',
+      failure: {
+        code: 'provider_auth_missing',
+        message: '[deepseek] Authentication failed: No API key found. Run `agi login deepseek`.',
+        provider: 'deepseek',
+        retryable: false,
+        action: 'sign_in_provider',
+      },
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: expect.objectContaining({
+        headline: 'AGI has no DeepSeek key to run this with.',
+        action: { kind: 'sign-in-provider', label: 'Sign in to DeepSeek', provider: 'deepseek' },
+      }),
+    });
+  });
+
+  it('still reads the legacy string from a runtime that sends no typed failure', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'turn_failed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'failed',
+      response: '',
+      inputTokens: 0,
+      outputTokens: 0,
+      error: '[deepseek] API error (HTTP 429): slow down',
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: presentChatError('[deepseek] API error (HTTP 429): slow down'),
+    });
+  });
+
+  it('runs the provider sign-in the failure asked for', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({
+      type: 'resolveTurnFailure',
+      payload: { kind: 'sign-in-provider', provider: 'deepseek' },
+    });
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'agi-workforce.signInProvider',
+      'deepseek',
+    );
+  });
+
   it('keeps a spoofed or cancelled sidebar bypass request on Auto', async () => {
     const harness = makeHarness();
 
