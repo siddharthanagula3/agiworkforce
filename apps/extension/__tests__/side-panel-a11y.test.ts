@@ -117,7 +117,9 @@ describe('Chrome side-panel composer at side-panel widths', () => {
     expect(source).toMatch(
       /#sp-model-badge \{[^}]*overflow: hidden;[\s\S]*?text-overflow: ellipsis;/,
     );
-    expect(source).toContain('modelEffortBadge.textContent = effortLabel');
+    expect(source).toContain(
+      "modelEffortBadge.textContent = state.status === 'ready' ? effortLabel : ''",
+    );
   });
 
   it('gives the permission chip a pointer target of at least 24px', () => {
