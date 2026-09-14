@@ -190,7 +190,7 @@ function describeListingFailure(error: unknown): string {
     : `${message.slice(0, LISTING_FAILURE_REASON_MAX_LENGTH - 1)}…`;
 }
 
-function formatRelativeTime(timestamp: number): string {
+export function formatRelativeTime(timestamp: number): string {
   const diff = Math.max(0, Date.now() - timestamp);
   const minutes = Math.floor(diff / 60_000);
   const hours = Math.floor(diff / 3_600_000);

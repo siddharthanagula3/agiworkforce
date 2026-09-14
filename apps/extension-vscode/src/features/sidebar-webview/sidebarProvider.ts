@@ -23,6 +23,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   private _view?: vscode.WebviewView;
   private _messageListener?: vscode.Disposable;
+  private _conversationTreeListener?: vscode.Disposable;
   private _pendingComposerDraft?: Extract<ExtToWebviewMessage, { type: 'composerDraft' }>;
   private readonly _stateManager: ChatStateManager;
 
@@ -30,7 +31,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
     private readonly _extensionContext: vscode.ExtensionContext,
-    conversationTreeProvider?: ConversationTreeProvider,
+    private readonly _conversationTreeProvider?: ConversationTreeProvider,
     workspaceState?: vscode.Memento,
     localRuntimes?: LocalRuntimePool,
     diffDecorationProvider?: DiffDecorationProvider,
@@ -39,7 +40,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       secrets,
       this._extensionContext,
       (msg: ExtToWebviewMessage) => this._view?.webview.postMessage(msg),
-      conversationTreeProvider,
+      this._conversationTreeProvider,
       workspaceState,
       localRuntimes,
       diffDecorationProvider,
@@ -89,9 +90,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       if (parsed.type === 'ready') await this._deliverComposerDraft();
     });
 
+    this._conversationTreeListener?.dispose();
+    this._conversationTreeListener = this._conversationTreeProvider?.onDidChangeTreeData(() => {
+      void this._stateManager.pushRecentConversations();
+    });
+
     webviewView.onDidDispose(() => {
       this._messageListener?.dispose();
       delete this._messageListener;
+      this._conversationTreeListener?.dispose();
+      delete this._conversationTreeListener;
       this._stateManager.cancelInFlight();
       delete this._view;
     });
