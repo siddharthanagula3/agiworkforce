@@ -26,6 +26,7 @@ export type ProviderId =
   | 'moonshot'
   | 'minimax'
   | 'zhipu'
+  | 'openrouter'
   | 'ollama'
   | 'lmstudio'
   | 'custom-openai-compatible'
@@ -34,7 +35,7 @@ export type ProviderId =
 export interface ProviderDisplay {
   id: ProviderId;
   label: string;
-  icon: string;
+  icon?: string;
   brandColor: string;
   isLocal: boolean;
   supportsEffort: boolean;
@@ -118,6 +119,13 @@ export const PROVIDER_DISPLAY: Readonly<Record<ProviderId, ProviderDisplay>> = O
     label: 'Zhipu',
     icon: 'providers/zhipu.svg',
     brandColor: '#3B82F6',
+    isLocal: false,
+    supportsEffort: false,
+  },
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    brandColor: '#6467F2',
     isLocal: false,
     supportsEffort: false,
   },

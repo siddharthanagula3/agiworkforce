@@ -21,7 +21,7 @@ export function toProviderId(providerKey: string): ProviderId | null {
 /** Returns the /providers/<id>.svg URL or null when provider is unknown. */
 export function providerLogoUrl(providerKey: string): string | null {
   const id = toProviderId(providerKey);
-  if (!id) return null;
+  if (!id || !PROVIDER_DISPLAY[id].icon) return null;
   return `/providers/${id}.svg`;
 }
 
