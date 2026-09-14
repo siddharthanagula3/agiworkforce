@@ -78,6 +78,21 @@ describe('Chrome manifest trust contract', () => {
     expect(listing).toContain('optional_host_permissions');
   });
 
+  it('justifies the all-sites content script, which is the install warning users see', () => {
+    const listing = readFileSync(join(APP_ROOT, 'docs/chrome-web-store-listing.md'), 'utf8');
+    const contentScripts = manifest['content_scripts'] as Array<{ matches?: string[] }>;
+    const matches = contentScripts[0]?.matches ?? [];
+
+    expect(matches).toEqual(['http://*/*', 'https://*/*']);
+    expect(listing, 'no store justification for the content_scripts match').toContain(
+      '`content_scripts` match',
+    );
+    for (const match of matches) {
+      expect(listing, `no store justification for "${match}"`).toContain(`\`${match}\``);
+    }
+    expect(listing).toContain('read and change all your data on all websites');
+  });
+
   it('describes Managed Cloud chat without claiming Desktop owns chat inference', () => {
     expect(String(manifest['description'])).toContain('Managed Cloud');
     expect(String(manifest['description'])).not.toMatch(/for AGI Desktop/i);
