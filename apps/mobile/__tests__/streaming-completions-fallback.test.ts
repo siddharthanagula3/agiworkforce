@@ -517,7 +517,7 @@ function providerFrame(delta: Record<string, unknown>, finishReason: string | nu
   return `data: ${JSON.stringify({
     id: 'gen_01M2FR6MQTV0BQXYT528HZ2VRH',
     object: 'chat.completion.chunk',
-    model: 'deepseek-v4-flash',
+    model: 'qa-provider/qa-model',
     choices: [{ index: 0, delta, logprobs: null, finish_reason: finishReason }],
   })}`;
 }
