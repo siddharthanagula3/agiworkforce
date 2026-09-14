@@ -6,17 +6,13 @@ import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   cloudRunBlock,
+  cloudRunBlockLabel,
   cloudRunStateColor,
   cloudRunTimeLabel,
   CLOUD_RUN_ORIGIN_LABELS,
   CLOUD_RUN_STATE_LABELS,
   CLOUD_RUN_WORK_MODE_LABELS,
 } from '../runPresentation';
-
-const BLOCK_LABELS: Record<NonNullable<ReturnType<typeof cloudRunBlock>>, string> = {
-  approval: 'Waiting for your approval',
-  input: 'Waiting for connector input',
-};
 
 function Chip({ label }: { label: string }) {
   const colors = useThemeColors();
@@ -49,6 +45,7 @@ export function CloudRunCard({
   const colors = useThemeColors();
   const stateColor = cloudRunStateColor(run.state, colors);
   const block = cloudRunBlock(run);
+  const blockLabel = cloudRunBlockLabel(run);
   const timeLabel = cloudRunTimeLabel(run);
   const originLabel = CLOUD_RUN_ORIGIN_LABELS[run.originSurface];
   const stateLabel = CLOUD_RUN_STATE_LABELS[run.state];
@@ -103,9 +100,9 @@ export function CloudRunCard({
             ) : null}
           </View>
 
-          {block ? (
+          {blockLabel ? (
             <Text style={{ color: colors.agentWarning, fontSize: 12, fontWeight: '600' }}>
-              {BLOCK_LABELS[block]}
+              {blockLabel}
             </Text>
           ) : null}
         </View>

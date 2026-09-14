@@ -115,7 +115,20 @@ export function cloudRunTooltipLines(run: CloudAgentRun, now = Date.now()): stri
   if (run.pendingInput !== undefined) {
     lines.push('A connector is asking this run for input');
   }
+  const deviceWait = cloudRunDeviceWaitLabel(run);
+  if (deviceWait !== undefined) lines.push(deviceWait);
   return lines;
+}
+
+/**
+ * A run held up on the user's own machine. Nothing here can answer it, so the
+ * only useful thing to say is which machine to go to and what it was asked for.
+ */
+export function cloudRunDeviceWaitLabel(run: CloudAgentRun): string | undefined {
+  const pending = run.pendingDeviceStep;
+  if (pending === undefined) return undefined;
+  const steps = pending.steps.map((step) => step.summary).join(', ');
+  return `Waiting for ${pending.deviceName}: ${steps}`;
 }
 
 export interface CloudRunStep {

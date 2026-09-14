@@ -17,6 +17,9 @@ import {
 } from '../runPresentation';
 import type { CloudRunDetail } from '../store';
 
+const DEVICE_STEP_NOTE =
+  'Open the AGI Cloud app on that computer to carry this out, or stop the task below.';
+
 const CONNECTOR_INPUT_NOTE =
   'Connector questions are answered where the task was started. You can still stop it here.';
 
@@ -260,6 +263,36 @@ export function CloudRunDetailSheet({
                 ))}
                 <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
                   {CONNECTOR_INPUT_NOTE}
+                </Text>
+              </View>
+            ) : null}
+
+            {run?.pendingDeviceStep ? (
+              <View
+                style={{
+                  borderRadius: 16,
+                  borderCurve: 'continuous',
+                  padding: 15,
+                  gap: 10,
+                  backgroundColor: colors.surfaceElevated,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+                  {`Waiting for ${run.pendingDeviceStep.deviceName}`}
+                </Text>
+                {run.pendingDeviceStep.steps.map((step) => (
+                  <Text
+                    key={step.toolCallId}
+                    numberOfLines={2}
+                    style={{ color: colors.textSecondary, fontSize: 13 }}
+                  >
+                    {step.summary}
+                  </Text>
+                ))}
+                <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
+                  {DEVICE_STEP_NOTE}
                 </Text>
               </View>
             ) : null}
