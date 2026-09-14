@@ -12,6 +12,7 @@ import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { OfflineIndicator } from '@shared/components/OfflineIndicator';
 import { AppearancePreferences } from '@shared/components/AppearancePreferences';
 import { TelemetryConsentSync } from '@shared/components/TelemetryConsentSync';
+import { CloudSettingsSync } from '@/features/settings/components/CloudSettingsSync';
 import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
 import { ConnectorOutcomeAnnouncer } from '@/features/connectors/components/ConnectorOutcomeAnnouncer';
@@ -32,6 +33,7 @@ export default function Providers({
             <WaitlistModalProvider>
               <AppearancePreferences />
               <TelemetryConsentSync />
+              <CloudSettingsSync />
               <SettingsModalProvider>{children}</SettingsModalProvider>
               <CommandPaletteProvider />
               <OfflineIndicator position="bottom" />
