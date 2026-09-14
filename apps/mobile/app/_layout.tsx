@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSegments, Slot } from 'expo-router';
 import { useLinkingURL } from 'expo-linking';
 import * as Linking from 'expo-linking';
@@ -13,8 +13,6 @@ import {
   BackHandler,
   Platform,
   ToastAndroid,
-  Pressable,
-  Text,
   AppState,
   LogBox,
   type AppStateStatus,
@@ -22,7 +20,6 @@ import {
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { Fingerprint } from 'lucide-react-native';
 import { useFonts } from 'expo-font';
 import { Newsreader_500Medium, Newsreader_600SemiBold } from '@expo-google-fonts/newsreader';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -40,6 +37,8 @@ import {
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
+import { AppLockOverlay } from '@/src/features/auth/components/AppLockOverlay';
+import { SecureStorageUnavailable } from '@/src/features/auth/components/SecureStorageUnavailable';
 import { ThemeVars, useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
@@ -172,9 +171,12 @@ export default function RootLayout() {
     Newsreader_500Medium,
     Newsreader_600SemiBold,
   });
-  const [isMmkvReady, setIsMmkvReady] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<'pending' | 'ready' | 'unavailable'>(
+    'pending',
+  );
+  const isMmkvReady = storageStatus === 'ready';
 
-  useLaunchSplashRelease(isMmkvReady && (fontsLoaded || fontError !== null));
+  useLaunchSplashRelease(storageStatus !== 'pending' && (fontsLoaded || fontError !== null));
   const isLoading = useAuthStore((s) => s.isLoading);
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const initialize = useAuthStore((s) => s.initialize);
@@ -201,27 +203,34 @@ export default function RootLayout() {
   }, [themeMode]);
   const { isUnlocked, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
-  useEffect(() => {
+  const openSecureStorage = useCallback(() => {
+    setStorageStatus('pending');
     initMmkvEncryption()
       .then(async () => {
         const language = await restoreStoredLanguage();
         if (language.directionChanged) {
           void reloadAppAsync('Apply stored app language direction').catch((err) => {
             console.warn('[RootLayout] app-language direction reload failed:', err);
-            setIsMmkvReady(true);
+            setStorageStatus('ready');
           });
           return;
         }
-        setIsMmkvReady(true);
+        setStorageStatus('ready');
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
+        // The reason is a native exception string. It belongs in the log, not
+        // on a screen a user reads.
         console.warn('[RootLayout] MMKV encryption init failed:', err);
-        setIsMmkvReady(true);
+        setStorageStatus('unavailable');
       });
+  }, []);
+
+  useEffect(() => {
+    openSecureStorage();
     hydrateBiometricFlag().catch((err) => {
       console.warn('[RootLayout] biometric flag hydrate failed:', err);
     });
-  }, []);
+  }, [openSecureStorage]);
 
   useEffect(() => {
     if (!isUnlocked) return;
@@ -642,6 +651,17 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, [router]);
 
+  if (storageStatus === 'unavailable') {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <StatusBar style={statusBarStyle} />
+          <SecureStorageUnavailable onRetry={openSecureStorage} />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
+
   if (!isMmkvReady || !isInitialized || isLoading || !isBiometricReady) {
     return (
       <View
@@ -654,45 +674,6 @@ export default function RootLayout() {
       >
         <ActivityIndicator color={themeColors.teal} size="large" />
       </View>
-    );
-  }
-
-  if (!isUnlocked) {
-    return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <StatusBar style={statusBarStyle} />
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: themeColors.background,
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 16,
-            }}
-          >
-            <Fingerprint size={48} color={themeColors.teal} />
-            <Text style={{ color: themeColors.textPrimary, fontSize: 18, fontWeight: '600' }}>
-              Locked
-            </Text>
-            <Text style={{ color: themeColors.textMuted, fontSize: 14 }}>
-              Authenticate to continue
-            </Text>
-            <Pressable
-              onPress={authenticate}
-              style={{
-                marginTop: 8,
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                backgroundColor: themeColors.teal,
-                borderRadius: 12,
-              }}
-            >
-              <Text style={{ color: themeColors.accentText, fontWeight: '600' }}>Unlock</Text>
-            </Pressable>
-          </View>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
     );
   }
 
@@ -711,6 +692,9 @@ export default function RootLayout() {
             </ThemeVars>
             {/* Global offline banner, renders above all content when NetInfo is offline */}
             <OfflineBanner />
+            {/* The lock covers the app, it does not replace it: unmounting the
+                navigator on every resume discarded the open conversation. */}
+            {isUnlocked ? null : <AppLockOverlay onUnlock={authenticate} />}
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </CapabilityProvider>
