@@ -19,10 +19,22 @@ use crate::user_input::UserInput;
 
 /// Current wire version for the shared CLI/VS Code developer-session protocol.
 ///
-/// Version 7 adds authoritative trust-mode and provider-route metadata to
-/// thread summaries so clients can resume a session without inferring its data
-/// boundary from a model id.
-pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 7;
+/// Version 8 adds the account, instruction, skill, plugin, MCP, hook, setting
+/// and command surfaces that let an editor client ride the CLI instead of
+/// keeping a second copy of each. Every v8 method is additive.
+pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 8;
+
+/// Wire versions this server still answers, newest first.
+///
+/// A client that omits `protocolVersion` in `initialize` is a pre-negotiation
+/// client, and those all pin an exact version equality check, so the handshake
+/// answers [`LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION`] for them rather than a
+/// number they would reject. The added methods stay dispatchable either way:
+/// an older client never calls them.
+pub const SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS: &[u32] = &[8, 7];
+
+/// Version answered when a client does not state one.
+pub const LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 7;
 
 pub mod method {
     pub const INITIALIZE: &str = "initialize";
@@ -41,6 +53,24 @@ pub mod method {
     pub const APPROVAL_RESPOND: &str = "approval/respond";
     pub const TASK_STATE_CHANGED: &str = "task/state_changed";
     pub const SHUTDOWN: &str = "shutdown";
+    pub const ACCOUNT_STATUS: &str = "account/status";
+    pub const ACCOUNT_LOGIN: &str = "account/login";
+    pub const ACCOUNT_LOGIN_WAIT: &str = "account/login/wait";
+    pub const ACCOUNT_LOGOUT: &str = "account/logout";
+    pub const ACCOUNT_TOKEN: &str = "account/token";
+    pub const CONTEXT_INSTRUCTIONS: &str = "context/instructions";
+    pub const SKILLS_LIST: &str = "skills/list";
+    pub const SKILLS_SET_ENABLED: &str = "skills/setEnabled";
+    pub const SKILLS_CONSENT: &str = "skills/consent";
+    pub const PLUGINS_LIST: &str = "plugins/list";
+    pub const PLUGINS_SET_ENABLED: &str = "plugins/setEnabled";
+    pub const MCP_LIST: &str = "mcp/list";
+    pub const MCP_LOGIN: &str = "mcp/login";
+    pub const HOOKS_LIST: &str = "hooks/list";
+    pub const SETTINGS_READ: &str = "settings/read";
+    pub const SETTINGS_WRITE: &str = "settings/write";
+    pub const COMMANDS_LIST: &str = "commands/list";
+    pub const COMMANDS_RUN: &str = "commands/run";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -206,6 +236,11 @@ pub struct InitializeParams {
     pub client_info: AppServerClientInfo,
     #[serde(default, skip_serializing_if = "is_false")]
     pub experimental_api: bool,
+    /// Wire version this client speaks. Omitted by pre-negotiation clients,
+    /// which are answered with [`LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub protocol_version: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -230,6 +265,23 @@ pub struct AppServerCapabilities {
     pub checkpoints: bool,
     pub worktrees: bool,
     pub models: bool,
+    /// v8 surfaces. Each is false on a host that does not implement that
+    /// family, so a client hides the control instead of calling a method that
+    /// answers "unavailable".
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub account: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub instructions: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub skills: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plugins: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub hooks: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub settings: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub commands: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -553,6 +605,480 @@ pub struct AcknowledgedResponse {
     pub acknowledged: bool,
 }
 
+// ---------------------------------------------------------------------------
+// v8: account, instructions, skills, plugins, MCP, hooks, settings, commands
+// ---------------------------------------------------------------------------
+
+/// Where an account answer came from. The CLI credential store is the only
+/// source today; a client must never present its own token as this identity.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum AccountSource {
+    Cli,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountStatusParams {
+    /// Bypass the cache and re-read the account from the hosted API. Without
+    /// it the host answers from its on-disk cache and touches the network only
+    /// once that cache has expired.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub refresh: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountStatusResponse {
+    pub signed_in: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub email: Option<String>,
+    /// Canonical billing tier exactly as the account holds it, never a
+    /// routing-collapsed group.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub tier: Option<String>,
+    /// Plan allowance left in the current monthly window, in credits. Absent
+    /// when the server states no allowance for this plan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub balance_credits: Option<f64>,
+    /// Separately purchased credit balance. Absent when the lookup failed,
+    /// which is not the same as a zero balance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub purchased_credits: Option<f64>,
+    /// True when the answer came from cache without a network read.
+    pub cached: bool,
+    pub source: AccountSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountLoginResponse {
+    /// Opaque handle for this in-flight login, passed back to
+    /// [`method::ACCOUNT_LOGIN_WAIT`].
+    pub login_id: String,
+    pub verification_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub user_code: Option<String>,
+    /// RFC 3339 instant after which the device code stops being accepted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountLoginWaitParams {
+    pub login_id: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum AccountLoginOutcome {
+    Completed,
+    Expired,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountLoginWaitResponse {
+    pub outcome: AccountLoginOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub message: Option<String>,
+    pub account: AccountStatusResponse,
+}
+
+/// Bearer credential minted from the CLI's own stored credential.
+///
+/// The host refuses this method on any connection that did not prove it holds
+/// the loopback app-server token, so a page that reaches the WebSocket port
+/// cannot exfiltrate the user's account credential.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountTokenResponse {
+    pub token: String,
+    /// RFC 3339 expiry. Absent when the stored credential states none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ContextInstructionsParams {
+    /// Directory the turn would run in. Defaults to the workspace this
+    /// app-server is scoped to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+pub enum InstructionFileKind {
+    #[serde(rename = "AGENTS.md")]
+    #[ts(rename = "AGENTS.md")]
+    Agents,
+    #[serde(rename = "CLAUDE.md")]
+    #[ts(rename = "CLAUDE.md")]
+    Claude,
+    #[serde(rename = "instructions.md")]
+    #[ts(rename = "instructions.md")]
+    AgiInstructions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct InstructionFile {
+    pub path: String,
+    pub kind: InstructionFileKind,
+    pub bytes: u32,
+    /// Directory the file was discovered in, the ancestor whose instructions
+    /// this file contributes.
+    pub root: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ContextInstructionsResponse {
+    /// Exactly the files the host loads for a turn in `cwd`, in load order.
+    pub files: Vec<InstructionFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project_root: Option<String>,
+    /// True when the instruction budget stopped the walk before every
+    /// discovered file was included, so the preview and the turn agree.
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum SkillCatalogScope {
+    Project,
+    User,
+    Plugin,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SkillSummary {
+    pub name: String,
+    pub description: String,
+    pub scope: SkillCatalogScope,
+    pub path: String,
+    /// False when the user turned this skill off; a disabled skill is never
+    /// offered to the model on either surface.
+    pub enabled: bool,
+    /// Project skills load only after explicit per-workspace consent. User and
+    /// plugin skills carry no consent gate and report `true`.
+    pub consented: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SkillListResponse {
+    pub skills: Vec<SkillSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SkillSetEnabledParams {
+    pub name: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SkillConsentParams {
+    /// Granting consent lets this workspace's `.agiworkforce/skills` load on
+    /// every run of either surface; revoking deletes that record.
+    pub granted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SkillConsentResponse {
+    pub consented: bool,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PluginScope {
+    User,
+    Project,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PluginSummary {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub version: Option<String>,
+    pub enabled: bool,
+    /// Directory family the plugin was loaded from.
+    pub source: PluginScope,
+    pub path: String,
+    /// Manifest dialect the plugin declared, when it declared one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub format: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PluginListResponse {
+    pub plugins: Vec<PluginSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PluginSetEnabledParams {
+    pub id: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum McpServerScope {
+    Project,
+    User,
+    Plugin,
+}
+
+/// Credential posture of a discovered MCP server, decided without opening a
+/// connection. It never claims a server is reachable.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum McpServerConfiguredStatus {
+    /// Runs locally, or carries its own credential header.
+    Configured,
+    /// A remote server with a stored OAuth token.
+    Authorized,
+    /// A remote server with neither a stored token nor a credential header.
+    NeedsAuth,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerSummary {
+    pub name: String,
+    /// `stdio`, `sse` or `http`.
+    pub transport: String,
+    pub scope: McpServerScope,
+    pub status: McpServerConfiguredStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerListResponse {
+    pub servers: Vec<McpServerSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpLoginParams {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpLoginResponse {
+    pub name: String,
+    pub status: McpServerConfiguredStatus,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HookConfigScope {
+    User,
+    Plugin,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HookSummary {
+    pub event: String,
+    pub command: String,
+    pub scope: HookConfigScope,
+    /// Plugin hooks from a project-local plugin directory never run; they are
+    /// listed so the reason a hook is inert is visible.
+    pub trusted: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HookListResponse {
+    pub hooks: Vec<HookSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SettingsReadResponse {
+    /// Model id the CLI starts a session with when a turn names none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub default_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub default_effort: Option<DeveloperReasoningEffort>,
+    /// Permission posture applied when a surface names none. `bypass` is never
+    /// stored here: a persisted setting must not disable every approval.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub permission_mode: Option<DeveloperAgentMode>,
+    /// Contents of the user-scope instruction file, the one every workspace
+    /// under the home directory inherits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub user_instructions: Option<String>,
+    /// Contents of this workspace's instruction file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project_instructions: Option<String>,
+    pub user_instructions_path: String,
+    pub project_instructions_path: String,
+    pub config_path: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SettingsWriteParams {
+    /// Every field is optional: an omitted field is left untouched. An empty
+    /// instruction string deletes that instruction file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub default_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub default_effort: Option<DeveloperReasoningEffort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub permission_mode: Option<DeveloperAgentMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub user_instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project_instructions: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum CommandSourceKind {
+    Builtin,
+    Skill,
+    Prompt,
+    Plugin,
+    Mcp,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SlashCommandSummary {
+    /// Name without the leading slash.
+    pub name: String,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub args_hint: Option<String>,
+    pub source: CommandSourceKind,
+    pub aliases: Vec<String>,
+    /// True when [`method::COMMANDS_RUN`] can execute this command outside a
+    /// terminal. A client must not offer the others as buttons.
+    pub runnable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SlashCommandListResponse {
+    pub commands: Vec<SlashCommandSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SlashCommandRunParams {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub args: Option<String>,
+}
+
+/// Shape of a command result so a client renders it instead of parsing prose.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum SlashCommandResultKind {
+    Text,
+    Skills,
+    Plugins,
+    Mcp,
+    Hooks,
+    Settings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SlashCommandRunResponse {
+    pub kind: SlashCommandResultKind,
+    /// Human-readable rendering, always present so a client can fall back to
+    /// showing text for a payload shape it does not know.
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub payload: Option<Value>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -562,8 +1088,12 @@ mod tests {
     };
 
     #[test]
-    fn developer_session_v7_wraps_canonical_agent_events() {
-        assert_eq!(DEVELOPER_SESSION_PROTOCOL_VERSION, 7);
+    fn developer_session_v8_wraps_canonical_agent_events() {
+        assert_eq!(DEVELOPER_SESSION_PROTOCOL_VERSION, 8);
+        assert!(
+            SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS
+                .contains(&LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION)
+        );
 
         let notification = agent_event_notification(
             "thread-1",
