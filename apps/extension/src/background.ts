@@ -85,6 +85,7 @@ import {
   type MemoryWriteResult,
 } from './background/memory-bridge';
 import { runAgentLoop } from './features/computer-use/agentLoop';
+import { ensureOnDetachListener } from './features/computer-use/cdpDriver';
 import {
   ComputerUseRunCoordinator,
   ComputerUseStartCoordinator,
@@ -196,8 +197,6 @@ interface BackgroundState {
   connectionStatus: ConnectionStatus;
   lastNativeError: string | null;
   rateLimiter: RateLimiter;
-  messageQueue: ExtensionMessage[];
-  isProcessingQueue: boolean;
 }
 
 interface NativeMessageEnvelope {
@@ -220,8 +219,6 @@ const state: BackgroundState = {
   connectionStatus: 'disconnected',
   lastNativeError: null,
   rateLimiter: new RateLimiter(120, 500),
-  messageQueue: [],
-  isProcessingQueue: false,
 };
 
 interface ActiveChatStream {
@@ -900,19 +897,6 @@ function connectToNativeHost(): void {
         clearNativeReconnectTimer();
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
-
-        if (state.messageQueue.length > 0 && !state.isProcessingQueue) {
-          state.isProcessingQueue = true;
-          const queued = state.messageQueue.splice(0);
-          for (const msg of queued) {
-            try {
-              await handleMessage(msg, {} as chrome.runtime.MessageSender, () => {});
-            } catch (err) {
-              logger.debug('Failed to drain queued message during reconnect', err);
-            }
-          }
-          state.isProcessingQueue = false;
-        }
       } catch (error) {
         logger.warn('Native host handshake failed', error);
         try {
@@ -1162,21 +1146,23 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         delete body['mac'];
         delete body['timestamp'];
         delete body['session_secret'];
-        void computeEnvelopeMac(message.id, respTs, body).then((expected) => {
-          if (expected === null || !timingSafeEqual(expected, respMac)) {
-            logger.warn(
-              '[native-mac] Response MAC mismatch, rejecting (potential shuffle attack)',
-              { id: message.id },
-            );
-            reject(new Error('Native response MAC mismatch'));
-            return;
-          }
-          if (message.success === false) {
-            reject(new Error(message.error ?? 'Native request failed'));
-          } else {
-            resolve(message as unknown as ExtensionResponse);
-          }
-        });
+        void computeEnvelopeMac(message.id, respTs, body)
+          .then((expected) => {
+            if (expected === null || !timingSafeEqual(expected, respMac)) {
+              logger.warn(
+                '[native-mac] Response MAC mismatch, rejecting (potential shuffle attack)',
+                { id: message.id },
+              );
+              reject(new Error('Native response MAC mismatch'));
+              return;
+            }
+            if (message.success === false) {
+              reject(new Error(message.error ?? 'Native request failed'));
+            } else {
+              resolve(message as unknown as ExtensionResponse);
+            }
+          })
+          .catch(reject);
         return;
       }
 
@@ -1228,7 +1214,6 @@ function handleNativeDisconnect(): void {
 function showNotification(
   title: string,
   message: string,
-  tabId?: number,
   conversationId?: string,
   conversationOwner?: ManagedCloudOwner,
 ): void {
@@ -1248,9 +1233,6 @@ function showNotification(
       }
     },
   );
-  if (tabId) {
-    chrome.storage.session.set({ [`agi_notif_${notifId}`]: tabId }).catch(() => {});
-  }
   if (conversationId && conversationOwner) {
     void linkNotificationToConversation(notifId, conversationOwner, conversationId);
   }
@@ -1401,7 +1383,6 @@ async function handleReplayShortcut(
         showNotification(
           'Shortcut Replayed',
           snippet ? `"${shortcut.name}": ${snippet}` : `"${shortcut.name}" finished`,
-          undefined,
           deliveredAnswer ? delivery?.conversationId : undefined,
           deliveredOwner,
         );
@@ -1959,7 +1940,6 @@ async function notifyScheduledTaskCompleted(notice: ScheduledTaskCompletionNotic
         showNotification(
           'Task Completed',
           snippet ? `"${taskName}": ${snippet}` : `Scheduled task "${taskName}" finished`,
-          undefined,
           answer ? conversationId : undefined,
           answer ? conversationOwner : undefined,
         );
@@ -5387,6 +5367,11 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 initialize();
 installBackgroundErrorReporting();
 
+// chrome.debugger.onDetach has to be attached in the worker's first turn: a
+// user pressing Cancel on Chrome's debugging bar wakes a worker that would
+// otherwise register the listener only once a run started.
+ensureOnDetachListener();
+
 for (const retired of RETIRED_ALARM_NAMES) {
   void chrome.alarms.clear(retired);
 }
@@ -5406,7 +5391,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     void loadScheduledTasks()
       .then(async (tasks) => {
         const task = tasks.find((t) => t.id === taskId);
-        if (!task?.enabled) return;
+        if (!task?.enabled) {
+          // Chrome keeps an alarm until it is cleared, so a deleted or disabled
+          // task went on waking the worker on its old period forever.
+          await chrome.alarms.clear(alarm.name);
+          return;
+        }
         await executeScheduledTask(task, expectedGeneration);
       })
       .catch((err) => {
