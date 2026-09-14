@@ -1457,7 +1457,11 @@ async fn handle_projects_command(action: &ProjectsSubcommand) -> Result<()> {
                 return Ok(());
             }
             for project in &cache.projects {
-                let archived = if project.is_archived { "  [archived]" } else { "" };
+                let archived = if project.is_archived {
+                    "  [archived]"
+                } else {
+                    ""
+                };
                 println!("{}  {}{}", project.id, project.name, archived);
                 if let Some(description) = project.description.as_deref() {
                     println!("  {description}");
@@ -1472,7 +1476,10 @@ async fn handle_projects_command(action: &ProjectsSubcommand) -> Result<()> {
             let project = cloud::create_project(privacy, name, description.as_deref())
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            println!("Created '{}' in your account ({}).", project.name, project.id);
+            println!(
+                "Created '{}' in your account ({}).",
+                project.name, project.id
+            );
             Ok(())
         }
         ProjectsSubcommand::Link { project } => {
@@ -4480,7 +4487,10 @@ mod tests {
             chrono::Utc::now(),
         );
         let managed = (session, std::path::PathBuf::from("/tmp/session.jsonl"));
-        assert_eq!(resumed_model(Some(&managed), "fallback-model"), "fallback-model");
+        assert_eq!(
+            resumed_model(Some(&managed), "fallback-model"),
+            "fallback-model"
+        );
         assert_eq!(resumed_model(None, "fallback-model"), "fallback-model");
     }
 
@@ -4492,7 +4502,10 @@ mod tests {
         );
         session.model = Some("a-model-that-was-retired".to_string());
         let managed = (session, std::path::PathBuf::from("/tmp/session.jsonl"));
-        assert_eq!(resumed_model(Some(&managed), "fallback-model"), "fallback-model");
+        assert_eq!(
+            resumed_model(Some(&managed), "fallback-model"),
+            "fallback-model"
+        );
     }
     use super::*;
 

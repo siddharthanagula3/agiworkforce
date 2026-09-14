@@ -53,7 +53,10 @@ impl std::fmt::Display for CloudError {
             }
             CloudError::Api { status, message } => write!(f, "{message} (HTTP {status})"),
             CloudError::Decode(message) => {
-                write!(f, "your AGI Workforce account returned an unreadable response: {message}")
+                write!(
+                    f,
+                    "your AGI Workforce account returned an unreadable response: {message}"
+                )
             }
         }
     }
