@@ -185,6 +185,7 @@ test('emits separated registry records and cross-language artifacts', () => {
     'workhorse_general',
     'reasoning_economy',
     'coding_fast',
+    'router_zero_cost',
   ]);
   for (const tier of Object.keys(registry.policies.auto.tierAllowedSlots)) {
     if (tier === 'free') continue;
@@ -194,6 +195,15 @@ test('emits separated registry records and cross-language artifacts', () => {
       `${tier} must not admit a free-lane slot`,
     );
   }
+  const taskPreferredSlots = new Set(
+    Object.values(registry.policies.auto.tasks).flatMap((task) =>
+      Object.values(task.preferredSlots).flat(),
+    ),
+  );
+  assert.ok(
+    !taskPreferredSlots.has('router_zero_cost'),
+    'router_zero_cost must stay outside every task preferredSlots list (the fallback candidate pool in auto.ts is filtered by the same reachability set), or Auto could select it on a paid tier without the caller naming it',
+  );
   assert.ok(registry.policies.auto.providerPolicies.usOnly.excludedProviders.includes('moonshot'));
   assert.deepEqual(registry.policies.auto.providerPolicies.usOnly.allowedTiers, [
     'max',
