@@ -716,29 +716,15 @@ fn browser_command_args(
     out
 }
 
-/// What the transcript says this did in the user's browser.
-///
-/// Every other tool prints one of these. A tool that acts in the window the
-/// user is looking at is the last one that should go unannounced: without it
-/// the transcript reads "Executing 1 tool" and then an answer, with nothing
-/// saying a page was read or a button was clicked.
-fn browser_command_status(command: &str, args: &HashMap<String, String>) -> String {
-    let argument = |key: &str| args.get(key).map(String::as_str).unwrap_or("");
-    match command {
-        "browser_read_page" => "Read the active tab".to_string(),
-        "browser_screenshot" => "Captured the active tab".to_string(),
-        "browser_click" => format!("Click({})", argument("selector")),
-        "browser_type" => format!("Type({})", argument("selector")),
-        "browser_navigate" => format!("Open({})", argument("url")),
-        other => other.to_string(),
-    }
-}
-
 async fn execute_browser_command(
     command: &str,
     args: &HashMap<String, String>,
 ) -> Result<ToolResult> {
-    print_tool_status(command, &browser_command_status(command, args));
+    print_tool_status(
+        command,
+        &crate::runtime::tool_catalog::tool_status_line(command, |key| args.get(key).cloned())
+            .unwrap_or_else(|| command.to_string()),
+    );
     let identity =
         crate::browser_bridge::ClientIdentity::for_cli(std::env::current_dir().ok(), None);
     let payload = Value::Object(browser_command_args(command, args));
