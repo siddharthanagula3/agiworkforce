@@ -152,6 +152,12 @@ export interface HostPreferences {
   screenshotShortcut: string;
   voiceShortcut: string;
   showInMenuBar: boolean;
+  /**
+   * Where the AGI CLI lives when it is not on the PATH the app was launched
+   * with. Empty means the shell resolves `agi` from that PATH, which is what a
+   * terminal install already puts there.
+   */
+  cliPath: string;
 }
 
 export const HOST_SHORTCUT_PREFERENCE_KEYS: Record<HostShortcutKey, keyof HostPreferences> = {
