@@ -33,6 +33,7 @@ export interface MutableConfigValues {
   cliPath: string;
   'composer.followUpBehavior': ComposerFollowUpBehavior;
   contextLines: number;
+  'editorContext.autoAttach': boolean;
   telemetryEnabled: boolean;
   hoverEnabled: boolean;
   codeLensEnabled: boolean;
@@ -76,6 +77,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'agent.effort',
   'agent.thinking',
   'composer.followUpBehavior',
+  'editorContext.autoAttach',
   'desktopBridge.enabled',
   'desktopBridge.port',
   'telemetryEndpoint',
@@ -103,6 +105,7 @@ const DEFAULTS = {
   model: 'auto',
   composerFollowUpBehavior: 'queue',
   contextLines: 50,
+  editorContextAutoAttach: true,
   telemetryEnabled: false,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
   desktopBridgeEnabled: false,
@@ -181,6 +184,9 @@ export const Config = {
   contextLines(): number {
     return get<number>('contextLines', DEFAULTS.contextLines);
   },
+  editorContextAutoAttach(): boolean {
+    return get<boolean>('editorContext.autoAttach', DEFAULTS.editorContextAutoAttach);
+  },
   apiEndpoint(): string {
     return getUserScoped<string>('apiEndpoint', DEFAULTS.apiEndpoint);
   },
@@ -222,6 +228,7 @@ export const Config = {
         cliPath: this.cliPath(),
         'composer.followUpBehavior': this.composerFollowUpBehavior(),
         contextLines: this.contextLines(),
+        'editorContext.autoAttach': this.editorContextAutoAttach(),
         telemetryEnabled: this.telemetryEnabled(),
         hoverEnabled: this.hoverEnabled(),
         codeLensEnabled: this.codeLensEnabled(),

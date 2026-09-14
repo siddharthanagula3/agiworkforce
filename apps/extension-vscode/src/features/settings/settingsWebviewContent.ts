@@ -1451,6 +1451,28 @@ export function getSettingsWebviewContent(
 
           <div class="card">
             <div class="card-heading">
+              <h3>Editor context</h3>
+              <p>What the composer attaches from the editor before you send. Every attachment shows as a removable chip.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-editor-context">Attach the active editor</label>
+                <span class="setting-description">Send the open file, the current selection and that file's problems with each turn.</span>
+              </div>
+              <label class="toggle" title="Attach the active editor">
+                <input
+                  id="setting-editor-context"
+                  data-setting="editorContext.autoAttach"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
               <h3>Editor surfaces</h3>
               <p>All editor decorations are opt-in so AGI does not crowd native VS Code controls.</p>
             </div>
@@ -1839,6 +1861,7 @@ ${capabilityAvailabilityRows}
           cliPath: 'CLI path',
           'composer.followUpBehavior': 'Active-turn send',
           contextLines: 'Context lines',
+          'editorContext.autoAttach': 'Editor context',
           telemetryEnabled: 'Telemetry',
           'memory.enabled': 'Memory',
           hoverEnabled: 'Hover actions',

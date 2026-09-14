@@ -34,8 +34,10 @@ import type {
   SlashCommandListResponse,
   SlashCommandRunResponse,
 } from '@agiworkforce/types/protocol';
+import { redactSecrets } from '../core/telemetry';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
+const MAX_REJECTED_LINE_CHARS = 400;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SHUTDOWN_ACK_TIMEOUT_MS = 7_000;
 // A device grant runs at the user's pace in a browser, and an MCP sign-in
@@ -634,7 +636,13 @@ class JsonlConnection {
     try {
       parsed = JSON.parse(line);
     } catch {
-      this.close(new Error('AGI local runtime emitted malformed JSON'));
+      this.close(
+        new Error(
+          `AGI local runtime emitted malformed JSON on its protocol stream: ${JSON.stringify(
+            redactSecrets(line.slice(0, MAX_REJECTED_LINE_CHARS)),
+          )}`,
+        ),
+      );
       return;
     }
 

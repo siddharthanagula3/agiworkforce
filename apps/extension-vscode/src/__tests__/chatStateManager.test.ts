@@ -1846,6 +1846,113 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('sends the active editor file, its selection and its problems with the turn', async () => {
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      configurable: true,
+      writable: true,
+      value: {
+        selection: {
+          isEmpty: false,
+          start: { line: 0, character: 0 },
+          end: { line: 2, character: 1 },
+          active: { line: 2, character: 1 },
+        },
+        document: {
+          uri: vscode.Uri.file('/workspace/src/app.ts'),
+          languageId: 'typescript',
+          lineCount: 3,
+          getText: () => 'export const add = (a, b) => a + b;',
+        },
+      },
+    });
+    vi.mocked(vscode.languages.getDiagnostics).mockReturnValue([
+      { severity: 0, message: 'b is not defined', range: { start: { line: 1, character: 9 } } },
+    ] as never);
+    vi.mocked(vscode.workspace.asRelativePath).mockImplementation((value: unknown) =>
+      String((value as { fsPath?: string }).fsPath ?? value).replace('/workspace/', ''),
+    );
+
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'What is this?' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const params = harness.runtime.startTurn.mock.calls[0]?.[0] as {
+      contextFiles: string[];
+      input: Array<{ type: string; text?: string }>;
+    };
+    expect(params.contextFiles).toContain('/workspace/src/app.ts');
+    const texts = params.input
+      .filter((part) => part.type === 'text')
+      .map((part) => part.text ?? '');
+    expect(
+      texts.some((text) => text.startsWith('Selected from src/app.ts (typescript), lines 1-3:')),
+    ).toBe(true);
+    expect(texts.some((text) => text.includes('b is not defined'))).toBe(true);
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('stops sending an editor chip the user removed, until the next turn', async () => {
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      configurable: true,
+      writable: true,
+      value: {
+        selection: {
+          isEmpty: true,
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          active: { line: 0, character: 0 },
+        },
+        document: {
+          uri: vscode.Uri.file('/workspace/src/app.ts'),
+          languageId: 'typescript',
+          lineCount: 3,
+          getText: () => '',
+        },
+      },
+    });
+    vi.mocked(vscode.languages.getDiagnostics).mockReturnValue([] as never);
+
+    const harness = makeHarness();
+    await harness.manager.handleMessage({
+      type: 'dismissEditorContext',
+      payload: { id: 'active-file:src/app.ts' },
+    });
+    expect(harness.posted.at(-1)).toEqual({ type: 'editorContext', payload: { chips: [] } });
+
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hello' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(
+      (harness.runtime.startTurn.mock.calls[0]?.[0] as { contextFiles?: string[] }).contextFiles,
+    ).not.toContain('/workspace/src/app.ts');
+
+    expect(harness.posted).toContainEqual({
+      type: 'editorContext',
+      payload: { chips: [{ id: 'active-file:src/app.ts', kind: 'active-file', label: 'app.ts' }] },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
   it('keeps a spoofed or cancelled sidebar bypass request on Auto', async () => {
     const harness = makeHarness();
 

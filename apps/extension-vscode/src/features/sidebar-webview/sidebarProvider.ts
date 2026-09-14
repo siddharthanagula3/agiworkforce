@@ -153,6 +153,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._stateManager.pushFollowUpBehavior();
   }
 
+  public pushEditorContext(): void {
+    this._stateManager.pushEditorContext();
+  }
+
   public refreshRuntimeStatus(): void {
     void this._stateManager.refreshRuntimeStatus();
   }

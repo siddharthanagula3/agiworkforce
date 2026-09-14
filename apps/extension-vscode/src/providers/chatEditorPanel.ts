@@ -138,6 +138,7 @@ export class ChatEditorPanel {
       ChatEditorPanel.mostRecent = Array.from(ChatEditorPanel.instances).at(-1);
     }
     this.stateManager.cancelInFlight();
+    this.stateManager.dispose();
     for (const disposable of this.disposables) disposable.dispose();
     this.disposables.length = 0;
   }
