@@ -152,6 +152,15 @@ describe('content-script initialization', () => {
   it('does not track the pointer on every page', () => {
     expect(documentListenerTypes).not.toContain('mousemove');
   });
+
+  it('registers its listeners once even if the script is injected again', async () => {
+    const registeredBefore = chromeMock.runtime.onMessage.addListener.mock.calls.length;
+
+    vi.resetModules();
+    await import('../src/content.ts');
+
+    expect(chromeMock.runtime.onMessage.addListener.mock.calls.length).toBe(registeredBefore);
+  });
 });
 
 describe('handleMessage, invalid messages are rejected', () => {
