@@ -342,14 +342,14 @@ async fn every_line_the_stdio_transport_writes_is_json() {
         );
         let failure = &params["failure"];
         assert_eq!(
-            failure["code"], "provider_auth_missing",
-            "an unauthenticated turn must classify as a missing credential: {params}"
+            failure["code"], "account_signed_out",
+            "an unauthenticated turn must classify as a signed-out account: {params}"
         );
-        assert_eq!(failure["action"], "sign_in_provider");
+        assert_eq!(failure["action"], "sign_in_account");
         assert_eq!(failure["retryable"], false);
         assert!(
-            failure["provider"].is_string(),
-            "the failure must name the route that failed: {params}"
+            failure["provider"].is_null(),
+            "a signed-out account names no vendor route: {params}"
         );
         assert_eq!(failure["message"], params["error"]);
     } else if let Some(params) = completed {
