@@ -487,6 +487,19 @@ function protocolError(message = 'Malformed response from AGI Cloud.'): ParsedSs
   return { error: { type: 'error', message, code: 'protocol_error' } };
 }
 
+// Multi-line `data:` is one payload per the SSE spec, but the server also
+// forwards raw provider lines with no blank separator, which arrive joined.
+// Parsing is what tells the two apart; splitting unconditionally breaks the first.
+function splitJoinedFrames(dataPayload: string): string[] {
+  if (!dataPayload.includes('\n')) return [dataPayload];
+  try {
+    JSON.parse(dataPayload);
+    return [dataPayload];
+  } catch {
+    return dataPayload.split('\n');
+  }
+}
+
 class ManagedChatProtocolError extends Error {
   constructor(message: string) {
     super(message);
@@ -952,7 +965,7 @@ export async function* streamFreeChat(
       dataEvents: readonly string[],
     ): Promise<{ chunks: FreeTrialChunk[]; terminal: boolean }> => {
       const chunks: FreeTrialChunk[] = [];
-      for (const data of dataEvents) {
+      for (const data of dataEvents.flatMap((event) => splitJoinedFrames(event))) {
         const frame = parseSseData(data);
         if (frame.error) {
           chunks.push(frame.error);
