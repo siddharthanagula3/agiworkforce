@@ -35,6 +35,9 @@ vi.mock('@agiworkforce/unified-chat', () => ({
 // other leaves below: this test asserts PROVIDER NESTING, and the real
 // component calls Clerk's useAuth, which throws outside a ClerkProvider.
 // which layout.tsx supplies and this structural test deliberately does not.
+vi.mock('@/features/settings/components/CloudSettingsSync', () => ({
+  CloudSettingsSync: () => null,
+}));
 vi.mock('@shared/components/TelemetryConsentSync', () => ({
   TelemetryConsentSync: () => null,
 }));
