@@ -287,6 +287,10 @@ struct TuiApp {
     /// derived from them because a `ContentBlock::Image` carries base64 bytes
     /// and no provenance, so the composer would have nothing to name in a chip.
     staged_images: Vec<String>,
+    /// Images `/image` generated this session, newest last. Held as paths so
+    /// the chip can name a real file and `/image open` can hand it to the
+    /// user's default viewer.
+    generated_images: Vec<std::path::PathBuf>,
     /// Workspace files the `@` picker offers, built once on the first `@` of a
     /// session. A monorepo walk is too slow to repeat per keystroke.
     mention_candidates: Option<Vec<crate::mentions::MentionCandidate>>,
@@ -456,6 +460,7 @@ impl TuiApp {
             tool_cells: Vec::new(),
             mcp_elicitation_handler: Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new()),
             staged_images: Vec::new(),
+            generated_images: Vec::new(),
             mention_candidates: None,
             mention_anchor: None,
         }
@@ -1073,8 +1078,10 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
     let area = frame.area();
 
     // Dynamic input height: border(2) + attachment chip row + content rows (1..=8)
-    let input_height =
-        2 + attachment_chip_rows(&app.staged_images) + composer_content_rows(&app.input);
+    let input_height = 2
+        + attachment_chip_rows(&app.staged_images)
+        + generated_chip_rows(&app.generated_images)
+        + composer_content_rows(&app.input);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -1651,11 +1658,18 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     // Attachment chips sit above the message, so a staged image is visible
     // without the user having to remember they pasted one.
-    let chip_rows = attachment_chip_rows(&app.staged_images);
+    let chip_rows =
+        attachment_chip_rows(&app.staged_images) + generated_chip_rows(&app.generated_images);
     let mut leading: Vec<Line> = Vec::new();
-    if chip_rows > 0 {
+    if !app.staged_images.is_empty() {
         leading.push(Line::from(Span::styled(
             attachment_chip_line(&app.staged_images),
+            Style::default().fg(app.mode.color()),
+        )));
+    }
+    if !app.generated_images.is_empty() {
+        leading.push(Line::from(Span::styled(
+            generated_chip_line(&app.generated_images),
             Style::default().fg(app.mode.color()),
         )));
     }
@@ -1746,6 +1760,30 @@ fn attachment_chip_rows(staged: &[String]) -> u16 {
 fn attachment_chip_line(staged: &[String]) -> String {
     let names: Vec<&str> = staged.iter().map(String::as_str).collect();
     format!("📎 {} · /attach remove to drop", names.join(", "))
+}
+
+/// One row when `/image` has produced something this session. A generated
+/// file the user never sees the path of is a silent result, so the composer
+/// grows by the row rather than printing the path once and losing it up the
+/// transcript.
+fn generated_chip_rows(generated: &[std::path::PathBuf]) -> u16 {
+    u16::from(!generated.is_empty())
+}
+
+/// The generated-image chip: the newest file, and how to open it.
+fn generated_chip_line(generated: &[std::path::PathBuf]) -> String {
+    let Some(newest) = generated.last() else {
+        return String::new();
+    };
+    let name = newest
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("image");
+    let more = match generated.len() {
+        0 | 1 => String::new(),
+        count => format!(" (+{} more)", count - 1),
+    };
+    format!("🖼 {name}{more} · /image open to view · /image clear to dismiss")
 }
 
 /// Return the number of display rows needed for the input composer content
@@ -2978,6 +3016,8 @@ enum SlashResult {
     RunLogout,
     /// Leave the TUI, run the interactive voice loop, then re-enter.
     RunVoice(String),
+    /// Generate an image on the account and stage its file as a chip.
+    RunImage(String),
 }
 
 fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
@@ -3032,6 +3072,40 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 }
             }
         }
+
+        "/image" => match arg {
+            "" => SlashResult::SystemMessage(
+                "/image <prompt> draws an image on your account and saves it here. \
+                 /image open views the last one, /image clear dismisses the chip."
+                    .to_string(),
+            ),
+            "clear" => {
+                let count = app.generated_images.len();
+                app.generated_images.clear();
+                SlashResult::SystemMessage(if count == 0 {
+                    "No generated images to dismiss.".to_string()
+                } else {
+                    format!("Dismissed {count} generated image chip(s).")
+                })
+            }
+            "open" => match app.generated_images.last() {
+                None => SlashResult::SystemMessage(
+                    "Nothing generated yet. Try /image a red bicycle.".to_string(),
+                ),
+                Some(path) => {
+                    let opened = crate::oauth::open_external_url(
+                        &format!("file://{}", path.display()),
+                        crate::oauth::UserActionContext::user_initiated(),
+                    );
+                    SlashResult::SystemMessage(if opened {
+                        format!("Opened {}", path.display())
+                    } else {
+                        format!("Could not open a viewer. The file is at {}", path.display())
+                    })
+                }
+            },
+            prompt => SlashResult::RunImage(prompt.to_string()),
+        },
 
         "/plan" => {
             let new_mode = if app.mode == InteractionMode::Plan {
@@ -4420,6 +4494,43 @@ async fn run_event_loop(
                                     },
                                 });
                             }
+                            SlashResult::RunImage(prompt) => {
+                                let privacy = app.session.privacy_mode;
+                                let options = crate::cloud::image::ImageRequestOptions {
+                                    prompt: prompt.clone(),
+                                    count: 1,
+                                    size: None,
+                                    quality: None,
+                                    model: None,
+                                    out: None,
+                                };
+                                let cwd = app.workspace_root();
+                                let text =
+                                    match crate::cloud::image::generate(privacy, &options, &cwd)
+                                        .await
+                                    {
+                                        Ok(generation) => {
+                                            app.generated_images
+                                                .extend(generation.paths.iter().cloned());
+                                            format!(
+                                                "Generated with {} ({}): {}",
+                                                generation.model,
+                                                generation.provider,
+                                                generation
+                                                    .paths
+                                                    .iter()
+                                                    .map(|path| path.display().to_string())
+                                                    .collect::<Vec<_>>()
+                                                    .join(", ")
+                                            )
+                                        }
+                                        Err(error) => format!("Image generation failed: {error}"),
+                                    };
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
                             SlashResult::RunCompact(focus) => {
                                 let focus = (!focus.trim().is_empty()).then_some(focus.as_str());
                                 let result = app.session.compact_now(&app.config, focus).await;
@@ -5734,6 +5845,94 @@ mod tests {
     }
 
     #[test]
+    fn the_composer_shows_no_generated_chip_until_an_image_exists() {
+        let mut app = minimal_app();
+        assert_eq!(generated_chip_rows(&app.generated_images), 0);
+        app.generated_images
+            .push(std::path::PathBuf::from("/work/a-red-bicycle.png"));
+        assert_eq!(generated_chip_rows(&app.generated_images), 1);
+        let chip = generated_chip_line(&app.generated_images);
+        assert!(chip.contains("a-red-bicycle.png"), "{chip}");
+        assert!(chip.contains("/image open"), "the chip says how to open it");
+    }
+
+    #[test]
+    fn the_generated_chip_names_the_newest_image_and_counts_the_rest() {
+        let mut app = minimal_app();
+        app.generated_images = vec![
+            std::path::PathBuf::from("/work/first.png"),
+            std::path::PathBuf::from("/work/second.png"),
+        ];
+        let chip = generated_chip_line(&app.generated_images);
+        assert!(chip.contains("second.png"), "{chip}");
+        assert!(chip.contains("+1 more"), "{chip}");
+        assert_eq!(generated_chip_rows(&app.generated_images), 1);
+    }
+
+    #[test]
+    fn slash_image_with_a_prompt_runs_a_generation() {
+        let mut app = minimal_app();
+        let result = handle_slash("/image a red bicycle", &mut app);
+        assert!(
+            matches!(result, SlashResult::RunImage(ref prompt) if prompt == "a red bicycle"),
+            "a prompt must reach the hosted route rather than the model"
+        );
+    }
+
+    #[test]
+    fn slash_image_without_a_prompt_explains_itself_instead_of_generating() {
+        let mut app = minimal_app();
+        let result = handle_slash("/image", &mut app);
+        match result {
+            SlashResult::SystemMessage(message) => {
+                assert!(message.contains("/image open"), "{message}");
+            }
+            _ => panic!("a bare /image must not spend an image"),
+        }
+    }
+
+    #[test]
+    fn slash_image_clear_drops_the_chip() {
+        let mut app = minimal_app();
+        app.generated_images
+            .push(std::path::PathBuf::from("/work/a.png"));
+        let _ = handle_slash("/image clear", &mut app);
+        assert!(app.generated_images.is_empty());
+        assert_eq!(generated_chip_rows(&app.generated_images), 0);
+    }
+
+    #[test]
+    fn slash_image_open_with_nothing_generated_says_so_and_opens_nothing() {
+        let _guard = crate::oauth::external_open_spy::lock();
+        crate::oauth::external_open_spy::enable_and_reset();
+        let mut app = minimal_app();
+        let result = handle_slash("/image open", &mut app);
+        let opened = crate::oauth::external_open_spy::open_count();
+        crate::oauth::external_open_spy::disable();
+        assert_eq!(opened, 0, "nothing to open must launch nothing");
+        assert!(matches!(result, SlashResult::SystemMessage(_)));
+    }
+
+    #[test]
+    fn slash_image_open_hands_the_newest_file_to_the_viewer() {
+        let _guard = crate::oauth::external_open_spy::lock();
+        crate::oauth::external_open_spy::enable_and_reset();
+        let mut app = minimal_app();
+        app.generated_images
+            .push(std::path::PathBuf::from("/work/a-red-bicycle.png"));
+        let result = handle_slash("/image open", &mut app);
+        let opened = crate::oauth::external_open_spy::open_count();
+        crate::oauth::external_open_spy::disable();
+        assert_eq!(opened, 1);
+        match result {
+            SlashResult::SystemMessage(message) => {
+                assert!(message.contains("a-red-bicycle.png"), "{message}")
+            }
+            _ => panic!("opening reports what it opened"),
+        }
+    }
+
+    #[test]
     fn at_key_opens_the_file_picker_and_keeps_the_character() {
         let mut app = minimal_app();
         // Seed the candidate list so the test does not depend on the walk
@@ -6083,6 +6282,8 @@ mod tests {
             "mem",
             "voice",
             "v",
+            "image",
+            "imagine",
             "theme",
             "btw",
             "ctx",
