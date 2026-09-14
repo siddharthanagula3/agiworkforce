@@ -12,15 +12,12 @@ export type HostModelSummary = {
    */
   provider: string;
   /**
-   * Whether a turn on this model could start. Not whether it is allowed:
-   * a session in Local privacy mode still refuses a network route however
-   * reachable it is, and that decision stays with the client.
+   * Whether a turn on this model could start. Not whether it is allowed.
    */
   reachable: boolean;
   unreachable?: ModelUnreachable;
   /**
-   * The boundary a turn on this model would cross, so a client can apply
-   * its own privacy rule without a second lookup.
+   * The boundary a turn on this model would cross.
    */
   trustMode: DeveloperSessionTrustMode;
 };
