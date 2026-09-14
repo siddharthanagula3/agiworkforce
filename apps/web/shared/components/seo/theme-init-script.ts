@@ -41,5 +41,10 @@ export const THEME_INIT_SCRIPT = `/* global document, localStorage, window */
   root.classList.add(theme);
   root.setAttribute('data-theme', theme);
   root.style.colorScheme = theme;
+
+  const host = window.agiHost;
+  if (host && typeof host.platform === 'string') {
+    root.setAttribute('data-desktop-host', host.platform);
+  }
 })();
 `;

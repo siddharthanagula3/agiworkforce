@@ -8,7 +8,7 @@ const HOME_HREF = '/';
 
 export function AuthBrand() {
   return (
-    <Link href={HOME_HREF} className={AUTH_BRAND_CLASS}>
+    <Link href={HOME_HREF} data-auth-brand="" className={AUTH_BRAND_CLASS}>
       <AgiMark size={AUTH_MARK_SIZE} mono />
       <span>{BRAND_NAME}</span>
     </Link>
