@@ -1,7 +1,4 @@
-import {
-  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
-  managedCloudPreferencesNamespacePath,
-} from '@agiworkforce/cloud-contracts';
+import { MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH } from '@agiworkforce/cloud-contracts';
 
 import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
@@ -58,56 +55,13 @@ export interface UserProfile {
   email?: string;
   name?: string;
   avatar_url?: string | null;
-  phone?: string;
-  bio?: string;
-  timezone?: string;
-  language?: string;
   role?: string;
   plan?: string;
 }
 
 export interface UserSettings {
-  email_notifications?: boolean;
-  push_notifications?: boolean;
-  workflow_alerts?: boolean;
-  employee_updates?: boolean;
-  system_maintenance?: boolean;
-  marketing_emails?: boolean;
-  weekly_reports?: boolean;
-  instant_alerts?: boolean;
-
   two_factor_enabled?: boolean;
-  totp_secret?: string;
-  totp_enabled_at?: string;
-  backup_codes?: string[];
-  backup_codes_generated_at?: string;
-  backup_codes_used?: number;
   session_timeout?: number;
-
-  theme?: 'light' | 'dark' | 'auto';
-  auto_save?: boolean;
-  debug_mode?: boolean;
-  analytics_enabled?: boolean;
-
-  cache_size?: string;
-  backup_frequency?: string;
-  retention_period?: number;
-  max_concurrent_jobs?: number;
-
-  default_ai_provider?:
-    | 'openai'
-    | 'anthropic'
-    | 'google'
-    | 'perplexity'
-    | 'grok'
-    | 'deepseek'
-    | 'qwen'
-    | 'moonshot'
-    | 'zhipu';
-  default_ai_model?: string;
-  prefer_streaming?: boolean;
-  ai_temperature?: number;
-  ai_max_tokens?: number;
 }
 
 export interface APIKey {
@@ -354,69 +308,6 @@ async function verifyBackupCode(code: string, hashedCodes: string[]): Promise<nu
 }
 
 class SettingsService {
-  async getProfile(): Promise<{ data: UserProfile | null; error?: string }> {
-    try {
-      const token = await getAuthToken();
-      if (!token) {
-        return { data: null, error: 'User not authenticated' };
-      }
-
-      const [meRes, prefRes] = await Promise.all([
-        fetch('/api/me', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(managedCloudPreferencesNamespacePath('profile'), {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      if (!meRes.ok) {
-        return { data: null, error: `HTTP ${meRes.status}` };
-      }
-
-      const me = (await meRes.json()) as {
-        id: string;
-        email?: string | null;
-        name?: string | null;
-        avatar_url?: string | null;
-        plan?: { tier?: string };
-      };
-
-      type StoredProfile = {
-        bio?: string;
-        phone?: string;
-        timezone?: string;
-        language?: string;
-      };
-      let stored: StoredProfile = {};
-      if (prefRes.ok) {
-        const prefJson = (await prefRes.json()) as { settings?: StoredProfile };
-        if (prefJson.settings && typeof prefJson.settings === 'object') {
-          stored = prefJson.settings;
-        }
-      }
-
-      return {
-        data: {
-          id: me.id,
-          email: me.email ?? undefined,
-          name: me.name ?? undefined,
-          avatar_url: me.avatar_url ?? undefined,
-          timezone: stored.timezone ?? 'America/New_York',
-          language: stored.language ?? 'en',
-          bio: stored.bio,
-          phone: stored.phone,
-          plan: me.plan?.tier,
-        },
-      };
-    } catch (error) {
-      return {
-        data: null,
-        error: toUserMessage(error, 'Something went wrong. Try again.'),
-      };
-    }
-  }
-
   async updateProfile(profile: Partial<UserProfile>): Promise<{ error?: string }> {
     try {
       const token = await getAuthToken();
@@ -452,36 +343,6 @@ class SettingsService {
         }
       }
 
-      const extPayload: Record<string, unknown> = {};
-      if (profile.bio !== undefined) extPayload['bio'] = profile.bio;
-      if (profile.phone !== undefined) extPayload['phone'] = profile.phone;
-      if (profile.timezone !== undefined) extPayload['timezone'] = profile.timezone;
-      if (profile.language !== undefined) extPayload['language'] = profile.language;
-
-      if (Object.keys(extPayload).length > 0) {
-        const prefRes = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-            'x-csrf-token': csrfToken,
-          },
-          body: JSON.stringify({ namespace: 'profile', value: extPayload }),
-        });
-
-        invalidatePreferencesSnapshot();
-
-        if (!prefRes.ok) {
-          const err = (await prefRes.json().catch(() => ({}))) as { error?: string };
-          return {
-            error: toUserMessage(
-              new Error(String(err.error ?? '')),
-              `Could not reach the server (HTTP ${prefRes.status}).`,
-            ),
-          };
-        }
-      }
-
       return {};
     } catch (error) {
       return {
@@ -492,28 +353,8 @@ class SettingsService {
 
   async getSettings(): Promise<{ data: UserSettings; error?: string }> {
     const hardcodedDefaults: UserSettings = {
-      email_notifications: true,
-      push_notifications: true,
-      workflow_alerts: true,
-      employee_updates: true,
-      system_maintenance: true,
-      marketing_emails: false,
-      weekly_reports: true,
-      instant_alerts: true,
       two_factor_enabled: false,
       session_timeout: 60,
-      theme: 'dark',
-      auto_save: true,
-      debug_mode: false,
-      analytics_enabled: true,
-      cache_size: '1GB',
-      backup_frequency: 'daily',
-      retention_period: 30,
-      max_concurrent_jobs: 10,
-      default_ai_provider: 'openai',
-      prefer_streaming: true,
-      ai_temperature: 0.7,
-      ai_max_tokens: 4000,
     };
 
     try {

@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  profileSettingsSchema,
   changePasswordSchema,
-  notificationPreferencesSchema,
   securitySettingsSchema,
-  systemSettingsSchema,
   createApiKeySchema,
   validateFormData,
   isValidIpOrCidr,
@@ -25,144 +22,6 @@ function hasErrorContaining(
 }
 
 describe('Settings Validation Schemas', () => {
-  describe('profileSettingsSchema', () => {
-    it('should validate a valid profile', () => {
-      const validProfile = {
-        name: 'John Doe',
-        phone: '+1 555-123-4567',
-        timezone: 'America/New_York',
-        language: 'en',
-        bio: 'Software developer',
-      };
-
-      const result = profileSettingsSchema.safeParse(validProfile);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.name).toBe('John Doe');
-      }
-    });
-
-    it('should reject empty name', () => {
-      const invalidProfile = {
-        name: '',
-        timezone: 'America/New_York',
-        language: 'en',
-      };
-
-      const result = profileSettingsSchema.safeParse(invalidProfile);
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject name shorter than 2 characters', () => {
-      const invalidProfile = {
-        name: 'J',
-        timezone: 'America/New_York',
-        language: 'en',
-      };
-
-      const result = profileSettingsSchema.safeParse(invalidProfile);
-      expect(result.success).toBe(false);
-    });
-
-    it('should sanitize XSS attempts in name', () => {
-      const xssProfile = {
-        name: '<script>alert("xss")</script>John Doe',
-        timezone: 'America/New_York',
-        language: 'en',
-      };
-
-      const result = profileSettingsSchema.safeParse(xssProfile);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.name).not.toContain('<script>');
-        expect(result.data.name).not.toContain('</script>');
-      }
-    });
-
-    it('should encode XSS attempts in bio', () => {
-      const xssProfile = {
-        name: 'John Doe',
-        timezone: 'America/New_York',
-        language: 'en',
-        bio: '<img src=x onerror=alert("xss")>Hello',
-      };
-
-      const result = profileSettingsSchema.safeParse(xssProfile);
-      expect(result.success).toBe(true);
-      if (result.success && result.data.bio) {
-        expect(result.data.bio).toContain('&lt;');
-        expect(result.data.bio).not.toContain('<img');
-      }
-    });
-
-    it('should reject invalid phone format', () => {
-      const invalidProfile = {
-        name: 'John Doe',
-        phone: 'not-a-phone<script>',
-        timezone: 'America/New_York',
-        language: 'en',
-      };
-
-      const result = profileSettingsSchema.safeParse(invalidProfile);
-      expect(result.success).toBe(false);
-    });
-
-    it('should accept valid phone formats', () => {
-      const validFormats = [
-        '+1 555-123-4567',
-        '(555) 123-4567',
-        '555.123.4567',
-        '+44 20 7946 0958',
-      ];
-
-      for (const phone of validFormats) {
-        const profile = {
-          name: 'John Doe',
-          phone,
-          timezone: 'America/New_York',
-          language: 'en',
-        };
-        const result = profileSettingsSchema.safeParse(profile);
-        expect(result.success).toBe(true);
-      }
-    });
-
-    it('should reject invalid timezone', () => {
-      const invalidProfile = {
-        name: 'John Doe',
-        timezone: 'Invalid/Timezone',
-        language: 'en',
-      };
-
-      const result = profileSettingsSchema.safeParse(invalidProfile);
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject invalid language', () => {
-      const invalidProfile = {
-        name: 'John Doe',
-        timezone: 'America/New_York',
-        language: 'invalid',
-      };
-
-      const result = profileSettingsSchema.safeParse(invalidProfile);
-      expect(result.success).toBe(false);
-    });
-
-    it('should enforce bio max length', () => {
-      const longBio = 'a'.repeat(600);
-      const invalidProfile = {
-        name: 'John Doe',
-        timezone: 'America/New_York',
-        language: 'en',
-        bio: longBio,
-      };
-
-      const result = profileSettingsSchema.safeParse(invalidProfile);
-      expect(result.success).toBe(false);
-    });
-  });
-
   describe('changePasswordSchema', () => {
     it('should validate a strong password', () => {
       const validPassword = {
@@ -241,40 +100,6 @@ describe('Settings Validation Schemas', () => {
     });
   });
 
-  describe('notificationPreferencesSchema', () => {
-    it('should validate valid notification preferences', () => {
-      const validPrefs = {
-        email_notifications: true,
-        push_notifications: false,
-        workflow_alerts: true,
-        employee_updates: true,
-        system_maintenance: true,
-        marketing_emails: false,
-        weekly_reports: true,
-        instant_alerts: true,
-      };
-
-      const result = notificationPreferencesSchema.safeParse(validPrefs);
-      expect(result.success).toBe(true);
-    });
-
-    it('should reject non-boolean values', () => {
-      const invalidPrefs = {
-        email_notifications: 'yes', // Should be boolean
-        push_notifications: false,
-        workflow_alerts: true,
-        employee_updates: true,
-        system_maintenance: true,
-        marketing_emails: false,
-        weekly_reports: true,
-        instant_alerts: true,
-      };
-
-      const result = notificationPreferencesSchema.safeParse(invalidPrefs);
-      expect(result.success).toBe(false);
-    });
-  });
-
   describe('securitySettingsSchema', () => {
     it('should validate valid security settings', () => {
       const validSettings = {
@@ -306,88 +131,6 @@ describe('Settings Validation Schemas', () => {
       const result = securitySettingsSchema.safeParse(invalidSettings);
       expect(result.success).toBe(false);
       expect(hasErrorContaining(result, '24') || hasErrorContaining(result, '1440')).toBe(true);
-    });
-  });
-
-  describe('systemSettingsSchema', () => {
-    it('should validate valid system settings', () => {
-      const validSettings = {
-        theme: 'dark',
-        auto_save: true,
-        debug_mode: false,
-        analytics_enabled: true,
-        cache_size: '1GB',
-        backup_frequency: 'daily',
-        retention_period: 30,
-        max_concurrent_jobs: 10,
-      };
-
-      const result = systemSettingsSchema.safeParse(validSettings);
-      expect(result.success).toBe(true);
-    });
-
-    it('should reject invalid theme', () => {
-      const invalidSettings = {
-        theme: 'purple', // Invalid theme
-        auto_save: true,
-        debug_mode: false,
-        analytics_enabled: true,
-        cache_size: '1GB',
-        backup_frequency: 'daily',
-        retention_period: 30,
-        max_concurrent_jobs: 10,
-      };
-
-      const result = systemSettingsSchema.safeParse(invalidSettings);
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject invalid cache size', () => {
-      const invalidSettings = {
-        theme: 'dark',
-        auto_save: true,
-        debug_mode: false,
-        analytics_enabled: true,
-        cache_size: '8GB', // Invalid cache size
-        backup_frequency: 'daily',
-        retention_period: 30,
-        max_concurrent_jobs: 10,
-      };
-
-      const result = systemSettingsSchema.safeParse(invalidSettings);
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject retention period out of range', () => {
-      const invalidSettings = {
-        theme: 'dark',
-        auto_save: true,
-        debug_mode: false,
-        analytics_enabled: true,
-        cache_size: '1GB',
-        backup_frequency: 'daily',
-        retention_period: 500, // Above 365 day maximum
-        max_concurrent_jobs: 10,
-      };
-
-      const result = systemSettingsSchema.safeParse(invalidSettings);
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject max concurrent jobs out of range', () => {
-      const invalidSettings = {
-        theme: 'dark',
-        auto_save: true,
-        debug_mode: false,
-        analytics_enabled: true,
-        cache_size: '1GB',
-        backup_frequency: 'daily',
-        retention_period: 30,
-        max_concurrent_jobs: 150, // Above 100 maximum
-      };
-
-      const result = systemSettingsSchema.safeParse(invalidSettings);
-      expect(result.success).toBe(false);
     });
   });
 
@@ -454,27 +197,21 @@ describe('Settings Validation Schemas', () => {
 
   describe('validateFormData utility', () => {
     it('should return success with valid data', () => {
-      const validProfile = {
-        name: 'John Doe',
-        timezone: 'America/New_York',
-        language: 'en',
-      };
-
-      const result = validateFormData(profileSettingsSchema, validProfile);
+      const result = validateFormData(securitySettingsSchema, {
+        two_factor_enabled: true,
+        session_timeout: 30,
+      });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.name).toBe('John Doe');
+        expect(result.data.session_timeout).toBe(30);
       }
     });
 
     it('should return errors for invalid data', () => {
-      const invalidProfile = {
-        name: '',
-        timezone: 'Invalid',
-        language: 'xx',
-      };
-
-      const result = validateFormData(profileSettingsSchema, invalidProfile);
+      const result = validateFormData(securitySettingsSchema, {
+        two_factor_enabled: true,
+        session_timeout: 5,
+      });
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(Object.keys(result.errors).length).toBeGreaterThan(0);
