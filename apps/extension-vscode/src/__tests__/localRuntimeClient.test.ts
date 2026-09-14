@@ -753,6 +753,26 @@ describe('LocalRuntimeClient', () => {
     await client.dispose();
   });
 
+  it('asks the host to re-resolve reachability only when told to refresh', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await client.listLocalModels();
+    await client.listLocalModels({ refresh: true });
+
+    expect(
+      runtime.requests
+        .filter((request) => request['method'] === 'model/list')
+        .map((request) => request['params']),
+    ).toEqual([{}, { refresh: true }]);
+    await client.dispose();
+  });
+
   it('resumes a persisted thread through the runtime owner', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({

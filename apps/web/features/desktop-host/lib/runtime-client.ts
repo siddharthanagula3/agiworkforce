@@ -349,8 +349,14 @@ export function readDeveloperRuntimeStatus(): Promise<DeveloperRuntimeStatus> {
   return invoke<DeveloperRuntimeStatus>('developer_runtime_status');
 }
 
-export function listDeveloperModels(rootId: string): Promise<DeveloperRuntimeModels> {
-  return invoke<DeveloperRuntimeModels>('developer_model_list', { rootId });
+export function listDeveloperModels(
+  rootId: string,
+  options: { refresh?: boolean } = {},
+): Promise<DeveloperRuntimeModels> {
+  return invoke<DeveloperRuntimeModels>('developer_model_list', {
+    rootId,
+    ...(options.refresh === true ? { refresh: true } : {}),
+  });
 }
 
 export function listDeveloperSessions(): Promise<DeveloperSessionList> {

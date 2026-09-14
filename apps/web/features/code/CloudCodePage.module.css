@@ -887,6 +887,46 @@ svg + .menuRowLabel {
   min-width: 0;
 }
 
+.menuItemStack {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuItemTop {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.menuItemLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuScroll {
+  max-height: min(70vh, var(--radix-dropdown-menu-content-available-height, 70vh));
+  overflow-y: auto;
+}
+
+.menuItemCount {
+  flex: none;
+  padding-left: 8px;
+  color: var(--chat-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.menuItemOffer {
+  color: var(--chat-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .field {
   border: 1px solid var(--chat-border-strong);
   border-radius: var(--chat-radius-2xl);
@@ -959,6 +999,12 @@ svg + .menuRowLabel {
 .controlButton:hover {
   background: var(--chat-surface-hover);
   color: var(--chat-text-primary);
+}
+
+.controlButtonWarning {
+  border-color: var(--chat-warning-border);
+  background: var(--chat-warning-bg);
+  color: var(--chat-warning-fg);
 }
 
 .controlButtonMode {

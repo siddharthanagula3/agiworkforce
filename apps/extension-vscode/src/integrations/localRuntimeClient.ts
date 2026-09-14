@@ -191,6 +191,20 @@ const threadReadResponseSchema = z.object({
     .max(10_000),
   transcriptTruncated: z.boolean(),
 });
+const hostModelSummarySchema = z.object({
+  id: z.string().min(1),
+  provider: z.string().min(1),
+  reachable: z.boolean(),
+  unreachable: z
+    .object({
+      code: z.string().min(1),
+      action: z.enum(['sign_in_provider', 'open_settings', 'retry', 'none']),
+      provider: z.string().optional(),
+    })
+    .optional(),
+  trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
+});
+
 const localModelListResponseSchema = z.object({
   models: z.array(
     z.object({
@@ -198,6 +212,7 @@ const localModelListResponseSchema = z.object({
       provider: z.enum(['ollama', 'lmstudio']),
     }),
   ),
+  hostModels: z.array(hostModelSummarySchema).optional(),
 });
 const turnSummarySchema = z.object({
   id: z.string().min(1),
@@ -776,10 +791,10 @@ export class LocalRuntimeClient {
     ) as ThreadListResponse;
   }
 
-  async listLocalModels(): Promise<LocalModelListResponse> {
+  async listLocalModels(options: { refresh?: boolean } = {}): Promise<LocalModelListResponse> {
     const connection = await this.readyConnection();
     return localModelListResponseSchema.parse(
-      await connection.request('model/list', {}),
+      await connection.request('model/list', options.refresh === true ? { refresh: true } : {}),
     ) as LocalModelListResponse;
   }
 

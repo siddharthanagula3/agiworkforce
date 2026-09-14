@@ -37,6 +37,9 @@ export const LOCAL_CODE_COPY = {
   reject: 'Deny',
   runtimeStopped: 'The local runtime stopped.',
   startFailed: 'That session could not be started.',
+  switchToReadyModel: 'Switch to a ready model',
+  modelNeedsSetup: (model: string, provider: string): string =>
+    `${model} cannot run on this machine yet: ${provider} needs a sign-in first.`,
   readFailed: 'That session could not be opened.',
   turnFailed: 'That message could not be sent.',
 } as const;
@@ -103,17 +106,25 @@ export function localTurnFailureSentence(failure: DeveloperTurnFailure): string 
  */
 export type LocalFailureAction = { kind: 'retry' } | { kind: 'copy'; text: string } | null;
 
-export function localFailureAction(failure: DeveloperTurnFailure): LocalFailureAction {
-  if (failure.action === 'retry' && failure.retryable) return { kind: 'retry' };
-  if (failure.action === 'sign_in_provider' && failure.provider) {
-    return { kind: 'copy', text: `agi login ${failure.provider}` };
+export function localOfferFor(
+  action: DeveloperTurnFailure['action'],
+  provider: string | null,
+  retryable: boolean,
+): LocalFailureAction {
+  if (action === 'retry' && retryable) return { kind: 'retry' };
+  if (action === 'sign_in_provider' && provider) {
+    return { kind: 'copy', text: `agi login ${provider}` };
   }
   return null;
 }
 
+export function localFailureAction(failure: DeveloperTurnFailure): LocalFailureAction {
+  return localOfferFor(failure.action, failure.provider, failure.retryable);
+}
+
 export const LOCAL_FAILURE_ACTION_LABELS = {
   retry: 'Send it again',
-  copy: 'Copy the command',
+  copy: 'Copy the sign-in command',
   copied: 'Copied',
 } as const;
 
@@ -121,28 +132,43 @@ export interface LocalModelChoice {
   id: string;
   label: string;
   /** Why this model is offered, which is also how far it has been proven. */
-  evidence: 'used-here' | 'installed' | 'configured';
+  evidence: 'reachable' | 'used-here' | 'installed' | 'configured';
+}
+
+/**
+ * One route the host cannot reach, and what makes it reachable. Reachability
+ * cannot differ inside a route, so the row is the route, not each model on it.
+ */
+export interface LocalProviderSetup {
+  provider: string;
+  label: string;
+  count: number;
+  offer: LocalFailureAction;
 }
 
 const EVIDENCE_ORDER: Record<LocalModelChoice['evidence'], number> = {
-  'used-here': 0,
-  installed: 1,
-  configured: 2,
+  reachable: 0,
+  'used-here': 1,
+  installed: 2,
+  configured: 3,
 };
 
 export const LOCAL_MODEL_EVIDENCE_LABELS: Record<LocalModelChoice['evidence'], string> = {
+  reachable: 'Ready on this device',
   'used-here': 'Used in this folder',
   installed: 'On this computer',
   configured: 'The CLI default',
 };
 
+export const LOCAL_MODEL_SETUP_HEADING = 'Needs setup on this machine';
+
+export function localModelSetupCount(setup: LocalProviderSetup): string {
+  return setup.count === 1 ? '1 model' : `${setup.count} models`;
+}
+
 /**
- * The models offered for a session in one folder, strongest evidence first.
- *
- * Protocol 8 does not say which own-key providers hold a key, so a model this
- * folder's sessions already ran on is the best evidence the CLI can reach it;
- * after that come the models installed on this Mac, and last the configured
- * default, which may be a route that cannot run here.
+ * The models offered for a session in one folder. A CLI that predates
+ * `hostModels` gives no verdict, so there the folder's history stands in.
  */
 export function localModelChoices(
   runtime: DeveloperRuntimeModels | null,
@@ -150,24 +176,36 @@ export function localModelChoices(
 ): LocalModelChoice[] {
   const byId = new Map<string, LocalModelChoice>();
 
-  for (const session of sessions) {
-    if (!session.model || byId.has(session.model)) continue;
-    byId.set(session.model, {
-      id: session.model,
-      label: localModelLabel(session.model) ?? session.model,
-      evidence: 'used-here',
-    });
+  if (runtime !== null && runtime.hostModels.length > 0) {
+    for (const model of runtime.hostModels) {
+      if (!model.reachable || byId.has(model.id)) continue;
+      byId.set(model.id, {
+        id: model.id,
+        label: localModelLabel(model.id) ?? model.id,
+        evidence: 'reachable',
+      });
+    }
+  } else {
+    for (const session of sessions) {
+      if (!session.model || byId.has(session.model)) continue;
+      byId.set(session.model, {
+        id: session.model,
+        label: localModelLabel(session.model) ?? session.model,
+        evidence: 'used-here',
+      });
+    }
+    for (const model of runtime?.models ?? []) {
+      if (byId.has(model.id)) continue;
+      byId.set(model.id, {
+        id: model.id,
+        label: localModelLabel(model.id) ?? model.id,
+        evidence: 'installed',
+      });
+    }
   }
-  for (const model of runtime?.models ?? []) {
-    if (byId.has(model.id)) continue;
-    byId.set(model.id, {
-      id: model.id,
-      label: localModelLabel(model.id) ?? model.id,
-      evidence: 'installed',
-    });
-  }
+
   const configured = runtime?.defaultModelId;
-  if (configured && !byId.has(configured)) {
+  if (configured && !byId.has(configured) && localModelSetup(runtime, configured) === null) {
     byId.set(configured, {
       id: configured,
       label: localModelLabel(configured) ?? configured,
@@ -178,7 +216,44 @@ export function localModelChoices(
   return [...byId.values()].sort((a, b) => EVIDENCE_ORDER[a.evidence] - EVIDENCE_ORDER[b.evidence]);
 }
 
-/** The model a session started here begins on: the best-evidenced one. */
+/** The routes the host cannot reach, one row each, most models first. */
+export function localProviderSetups(runtime: DeveloperRuntimeModels | null): LocalProviderSetup[] {
+  const byProvider = new Map<string, LocalProviderSetup>();
+
+  for (const model of runtime?.hostModels ?? []) {
+    if (model.reachable || model.unreachable === null) continue;
+    const provider = model.unreachable.provider ?? model.provider;
+    const existing = byProvider.get(provider);
+    if (existing !== undefined) {
+      existing.count += 1;
+      continue;
+    }
+    byProvider.set(provider, {
+      provider,
+      label: localProviderLabel(getModelMetadata(model.id)?.provider ?? null) ?? provider,
+      count: 1,
+      offer: localOfferFor(model.unreachable.action, provider, false),
+    });
+  }
+
+  return [...byProvider.values()].sort(
+    (a, b) => b.count - a.count || a.label.localeCompare(b.label),
+  );
+}
+
+/** The route a model needs before it can run, or null when it can run now. */
+export function localModelSetup(
+  runtime: DeveloperRuntimeModels | null,
+  modelId: string | null,
+): LocalProviderSetup | null {
+  if (!modelId) return null;
+  const host = (runtime?.hostModels ?? []).find((model) => model.id === modelId);
+  if (host === undefined || host.reachable || host.unreachable === null) return null;
+  const provider = host.unreachable.provider ?? host.provider;
+  return localProviderSetups(runtime).find((setup) => setup.provider === provider) ?? null;
+}
+
+/** The model a session started here begins on: the first one it can run. */
 export function startingModelId(
   runtime: DeveloperRuntimeModels | null,
   sessions: readonly LocalDeveloperSession[],

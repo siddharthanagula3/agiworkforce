@@ -53,7 +53,9 @@ export {
 } from './developer-sessions';
 export type {
   DeveloperApprovalAnswer,
+  DeveloperHostModel,
   DeveloperModelOption,
+  DeveloperModelUnreachable,
   DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
   DeveloperRuntimeUnavailable,
