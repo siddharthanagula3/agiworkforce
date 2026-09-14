@@ -13,7 +13,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 pub enum KeybindingAction {
     Quit,
     CycleMode,
-    ClearChat,
+    Redraw,
     ClearInput,
     OpenPalette,
 }
@@ -22,7 +22,7 @@ impl KeybindingAction {
     pub const ALL: [Self; 5] = [
         Self::Quit,
         Self::CycleMode,
-        Self::ClearChat,
+        Self::Redraw,
         Self::ClearInput,
         Self::OpenPalette,
     ];
@@ -31,7 +31,7 @@ impl KeybindingAction {
         match self {
             Self::Quit => "quit",
             Self::CycleMode => "cycle_mode",
-            Self::ClearChat => "clear_chat",
+            Self::Redraw => "redraw",
             Self::ClearInput => "clear_input",
             Self::OpenPalette => "open_palette",
         }
@@ -41,7 +41,7 @@ impl KeybindingAction {
         match self {
             Self::Quit => "esc",
             Self::CycleMode => "shift+tab",
-            Self::ClearChat => "ctrl+l",
+            Self::Redraw => "ctrl+l",
             Self::ClearInput => "ctrl+c",
             Self::OpenPalette => "/",
         }
@@ -51,7 +51,7 @@ impl KeybindingAction {
         match self {
             Self::Quit => "Quit",
             Self::CycleMode => "Cycle permission mode",
-            Self::ClearChat => "Clear screen",
+            Self::Redraw => "Redraw the screen",
             Self::ClearInput => "Clear current input",
             Self::OpenPalette => "Open command palette",
         }
@@ -141,7 +141,14 @@ impl Keybindings {
             "  edit_mode = \"vi\" # or \"emacs\"".to_string(),
             "  [ui.keybindings]".to_string(),
             "  open_palette = \"ctrl+p\"".to_string(),
-            "Actions: quit, cycle_mode, clear_chat, clear_input, open_palette".to_string(),
+            format!(
+                "Actions: {}",
+                KeybindingAction::ALL
+                    .iter()
+                    .map(|action| action.config_key())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         ]);
         lines.join("\n")
     }
@@ -288,7 +295,7 @@ mod tests {
             KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)
         ));
         assert!(bindings.matches(
-            KeybindingAction::ClearChat,
+            KeybindingAction::Redraw,
             KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL)
         ));
     }
@@ -324,7 +331,7 @@ mod tests {
         assert!(validate_config(&BTreeMap::from([("quit".to_string(), "q".to_string())])).is_err());
         assert!(validate_config(&BTreeMap::from([
             ("quit".to_string(), "ctrl+x".to_string()),
-            ("clear_chat".to_string(), "ctrl+x".to_string()),
+            ("redraw".to_string(), "ctrl+x".to_string()),
         ]))
         .is_err());
     }
