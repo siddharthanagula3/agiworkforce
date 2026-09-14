@@ -1355,7 +1355,13 @@ fn print_structured(value: &serde_json::Value, mode: StructuredOutput) -> Result
 /// The privacy boundary the account commands run under. They read and write
 /// the account, so Local and BYOK are refused with a message that names the
 /// mode rather than failing silently.
-fn account_privacy_mode(config: &config::CliConfig) -> platform::runtime::session::PrivacyMode {
+///
+/// The project's own `.agiworkforce/config.toml` is merged in, because a
+/// directory a user marked Local must not reach the account from inside it.
+fn account_privacy_mode() -> platform::runtime::session::PrivacyMode {
+    let config = config::CliConfig::load_merged()
+        .or_else(|_| config::CliConfig::load_without_project())
+        .unwrap_or_default();
     config
         .ui
         .privacy_mode
@@ -1367,8 +1373,7 @@ fn account_privacy_mode(config: &config::CliConfig) -> platform::runtime::sessio
 /// Pull one conversation out of the account and write it into the managed
 /// session store, returning the local id the resume path takes.
 async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
-    let config = config::CliConfig::load().unwrap_or_default();
-    let privacy = account_privacy_mode(&config);
+    let privacy = account_privacy_mode();
     let conversation = cloud::hosted_conversation(privacy, conversation_id)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?
@@ -1401,8 +1406,7 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
 /// out, Local mode) is stated, never swallowed and never shown as an empty
 /// account.
 async fn print_hosted_history(limit: usize) {
-    let config = config::CliConfig::load().unwrap_or_default();
-    let privacy = account_privacy_mode(&config);
+    let privacy = account_privacy_mode();
     match cloud::hosted_conversations(privacy).await {
         Ok(conversations) if conversations.is_empty() => {
             println!("No conversations in your AGI Workforce account yet.");
@@ -1426,8 +1430,7 @@ async fn print_hosted_history(limit: usize) {
 }
 
 async fn handle_projects_command(action: &ProjectsSubcommand) -> Result<()> {
-    let config = config::CliConfig::load().unwrap_or_default();
-    let privacy = account_privacy_mode(&config);
+    let privacy = account_privacy_mode();
     match action {
         ProjectsSubcommand::List => {
             let cache = cloud::refresh_projects(privacy)
@@ -1480,8 +1483,7 @@ async fn handle_projects_command(action: &ProjectsSubcommand) -> Result<()> {
 }
 
 async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
-    let config = config::CliConfig::load().unwrap_or_default();
-    let privacy = account_privacy_mode(&config);
+    let privacy = account_privacy_mode();
     match action {
         MemorySubcommand::List => {
             let cache = cloud::refresh_memory(privacy)
