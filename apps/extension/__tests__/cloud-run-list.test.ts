@@ -7,6 +7,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { agentTaskStateLabel } from '@agiworkforce/types';
 import {
   listChromeManagedRuns,
   readChromeManagedRunJournal,
@@ -328,6 +329,31 @@ describe('side-panel cloud run list', () => {
     await vi.waitFor(() => {
       expect(signIn).toHaveBeenCalledTimes(1);
     });
+    panel.dispose();
+  });
+
+  // The panel used to carry its own copy of the run-state words, which agreed
+  // with the shared vocabulary on every state but this one and called it "Needs
+  // approval" while every other surface said "Waiting for input".
+  it('names a run awaiting input with the shared vocabulary, on the card and the row', async () => {
+    const deps = panelDependencies({
+      listRuns: vi.fn().mockResolvedValue({
+        status: 'success',
+        page: { runs: [awaitingApprovalRun()], nextCursor: null },
+      }),
+    });
+    const panel = buildCloudRunsPanel(deps);
+    document.body.appendChild(panel.panelEl);
+    panel.setActive(true);
+
+    await vi.waitFor(() => {
+      expect(panel.panelEl.querySelector('.sp-run-approval-title')).not.toBeNull();
+    });
+    const title = panel.panelEl.querySelector('.sp-run-approval-title')!.textContent;
+    expect(title).toBe(`${agentTaskStateLabel('awaiting_input')}, model-1`);
+    expect(title).toContain('Waiting for input');
+    expect(panel.panelEl.textContent).not.toContain('Waiting on you');
+    expect(panel.panelEl.textContent).not.toContain('Needs approval');
     panel.dispose();
   });
 
