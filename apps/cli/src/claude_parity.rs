@@ -1407,15 +1407,6 @@ mod tests {
         }
     }
 
-    /// `/chrome` is the CLI's only statement about browser control, so what it
-    /// claims has to match what this build can do.
-    ///
-    /// It used to assert the opposite of the truth, that the CLI "cannot drive
-    /// Chrome itself", which stopped being true when the browser tool family
-    /// landed. It also called `render_chrome()`, which probes the running
-    /// desktop app, so its answer depended on whether a shell happened to be
-    /// running on the machine. Both are fixed here: the states are supplied,
-    /// and every one of them is checked.
     #[test]
     fn chrome_command_claims_only_what_this_build_can_do() {
         use crate::browser_bridge::{BrowserAvailability, BrowserState};
@@ -1428,8 +1419,6 @@ mod tests {
             })
         };
 
-        // Without a desktop app there is no browser at all, and the copy says
-        // so while naming the only path to one.
         let no_shell = render(BrowserAvailability::ShellNotRunning);
         assert!(no_shell.contains("AGI Desktop is not running"));
         assert!(
@@ -1445,8 +1434,6 @@ mod tests {
         ] {
             let message = render(availability);
 
-            // The CLI drives the browser only through the desktop app, never
-            // on its own, and it must not say otherwise in either direction.
             assert!(
                 !message.contains("cannot drive Chrome"),
                 "{availability:?} repeats a claim this build made false: {message}"
@@ -1457,7 +1444,6 @@ mod tests {
                 "{availability:?} must not claim the CLI reaches Chrome alone: {message}"
             );
 
-            // Flags and status lines the CLI does not implement.
             for overclaim in ["--chrome", "--no-chrome", "Extension: Installed", "Status:"] {
                 assert!(
                     !message.contains(overclaim),
@@ -1465,7 +1451,6 @@ mod tests {
                 );
             }
 
-            // Only a browser that can answer may advertise the tools.
             let names_tools = message.contains("browser_read_page");
             assert_eq!(
                 names_tools,
