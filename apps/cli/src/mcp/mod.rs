@@ -413,6 +413,164 @@ impl ElicitationHandler for HookFiringElicitationHandler {
     }
 }
 
+/// Where a discovered MCP server was configured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpServerOrigin {
+    Project,
+    User,
+    Plugin,
+}
+
+/// Credential posture of a configured server, decided without connecting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpCredentialState {
+    /// Runs locally, or carries its own credential header.
+    Configured,
+    /// Remote, with an OAuth token already in the store.
+    Authorized,
+    /// Remote, with neither a stored token nor a credential header.
+    NeedsAuth,
+}
+
+/// A configured MCP server plus the scope and credential state a settings
+/// surface needs. Discovery order matches the engine's: project files win over
+/// the user's, and plugin-declared servers fill in the rest.
+#[derive(Debug, Clone)]
+pub struct DiscoveredMcpServer {
+    pub name: String,
+    pub config: McpServerConfig,
+    pub origin: McpServerOrigin,
+    pub credential: McpCredentialState,
+    pub url: Option<String>,
+}
+
+fn mcp_server_url(config: &McpServerConfig) -> Option<String> {
+    match config.as_transport() {
+        McpTransport::Stdio { .. } => None,
+        McpTransport::Sse { url, .. } | McpTransport::Http { url, .. } => Some(url),
+    }
+}
+
+fn has_credential_header(headers: &HashMap<String, String>) -> bool {
+    headers.keys().any(|key| {
+        key.eq_ignore_ascii_case("authorization") || key.eq_ignore_ascii_case("x-api-key")
+    })
+}
+
+fn credential_state(config: &McpServerConfig) -> McpCredentialState {
+    match config.as_transport() {
+        McpTransport::Stdio { .. } => McpCredentialState::Configured,
+        McpTransport::Sse { url, headers } => remote_credential_state(&url, &headers),
+        McpTransport::Http { url, headers, .. } => remote_credential_state(&url, &headers),
+    }
+}
+
+fn remote_credential_state(url: &str, headers: &HashMap<String, String>) -> McpCredentialState {
+    if KeyringTokenStore.get(url).is_some() {
+        McpCredentialState::Authorized
+    } else if has_credential_header(headers) {
+        McpCredentialState::Configured
+    } else {
+        McpCredentialState::NeedsAuth
+    }
+}
+
+/// Discover every configured MCP server with the scope it came from.
+///
+/// `project_dir` is the workspace whose `.mcp.json` / `mcp.json` counts as
+/// project scope; passing it explicitly keeps this usable from a host that
+/// must not depend on the process working directory.
+pub fn discover_servers(project_dir: &std::path::Path) -> Vec<DiscoveredMcpServer> {
+    let mut servers: Vec<DiscoveredMcpServer> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    let push_all = |configs: HashMap<String, McpServerConfig>,
+                    origin: McpServerOrigin,
+                    seen: &mut HashSet<String>,
+                    servers: &mut Vec<DiscoveredMcpServer>| {
+        let mut entries: Vec<(String, McpServerConfig)> = configs.into_iter().collect();
+        entries.sort_by(|left, right| left.0.cmp(&right.0));
+        for (name, config) in entries {
+            if !seen.insert(name.clone()) {
+                continue;
+            }
+            servers.push(DiscoveredMcpServer {
+                url: mcp_server_url(&config),
+                credential: credential_state(&config),
+                name,
+                config,
+                origin,
+            });
+        }
+    };
+
+    let mut project = HashMap::new();
+    for filename in [".mcp.json", "mcp.json"] {
+        load_mcp_config_file_into(&project_dir.join(filename), &mut project, true);
+    }
+    push_all(project, McpServerOrigin::Project, &mut seen, &mut servers);
+
+    let mut user = HashMap::new();
+    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
+        for filename in [".mcp.json", "mcp.json"] {
+            load_mcp_config_file_into(&config_dir.join(filename), &mut user, false);
+        }
+    }
+    push_all(user, McpServerOrigin::User, &mut seen, &mut servers);
+
+    let mut plugins = crate::plugins::PluginsManager::new();
+    if plugins.load_all(Some(project_dir)).is_ok() {
+        push_all(
+            plugins.mcp_configs(),
+            McpServerOrigin::Plugin,
+            &mut seen,
+            &mut servers,
+        );
+    }
+
+    servers
+}
+
+/// Browser authorizer for a client that has its own window.
+///
+/// The terminal check `CliBrowserAuthorizer` makes is about the CLI printing
+/// instructions to a TTY. An editor client drives the same flow from a button
+/// the user pressed, so the open is still user-initiated and still goes
+/// through the same chokepoint.
+pub struct ClientBrowserAuthorizer;
+
+impl BrowserAuthorizer for ClientBrowserAuthorizer {
+    fn is_interactive(&self) -> bool {
+        true
+    }
+
+    fn open_url(&self, url: &str) -> bool {
+        crate::oauth::open_external_url(url, crate::oauth::UserActionContext::user_initiated())
+    }
+}
+
+/// Authorize a remote MCP server on behalf of a client that opens its own
+/// browser window, and report the resulting credential state.
+pub async fn login_to_remote_server_for_client(
+    name: &str,
+    config: &McpServerConfig,
+) -> Result<McpCredentialState> {
+    if matches!(config.as_transport(), McpTransport::Stdio { .. }) {
+        bail!("MCP server '{name}' runs locally over stdio and has nothing to sign in to");
+    }
+    let transport = to_transport_config(config);
+    let timeouts = McpTimeouts::default();
+    let hooks = build_client_hooks_with_browser(
+        Arc::new(AutoDeclineHandler),
+        Arc::new(ClientBrowserAuthorizer),
+    );
+    let mut client = McpClient::connect(name, transport, timeouts, hooks)
+        .await
+        .with_context(|| format!("could not authorize MCP server '{name}'"))?;
+    let _ = client.shutdown().await;
+    Ok(credential_state(config))
+}
+
 /// Authorize a registered remote MCP server and leave its token in the store
 /// every later connection reads.
 ///
@@ -452,10 +610,19 @@ pub fn logout_from_remote_server(server_url: &str) -> Result<bool> {
 /// [`AutoDeclineHandler`], while the full-screen TUI injects its interactive
 /// queue. The wrapper keeps the CLI hook lifecycle identical in both cases.
 fn build_client_hooks(elicitation: Arc<dyn ElicitationHandler>) -> ClientHooks {
+    build_client_hooks_with_browser(elicitation, Arc::new(CliBrowserAuthorizer))
+}
+
+/// Same bundle with an explicit browser surface, for a client that owns a
+/// window instead of a terminal.
+fn build_client_hooks_with_browser(
+    elicitation: Arc<dyn ElicitationHandler>,
+    browser: Arc<dyn BrowserAuthorizer>,
+) -> ClientHooks {
     ClientHooks {
         token_store: Arc::new(KeyringTokenStore),
         elicitation: Arc::new(HookFiringElicitationHandler::new(elicitation)),
-        browser: Arc::new(CliBrowserAuthorizer),
+        browser,
         client_info: ClientInfo {
             name: "agiworkforce-cli".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),

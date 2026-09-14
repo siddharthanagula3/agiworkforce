@@ -15,8 +15,8 @@
 mod developer_sessions;
 
 pub use developer_sessions::{
-    run_developer_session_stdio, serve_developer_session_io, DeveloperSessionHost,
-    DeveloperSessionHostError, DeveloperSessionProcessor,
+    run_developer_session_stdio, serve_developer_session_io, DeveloperConnectionTrust,
+    DeveloperSessionHost, DeveloperSessionHostError, DeveloperSessionProcessor,
 };
 
 use agiworkforce_protocol::developer_session::{
@@ -236,7 +236,7 @@ async fn run_ws(
                     let security = security.clone();
                     async move {
                         match validate_ws_request(&headers, &uri, listen_addr, &security) {
-                            Ok(()) => ws.on_upgrade(move |s| handle_ws(s, p)).into_response(),
+                            Ok(_) => ws.on_upgrade(move |s| handle_ws(s, p)).into_response(),
                             Err(status) => status.into_response(),
                         }
                     }
@@ -296,9 +296,9 @@ pub async fn serve_developer_session_websocket(
                     let security = security.clone();
                     async move {
                         match validate_ws_request(&headers, &uri, listen_addr, &security) {
-                            Ok(()) => ws
+                            Ok(trust) => ws
                                 .on_upgrade(move |socket| {
-                                    handle_developer_session_ws(socket, host, capabilities)
+                                    handle_developer_session_ws(socket, host, capabilities, trust)
                                 })
                                 .into_response(),
                             Err(status) => status.into_response(),
@@ -313,19 +313,28 @@ pub async fn serve_developer_session_websocket(
     Ok(())
 }
 
+/// Validate an upgrade and report how the connection proved itself.
+///
+/// A token presented in a header stays out of browser history, proxy logs and
+/// referrers; a `?token=` query does not. The caller carries that difference
+/// forward so credential-minting methods can refuse the weaker proof.
 fn validate_ws_request(
     headers: &HeaderMap,
     uri: &Uri,
     addr: SocketAddr,
     security: &WebSocketSecurity,
-) -> std::result::Result<(), StatusCode> {
+) -> std::result::Result<DeveloperConnectionTrust, StatusCode> {
     let expected_token = security
         .auth_token
         .as_deref()
         .filter(|token| !token.trim().is_empty())
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    if request_token(headers, uri, security.allow_query_token).as_deref() != Some(expected_token) {
+    let presented = request_token(headers, uri, security.allow_query_token);
+    let Some(presented) = presented else {
+        return Err(StatusCode::UNAUTHORIZED);
+    };
+    if presented.token != expected_token {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -333,13 +342,25 @@ fn validate_ws_request(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    Ok(())
+    Ok(presented.trust)
 }
 
-fn request_token(headers: &HeaderMap, uri: &Uri, allow_query_token: bool) -> Option<String> {
+struct PresentedToken {
+    token: String,
+    trust: DeveloperConnectionTrust,
+}
+
+fn request_token(
+    headers: &HeaderMap,
+    uri: &Uri,
+    allow_query_token: bool,
+) -> Option<PresentedToken> {
     if let Some(value) = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok()) {
         if let Some(token) = value.strip_prefix("Bearer ") {
-            return Some(token.to_string());
+            return Some(PresentedToken {
+                token: token.to_string(),
+                trust: DeveloperConnectionTrust::LoopbackOwner,
+            });
         }
     }
 
@@ -347,13 +368,19 @@ fn request_token(headers: &HeaderMap, uri: &Uri, allow_query_token: bool) -> Opt
         .get("x-agi-app-server-token")
         .and_then(|v| v.to_str().ok())
     {
-        return Some(value.to_string());
+        return Some(PresentedToken {
+            token: value.to_string(),
+            trust: DeveloperConnectionTrust::LoopbackOwner,
+        });
     }
 
     if allow_query_token {
         uri.query()?.split('&').find_map(|pair| {
             let (key, value) = pair.split_once('=')?;
-            (key == "token").then(|| value.to_string())
+            (key == "token").then(|| PresentedToken {
+                token: value.to_string(),
+                trust: DeveloperConnectionTrust::Untrusted,
+            })
         })
     } else {
         None
@@ -423,8 +450,9 @@ async fn handle_developer_session_ws(
     socket: WebSocket,
     host: Arc<dyn DeveloperSessionHost>,
     capabilities: AppServerCapabilities,
+    trust: DeveloperConnectionTrust,
 ) {
-    let mut processor = DeveloperSessionProcessor::new(host, capabilities);
+    let mut processor = DeveloperSessionProcessor::new_with_trust(host, capabilities, trust);
     let mut notifications = processor.subscribe();
     let (mut sender, mut receiver) = futures_util::StreamExt::split(socket);
     let mut initialized = false;
@@ -661,7 +689,7 @@ mod tests {
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
         assert_eq!(
             validate_ws_request(&headers, &uri, addr, &ws_security()),
-            Ok(())
+            Ok(DeveloperConnectionTrust::LoopbackOwner)
         );
     }
 
@@ -673,7 +701,7 @@ mod tests {
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
         assert_eq!(
             validate_ws_request(&headers, &uri, addr, &ws_security()),
-            Ok(())
+            Ok(DeveloperConnectionTrust::LoopbackOwner)
         );
     }
 
@@ -696,7 +724,12 @@ mod tests {
         let mut security = ws_security();
         security.allow_query_token = true;
 
-        assert_eq!(validate_ws_request(&headers, &uri, addr, &security), Ok(()));
+        // A URL token authenticates the connection but is logged by browsers
+        // and proxies, so it never carries credential-minting trust.
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &security),
+            Ok(DeveloperConnectionTrust::Untrusted)
+        );
     }
 
     #[test]
@@ -738,7 +771,7 @@ mod tests {
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
         assert_eq!(
             validate_ws_request(&headers, &uri, addr, &ws_security()),
-            Ok(())
+            Ok(DeveloperConnectionTrust::LoopbackOwner)
         );
     }
 

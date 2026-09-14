@@ -488,6 +488,12 @@ const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
 // Override with AGI_AUTH_BASE (e.g. `http://localhost:3000/api`) to test against
 // a local `next dev` web server.
 const AGIWORKFORCE_API_BASE: &str = "https://agiworkforce.com/api";
+
+/// Device-grant endpoint base, so every surface that starts a login targets
+/// the one host this file documents.
+pub fn agiworkforce_api_base() -> &'static str {
+    AGIWORKFORCE_API_BASE
+}
 /// Maximum number of polling attempts during device code authentication (5s intervals = 5min).
 const MAX_POLL_ATTEMPTS: u32 = 60;
 
