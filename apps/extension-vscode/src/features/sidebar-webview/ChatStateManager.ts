@@ -56,8 +56,8 @@ import {
 import {
   BUILT_IN_SLASH_COMMANDS,
   CliCapabilityAdapter,
+  commandForSurface,
   mergeSessionRows,
-  SURFACE_MENU_ITEMS,
   type SessionRow,
   type SessionRowInput,
   type SessionSource,
@@ -157,7 +157,6 @@ export type WebviewToExtMessage =
   | { type: 'openPrivacySettings' }
   | { type: 'openCloudTasks' }
   | { type: 'openRecentConversation'; payload: { threadId: string } }
-  | { type: 'revealConversationHistory' }
   | { type: 'openPathReference'; payload: PathReferenceTarget }
   | { type: 'requestContextMenuState' }
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
@@ -797,11 +796,6 @@ export class ChatStateManager {
         break;
       }
 
-      case 'revealConversationHistory': {
-        await vscode.commands.executeCommand('agi-workforce.conversations.focus');
-        break;
-      }
-
       case 'openRecentConversation': {
         await vscode.commands.executeCommand(
           'agi-workforce.openConversation',
@@ -854,9 +848,9 @@ export class ChatStateManager {
       }
 
       case 'openSurface': {
-        const item = SURFACE_MENU_ITEMS.find((candidate) => candidate.id === msg.payload.surfaceId);
-        if (item === undefined) break;
-        await vscode.commands.executeCommand(item.command);
+        const command = commandForSurface(msg.payload.surfaceId);
+        if (command === undefined) break;
+        await vscode.commands.executeCommand(command);
         break;
       }
 

@@ -215,8 +215,8 @@ describe('single sign-in', () => {
   it('prefers the identity the CLI already holds over the extension secret', async () => {
     const adapter = new CliCapabilityAdapter(
       poolWith({
-        readAccountStatus: async () => ({ signedIn: true, email: 'dev@example.com', tier: 'max' }),
-        readAccountToken: async () => ({ token: 'cli-token' }),
+        accountStatus: async () => ({ signedIn: true, email: 'dev@example.com', tier: 'max' }),
+        accountToken: async () => ({ token: 'cli-token' }),
       }),
     );
 

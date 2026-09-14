@@ -46,6 +46,18 @@ export const SURFACE_MENU_ITEMS: readonly SurfaceMenuItem[] = [
   { id: 'account', label: 'Account', icon: 'account', command: 'agi-workforce.showAccountUsage' },
 ];
 
+export const ACCOUNT_SURFACE_COMMANDS: Readonly<Record<string, string>> = {
+  signIn: 'agi-workforce.signIn',
+  signOut: 'agi-workforce.signOut',
+};
+
+export function commandForSurface(surfaceId: string): string | undefined {
+  return (
+    SURFACE_MENU_ITEMS.find((item) => item.id === surfaceId)?.command ??
+    ACCOUNT_SURFACE_COMMANDS[surfaceId]
+  );
+}
+
 export interface SlashCommandItem {
   name: string;
   description: string;
