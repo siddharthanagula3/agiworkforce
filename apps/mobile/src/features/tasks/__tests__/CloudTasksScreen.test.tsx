@@ -150,6 +150,27 @@ describe('Cloud tasks screen', () => {
     expect(getByText('Waiting for your approval')).toBeTruthy();
   });
 
+  it('previews the task prompt under the title, and drops it when it repeats the title', async () => {
+    mockListRuns.mockResolvedValue({
+      runs: [{ ...RUN, conversationPreview: 'Compare the Q4 filings for both vendors' }],
+      nextCursor: null,
+    });
+    const withPreview = render(<CloudTasksScreen />);
+
+    await waitFor(() =>
+      expect(withPreview.getByText('Compare the Q4 filings for both vendors')).toBeTruthy(),
+    );
+    withPreview.unmount();
+
+    mockListRuns.mockResolvedValue({
+      runs: [{ ...RUN, conversationPreview: 'Research task' }],
+      nextCursor: null,
+    });
+    const echoed = render(<CloudTasksScreen />);
+
+    await waitFor(() => expect(echoed.getAllByText('Research task')).toHaveLength(1));
+  });
+
   it('opens a run, follows it, and resolves the approval blocking it', async () => {
     const { getByLabelText, getByText } = render(<CloudTasksScreen />);
 

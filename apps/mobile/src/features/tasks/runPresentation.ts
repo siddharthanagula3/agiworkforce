@@ -129,6 +129,12 @@ export function cloudRunTitle(run: CloudAgentRun, conversationTitle?: string): s
   return conversationTitle?.trim() || CLOUD_RUN_WORK_MODE_TITLES[run.workMode];
 }
 
+export function cloudRunPreview(run: CloudAgentRun, title: string): string | null {
+  const preview = run.conversationPreview?.replace(/\s+/g, ' ').trim();
+  if (!preview) return null;
+  return preview.toLowerCase() === title.trim().toLowerCase() ? null : preview;
+}
+
 export function cloudRunActivityMs(run: CloudAgentRun): number {
   const parsed = Date.parse(run.completedAt ?? run.updatedAt);
   return Number.isNaN(parsed) ? 0 : parsed;
