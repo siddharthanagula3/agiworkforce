@@ -378,12 +378,8 @@
     "description": "Composer chat gate when a gate button's navigation threw without a message"
   },
   "spComposerPlaceholder": {
-    "message": "Ask anything... (/ for commands)",
+    "message": "How can I help you today?",
     "description": "Composer input placeholder while chat is usable"
-  },
-  "spComposerPlaceholderNoPageContext": {
-    "message": "Ask anything (page context unavailable)",
-    "description": "Composer input placeholder while chat is usable but the tab cannot be read"
   },
   "spComposerPlaceholderSignedOut": {
     "message": "Sign in to chat",
@@ -448,10 +444,6 @@
   "spGroupTabRemoved": {
     "message": "Removed current tab from the AGI Workforce group.",
     "description": "Success notice after the active tab leaves AGI's tab group"
-  },
-  "spContextChipFallback": {
-    "message": "page",
-    "description": "Composer page-context chip before a hostname is known"
   },
   "spContextChipCapturing": {
     "message": "capturing…",
@@ -547,43 +539,9 @@
     "message": "Dismiss onboarding",
     "description": "First-run onboarding primary button accessible name on the final step"
   },
-  "spEffortButton": {
-    "message": "$EFFORT$",
-    "description": "Composer reasoning-effort button",
-    "placeholders": {
-      "effort": {
-        "content": "$1",
-        "example": "High"
-      }
-    }
-  },
   "spEffortAuto": {
     "message": "Auto",
     "description": "Composer reasoning-effort value while the route has not been chosen yet"
-  },
-  "spEffortUnavailable": {
-    "message": "N/A",
-    "description": "Composer reasoning-effort value while the selected model exposes none"
-  },
-  "spEffortAriaReady": {
-    "message": "Reasoning effort: $VALUE$",
-    "description": "Composer reasoning-effort button accessible name while an effort is selected",
-    "placeholders": {
-      "value": {
-        "content": "$1",
-        "example": "High"
-      }
-    }
-  },
-  "spEffortAriaUnavailable": {
-    "message": "Reasoning effort unavailable. $REASON$",
-    "description": "Composer reasoning-effort button accessible name while no effort can be chosen",
-    "placeholders": {
-      "reason": {
-        "content": "$1",
-        "example": "This model has a fixed reasoning budget."
-      }
-    }
   },
   "spHistoryDeleteFailed": {
     "message": "Could not delete this chat. Try again.",
@@ -1136,5 +1094,121 @@
         "example": "in 2 hours"
       }
     }
+  },
+  "spEffortHeading": {
+    "message": "Effort",
+    "description": "Heading above the reasoning-effort rows in the model menu"
+  },
+  "spEffortDefaultBadge": {
+    "message": "Default",
+    "description": "Badge on the effort level a model uses when none is chosen"
+  },
+  "spMoreModels": {
+    "message": "More models",
+    "description": "Heading above the models that are not one of the three headline choices"
+  },
+  "spModelsSignedOut": {
+    "message": "Sign in for models",
+    "description": "Shown in the model menu when no account is signed in"
+  },
+  "spModelsOtherProvider": {
+    "message": "Other",
+    "description": "Group heading for models whose provider is unknown"
+  },
+  "spModelMenuAria": {
+    "message": "Model $MODEL$, effort $EFFORT$",
+    "description": "Accessible name of the composer button that opens the model menu",
+    "placeholders": {
+      "model": {
+        "content": "$1"
+      },
+      "effort": {
+        "content": "$2"
+      }
+    }
+  },
+  "spQuickModeDescription": {
+    "message": "Answer faster on a cheaper route",
+    "description": "One-line description of the Quick mode toggle"
+  },
+  "spThinking": {
+    "message": "Extended thinking",
+    "description": "Label of the extended-thinking toggle in the model menu"
+  },
+  "spThinkingDescription": {
+    "message": "Let the model reason before it answers",
+    "description": "One-line description of the extended-thinking toggle"
+  },
+  "spContextItem": {
+    "message": "Add the browser page",
+    "description": "Plus-menu item that attaches the current page to the next message"
+  },
+  "spContextItemAttached": {
+    "message": "Browser page added",
+    "description": "Plus-menu item once the current page is attached"
+  },
+  "spConnectors": {
+    "message": "Connectors",
+    "description": "Plus-menu item that opens the connector directory on the web"
+  },
+  "spAutonomyAskFirstDescription": {
+    "message": "Confirm every browser action before it runs",
+    "description": "One-line description of the ask-first permission mode"
+  },
+  "spAutonomyFullAccessDescription": {
+    "message": "Act on approved sites without asking",
+    "description": "One-line description of the full-access permission mode"
+  },
+  "spMenuTitle": {
+    "message": "Menu",
+    "description": "Title of the side panel menu drawer"
+  },
+  "spMenuBack": {
+    "message": "Back to the menu",
+    "description": "Accessible label of the drawer back button"
+  },
+  "spMenuClose": {
+    "message": "Close the menu",
+    "description": "Accessible label of the drawer close button"
+  },
+  "spMenuChat": {
+    "message": "Chat",
+    "description": "Menu row for chat actions"
+  },
+  "spMenuAutomate": {
+    "message": "Automate",
+    "description": "Menu row for workflows and cloud runs"
+  },
+  "spMenuProjects": {
+    "message": "Projects",
+    "description": "Menu row for account projects"
+  },
+  "spMenuArtifacts": {
+    "message": "Artifacts",
+    "description": "Menu row for account artifacts"
+  },
+  "spMenuTools": {
+    "message": "Tools",
+    "description": "Menu row for browser tools"
+  },
+  "spMenuPairing": {
+    "message": "Desktop pairing",
+    "description": "Menu row for pairing with the desktop app"
+  },
+  "spMenuSettings": {
+    "message": "Settings",
+    "description": "Menu row for the remaining extension settings"
+  },
+  "spRecentsTitle": {
+    "message": "Recent chats",
+    "description": "Title of the recent-chats sheet"
+  },
+  "spRecentsClose": {
+    "message": "Close recent chats",
+    "description": "Accessible label of the recent-chats close button"
+  },
+  "spModelAutoDescription": {
+    "message": "Route each turn to the model that fits it",
+    "description": "One-line description of the automatic model choice"
   }
 }

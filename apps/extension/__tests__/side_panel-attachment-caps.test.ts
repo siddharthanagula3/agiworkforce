@@ -134,11 +134,7 @@ function pickFiles(files: File[]): void {
 
 function captureScreenshot(dataUrl: string): void {
   chromeMock.screenshotDataUrl = dataUrl;
-  const item = attachmentBar()
-    .closest('#sp-composer-shell')
-    ?.querySelector<HTMLElement>('.sp-attach-menu-item');
-  const screenshotItem =
-    item ?? document.querySelector<HTMLElement>('#sp-attach-menu .sp-attach-menu-item');
+  const screenshotItem = document.getElementById('sp-attach-screenshot-item');
   if (!screenshotItem) throw new Error('screenshot menu item was never built');
   screenshotItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
