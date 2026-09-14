@@ -82,6 +82,12 @@
         "collected_when": "Only in AGI Cloud: documents attached to a message are uploaded."
       },
       {
+        "type": "Voice or sound recordings",
+        "purpose": "App functionality",
+        "optional": true,
+        "collected_when": "Only during live voice mode in an AGI Cloud chat: the microphone is streamed to AGI Cloud for the session and the transcript is saved to that chat. Dictation transcribes on the device and uploads no audio."
+      },
+      {
         "type": "User IDs",
         "purpose": "App functionality",
         "optional": true,

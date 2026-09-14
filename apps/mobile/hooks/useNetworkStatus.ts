@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState, useCallback } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { useChatStore } from '@/stores/chatStore';
@@ -20,7 +19,7 @@ export function isReachableNetworkState(state: ReachabilityState): boolean {
 }
 
 export function useNetworkStatus(): NetworkStatus {
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [queueSize, setQueueSize] = useState(0);
 

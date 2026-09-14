@@ -79,6 +79,7 @@ export function SendButton({ state, onPress, disabled, accessibilityLabel }: Sen
     <AnimatedPressable
       onPress={onPress}
       disabled={disabled && state === 'idle'}
+      hitSlop={12}
       style={[
         {
           padding: 8,

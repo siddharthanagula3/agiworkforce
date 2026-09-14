@@ -56,6 +56,18 @@
       "backedBy": "Image attachments picked for a Cloud message (apps/mobile/src/features/media/photo-picker.ts) and the Cloud profile photo, which is uploaded to Clerk (apps/mobile/src/features/settings/index.tsx)."
     },
     {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeAudioData",
+      "playCategory": "Audio",
+      "playDataType": "Voice or sound recordings",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["App functionality"],
+      "optional": true,
+      "ephemeral": true,
+      "usedForTracking": false,
+      "backedBy": "Live voice mode in a Cloud chat streams the microphone to AGI Cloud over WebRTC for the session (apps/mobile/src/features/voice/services/liveVoiceSession.ts) and saves the transcript to that chat. Dictation and the turn-based voice companion transcribe on the device (apps/mobile/src/features/voice/services/voiceInput.ts) and upload no audio. Local Mode has no live voice."
+    },
+    {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeOtherUserContent",
       "playCategory": "Files and docs",
       "playDataType": "Files and docs",

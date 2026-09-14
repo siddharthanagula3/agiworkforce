@@ -3,6 +3,7 @@ import { View, Animated } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { EDGE_COPY } from './copy';
@@ -11,7 +12,9 @@ import { spacing } from '@/src/ui/theme';
 export function OfflineBanner() {
   const colors = useThemeColors();
   const { isOnline } = useNetworkStatus();
-  const translateY = useRef(new Animated.Value(-60)).current;
+  const insets = useSafeAreaInsets();
+  const hiddenOffset = -(60 + insets.top);
+  const translateY = useRef(new Animated.Value(hiddenOffset)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const reduceMotion = useReduceMotion();
 
@@ -38,12 +41,12 @@ export function OfflineBanner() {
       }
     } else {
       if (reduceMotion) {
-        translateY.setValue(-60);
+        translateY.setValue(hiddenOffset);
         opacity.setValue(0);
       } else {
         Animated.parallel([
           Animated.timing(translateY, {
-            toValue: -60,
+            toValue: hiddenOffset,
             duration: 180,
             useNativeDriver: true,
           }),
@@ -55,7 +58,7 @@ export function OfflineBanner() {
         ]).start();
       }
     }
-  }, [isOnline, reduceMotion, translateY, opacity]);
+  }, [isOnline, reduceMotion, translateY, opacity, hiddenOffset]);
 
   return (
     <Animated.View
@@ -72,7 +75,8 @@ export function OfflineBanner() {
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.sm,
+        paddingTop: insets.top + spacing.sm,
+        paddingBottom: spacing.sm,
         gap: spacing.sm,
       }}
       accessibilityRole="alert"

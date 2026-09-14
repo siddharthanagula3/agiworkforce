@@ -7,6 +7,7 @@ import {
   ActionSheetIOS,
   Alert,
   Keyboard,
+  Linking,
   Modal,
   TextInput,
 } from 'react-native';
@@ -36,7 +37,10 @@ import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelect
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
-import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
+import {
+  VoiceOnboardingSheet,
+  type VoiceOnboardingMode,
+} from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
 import { LiveVoiceComposer } from '@/src/features/voice/components/LiveVoiceComposer';
@@ -706,7 +710,11 @@ export default function ChatScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Camera Access',
-          'Camera permission is required to take photos. Please enable it in Settings.',
+          'Camera permission is required to take photos. Allow it in Settings to attach a photo.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+          ],
         );
         return;
       }
@@ -848,6 +856,17 @@ export default function ChatScreen() {
     await loadMessages(id);
     setRefreshing(false);
   }, [id, loadMessages]);
+
+  const voiceOnboardingMode: VoiceOnboardingMode = useMemo(
+    () =>
+      liveVoiceModeUnavailableReason({
+        executionMode: conversationExecutionMode,
+        signedIn: isClerkSignedIn,
+      })
+        ? 'on-device'
+        : 'live',
+    [conversationExecutionMode, isClerkSignedIn],
+  );
 
   const startVoiceMode = useCallback(() => {
     const reason = liveVoiceModeUnavailableReason({
@@ -1035,6 +1054,29 @@ export default function ChatScreen() {
     setRenameText('');
   }, []);
 
+  const confirmDeleteConversation = useCallback(
+    (actionScope: ConversationUiActionScope) => {
+      if (!id || !isConversationActionCurrent(actionScope)) return;
+      Alert.alert(
+        'Delete chat?',
+        'This chat and its messages are removed from every device on this account. It cannot be recovered.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              if (!isConversationActionCurrent(actionScope)) return;
+              deleteConversation(id);
+              handleBack();
+            },
+          },
+        ],
+      );
+    },
+    [deleteConversation, handleBack, id, isConversationActionCurrent],
+  );
+
   const handleMenuPress = useCallback(() => {
     const actionScope = captureConversationAction();
     if (!actionScope || !isConversationActionCurrent(actionScope)) return;
@@ -1066,20 +1108,8 @@ export default function ChatScreen() {
               'plain-text',
               title,
             );
-          } else if (buttonIndex === 2 && id) {
-            if (!isConversationActionCurrent(actionScope)) return;
-            Alert.alert('Delete Conversation', 'This cannot be undone.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () => {
-                  if (!isConversationActionCurrent(actionScope)) return;
-                  deleteConversation(id);
-                  handleBack();
-                },
-              },
-            ]);
+          } else if (buttonIndex === 2) {
+            confirmDeleteConversation(actionScope);
           }
         },
       );
@@ -1104,19 +1134,13 @@ export default function ChatScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            if (!id || !isConversationActionCurrent(actionScope)) return;
-            deleteConversation(id);
-            handleBack();
-          },
+          onPress: () => confirmDeleteConversation(actionScope),
         },
-        { text: 'Cancel', style: 'cancel' },
       ]);
     }
   }, [
     captureConversationAction,
-    deleteConversation,
-    handleBack,
+    confirmDeleteConversation,
     id,
     isConversationActionCurrent,
     renameConversation,
@@ -1435,6 +1459,7 @@ export default function ChatScreen() {
             inline mode, references-2 voice-03. */}
         <VoiceOnboardingSheet
           visible={voiceIntroVisible}
+          mode={voiceOnboardingMode}
           onContinue={handleVoiceIntroContinue}
           onDismiss={handleVoiceIntroDismiss}
         />
