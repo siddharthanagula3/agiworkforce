@@ -38,6 +38,35 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
 const recordSettledProviderCostMock = vi.fn(async (..._args: unknown[]) => {});
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCostMock(...args),
+  getOrganizationMonthToDateSpendCents: vi.fn(async () => 0),
+}));
+
+const reserveMock = vi.fn(async (..._args: unknown[]) => ({
+  db: {},
+  userId: 'user_1',
+  idempotencyKey: 'title:conv_1',
+  requestHash: 'hash',
+  leaseToken: 'lease',
+  estimatedCostMicrousd: 200,
+  estimatedCostCents: 1,
+  quotaFeature: 'conversation_title',
+}));
+const finalizeMock = vi.fn(async (..._args: unknown[]) => ({
+  requestStatus: 'completed',
+  operationResult: 'finalized',
+  settlementStatus: 'succeeded',
+  actualCostCents: 1,
+}));
+const markStartedMock = vi.fn(async (..._args: unknown[]) => {});
+vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  reserveManagedUsageRequest: (...args: unknown[]) => reserveMock(...args),
+  finalizeManagedUsageRequest: (...args: unknown[]) => finalizeMock(...args),
+  markManagedUsageProviderStarted: (...args: unknown[]) => markStartedMock(...args),
+  fingerprintManagedUsageRequest: () => 'hash',
+}));
+
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: async () => ({ plan_tier: 'pro' }) },
 }));
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
@@ -128,25 +157,53 @@ describe('exact-response cache integration', () => {
     expect(dbSecond.executed[0]?.[0]).toBe('Refactor auth module');
   });
 
-  it('records a zero-charge COGS event on a cache miss and skips recording on the cache hit', async () => {
+  it('reserves and finalizes exactly once on a cache miss and spends nothing on the cache hit', async () => {
     const dbFirst = fakeDb();
     scheduleConversationTitleGeneration(scheduleInput(dbFirst));
     await new Promise((resolve) => setImmediate(resolve));
-    expect(recordSettledProviderCostMock).toHaveBeenCalledTimes(1);
-    expect(recordSettledProviderCostMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: USER_ID,
-        customerCanonicalMicrousd: 0,
-        surface: 'conversation_title',
-        taskOutcome: 'delivered',
-        sourceRef: expect.stringContaining(`title:${CONVERSATION_ID}:`),
-      }),
-    );
+    expect(reserveMock).toHaveBeenCalledTimes(1);
+    expect(reserveMock.mock.calls[0]?.[0]).toMatchObject({
+      userId: USER_ID,
+      idempotencyKey: `title:${CONVERSATION_ID}`,
+      quotaFeature: 'conversation_title',
+      planTier: 'pro',
+      isFlagship: false,
+    });
+    expect(finalizeMock).toHaveBeenCalledTimes(1);
+    expect(finalizeMock.mock.calls[0]?.[0]).toMatchObject({ outcome: 'completed' });
+    expect(recordSettledProviderCostMock).not.toHaveBeenCalled();
 
     const dbSecond = fakeDb();
     scheduleConversationTitleGeneration(scheduleInput(dbSecond));
     await new Promise((resolve) => setImmediate(resolve));
-    expect(recordSettledProviderCostMock).toHaveBeenCalledTimes(1);
+    expect(reserveMock).toHaveBeenCalledTimes(1);
+    expect(finalizeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the truncated title and never calls the provider when the reservation is refused', async () => {
+    reserveMock.mockRejectedValueOnce(new Error('Usage budget exhausted'));
+    const db = fakeDb();
+    scheduleConversationTitleGeneration(scheduleInput(db));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(drainToLlmResponseMock).not.toHaveBeenCalled();
+    expect(finalizeMock).not.toHaveBeenCalled();
+    expect(db.executed).toHaveLength(0);
+  });
+
+  it('releases the reservation when the provider call fails', async () => {
+    drainToLlmResponseMock.mockRejectedValueOnce(new Error('upstream anthropic'));
+    const db = fakeDb();
+    scheduleConversationTitleGeneration(scheduleInput(db));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(reserveMock).toHaveBeenCalledTimes(1);
+    expect(finalizeMock).toHaveBeenCalledTimes(1);
+    expect(finalizeMock.mock.calls[0]?.[0]).toMatchObject({
+      outcome: 'failed',
+      actualCostCents: 0,
+    });
+    expect(db.executed).toHaveLength(0);
   });
 
   it('bypasses the cache for a temporary conversation and never reads or writes a cached entry', async () => {

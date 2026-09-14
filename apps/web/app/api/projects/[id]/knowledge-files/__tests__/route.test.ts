@@ -140,6 +140,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     wireAuth();
     mockExtractProjectKnowledgeFile.mockResolvedValue({
       extractedText: null,
+      anchors: [],
       objectKey: UPLOADED_KEY,
       etag: '"etag-1"',
     });
@@ -206,6 +207,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
       extractedText: 'The launch date is October 4.',
+      anchors: [],
       objectKey: UPLOADED_KEY,
       etag: '"etag-1"',
     });
@@ -457,6 +459,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([]);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
       extractedText: 'Corrected text.',
+      anchors: [],
       objectKey: UPLOADED_KEY,
       etag: '"etag-1"',
     });

@@ -17,6 +17,7 @@ export const DESKTOP_CAPABILITIES = [
   'browser.site',
   'browser.cdp',
   'screen.capture',
+  'computer.use',
   'application.control',
   'clipboard.read',
   'clipboard.monitor',
@@ -69,6 +70,7 @@ export interface PermissionRequest {
 export const HIGH_RISK_CAPABILITIES: readonly DesktopCapability[] = [
   'shell.execute',
   'git.destructive',
+  'computer.use',
   'application.control',
   'clipboard.monitor',
   'browser.cdp',
