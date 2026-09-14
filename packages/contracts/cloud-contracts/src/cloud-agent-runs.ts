@@ -58,6 +58,25 @@ export const CloudAgentPendingInputSchema = z.object({
     .max(32),
 });
 
+// The device steps a run is blocked on. A surface that is NOT the device shows
+// this to say which machine the user must go to; it names the step and the
+// device, never what the step will read.
+export const CloudAgentPendingDeviceStepSchema = z.object({
+  requestedAt: z.string().datetime(),
+  deviceId: z.string().min(1).max(200),
+  deviceName: z.string().min(1).max(200),
+  steps: z
+    .array(
+      z.object({
+        toolCallId: z.string().min(1).max(256),
+        name: z.string().min(1).max(512),
+        summary: z.string().min(1).max(400),
+      }),
+    )
+    .min(1)
+    .max(8),
+});
+
 export const CloudAgentRunUsageSchema = z.object({
   providerCalls: z.number().int().min(0),
   inputTokens: z.number().int().min(0),
@@ -103,6 +122,7 @@ export const CloudAgentRunSchema = z.object({
   staleForMs: z.number().int().min(0).optional(),
   pendingApproval: CloudAgentPendingApprovalSchema.optional(),
   pendingInput: CloudAgentPendingInputSchema.optional(),
+  pendingDeviceStep: CloudAgentPendingDeviceStepSchema.optional(),
   usage: CloudAgentRunUsageSchema.optional(),
 });
 
@@ -126,6 +146,7 @@ export type CloudAgentWorkMode = z.infer<typeof CloudAgentWorkModeSchema>;
 export type CloudAgentRun = z.infer<typeof CloudAgentRunSchema>;
 export type CloudAgentPendingApproval = z.infer<typeof CloudAgentPendingApprovalSchema>;
 export type CloudAgentPendingInput = z.infer<typeof CloudAgentPendingInputSchema>;
+export type CloudAgentPendingDeviceStep = z.infer<typeof CloudAgentPendingDeviceStepSchema>;
 export type CloudAgentRunUsage = z.infer<typeof CloudAgentRunUsageSchema>;
 
 export interface CloudAgentRunSnapshotPage {

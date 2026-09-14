@@ -30,6 +30,7 @@ export * from './agent-events';
 export * from './cloud-agent-runs';
 export * from './managed-cloud-agent-runs-client';
 export * from './tool-approval-resume';
+export * from './device-steps';
 export * from './connectors';
 export * from './capability-handshake';
 export * from './schedules';
