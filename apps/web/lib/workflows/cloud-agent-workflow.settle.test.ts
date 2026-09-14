@@ -52,6 +52,7 @@ vi.mock('@/lib/services/managed-auto-memory-service', () => ({
   recordManagedAutoMemoryTurn: mocks.autoMemory,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  saveCloudAgentDeviceCheckpoint: vi.fn(),
   appendCloudAgentEvent: vi.fn(),
   appendCloudAgentEvents: vi.fn(),
   completeCloudAgentApprovalCheckpoint: mocks.completeCheckpoint,
