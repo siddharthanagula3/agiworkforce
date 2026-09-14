@@ -11,6 +11,7 @@ const warnings = [];
 
 const allowedRootFiles = new Set([
   'ACTIVE_ISSUES.md',
+  'WEB_PUBLIC_RELEASE_AUDIT.md',
   '.git',
   '.agi-guardian.yml',
   '.claudeignore',

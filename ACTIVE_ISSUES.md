@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-13
+Last updated: 2026-09-14
 
 The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
@@ -24,6 +24,14 @@ not open a second active-issues document.
 
 Capability backlog (`CAP-*`) is product scope, not defect work, and is out of
 scope for this file.
+
+The website's public-release audit lives in `WEB_PUBLIC_RELEASE_AUDIT.md`
+(2026-09-14, founder-requested, one canonical file). It carries the `WEB-*`
+findings for the web UI, what the pass fixed, and the order for the rest; this
+file points to it rather than restating its rows. Its open P2 items that need a
+decision rather than code are the composer rest-height contract (`WEB-052`), an
+early byte before the provider's first token (`WEB-053`), and whether the
+built-but-dark support widget ships (`WEB-031`).
 
 **A closed issue is deleted, not archived.** Git history is the record of what
 was fixed and why; a resolved section left here is a second, staler copy of a
