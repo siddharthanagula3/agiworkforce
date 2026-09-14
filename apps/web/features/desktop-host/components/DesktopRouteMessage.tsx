@@ -44,7 +44,7 @@ export function DesktopRouteMessage({
         )}
         <Link
           href={PRODUCT_HOME_PATH}
-          className="mt-2 inline-flex h-9 items-center justify-center rounded-lg bg-[hsl(var(--primary))] px-4 text-sm font-medium text-[hsl(var(--primary-foreground))]"
+          className="mt-2 inline-flex h-9 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
         >
           {ACTION_LABEL}
         </Link>
