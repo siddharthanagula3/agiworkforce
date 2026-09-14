@@ -163,6 +163,13 @@ impl McpRegistry {
         }
     }
 
+    /// The raw entry for a name, from either section. Callers that need more
+    /// than [`RegistryEntry`]'s summary (the OAuth block, custom headers) parse
+    /// this into [`super::McpServerConfig`] rather than re-reading the file.
+    pub fn entry(&self, name: &str) -> Option<&Value> {
+        self.enabled.get(name).or_else(|| self.disabled.get(name))
+    }
+
     /// List every registered server, enabled first, each sorted by name.
     pub fn list(&self) -> Vec<RegistryEntry> {
         let mut rows: Vec<RegistryEntry> = Vec::new();

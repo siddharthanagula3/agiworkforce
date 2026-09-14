@@ -282,6 +282,16 @@ struct TuiApp {
     tool_cells: Vec<ToolCell>,
     /// Interactive MCP elicitation queue installed only for the full-screen TUI.
     mcp_elicitation_handler: Arc<crate::mcp::tui_handler::TuiElicitationHandler>,
+    /// Labels for the images staged on the next turn, one per block queued in
+    /// `session.pending_image_blocks`. Kept beside the blocks rather than
+    /// derived from them because a `ContentBlock::Image` carries base64 bytes
+    /// and no provenance, so the composer would have nothing to name in a chip.
+    staged_images: Vec<String>,
+    /// Workspace files the `@` picker offers, built once on the first `@` of a
+    /// session. A monorepo walk is too slow to repeat per keystroke.
+    mention_candidates: Option<Vec<crate::mentions::MentionCandidate>>,
+    /// Byte offset of the `@` the open mention popup is completing.
+    mention_anchor: Option<usize>,
 }
 
 /// Short-lived banner shown across the top of the chat area when the
@@ -445,7 +455,117 @@ impl TuiApp {
             overlay_scroll: 0,
             tool_cells: Vec::new(),
             mcp_elicitation_handler: Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new()),
+            staged_images: Vec::new(),
+            mention_candidates: None,
+            mention_anchor: None,
         }
+    }
+
+    /// The workspace directory mentions and attachments resolve against.
+    fn workspace_root(&self) -> std::path::PathBuf {
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+    }
+
+    /// Stage one image file on the next turn, as `--file` does at launch.
+    /// Returns the label the composer chip shows.
+    fn stage_image_path(&mut self, path: &str) -> Result<String, String> {
+        let root = self.workspace_root();
+        let resolved = crate::path_security::validate_workspace_path_with_cwd(path, &root)?;
+        if !resolved.is_file() {
+            return Err(format!("{path} is not a file"));
+        }
+        if !crate::is_image_extension(path) {
+            return Err(format!("{path} is not an image"));
+        }
+        let attachment = crate::load_image_attachment(&resolved.to_string_lossy())
+            .map_err(|error| format!("{error:#}"))?;
+        let label = resolved
+            .strip_prefix(&root)
+            .unwrap_or(resolved.as_path())
+            .to_string_lossy()
+            .into_owned();
+        self.session
+            .pending_image_blocks
+            .push(attachment.into_image_block());
+        self.staged_images.push(label.clone());
+        Ok(label)
+    }
+
+    /// Stage whatever bitmap the system clipboard is holding.
+    fn stage_clipboard_image(&mut self) -> Result<String, String> {
+        let image = arboard::Clipboard::new()
+            .and_then(|mut clipboard| clipboard.get_image())
+            .map_err(|error| format!("no image on the clipboard ({error})"))?;
+        let attachment = crate::clipboard_image_attachment(
+            image.width as u32,
+            image.height as u32,
+            image.bytes.into_owned(),
+        )
+        .map_err(|error| format!("{error:#}"))?;
+        let label = format!("clipboard ({}x{})", image.width, image.height);
+        self.session
+            .pending_image_blocks
+            .push(attachment.into_image_block());
+        self.staged_images.push(label.clone());
+        Ok(label)
+    }
+
+    /// Drop one staged image by 1-based position, or every one when `None`.
+    fn remove_staged_image(&mut self, position: Option<usize>) -> Result<String, String> {
+        match position {
+            None => {
+                let count = self.staged_images.len();
+                self.staged_images.clear();
+                self.session.pending_image_blocks.clear();
+                Ok(format!("Removed {count} staged image(s)."))
+            }
+            Some(position) => {
+                let index = position
+                    .checked_sub(1)
+                    .filter(|index| *index < self.staged_images.len())
+                    .ok_or_else(|| {
+                        format!(
+                            "no staged image {position}; {} staged",
+                            self.staged_images.len()
+                        )
+                    })?;
+                let label = self.staged_images.remove(index);
+                if index < self.session.pending_image_blocks.len() {
+                    self.session.pending_image_blocks.remove(index);
+                }
+                Ok(format!("Removed {label}."))
+            }
+        }
+    }
+
+    /// Candidate list for the `@` picker, walked once per session.
+    fn mention_candidates(&mut self) -> Vec<crate::mentions::MentionCandidate> {
+        if self.mention_candidates.is_none() {
+            let root = self.workspace_root();
+            self.mention_candidates = Some(crate::mentions::workspace_file_candidates(&root));
+        }
+        self.mention_candidates.clone().unwrap_or_default()
+    }
+
+    /// Replace the partially typed `@query` at the cursor with the chosen path.
+    fn insert_mention(&mut self, path: &str) {
+        let Some(anchor) = self.mention_anchor.take() else {
+            return;
+        };
+        let cursor = floor_char_boundary(&self.input, self.cursor).max(anchor);
+        if anchor > self.input.len() || cursor > self.input.len() {
+            return;
+        }
+        let replacement = format!("@{path} ");
+        self.input.replace_range(anchor..cursor, &replacement);
+        self.cursor = anchor + replacement.len();
+    }
+
+    /// Whether this workspace has been trusted, which decides if a mention
+    /// carries file contents or only the path. Mirrors the trust gate the tool
+    /// layer applies to repository-controlled policy.
+    fn workspace_is_trusted(&self) -> bool {
+        crate::features::exec::tools::workspace_policy_is_trusted(&self.workspace_root())
     }
 
     /// Install the fallback banner sink on the underlying session. Idempotent
@@ -536,6 +656,24 @@ impl TuiApp {
                 let name = tag.trim_start_matches("slash:");
                 self.input = format!("/{name}");
                 self.cursor = self.input.len();
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+            }
+            ViewAction::SideAction(tag) if tag.starts_with("mention:") => {
+                let path = tag.trim_start_matches("mention:").to_string();
+                self.insert_mention(&path);
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+            }
+            ViewAction::SideAction(tag) if tag == "mention-cancel-at" => {
+                // The popup was dismissed by backspacing over the `@` that
+                // opened it, so the composer deletes that character too.
+                if let Some(anchor) = self.mention_anchor.take() {
+                    if self.input.get(anchor..anchor + 1) == Some("@") {
+                        self.input.remove(anchor);
+                        self.cursor = anchor;
+                    }
+                }
                 self.overlay_scroll = 0;
                 self.active_overlay = None;
             }
@@ -934,8 +1072,9 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
 fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
     let area = frame.area();
 
-    // Dynamic input height: border(2) + content rows (1..=8)
-    let input_height = 2 + composer_content_rows(&app.input);
+    // Dynamic input height: border(2) + attachment chip row + content rows (1..=8)
+    let input_height =
+        2 + attachment_chip_rows(&app.staged_images) + composer_content_rows(&app.input);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -1510,6 +1649,17 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         .border_style(Style::default().fg(ui_muted()))
         .title(format!(" {} ", app.mode.label()));
 
+    // Attachment chips sit above the message, so a staged image is visible
+    // without the user having to remember they pasted one.
+    let chip_rows = attachment_chip_rows(&app.staged_images);
+    let mut leading: Vec<Line> = Vec::new();
+    if chip_rows > 0 {
+        leading.push(Line::from(Span::styled(
+            attachment_chip_line(&app.staged_images),
+            Style::default().fg(app.mode.color()),
+        )));
+    }
+
     if app.input.is_empty() && !app.is_loading {
         // Show placeholder on single line
         let placeholder_line = Line::from(vec![
@@ -1523,16 +1673,19 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                 if exit_armed {
                     "Press Ctrl-C again to exit"
                 } else {
-                    "Message AGI...  Enter to send · Shift+Enter for newline · / for commands"
+                    "Message AGI...  Enter to send · Shift+Enter for newline · / for commands · @ for files"
                 },
                 Style::default().fg(ui_muted()),
             ),
         ]);
-        let widget = Paragraph::new(placeholder_line).block(block);
+        let mut lines = leading;
+        lines.push(placeholder_line);
+        sanitize_terminal_lines(&mut lines);
+        let widget = Paragraph::new(lines).block(block);
         frame.render_widget(widget, area);
         // Position cursor after prompt character
         let cursor_x = area.x + 1 + prompt_width;
-        let cursor_y = area.y + 1;
+        let cursor_y = area.y + 1 + chip_rows;
         frame.set_cursor_position((cursor_x, cursor_y));
         return;
     }
@@ -1544,25 +1697,22 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         .add_modifier(Modifier::BOLD);
 
     let lines_text: Vec<&str> = app.input.split('\n').collect();
-    let mut lines: Vec<Line> = lines_text
-        .iter()
-        .enumerate()
-        .map(|(i, &text)| {
-            if i == 0 {
-                Line::from(vec![
-                    Span::styled(prompt_char, prompt_style),
-                    Span::styled(text.to_string(), style),
-                ])
-            } else {
-                // Indent continuation lines to align with text after prompt
-                let indent = " ".repeat(prompt_width as usize);
-                Line::from(vec![
-                    Span::styled(indent, style),
-                    Span::styled(text.to_string(), style),
-                ])
-            }
-        })
-        .collect();
+    let mut lines: Vec<Line> = leading;
+    lines.extend(lines_text.iter().enumerate().map(|(i, &text)| {
+        if i == 0 {
+            Line::from(vec![
+                Span::styled(prompt_char, prompt_style),
+                Span::styled(text.to_string(), style),
+            ])
+        } else {
+            // Indent continuation lines to align with text after prompt
+            let indent = " ".repeat(prompt_width as usize);
+            Line::from(vec![
+                Span::styled(indent, style),
+                Span::styled(text.to_string(), style),
+            ])
+        }
+    }));
 
     sanitize_terminal_lines(&mut lines);
 
@@ -1580,9 +1730,22 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         // Continuation rows align under the first line's text, same as row 0.
         let indent_width = prompt_width;
         let cursor_x = area.x + 1 + indent_width + col_text_width;
-        let cursor_y = area.y + 1 + cursor_row as u16;
+        let cursor_y = area.y + 1 + chip_rows + cursor_row as u16;
         frame.set_cursor_position((cursor_x, cursor_y));
     }
+}
+
+/// One row when images are staged for the next turn, none otherwise. The chip
+/// row is what tells the user an attachment is pending, so the composer grows
+/// by it rather than overwriting a line of their message.
+fn attachment_chip_rows(staged: &[String]) -> u16 {
+    u16::from(!staged.is_empty())
+}
+
+/// The chip line: what is attached, and how to drop it.
+fn attachment_chip_line(staged: &[String]) -> String {
+    let names: Vec<&str> = staged.iter().map(String::as_str).collect();
+    format!("📎 {} · /attach remove to drop", names.join(", "))
 }
 
 /// Return the number of display rows needed for the input composer content
@@ -2199,8 +2362,25 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             InputAction::SendMessage(text)
         }
 
+        // Ctrl+V pastes an image off the clipboard as an attachment. Text
+        // pastes arrive through bracketed paste, not here, so this key is only
+        // reached when the user asked for a clipboard image explicitly.
+        KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let notice = match app.stage_clipboard_image() {
+                Ok(label) => format!("attached {label}"),
+                Err(reason) => reason,
+            };
+            app.status_notice = Some((notice, Instant::now()));
+            InputAction::None
+        }
+
         KeyCode::Char(c) => {
             insert_char_at_cursor(&mut app.input, &mut app.cursor, c);
+            // `@` at a word boundary opens the file picker, the same way `/` on
+            // an empty composer opens the command popup.
+            if c == '@' && crate::mentions::active_mention_query(&app.input, app.cursor).is_some() {
+                open_mention_popup(app);
+            }
             InputAction::None
         }
 
@@ -2377,6 +2557,7 @@ fn open_command_popup(app: &mut TuiApp) {
     // would reject them). They are still dispatched by `handle_slash_command`
     // below, so surface them here so `/` makes them discoverable in the TUI.
     for (name, desc) in [
+        ("attach", "Attach an image to the next message"),
         ("memories", "Configure auto-memory settings"),
         ("skills-toggle", "Enable or disable individual skills"),
         ("title", "Configure the terminal window title"),
@@ -2388,6 +2569,49 @@ fn open_command_popup(app: &mut TuiApp) {
     }
 
     app.open_overlay(Box::new(CommandPopup::new(cmds)));
+}
+
+/// Turn the `@path` tokens in a submitted message into the prompt the model
+/// receives, staging any image a mention named and reporting what was skipped.
+fn resolve_composer_mentions(app: &mut TuiApp, text: &str) -> String {
+    let root = app.workspace_root();
+    let trusted = app.workspace_is_trusted();
+    let expansion = crate::mentions::expand_mentions(text, &root, trusted);
+
+    for image in &expansion.images {
+        match app.stage_image_path(image) {
+            Ok(label) => app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!("Attached {label}."),
+            }),
+            Err(reason) => app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!("Could not attach {image}: {reason}"),
+            }),
+        }
+    }
+    for (path, reason) in &expansion.skipped {
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::System,
+            text: format!("{path} was not inlined: {reason}"),
+        });
+    }
+    expansion.prompt
+}
+
+fn open_mention_popup(app: &mut TuiApp) {
+    use crate::tui::widgets::mention_popup::MentionPopup;
+
+    let Some((anchor, _)) = crate::mentions::active_mention_query(&app.input, app.cursor) else {
+        return;
+    };
+    let candidates = app.mention_candidates();
+    if candidates.is_empty() {
+        app.status_notice = Some(("no workspace files to mention".to_string(), Instant::now()));
+        return;
+    }
+    app.mention_anchor = Some(anchor);
+    app.open_overlay(Box::new(MentionPopup::new(candidates)));
 }
 
 fn insert_char_at_cursor(input: &mut String, cursor: &mut usize, c: char) {
@@ -3219,10 +3443,62 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
+        "/attach" => {
+            let (action, rest) = arg.split_once(' ').unwrap_or((arg, ""));
+            match action {
+                "" => SlashResult::SystemMessage(
+                    "Usage: /attach <image path> · /attach list · /attach remove [n|all]"
+                        .to_string(),
+                ),
+                "list" => SlashResult::SystemMessage(if app.staged_images.is_empty() {
+                    "No images staged for the next turn.".to_string()
+                } else {
+                    let rows: Vec<String> = app
+                        .staged_images
+                        .iter()
+                        .enumerate()
+                        .map(|(i, label)| format!("  {}. {label}", i + 1))
+                        .collect();
+                    format!("Staged for the next turn:\n{}", rows.join("\n"))
+                }),
+                "remove" | "rm" => {
+                    let target = rest.trim();
+                    let position = match target {
+                        "" | "all" => None,
+                        other => match other.parse::<usize>() {
+                            Ok(position) => Some(position),
+                            Err(_) => {
+                                return SlashResult::SystemMessage(format!(
+                                    "Not a staged image number: {other}"
+                                ))
+                            }
+                        },
+                    };
+                    match app.remove_staged_image(position) {
+                        Ok(message) => SlashResult::SystemMessage(message),
+                        Err(reason) => SlashResult::SystemMessage(reason),
+                    }
+                }
+                "clipboard" => match app.stage_clipboard_image() {
+                    Ok(label) => SlashResult::SystemMessage(format!("Attached {label}.")),
+                    Err(reason) => SlashResult::SystemMessage(format!("Could not attach: {reason}")),
+                },
+                path => match app.stage_image_path(path) {
+                    Ok(label) => SlashResult::SystemMessage(format!(
+                        "Attached {label}. It goes with your next message; /attach remove drops it."
+                    )),
+                    Err(reason) => {
+                        SlashResult::SystemMessage(format!("Could not attach {path}: {reason}"))
+                    }
+                },
+            }
+        }
+
         "/hooks" => {
-            let hooks = crate::hooks::load_hooks().unwrap_or_default();
-            let msg = crate::hooks::format_hooks_list(&hooks);
-            SlashResult::SystemMessage(msg)
+            match crate::hooks::apply_hooks_command(arg) {
+                Ok(message) => SlashResult::SystemMessage(message),
+                Err(error) => SlashResult::SystemMessage(format!("{error:#}")),
+            }
         }
 
         "/plugin" | "/plugins" | "/marketplace" | "/market" => {
@@ -4168,7 +4444,8 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
-                                send_message(terminal, app, &text).await?;
+                                let prompt = resolve_composer_mentions(app, &text);
+                                send_message_with_prompt(terminal, app, &text, &prompt).await?;
                             }
                             SlashResult::SendPrompt(prompt) => {
                                 send_message(terminal, app, &prompt).await?;
@@ -4317,6 +4594,21 @@ async fn send_message(
     app: &mut TuiApp,
     user_text: &str,
 ) -> Result<()> {
+    send_message_with_prompt(terminal, app, user_text, user_text).await
+}
+
+/// Send a turn whose transcript line and model prompt differ.
+///
+/// `@file` mentions are the reason the two are separate: the transcript keeps
+/// the `@path` the user typed, and the model receives it with the file's
+/// contents spliced in ahead of the message, the same `<file path="…">` block
+/// `--file` produces.
+async fn send_message_with_prompt(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &mut TuiApp,
+    transcript_text: &str,
+    user_text: &str,
+) -> Result<()> {
     let hooks_cfg = app.session.hooks_config().clone();
     crate::hooks::run_hooks(
         &hooks_cfg,
@@ -4336,8 +4628,12 @@ async fn send_message(
 
     app.chat_messages.push(ChatMessage {
         role: ChatRole::User,
-        text: user_text.to_string(),
+        text: transcript_text.to_string(),
     });
+
+    // The session drains `pending_image_blocks` into this turn, so the chips
+    // that named them go with it.
+    app.staged_images.clear();
 
     app.is_loading = true;
     app.scroll_offset = 0;
@@ -5438,6 +5734,119 @@ mod tests {
     }
 
     #[test]
+    fn at_key_opens_the_file_picker_and_keeps_the_character() {
+        let mut app = minimal_app();
+        // Seed the candidate list so the test does not depend on the walk
+        // finding files under whatever directory it runs in.
+        app.mention_candidates = Some(vec![
+            crate::mentions::MentionCandidate::new("src/lib.rs"),
+            crate::mentions::MentionCandidate::new("README.md"),
+        ]);
+
+        let action = handle_key_event(&mut app, make_key(crossterm::event::KeyCode::Char('@')));
+
+        assert!(matches!(action, InputAction::None));
+        assert!(app.active_overlay.is_some(), "the picker opens on @");
+        // Unlike `/`, the `@` stays in the composer: it is part of the mention.
+        assert_eq!(app.input, "@");
+        assert_eq!(app.mention_anchor, Some(0));
+    }
+
+    #[test]
+    fn an_at_inside_a_word_does_not_open_the_picker() {
+        let mut app = minimal_app();
+        app.mention_candidates = Some(vec![crate::mentions::MentionCandidate::new("src/lib.rs")]);
+        app.input = "mail me".to_string();
+        app.cursor = app.input.len();
+
+        handle_key_event(&mut app, make_key(crossterm::event::KeyCode::Char('@')));
+        assert!(app.active_overlay.is_none());
+        assert_eq!(app.input, "mail me@");
+    }
+
+    #[test]
+    fn choosing_a_file_replaces_the_typed_query_with_the_path() {
+        let mut app = minimal_app();
+        app.input = "explain @li".to_string();
+        app.cursor = app.input.len();
+        app.mention_anchor = Some(8);
+
+        app.insert_mention("src/lib.rs");
+
+        assert_eq!(app.input, "explain @src/lib.rs ");
+        assert_eq!(app.cursor, app.input.len());
+        assert_eq!(app.mention_anchor, None, "the anchor is consumed");
+    }
+
+    #[test]
+    fn a_mention_chosen_mid_message_keeps_the_text_after_the_cursor() {
+        let mut app = minimal_app();
+        app.input = "@li and then some".to_string();
+        app.cursor = 3;
+        app.mention_anchor = Some(0);
+
+        app.insert_mention("src/lib.rs");
+
+        assert_eq!(app.input, "@src/lib.rs  and then some");
+    }
+
+    #[test]
+    fn the_composer_shows_no_chip_row_until_something_is_staged() {
+        let mut app = minimal_app();
+        assert_eq!(attachment_chip_rows(&app.staged_images), 0);
+        app.staged_images.push("shot.png".to_string());
+        assert_eq!(attachment_chip_rows(&app.staged_images), 1);
+        let chip = attachment_chip_line(&app.staged_images);
+        assert!(chip.contains("shot.png"));
+        assert!(
+            chip.contains("/attach remove"),
+            "the chip says how to drop it"
+        );
+    }
+
+    #[test]
+    fn removing_a_staged_image_drops_its_block_and_its_chip() {
+        let mut app = minimal_app();
+        app.staged_images = vec!["a.png".to_string(), "b.png".to_string()];
+        app.session.pending_image_blocks = vec![
+            crate::models::ContentBlock::Image {
+                mime: "image/png".to_string(),
+                data_b64: "a".to_string(),
+            },
+            crate::models::ContentBlock::Image {
+                mime: "image/png".to_string(),
+                data_b64: "b".to_string(),
+            },
+        ];
+
+        app.remove_staged_image(Some(1)).expect("removes the first");
+
+        assert_eq!(app.staged_images, vec!["b.png".to_string()]);
+        assert_eq!(app.session.pending_image_blocks.len(), 1);
+
+        app.remove_staged_image(None).expect("clears the rest");
+        assert!(app.staged_images.is_empty());
+        assert!(app.session.pending_image_blocks.is_empty());
+    }
+
+    #[test]
+    fn removing_an_image_that_is_not_staged_is_refused() {
+        let mut app = minimal_app();
+        app.staged_images = vec!["a.png".to_string()];
+        assert!(app.remove_staged_image(Some(2)).is_err());
+        assert!(app.remove_staged_image(Some(0)).is_err());
+        assert_eq!(app.staged_images.len(), 1);
+    }
+
+    #[test]
+    fn attach_reports_a_path_that_is_not_an_image() {
+        let mut app = minimal_app();
+        let error = app.stage_image_path("Cargo.toml").expect_err("refused");
+        assert!(error.contains("not an image") || error.contains("not a file"));
+        assert!(app.staged_images.is_empty());
+    }
+
+    #[test]
     fn slash_key_opens_palette_without_inserting_duplicate_slash() {
         let mut app = minimal_app();
         let action = handle_key_event(&mut app, make_key(crossterm::event::KeyCode::Char('/')));
@@ -5665,6 +6074,7 @@ mod tests {
             "init",
             "skills",
             "hooks",
+            "attach",
             "plugin",
             "plugins",
             "marketplace",

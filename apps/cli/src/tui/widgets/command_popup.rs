@@ -29,7 +29,7 @@ impl RegistryCommand {
 }
 
 /// Inner content width of the popup box (chars between the `│ ` and `│` borders).
-const POPUP_INNER_WIDTH: usize = 59;
+pub(super) const POPUP_INNER_WIDTH: usize = 59;
 
 /// Columns between the `┌`/`└` and `┐`/`┘` corners: the content width plus the
 /// single space that separates content from the left border.
@@ -38,14 +38,14 @@ const POPUP_BORDER_WIDTH: usize = POPUP_INNER_WIDTH + 1;
 /// Top border with the title inlaid, `┌─ Title ──…──┐`. The dash run is
 /// measured rather than typed so a translated title keeps the box rectangular;
 /// the previous fixed literal only lined up for the word "Commands".
-fn popup_header(title: &str) -> String {
+pub(super) fn popup_header(title: &str) -> String {
     let inlay = format!("─ {} ", truncate_cols(title, POPUP_BORDER_WIDTH - 3));
     let fill = POPUP_BORDER_WIDTH.saturating_sub(display_width(&inlay));
     format!("┌{inlay}{}┐\n", "─".repeat(fill))
 }
 
 /// One content row: `│ `, exactly `POPUP_INNER_WIDTH` columns, `│`.
-fn popup_row(content: &str) -> String {
+pub(super) fn popup_row(content: &str) -> String {
     format!("│ {}│\n", pad_to_cols(content, POPUP_INNER_WIDTH))
 }
 

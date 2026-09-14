@@ -101,6 +101,81 @@ pub fn install_command() -> String {
     }
 }
 
+/// What `--install` is about to run, and why the run may still not produce a
+/// newer binary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstallPlan {
+    pub running: String,
+    pub published: String,
+    pub verdict: UpdateVerdict,
+    pub command: String,
+}
+
+impl InstallPlan {
+    pub fn new(running: &str, release: &CliRelease) -> Self {
+        Self {
+            running: running.to_string(),
+            published: release.version.clone(),
+            verdict: compare_versions(running, &release.version),
+            command: install_command(),
+        }
+    }
+
+    /// True when running the command could actually change the installed
+    /// build. An up-to-date or ahead-of-feed build has nothing to install.
+    pub fn has_work(&self) -> bool {
+        matches!(self.verdict, UpdateVerdict::Available)
+    }
+
+    /// The lines printed before the confirmation prompt. Nothing runs until
+    /// the user has read the exact command.
+    pub fn render(&self) -> Vec<String> {
+        let mut lines = vec![
+            format!("Running:   {}", self.running),
+            format!("Published: {}", self.published),
+        ];
+        match &self.verdict {
+            UpdateVerdict::Available => {
+                lines.push(String::new());
+                lines.push("Will run:".to_string());
+                lines.push(format!("  {}", self.command));
+                lines.push(String::new());
+                lines.push(
+                    "Installing replaces the binary this shell resolves as `agi`.".to_string(),
+                );
+                lines.push(INSTALL_SIGNING_NOTE.to_string());
+            }
+            UpdateVerdict::UpToDate => lines
+                .push("Already on the newest published release, nothing to install.".to_string()),
+            UpdateVerdict::AheadOfPublished => lines.push(
+                "This build is newer than the newest published release, nothing to install."
+                    .to_string(),
+            ),
+            UpdateVerdict::Unknown(reason) => lines.push(reason.clone()),
+        }
+        lines
+    }
+}
+
+/// Stated wherever `--install` is described. The install routes are gated on a
+/// signed release: `scripts/install.sh` refuses an archive without `SHA256SUMS`
+/// and its sigstore bundle, and the npm package carries the same artifacts. No
+/// published CLI release carries them yet, so an install can legitimately fail
+/// on provenance rather than on anything the user did wrong.
+pub const INSTALL_SIGNING_NOTE: &str =
+    "Install needs a signed release: the install routes refuse an archive without its \
+signed checksum manifest, and no published CLI release carries one yet.";
+
+/// Run the install command through the shell, streaming its output.
+pub fn run_install_command(command: &str) -> anyhow::Result<std::process::ExitStatus> {
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .status()
+        .map_err(|error| anyhow::anyhow!("failed to start `{command}`: {error}"))?;
+    Ok(status)
+}
+
 pub async fn fetch_latest_release() -> anyhow::Result<CliRelease> {
     let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
         .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
@@ -183,6 +258,50 @@ mod tests {
     #[test]
     fn install_command_reads_the_published_package_name() {
         assert!(install_command().starts_with("npm install -g @"));
+    }
+
+    fn release(version: &str) -> CliRelease {
+        CliRelease {
+            version: version.to_string(),
+            published_at: "2026-09-12T10:00:00Z".to_string(),
+            downloads: vec![],
+        }
+    }
+
+    #[test]
+    fn the_install_plan_shows_the_exact_command_before_running_it() {
+        let plan = InstallPlan::new("1.0.0", &release("9.9.9"));
+        assert!(plan.has_work());
+        let rendered = plan.render().join("\n");
+        assert!(rendered.contains("Will run:"));
+        assert!(rendered.contains(&install_command()));
+        assert!(rendered.contains("signed release"));
+    }
+
+    #[test]
+    fn an_up_to_date_build_has_no_install_work() {
+        let plan = InstallPlan::new("1.7.1", &release("1.7.1"));
+        assert!(!plan.has_work());
+        let rendered = plan.render().join("\n");
+        assert!(rendered.contains("nothing to install"));
+        assert!(
+            !rendered.contains("Will run:"),
+            "a no-op plan must not show a command to confirm"
+        );
+    }
+
+    #[test]
+    fn a_build_ahead_of_the_feed_has_no_install_work() {
+        let plan = InstallPlan::new("2.0.0", &release("1.7.1"));
+        assert!(!plan.has_work());
+        assert!(plan.render().join("\n").contains("nothing to install"));
+    }
+
+    #[test]
+    fn an_uncomparable_version_reports_why_and_installs_nothing() {
+        let plan = InstallPlan::new("nightly", &release("1.7.1"));
+        assert!(!plan.has_work());
+        assert!(plan.render().join("\n").contains("cannot compare"));
     }
 
     #[test]
