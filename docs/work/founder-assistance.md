@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-13
+Last updated: 2026-09-14
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -168,6 +168,13 @@ per-turn spend, which is a founder call rather than an engineering one.
 **Needed input** One decision.
 **How to verify completion** A fact stated with no trigger phrase, for example "I just moved to Berlin", is stored and answered in a second conversation.
 **What remains after founder action** Setting the variable and one live two-chat check, both engineering.
+**Metering** Since 2026-09-14 the extraction call is reserved and finalized on
+the managed usage ledger under the `memory_extraction` quota feature, so it
+counts against the session, weekly and flagship caps and appears on
+`GET /api/usage` like any other spend. A turn whose reservation is refused
+skips the model and keeps the pattern candidates. The only decision still open
+is the on/off call above; nothing about where the spend is recorded remains
+undecided.
 **Impact** NON-BLOCKING (memory works today for the phrasings the patterns know)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 

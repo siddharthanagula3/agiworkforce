@@ -21,11 +21,16 @@ const { recordManagedAutoMemoryTurn } = await import('../managed-auto-memory-ser
  * prepared, and that ON never runs the extraction inside the awaited callback,
  * which is the one the non-streaming response waits on.
  */
-function processed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
+function processed(
+  overrides: Partial<ProcessedRequest> = {},
+  meteringDb?: unknown,
+): ProcessedRequest {
   return {
     requestId: 'request-1',
+    subscriptionTier: 'pro',
     autoMemoryFacts: ["User's name is Sid"],
     autoMemorySourceText: 'My name is Sid. I just moved to Berlin.',
+    ...(meteringDb ? { managedUsage: { db: meteringDb, userId: 'user-1' } } : {}),
     ...overrides,
   } as ProcessedRequest;
 }
@@ -75,13 +80,17 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
     await recordManagedAutoMemoryTurn({
       db: { query },
       userId: 'user-1',
-      processed: processed(),
+      processed: processed({}, { query }),
       outcome: 'completed',
     });
     await hoisted.after.mock.calls[0]?.[0];
 
     expect(hoisted.extract).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'My name is Sid. I just moved to Berlin.' }),
+      expect.objectContaining({
+        message: 'My name is Sid. I just moved to Berlin.',
+        planTier: 'pro',
+        db: { query },
+      }),
     );
     expect(insertedCandidates(query)).toContain('User lives in Berlin');
   });
@@ -99,7 +108,7 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
     await recordManagedAutoMemoryTurn({
       db: { query },
       userId: 'user-1',
-      processed: processed(),
+      processed: processed({}, { query }),
       outcome: 'completed',
     });
 
@@ -117,7 +126,7 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
     await recordManagedAutoMemoryTurn({
       db: { query },
       userId: 'user-1',
-      processed: processed(),
+      processed: processed({}, { query }),
       outcome: 'completed',
     });
     await hoisted.after.mock.calls[0]?.[0];
@@ -135,6 +144,22 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
       processed: processed({ zeroDataRetentionOnly: true }),
       outcome: 'completed',
     });
+
+    expect(hoisted.extract).not.toHaveBeenCalled();
+    expect(insertedCandidates(query)).toContain("User's name is Sid");
+  });
+
+  it('keeps the pattern facts when no metering context can be resolved', async () => {
+    hoisted.enabled.mockReturnValue(true);
+    const query = vi.fn().mockResolvedValue([{ id: 'memory-1' }]);
+
+    await recordManagedAutoMemoryTurn({
+      db: { query },
+      userId: 'user-1',
+      processed: processed(),
+      outcome: 'completed',
+    });
+    await hoisted.after.mock.calls[0]?.[0];
 
     expect(hoisted.extract).not.toHaveBeenCalled();
     expect(insertedCandidates(query)).toContain("User's name is Sid");
