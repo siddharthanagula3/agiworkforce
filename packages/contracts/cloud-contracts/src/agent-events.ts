@@ -194,6 +194,38 @@ const InputResolvedSchema = z.object({
   outcome: z.enum(['resolved', 'cancelled']),
 });
 
+// A device step's planned arguments are host-authored: the server turned the
+// model's arguments into a folder id plus a path or command before emitting
+// this, so the payload is bounded by construction rather than echoed verbatim.
+const MAX_DEVICE_STEP_INPUT_SERIALIZED_BYTES = 8_000;
+
+const BoundedDeviceStepInputSchema = JsonValueSchema.superRefine((value, ctx) => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    ctx.addIssue({ code: 'custom', message: 'input must be a JSON object' });
+    return;
+  }
+  if (JSON.stringify(value).length > MAX_DEVICE_STEP_INPUT_SERIALIZED_BYTES) {
+    ctx.addIssue({ code: 'custom', message: 'input exceeds the size limit' });
+  }
+});
+
+const DeviceStepRequestedSchema = z.object({
+  type: z.literal('device-step-requested'),
+  toolCallId: NonEmptyStringSchema,
+  toolName: NonEmptyStringSchema,
+  deviceId: NonEmptyStringSchema,
+  deviceName: NonEmptyStringSchema,
+  summary: NonEmptyStringSchema,
+  input: BoundedDeviceStepInputSchema,
+  expiresAtMs: z.number().int().nonnegative(),
+});
+
+const DeviceStepResolvedSchema = z.object({
+  type: z.literal('device-step-resolved'),
+  toolCallId: NonEmptyStringSchema,
+  outcome: z.enum(['completed', 'failed', 'expired', 'cancelled']),
+});
+
 const ArtifactProducedSchema = z.object({
   type: z.literal('artifact-produced'),
   artifactId: NonEmptyStringSchema,
@@ -250,6 +282,8 @@ export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion('typ
   ApprovalResolvedSchema,
   InputRequestedSchema,
   InputResolvedSchema,
+  DeviceStepRequestedSchema,
+  DeviceStepResolvedSchema,
   ArtifactProducedSchema,
   ContextCompactedSchema,
   TaskStateChangedSchema,

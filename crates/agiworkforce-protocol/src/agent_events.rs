@@ -206,6 +206,14 @@ pub enum AgentEvent {
     /// The outcome of a prior [`AgentEventInputRequested`]: the caller either
     /// supplied the requested input or cancelled the paused call.
     InputResolved(AgentEventInputResolved),
+    /// A cloud turn handed a step to the machine the user is sitting at: read
+    /// or write a file in a folder they granted, or run a command there. The
+    /// run pauses until that one device answers; nothing in the cloud can
+    /// carry the step out, and no other device may answer it.
+    DeviceStepRequested(AgentEventDeviceStepRequested),
+    /// The outcome of a prior [`AgentEventDeviceStepRequested`]: the device
+    /// ran the step, refused it, or let it expire.
+    DeviceStepResolved(AgentEventDeviceStepResolved),
     /// A durable file or rich artifact was produced and is ready to preview or
     /// download.
     ArtifactProduced(AgentEventArtifactProduced),
@@ -579,6 +587,48 @@ pub struct AgentEventInputResolved {
     pub outcome: AgentEventInputOutcome,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventDeviceStepRequested {
+    pub tool_call_id: String,
+    /// Which device tool the model called.
+    pub tool_name: String,
+    /// Stable id of the device the step was issued to. Only that device may
+    /// answer it.
+    pub device_id: String,
+    /// How the device names itself, for surfaces that must tell the user which
+    /// machine to go to.
+    pub device_name: String,
+    /// One line naming what runs and where, authored by the host from the
+    /// model's arguments rather than echoed from them.
+    pub summary: String,
+    /// The step's arguments as the host planned them: a granted folder id and
+    /// the path, text, or command the device will act on.
+    pub input: serde_json::Value,
+    /// When the pause stops being answerable, in milliseconds since the epoch.
+    #[ts(type = "number")]
+    pub expires_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventDeviceStepResolved {
+    pub tool_call_id: String,
+    pub outcome: AgentEventDeviceStepOutcome,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename_all = "kebab-case")]
+pub enum AgentEventDeviceStepOutcome {
+    Completed,
+    Failed,
+    Expired,
+    Cancelled,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "kebab-case")]
 #[ts(rename_all = "kebab-case")]
@@ -872,6 +922,33 @@ mod tests {
                 before_tokens: Some(180_000),
                 after_tokens: Some(42_000),
                 summary: Some("Context automatically compacted".to_string()),
+            },
+        )));
+    }
+
+    #[test]
+    fn device_step_pause_and_resolution_round_trip() {
+        assert_round_trips(&sample_envelope(AgentEvent::DeviceStepRequested(
+            AgentEventDeviceStepRequested {
+                tool_call_id: "call-device-1".to_string(),
+                tool_name: "device_read_file".to_string(),
+                device_id: "device-abc123".to_string(),
+                device_name: "Work MacBook".to_string(),
+                summary: "Read notes.md in Documents".to_string(),
+                input: serde_json::json!({ "rootId": "root-1", "path": "notes.md" }),
+                expires_at_ms: 1_700_000_900_000,
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::DeviceStepResolved(
+            AgentEventDeviceStepResolved {
+                tool_call_id: "call-device-1".to_string(),
+                outcome: AgentEventDeviceStepOutcome::Completed,
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::DeviceStepResolved(
+            AgentEventDeviceStepResolved {
+                tool_call_id: "call-device-1".to_string(),
+                outcome: AgentEventDeviceStepOutcome::Expired,
             },
         )));
     }

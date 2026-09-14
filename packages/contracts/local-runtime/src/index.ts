@@ -168,3 +168,29 @@ export {
   toComparableSegments,
 } from './path-safety';
 export type { ContainmentOptions, PathPlatform } from './path-safety';
+
+export {
+  DEVICE_HOST_HEADER,
+  DEVICE_STEP_DEFINITIONS,
+  DEVICE_STEP_TOOLS,
+  DEVICE_STEP_TTL_MINUTES,
+  DeviceStepRefused,
+  MAX_DEVICE_HOST_HEADER_LENGTH,
+  MAX_DEVICE_STEP_RESULT_LENGTH,
+  MAX_DEVICE_STEP_ROOTS,
+  describeDeviceStep,
+  deviceStepCapability,
+  deviceStepCommand,
+  encodeDesktopHostDeclaration,
+  isDeviceStepTool,
+  offeredDeviceStepTools,
+  parseDesktopHostDeclaration,
+  planDeviceStep,
+} from './device-steps';
+export type {
+  DesktopHostDeclaration,
+  DeviceStepDefinition,
+  DeviceStepRequest,
+  DeviceStepRoot,
+  DeviceStepTool,
+} from './device-steps';
