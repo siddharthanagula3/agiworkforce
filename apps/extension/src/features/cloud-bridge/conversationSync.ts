@@ -3,6 +3,7 @@ import {
   blockCloudPersistence,
   claimCloudConversationBinding,
   cloudMessageSyncFingerprint,
+  conversationProjectNeedsSync,
   getConversation,
   isCloudPersistenceEligible,
   listConversationsNeedingCloudSync,
@@ -189,9 +190,11 @@ async function flushEligibleConversation(
     candidate.cloudSync?.conversationId !== undefined &&
     (candidate.cloudSync.organizationId === undefined ||
       candidate.cloudSync.createAcknowledged !== true);
+  const needsProjectUpdate = conversationProjectNeedsSync(candidate);
   if (
     selectFlushableMessages(candidate, streaming).length === 0 &&
     !needsTitleUpdate &&
+    !needsProjectUpdate &&
     !needsWorkspaceRecovery
   ) {
     return;
@@ -205,6 +208,10 @@ async function flushEligibleConversation(
 
   const client = createExtensionCloudChatClient(owner);
   let organizationId = entry.cloudSync?.organizationId;
+  // Tracked alongside the binding rather than re-read from `entry`, which is a
+  // snapshot taken before the create and would make an accepted project look
+  // unsynced on every later flush.
+  let syncedProjectId = entry.cloudSync?.syncedProjectId ?? null;
   const createAcknowledged = entry.cloudSync?.createAcknowledged;
 
   if (createAcknowledged === false) {
@@ -216,6 +223,7 @@ async function flushEligibleConversation(
           ...(entry.routing.currentModelKey && entry.routing.currentModelKey !== 'auto'
             ? { model: entry.routing.currentModelKey }
             : {}),
+          ...(entry.projectId ? { projectId: entry.projectId } : {}),
         },
         { signal },
       );
@@ -230,10 +238,12 @@ async function flushEligibleConversation(
         return;
       }
       organizationId = created.organizationId;
+      syncedProjectId = created.projectId;
       await recordCloudSyncState(owner, conversationId, {
         state: 'pending',
         createAcknowledged: true,
         organizationId,
+        syncedProjectId,
         lastAttemptAt: Date.now(),
       });
     } catch (error) {
@@ -345,6 +355,21 @@ async function flushEligibleConversation(
     await recordCloudMessagesSynced(owner, conversationId, [
       { cloudMessageId, syncedChars, syncedFingerprint },
     ]).catch(() => undefined);
+  }
+
+  if ((entry.projectId ?? null) !== syncedProjectId) {
+    try {
+      const updated = await client.updateConversation(
+        cloudConversationId,
+        { projectId: entry.projectId ?? null },
+        { signal, organizationId },
+      );
+      syncedProjectId = updated.projectId;
+      await recordCloudSyncState(owner, conversationId, { syncedProjectId });
+    } catch (error) {
+      await handleFlushError(owner, conversationId, error);
+      return;
+    }
   }
 
   if (entry.title !== entry.cloudSync?.syncedTitle && messages.length > 0) {
