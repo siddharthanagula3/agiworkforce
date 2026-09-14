@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
-import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
+import { normalizeConfiguredModelId, type ModelRoute } from '../model-picker/modelConstants';
 import { Config } from '../../platform/config';
 import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
 import { shouldShowOnboarding } from '../onboarding/onboardingState';
@@ -163,6 +163,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   public pushEditorContext(): void {
     this._stateManager.pushEditorContext();
+  }
+
+  public activeRoute(): ModelRoute | undefined {
+    return this._stateManager.activeRoute();
   }
 
   public refreshRuntimeStatus(): void {
