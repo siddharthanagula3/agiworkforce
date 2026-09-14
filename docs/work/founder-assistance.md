@@ -762,6 +762,37 @@ verification path a missing file is indistinguishable from a tampered one to
 the user who is checking precisely because they do not trust the download)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [Product] Decide which desktop app the public desktop page describes
+
+**Why founder assistance is required**
+Two desktop apps exist and both have release pipelines: the Electron shell
+"AGI Cloud" (`apps/desktop/electron`, tag scheme `v-cloud-desktop-*`, the app
+every workstream since 2026-09-05 has been building on, per the founder's
+"Electron is the desktop, leave Tauri alone" instruction) and the frozen Tauri
+app (`apps/desktop/src-tauri`, tag scheme `v-desktop-*`, last touched
+2026-09-09). The public page at `/desktop` still describes the Tauri app: its
+specification ledger names "Tauri 2, Rust backend", it lists native computer
+use (fourteen Tauri commands that the Electron shell does not have), and the
+Linux artifacts it links are Tauri builds. Which app the public sees is a
+product decision, not an engineering one.
+**Exact action** Say one of: (a) the Electron app is the desktop, so `/desktop`
+and the release API's default should describe and serve it and the Tauri rows
+(engine, native computer use, Linux AppImage) come off the page until the
+Electron shell has them; or (b) both stay public, with `/desktop` split into two
+named downloads and their real capability lists.
+**Where** A reply in this file's entry or in chat.
+**Needed input** The choice, and for (a) whether the Tauri Linux download stays
+linked anywhere.
+**How to verify completion** `/desktop` names one engine, lists only capabilities
+the linked build has, and the release-state guard and the surface page claim
+tests pass on the rewritten copy.
+**What remains after founder action** Engineering rewrites the page and the
+release API default in one commit; the Electron computer-use port stays tracked
+as `DESKTOP-CLOUD-COMPUTER-USE-UNPORTED-01`.
+**Impact** LAUNCH-BLOCKING for honesty (the page today promises a capability
+the app the team is shipping does not deliver)
+**Status** BLOCKED, FOUNDER DECISION REQUIRED
+
 ## [Legal] Privacy and cookie policy revision dates after a material correction
 
 **Why founder assistance is required**
