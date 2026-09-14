@@ -100,6 +100,7 @@ pub mod init;
 pub mod keybindings;
 pub mod local_models;
 pub mod model_catalog;
+pub mod model_reachability;
 pub mod models_cache;
 pub mod oauth;
 pub mod onboarding;
