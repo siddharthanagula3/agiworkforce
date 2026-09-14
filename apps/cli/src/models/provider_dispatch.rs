@@ -214,7 +214,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
         Provider::ManagedCloud => {
             let token = crate::tier_cache::load_jwt();
             if token.is_none() {
-                return Err(CliError::auth(
+                return Err(CliError::auth_missing(
                     name,
                     "No AGI Workforce session found. Run `agi login` to use managed cloud."
                         .to_string(),
@@ -227,7 +227,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
         Provider::Ollama(OllamaMode::Cloud) => {
             let key = resolve_config_env_auth_key(config, name, "OLLAMA_API_KEY");
             if key.is_none() {
-                return Err(CliError::auth(
+                return Err(CliError::auth_missing(
                     name,
                     "No API key found. Run `agi login ollama-cloud` or set OLLAMA_API_KEY."
                         .to_string(),
@@ -247,7 +247,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             };
             let key = resolve_config_env_auth_key(config, pname, env_var);
             if key.is_none() {
-                return Err(CliError::auth(
+                return Err(CliError::auth_missing(
                     *pname,
                     format!(
                         "No API key found. Run `agi login {}` or set {}.",
@@ -272,7 +272,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
                 .or_else(|| env_api_key(env_var))
                 .or_else(|| auth_store_api_key(pname));
             if key.is_none() {
-                return Err(CliError::auth(
+                return Err(CliError::auth_missing(
                     pname.clone(),
                     format!(
                         "No API key found. Run `agi login {}` or set {}.",
@@ -295,7 +295,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
                 .or_else(|| env_api_key(env_var))
                 .or_else(|| auth_store_api_key(name));
             if key.is_none() {
-                return Err(CliError::auth(
+                return Err(CliError::auth_missing(
                     name,
                     format!(
                         "No API key found. Run `agi login {}` or set {}.",

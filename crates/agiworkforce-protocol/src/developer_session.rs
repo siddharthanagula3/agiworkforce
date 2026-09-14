@@ -301,6 +301,7 @@ pub enum ThreadStatus {
 pub enum DeveloperSessionSource {
     Cli,
     Vscode,
+    Desktop,
 }
 
 /// Durable trust boundary for a developer session.
@@ -341,6 +342,26 @@ pub struct ThreadSummary {
     pub updated_at: String,
     pub created_by: DeveloperSessionSource,
     pub status: ThreadStatus,
+    /// Checked-out branch of the thread's workspace, as it was when the host
+    /// last persisted it. A host records this at thread start and refreshes it
+    /// when a turn ends; nothing recomputes it while listing, so a list of a
+    /// hundred threads costs no git invocations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub git_branch: Option<String>,
+    /// Top level of the thread's git worktree, persisted alongside the branch.
+    /// Distinct from `cwd`: a thread started in a subdirectory shares its
+    /// worktree root with every other thread in the same checkout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub worktree_root: Option<String>,
+    /// `clientInfo.name` from the `initialize` of the connection that created
+    /// the thread. `created_by` is the coarse surface; this is the exact
+    /// client, so two clients that both map to one surface stay tellable
+    /// apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -578,6 +599,172 @@ pub struct TurnSummary {
 #[ts(rename_all = "camelCase")]
 pub struct TurnStartResponse {
     pub turn: TurnSummary,
+}
+
+/// Why a turn ended without completing.
+///
+/// The closed set a client may branch on. A free-text `error` string tells a
+/// user what happened; it cannot tell a client whether to offer a sign-in
+/// button, a retry, or nothing at all, because that decision cannot be made by
+/// matching on prose that changes with every provider.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum TurnFailureCode {
+    /// The route has no credential at all. Distinct from an invalid one: the
+    /// user has never signed in, so there is nothing to refresh.
+    ProviderAuthMissing,
+    /// A credential exists and the provider rejected it.
+    ProviderAuthInvalid,
+    ProviderRateLimited,
+    /// The provider answered, but not with a usable response: 5xx, capacity,
+    /// or a stream that died after the handshake.
+    ProviderUnavailable,
+    ContextWindowExceeded,
+    /// The request never reached the provider.
+    Network,
+    /// A tool call was refused: by the user at the approval prompt, or by
+    /// policy.
+    ToolDenied,
+    /// The user or the client stopped the turn.
+    Interrupted,
+    Timeout,
+    /// The turn was rejected before any provider call: bad params, an
+    /// unroutable model, a broken config, an unsupported operation.
+    InvalidRequest,
+    Unknown,
+}
+
+/// What a client should offer the user next.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum TurnFailureAction {
+    /// Send the user to a sign-in for `provider`.
+    SignInProvider,
+    /// Send the user to settings: the route, the model, or the config is wrong.
+    OpenSettings,
+    /// Running the same turn again may work.
+    Retry,
+    /// Nothing for the client to offer.
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnFailure {
+    pub code: TurnFailureCode,
+    /// The same human-readable text as the notification's `error` field.
+    pub message: String,
+    /// The route that failed, when the failure belongs to one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub provider: Option<String>,
+    pub retryable: bool,
+    pub action: TurnFailureAction,
+}
+
+impl TurnFailure {
+    pub fn new(code: TurnFailureCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            provider: None,
+            retryable: code.is_retryable(),
+            action: code.default_action(),
+        }
+    }
+
+    pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
+        self.provider = Some(provider.into());
+        self
+    }
+
+    /// Classify an engine error.
+    ///
+    /// The CLI carries its own richer taxonomy and classifies from that first;
+    /// this is the fallback for the shared engine's errors, so the two hosts
+    /// cannot drift into separate code sets.
+    pub fn from_agiworkforce_err(error: &crate::error::AgiworkforceErr) -> Self {
+        use crate::error::AgiworkforceErr as E;
+        let code = match error {
+            E::ContextWindowExceeded => TurnFailureCode::ContextWindowExceeded,
+            E::Interrupted | E::TurnAborted => TurnFailureCode::Interrupted,
+            E::Timeout => TurnFailureCode::Timeout,
+            E::ConnectionFailed(_) => TurnFailureCode::Network,
+            E::UsageLimitReached(_) | E::QuotaExceeded => TurnFailureCode::ProviderRateLimited,
+            E::RefreshTokenFailed(_) => TurnFailureCode::ProviderAuthInvalid,
+            E::UsageNotIncluded => TurnFailureCode::ProviderAuthMissing,
+            E::Stream(..)
+            | E::ServerOverloaded
+            | E::InternalServerError
+            | E::ResponseStreamFailed(_)
+            | E::RetryLimit(_)
+            | E::UnexpectedStatus(_) => TurnFailureCode::ProviderUnavailable,
+            E::InvalidRequest(_)
+            | E::InvalidImageRequest()
+            | E::UnsupportedOperation(_)
+            | E::ThreadNotFound(_)
+            | E::AgentLimitReached { .. }
+            | E::EnvVar(_) => TurnFailureCode::InvalidRequest,
+            E::Sandbox(_) | E::CyberPolicy { .. } | E::LandlockSandboxExecutableNotProvided => {
+                TurnFailureCode::ToolDenied
+            }
+            _ => TurnFailureCode::Unknown,
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+impl TurnFailureCode {
+    pub fn is_retryable(self) -> bool {
+        matches!(
+            self,
+            TurnFailureCode::ProviderRateLimited
+                | TurnFailureCode::ProviderUnavailable
+                | TurnFailureCode::Network
+                | TurnFailureCode::Timeout
+        )
+    }
+
+    pub fn default_action(self) -> TurnFailureAction {
+        match self {
+            TurnFailureCode::ProviderAuthMissing | TurnFailureCode::ProviderAuthInvalid => {
+                TurnFailureAction::SignInProvider
+            }
+            TurnFailureCode::ContextWindowExceeded | TurnFailureCode::InvalidRequest => {
+                TurnFailureAction::OpenSettings
+            }
+            TurnFailureCode::ProviderRateLimited
+            | TurnFailureCode::ProviderUnavailable
+            | TurnFailureCode::Network
+            | TurnFailureCode::Timeout => TurnFailureAction::Retry,
+            TurnFailureCode::ToolDenied
+            | TurnFailureCode::Interrupted
+            | TurnFailureCode::Unknown => TurnFailureAction::None,
+        }
+    }
+}
+
+/// Params of the `turn/completed` and `turn/failed` notifications.
+///
+/// One shape for both so a client parses the end of a turn once. `failure` is
+/// null on a completed turn and populated on a failed one; `error` carries the
+/// same text as `failure.message` and stays for clients that predate the typed
+/// object.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnEndedNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub status: TurnStatus,
+    pub response: String,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub error: Option<String>,
+    pub failure: Option<TurnFailure>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

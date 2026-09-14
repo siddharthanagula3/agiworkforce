@@ -11,8 +11,6 @@
 //! file. Add a root here only when a type family is NOT reachable from the
 //! existing envelopes.
 
-use std::path::Path;
-
 use ts_rs::TS;
 
 #[test]
@@ -69,6 +67,10 @@ fn export_typescript_bindings() {
         .expect("export developer-session turn response graph");
     agiworkforce_protocol::developer_session::TurnInterruptParams::export_all_to(dir)
         .expect("export developer-session interrupt graph");
+    // `turn/completed` and `turn/failed` params, and with them the typed
+    // failure a client branches on. No envelope references them.
+    agiworkforce_protocol::developer_session::TurnEndedNotification::export_all_to(dir)
+        .expect("export developer-session turn ended graph");
     agiworkforce_protocol::developer_session::ApprovalResponseParams::export_all_to(dir)
         .expect("export developer-session approval graph");
     agiworkforce_protocol::developer_session::AcknowledgedResponse::export_all_to(dir)
