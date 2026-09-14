@@ -6693,3 +6693,75 @@
     margin-right: 0;
   }
 }
+
+[data-design='agi'] .agi-compare-disclosure {
+  margin-top: 36px;
+  border: 1px solid var(--agi-rule);
+  border-radius: 12px;
+  background: var(--agi-bg-2);
+}
+
+[data-design='agi'] .agi-compare-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--agi-ink);
+  list-style: none;
+  border-radius: 12px;
+  transition: background var(--agi-dur-fast) var(--agi-ease-out);
+}
+
+[data-design='agi'] .agi-compare-summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-design='agi'] .agi-compare-summary:hover {
+  background: var(--agi-surface-wash);
+}
+
+[data-design='agi'] .agi-compare-summary:focus-visible {
+  outline: 2px solid var(--agi-amber);
+  outline-offset: 2px;
+}
+
+[data-design='agi'] .agi-compare-summary-hint {
+  margin-left: auto;
+  font-family: var(--agi-font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--agi-ink-quiet);
+}
+
+/* Caret drawn from borders rather than a glyph, so it inherits colour. */
+[data-design='agi'] .agi-compare-summary::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 12px;
+  border-right: 1.5px solid var(--agi-ink-quiet);
+  border-bottom: 1.5px solid var(--agi-ink-quiet);
+  transform: rotate(-45deg);
+  transition: transform var(--agi-dur-fast) var(--agi-ease-out);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+[data-design='agi'] .agi-compare-disclosure[open] .agi-compare-summary::before {
+  transform: rotate(45deg);
+}
+
+[data-design='agi'] .agi-compare-disclosure > div {
+  padding: 0 20px 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design='agi'] .agi-compare-summary::before {
+    transition: none;
+  }
+}
