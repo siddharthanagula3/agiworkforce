@@ -4,8 +4,12 @@
   "description": "Locale catalogues and message resolution shared by every surface; parity across locales is enforced by check:i18n-parity.",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./en": "./src/en.ts",
+    "./languages": "./src/languages.ts",
+    "./lazy": "./src/lazy.ts",
     "./resources": "./src/resources.ts"
   },
   "main": "./src/index.ts",
