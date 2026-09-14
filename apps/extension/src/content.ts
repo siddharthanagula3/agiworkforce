@@ -1043,7 +1043,14 @@ async function handleFillForm(message: FillFormMessage): Promise<ExtensionRespon
   try {
     const { formSelector, data, options = {} } = message;
 
-    const form = formSelector ? domUtils.querySelector(formSelector) : null;
+    if (!formSelector || !validators.isValidSelector(formSelector)) {
+      return { success: false, error: 'FILL_FORM requires a valid formSelector' };
+    }
+
+    const form = domUtils.querySelector(formSelector);
+    if (!form) {
+      return { success: false, error: `Form not found: ${formSelector}` };
+    }
 
     const fields = formUtils.getFormFields(form as HTMLFormElement);
 
@@ -1197,13 +1204,16 @@ async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionRe
   try {
     const { formSelector } = message;
 
-    const form = formSelector
-      ? (domUtils.querySelector(formSelector) as HTMLFormElement | null)
-      : null;
+    if (!formSelector || !validators.isValidSelector(formSelector)) {
+      return { success: false, error: 'SUBMIT_FORM requires a valid formSelector' };
+    }
 
-    const success = formUtils.submitForm(form);
+    const form = domUtils.querySelector(formSelector);
+    if (!(form instanceof HTMLFormElement)) {
+      return { success: false, error: `Form not found: ${formSelector}` };
+    }
 
-    return { success };
+    return { success: formUtils.submitForm(form) };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
