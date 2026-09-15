@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useSession } from '@/lib/identity/client';
 import { getCsrfToken } from '@/lib/client/csrf';
-import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
+import { selectableLanguageOrDefault, SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useAppTheme } from '@shared/hooks/useAppTheme';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import {
@@ -110,7 +110,7 @@ export function CloudSettingsSync() {
 
         const storedLocale = readStoredLocale(storedLanguage, SUPPORTED_LOCALES);
         if (storedLocale && storedLocale !== localeRef.current) {
-          await i18nRef.current.changeLanguage(storedLocale);
+          await i18nRef.current.changeLanguage(selectableLanguageOrDefault(storedLocale));
         }
         if (cancelled) return;
         acknowledgedLocale.current = storedLocale;
