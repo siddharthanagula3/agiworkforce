@@ -1070,6 +1070,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .clone()
             .unwrap_or_else(|| self.config.default.model.clone());
         let requested_provider = params.provider.map(LocalModelProvider::as_str);
+        crate::tier_cache::ensure_plan_models_cached().await;
         let resolved_model = self.resolve_thread_model(&requested_model)?;
         let model = resolved_model.provider_model_id.clone();
         let title = clean_title(params.title);

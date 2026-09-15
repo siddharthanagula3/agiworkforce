@@ -265,6 +265,16 @@ pub fn write_plan_models_cache(models: &[String]) {
     }
 }
 
+/// A signed-in account whose plan list is not cached yet fetches it before any
+/// route is judged, so the first verdict a client asks for reads the plan
+/// rather than the bundled vendor rule.
+pub async fn ensure_plan_models_cached() {
+    if read_plan_models_cache().is_some() || load_jwt().is_none() {
+        return;
+    }
+    refresh_plan_models_cache().await;
+}
+
 async fn refresh_plan_models_cache() {
     match crate::models::gateway_models::discover_gateway_models().await {
         Ok(catalog) => {
@@ -476,6 +486,9 @@ pub fn reconcile_fetched_tier(fetched: &UserTier, cached: &UserTier) -> UserTier
 pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
     // Fast path: return fresh cache without touching the network.
     if let Some(cached) = read_tier_cache() {
+        if read_plan_models_cache().is_none() && jwt.is_some_and(|j| !j.is_empty()) {
+            refresh_plan_models_cache().await;
+        }
         return TierResolution {
             cached: Some(cached),
             needs_reauth: false,

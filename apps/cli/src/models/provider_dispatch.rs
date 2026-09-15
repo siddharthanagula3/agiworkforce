@@ -427,6 +427,7 @@ pub async fn turn_can_start(config: &CliConfig, provider: &Provider, model: &str
     if try_subscription_auth(provider).await.is_some() {
         return Ok(());
     }
+    crate::tier_cache::ensure_plan_models_cached().await;
     match resolve_key(config, provider) {
         Ok(_) => Ok(()),
         Err(error) => match resolve_turn_route(config, &AccountRoute::load(), model, None) {
