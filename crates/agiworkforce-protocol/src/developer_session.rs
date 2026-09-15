@@ -691,7 +691,8 @@ pub enum TurnFailureAction {
 #[ts(rename_all = "camelCase")]
 pub struct TurnFailure {
     pub code: TurnFailureCode,
-    /// The same human-readable text as the notification's `error` field.
+    /// The failure as one sentence; the notification's `error` field keeps the
+    /// terminal rendering with its provider prefix.
     pub message: String,
     /// The route that failed, when the failure belongs to one.
     #[serde(default, skip_serializing_if = "Option::is_none")]

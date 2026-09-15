@@ -161,17 +161,9 @@ impl fmt::Display for CliError {
                 "Context overflow for model '{}': {} tokens exceeds limit of {}",
                 model, token_count, limit
             ),
-            CliError::RateLimited {
-                provider,
-                retry_after,
-            } => match retry_after {
-                Some(secs) => write!(f, "[{}] Rate limited, retry after {}s", provider, secs),
-                None => write!(
-                    f,
-                    "[{}] Rate limited, please wait before retrying",
-                    provider
-                ),
-            },
+            CliError::RateLimited { provider, .. } => {
+                write!(f, "[{}] {}", provider, self.detail())
+            }
             CliError::StreamError {
                 provider, message, ..
             } => {
@@ -205,6 +197,24 @@ impl fmt::Display for CliError {
                     urlencoding::encode(feature),
                 )
             }
+        }
+    }
+}
+
+impl CliError {
+    /// The failure as one sentence without the terminal's provider prefix; a
+    /// client shows it beside the provider the failure names.
+    pub fn detail(&self) -> String {
+        match self {
+            CliError::Api { message, .. }
+            | CliError::Auth { message, .. }
+            | CliError::AuthMissing { message, .. }
+            | CliError::StreamError { message, .. } => message.clone(),
+            CliError::RateLimited { retry_after, .. } => match retry_after {
+                Some(secs) => format!("Rate limited, retry after {secs}s"),
+                None => "Rate limited, please wait before retrying".to_string(),
+            },
+            other => other.to_string(),
         }
     }
 }
@@ -527,7 +537,7 @@ impl CliError {
             CliError::Tool { .. } => (TurnFailureCode::ToolDenied, None),
             CliError::Config { .. } => (TurnFailureCode::InvalidRequest, None),
         };
-        let failure = TurnFailure::new(code, self.to_string());
+        let failure = TurnFailure::new(code, self.detail());
         match provider {
             Some(provider) => failure.with_provider(provider.clone()),
             None => failure,
@@ -702,6 +712,28 @@ mod tests {
             "No AGI Workforce session, and no provider key for 'fixture-model'."
         );
         assert!(!err.turn_failure().message.contains("agi login"));
+    }
+
+    #[test]
+    fn the_protocol_message_drops_the_terminal_prefix() {
+        let sentence = "The model failed to produce a response.";
+        let stream = CliError::stream_error("managed_cloud", sentence, false);
+        assert_eq!(stream.turn_failure().message, sentence);
+        assert_eq!(
+            stream.to_string(),
+            format!("[managed_cloud] Stream error: {sentence}")
+        );
+        let api = CliError::api("openai", 400, "messages.0.content: Invalid input");
+        assert_eq!(
+            api.turn_failure().message,
+            "messages.0.content: Invalid input"
+        );
+        assert_eq!(
+            CliError::rate_limited("anthropic", Some(30))
+                .turn_failure()
+                .message,
+            "Rate limited, retry after 30s"
+        );
     }
 
     #[test]
