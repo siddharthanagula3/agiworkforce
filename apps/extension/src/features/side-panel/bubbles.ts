@@ -42,6 +42,7 @@ export interface BubbleInteractionOptions {
   approvalError?: string;
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
   onRetry?: (messageId: string) => void;
+  onSwitchModel?: () => void;
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -146,6 +147,7 @@ function appendInteractiveCards(parent: HTMLElement, message: ChatMessage): void
 function buildErrorFooter(
   msg: ChatMessage,
   onRetry?: (messageId: string) => void,
+  onSwitchModel?: () => void,
 ): HTMLElement | null {
   if (!msg.error || !msg.errorText) return null;
 
@@ -163,6 +165,15 @@ function buildErrorFooter(
       onRetry(msg.id);
     });
     footer.appendChild(retryBtn);
+  }
+  if (msg.errorAction === 'switch-model' && onSwitchModel) {
+    const switchBtn = el(
+      'button',
+      { class: 'sp-bubble-retry-btn', type: 'button' },
+      'Switch model',
+    ) as HTMLButtonElement;
+    switchBtn.addEventListener('click', () => onSwitchModel());
+    footer.appendChild(switchBtn);
   }
 
   return footer;
@@ -225,7 +236,7 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
 
   wrapper.appendChild(bubble);
 
-  const errorFooter = buildErrorFooter(msg, options.onRetry);
+  const errorFooter = buildErrorFooter(msg, options.onRetry, options.onSwitchModel);
   if (errorFooter) bubble.appendChild(errorFooter);
   const interruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (interruptedFooter) bubble.appendChild(interruptedFooter);

@@ -467,6 +467,7 @@ interface ChatChunk {
   text: string;
   done: boolean;
   error?: string;
+  errorCode?: string;
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
@@ -4421,6 +4422,7 @@ function renderMessages(): void {
           onResolveApproval: (toolCallId, decision) =>
             resolveManagedToolApproval(msg.id, toolCallId, decision),
           onRetry: (messageId) => retryFailedMessage(messageId),
+          onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
         }),
       );
     }
@@ -4964,8 +4966,20 @@ function retryFailedMessage(messageId: string): void {
   sendMessage(promptText);
 }
 
-function handleStreamError(id: string, errorText: string): void {
+function handleStreamError(id: string, errorText: string, errorCode?: string): void {
   if (_ctx.currentStreamId !== id) return;
+  const errorAction =
+    errorCode !== undefined &&
+    ![
+      'auth_required',
+      'plan_required',
+      'quota_exceeded',
+      'cancelled',
+      'invalid_request',
+      'protocol_error',
+    ].includes(errorCode)
+      ? 'switch-model'
+      : undefined;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
   const assistantCloudId = assistantCloudIdByStreamId.get(id);
   resolvedRouteByStreamId.delete(id);
@@ -4992,7 +5006,7 @@ function handleStreamError(id: string, errorText: string): void {
     existing.cloudApprovalDecisions = undefined;
     existing.cloudApprovalError = errorText.slice(0, 500);
   } else {
-    applyStreamFailure(_ctx.messages, id, errorText);
+    applyStreamFailure(_ctx.messages, id, errorText, Date.now(), errorAction);
   }
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
@@ -10630,7 +10644,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       handleStreamError(chunk.id, 'Sign in to AGI Cloud to send messages.');
       return;
     }
-    handleStreamError(chunk.id, chunk.error);
+    handleStreamError(chunk.id, chunk.error, chunk.errorCode);
     return;
   }
 

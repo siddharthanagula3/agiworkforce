@@ -33,6 +33,7 @@ export interface SidePanelChatMessage {
   interactiveCards?: InteractiveCard[];
   runtime?: 'managed-cloud' | 'local';
   errorText?: string;
+  errorAction?: 'switch-model';
   /**
    * Client-generated UUID reused as the server's `assistant_message_id` and the
    * cloud sync's message id, so a server-persisted turn and the extension's own
@@ -194,12 +195,14 @@ export function applyStreamFailure(
   streamId: string,
   errorText: string,
   timestamp = Date.now(),
+  errorAction?: 'switch-model',
 ): void {
   const existing = messages.find((message) => message.id === streamId);
   if (existing) {
     existing.streaming = false;
     existing.error = true;
     existing.errorText = errorText;
+    if (errorAction) existing.errorAction = errorAction;
     return;
   }
   messages.push({
@@ -208,6 +211,7 @@ export function applyStreamFailure(
     content: '',
     error: true,
     errorText,
+    ...(errorAction ? { errorAction } : {}),
     timestamp,
   });
 }
