@@ -170,7 +170,32 @@
     "voiceStopRecording": "إيقاف التسجيل",
     "voiceStopping": "جارٍ إيقاف الإجراء الصوتي",
     "voiceTranscribing": "جارٍ تفريغ الصوت",
-    "voiceUnsupported": "الإدخال الصوتي غير متاح"
+    "voiceUnsupported": "الإدخال الصوتي غير متاح",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "الدردشة: أسئلة سريعة ومحادثة",
+    "modeAgiWorkTitle": "AGI Work: مهام متعددة الخطوات مع أدوات وملفات ومخرجات قابلة للمراجعة",
+    "style": "الأسلوب",
+    "styleCustom": "مخصص",
+    "responseStyle": "أسلوب الرد",
+    "styles": {
+      "default": "افتراضي",
+      "concise": "موجز",
+      "detailed": "مفصّل",
+      "technical": "تقني",
+      "creative": "إبداعي"
+    },
+    "styleDescs": {
+      "default": "أسلوب الرد القياسي",
+      "concise": "مختصر ومباشر",
+      "detailed": "شامل مع أمثلة",
+      "technical": "دقيق مع أمثلة برمجية",
+      "creative": "معبّر وجذاب"
+    },
+    "addAttachmentsAndTools": "إضافة مرفقات وأدوات",
+    "addAttachmentsAndToolsActive": "إضافة مرفقات وأدوات: {{count}} نشطة",
+    "voiceStart": "بدء الإدخال الصوتي",
+    "voiceUnsupportedBrowser": "الإدخال الصوتي غير مدعوم في هذا المتصفح",
+    "voiceUnsupportedHint": "الإدخال الصوتي غير مدعوم في هذا المتصفح. جرّب Chrome أو Edge."
   },
   "bubble": {
     "assistantThinking": "المساعد يفكر",
@@ -268,5 +293,13 @@
     "thinkingSimple": "أفكر في سؤالك...",
     "workingOnGoal": "جارٍ العمل عليه... {{goal}}",
     "workingOnRequest": "جارٍ العمل على طلبك..."
+  },
+  "greeting": {
+    "morning": "صباح الخير",
+    "afternoon": "طاب يومك",
+    "evening": "مساء الخير",
+    "morningNamed": "صباح الخير يا {{name}}",
+    "afternoonNamed": "طاب يومك يا {{name}}",
+    "eveningNamed": "مساء الخير يا {{name}}"
   }
 }

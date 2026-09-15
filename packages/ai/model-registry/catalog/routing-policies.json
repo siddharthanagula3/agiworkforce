@@ -25,7 +25,8 @@
         "free_workhorse_fast",
         "workhorse_general",
         "reasoning_economy",
-        "coding_fast"
+        "coding_fast",
+        "router_zero_cost"
       ],
       "pro": [
         "workhorse_general",
@@ -40,7 +41,8 @@
         "search_fast",
         "search_premium",
         "computer_use_balanced",
-        "image_generation"
+        "image_generation",
+        "router_zero_cost"
       ],
       "max": [
         "workhorse_general",
@@ -59,7 +61,8 @@
         "search_premium",
         "computer_use_balanced",
         "computer_use_premium",
-        "image_generation"
+        "image_generation",
+        "router_zero_cost"
       ],
       "enterprise": [
         "workhorse_general",
@@ -78,7 +81,8 @@
         "search_premium",
         "computer_use_balanced",
         "computer_use_premium",
-        "image_generation"
+        "image_generation",
+        "router_zero_cost"
       ],
       "byok": [
         "workhorse_general",
@@ -97,7 +101,8 @@
         "search_premium",
         "computer_use_balanced",
         "computer_use_premium",
-        "image_generation"
+        "image_generation",
+        "router_zero_cost"
       ]
     },
     "providerPolicies": {
@@ -368,6 +373,9 @@
         "modelKey": "openrouter-free"
       },
       "free_workhorse_fast": {
+        "modelKey": "openrouter-free"
+      },
+      "router_zero_cost": {
         "modelKey": "openrouter-free"
       },
       "general_fast": {

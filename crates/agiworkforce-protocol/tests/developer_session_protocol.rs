@@ -1,7 +1,8 @@
 use agiworkforce_protocol::developer_session::{
     AppServerClientInfo, AppServerRequest, AppServerResponse, DeveloperMessage,
     DeveloperSessionSource, DeveloperSessionTrustMode, InitializeParams, ThreadReadResponse,
-    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary,
+    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary, TurnEndedNotification,
+    TurnFailure, TurnFailureAction, TurnFailureCode, TurnStatus,
 };
 
 #[test]
@@ -119,6 +120,9 @@ fn thread_response_keeps_cli_and_vscode_on_one_session_identity() {
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
         status: ThreadStatus::Idle,
+        git_branch: None,
+        worktree_root: None,
+        client: None,
     };
     let response = AppServerResponse::success(
         10,
@@ -150,6 +154,9 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
             updated_at: "2026-07-14T12:01:00Z".to_string(),
             created_by: DeveloperSessionSource::Cli,
             status: ThreadStatus::Idle,
+            git_branch: None,
+            worktree_root: None,
+            client: None,
         },
         messages: vec![DeveloperMessage {
             role: "assistant".to_string(),
@@ -167,4 +174,199 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
         .expect("thread read response object")
         .remove("transcriptTruncated");
     assert!(serde_json::from_value::<ThreadReadResponse>(missing_flag).is_err());
+}
+
+/// The widened summary is additive: a client that predates these fields sees a
+/// byte-identical object, and one that postdates them can round-trip a
+/// populated one.
+#[test]
+fn the_wider_thread_summary_stays_additive() {
+    let bare = ThreadSummary {
+        id: "session-1".to_string(),
+        title: "Untitled".to_string(),
+        model: None,
+        cwd: None,
+        provider: None,
+        trust_mode: DeveloperSessionTrustMode::Local,
+        created_at: "2026-09-14T12:00:00Z".to_string(),
+        updated_at: "2026-09-14T12:00:00Z".to_string(),
+        created_by: DeveloperSessionSource::Cli,
+        status: ThreadStatus::Idle,
+        git_branch: None,
+        worktree_root: None,
+        client: None,
+    };
+    let value = serde_json::to_value(&bare).expect("serialize bare summary");
+    for absent in ["gitBranch", "worktreeRoot", "client"] {
+        assert!(
+            value.get(absent).is_none(),
+            "an unpopulated {absent} must not appear on the wire"
+        );
+    }
+    assert_eq!(value["createdBy"], "cli");
+
+    let widened = ThreadSummary {
+        git_branch: Some("main".to_string()),
+        worktree_root: Some("/workspace/project".to_string()),
+        client: Some("agi-desktop".to_string()),
+        created_by: DeveloperSessionSource::Desktop,
+        ..bare.clone()
+    };
+    let value = serde_json::to_value(&widened).expect("serialize widened summary");
+    assert_eq!(value["gitBranch"], "main");
+    assert_eq!(value["worktreeRoot"], "/workspace/project");
+    assert_eq!(value["client"], "agi-desktop");
+    assert_eq!(value["createdBy"], "desktop");
+    assert_eq!(
+        serde_json::from_value::<ThreadSummary>(value).expect("round trip"),
+        widened
+    );
+
+    // A summary persisted before these fields existed still deserializes.
+    let legacy = serde_json::json!({
+        "id": "session-1",
+        "title": "Untitled",
+        "trustMode": "local",
+        "createdAt": "2026-09-14T12:00:00Z",
+        "updatedAt": "2026-09-14T12:00:00Z",
+        "createdBy": "cli",
+        "status": "idle",
+    });
+    assert_eq!(
+        serde_json::from_value::<ThreadSummary>(legacy).expect("legacy summary"),
+        bare
+    );
+}
+
+/// A completed turn carries `failure: null`; a failed one carries the typed
+/// object alongside the unchanged `error` string.
+#[test]
+fn a_turn_ends_with_a_typed_failure_or_an_explicit_null() {
+    let completed = TurnEndedNotification {
+        thread_id: "thread-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        status: TurnStatus::Completed,
+        response: "done".to_string(),
+        input_tokens: 10,
+        output_tokens: 3,
+        error: None,
+        failure: None,
+    };
+    let value = serde_json::to_value(&completed).expect("serialize completed");
+    assert_eq!(value["status"], "completed");
+    assert!(
+        value["failure"].is_null() && value["error"].is_null(),
+        "both fields must be present and null, never absent: {value}"
+    );
+
+    let failed = TurnEndedNotification {
+        status: TurnStatus::Failed,
+        response: String::new(),
+        error: Some("[deepseek] Authentication failed: No API key found.".to_string()),
+        failure: Some(
+            TurnFailure::new(
+                TurnFailureCode::ProviderAuthMissing,
+                "[deepseek] Authentication failed: No API key found.",
+            )
+            .with_provider("deepseek"),
+        ),
+        ..completed
+    };
+    let value = serde_json::to_value(&failed).expect("serialize failed");
+    assert_eq!(value["failure"]["code"], "provider_auth_missing");
+    assert_eq!(value["failure"]["provider"], "deepseek");
+    assert_eq!(value["failure"]["action"], "sign_in_provider");
+    assert_eq!(value["failure"]["retryable"], false);
+    assert_eq!(value["failure"]["message"], value["error"]);
+    assert_eq!(
+        serde_json::from_value::<TurnEndedNotification>(value).expect("round trip"),
+        failed
+    );
+}
+
+/// Retryability and the offered action are decided once, by the code, so two
+/// hosts cannot disagree about what a rate limit means.
+#[test]
+fn every_failure_code_decides_its_own_action_and_retryability() {
+    for (code, retryable, action) in [
+        (
+            TurnFailureCode::ProviderAuthMissing,
+            false,
+            TurnFailureAction::SignInProvider,
+        ),
+        (
+            TurnFailureCode::ProviderAuthInvalid,
+            false,
+            TurnFailureAction::SignInProvider,
+        ),
+        (
+            TurnFailureCode::ProviderRateLimited,
+            true,
+            TurnFailureAction::Retry,
+        ),
+        (
+            TurnFailureCode::ProviderUnavailable,
+            true,
+            TurnFailureAction::Retry,
+        ),
+        (TurnFailureCode::Network, true, TurnFailureAction::Retry),
+        (TurnFailureCode::Timeout, true, TurnFailureAction::Retry),
+        (
+            TurnFailureCode::ContextWindowExceeded,
+            false,
+            TurnFailureAction::OpenSettings,
+        ),
+        (
+            TurnFailureCode::InvalidRequest,
+            false,
+            TurnFailureAction::OpenSettings,
+        ),
+        (TurnFailureCode::ToolDenied, false, TurnFailureAction::None),
+        (TurnFailureCode::Interrupted, false, TurnFailureAction::None),
+        (TurnFailureCode::Unknown, false, TurnFailureAction::None),
+    ] {
+        let failure = TurnFailure::new(code, "message");
+        assert_eq!(failure.retryable, retryable, "retryable for {code:?}");
+        assert_eq!(failure.action, action, "action for {code:?}");
+    }
+}
+
+/// The shared engine's errors classify into the same closed set the CLI uses,
+/// so a client never sees one host's code vocabulary and another's prose.
+#[test]
+fn engine_errors_classify_into_the_shared_code_set() {
+    use agiworkforce_protocol::error::AgiworkforceErr;
+
+    assert_eq!(
+        TurnFailure::from_agiworkforce_err(&AgiworkforceErr::ContextWindowExceeded).code,
+        TurnFailureCode::ContextWindowExceeded
+    );
+    assert_eq!(
+        TurnFailure::from_agiworkforce_err(&AgiworkforceErr::Interrupted).code,
+        TurnFailureCode::Interrupted
+    );
+    assert_eq!(
+        TurnFailure::from_agiworkforce_err(&AgiworkforceErr::Timeout).code,
+        TurnFailureCode::Timeout
+    );
+    assert_eq!(
+        TurnFailure::from_agiworkforce_err(&AgiworkforceErr::QuotaExceeded).code,
+        TurnFailureCode::ProviderRateLimited
+    );
+    assert_eq!(
+        TurnFailure::from_agiworkforce_err(&AgiworkforceErr::ServerOverloaded).code,
+        TurnFailureCode::ProviderUnavailable
+    );
+    assert_eq!(
+        TurnFailure::from_agiworkforce_err(&AgiworkforceErr::UsageNotIncluded).code,
+        TurnFailureCode::ProviderAuthMissing
+    );
+
+    let unmapped = TurnFailure::from_agiworkforce_err(&AgiworkforceErr::InternalAgentDied);
+    assert_eq!(unmapped.code, TurnFailureCode::Unknown);
+    assert_eq!(
+        unmapped.message,
+        AgiworkforceErr::InternalAgentDied.to_string(),
+        "an unmapped error still carries its own text"
+    );
 }

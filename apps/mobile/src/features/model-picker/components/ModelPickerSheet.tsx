@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { ActivityIndicator, View, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -238,8 +238,18 @@ export function ModelPickerSheet({
     return completeModelList;
   }, [completeModelList, modelScope]);
 
+  // Reading what is installed is async, so the list would otherwise render with
+  // every on-device model marked "download required" and then correct itself.
+  const [readingInstalled, setReadingInstalled] = useState(true);
   useEffect(() => {
-    void hydrateInstalledModels();
+    let active = true;
+    setReadingInstalled(true);
+    void hydrateInstalledModels().finally(() => {
+      if (active) setReadingInstalled(false);
+    });
+    return () => {
+      active = false;
+    };
   }, [hydrateInstalledModels]);
 
   useEffect(() => {
@@ -624,6 +634,18 @@ export function ModelPickerSheet({
                 </Pressable>
               );
             })}
+          </View>
+        ) : null}
+
+        {readingInstalled ? (
+          <View
+            testID="model-picker-loading"
+            style={{ paddingVertical: 28, alignItems: 'center', gap: 10 }}
+            accessibilityRole="progressbar"
+            accessibilityLabel="Loading models"
+          >
+            <ActivityIndicator size="small" color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading models…</Text>
           </View>
         ) : null}
 

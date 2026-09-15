@@ -1,5 +1,27 @@
 import '@testing-library/jest-dom';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { vi } from 'vitest';
+// @ts-expect-error -- plain ESM with no types, resolved by vitest rather than by the app's tsconfig
+import { readShellTokens } from '../../electron/shellTokens.mjs';
+
+/**
+ * The three values `electron/build-main.mjs` injects with esbuild `define`.
+ *
+ * A test that loads the main process runs it unbundled, where those identifiers
+ * do not exist. They are read here from the same design tokens the build reads,
+ * so a test sees the shipped values rather than a stand-in, and the main process
+ * keeps no fallback of its own.
+ */
+const shellTokens = readShellTokens(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..'),
+) as { pageBackgroundLight: string; pageBackgroundDark: string; titleStripHeight: number };
+
+Object.assign(globalThis, {
+  AGI_PAGE_BACKGROUND_LIGHT: shellTokens.pageBackgroundLight,
+  AGI_PAGE_BACKGROUND_DARK: shellTokens.pageBackgroundDark,
+  AGI_TITLE_STRIP_HEIGHT: shellTokens.titleStripHeight,
+});
 
 process.removeAllListeners('unhandledRejection');
 process.on('unhandledRejection', (reason) => {

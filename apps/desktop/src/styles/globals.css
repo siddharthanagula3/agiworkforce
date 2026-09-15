@@ -45,60 +45,60 @@
   --line-height-chat: 1.6;
 
   /* Custom colors - Cream */
-  --color-cream-50: #fcfcf9;
-  --color-cream-100: #f9f9f6;
-  --color-cream-200: #f5f5f2;
+  --color-cream-50: var(--hue-cream-50);
+  --color-cream-100: var(--hue-cream-100);
+  --color-cream-200: var(--hue-cream-200);
 
   /* Custom colors - Charcoal */
-  --color-charcoal-900: #1f2121;
-  --color-charcoal-800: #2a2c2c;
-  --color-charcoal-700: #363838;
+  --color-charcoal-900: var(--hue-charcoal-900);
+  --color-charcoal-800: var(--hue-charcoal-800);
+  --color-charcoal-700: var(--hue-charcoal-700);
 
   /* Custom colors - Terra Cotta */
-  --color-terra-cotta: #da7756;
-  --color-terra-cotta-50: #f9e8e1;
-  --color-terra-cotta-100: #f5d4c8;
-  --color-terra-cotta-200: #ecad96;
-  --color-terra-cotta-300: #e38664;
-  --color-terra-cotta-400: #da7332;
-  --color-terra-cotta-500: #da7756;
-  --color-terra-cotta-600: #bd5d3a;
-  --color-terra-cotta-700: #743924;
-  --color-terra-cotta-800: #4d2618;
-  --color-terra-cotta-900: #27130c;
+  --color-terra-cotta: var(--hue-terra-cotta);
+  --color-terra-cotta-50: var(--hue-terra-cotta-50);
+  --color-terra-cotta-100: var(--hue-terra-cotta-100);
+  --color-terra-cotta-200: var(--hue-terra-cotta-200);
+  --color-terra-cotta-300: var(--hue-terra-cotta-300);
+  --color-terra-cotta-400: var(--hue-terra-cotta-400);
+  --color-terra-cotta-500: var(--hue-terra-cotta-500);
+  --color-terra-cotta-600: var(--hue-terra-cotta-600);
+  --color-terra-cotta-700: var(--hue-terra-cotta-700);
+  --color-terra-cotta-800: var(--hue-terra-cotta-800);
+  --color-terra-cotta-900: var(--hue-terra-cotta-900);
 
   /* Custom colors - Warm Peach */
-  --color-warm-peach: #f5c1a9;
-  --color-warm-peach-50: #ffffff;
-  --color-warm-peach-100: #fef9f6;
-  --color-warm-peach-200: #fce8dd;
-  --color-warm-peach-300: #fad7c4;
-  --color-warm-peach-400: #f7c9b6;
-  --color-warm-peach-500: #f5c1a9;
-  --color-warm-peach-600: #f0a481;
-  --color-warm-peach-700: #eb8759;
-  --color-warm-peach-800: #e66a31;
-  --color-warm-peach-900: #c64f14;
+  --color-warm-peach: var(--hue-warm-peach);
+  --color-warm-peach-50: var(--hue-warm-peach-50);
+  --color-warm-peach-100: var(--hue-warm-peach-100);
+  --color-warm-peach-200: var(--hue-warm-peach-200);
+  --color-warm-peach-300: var(--hue-warm-peach-300);
+  --color-warm-peach-400: var(--hue-warm-peach-400);
+  --color-warm-peach-500: var(--hue-warm-peach-500);
+  --color-warm-peach-600: var(--hue-warm-peach-600);
+  --color-warm-peach-700: var(--hue-warm-peach-700);
+  --color-warm-peach-800: var(--hue-warm-peach-800);
+  --color-warm-peach-900: var(--hue-warm-peach-900);
 
   /* Custom colors - Teal */
-  --color-teal: #21808d;
-  --color-teal-50: #8fd9e3;
-  --color-teal-100: #7dd3df;
-  --color-teal-200: #5ac7d7;
-  --color-teal-300: #3ab5c5;
-  --color-teal-400: #2d9ba8;
-  --color-teal-500: #21808d;
-  --color-teal-600: #196068;
-  --color-teal-700: #124043;
-  --color-teal-800: #0a201e;
-  --color-teal-900: #000000;
+  --color-teal: var(--hue-teal);
+  --color-teal-50: var(--hue-teal-50);
+  --color-teal-100: var(--hue-teal-100);
+  --color-teal-200: var(--hue-teal-200);
+  --color-teal-300: var(--hue-teal-300);
+  --color-teal-400: var(--hue-teal-400);
+  --color-teal-500: var(--hue-teal-500);
+  --color-teal-600: var(--hue-teal-600);
+  --color-teal-700: var(--hue-teal-700);
+  --color-teal-800: var(--hue-teal-800);
+  --color-teal-900: var(--hue-teal-900);
 
   /* Agent status colors */
-  --color-agent-thinking: #a855f7;
-  --color-agent-active: #3b82f6;
-  --color-agent-success: #10b981;
-  --color-agent-error: #ef4444;
-  --color-agent-warning: #f59e0b;
+  --color-agent-thinking: var(--hue-agent-thinking);
+  --color-agent-active: var(--hue-agent-active);
+  --color-agent-success: var(--hue-agent-success);
+  --color-agent-error: var(--hue-agent-error);
+  --color-agent-warning: var(--hue-agent-warning);
 
   /* Surface colors */
   --color-surface-floating: rgba(255, 255, 255, 0.08);
@@ -148,12 +148,12 @@
   --color-info-on-fill: var(--info-on-fill);
 
   /* Border radius */
-  --radius-lg: 12px;
-  --radius-md: 8px;
-  --radius-sm: 6px;
-  --radius-xl: 16px;
-  --radius-2xl: 24px;
-  --radius-3xl: 32px;
+  --radius-lg: var(--corner-surface);
+  --radius-md: var(--corner-field);
+  --radius-sm: var(--corner-control);
+  --radius-xl: var(--corner-panel);
+  --radius-2xl: var(--corner-overlay);
+  --radius-3xl: var(--corner-hero);
 
   /* Box shadows */
   --shadow-floating-input: 0 8px 32px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);

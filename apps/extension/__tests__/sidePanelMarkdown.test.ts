@@ -75,4 +75,15 @@ describe('renderMarkdown, link XSS prevention', () => {
     const innerHref = output.match(/href="([^"]*)"/)?.[1] ?? '';
     expect(innerHref).not.toContain('"');
   });
+
+  it('renders a heading whose first token carries a leading space, a real streamed-model artifact', () => {
+    const output = renderMarkdown(' # The History of Clocks\nTimekeeping is old.');
+    expect(output).toContain('<h1>The History of Clocks</h1>');
+    expect(output).not.toContain('# The History of Clocks</p>');
+  });
+
+  it('still refuses a genuinely indented line as a heading (4+ spaces reads as a code block elsewhere)', () => {
+    const output = renderMarkdown('    # not a heading');
+    expect(output).not.toContain('<h1>');
+  });
 });

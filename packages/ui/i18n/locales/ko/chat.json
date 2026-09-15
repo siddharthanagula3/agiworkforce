@@ -170,7 +170,32 @@
     "voiceStopRecording": "녹음 중지",
     "voiceStopping": "음성 작업 중지 중",
     "voiceTranscribing": "음성 변환 중",
-    "voiceUnsupported": "음성 입력을 사용할 수 없습니다"
+    "voiceUnsupported": "음성 입력을 사용할 수 없습니다",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "채팅: 빠른 질문과 대화",
+    "modeAgiWorkTitle": "AGI Work: 도구, 파일, 검토 가능한 결과물이 있는 다단계 작업",
+    "style": "스타일",
+    "styleCustom": "사용자 지정",
+    "responseStyle": "응답 스타일",
+    "styles": {
+      "default": "기본",
+      "concise": "간결",
+      "detailed": "상세",
+      "technical": "기술적",
+      "creative": "창의적"
+    },
+    "styleDescs": {
+      "default": "표준 응답 스타일",
+      "concise": "짧고 직접적",
+      "detailed": "예시를 곁들여 자세히",
+      "technical": "코드 예시와 함께 정확하게",
+      "creative": "표현력 있고 매력적"
+    },
+    "addAttachmentsAndTools": "첨부 파일과 도구 추가",
+    "addAttachmentsAndToolsActive": "첨부 파일과 도구 추가: {{count}}개 활성",
+    "voiceStart": "음성 입력 시작",
+    "voiceUnsupportedBrowser": "이 브라우저에서는 음성 입력을 지원하지 않습니다",
+    "voiceUnsupportedHint": "이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome 또는 Edge를 사용해 보세요."
   },
   "bubble": {
     "assistantThinking": "어시스턴트가 생각 중입니다",
@@ -268,5 +293,13 @@
     "thinkingSimple": "질문에 대해 생각 중...",
     "workingOnGoal": "처리 중... {{goal}}",
     "workingOnRequest": "요청을 처리하는 중..."
+  },
+  "greeting": {
+    "morning": "좋은 아침입니다",
+    "afternoon": "안녕하세요",
+    "evening": "좋은 저녁입니다",
+    "morningNamed": "{{name}}님, 좋은 아침입니다",
+    "afternoonNamed": "{{name}}님, 안녕하세요",
+    "eveningNamed": "{{name}}님, 좋은 저녁입니다"
   }
 }

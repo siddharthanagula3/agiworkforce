@@ -98,8 +98,20 @@ describe('page context is never silently missing', () => {
     expect(sidePanel).toMatch(
       /function describePageContextFailure[\s\S]*cannot access[\s\S]*host permission[\s\S]*PAGE_CONTEXT_DENIED_REASON/,
     );
-    expect(sidePanel).toContain('Chrome does not let extensions read this page.');
+    expect(sidePanel).toContain('Approve this site under Settings, Site');
     expect(sidePanel).not.toContain('Add this site under Approved sites');
+  });
+
+  it('sends a page Chrome blocks outright to different copy than a page awaiting site approval', () => {
+    expect(sidePanel).toContain('PAGE_CONTEXT_BLOCKED_REASON');
+    expect(sidePanel).toContain('does not let extensions read this page at all');
+    const routing = sidePanel.slice(
+      sidePanel.indexOf('function describePageContextFailure'),
+      sidePanel.indexOf('}', sidePanel.indexOf('return `The page could not be read')),
+    );
+    expect(routing.indexOf('PAGE_CONTEXT_BLOCKED_REASON')).toBeLessThan(
+      routing.indexOf('PAGE_CONTEXT_DENIED_REASON'),
+    );
   });
 
   it('refuses a page-scoped command whose capture came from a different page than the one it was issued on', () => {

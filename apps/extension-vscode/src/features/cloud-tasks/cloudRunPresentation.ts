@@ -3,6 +3,7 @@ import type {
   CloudAgentRun,
   CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
+import { AGENT_TASK_STATE_LABELS } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 export type CloudRunState = CloudAgentRun['state'];
@@ -13,16 +14,28 @@ interface CloudRunStateFace {
   settled: boolean;
 }
 
+/**
+ * The word for each state belongs to the contracts owner; only the codicon and
+ * whether the state is settled are this surface's business.
+ */
 const CLOUD_RUN_STATE_FACES: Record<CloudRunState, CloudRunStateFace> = {
-  queued: { label: 'Queued', icon: 'clock', settled: false },
-  running: { label: 'Running', icon: 'loading~spin', settled: false },
-  awaiting_input: { label: 'Waiting on you', icon: 'question', settled: false },
-  paused: { label: 'Paused', icon: 'debug-pause', settled: false },
-  ready_for_review: { label: 'Ready for review', icon: 'eye', settled: true },
-  completed: { label: 'Completed', icon: 'pass', settled: true },
-  failed: { label: 'Failed', icon: 'error', settled: true },
-  cancelled: { label: 'Cancelled', icon: 'circle-slash', settled: true },
-  archived: { label: 'Archived', icon: 'archive', settled: true },
+  queued: { label: AGENT_TASK_STATE_LABELS.queued, icon: 'clock', settled: false },
+  running: { label: AGENT_TASK_STATE_LABELS.running, icon: 'loading~spin', settled: false },
+  awaiting_input: {
+    label: AGENT_TASK_STATE_LABELS.awaiting_input,
+    icon: 'question',
+    settled: false,
+  },
+  paused: { label: AGENT_TASK_STATE_LABELS.paused, icon: 'debug-pause', settled: false },
+  ready_for_review: {
+    label: AGENT_TASK_STATE_LABELS.ready_for_review,
+    icon: 'eye',
+    settled: true,
+  },
+  completed: { label: AGENT_TASK_STATE_LABELS.completed, icon: 'pass', settled: true },
+  failed: { label: AGENT_TASK_STATE_LABELS.failed, icon: 'error', settled: true },
+  cancelled: { label: AGENT_TASK_STATE_LABELS.cancelled, icon: 'circle-slash', settled: true },
+  archived: { label: AGENT_TASK_STATE_LABELS.archived, icon: 'archive', settled: true },
 };
 
 const CLOUD_RUN_WORK_MODE_TITLES: Record<CloudAgentWorkMode, string> = {

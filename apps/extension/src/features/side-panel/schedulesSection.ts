@@ -172,6 +172,7 @@ export function buildSchedulesSection(
   sectionEl.appendChild(listEl);
 
   let schedules: ManagedCloudScheduleTask[] = [];
+  let listed = false;
   let active = false;
   let inFlight: AbortController | null = null;
   let pendingScheduleId: string | null = null;
@@ -261,7 +262,7 @@ export function buildSchedulesSection(
     const fragment = document.createDocumentFragment();
     for (const schedule of schedules) fragment.appendChild(buildRow(schedule, now));
     listEl.replaceChildren(fragment);
-    emptyEl.hidden = schedules.length > 0 || !statusEl.hidden;
+    emptyEl.hidden = !listed || schedules.length > 0 || !statusEl.hidden;
   }
 
   async function toggleSchedule(schedule: ManagedCloudScheduleTask): Promise<void> {
@@ -305,12 +306,16 @@ export function buildSchedulesSection(
     if (controller.signal.aborted) return;
     if (result.status === 'error') {
       if (result.code === 'cancelled') return;
-      if (result.code === 'auth_required') schedules = [];
+      if (result.code === 'auth_required') {
+        schedules = [];
+        listed = true;
+      }
       reportFailure(result);
       render();
       return;
     }
     schedules = result.schedules;
+    listed = true;
     setStatus('');
     render();
   }
@@ -325,6 +330,7 @@ export function buildSchedulesSection(
     inFlight?.abort();
     inFlight = null;
     schedules = [];
+    listed = false;
     pendingScheduleId = null;
     setStatus('');
     render();

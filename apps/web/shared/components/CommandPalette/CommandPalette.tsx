@@ -33,6 +33,7 @@ import { formatRelativeTime } from '@shared/utils/format';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import { useTranslation } from 'react-i18next';
 import { CODE_COPY, CODE_ROUTES } from '@/features/code/code-surface';
 
 export interface CommandOption {
@@ -123,11 +124,13 @@ function useCommands(
   // The rail (`buildAppNavItems`) is the one place page destinations are
   // defined; reusing it here means this list can never drift the way the
   // hand-duplicated copy this replaced eventually did.
+  const { t } = useTranslation('common');
   const pageActions: CommandOption[] = buildAppNavItems({
     pathname: pathname ?? '/chat',
     navigate: (href) => router.push(href),
     isAdmin: isWorkspaceAdmin,
     hiddenIds: hiddenNavIds,
+    translate: (key, fallback) => t(key, { defaultValue: fallback }),
   }).map((item) => ({
     id: `nav-${item.id}`,
     title: item.label,

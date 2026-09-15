@@ -76,6 +76,21 @@ import {
   writeTextFile,
 } from './filesystemService';
 import { readWorkspaceGit } from './gitService';
+import {
+  DeveloperRuntimeUnavailableError,
+  answerDeveloperApproval,
+  interruptDeveloperTurn,
+  listDeveloperSessions,
+  readDeveloperModels,
+  readDeveloperRuntimeStatus,
+  readDeveloperSession,
+  resumeDeveloperSession,
+  startDeveloperSession,
+  startDeveloperTurn,
+  stopDeveloperRuntime,
+  syncDeveloperAccounts,
+} from './developerSessionService';
+import { reportShellIdentity } from '../shellIdentity';
 import { PathRefused } from './pathGuard';
 import { consumeSingleUse, getPermissionState, requestPermission } from './permissionManager';
 import {
@@ -239,9 +254,9 @@ function workspaceScope(root: WorkspaceRoot): PermissionScope {
 }
 
 /**
- * Every command that touches the disk names the capability it needs and the
- * reason shown in the prompt. A command absent from this table reaches no
- * service: `dispatch` refuses anything it cannot classify.
+ * Every command that touches the disk names the capability it needs. A command
+ * absent from this table reaches no service: `dispatch` refuses what it cannot
+ * classify.
  */
 const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; reason: string }> = {
   file_list: { capability: 'filesystem.read', reason: 'The agent wants to browse this folder.' },
@@ -288,16 +303,22 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     capability: 'filesystem.read',
     reason: 'The agent wants to show a file from this folder in your file manager.',
   },
+  developer_session_start: {
+    capability: 'shell.execute',
+    reason:
+      'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.',
+  },
+  developer_turn_start: {
+    capability: 'shell.execute',
+    reason:
+      'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.',
+  },
 };
 
 const COMPUTER_USE_REASON =
   'The agent moves the pointer, clicks and types on this Mac as if you were doing it, and reads the screen to decide where. It can reach anything already open, including apps and pages you are signed into.';
 
-/**
- * Capabilities that are not about one folder. The clipboard belongs to the
- * session rather than to a workspace, so it carries a global scope and asks
- * once.
- */
+/** Capabilities scoped to the session rather than to one folder. */
 const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   string,
   { capability: DesktopCapability; reason: string }
@@ -359,12 +380,8 @@ function emitRuntimeEvent(window: BrowserWindow | null, event: unknown): void {
 }
 
 /**
- * The second gate on a local command.
- *
- * The capability grant says this folder may run programs at all; this asks
- * about the one command about to start, quoting it verbatim so the text the
- * user approves is the text that is spawned. Programs the user has put on the
- * allow list never reach here.
+ * The second gate on a local command, quoting it verbatim so the text the user
+ * approves is the text that is spawned.
  */
 async function approveShellCommand(
   window: BrowserWindow | null,
@@ -389,12 +406,8 @@ async function approveShellCommand(
 }
 
 /**
- * The second gate on a browser command.
- *
- * The capability grant says the paired browser may be driven at all; this asks
- * about the one action, naming what it does to the page in front of the user.
- * The extension applies its own site allowlist after this, so a yes here is
- * necessary and not sufficient.
+ * The second gate on a browser command. The extension applies its own site
+ * allowlist after this, so a yes here is necessary and not sufficient.
  */
 async function approveBrowserCommand(
   window: BrowserWindow | null,
@@ -416,20 +429,68 @@ async function approveBrowserCommand(
   return result.response === 1;
 }
 
-async function runBrowserCommand(
+/** Another program on this machine asking for the browser, not the renderer. */
+export interface BrowserCommandCaller {
+  /** Scope key, so the user answers once per client rather than once per program. */
+  name: string;
+  /** Subject of the prompt's question, in words. */
+  subject: string;
+  /** The folder the client is working in, by name. */
+  folder: string | null;
+  /** That folder's full path, never shortened. */
+  path: string | null;
+}
+
+/**
+ * What the prompt says for a browser action another program asked for. The
+ * client already approved the tool call, so the shell says so rather than
+ * raising a second dialog per action.
+ */
+function browserPromptReason(caller: BrowserCommandCaller): string {
+  const where = caller.folder ? ` running in ${caller.folder}` : '';
+  const at = caller.path && caller.path !== caller.folder ? `\n\n${caller.path}` : '';
+  return (
+    `${caller.subject}${where} is asking.${at}\n\n` +
+    'It already asked you before making this tool call, under its own permission rules, ' +
+    'so AGI Desktop will not ask again for each action.\n\n' +
+    'The paired Chrome extension still carries the action out under its own approved-sites list.'
+  );
+}
+
+/** The object of the question: the browser, not the program that asked. */
+const BROWSER_OBJECT_PHRASES: Readonly<Record<string, string>> = Object.freeze({
+  'browser.site': 'use the paired browser',
+  'browser.cdp': "read the paired browser's page internals",
+});
+
+export async function runBrowserCommand(
   window: BrowserWindow | null,
   command: string,
   args: Args,
+  caller?: BrowserCommandCaller,
 ): Promise<DesktopRuntimeResponse> {
   const plan = planBrowserCommand(command, args);
-  const scope: PermissionScope = { kind: 'global' };
+  // Each client is its own permission subject, so revoking one leaves the
+  // renderer's grant standing.
+  const scope: PermissionScope = caller
+    ? { kind: 'application', target: caller.name }
+    : { kind: 'global' };
+  const reason = caller
+    ? browserPromptReason(caller)
+    : 'The paired Chrome extension carries out the action, under its own approved-sites list.';
   const state =
     getPermissionState(plan.capability, scope) === 'prompt'
       ? await requestPermission(
           window,
           plan.capability,
           scope,
-          'The paired Chrome extension carries out the action, under its own approved-sites list.',
+          reason,
+          caller
+            ? {
+                subject: caller.name,
+                objectPhrase: BROWSER_OBJECT_PHRASES[plan.capability],
+              }
+            : {},
         )
       : getPermissionState(plan.capability, scope);
 
@@ -443,7 +504,9 @@ async function runBrowserCommand(
       },
     );
   }
-  if (!(await approveBrowserCommand(window, plan))) {
+  // A local client already put the tool call through its own approval, so a
+  // second dialog here would ask the same question with no new information.
+  if (!caller && !(await approveBrowserCommand(window, plan))) {
     return runtimeFailure('cancelled', 'That browser action was not run.');
   }
 
@@ -453,13 +516,9 @@ async function runBrowserCommand(
 }
 
 /**
- * What this machine tells a cloud turn it can be asked to do.
- *
- * A capability is declared when the user has not refused it on at least one
- * granted folder, not when it is already granted: the point of the declaration
- * is to let the model ask, and the ask is what raises the permission prompt. A
- * refused capability is left out, so the model never spends a turn reaching a
- * refusal this process already knows about.
+ * What this machine tells a cloud turn it can be asked to do. Declared when the
+ * user has not refused it, not when it is already granted: the ask is what
+ * raises the prompt, and a refused capability is left out.
  */
 function declareDeviceHost(): DesktopHostDeclaration {
   const roots = listRoots();
@@ -498,8 +557,11 @@ async function execute(
       return pickRoot(window);
     case 'workspace_list_roots':
       return listRoots();
-    case 'workspace_revoke_root':
-      return revokeRoot(requireString(args, 'rootId'));
+    case 'workspace_revoke_root': {
+      const rootId = requireString(args, 'rootId');
+      stopDeveloperRuntime(rootId);
+      return revokeRoot(rootId);
+    }
     case 'workspace_snapshot':
       return snapshotFor(resolveRoot(args));
     case 'workspace_reveal': {
@@ -625,6 +687,52 @@ async function execute(
       return waitFor(optionalNumberOr(args, 'ms', 500));
     case 'device_host_declaration':
       return declareDeviceHost();
+    case 'developer_runtime_status':
+      return readDeveloperRuntimeStatus();
+    case 'developer_model_list':
+      return readDeveloperModels(requireString(args, 'rootId'), args['refresh'] === true);
+    case 'developer_session_list':
+      return listDeveloperSessions();
+    case 'developer_session_read':
+      return readDeveloperSession(requireString(args, 'rootId'), requireString(args, 'threadId'));
+    case 'developer_session_resume':
+      return resumeDeveloperSession(requireString(args, 'rootId'), requireString(args, 'threadId'));
+    case 'developer_session_start': {
+      const model = optionalString(args, 'model', '');
+      return startDeveloperSession(requireString(args, 'rootId'), model === '' ? undefined : model);
+    }
+    case 'developer_turn_start': {
+      const model = optionalString(args, 'model', '');
+      return startDeveloperTurn({
+        rootId: requireString(args, 'rootId'),
+        threadId: requireString(args, 'threadId'),
+        text: requireString(args, 'text'),
+        ...(model === '' ? {} : { model }),
+      });
+    }
+    case 'developer_turn_interrupt':
+      return interruptDeveloperTurn(
+        requireString(args, 'rootId'),
+        requireString(args, 'threadId'),
+        requireString(args, 'turnId'),
+      );
+    case 'developer_approval_answer':
+      return answerDeveloperApproval({
+        rootId: requireString(args, 'rootId'),
+        threadId: requireString(args, 'threadId'),
+        turnId: requireString(args, 'turnId'),
+        requestId: requireString(args, 'requestId'),
+        approved: args['approved'] === true,
+      });
+    case 'developer_account_report': {
+      reportShellIdentity({
+        signedIn: args['signedIn'] === true,
+        email: optionalString(args, 'email', '') || null,
+      });
+      void syncDeveloperAccounts();
+      return true;
+    }
+
     case 'browser_pairing_state':
       return pairingState();
     case 'browser_pairing_install_host':
@@ -657,6 +765,9 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
   }
   if (error instanceof BrowserBridgeError) return runtimeFailure('io-error', error.message);
   if (error instanceof UnknownWorkspace) return runtimeFailure('not-found', error.message);
+  if (error instanceof DeveloperRuntimeUnavailableError) {
+    return runtimeFailure('runtime-unavailable', `${error.message} ${error.hint}`);
+  }
   if (error instanceof WorkspaceGrantRefused) {
     return runtimeFailure('permission-denied', error.message);
   }
@@ -703,11 +814,8 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
 }
 
 /**
- * The single entry point from IPC into anything privileged.
- *
- * Order matters: a command is classified before it runs, the workspace is
- * resolved before permission is checked, and permission is checked before the
- * service is called. Nothing reaches the disk on an unclassified command.
+ * The single entry point from IPC into anything privileged. Order matters:
+ * classify, resolve the workspace, check permission, then call the service.
  */
 export async function dispatch(
   window: BrowserWindow | null,

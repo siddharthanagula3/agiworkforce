@@ -170,7 +170,32 @@
     "voiceStopRecording": "録音を停止",
     "voiceStopping": "音声アクションを停止中",
     "voiceTranscribing": "音声を文字起こし中",
-    "voiceUnsupported": "音声入力は利用できません"
+    "voiceUnsupported": "音声入力は利用できません",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "チャット: 簡単な質問と会話",
+    "modeAgiWorkTitle": "AGI Work: ツール、ファイル、確認できる成果物を使う複数ステップのタスク",
+    "style": "スタイル",
+    "styleCustom": "カスタム",
+    "responseStyle": "応答スタイル",
+    "styles": {
+      "default": "デフォルト",
+      "concise": "簡潔",
+      "detailed": "詳細",
+      "technical": "技術的",
+      "creative": "クリエイティブ"
+    },
+    "styleDescs": {
+      "default": "標準の応答スタイル",
+      "concise": "短く直接的",
+      "detailed": "例を交えて詳しく",
+      "technical": "コード例付きで正確に",
+      "creative": "表現豊かで魅力的"
+    },
+    "addAttachmentsAndTools": "添付ファイルとツールを追加",
+    "addAttachmentsAndToolsActive": "添付ファイルとツールを追加: {{count}} 件有効",
+    "voiceStart": "音声入力を開始",
+    "voiceUnsupportedBrowser": "このブラウザでは音声入力に対応していません",
+    "voiceUnsupportedHint": "このブラウザでは音声入力に対応していません。Chrome または Edge をお試しください。"
   },
   "bubble": {
     "assistantThinking": "アシスタントが考えています",
@@ -268,5 +293,13 @@
     "thinkingSimple": "ご質問について考え中...",
     "workingOnGoal": "対応中... {{goal}}",
     "workingOnRequest": "リクエストを処理中..."
+  },
+  "greeting": {
+    "morning": "おはようございます",
+    "afternoon": "こんにちは",
+    "evening": "こんばんは",
+    "morningNamed": "{{name}}さん、おはようございます",
+    "afternoonNamed": "{{name}}さん、こんにちは",
+    "eveningNamed": "{{name}}さん、こんばんは"
   }
 }

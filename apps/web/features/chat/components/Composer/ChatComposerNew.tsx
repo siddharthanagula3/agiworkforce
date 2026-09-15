@@ -208,6 +208,15 @@ const WORK_MODE_LABELS: Record<ComposerWorkMode, string> = {
   agiwork: 'AGI Work',
 };
 
+const WORK_MODE_LABEL_KEYS: Record<ComposerWorkMode, string> = {
+  chat: 'composer.modeChat',
+  agiwork: 'composer.modeAgiWork',
+};
+const WORK_MODE_TITLE_KEYS: Record<ComposerWorkMode, string> = {
+  chat: 'composer.modeChatTitle',
+  agiwork: 'composer.modeAgiWorkTitle',
+};
+
 const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
   chat: 'Chat: quick questions and conversation',
   agiwork: 'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
@@ -659,6 +668,7 @@ const ChatComposerNewComponent = ({
   const [agiWorkDeliverable, setAgiWorkDeliverable] = useState('');
   const [agiWorkFieldsOpen, setAgiWorkFieldsOpen] = useState(false);
   const { t: tAgiWork } = useTranslation('v3');
+  const { t: tChat } = useTranslation('chat');
   /**
    * AUDIT-FIX STR-23: mirror of `message` readable from effects without adding
    * it to their dependency arrays -- used to park the outgoing conversation's
@@ -3656,8 +3666,13 @@ const ChatComposerNewComponent = ({
                     )}
                     aria-label={
                       hasOverflowActive
-                        ? `Add attachments and tools: ${overflowActiveCount} active`
-                        : 'Add attachments and tools'
+                        ? tChat('composer.addAttachmentsAndToolsActive', {
+                            count: overflowActiveCount,
+                            defaultValue: `Add attachments and tools: ${overflowActiveCount} active`,
+                          })
+                        : tChat('composer.addAttachmentsAndTools', {
+                            defaultValue: 'Add attachments and tools',
+                          })
                     }
                     aria-pressed={hasOverflowActive}
                     aria-expanded={showOverflowMenu}
@@ -3839,8 +3854,12 @@ const ChatComposerNewComponent = ({
                           onClick={() => handleWorkModeChange(mode)}
                           disabled={isTurnActive || composerDisabled}
                           aria-pressed={workMode === mode}
-                          aria-label={WORK_MODE_LABELS[mode]}
-                          title={WORK_MODE_TITLES[mode]}
+                          aria-label={tChat(WORK_MODE_LABEL_KEYS[mode], {
+                            defaultValue: WORK_MODE_LABELS[mode],
+                          })}
+                          title={tChat(WORK_MODE_TITLE_KEYS[mode], {
+                            defaultValue: WORK_MODE_TITLES[mode],
+                          })}
                           className={cn(
                             'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors sm:h-7 sm:w-auto sm:px-2.5',
                             workMode === mode
@@ -3850,7 +3869,11 @@ const ChatComposerNewComponent = ({
                           )}
                         >
                           <ModeGlyph className="h-4 w-4 sm:hidden" aria-hidden="true" />
-                          <span className="hidden sm:inline">{WORK_MODE_LABELS[mode]}</span>
+                          <span className="hidden sm:inline">
+                            {tChat(WORK_MODE_LABEL_KEYS[mode], {
+                              defaultValue: WORK_MODE_LABELS[mode],
+                            })}
+                          </span>
                         </button>
                       );
                     })}

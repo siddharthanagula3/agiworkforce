@@ -126,6 +126,11 @@ fn map_llm_error(err: LlmError) -> anyhow::Error {
             message,
         } => CliError::api(provider, status, message).into(),
         LlmError::Auth { provider, message } => CliError::auth(provider, message).into(),
+        LlmError::StreamError {
+            provider,
+            message,
+            retryable,
+        } => CliError::stream_error(provider, message, retryable).into(),
         LlmError::RateLimited {
             provider,
             retry_after,
@@ -331,7 +336,11 @@ async fn run_spec(
     // catalog selection work even when its provider wire ID differs;
     // display/pricing/provider-inference keep the dotted id. Unknown ids
     // (local/Ollama/custom) fall through unchanged.
-    let wire_model = crate::model_catalog::api_wire_id(model);
+    let wire_model = if spec.id == super::provider_name(&Provider::ManagedCloud) {
+        crate::model_catalog::canonical_model_id(model)
+    } else {
+        crate::model_catalog::api_wire_id(model)
+    };
     let req = ChatRequest {
         model: &wire_model,
         messages,
@@ -408,7 +417,17 @@ pub async fn stream_completion(
     }
 
     // ---- Fall through to API key auth ----
-    let api_key = resolve_key(config, provider)?;
+    let api_key = resolve_key(config, provider).map_err(|error| {
+        match super::provider_dispatch::resolve_turn_route(
+            config,
+            &super::AccountRoute::load(),
+            model,
+            None,
+        ) {
+            Ok(_) => error,
+            Err(account) => account,
+        }
+    })?;
     let key = api_key.as_deref().unwrap_or_default();
 
     match provider {

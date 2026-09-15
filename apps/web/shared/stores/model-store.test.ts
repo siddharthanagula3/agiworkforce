@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { getAutoRoutingProfiles, getModelsForTierAndSurface } from '@agiworkforce/types';
-import { AVAILABLE_MODELS, resolveSelectableModelId, useModelStore } from './model-store';
+import {
+  CHAT_MODEL_TYPES,
+  getAutoRoutingProfiles,
+  getModelsForTierAndSurface,
+  listChatModels,
+  listManagedRoutesForModel,
+} from '@agiworkforce/types';
+import {
+  AVAILABLE_MODELS,
+  findSelectableModel,
+  isSelectableModelId,
+  resolveSelectableModelId,
+  useModelStore,
+} from './model-store';
 
 describe('web model selection trust boundary', () => {
   it('classifies Auto routing profiles as managed cloud without fake model metadata', () => {
@@ -24,15 +36,46 @@ describe('web model selection trust boundary', () => {
     );
   });
 
-  it('derives manual rows from the shared Max + web runtime intersection', () => {
-    const expectedIds = getModelsForTierAndSurface('max', 'web/cloud-chat', {
-      modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+  it('derives manual rows from every chat model a managed route can serve', () => {
+    const expectedIds = listChatModels()
+      .filter((model) => listManagedRoutesForModel(model.id).length > 0)
+      .map((model) => model.id);
+    const actualIds = AVAILABLE_MODELS.filter(
+      (model) => model.providerKey !== 'managed_cloud' && model.availability !== 'coming_soon',
+    ).map((model) => model.id);
+
+    expect([...actualIds].sort()).toEqual([...expectedIds].sort());
+  });
+
+  it("holds exactly the shared owner's rows for this surface, in its order", () => {
+    const surfaceIds = getModelsForTierAndSurface('max', 'web/cloud-chat', {
+      modelTypes: [...CHAT_MODEL_TYPES],
     }).map((model) => model.id);
     const actualIds = AVAILABLE_MODELS.filter(
       (model) => model.providerKey !== 'managed_cloud' && model.availability !== 'coming_soon',
     ).map((model) => model.id);
 
-    expect(actualIds).toEqual(expectedIds);
+    expect(surfaceIds.length).toBeGreaterThan(0);
+    expect(actualIds).toEqual(surfaceIds);
+  });
+
+  /**
+   * The picker offers whatever `/api/models/catalogue` admits. An id it offers
+   * that this store will not hold used to resolve back to the Auto default with
+   * no request, no message and no notice, so the row read as a working control
+   * that did nothing.
+   */
+  it('holds every model the catalogue projection can offer', () => {
+    const offerable = listChatModels().filter(
+      (model) => listManagedRoutesForModel(model.id).length > 0,
+    );
+
+    expect(offerable.length).toBeGreaterThan(0);
+    for (const model of offerable) {
+      expect(isSelectableModelId(model.id)).toBe(true);
+      expect(resolveSelectableModelId(model.id)).toBe(model.id);
+      expect(findSelectableModel(model.id)?.id).toBe(model.id);
+    }
   });
 
   it('rehydrates an unknown persisted model to the canonical default', async () => {

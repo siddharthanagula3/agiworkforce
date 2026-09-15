@@ -53,6 +53,62 @@
     --neutral-fg-2: 0 0% 68.6%;
     --neutral-fg-3: 0 0% 60.8%;
 
+    /* The brand ramps, mode invariant. Web, desktop and mobile each carried a
+     * byte-identical hand copy; this is the only one. `agiBrandScale` in this
+     * package's TypeScript entry mirrors it for hosts that cannot import a
+     * stylesheet, and the two are asserted equal in both directions by
+     * apps/web/shared/components/__tests__/theme-contrast.test.ts, so a step
+     * added here without a step added there fails. */
+    --hue-cream-50: #fcfcf9;
+    --hue-cream-100: #f9f9f6;
+    --hue-cream-200: #f5f5f2;
+
+    --hue-charcoal-700: #363838;
+    --hue-charcoal-800: #2a2c2c;
+    --hue-charcoal-900: #1f2121;
+
+    --hue-terra-cotta: #da7756;
+    --hue-terra-cotta-50: #f9e8e1;
+    --hue-terra-cotta-100: #f5d4c8;
+    --hue-terra-cotta-200: #ecad96;
+    --hue-terra-cotta-300: #e38664;
+    --hue-terra-cotta-400: #da7332;
+    --hue-terra-cotta-500: #da7756;
+    --hue-terra-cotta-600: #bd5d3a;
+    --hue-terra-cotta-700: #743924;
+    --hue-terra-cotta-800: #4d2618;
+    --hue-terra-cotta-900: #27130c;
+
+    --hue-warm-peach: #f5c1a9;
+    --hue-warm-peach-50: #ffffff;
+    --hue-warm-peach-100: #fef9f6;
+    --hue-warm-peach-200: #fce8dd;
+    --hue-warm-peach-300: #fad7c4;
+    --hue-warm-peach-400: #f7c9b6;
+    --hue-warm-peach-500: #f5c1a9;
+    --hue-warm-peach-600: #f0a481;
+    --hue-warm-peach-700: #eb8759;
+    --hue-warm-peach-800: #e66a31;
+    --hue-warm-peach-900: #c64f14;
+
+    --hue-teal: #21808d;
+    --hue-teal-50: #8fd9e3;
+    --hue-teal-100: #7dd3df;
+    --hue-teal-200: #5ac7d7;
+    --hue-teal-300: #3ab5c5;
+    --hue-teal-400: #2d9ba8;
+    --hue-teal-500: #21808d;
+    --hue-teal-600: #196068;
+    --hue-teal-700: #124043;
+    --hue-teal-800: #0a201e;
+    --hue-teal-900: #000000;
+
+    --hue-agent-thinking: #a855f7;
+    --hue-agent-active: #3b82f6;
+    --hue-agent-success: #10b981;
+    --hue-agent-error: #ef4444;
+    --hue-agent-warning: #f59e0b;
+
     /* ---- layer 2: semantic roles, light --------------------------------- */
     /* --background, --foreground, --border and --destructive-text hold bare HSL
      * channel triplets, read as hsl(var(--x)). */

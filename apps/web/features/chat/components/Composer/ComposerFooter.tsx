@@ -41,7 +41,13 @@ import {
 import { formatLocalModelSize, type LocalModel } from '@agiworkforce/local-runtime-contract';
 import { useLocalModelSelection, useLocalModels } from '@features/desktop-host';
 import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
-import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
+import {
+  useModelStore,
+  AVAILABLE_MODELS,
+  findSelectableModel,
+  isSelectableModelId,
+  type AIModel,
+} from '@shared/stores/model-store';
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
@@ -201,6 +207,19 @@ function useFreeLaneUiEnabled(): boolean {
     resolveFreeLaneUiEnabled,
     resolveFreeLaneUiBuildEnabled,
   );
+}
+
+const subscribeToHydration = () => () => {};
+const hydratedSnapshot = () => true;
+const serverSnapshot = () => false;
+
+function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeToHydration, hydratedSnapshot, serverSnapshot);
+}
+
+function initialSelectedModel(): AIModel {
+  const { selectedModelId } = useModelStore.getInitialState();
+  return AVAILABLE_MODELS.find((model) => model.id === selectedModelId) ?? AVAILABLE_MODELS[0]!;
 }
 
 // ---------------------------------------------------------------------------
@@ -874,7 +893,8 @@ export function ComposerFooter({
   // guess into an "requires upgrade" claim against paying subscribers.
   const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
 
-  const selectedModel = getSelectedModel();
+  const hydrated = useHydrated();
+  const selectedModel = hydrated ? getSelectedModel() : initialSelectedModel();
 
   // Prompt-cache accounting: switching the model mid-conversation resets the cache and re-bills
   // prior context at full input price (caching is per-model). The switch itself is never blocked;
@@ -1259,10 +1279,10 @@ export function ComposerFooter({
                       query={searchQuery}
                       onQueryChange={setSearchQuery}
                       onSelect={(modelId) => {
-                        const target = AVAILABLE_MODELS.find((model) => model.id === modelId);
+                        const target = findSelectableModel(modelId);
                         if (target) handleSelectModel(target);
-                        else void commitModel(modelId);
                       }}
+                      isSelectable={isSelectableModelId}
                       onToggleFavourite={toggleFavourite}
                       onUpgradeRequest={onUpgradeRequest}
                       isEnvironmentLocked={(requiresEnvironment) => {

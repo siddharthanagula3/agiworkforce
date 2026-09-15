@@ -287,7 +287,8 @@ where
                 run_openai_responses_stream(byte_stream, idle, &mut on_event).await
             }
             Decoder::OpenAiCompat => {
-                run_openai_compat_stream(byte_stream, idle, &mut on_event).await
+                run_openai_compat_stream(byte_stream, idle, "openai-compatible", &mut on_event)
+                    .await
             }
             Decoder::OllamaNative => run_ollama_stream(byte_stream, idle, &mut on_event).await,
         };

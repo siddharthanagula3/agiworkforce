@@ -35,7 +35,8 @@ export type CodeTranscriptItem =
       id: string;
       at: string;
       text: string;
-      stopReason: CloudCodeAgentStopReason;
+      /** Null where the source records what was said but not how the turn ended. */
+      stopReason: CloudCodeAgentStopReason | null;
       retryGoal: string | null;
     };
 

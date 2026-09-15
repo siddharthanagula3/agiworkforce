@@ -121,6 +121,8 @@ export const CookieConsent = () => {
                     allow it, and we never set advertising cookies. Read the{' '}
                     <Link
                       href="/cookies"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       data-inline-link="true"
                       className="underline underline-offset-2 hover:text-foreground"
                     >
@@ -178,6 +180,8 @@ export const CookieConsent = () => {
               These are the only cookie categories this site uses. See the{' '}
               <Link
                 href="/cookies"
+                target="_blank"
+                rel="noopener noreferrer"
                 data-inline-link="true"
                 className="underline underline-offset-2"
               >

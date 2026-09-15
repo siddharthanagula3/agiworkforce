@@ -273,3 +273,77 @@ describe('Chrome side-panel tab-group state', () => {
     expect(source).not.toContain('let isGrouped = false');
   });
 });
+
+describe('Chrome side-panel sign-out ends the shared session, not just the local one', () => {
+  it('signs out of Clerk before clearing the extension-local auth state', () => {
+    const start = source.indexOf("signoutBtn.addEventListener('click'");
+    const end = source.indexOf('\n  });', start);
+    const body = source.slice(start, end);
+
+    expect(body).toContain('signOutClerk()');
+    expect(body).toContain('transitionManagedCloudOwner(null)');
+
+    const clerkSignOutIndex = body.indexOf('signOutClerk()');
+    const localResetIndex = body.indexOf('transitionManagedCloudOwner(null)');
+    expect(clerkSignOutIndex).toBeGreaterThan(-1);
+    expect(localResetIndex).toBeGreaterThan(clerkSignOutIndex);
+  });
+
+  it('imports the sign-out helper from the same Clerk auth module as sign-in', () => {
+    const start = source.indexOf("} from './features/cloud-bridge/clerkAuth';");
+    const importBlock = source.slice(Math.max(0, start - 300), start);
+    expect(importBlock).toContain('signOutClerk');
+    expect(importBlock).toContain('revokeSyncedWebSession');
+  });
+
+  it('revokes the sync host session before signing out of Clerk locally', () => {
+    const start = source.indexOf("signoutBtn.addEventListener('click'");
+    const end = source.indexOf('\n  });', start);
+    const body = source.slice(start, end);
+
+    expect(body).toContain('revokeSyncedWebSession()');
+
+    const syncHostRevokeIndex = body.indexOf('revokeSyncedWebSession()');
+    const clerkSignOutIndex = body.indexOf('signOutClerk()');
+    const localResetIndex = body.indexOf('transitionManagedCloudOwner(null)');
+    expect(syncHostRevokeIndex).toBeGreaterThan(-1);
+    expect(clerkSignOutIndex).toBeGreaterThan(syncHostRevokeIndex);
+    expect(localResetIndex).toBeGreaterThan(clerkSignOutIndex);
+  });
+
+  it('tells the user in the panel, not only the console, when the sync host revoke fails', () => {
+    const start = source.indexOf("signoutBtn.addEventListener('click'");
+    const end = source.indexOf('\n  });', start);
+    const body = source.slice(start, end);
+
+    const catchStart = body.indexOf('catch (error) {', body.indexOf('revokeSyncedWebSession()'));
+    const catchEnd = body.indexOf('}', catchStart);
+    const revokeCatchBlock = body.slice(catchStart, catchEnd);
+
+    expect(revokeCatchBlock).toContain("t('spCloudSignOutSyncFailed')");
+    expect(revokeCatchBlock).toContain('signoutStatusEl.textContent');
+  });
+});
+
+describe('Chrome side-panel composer placeholder never shows a stale literal', () => {
+  it('creates the composer with the catalog ready copy, not a hardcoded literal', () => {
+    const start = source.indexOf("id: 'sp-input',");
+    const end = source.indexOf('}) as HTMLTextAreaElement', start);
+    const textareaCall = source.slice(start, end);
+
+    expect(textareaCall).toContain("placeholder: t('spComposerPlaceholder')");
+    expect(textareaCall).not.toContain('Type / for commands');
+  });
+
+  it('owns the placeholder for every chat state, loading included', () => {
+    const start = source.indexOf('function setManagedCloudChatState');
+    const end = source.indexOf('\n}', start);
+    const body = source.slice(start, end);
+
+    expect(body).toContain("if (state === 'signed_out')");
+    expect(body).toContain("input.placeholder = t('spComposerPlaceholderSignedOut')");
+    expect(body).toContain("else if (state === 'unavailable')");
+    expect(body).toContain("input.placeholder = t('spComposerPlaceholderNoAccess')");
+    expect(body).toMatch(/else\s+input\.placeholder = t\('spComposerPlaceholder'\)/);
+  });
+});

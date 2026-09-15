@@ -139,6 +139,7 @@ import {
   BROWSER_COMMAND_PROTOCOL_VERSION,
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
+  NATIVE_BROWSER_UNPAIR_MESSAGE,
 } from '@agiworkforce/types';
 import {
   captureThroughDebugger,
@@ -3083,6 +3084,16 @@ async function handleMessageAsync(
     case 'RECONNECT_NATIVE':
       return triggerManualReconnect();
 
+    case 'UNPAIR_NATIVE': {
+      // Best effort, and deliberately not fatal: if the desktop cannot be
+      // reached the user still gets to unpair here, and the desktop notices
+      // when this extension stops answering.
+      const unpaired = (await sendNativeRequest({
+        type: NATIVE_BROWSER_UNPAIR_MESSAGE,
+      }).catch(() => null)) as { success?: boolean } | null;
+      return { success: unpaired?.success === true } as ExtensionResponse;
+    }
+
     case 'TAB_READY': {
       return { success: true, ready: true } as ExtensionResponse;
     }
@@ -4960,6 +4971,7 @@ async function handleChatMessage(
         text: '',
         done: true,
         error: visibleError,
+        errorCode: result.code,
         ...(result.routing ? { routing: result.routing } : {}),
       });
     }
@@ -4984,6 +4996,7 @@ async function handleChatMessage(
         text: '',
         done: true,
         error: messageText,
+        errorCode: result.code,
       });
     }
     logger.error('handleChatMessage error', error);
@@ -5100,6 +5113,7 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
         text: '',
         done: true,
         error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
+        errorCode: result.code,
         ...(routing ? { routing } : {}),
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
@@ -5220,6 +5234,7 @@ async function handleResolveChatApproval(
         text: '',
         done: true,
         error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
+        errorCode: result.code,
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
     }
@@ -5313,6 +5328,7 @@ async function handleInPagePrompt(
         pageContext,
         modelSelection: 'auto',
         systemPrompt,
+        completionMode: 'unattended',
         signal: activeStream.controller.signal,
       },
       {

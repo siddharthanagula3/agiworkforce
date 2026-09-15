@@ -1,8 +1,7 @@
 ---
 source: apps/cli/src/tui/tui_app.rs
-assertion_line: 5963
-expression: "draw_header(40, Some(&hud))"
+expression: draw_header(40)
 ---
 ┌──────────────────────────────────────┐
 │ AGI  v1.7.1  │ fixture-flagship │ ant│
-├ 1.2Kin / 567out │ Turns: 3 ──────────┤
+├──────────────────────────────────────┤

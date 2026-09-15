@@ -56,6 +56,7 @@ function isUnder(pathname: string, prefix: string): boolean {
 export interface AppNavDestination {
   id: string;
   label: string;
+  labelKey: string;
   icon: SidebarIconComponent;
   /** Route pushed on click. */
   href: string;
@@ -84,6 +85,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
   {
     id: 'chat-home',
     label: 'Chat',
+    labelKey: 'navChat',
     icon: MessageSquare,
     href: '/chat',
     isActive: (pathname) => isUnder(pathname, '/chat') && !isChatSectionPath(pathname),
@@ -94,6 +96,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
   {
     id: 'projects',
     label: 'Projects',
+    labelKey: 'navProjects',
     icon: FolderOpen,
     href: '/chat/projects',
     isActive: (pathname) => isUnder(pathname, '/chat/projects'),
@@ -110,6 +113,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
   {
     id: 'library',
     label: 'Library',
+    labelKey: 'navLibrary',
     icon: LibraryBig,
     href: '/chat/library',
     isActive: (pathname) =>
@@ -119,6 +123,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
   {
     id: 'models',
     label: 'Models',
+    labelKey: 'navModels',
     icon: Brain,
     href: '/models',
     isActive: (pathname) => isUnder(pathname, '/models'),
@@ -127,6 +132,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
   {
     id: 'schedules',
     label: 'Schedules',
+    labelKey: 'navSchedules',
     icon: CalendarClock,
     href: '/chat/schedules',
     isActive: (pathname) => isUnder(pathname, '/chat/schedules'),
@@ -139,6 +145,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
   {
     id: 'admin',
     label: 'Admin',
+    labelKey: 'navAdmin',
     icon: ShieldCheck,
     href: '/admin/directory-sync',
     isActive: (pathname) => isUnder(pathname, '/admin'),
@@ -163,15 +170,16 @@ export function buildAppNavItems(options: {
    * this contains, so a stale or hand-edited value cannot empty the rail.
    */
   hiddenIds?: readonly string[];
+  translate?: (key: string, fallback: string) => string;
 }): SidebarNavItem[] {
-  const { pathname, navigate, isAdmin = false, hiddenIds = [] } = options;
+  const { pathname, navigate, isAdmin = false, hiddenIds = [], translate } = options;
   return APP_NAV_DESTINATIONS.filter((destination) => !destination.adminOnly || isAdmin)
     .filter((destination) => !(destination.hideable && hiddenIds.includes(destination.id)))
     .map((destination) => {
       const { href } = destination;
       return {
         id: destination.id,
-        label: destination.label,
+        label: translate ? translate(destination.labelKey, destination.label) : destination.label,
         icon: destination.icon,
         onClick: () => navigate(href),
         isActive: destination.isActive(pathname),

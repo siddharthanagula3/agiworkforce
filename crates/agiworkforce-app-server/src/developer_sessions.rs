@@ -5,13 +5,13 @@ use agiworkforce_protocol::developer_session::{
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, HookListResponse, InitializeParams, InitializeResponse,
     LocalModelListResponse, McpLoginParams, McpLoginResponse, McpServerListResponse,
-    PluginListResponse, PluginSetEnabledParams, SettingsReadResponse, SettingsWriteParams,
-    SkillConsentParams, SkillConsentResponse, SkillListResponse, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStartResponse,
-    TurnSteerParams, TurnSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    ModelListParams, PluginListResponse, PluginSetEnabledParams, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
+    TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -54,7 +54,15 @@ pub trait DeveloperSessionHost: Send + Sync {
         params: ThreadListParams,
     ) -> Result<ThreadListResponse, DeveloperSessionHostError>;
 
-    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError>;
+    /// Models this host knows about, and whether it can reach them.
+    ///
+    /// `params.refresh` asks for a fresh answer rather than what the session
+    /// already resolved: reachability costs a probe per local runtime and a
+    /// credential lookup per route, so it is not recomputed per request.
+    async fn list_local_models(
+        &self,
+        params: ModelListParams,
+    ) -> Result<LocalModelListResponse, DeveloperSessionHostError>;
 
     async fn resume_thread(
         &self,
@@ -383,11 +391,16 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(serde_json::to_value)
             }
-            method::MODEL_LIST => self
-                .host
-                .list_local_models()
-                .await
-                .map(serde_json::to_value),
+            method::MODEL_LIST => {
+                let params = match parse_optional_params::<ModelListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .list_local_models(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
             method::THREAD_RESUME => {
                 let params = match parse_params::<ThreadIdParams>(&request) {
                     Ok(params) => params,

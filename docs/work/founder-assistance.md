@@ -88,6 +88,18 @@ managed route since the abroad-endpoint exclusion, and the Zhipu default has one
 **Impact** FEATURE-BLOCKING (managed routes for those vendors; cheaper capacity)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [Localization] Translating the v3 namespace for ten languages
+
+**Why founder assistance is required**
+Settings offers twelve languages. The `v3` dictionary that names the sidebar, empty chat, response actions, thinking, artifacts, search, the account menu, customize, skills and connectors is translated for Spanish only; in the other ten languages 255 to 259 of its 330 values are still English (measured 2026-09-15), so a user who picks French, German, Japanese, Hindi, Arabic, Italian, Korean, Portuguese, Russian or Chinese sees most of the chat surface in English. ChatGPT and Claude ship every offered language fully. Producing 2,500 strings is a spend and a brand-voice call: a model-assisted pass reviewed by a native reader per language is the leaders' floor, a vendor is the ceiling.
+**Exact action** Say which of the two routes to take, or narrow the offered languages to the ones that will be reviewed; name a reviewer per kept language if there is one. Say too whether the other clients should follow the account language: today mobile follows the device locale with almost no translated strings, the Chrome extension ships one locale and VS Code has none.
+**Where** `packages/ui/i18n/locales/<lang>/v3.json`; the language control in Settings → General.
+**Needed input** One product decision and, for the model-assisted route, permission to spend plan credits on the batch.
+**How to verify completion** The English-value count per language in `v3.json` drops to the product names only, and the settings pass under each language shows one language on the chat surface.
+**What remains after founder action** The batch itself and its review loop; a key-parity guard already fails the chain when a locale trails the English key set, and a value-level guard for untranslated strings can follow the batch. All engineering.
+**Impact** NON-BLOCKING for English; BLOCKING for offering the other languages honestly
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
 ## [Product] Tool-approval defaults versus the leaders (D-2026-09-10-02)
 
 **Why founder assistance is required**
@@ -465,8 +477,8 @@ model answers instead of returning 400 "Your credit balance is too
 low to access the Anthropic API". A smoke probe on 2026-09-12 04:00 UTC got
 that 400 for every Anthropic model while OpenAI, Google, DeepSeek, Qwen, Moonshot and xAI all
 answered normally.
-**What remains after founder action** Nothing in code. Until it is done every
-Anthropic model is unservable for everyone, not only for event visitors:
+**What remains after founder action** Nothing in code. Since 2026-09-15 the plan parks the unfunded route and serves the same models through the proxy route, so they answer, but the first token arrives after about 4.1 seconds on the cheapest Claude model (dev log 15:37 UTC: the provider span took 4109 ms of a 4306 ms turn, the gateway's own work under 200 ms) where the direct route answered in about a second; beside ChatGPT or Claude that reads as a slow product. Until it is done every
+Anthropic model is served slowly for everyone, not only for event visitors:
 every Anthropic model in the catalogue sits on this one account, so a paying Pro
 or Max subscriber who selects any of them gets a provider error, and they are
 held out of the event allowlist for the same reason.
@@ -666,6 +678,100 @@ extension flows above run end to end.
 **Impact** FEATURE-BLOCKING (native surfaces cannot be exercised end to end)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [Routing] The zero-price OpenRouter router on paid plans
+
+**Why founder assistance is required**
+Whether a paying customer's prompt may reach an upstream that trains on it is a
+data-handling decision, not an engineering one.
+**Exact action**
+Decide one of: keep the privacy-safe default shipped on 2026-09-14 (an explicit
+pick of the zero-price router on any plan sends `data_collection: deny`, so
+training-permitted upstreams are excluded and the router may answer "no
+endpoints" when only those are online); allow training-permitted upstreams for
+explicit picks on paid plans; or remove the router from the paid-plan pickers.
+Also change the company OpenRouter account's privacy settings at
+openrouter.ai/settings/privacy if the first option should succeed more often.
+**Where** `packages/ai/model-registry/catalog/routing-policies.json`,
+`packages/ai/providers/openrouter/src/provider-routing.ts`,
+`docs/research/free-inference-tos-workbook-2026-09-01.md`, the OpenRouter dashboard.
+**Needed input** One sentence naming the option.
+**How to verify completion** A paid-plan pick of the free router answers, and the
+registry contract test still refuses `free_` slots on paid tiers.
+**What remains after founder action** Nothing for the default; a one-line policy
+and provider change for either alternative.
+**Impact** NON-BLOCKING (the picker entry works privacy-safe by default)
+**Status** DECISION REQUESTED
+
+## [Mobile QA] A native sign-in path for the QA account
+
+**Why founder assistance is required**
+The QA user signs in with Google only (no password, a real Gmail inbox nobody on
+the team reads), and the phone cannot mint the Clerk ticket the web and Chrome
+passes use. Every mobile Cloud flow (sync, projects, account rows, shared links)
+therefore stays unverified on the simulator, and setting a credential on an
+account the founder owns is the founder's call.
+**Exact action**
+Either sign in once on the booted iPhone 17 Pro simulator with the QA Google
+account when the mobile fix package lands, or give the QA user a password in the
+Clerk dashboard (Users, the QA user, Set password) and put it in
+`apps/web/.env.local` as `MOBILE_QA_PASSWORD` (gitignored; never in the repo).
+**Where** Clerk dashboard for the development instance; the simulator.
+**Needed input** One of the two actions above.
+**How to verify completion** The mobile Cloud sign-in screen accepts the account
+and the Settings rows resolve to the account's real values.
+**What remains after founder action** Run the mobile Cloud pass (sync, projects,
+account data) and record it in the release doc's verification matrix.
+**Impact** VERIFICATION-BLOCKING (mobile Cloud mode only; Local mode and every
+other client are unaffected)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
+## [Mobile] Enable the Native API on the Clerk development instance
+
+**Why founder assistance is required**
+The iOS app's Cloud sign-in screen renders a heading and no fields: the Clerk
+instance answers `native_api_disabled` ("The Native API is disabled for this
+instance. Visit the Clerk Dashboard to enable it.") to the app's environment
+call, so the native SDK has no sign-in strategies to draw and Clerk never
+reports loaded. This is an instance setting in the Clerk Dashboard, not app
+code, and it also means the item above (a password for the QA user) cannot
+help until it is on.
+**Exact action**
+In the Clerk Dashboard for the development instance (`handy-jawfish-73`), open
+Native applications and enable the Native API; add the iOS bundle id
+`com.agiworkforce.app` if the page asks for one. Repeat on the production
+instance before a store build.
+**Where** Clerk Dashboard, development instance, then production.
+**Needed input** One toggle per instance.
+**How to verify completion** A fresh launch of the iOS app shows sign-in
+fields on the Cloud Account screen and the Settings rows resolve from "Sign
+in" to the account's values after signing in.
+**What remains after founder action** Run the mobile Cloud pass (sync,
+projects, account data) and record it in the release doc's matrix.
+**Impact** VERIFICATION-BLOCKING (mobile Cloud mode; Local mode is unaffected)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
+## [Chrome QA] One click on Chrome's host-permission prompt
+
+**Why founder assistance is required**
+The side panel's Site Allowlist "Add" now asks Chrome for read access to the
+site (it used to write storage only, so page context never worked). Chrome
+answers with its own native prompt, which is browser chrome: Playwright cannot
+see or click it, and the computer-use tools are read-only over browsers. The
+happy path therefore has unit coverage and no live proof.
+**Exact action**
+Load the extension from `apps/extension/dist` (or the store build), open the side
+panel on any site, choose Settings, Site Allowlist, click Add, click Allow on
+Chrome's prompt, turn on "Add the browser page" and ask "What is this page
+about?". One minute.
+**Where** Chrome on the founder's machine.
+**Needed input** One click on Allow, then a yes or no.
+**How to verify completion** The reply describes the page and the outgoing
+message carries page context; a refusal still shows the panel's own sentence.
+**What remains after founder action** Record the result in the release doc's
+verification matrix and the Screen Studio gate.
+**Impact** VERIFICATION-BLOCKING (page context in the side panel only)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
 ## [Durability] Ship the world transport fix and end the two stranded runs
 
 **Why founder assistance is required**
@@ -835,4 +941,119 @@ shipped and are pinned by tests. The subprocessors and trust dates were bumped
 already, since those are display-only and the subprocessors page runs its
 objection window from the date it publishes.
 **Impact** NON-BLOCKING (the policies are now accurate; this is about notice)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [QA] Re-grant Accessibility to the process that runs the agents
+
+**Why founder assistance is required**
+From about 10:05 local time on 2026-09-14, synthetic input from the agents'
+shell (System Events, CGEvent clicks, keystrokes) reaches no application:
+window counts read zero for every app, a click at a known control changes
+nothing, a keystroke types nowhere, while screen capture still works. At 09:08
+the same commands clicked the desktop shell's capability prompt. Accessibility
+is a per-process grant in System Settings on the founder's machine, and an
+agent must not change it.
+**Exact action**
+System Settings, Privacy and Security, Accessibility: confirm the terminal (or
+Claude) process that runs the agents is listed and on; turn it off and on if it
+already is. Then re-run the VS Code sidebar leg of the browser tool: with the
+dev host open on the QA project and a browser paired, type a prompt that asks
+for the open page's title. One minute.
+**Where** System Settings on the founder's machine.
+**Needed input** The toggle, then a yes or no on the sidebar leg.
+**How to verify completion** An osascript count of Finder's windows through
+System Events returns a number above zero, and the VS Code sidebar's transcript
+shows the paired page's title.
+**What remains after founder action** Record the sidebar leg in the release
+doc's verification matrix (VS Code to Chrome moves from the app-server
+boundary to the sidebar itself) and the native-prompt proofs run unattended
+again.
+**Impact** VERIFICATION-BLOCKING (the VS Code sidebar leg of the browser tool
+and every native-prompt proof)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
+## [Product] The CLI's OpenAI sign-in runs a ChatGPT-subscription OAuth flow
+
+**Why founder assistance is required**
+`agi login openai` authenticates "with OpenAI (ChatGPT Plus/Pro subscription)"
+by opening an OAuth authorization on OpenAI's server with a client id and a
+simplified-flow flag that belong to OpenAI's own Codex CLI, then asking the
+user to paste the callback code. Whether AGI Workforce may use another
+vendor's OAuth client to draw on a user's ChatGPT subscription is an
+authorization and terms question, and it sits against the product's own model
+(users pay AGI for a plan; a vendor API key is the optional "Your key" path).
+On 2026-09-14 the founder said VS Code and the CLI should run on the AGI Pro
+or Max subscription rather than ask for an OpenAI sign-in.
+**Exact action**
+Decide whether the ChatGPT-subscription flow stays. Recommendation: remove it,
+keep `agi login openai` as API-key entry for "Your key", and let `agi login`
+with no provider sign in to the AGI account. Until the decision, no client
+offer and no CLI copy leads to that flow (protocol-4 in the release doc).
+**Where** `apps/cli/src/oauth.rs` (the provider entry and the authorize URL),
+`apps/cli/src/auth.rs` (the ChatGPT client id and the subscription check).
+**Needed input** One decision: remove, or keep with the founder's own
+authorization on record.
+**How to verify completion** Either the two files no longer carry the ChatGPT
+client id and the subscription copy, and `agi login openai` asks for an API
+key, or a dated note records the authorization to keep the flow.
+**What remains after founder action** Nothing on removal beyond the commit;
+on keeping it, a release note stating the flow's basis.
+**Impact** NON-BLOCKING for the product; a terms exposure while it ships.
+**Status** BLOCKED, FOUNDER DECISION REQUIRED
+
+## [Desktop QA] One click on the shell's run-commands consent for the QA folder
+
+**Why founder assistance is required**
+Starting a coding session in a folder from the desktop shell raises the
+shell's own consent sheet ("Allow AGI Workforce to run commands in
+.../scratchpad/qa-project? ... This is a high-impact permission."). Every
+grant on this machine was cleared during an earlier cleanup, and an agent
+must not answer a high-impact consent on a person's behalf; the machine's
+accessibility grant is also broken (the item above), so the sheet cannot be
+clicked by automation either. The composer's Local mode is proven up to that
+sheet: it names the host command and the right folder, and the managed API is
+never called.
+**Exact action**
+With the dev shell running on the dev origin, open AGI Code, choose "Add a
+folder" in the environment menu and approve the scratch folder on the native
+"Choose a project folder" sheet, then keep Local · qa-project selected, send
+"Reply with only: ok" on the cheap model the chip names, and click "Allow this
+session" on the consent sheet. Two clicks; after them both the folder path
+and the turn can be driven by automation again. One minute.
+**Where** The Electron shell on the founder's machine.
+**Needed input** Two clicks, then a yes or no on the reply.
+**How to verify completion** The transcript shows the reply and the session
+appears under On this device with the Desktop source.
+**What remains after founder action** Record the turn in the release doc's
+verification matrix for the coding surface's Local mode.
+**Impact** VERIFICATION-BLOCKING (the last leg of the Local composer proof)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
+## [Providers] A managed route answers with exhausted provider billing
+
+**Why founder assistance is required**
+On 2026-09-14 a direct turn on the managed route for one Anthropic model
+returned 503 with `provider_billing_exhausted` on the dev server: the
+provider account behind that route is out of credit. The route's health
+state had not been marked degraded, so the catalogue still offered the model
+and the panel showed nothing for it while Auto answered on another route.
+Topping up or changing the provider account is a billing action on the
+founder's accounts.
+**Exact action**
+Check the Anthropic account the managed cloud route uses (the key in the
+deployment's environment), top it up or replace the key, and confirm one
+cheap turn on that route answers. Then confirm the billing alert on that
+account reaches you before it runs dry again.
+**Where** The provider's billing console and the deployment's environment.
+**Needed input** The top-up, and a yes that the alert is set.
+**How to verify completion** A turn on that route returns 200 on the dev
+server and in production.
+**What remains after founder action** Nothing on the engineering side: F56
+landed in ff92e2e0d (the picker, the dispatcher and the hosted model list read
+one unfunded-credential fact, and a turn is steered to another transport of
+the same model for the cooldown window; the marks clear on their own once the
+route answers again). The first explicit turn after a quiet window still
+reaches the unfunded route once per window (F58 in the release doc).
+**Impact** USER-VISIBLE while it lasts (one provider family unusable on the
+plan), NON-BLOCKING for the release.
 **Status** BLOCKED, FOUNDER ACTION REQUIRED

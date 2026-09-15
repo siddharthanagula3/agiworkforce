@@ -1,6 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
+import type { TurnFailureAction, TurnFailureCode } from '@agiworkforce/types/protocol';
 import type {
   AppServerCapabilities,
   AppServerNotification,
@@ -34,8 +35,11 @@ import type {
   SlashCommandListResponse,
   SlashCommandRunResponse,
 } from '@agiworkforce/types/protocol';
+import { redactSecrets } from '../core/telemetry';
+import { trackRuntimeChild } from './runtimeProcessRegistry';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
+const MAX_REJECTED_LINE_CHARS = 400;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SHUTDOWN_ACK_TIMEOUT_MS = 7_000;
 // A device grant runs at the user's pace in a browser, and an MCP sign-in
@@ -164,8 +168,11 @@ const threadSummarySchema = z.object({
   trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
   createdAt: z.string(),
   updatedAt: z.string(),
-  createdBy: z.enum(['cli', 'vscode']),
+  createdBy: z.enum(['cli', 'vscode', 'desktop']),
   status: z.enum(['idle', 'running', 'awaiting_approval', 'archived', 'failed']),
+  gitBranch: z.string().min(1).max(512).optional(),
+  worktreeRoot: z.string().min(1).max(16_384).optional(),
+  client: z.string().min(1).max(200).optional(),
 });
 
 const threadStartResponseSchema = z.object({ thread: threadSummarySchema });
@@ -185,6 +192,27 @@ const threadReadResponseSchema = z.object({
     .max(10_000),
   transcriptTruncated: z.boolean(),
 });
+const hostModelSummarySchema = z.object({
+  id: z.string().min(1),
+  provider: z.string().min(1),
+  reachable: z.boolean(),
+  unreachable: z
+    .object({
+      code: z.string().min(1),
+      action: z.enum([
+        'sign_in_provider',
+        'sign_in_account',
+        'upgrade_plan',
+        'open_settings',
+        'retry',
+        'none',
+      ]),
+      provider: z.string().optional(),
+    })
+    .optional(),
+  trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
+});
+
 const localModelListResponseSchema = z.object({
   models: z.array(
     z.object({
@@ -192,6 +220,7 @@ const localModelListResponseSchema = z.object({
       provider: z.enum(['ollama', 'lmstudio']),
     }),
   ),
+  hostModels: z.array(hostModelSummarySchema).optional(),
 });
 const turnSummarySchema = z.object({
   id: z.string().min(1),
@@ -337,6 +366,47 @@ const outputDeltaEventSchema = z.object({
   turnId: z.string().min(1),
   delta: z.string(),
 });
+// Keyed by the protocol's own unions, so a code the CLI learns to send fails
+// the typecheck here instead of making the whole terminal event unparsable,
+// which left the sidebar running forever on a signed-out turn.
+const TURN_FAILURE_CODE_KNOWN: Record<TurnFailureCode, true> = {
+  provider_auth_missing: true,
+  account_signed_out: true,
+  plan_excludes_model: true,
+  provider_auth_invalid: true,
+  provider_rate_limited: true,
+  provider_unavailable: true,
+  context_window_exceeded: true,
+  network: true,
+  tool_denied: true,
+  interrupted: true,
+  timeout: true,
+  invalid_request: true,
+  unknown: true,
+};
+const TURN_FAILURE_ACTION_KNOWN: Record<TurnFailureAction, true> = {
+  sign_in_provider: true,
+  sign_in_account: true,
+  upgrade_plan: true,
+  open_settings: true,
+  retry: true,
+  none: true,
+};
+const TURN_FAILURE_CODES = Object.keys(TURN_FAILURE_CODE_KNOWN) as [
+  TurnFailureCode,
+  ...TurnFailureCode[],
+];
+const TURN_FAILURE_ACTIONS = Object.keys(TURN_FAILURE_ACTION_KNOWN) as [
+  TurnFailureAction,
+  ...TurnFailureAction[],
+];
+const turnFailureSchema = z.object({
+  code: z.enum(TURN_FAILURE_CODES).catch('unknown'),
+  message: z.string().max(10_000),
+  provider: z.string().min(1).max(200).optional(),
+  retryable: z.boolean(),
+  action: z.enum(TURN_FAILURE_ACTIONS).catch('none'),
+});
 const turnTerminalEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
@@ -345,6 +415,7 @@ const turnTerminalEventSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   error: z.string().nullable().optional(),
+  failure: turnFailureSchema.nullable().optional().catch(null),
 });
 const approvalRequestedEventSchema = z.object({
   threadId: z.string().min(1),
@@ -634,7 +705,13 @@ class JsonlConnection {
     try {
       parsed = JSON.parse(line);
     } catch {
-      this.close(new Error('AGI local runtime emitted malformed JSON'));
+      this.close(
+        new Error(
+          `AGI local runtime emitted malformed JSON on its protocol stream: ${JSON.stringify(
+            redactSecrets(line.slice(0, MAX_REJECTED_LINE_CHARS)),
+          )}`,
+        ),
+      );
       return;
     }
 
@@ -744,10 +821,10 @@ export class LocalRuntimeClient {
     ) as ThreadListResponse;
   }
 
-  async listLocalModels(): Promise<LocalModelListResponse> {
+  async listLocalModels(options: { refresh?: boolean } = {}): Promise<LocalModelListResponse> {
     const connection = await this.readyConnection();
     return localModelListResponseSchema.parse(
-      await connection.request('model/list', {}),
+      await connection.request('model/list', options.refresh === true ? { refresh: true } : {}),
     ) as LocalModelListResponse;
   }
 
@@ -1090,6 +1167,7 @@ export class LocalRuntimeClient {
     }
     this.stderrTail = '';
     this.child = child;
+    const releaseTracking = trackRuntimeChild(child);
     let resolveChildExit!: () => void;
     const childExitPromise = new Promise<void>((resolve) => {
       resolveChildExit = resolve;
@@ -1111,12 +1189,16 @@ export class LocalRuntimeClient {
       this.stderrTail = `${this.stderrTail}${chunk}`.slice(-64 * 1024);
     });
     child.once('error', (error) => {
-      if (child.pid === undefined) resolveChildExit();
+      if (child.pid === undefined) {
+        releaseTracking();
+        resolveChildExit();
+      }
       if (this.child === child && this.connection === connection) {
         this.resetProcess(describeSpawnFailure(cliPath, error));
       }
     });
     child.once('exit', (code, signal) => {
+      releaseTracking();
       resolveChildExit();
       const detail = this.stderrTail.trim();
       const suffix = detail === '' ? '' : `: ${detail}`;
@@ -1212,5 +1294,7 @@ async function terminateLocalRuntimeProcessTree(
     killer.once('exit', () => resolve());
   });
 }
+
+export type TurnFailureEvent = z.infer<typeof turnFailureSchema>;
 
 export type { AppServerCapabilities };

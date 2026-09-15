@@ -26,7 +26,15 @@ pub(super) fn validate_file_write_path(path_str: &str) -> std::result::Result<Pa
     crate::path_security::validate_workspace_write_path(path_str)
 }
 
+pub(super) use crate::path_security::display_path;
+
+/// The TUI renders every tool call as its own transcript cell, and a stderr
+/// write while it owns the terminal lands outside ratatui's buffer, so this
+/// line is only for the exec and REPL surfaces.
 pub(super) fn print_tool_status(tool_name: &str, display: &str) {
+    if crate::tui::tui_active() {
+        return;
+    }
     eprintln!(
         "  {} {}",
         ts::accent_header(format!("[{}]", tool_name)),

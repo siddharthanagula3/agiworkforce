@@ -4,6 +4,7 @@ import {
   type CloudAgentRun,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { agentTaskStateLabel } from '@agiworkforce/types';
 import {
   ALL_MANAGED_RUN_STATES,
   cancelChromeManagedRun,
@@ -341,18 +342,6 @@ type RunFilter = 'active' | 'all';
 type RunStateTone = 'active' | 'attention' | 'success' | 'danger' | 'muted';
 type StatusOrigin = 'progress' | 'load' | 'action';
 
-const RUN_STATE_LABELS: Record<CloudAgentRun['state'], string> = {
-  queued: 'Queued',
-  running: 'Running',
-  awaiting_input: 'Needs approval',
-  ready_for_review: 'Ready for review',
-  completed: 'Completed',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-  paused: 'Paused',
-  archived: 'Archived',
-};
-
 const RUN_STATE_TONES: Record<CloudAgentRun['state'], RunStateTone> = {
   queued: 'active',
   running: 'active',
@@ -483,7 +472,7 @@ function describeEnvelope(envelope: AgentEventEnvelope): JournalEntry | null {
     case 'artifact-produced':
       return { kind: 'tool', title: `Artifact: ${event.name}` };
     case 'task-state-changed':
-      return { kind: 'state', title: RUN_STATE_LABELS[event.state] };
+      return { kind: 'state', title: agentTaskStateLabel(event.state) };
     case 'error':
       return { kind: 'error', title: event.message };
     default:
@@ -653,7 +642,13 @@ export function buildCloudRunsPanel(
     if (!pending) return null;
 
     const card = el('div', { class: 'sp-run-approval', role: 'group' });
-    card.appendChild(el('div', { class: 'sp-run-approval-title' }, `Waiting on you, ${run.model}`));
+    card.appendChild(
+      el(
+        'div',
+        { class: 'sp-run-approval-title' },
+        `${agentTaskStateLabel('awaiting_input')}, ${run.model}`,
+      ),
+    );
     for (const call of pending.toolCalls) {
       card.appendChild(
         el('div', { class: 'sp-run-approval-call' }, `${call.name}\n${call.argsPreview}`),
@@ -758,7 +753,7 @@ export function buildCloudRunsPanel(
       type: 'button',
       class: 'sp-run-row',
       'data-run-id': run.id,
-      'aria-label': `Open ${WORK_MODE_LABELS[run.workMode]} run, ${RUN_STATE_LABELS[run.state]}`,
+      'aria-label': `Open ${WORK_MODE_LABELS[run.workMode]} run, ${agentTaskStateLabel(run.state)}`,
     });
 
     const head = el('div', { class: 'sp-run-row-head' });
@@ -766,7 +761,7 @@ export function buildCloudRunsPanel(
       el(
         'span',
         { class: 'sp-run-badge', 'data-tone': RUN_STATE_TONES[run.state] },
-        RUN_STATE_LABELS[run.state],
+        agentTaskStateLabel(run.state),
       ),
     );
     head.appendChild(el('span', { class: 'sp-run-time' }, formatRelativeTime(run.updatedAt, now)));
@@ -826,7 +821,7 @@ export function buildCloudRunsPanel(
         el(
           'span',
           { class: 'sp-run-badge', 'data-tone': RUN_STATE_TONES[run.state] },
-          RUN_STATE_LABELS[run.state],
+          agentTaskStateLabel(run.state),
         ),
       );
       head.appendChild(

@@ -6,8 +6,15 @@ import {
 import { SETTINGS_DEEP_LINK_QUERY_KEY } from '@/features/settings/lib/web-settings-sections';
 import { isWebSettingsSection } from '@/features/settings/lib/web-settings-sections';
 
-const CHAT_PATH = '/chat';
-const PROJECT_PATH = '/chat/projects';
+/**
+ * Where the product starts. The shell opens here, a deep link resolves against
+ * it, and a page the shell reached by mistake offers it instead of the
+ * marketing home, which the shell does not host.
+ */
+export const PRODUCT_HOME_PATH = '/chat';
+
+const CHAT_PATH = PRODUCT_HOME_PATH;
+const PROJECT_PATH = `${PRODUCT_HOME_PATH}/projects`;
 
 export function conversationDeepLink(conversationId: string): string {
   return desktopDeepLink('chat', conversationId);
@@ -24,6 +31,8 @@ export function deepLinkDestination(url: string): string | null {
 
   if (link.target === 'chat') return `${CHAT_PATH}/${encodeURIComponent(link.id)}`;
   if (link.target === 'project') return `${PROJECT_PATH}/${encodeURIComponent(link.id)}`;
-  if (!isWebSettingsSection(link.id)) return null;
+  // A `agiworkforce-cloud://settings/...` link only ever arrives from the
+  // shell, so the desktop-only sections are routable here.
+  if (!isWebSettingsSection(link.id, true)) return null;
   return `${CHAT_PATH}?${SETTINGS_DEEP_LINK_QUERY_KEY}=${encodeURIComponent(link.id)}`;
 }

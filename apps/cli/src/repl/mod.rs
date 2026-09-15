@@ -40,7 +40,7 @@ pub async fn run_repl(
     resume_managed_session: Option<ManagedSessionResume>,
     max_turns: Option<usize>,
     skip_permissions: bool,
-    fallback_model: Option<String>,
+    fallback_chain: crate::routing::fallback::FallbackChain,
     session_name: Option<String>,
     team_mode: bool,
     auto_approve_safe: bool,
@@ -54,13 +54,21 @@ pub async fn run_repl(
     agent_name: Option<String>,
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
-    let provider_override = crate::models::selection_provider_override(
+    crate::tier_cache::ensure_plan_models_cached().await;
+    let provider_override = crate::models::plan_first_provider_override(
+        &crate::models::AccountRoute::load(),
         model,
         &config.default.model,
         &config.default.provider,
         provider_override,
     );
-    let provider = crate::models::resolve_selected_provider(model, provider_override)?;
+    let provider_override = provider_override.as_deref();
+    let provider = crate::models::select_turn_route(
+        config,
+        &crate::models::AccountRoute::load(),
+        model,
+        provider_override,
+    )?;
     let provider_str = crate::models::provider_name(&provider).to_string();
     output::print_compact_header(&provider_str);
     output::print_banner(model, &provider_str);
@@ -75,7 +83,9 @@ pub async fn run_repl(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
-    session.fallback_model = fallback_model;
+    if fallback_chain.primaries.len() > 1 {
+        session.fallback_chain = Some(fallback_chain);
+    }
     session.session_name = session_name;
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
@@ -689,7 +699,7 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
             }
         }
         Err(e) => {
-            output::print_error(&format!("{:#}", e));
+            output::print_error(&crate::errors::terminal_text(&e));
         }
     }
 }
