@@ -2369,7 +2369,10 @@ describe('what the local chip row and menu say about a folder', () => {
     render(<CloudCodePage api={createApi()} />);
 
     const menu = await openEnvironment(user);
-    await user.click(within(menu).getByRole('menuitemradio', { name: /moved-project/ }));
+    const row = within(menu).getByRole('menuitemradio', { name: /moved-project/ });
+    expect(row).toHaveTextContent('Cannot run here');
+    expect(row).not.toHaveTextContent('Add it again');
+    await user.click(row);
 
     expect(
       await screen.findByRole('button', { name: 'Local · moved-project' }),

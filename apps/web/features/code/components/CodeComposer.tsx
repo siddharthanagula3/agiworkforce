@@ -329,18 +329,20 @@ function EnvironmentChip({
                   onDraftChange({ environment: 'local', localRootId: value })
                 }
               >
-                {local.folders.map((choice) => (
-                  <DropdownMenuRadioItem key={choice.rootId} value={choice.rootId}>
-                    <span className={styles['menuRowLabel']}>
-                      <span className={styles['optionLabel']}>{choice.name}</span>
-                      {(choice.unavailable ?? choice.branch) && (
-                        <span className={styles['optionCopy']}>
-                          {choice.unavailable ?? choice.branch}
-                        </span>
-                      )}
-                    </span>
-                  </DropdownMenuRadioItem>
-                ))}
+                {local.folders.map((choice) => {
+                  const secondary =
+                    choice.unavailable === null
+                      ? choice.branch
+                      : CODE_COPY.environmentFolderUnavailable;
+                  return (
+                    <DropdownMenuRadioItem key={choice.rootId} value={choice.rootId}>
+                      <span className={styles['menuRowLabel']}>
+                        <span className={styles['optionLabel']}>{choice.name}</span>
+                        {secondary && <span className={styles['optionCopy']}>{secondary}</span>}
+                      </span>
+                    </DropdownMenuRadioItem>
+                  );
+                })}
               </DropdownMenuRadioGroup>
               <DropdownMenuItem
                 disabled={local.adding}

@@ -178,6 +178,7 @@ export const CODE_COPY = {
 
   environmentLocal: 'Local',
   environmentCloud: 'Cloud',
+  environmentFolderUnavailable: 'Cannot run here',
 
   repositoryChange: 'Change repository',
   branchEdit: 'Change the branch',
