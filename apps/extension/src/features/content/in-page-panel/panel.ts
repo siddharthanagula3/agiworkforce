@@ -18,10 +18,11 @@
  */
 
 import { sanitizePageText } from '../../../background/policy';
+import { isDomSmallEnoughToRead } from '../../../dom-helpers';
 import type { InPagePromptOutcome, InPagePromptResponse } from '../../../types';
 import { getPageActions, truncatePageText } from './pageActions';
 import type { PageAction } from './pageActions';
-import { buildPanelStyles } from './panelStyles';
+import { buildPanelStyles, PANEL_SLIDE_MS } from './panelStyles';
 import {
   ArrowUp,
   Clock,
@@ -322,32 +323,49 @@ function autoResizeTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
 }
 
-function capturePageContext(): {
+interface PageContext {
   url: string;
   title: string;
   pageText: string;
-  actions: PageAction[];
-} {
-  const url = window.location.href;
-  const title = truncatePageText(sanitizePageText(document.title || 'Untitled'), 300);
-  const pageText = truncatePageText(sanitizePageText(document.body?.innerText ?? ''));
-  const actions = getPageActions(url);
-  return { url, title, pageText, actions };
+}
+
+const MAX_PAGE_TITLE_CHARS = 300;
+const MIN_MAIN_REGION_CHARS = 200;
+
+function readVisiblePageText(): string {
+  if (!isDomSmallEnoughToRead()) return '';
+  const main = document.querySelector<HTMLElement>('main, article, [role="main"]');
+  const mainText = main?.innerText.trim() ?? '';
+  const raw =
+    mainText.length >= MIN_MAIN_REGION_CHARS ? mainText : (document.body?.innerText ?? '');
+  return sanitizePageText(truncatePageText(raw));
+}
+
+function capturePageContext(): PageContext {
+  return {
+    url: window.location.href,
+    title: sanitizePageText(truncatePageText(document.title || 'Untitled', MAX_PAGE_TITLE_CHARS)),
+    pageText: readVisiblePageText(),
+  };
 }
 
 function updateDisclosure(
   disclosure: HTMLElement,
-  context: ReturnType<typeof capturePageContext>,
+  url: string,
+  capturedChars: number | null,
 ): void {
   let source = 'this approved page';
   try {
-    source = new URL(context.url).hostname || source;
+    source = new URL(url).hostname || source;
   } catch {
     // The page URL is only a label; an unparsable URL must not hide the notice.
   }
+  const volume =
+    capturedChars === null
+      ? 'up to 30,000 characters of visible text'
+      : `${capturedChars.toLocaleString()} characters of visible text (30,000 maximum)`;
   disclosure.textContent =
-    `This panel can send visible text from ${source} ` +
-    `(${context.pageText.length.toLocaleString()} characters; 30,000 maximum) to ` +
+    `This panel can send ${volume} from ${source} to ` +
     'AGI Managed Cloud with your requests. The extension redacts patterns that resemble ' +
     'secrets; review page content before sending. Each response replaces the previous one here; ' +
     'open the side panel for a saved conversation.';
@@ -362,12 +380,12 @@ export function createPanel(): {
 } {
   const host = document.createElement('div');
   host.setAttribute('data-agi-panel', 'true');
-  host.style.cssText = 'all:initial;';
+  host.style.cssText =
+    'all:initial;position:fixed;top:0;left:0;width:0;height:0;overflow:visible;z-index:2147483647;';
 
   const shadow = host.attachShadow({ mode: 'closed' });
   const els = buildPanelDOM(shadow);
 
-  let ctx = capturePageContext();
   let requestInFlight = false;
   let returnFocus: HTMLElement | null = null;
 
@@ -396,13 +414,17 @@ export function createPanel(): {
     );
   }
 
+  function refreshContext(): PageContext {
+    const fresh = capturePageContext();
+    updateDisclosure(els.disclosure, fresh.url, fresh.pageText.length);
+    return fresh;
+  }
+
   function rebuildChips(): void {
-    ctx = capturePageContext();
-    updateDisclosure(els.disclosure, ctx);
-    buildActionChips(ctx.actions, els.actionsRow, (action) => {
-      const fresh = capturePageContext();
-      ctx = fresh;
-      updateDisclosure(els.disclosure, fresh);
+    const url = window.location.href;
+    updateDisclosure(els.disclosure, url, null);
+    buildActionChips(getPageActions(url), els.actionsRow, (action) => {
+      const fresh = refreshContext();
       runPrompt(
         action.buildPrompt(fresh.title, ''),
         `Page title: ${fresh.title}\n\nVisible page text:\n${fresh.pageText}`,
@@ -413,18 +435,15 @@ export function createPanel(): {
   rebuildChips();
 
   window.addEventListener('popstate', rebuildChips);
-  const _origPushState = history.pushState.bind(history);
-  history.pushState = function (...args: Parameters<typeof history.pushState>) {
-    _origPushState(...args);
-    rebuildChips();
-  };
+  (window as Window & { navigation?: EventTarget }).navigation?.addEventListener(
+    'currententrychange',
+    rebuildChips,
+  );
 
   function submitComposer(): void {
     const text = els.textarea.value.trim();
     if (!text || requestInFlight) return;
-    const fresh = capturePageContext();
-    ctx = fresh;
-    updateDisclosure(els.disclosure, fresh);
+    const fresh = refreshContext();
     els.textarea.value = '';
     autoResizeTextarea(els.textarea);
     syncComposerState();
@@ -443,14 +462,40 @@ export function createPanel(): {
     syncComposerState();
   });
 
-  void ctx;
-
   let isOpen = false;
+  let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function withdrawFromPage(afterSlide: boolean): void {
+    els.panel.setAttribute('inert', '');
+    els.panel.setAttribute('aria-hidden', 'true');
+    if (hideTimer !== null) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    if (!afterSlide) {
+      els.panel.classList.add('agi-panel--hidden');
+      return;
+    }
+    hideTimer = setTimeout(() => {
+      hideTimer = null;
+      els.panel.classList.add('agi-panel--hidden');
+    }, PANEL_SLIDE_MS);
+  }
+
+  withdrawFromPage(false);
 
   function open(): void {
     if (isOpen) return;
     isOpen = true;
+    if (hideTimer !== null) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    els.panel.classList.remove('agi-panel--hidden');
+    els.panel.removeAttribute('inert');
+    els.panel.removeAttribute('aria-hidden');
     els.panel.classList.add('open');
+    refreshContext();
     els.textarea.focus();
   }
 
@@ -458,6 +503,7 @@ export function createPanel(): {
     if (!isOpen) return;
     isOpen = false;
     els.panel.classList.remove('open');
+    withdrawFromPage(true);
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
   }
 

@@ -1,4 +1,3 @@
-
 const {
   withAppBuildGradle,
   withDangerousMod,
@@ -84,10 +83,16 @@ function withVisionOCRMainApplication(config) {
       }
 
       if (!mainApp.includes(PACKAGE_REGISTRATION)) {
-        mainApp = mainApp.replace(
+        const registered = mainApp.replace(
           /(getPackages\(\)[^{]*\{[^}]*apply\s*\{)/s,
           `$1\n      ${PACKAGE_REGISTRATION}`,
         );
+        if (registered === mainApp) {
+          throw new Error(
+            `${PLUGIN_NAME}: could not find the getPackages() apply block in MainApplication.kt`,
+          );
+        }
+        mainApp = registered;
       }
 
       fs.writeFileSync(mainAppPath, mainApp, 'utf8');

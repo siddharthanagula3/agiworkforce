@@ -34,8 +34,6 @@ export type NativeMessageType =
   | 'APPROVE_CONTEXT_HANDOFF'
   | 'CANCEL_CONTEXT_HANDOFF'
   | 'RUN_PAGE_ACTIONS'
-  | 'CAPTURE_ELEMENT'
-  | 'GET_ELEMENT_INFO'
   | 'AUTO_FILL_JOB_APPLICATION'
   | 'QUEUE_MESSAGE'
   | 'CHAT_MESSAGE'
@@ -46,11 +44,6 @@ export type NativeMessageType =
   | 'GET_COMPUTER_USE_STATE'
   | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
-  | 'SET_COOKIE'
-  | 'GET_ALL_TABS'
-  | 'CREATE_TAB'
-  | 'CLOSE_TAB'
-  | 'SWITCH_TAB'
   | 'GET_ACCESSIBILITY_TREE'
   | 'START_RECORDING'
   | 'STOP_RECORDING'
@@ -69,7 +62,6 @@ export type NativeMessageType =
   | 'WEBMCP_DISCOVER_TOOLS'
   | 'WEBMCP_CALL_TOOL'
   | 'WEBMCP_TOOLS_CHANGED'
-  | 'NLWEB_DETECTED'
   | 'SAVE_SHORTCUT'
   | 'LIST_SHORTCUTS'
   | 'DELETE_SHORTCUT'
@@ -480,20 +472,6 @@ export interface RunPageActionsResponse {
   error?: string;
 }
 
-export interface CaptureElementMessage extends BaseMessage {
-  type: 'CAPTURE_ELEMENT';
-}
-
-export interface GetElementInfoMessage extends BaseMessage {
-  type: 'GET_ELEMENT_INFO';
-}
-
-export interface ElementInfoResponse {
-  success: boolean;
-  element?: Record<string, unknown>;
-  error?: string;
-}
-
 export interface QueueMessageMessage extends BaseMessage {
   type: 'QUEUE_MESSAGE';
   id: string;
@@ -609,78 +587,6 @@ export type InPagePromptResponse =
 
 export interface OpenSidePanelMessage extends BaseMessage {
   type: 'OPEN_SIDE_PANEL';
-}
-
-export interface CookieDetails {
-  name: string;
-  value: string;
-  domain?: string;
-  path?: string;
-  secure?: boolean;
-  httpOnly?: boolean;
-  url?: string;
-}
-
-export interface SetCookieMessage extends BaseMessage {
-  type: 'SET_COOKIE';
-  cookie: CookieDetails;
-}
-
-export interface SetCookieResponse {
-  success: boolean;
-  error?: string;
-}
-
-export interface GetAllTabsMessage extends BaseMessage {
-  type: 'GET_ALL_TABS';
-}
-
-export interface TabInfo {
-  id?: number;
-  url?: string;
-  title?: string;
-  favIconUrl?: string;
-  active?: boolean;
-  windowId?: number;
-  status?: string;
-}
-
-export interface GetAllTabsResponse {
-  success: boolean;
-  data?: TabInfo[];
-  error?: string;
-}
-
-export interface CreateTabMessage extends BaseMessage {
-  type: 'CREATE_TAB';
-  url: string;
-  active?: boolean;
-}
-
-export interface CreateTabResponse {
-  success: boolean;
-  data?: TabInfo;
-  error?: string;
-}
-
-export interface CloseTabMessage extends BaseMessage {
-  type: 'CLOSE_TAB';
-  tabId: number;
-}
-
-export interface CloseTabResponse {
-  success: boolean;
-  error?: string;
-}
-
-export interface SwitchTabMessage extends BaseMessage {
-  type: 'SWITCH_TAB';
-  tabId: number;
-}
-
-export interface SwitchTabResponse {
-  success: boolean;
-  error?: string;
 }
 
 export interface GetAccessibilityTreeMessage extends BaseMessage {
@@ -811,12 +717,6 @@ export interface WebMCPCallToolResponse {
 export interface WebMCPToolsChangedMessage extends BaseMessage {
   type: 'WEBMCP_TOOLS_CHANGED';
   tools: WebMCPToolInfo[];
-  url?: string;
-}
-
-export interface NLWebDetectedMessage extends BaseMessage {
-  type: 'NLWEB_DETECTED';
-  nlweb: import('./nlweb').NLWebDetectionResult;
   url?: string;
 }
 
@@ -1109,8 +1009,6 @@ export type ExtensionMessage =
   | TabReadyMessage
   | SyncPageContextMessage
   | RunPageActionsMessage
-  | CaptureElementMessage
-  | GetElementInfoMessage
   | AutoFillJobApplicationMessage
   | QueueMessageMessage
   | ChatMessageMessage
@@ -1119,11 +1017,6 @@ export type ExtensionMessage =
   | ResolveChatApprovalMessage
   | InPagePromptMessage
   | OpenSidePanelMessage
-  | SetCookieMessage
-  | GetAllTabsMessage
-  | CreateTabMessage
-  | CloseTabMessage
-  | SwitchTabMessage
   | GetAccessibilityTreeMessage
   | BuildAccessibilityTreeMessage
   | StartRecordingMessage
@@ -1142,7 +1035,6 @@ export type ExtensionMessage =
   | WebMCPDiscoverToolsMessage
   | WebMCPCallToolMessage
   | WebMCPToolsChangedMessage
-  | NLWebDetectedMessage
   | AddTabToGroupMessage
   | GetTabGroupStateMessage
   | RemoveTabFromGroupMessage
@@ -1190,15 +1082,9 @@ export type ExtensionResponse =
   | GetCloudAuthTokenResponse
   | TabReadyResponse
   | RunPageActionsResponse
-  | ElementInfoResponse
   | AutoFillJobApplicationResponse
   | ChatMessageResponse
   | InPagePromptResponse
-  | SetCookieResponse
-  | GetAllTabsResponse
-  | CreateTabResponse
-  | CloseTabResponse
-  | SwitchTabResponse
   | GetAccessibilityTreeResponse
   | RecordingResponse
   | WebMCPDiscoverToolsResponse

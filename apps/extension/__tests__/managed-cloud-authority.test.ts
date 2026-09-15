@@ -156,7 +156,7 @@ describe('Managed Cloud account/session authority', () => {
     const deleteCase = sourceBetween(
       backgroundSource,
       "case 'DELETE_SCHEDULED_TASK':",
-      "case 'NLWEB_PROBE'",
+      "case 'IN_PAGE_PROMPT'",
     );
 
     expect(updateCase).toMatch(
@@ -240,7 +240,7 @@ describe('Managed Cloud account/session authority', () => {
     const deleteCase = sourceBetween(
       backgroundSource,
       "case 'DELETE_SCHEDULED_TASK':",
-      "case 'NLWEB_PROBE'",
+      "case 'IN_PAGE_PROMPT'",
     );
 
     expect(createCase).toContain('normalizeManagedCloudOwner(createMessage.owner)');

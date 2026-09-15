@@ -27,9 +27,13 @@ export default function RootErrorBoundary({ error, retry }: ErrorBoundaryProps) 
         <Text style={[styles.description, { color: colors.textSecondary }]}>
           An unexpected error occurred. Please try again.
         </Text>
-        <Text style={[styles.errorText, { color: colors.textMuted }]} numberOfLines={3}>
-          {error.message}
-        </Text>
+        {__DEV__ ? (
+          <Text style={[styles.errorText, { color: colors.textMuted }]} numberOfLines={3}>
+            {error.message}
+          </Text>
+        ) : (
+          <View style={styles.errorSpacer} />
+        )}
 
         <Pressable
           onPress={retry}
@@ -43,6 +47,7 @@ export default function RootErrorBoundary({ error, retry }: ErrorBoundaryProps) 
         <Pressable
           onPress={() => {
             if (router.canGoBack()) router.back();
+            else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
           }}
           style={styles.backButton}
           accessibilityLabel="Go back"
@@ -107,9 +112,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  errorSpacer: {
+    height: 32,
+  },
   backButton: {
     paddingHorizontal: 24,
-    paddingVertical: 8,
+    paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: 8,
   },
   backText: {

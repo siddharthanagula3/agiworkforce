@@ -54,7 +54,11 @@ export default function Article50Screen() {
   };
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView
+      className="flex-1"
+      edges={['bottom']}
+      style={{ backgroundColor: colors.surfaceBase }}
+    >
       <ScrollView
         className="flex-1 px-6"
         contentContainerStyle={{ paddingBottom: 48, paddingTop: 16 }}

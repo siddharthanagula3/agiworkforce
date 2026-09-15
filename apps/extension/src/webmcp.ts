@@ -362,6 +362,35 @@ export function stopWatchingToolChanges(): void {
   toolChangeCallback = null;
 }
 
+export function toolListSignature(tools: WebMCPToolInfo[]): string {
+  return JSON.stringify(
+    tools
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        source: tool.source,
+        inputSchema: tool.inputSchema ?? null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  );
+}
+
+export function startToolChangeReporting(
+  initialTools: WebMCPToolInfo[],
+  report: (tools: WebMCPToolInfo[]) => void,
+): void {
+  if (initialTools.length === 0) return;
+
+  let lastReportedSignature = toolListSignature(initialTools);
+  watchForToolChanges((tools) => {
+    const signature = toolListSignature(tools);
+    if (signature === lastReportedSignature) return;
+    lastReportedSignature = signature;
+    report(tools);
+  });
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', stopWatchingToolChanges);
+  window.addEventListener('pagehide', stopWatchingToolChanges);
 }

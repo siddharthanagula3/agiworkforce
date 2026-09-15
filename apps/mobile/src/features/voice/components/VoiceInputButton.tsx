@@ -354,6 +354,7 @@ export function VoiceInputButton({
         onLongPress={handleLongPress}
         delayLongPress={LONG_PRESS_DELAY_MS}
         disabled={isDisabled}
+        hitSlop={8}
         style={[
           {
             padding: 6,
