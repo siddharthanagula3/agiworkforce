@@ -1,6 +1,5 @@
 ---
 source: apps/cli/src/tui/widgets/snapshot_smoke.rs
-assertion_line: 204
 expression: terminal.backend()
 ---
 "                                                                                "
@@ -18,8 +17,8 @@ expression: terminal.backend()
 "  │──────────────────────────────────────────────────────────────────────────│  "
 "  │Bring your own key · your own provider keys                               │  "
 "  │  Anthropic                                                               │  "
-"  │    fixture-flagship                    Balanced      200K ctx            │  "
-"  │  ● fixture-balanced                    Balanced      200K ctx            │  "
+"  │    Fixture Flagship                    Balanced      200K ctx            │  "
+"  │  ● Fixture Balanced                    Balanced      200K ctx            │  "
 "  │  OpenAI                                                                  │  "
 "  └──────────────────────────────────────────────────────────────────────────┘  "
 "                                                                                "
