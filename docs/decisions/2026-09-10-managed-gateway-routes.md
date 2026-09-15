@@ -1,8 +1,8 @@
 # Decisions pending the founder, 2026-09-10
 
-Status: Pending founder decision
+Status: Decided (see `2026-09-15-founder-decisions.md`)
 Owner: Fable (architect) with the founder
-Last updated: 2026-09-10
+Last updated: 2026-09-15
 
 Decisions in the living decision model's shape
 (`2026-09-05-living-decision-model.md`), kept in their own file because the
