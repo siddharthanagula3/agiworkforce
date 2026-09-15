@@ -3232,11 +3232,7 @@ pub async fn run_main() -> Result<()> {
                         } else if *json {
                             eprintln!(
                                 "{}",
-                                serde_json::to_string_pretty(&serde_json::json!({
-                                    "type": "result",
-                                    "is_error": true,
-                                    "error": format!("{e:#}"),
-                                }))?
+                                serde_json::to_string_pretty(&errors::result_error_json(&e))?
                             );
                         } else {
                             output::print_assistant_end();
@@ -5084,12 +5080,8 @@ pub async fn run_oneshot(
                 println!("{}", serde_json::to_string_pretty(&json_out)?);
             }
             Err(e) => {
-                let json_out = serde_json::json!({
-                    "type": "result",
-                    "is_error": true,
-                    "error": format!("{:#}", e),
-                    "duration_ms": duration_ms,
-                });
+                let mut json_out = errors::result_error_json(&e);
+                json_out["duration_ms"] = duration_ms.into();
                 eprintln!("{}", serde_json::to_string_pretty(&json_out)?);
                 exit_with_error(&e);
             }
@@ -5156,7 +5148,7 @@ pub async fn run_oneshot(
                 }
             }
             Err(e) => {
-                output::print_error(&format!("{:#}", e));
+                output::print_error(&errors::terminal_text(&e));
                 exit_with_error(&e);
             }
         }

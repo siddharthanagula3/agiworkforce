@@ -215,13 +215,29 @@ impl std::error::Error for CliError {}
 /// from the failure's action instead.
 pub fn terminal_text(error: &anyhow::Error) -> String {
     let text = format!("{error:#}");
-    match error
-        .chain()
-        .find_map(|cause| cause.downcast_ref::<CliError>())
-    {
+    match cli_cause(error) {
         Some(cli) => format!("{text}\n{}", cli.hint()),
         None => text,
     }
+}
+
+/// The `--json` result for a failed turn, with the typed kind and the remedy
+/// beside the text so a script reads them without parsing prose.
+pub fn result_error_json(error: &anyhow::Error) -> serde_json::Value {
+    let cli = cli_cause(error);
+    serde_json::json!({
+        "type": "result",
+        "is_error": true,
+        "error": format!("{error:#}"),
+        "kind": cli.map(CliError::kind),
+        "hint": cli.map(CliError::hint),
+    })
+}
+
+fn cli_cause(error: &anyhow::Error) -> Option<&CliError> {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<CliError>())
 }
 
 // ---------------------------------------------------------------------------
@@ -700,6 +716,23 @@ mod tests {
             "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
         ));
         assert_eq!(terminal_text(&anyhow::anyhow!("plain")), "plain");
+    }
+
+    #[test]
+    fn the_json_result_carries_the_kind_and_the_remedy_beside_the_text() {
+        let error = anyhow::Error::new(CliError::AccountSignedOut {
+            model: "fixture-model".to_string(),
+        });
+        let json = result_error_json(&error);
+        assert_eq!(json["is_error"], true);
+        assert_eq!(json["kind"], "account_signed_out");
+        assert!(json["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("No AGI Workforce session"));
+        assert!(json["hint"].as_str().unwrap().contains("agi login"));
+        let plain = result_error_json(&anyhow::anyhow!("plain"));
+        assert!(plain["kind"].is_null() && plain["hint"].is_null());
     }
 
     #[test]
