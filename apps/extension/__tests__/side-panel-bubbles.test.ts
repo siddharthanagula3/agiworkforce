@@ -143,7 +143,7 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     ['failed', 'Failed after 2s', 'path[d="m15 9-6 6"]', false],
     ['cancelled', 'Cancelled after 2s', 'path[d="m15 9-6 6"]', false],
     ['paused', 'Paused after 1s', 'polyline[points="12 6 12 12 16 14"]', false],
-    ['awaiting-approval', 'Needs approval · 1s', 'polyline[points="12 6 12 12 16 14"]', false],
+    ['awaiting-approval', 'Needs your approval · 1s', 'polyline[points="12 6 12 12 16 14"]', false],
   ] as const)(
     'renders the %s agent run with explicit copy and the correct status icon',
     (status, label, iconSelector, usesLoader) => {
@@ -209,6 +209,38 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     const node = buildBubbleWithTools(assistant);
     expect(node.querySelector('.sp-agent-artifact-link')).toBeNull();
     expect(node.textContent).toContain('Download unavailable in Chrome');
+  });
+
+  it('opens the activity block and asks for approval when a paused run holds a waiting tool', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-4', {
+      schemaVersion: 4,
+      sessionId: 'session-1',
+      turnId: 'turn-4',
+      sequence: 1,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'approval-requested',
+        approvalId: 'approval-2',
+        toolCallId: 'call-2',
+        name: 'read_page',
+        category: 'browser',
+        summary: 'Read the current page',
+        input: {},
+        riskLevel: 'low',
+      },
+    });
+    assistant.agentActivity!.status = 'paused';
+
+    const node = buildBubbleWithTools(assistant, { onResolveApproval: vi.fn() });
+    const details = node.querySelector<HTMLDetailsElement>('details.sp-agent-activity');
+
+    expect(details?.open).toBe(true);
+    expect(details?.querySelector('summary')?.textContent).toContain('Needs your approval');
+    expect(
+      node.querySelector<HTMLDetailsElement>('details.sp-agent-step--awaiting-approval')?.open,
+    ).toBe(true);
+    expect(node.querySelector('[aria-label="Approve read_page"]')).not.toBeNull();
   });
 
   it('renders actionable approve and decline controls for a managed tool boundary', () => {
