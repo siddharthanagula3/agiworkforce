@@ -17,7 +17,7 @@
     "lmstudio": "LM Studio"
   },
   "models": {
-    "auto": "Automatico (Recomendado)"
+    "auto": "Automático (Recomendado)"
   },
   "selectProvider": "Seleccionar Proveedor",
   "selectModel": "Seleccionar Modelo",
@@ -35,11 +35,11 @@
   "taskRouting": "Enrutamiento de Tareas",
   "taskRoutingDescription": "Configurar diferentes modelos para diferentes tipos de tareas",
   "search": "Busqueda",
-  "code": "Codigo",
+  "code": "Código",
   "docs": "Documentacion",
   "vision": "Vision",
-  "image": "Generacion de Imagen",
-  "video": "Generacion de Video",
+  "image": "Generación de Imagen",
+  "video": "Generación de Video",
   "comingSoonProviders": {
     "aws_bedrock": "AWS Bedrock"
   },
