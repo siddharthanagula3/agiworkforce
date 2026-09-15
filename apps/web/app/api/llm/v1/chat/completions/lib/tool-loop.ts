@@ -458,6 +458,13 @@ export interface ToolLoopStepBudgetCheckpoint {
   messages: ProcessedRequest['llmRequest']['messages'];
 }
 
+/** The provider's own report of a failure inside its stream. */
+export interface ProviderStreamError {
+  message: string;
+  code?: string;
+  retryable?: boolean;
+}
+
 export interface ToolLoopProviderStepResult {
   lines?: Array<{
     line: string;
@@ -465,6 +472,7 @@ export interface ToolLoopProviderStepResult {
     serverToolStart?: ServerToolStartSignal;
     serverToolResults?: ServerToolResultSignal[];
   }>;
+  providerError?: ProviderStreamError;
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
   textContent: string;
@@ -1380,6 +1388,7 @@ export async function collectProviderStream(
   onLine?: (entry: CollectedProviderLine) => void,
 ): Promise<{
   lines: CollectedProviderLine[];
+  providerError?: ProviderStreamError;
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
   textContent: string;
@@ -1389,6 +1398,7 @@ export async function collectProviderStream(
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   const lines: CollectedProviderLine[] = [];
+  let providerError: ProviderStreamError | undefined;
   const pushLine = (entry: CollectedProviderLine): void => {
     lines.push(entry);
     onLine?.(entry);
@@ -1508,14 +1518,29 @@ export async function collectProviderStream(
           }
         }
 
-        pushLine({
-          line: raw + '\n\n',
-          publicTextDelta,
-          reasoningDelta,
-          serverToolStart,
-          serverToolResults,
-          searchActivity: serverToolStart !== undefined || Array.isArray(searchResultsContent),
-        });
+        // The adapter's error frame carries the provider's verbatim text. It is
+        // kept for classification and never forwarded: the loop speaks for the
+        // failure in its own words once the step has ended.
+        const streamErrorDelta = event?.choices?.[0]?.delta?.x_stream_error;
+        if (streamErrorDelta && typeof streamErrorDelta === 'object') {
+          const errorObj = streamErrorDelta as Record<string, unknown>;
+          providerError = {
+            message: typeof errorObj['message'] === 'string' ? errorObj['message'] : '',
+            ...(typeof errorObj['code'] === 'string' ? { code: errorObj['code'] } : {}),
+            ...(typeof errorObj['retryable'] === 'boolean'
+              ? { retryable: errorObj['retryable'] }
+              : {}),
+          };
+        } else {
+          pushLine({
+            line: raw + '\n\n',
+            publicTextDelta,
+            reasoningDelta,
+            serverToolStart,
+            serverToolResults,
+            searchActivity: serverToolStart !== undefined || Array.isArray(searchResultsContent),
+          });
+        }
         frameOpen = false;
 
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
@@ -1594,6 +1619,7 @@ export async function collectProviderStream(
 
   return {
     lines,
+    ...(providerError === undefined ? {} : { providerError }),
     finishReason,
     pendingToolCalls,
     textContent,
@@ -4348,13 +4374,15 @@ export async function* runToolLoop(
                 fallbackable: true,
                 message: 'The model blocked this response before returning any content.',
               }
-            : {
-                category: 'empty_response',
-                code: 'empty_response',
-                retryable: false,
-                fallbackable: true,
-                message: 'The model finished without returning a response.',
-              };
+            : providerStep.providerError?.message
+              ? classifyError(new Error(providerStep.providerError.message))
+              : {
+                  category: 'empty_response',
+                  code: 'empty_response',
+                  retryable: false,
+                  fallbackable: true,
+                  message: 'The model finished without returning a response.',
+                };
           logger.warn(
             {
               provider: servingProcessed.provider,
