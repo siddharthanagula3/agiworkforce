@@ -507,7 +507,8 @@ Evidence: i18next is initialised with 12 locales and RTL support, and a directio
 Expected: a localised app, or no picker.
 Actual: selecting Arabic mirrors the layout and reloads; everything stays English.
 Root Cause: Verified.
-Recommended Correction: for this release, hide the picker behind the existing `v1FeatureFlags` pattern or restrict it to English; then migrate strings through the shared shells first. Add a guard counting `t(` adoption against offered locales.
+Update, main `50925e17` (2026-09-15): the shared catalogue now exports a selectable set of English and Spanish only, the web control lists that set, and mobile's `getDeviceLanguage` falls back to English outside it. The mobile picker was not moved: `settings/app-language/index.tsx:37-38` still builds its list from `SUPPORTED_LANGUAGES`, so the screen keeps offering all twelve including RTL Arabic while every other surface offers two. That narrows the finding to one inconsistency with an obvious fix.
+Recommended Correction: have the mobile picker read the selectable set the shared catalogue already exports, matching web; then migrate strings through the shared shells before widening it again. Add a guard counting `t(` adoption against offered locales.
 Verification: `app-language-settings.test.tsx` extended.
 
 ### MOBILE-016 No store screenshots exist
@@ -893,10 +894,11 @@ Severity: P4 | `settings/index.tsx:152-154,178-180,283-286,646-648`, `permission
 
 Severity: P4 | `src/features/settings/permissions/registry.ts:33-37`
 
-### MOBILE-085 TLS pinning ships inert with placeholder pins
+### MOBILE-085 TLS pinning ships inert with placeholder pins, and has lost its tracker
 
-Severity: P4 (acceptable) | `lib/pinning.ts`, `native/withAGITlsPinning.cjs`
+Severity: P3 (was P4, acceptable while tracked) | `lib/pinning.ts`, `native/withAGITlsPinning.cjs`, `docs/work/founder-assistance.md`
 Fails closed on standard TLS; `check:tls-pins` passing does not mean pinning is on. Provision real SPKI hashes per the runbook in `lib/pinning.ts:126-145` when ready.
+Update, main `74654afd` (2026-09-15): the founder-assistance restructure removed the `CLAUDE-SECURITY-20260821-170634 F6` section, which was the entry naming this an accepted unverified transport, `BLOCKED_BY_HUMAN`. The thirteen placeholder pins are unchanged, so the gap is open and now tracked nowhere: the marker appears in no file under `docs/`, and the founder's own decision `D-2026-09-15-11` records the pinning policy without recording that the shipped build still has none. `apps/mobile/__tests__/pinning.test.ts:545-549` asserts that entry exists and is red on main because of it, which is the guard doing its job. Restoring a tracker, or repointing the guard at whichever file now owns open security items, is the maintainer's call; the audit's earlier "acceptable" rating rested on the gap being tracked.
 
 ### MOBILE-086 New Architecture and Hermes are inferred from SDK defaults, not pinned
 
