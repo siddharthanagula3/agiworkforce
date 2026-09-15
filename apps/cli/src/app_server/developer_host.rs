@@ -1395,6 +1395,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             )));
         }
 
+        let mut refused_turn: Option<anyhow::Error> = None;
         {
             let mut agent = session.lock().await;
             let snapshot = TurnSetupSnapshot::capture(&agent);
@@ -1424,10 +1425,19 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     Self::apply_auto_thread_model(&mut agent, resolved)?;
                 } else if let Some(model) = params.model.as_deref() {
                     if model != agent.model {
-                        if agent.privacy_mode == crate::agent::PrivacyMode::Managed {
-                            agent.switch_managed_model(model).map_err(invalid_request)?;
+                        let switched = if agent.privacy_mode == crate::agent::PrivacyMode::Managed {
+                            agent.switch_managed_model(model)
                         } else {
-                            agent.switch_model(model).map_err(invalid_request)?;
+                            agent.switch_model(model)
+                        };
+                        if let Err(error) = switched {
+                            if error.chain().any(|cause| {
+                                cause.downcast_ref::<crate::errors::CliError>().is_some()
+                            }) {
+                                refused_turn = Some(error);
+                            } else {
+                                return Err(invalid_request(error));
+                            }
                         }
                     }
                     agent.fallback_chain = None;
@@ -1495,11 +1505,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             // A route that cannot start is refused before any work is announced,
             // so a client shows the failure alone rather than an activity row
             // that ended with an error.
-            let route_block = {
-                let agent = task_session.lock().await;
-                models::turn_can_start(&task_config, &agent.provider, &agent.model)
-                    .await
-                    .err()
+            let route_block = match refused_turn {
+                Some(error) => Some(error),
+                None => {
+                    let agent = task_session.lock().await;
+                    models::turn_can_start(&task_config, &agent.provider, &agent.model)
+                        .await
+                        .err()
+                }
             };
             let work_started = route_block.is_none();
             if let Some(error) = route_block {

@@ -114,6 +114,8 @@ pub enum CliError {
     AccountSignedOut { model: String },
     /// Signed in, but the account's plan does not include the model.
     PlanExcludesModel { model: String, tier: String },
+    /// On the plan, but the hosted list withholds the model right now.
+    ModelUnavailable { model: String },
     /// AGI Workforce managed-cloud paywall, user's tier cap reached.
     ///
     /// HTTP 429 + `{"kind":"paywall", "feature":..., "requiredTier":..., "reason":...}`
@@ -182,6 +184,9 @@ impl fmt::Display for CliError {
                     "Your {} plan does not include '{}', and no provider key for it is set.",
                     tier, model
                 )
+            }
+            CliError::ModelUnavailable { model } => {
+                write!(f, "'{}' is unavailable on your plan right now.", model)
             }
             CliError::Paywall {
                 feature,
@@ -278,6 +283,7 @@ impl CliError {
             CliError::StreamError { .. } => "stream_disconnect",
             CliError::AccountSignedOut { .. } => "account_signed_out",
             CliError::PlanExcludesModel { .. } => "plan_excludes_model",
+            CliError::ModelUnavailable { .. } => "model_unavailable",
             CliError::Paywall { .. } => "paywall",
         }
     }
@@ -362,6 +368,11 @@ impl CliError {
             CliError::PlanExcludesModel { .. } => {
                 "Upgrade at https://agiworkforce.com/pricing, choose a model your plan includes, \
                  or set that provider's own key."
+                    .to_string()
+            }
+            CliError::ModelUnavailable { .. } => {
+                "Choose another model, or try again shortly; `agi models list` shows what is \
+                 available now."
                     .to_string()
             }
             CliError::Paywall { required_tier, .. } => format!(
@@ -516,6 +527,7 @@ impl CliError {
             // the plan rather than a sign-in.
             CliError::AccountSignedOut { .. } => (TurnFailureCode::AccountSignedOut, None),
             CliError::PlanExcludesModel { .. } => (TurnFailureCode::PlanExcludesModel, None),
+            CliError::ModelUnavailable { .. } => (TurnFailureCode::ProviderUnavailable, None),
             CliError::Paywall { .. } => (TurnFailureCode::ProviderRateLimited, None),
             CliError::Api {
                 provider, status, ..
@@ -538,9 +550,12 @@ impl CliError {
             CliError::Config { .. } => (TurnFailureCode::InvalidRequest, None),
         };
         let failure = TurnFailure::new(code, self.detail());
-        match provider {
-            Some(provider) => failure.with_provider(provider.clone()),
-            None => failure,
+        match (provider, self) {
+            (Some(provider), _) => failure.with_provider(provider.clone()),
+            (None, CliError::ModelUnavailable { .. }) => failure.with_provider(
+                crate::models::provider_name(&crate::models::Provider::ManagedCloud),
+            ),
+            (None, _) => failure,
         }
     }
 }
@@ -572,7 +587,9 @@ impl CliError {
     /// - `StreamError` when `is_retryable` is set
     pub fn is_retryable(&self) -> bool {
         match self {
-            CliError::RateLimited { .. } | CliError::Network { .. } => true,
+            CliError::RateLimited { .. }
+            | CliError::Network { .. }
+            | CliError::ModelUnavailable { .. } => true,
             CliError::Api { status, .. } => RETRYABLE_API_STATUSES.contains(status),
             CliError::StreamError { is_retryable, .. } => *is_retryable,
             _ => false,
@@ -712,6 +729,22 @@ mod tests {
             "No AGI Workforce session, and no provider key for 'fixture-model'."
         );
         assert!(!err.turn_failure().message.contains("agi login"));
+    }
+
+    #[test]
+    fn a_withheld_plan_model_fails_as_a_route_outage_without_a_terminal_hint() {
+        let err = CliError::ModelUnavailable {
+            model: "fixture-model".to_string(),
+        };
+        let failure = err.turn_failure();
+        assert_eq!(failure.code, TurnFailureCode::ProviderUnavailable);
+        assert_eq!(failure.provider.as_deref(), Some("managed_cloud"));
+        assert!(failure.retryable);
+        assert_eq!(
+            failure.message,
+            "'fixture-model' is unavailable on your plan right now."
+        );
+        assert!(err.hint().contains("agi models list"));
     }
 
     #[test]
