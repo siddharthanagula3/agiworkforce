@@ -23,6 +23,20 @@ describe('AppLockOverlay', () => {
     fireEvent.press(getByTestId('app-lock-unlock'));
     expect(onUnlock).toHaveBeenCalledTimes(1);
   });
+
+  it('offers a way out for a gate that can no longer be satisfied', () => {
+    const onReset = jest.fn();
+    const { getByTestId } = render(<AppLockOverlay onUnlock={jest.fn()} onReset={onReset} />);
+    fireEvent.press(getByTestId('app-lock-reset'));
+    expect(onReset).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no reset action on the background cover', () => {
+    const { queryByTestId } = render(
+      <AppLockOverlay onUnlock={jest.fn()} onReset={jest.fn()} variant="cover" />,
+    );
+    expect(queryByTestId('app-lock-reset')).toBeNull();
+  });
 });
 
 describe('SecureStorageUnavailable', () => {

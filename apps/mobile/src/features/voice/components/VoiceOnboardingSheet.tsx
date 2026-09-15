@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -51,14 +50,24 @@ const PILL_LABEL = {
   textAlign: 'center' as const,
 };
 
+export type VoiceOnboardingMode = 'on-device' | 'live';
+
+export const VOICE_DISCLOSURE: Record<VoiceOnboardingMode, string> = {
+  'on-device':
+    'Your voice is transcribed on this device to hear you. Nothing is recorded or stored.',
+  live: 'In live voice your microphone is sent to AGI Cloud while you talk, and the transcript is saved to this chat. Audio is not kept.',
+};
+
 export interface VoiceOnboardingSheetProps {
   visible: boolean;
+  mode: VoiceOnboardingMode;
   onContinue: () => void;
   onDismiss: () => void;
 }
 
 export function VoiceOnboardingSheet({
   visible,
+  mode,
   onContinue,
   onDismiss,
 }: VoiceOnboardingSheetProps) {
@@ -143,7 +152,7 @@ export function VoiceOnboardingSheet({
               flowing naturally.
             </FeatureRow>
             <FeatureRow icon={<Info size={22} color={colors.textMuted} />}>
-              Your voice is transcribed on this device to hear you. Nothing is recorded or stored.
+              {VOICE_DISCLOSURE[mode]}
             </FeatureRow>
           </View>
 

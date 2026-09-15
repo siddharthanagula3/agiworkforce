@@ -1,8 +1,10 @@
-
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
-import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
+import {
+  VoiceOnboardingSheet,
+  VOICE_DISCLOSURE,
+} from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 const METRICS: Metrics = {
@@ -13,7 +15,13 @@ const METRICS: Metrics = {
 function renderSheet(props: Partial<React.ComponentProps<typeof VoiceOnboardingSheet>> = {}) {
   return render(
     <SafeAreaProvider initialMetrics={METRICS}>
-      <VoiceOnboardingSheet visible onContinue={jest.fn()} onDismiss={jest.fn()} {...props} />
+      <VoiceOnboardingSheet
+        visible
+        mode="on-device"
+        onContinue={jest.fn()}
+        onDismiss={jest.fn()}
+        {...props}
+      />
     </SafeAreaProvider>,
   );
 }
@@ -23,11 +31,18 @@ describe('VoiceOnboardingSheet', () => {
     useSettingsStore.setState({ voiceOnboardingSeen: false, hapticsEnabled: false });
   });
 
-  it('renders the intro and the recording disclosure', () => {
-    const { getByText } = renderSheet();
+  it('renders the intro and the on-device disclosure for turn-based voice', () => {
+    const { getByText, queryByText } = renderSheet();
     getByText('Meet Voice');
     getByText(/Say what's on your mind/);
-    getByText(/transcribed on this device/);
+    getByText(VOICE_DISCLOSURE['on-device']);
+    expect(queryByText(VOICE_DISCLOSURE.live)).toBeNull();
+  });
+
+  it('discloses cloud streaming and transcript storage before live voice', () => {
+    const { getByText, queryByText } = renderSheet({ mode: 'live' });
+    getByText(VOICE_DISCLOSURE.live);
+    expect(queryByText(VOICE_DISCLOSURE['on-device'])).toBeNull();
   });
 
   it('marks the disclosure acknowledged and proceeds on Continue', () => {
