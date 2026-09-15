@@ -96,7 +96,7 @@ Settings offers twelve languages. The `v3` dictionary that names the sidebar, em
 **Where** `packages/ui/i18n/locales/<lang>/v3.json`; the language control in Settings → General.
 **Needed input** One product decision and, for the model-assisted route, permission to spend plan credits on the batch.
 **How to verify completion** The English-value count per language in `v3.json` drops to the product names only, and the settings pass under each language shows one language on the chat surface.
-**What remains after founder action** The batch itself, its review loop and a guard that fails the build when a locale trails English by more than a few keys; all engineering.
+**What remains after founder action** The batch itself and its review loop; a key-parity guard already fails the chain when a locale trails the English key set, and a value-level guard for untranslated strings can follow the batch. All engineering.
 **Impact** NON-BLOCKING for English; BLOCKING for offering the other languages honestly
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
