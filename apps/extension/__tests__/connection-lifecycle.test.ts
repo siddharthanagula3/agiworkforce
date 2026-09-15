@@ -1,58 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
 
-function isPermanentError(error: string): boolean {
-  return (
-    error.includes('Native host not found') ||
-    error.includes('Specified native messaging host not found') ||
-    error.includes('Access to the specified native messaging host is forbidden') ||
-    error.includes('not allowed')
-  );
-}
-
-interface ReconnectSchedulerOptions {
-  initialDelayMs?: number;
-  maxDelayMs?: number;
-  maxAttempts?: number;
-  isPermanentError?: (msg: string) => boolean;
-}
-
-class ReconnectScheduler {
-  private attemptCount = 0;
-  private readonly initialDelayMs: number;
-  private readonly maxDelayMs: number;
-  private readonly maxAttempts: number;
-  private readonly _isPermanentError: (msg: string) => boolean;
-
-  constructor(opts: ReconnectSchedulerOptions = {}) {
-    this.initialDelayMs = opts.initialDelayMs ?? 1_000;
-    this.maxDelayMs = opts.maxDelayMs ?? 30_000;
-    this.maxAttempts = opts.maxAttempts ?? 10;
-    this._isPermanentError = opts.isPermanentError ?? isPermanentError;
-  }
-
-  nextDelay(errorMessage: string): number | null {
-    if (this._isPermanentError(errorMessage)) {
-      return null;
-    }
-
-    if (this.attemptCount >= this.maxAttempts) {
-      return null;
-    }
-
-    const delay = Math.min(this.initialDelayMs * Math.pow(2, this.attemptCount), this.maxDelayMs);
-
-    this.attemptCount++;
-    return delay;
-  }
-
-  reset(): void {
-    this.attemptCount = 0;
-  }
-
-  get attempts(): number {
-    return this.attemptCount;
-  }
-}
+import {
+  isPermanentNativeDisconnect,
+  nativeReconnectDelayMs,
+  NATIVE_RECONNECT_BASE_DELAY_MS,
+  NATIVE_RECONNECT_MAX_ATTEMPTS,
+  NATIVE_RECONNECT_MAX_DELAY_MS,
+} from '../src/features/native-bridge/reconnect';
 
 interface Tab {
   id?: number;
@@ -125,107 +82,79 @@ function buildStatusResponse(
   };
 }
 
-describe('isPermanentError', () => {
+describe('isPermanentNativeDisconnect', () => {
   it('identifies "Specified native messaging host not found" as permanent', () => {
-    expect(isPermanentError('Specified native messaging host not found')).toBe(true);
+    expect(isPermanentNativeDisconnect('Specified native messaging host not found')).toBe(true);
   });
 
   it('identifies "Native host not found" as permanent', () => {
-    expect(isPermanentError('Native host not found')).toBe(true);
+    expect(isPermanentNativeDisconnect('Native host not found')).toBe(true);
   });
 
   it('identifies forbidden access message as permanent', () => {
-    expect(isPermanentError('Access to the specified native messaging host is forbidden')).toBe(
-      true,
-    );
+    expect(
+      isPermanentNativeDisconnect('Access to the specified native messaging host is forbidden'),
+    ).toBe(true);
   });
 
   it('identifies "not allowed" as permanent', () => {
-    expect(isPermanentError('Connection is not allowed')).toBe(true);
+    expect(isPermanentNativeDisconnect('Connection is not allowed')).toBe(true);
   });
 
   it('does not classify a crash as permanent', () => {
-    expect(isPermanentError('com.agiworkforce.browser crashed unexpectedly')).toBe(false);
+    expect(isPermanentNativeDisconnect('com.agiworkforce.browser crashed unexpectedly')).toBe(
+      false,
+    );
   });
 
   it('does not classify an empty string as permanent', () => {
-    expect(isPermanentError('')).toBe(false);
+    expect(isPermanentNativeDisconnect('')).toBe(false);
   });
 
   it('does not classify a generic disconnect as permanent', () => {
-    expect(isPermanentError('Native host disconnected')).toBe(false);
+    expect(isPermanentNativeDisconnect('Native host disconnected')).toBe(false);
   });
 
   it('does not classify a timeout as permanent', () => {
-    expect(isPermanentError('Connection timed out waiting for host response')).toBe(false);
+    expect(isPermanentNativeDisconnect('Connection timed out waiting for host response')).toBe(
+      false,
+    );
   });
 });
 
-describe('ReconnectScheduler', () => {
-  it('returns initialDelay on the first transient error', () => {
-    const sched = new ReconnectScheduler({ initialDelayMs: 1000 });
-    expect(sched.nextDelay('crashed')).toBe(1000);
+describe('nativeReconnectDelayMs', () => {
+  it('returns the base delay for the first attempt', () => {
+    expect(nativeReconnectDelayMs(1)).toBe(NATIVE_RECONNECT_BASE_DELAY_MS);
   });
 
-  it('doubles the delay on successive attempts (exponential backoff)', () => {
-    const sched = new ReconnectScheduler({ initialDelayMs: 1000, maxDelayMs: 60_000 });
-    expect(sched.nextDelay('crash')).toBe(1000);
-    expect(sched.nextDelay('crash')).toBe(2000);
-    expect(sched.nextDelay('crash')).toBe(4000);
-    expect(sched.nextDelay('crash')).toBe(8000);
+  it('doubles on each successive attempt', () => {
+    expect(nativeReconnectDelayMs(2)).toBe(NATIVE_RECONNECT_BASE_DELAY_MS * 2);
+    expect(nativeReconnectDelayMs(3)).toBe(NATIVE_RECONNECT_BASE_DELAY_MS * 4);
+    expect(nativeReconnectDelayMs(4)).toBe(NATIVE_RECONNECT_BASE_DELAY_MS * 8);
   });
 
-  it('caps delay at maxDelayMs', () => {
-    const sched = new ReconnectScheduler({
-      initialDelayMs: 1000,
-      maxDelayMs: 5000,
-      maxAttempts: 20,
-    });
-    sched.nextDelay('crash');
-    sched.nextDelay('crash');
-    sched.nextDelay('crash');
-    const capped = sched.nextDelay('crash');
-    expect(capped).toBe(5000);
-    expect(sched.nextDelay('crash')).toBe(5000);
+  it('caps at the maximum delay', () => {
+    for (let attempt = 1; attempt < NATIVE_RECONNECT_MAX_ATTEMPTS; attempt++) {
+      expect(nativeReconnectDelayMs(attempt)).toBeLessThanOrEqual(NATIVE_RECONNECT_MAX_DELAY_MS);
+    }
+    expect(nativeReconnectDelayMs(NATIVE_RECONNECT_MAX_ATTEMPTS - 1)).toBe(
+      NATIVE_RECONNECT_MAX_DELAY_MS,
+    );
   });
 
-  it('returns null for a permanent error regardless of attempt count', () => {
-    const sched = new ReconnectScheduler({ initialDelayMs: 500 });
-    expect(sched.nextDelay('Specified native messaging host not found')).toBeNull();
+  it('stops once the attempts are exhausted, so only a user action reconnects', () => {
+    expect(nativeReconnectDelayMs(NATIVE_RECONNECT_MAX_ATTEMPTS)).toBeNull();
+    expect(nativeReconnectDelayMs(NATIVE_RECONNECT_MAX_ATTEMPTS + 1)).toBeNull();
   });
 
-  it('returns null after maxAttempts are exhausted', () => {
-    const sched = new ReconnectScheduler({ initialDelayMs: 100, maxAttempts: 3 });
-    sched.nextDelay('crash');
-    sched.nextDelay('crash');
-    sched.nextDelay('crash');
-    expect(sched.nextDelay('crash')).toBeNull();
-  });
-
-  it('reset() restarts the attempt counter', () => {
-    const sched = new ReconnectScheduler({ initialDelayMs: 1000, maxAttempts: 1 });
-    sched.nextDelay('crash');
-    expect(sched.nextDelay('crash')).toBeNull();
-
-    sched.reset();
-    expect(sched.nextDelay('crash')).toBe(1000);
-  });
-
-  it('tracks attempt count correctly', () => {
-    const sched = new ReconnectScheduler({ initialDelayMs: 100, maxAttempts: 5 });
-    expect(sched.attempts).toBe(0);
-    sched.nextDelay('crash');
-    sched.nextDelay('crash');
-    expect(sched.attempts).toBe(2);
-  });
-
-  it('uses a custom isPermanentError predicate when provided', () => {
-    const sched = new ReconnectScheduler({
-      initialDelayMs: 500,
-      isPermanentError: (msg) => msg.includes('CUSTOM_FATAL'),
-    });
-    expect(sched.nextDelay('CUSTOM_FATAL error occurred')).toBeNull();
-    expect(sched.nextDelay('transient error')).toBe(500);
+  it('grows strictly until it reaches the cap', () => {
+    const delays: number[] = [];
+    for (let attempt = 1; attempt < NATIVE_RECONNECT_MAX_ATTEMPTS; attempt++) {
+      delays.push(nativeReconnectDelayMs(attempt)!);
+    }
+    for (let index = 1; index < delays.length; index++) {
+      expect(delays[index]!).toBeGreaterThanOrEqual(delays[index - 1]!);
+    }
   });
 });
 
@@ -358,53 +287,71 @@ describe('buildStatusResponse', () => {
 });
 
 describe('end-to-end reconnection simulation', () => {
-  it('attempts reconnect with increasing backoff until maxAttempts', () => {
-    const sched = new ReconnectScheduler({
-      initialDelayMs: 100,
-      maxDelayMs: 1600,
-      maxAttempts: 4,
-    });
-
+  it('backs off over the whole budget and then stops', () => {
     const delays: (number | null)[] = [];
-    for (let i = 0; i < 6; i++) {
-      delays.push(sched.nextDelay('crash'));
+    for (let attempt = 1; attempt <= NATIVE_RECONNECT_MAX_ATTEMPTS + 1; attempt++) {
+      delays.push(nativeReconnectDelayMs(attempt));
     }
 
-    expect(delays[0]).toBe(100);
-    expect(delays[1]).toBe(200);
-    expect(delays[2]).toBe(400);
-    expect(delays[3]).toBe(800);
-    expect(delays[4]).toBeNull();
-    expect(delays[5]).toBeNull();
+    expect(delays[0]).toBe(NATIVE_RECONNECT_BASE_DELAY_MS);
+    expect(delays.filter((delay) => delay === null)).toHaveLength(2);
+    expect(delays[NATIVE_RECONNECT_MAX_ATTEMPTS - 1]).toBeNull();
   });
 
   it('stops immediately on a permanent error mid-reconnection', () => {
-    const sched = new ReconnectScheduler({ initialDelayMs: 200, maxAttempts: 10 });
+    expect(nativeReconnectDelayMs(2)).not.toBeNull();
+    expect(isPermanentNativeDisconnect('Specified native messaging host not found')).toBe(true);
+  });
+});
 
-    sched.nextDelay('crash');
-    sched.nextDelay('crash');
+describe('the worker connects to AGI Desktop only once pairing has succeeded', () => {
+  const background = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+    'utf8',
+  );
 
-    const delay = sched.nextDelay('Specified native messaging host not found');
-    expect(delay).toBeNull();
+  it('gates the start-up connect on the persisted pairing flag', () => {
+    const initialize = background.slice(
+      background.indexOf('function initialize(): void {'),
+      background.indexOf('function handleManagedChatKeepalivePort('),
+    );
+    expect(initialize).toMatch(
+      /void shouldAutoConnectToDesktop\(\)\.then\(\(autoConnect\) => \{\s*if \(!autoConnect\) return;/,
+    );
+    expect(background).toMatch(
+      /async function shouldAutoConnectToDesktop\(\)[\s\S]*?storageUtils\.getItem<boolean>\(DESKTOP_PAIRED_KEY, false\)\)? === true/,
+    );
   });
 
-  it('full lifecycle: connect → crash → backoff × 3 → permanent error → stop', () => {
-    const sched = new ReconnectScheduler({ initialDelayMs: 500, maxAttempts: 5 });
+  it('stops the maintenance pass re-arming its alarm for an unpaired profile', () => {
+    const pass = background.slice(
+      background.indexOf('async function runMaintenancePass()'),
+      background.indexOf('async function settleMaintenanceAlarm()'),
+    );
+    expect(pass).toContain('if (!state.isNativeConnected && (await shouldAutoConnectToDesktop()))');
+  });
 
-    const broadcastCalls: boolean[] = [];
-    const broadcast = (connected: boolean) => broadcastCalls.push(connected);
+  it('keeps the give-up decision across a worker restart within the session', () => {
+    expect(background).toContain(
+      "const NATIVE_RECONNECT_GAVE_UP_KEY = 'agi_native_reconnect_gave_up';",
+    );
+    expect(background).toMatch(/chrome\.storage\.session\s*\.get\(NATIVE_RECONNECT_GAVE_UP_KEY\)/);
+    expect(background).toMatch(
+      /function setNativeReconnectGaveUp\(gaveUp: boolean\): void \{[\s\S]*?chrome\.storage\.session[\s\S]*?set\(\{ \[NATIVE_RECONNECT_GAVE_UP_KEY\]: gaveUp \}\)/,
+    );
+    for (const branch of [
+      'Max native reconnect attempts reached; giving up until user action',
+      'Native host permanently unavailable; halting reconnect',
+    ]) {
+      const index = background.indexOf(branch);
+      expect(index).toBeGreaterThan(-1);
+      expect(background.slice(index, index + 220)).toContain('setNativeReconnectGaveUp(true)');
+    }
+  });
 
-    broadcast(true);
-    expect(broadcastCalls).toEqual([true]);
-
-    broadcast(false);
-
-    expect(sched.nextDelay('crash')).toBe(500);
-    expect(sched.nextDelay('crash')).toBe(1000);
-    expect(sched.nextDelay('crash')).toBe(2000);
-
-    expect(sched.nextDelay('Specified native messaging host not found')).toBeNull();
-
-    expect(broadcastCalls).toEqual([true, false]);
+  it('clears the suspend flag when Chrome cancels the suspend', () => {
+    expect(background).toMatch(
+      /chrome\.runtime\.onSuspendCanceled\.addListener\(\(\) => \{\s*_bgCtx\.nativeSuspendInProgress = false;/,
+    );
   });
 });

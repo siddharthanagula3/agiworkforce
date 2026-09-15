@@ -391,8 +391,9 @@ still had minutes of budget.
 
 #### Register delta
 
-The web section of `docs/agent-context/known-flaws.md` now holds one row,
-WEB-SEO-PROBE-404-01 (an extension surface). The three routing-preference and
+The web section of `docs/agent-context/known-flaws.md` no longer holds a row:
+WEB-SEO-PROBE-404-01 closed when the Chrome extension's NLWeb endpoint probe
+was removed in the 2026-09-14 public-release audit. The three routing-preference and
 non-streaming rows this section used to list were closed: the us_only overlay
 is threaded into the resolver as of the 2026-09-08 stabilization pass
 (ACTIVE_ISSUES.md AGI-8). The rows closed in these waves were removed in or

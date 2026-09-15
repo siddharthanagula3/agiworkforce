@@ -49,6 +49,7 @@ import {
   loadPosition,
   savePosition,
   applyPosition,
+  createLauncher,
 } from '../src/features/content/in-page-panel/launcher';
 import { isPanelEnabled, IN_PAGE_PANEL_ENABLED_KEY } from '../src/inPagePanel/setup';
 
@@ -174,6 +175,23 @@ describe('launcher position persist', () => {
     applyPosition(el, { bottom: 32, right: 40 });
     expect(el.style.bottom).toBe('32px');
     expect(el.style.right).toBe('40px');
+  });
+});
+
+describe('createLauncher', () => {
+  it('closes the panel when Escape is pressed with focus on the launcher', () => {
+    const onOpen = vi.fn();
+    const onEscape = vi.fn();
+    const { host, button } = createLauncher(onOpen, onEscape);
+
+    button.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }),
+    );
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
+
+    host.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    expect(onEscape).toHaveBeenCalledTimes(1);
   });
 });
 

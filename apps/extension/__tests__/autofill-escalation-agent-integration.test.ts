@@ -212,6 +212,7 @@ import {
   loadAutofillProfile,
   resolveProfileValue,
   FILE_INPUT_SKIP_REASON,
+  USER_TEXT_SKIP_REASON,
 } from '../src/features/content/autofill/filler';
 import { detectJobApplication } from '../src/features/content/autofill/detector';
 import { makeEscalationDecision } from '../src/features/computer-use/escalationEngine';
@@ -241,6 +242,47 @@ function buildGreenhouseDom(): void {
     </form>
   `;
 }
+
+describe('autofill never overwrites text already on the page', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    buildGreenhouseDom();
+    Object.defineProperty(window, 'location', {
+      value: { href: 'https://boards.greenhouse.io/acmecorp/jobs/123' },
+      writable: true,
+    });
+  });
+
+  it('skips a field the user already typed into and says why', async () => {
+    const typed = document.getElementById('first_name') as HTMLInputElement;
+    typed.value = 'Jan';
+
+    const result = await autofillGreenhouse({ firstName: 'Jane', email: 'jane@example.com' }, 0);
+
+    expect(typed.value).toBe('Jan');
+    const firstName = result.filled.find((entry) => entry.key === 'firstName');
+    expect(firstName).toMatchObject({
+      success: false,
+      skipped: true,
+      reason: USER_TEXT_SKIP_REASON,
+    });
+    expect(result.skippedCount).toBeGreaterThan(0);
+    expect((document.getElementById('email') as HTMLInputElement).value).toBe('jane@example.com');
+  });
+
+  it('still writes a field whose current value is the profile value', async () => {
+    const typed = document.getElementById('first_name') as HTMLInputElement;
+    typed.value = 'Jane';
+
+    const result = await autofillGreenhouse({ firstName: 'Jane' }, 0);
+
+    expect(typed.value).toBe('Jane');
+    expect(result.filled.find((entry) => entry.key === 'firstName')).toMatchObject({
+      success: true,
+      skipped: false,
+    });
+  });
+});
 
 describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
   beforeEach(() => {
