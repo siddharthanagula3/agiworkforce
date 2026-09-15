@@ -9,7 +9,7 @@
 //! - `stream_completion(...)` keeps its historical signature, so the agent
 //!   loop, TUI, subagents, and memory pipeline are untouched by construction;
 //! - provider selection + key resolution (`provider_dispatch`) and
-//!   subscription auth (Copilot / ChatGPT) stay here, the crate receives
+//!   subscription auth (Copilot) stay here, the crate receives
 //!   opaque credentials via `ProviderSpec`;
 //! - Ollama-local preflight (model availability, tool-support probing, the
 //!   "running without tools" TUI notice) stays here, the crate has no TUI;
@@ -258,15 +258,10 @@ fn managed_cloud_spec(jwt: &str) -> Result<ProviderSpec> {
     managed_cloud_spec_for_base(jwt, &raw_base)
 }
 
-/// Subscription-auth specs (Copilot / ChatGPT Plus). Auth resolution happened
+/// Subscription-auth specs (Copilot). Auth resolution happened
 /// in `provider_dispatch::try_subscription_auth`; here we only attach the
 /// provider-required extra headers.
-fn subscription_spec(
-    sub_name: &str,
-    url: &str,
-    token: &str,
-    account_id: Option<&str>,
-) -> ProviderSpec {
+fn subscription_spec(sub_name: &str, url: &str, token: &str) -> ProviderSpec {
     match sub_name {
         "copilot" => {
             let mut spec = openai_compat_spec("copilot", url, token);
@@ -281,16 +276,6 @@ fn subscription_spec(
                 ),
                 ("Copilot-Vision-Request".to_string(), "true".to_string()),
             ];
-            spec
-        }
-        "chatgpt" => {
-            let mut spec = openai_compat_spec("chatgpt", url, token);
-            spec.extra_headers
-                .push(("originator".to_string(), "agiworkforce".to_string()));
-            if let Some(aid) = account_id {
-                spec.extra_headers
-                    .push(("ChatGPT-Account-Id".to_string(), aid.to_string()));
-            }
             spec
         }
         other => openai_compat_spec(other, url, token),
@@ -396,9 +381,9 @@ pub async fn stream_completion(
     let client = provider_client().clone();
     let temperature = config.default.temperature;
 
-    // ---- Try subscription auth first (Copilot, ChatGPT Plus) ----
-    if let Some((token, url, sub_name, account_id)) = try_subscription_auth(provider).await {
-        let spec = subscription_spec(&sub_name, &url, &token, account_id.as_deref());
+    // ---- Try subscription auth first (Copilot) ----
+    if let Some((token, url, sub_name)) = try_subscription_auth(provider).await {
+        let spec = subscription_spec(&sub_name, &url, &token);
         let mut result = run_spec(
             &client,
             &spec,
@@ -983,7 +968,6 @@ mod tests {
             "copilot",
             "https://api.githubcopilot.com/chat/completions",
             "tok",
-            None,
         );
         assert_eq!(copilot.id, "copilot");
         let names: Vec<&str> = copilot
@@ -995,21 +979,6 @@ mod tests {
             names,
             vec!["User-Agent", "Openai-Intent", "Copilot-Vision-Request"]
         );
-
-        let chatgpt = subscription_spec(
-            "chatgpt",
-            "https://chatgpt.com/backend-api/codex/responses",
-            "tok",
-            Some("acct_1"),
-        );
-        assert!(
-            matches!(&chatgpt.dialect, Dialect::OpenAiCompat(o) if o.use_max_completion_tokens),
-            "chatgpt.com endpoint must use max_completion_tokens"
-        );
-        assert!(chatgpt
-            .extra_headers
-            .iter()
-            .any(|(n, v)| n == "ChatGPT-Account-Id" && v == "acct_1"));
     }
 
     #[test]
