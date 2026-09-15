@@ -520,6 +520,22 @@ pub fn canonical_model_id(model_id: &str) -> String {
         .unwrap_or_else(|| model_id.to_string())
 }
 
+/// The name a person knows the model by, from the shared catalog first and
+/// the CLI's own catalog second; the id when neither names it.
+pub fn display_name(model_id: &str) -> String {
+    shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id).map(|model| model.name.clone()))
+        .or_else(|| {
+            catalog()
+                .all()
+                .iter()
+                .find(|model| model.id == model_id)
+                .map(|model| model.display_name.clone())
+        })
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| model_id.to_string())
+}
+
 fn shared_catalog_lookup_aliases() -> Vec<(String, String)> {
     let Some(catalog) = shared_catalog() else {
         return Vec::new();
