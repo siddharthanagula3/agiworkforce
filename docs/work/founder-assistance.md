@@ -191,18 +191,30 @@ vendor is a legal-risk and spend decision.
 ## [Security] Managed Cloud plan-tier gate on bare session tokens
 
 **Why founder assistance is required**
-A free-tier account can script around the Pro-only API paywall with a bare
-session token; two remediations were rejected in review, and the durable fix
-changes what a credential carries. Registered as
-`WEB-SEC-SCAN-2026-09-09-F88`: an API key and a developer credential already
-pin their surface, a bare session token does not, so the plan gate reads the
-advisory `x-agi-surface` header the caller controls.
-**Exact action** Decided 2026-09-15 (D-2026-09-15-09): the calling surface is bound into a trusted Clerk custom session claim and `x-agi-surface` is no longer trusted. What stays with the founder: add the custom claim to the session token template in the Clerk dashboard (development and production instances) once engineering names the claim in the pull request.
-**Where** The header is trusted in `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts`; the plan gate that acts on it is `enforceManagedCloudSurface` in `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts`.
-**Needed input** One security-architecture decision. No new deployment secret under any of the three options.
-**How to verify completion** With a free-tier account, a bare session token sent to `POST /api/llm/v1/chat/completions` with `x-agi-surface: cli` answers `developer_surface_plan_required` rather than completing the turn.
-**What remains after founder action** The gateway reads the claim and the clients stop sending the header; engineering.
-**Impact** RELEASE-BLOCKING (revenue integrity, no data exposure)
+Decided 2026-09-15 (D-2026-09-15-09) and built: the gateway now binds a Clerk
+token to the surface its signed claims prove (the `azp` origin for the web app
+and the browser extension) and no longer trusts `x-agi-surface`. A native
+token carries no origin, so the mobile app mints its token from a Clerk JWT
+template that stamps a `surface` claim, and JWT templates are created in the
+Clerk dashboard.
+**Exact action** In the Clerk dashboard, JWT templates, on both the
+development and the production instance: create a template named `agi-mobile`
+with the claims `{"surface": "mobile"}` and the default lifetime. Then confirm
+`CLERK_AUTHORIZED_PARTIES` on the production web deployment lists the web
+origin and the published extension's `chrome-extension://<id>` origin.
+**Where** The claim and template name are `SURFACE_TOKEN_CLAIM` and
+`MOBILE_SESSION_TOKEN_TEMPLATE` in `packages/contracts/types/src/surface-binding.ts`;
+the binding is `bindSurfaceFromClaims` in `apps/web/lib/free-chat-surface-policy.ts`;
+the mobile minter is `getSurfaceToken` in `apps/mobile/src/integrations/clerk.ts`.
+**Needed input** Two dashboard actions; no new deployment secret.
+**How to verify completion** A token minted outside a browser from a free-tier
+account, sent to `POST /api/llm/v1/chat/completions` with `x-agi-surface: web`,
+answers `managed_cloud_surface_unknown`; the same header on a browser-minted
+token still runs as web; a mobile build signed in on the development instance
+completes a turn once the template exists.
+**What remains after founder action** Nothing; until the template exists the
+mobile app's turns are refused as an unknown surface, which is loud on purpose.
+**Impact** RELEASE-BLOCKING for the mobile release only
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Infra] `ALLOWED_ORIGINS` on the signaling deploy
@@ -320,25 +332,6 @@ table and the gap comparison ship with this change. Until each variable is set
 that provider is skipped and its ledger cost stays an unverified estimate.
 **Impact** NON-BLOCKING (margin stays estimate-only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [Billing] Reconciliation storage (migration 0184)
-
-**Why founder assistance is required**
-It no longer is. This entry asked for a production migration that had already
-been applied under a different number.
-**Exact action** DO NOT APPLY `0184`. It is already in production as
-`0181_provider_cost_reconciliation_days.sql`, applied between 09-07 and 09-11.
-The two files carry the same name and differ only in the number inside their
-own comments. `0184` is this branch's duplicate and is withdrawn by the
-reconciliation in ACTIVE_ISSUES.
-**Where** Nowhere. No Neon, dashboard or environment change.
-**Needed input** None.
-**How to verify completion** `provider_cost_reconciliation_days` already
-exists; after a nightly run it holds one row per provider that answered. If it
-is absent, that is a reconciliation question, not a reason to apply `0184`.
-**What remains after founder action** Nothing.
-**Impact** NON-BLOCKING
-**Status** CORRECTED 2026-09-12, NO MIGRATION TO APPLY
 
 ## [Providers] The Anthropic account has no API credit
 

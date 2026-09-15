@@ -133,6 +133,13 @@ capabilities hidden or clearly unavailable, never presented as working.
   claim; never trust the caller-controlled `x-agi-surface`; normal CLI,
   extension and IDE users do not mint extra credentials; the billing-bypass
   residual is not accepted.
+- Follow-through: the gateway binds a Clerk token to the surface its signed
+  claims prove, the `azp` origin for the web app and the browser extension and
+  the surface claim of the mobile JWT template, and a developer token to its
+  own class; the header only refines within a proved class. The mobile
+  template is a Clerk dashboard item in the founder file; until it exists the
+  mobile app's turns are refused as an unknown surface, which is the intended
+  loud failure for an unpublished client.
 
 ## D-2026-09-15-10 Dispatch pairing
 
