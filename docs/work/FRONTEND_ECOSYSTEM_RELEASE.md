@@ -509,3 +509,16 @@ READY WITH MINOR POLISH for Web, Electron, VS Code, CLI and the Chrome side
 panel; NOT READY for Mobile Cloud mode (two founder items) and Tauri (decision
 4.1). The polish owed is listed in section 3 as the open rows and in the three
 running packages.
+
+2026-09-15 addendum: thirty-four commits since 790da0f53 (17 fixes, 15 doc
+checkpoints, 2 test-only; 92 files, about 1.8k lines added and 300 removed),
+pushed in three checkpoints with the pre-push chain green each time and two CI
+reds caught and fixed the same hour (a fake-timer flake in the tasks page test,
+a mobile test pinning old recall wording). A provider refusal now reads the
+same gateway sentence with a Switch model offer on the web, in Chrome, in VS
+Code, in the CLI and on mobile (F71, F80 to F88, all but the mobile rendering
+seen live); the CLI's fallback flag rotates on every entry point and keeps a
+plan session on the plan; the language control's promised scope (navigation,
+menus, the composer's labels, the greeting) follows the chosen language, seen
+live in Spanish (F89), with the newer chat namespace's translations for ten
+languages left as a founder item.
