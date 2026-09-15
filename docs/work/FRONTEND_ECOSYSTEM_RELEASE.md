@@ -262,7 +262,15 @@ goes out with this section.
   identity for the desktop, the CLI and VS Code on a machine, through the
   protocol's device flow approved from the shell's own session, with the
   renderer reporting sign-in and sign-out so a stale credential cannot
-  outlive a sign-out.
+  outlive a sign-out. The control-driven desktop pass then fixed seven shell
+  defects against the reference apps (3ac80909c, fd7b150bd, 314bac759,
+  b780d9159): the Code rail wordmark clipping the zoom button (the inset
+  token now clears the buttons by a gutter measured from Claude's desktop
+  app, pinned by a test), the window frame never remembered, a closed window
+  stranding the app on a second launch or a deep link, the wrong-appearance
+  flash on every launch, the ⌘/ sheet not knowing it was a desktop app, no
+  ⌘W on macOS, and "⌘Plus" rendered as a word. The coding surface's
+  environment choice inside the shell is F52 (1dda37e21, c826fa9ba).
 - CLI: Gemini schema rejection, glued one-shot notices, MCP tool names,
   double Enter, overlay bleed, Esc and Ctrl-L, stats in one place, trust words
   Local / Your key / Managed, a session picker, and a pure JSON stdout under the
@@ -369,7 +377,12 @@ zero-price router on paid plans; a native sign-in path for the QA account; the
 Clerk development instance's Native API; one click on Chrome's host-permission
 prompt; the Accessibility grant for the process that runs the agents. Not
 founder-gated but open: on-device generation on the simulator
-(needs one run on a real device) and chrome-5's remaining items.
+(needs one run on a real device); in the shell, the model picker's selection
+could not be moved off Auto by the pass's harness, which cannot deliver real
+pointer presses to this Electron build, so whether the picker is broken in
+the shell is unresolved until a driver with a working pointer looks; and the
+shell's local coding sessions, settings through their real controls and the
+chords pressed for real wait on founder items 6 and 8.
 
 ### Screen Studio flows
 
