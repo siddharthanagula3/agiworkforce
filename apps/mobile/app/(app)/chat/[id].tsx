@@ -100,6 +100,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
+import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
 import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
@@ -664,6 +665,18 @@ export default function ChatScreen() {
   const handleOpenCloudSignIn = useCallback(() => {
     router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
   }, [router]);
+
+  const sendRecoveryAction = useMemo(() => {
+    if (localRecoveryAction) return localRecoveryAction;
+    if (sendError !== CLOUD_SIGN_IN_MESSAGE) return null;
+    return {
+      label: 'Sign in',
+      onPress: () => {
+        clearError();
+        handleOpenCloudSignIn();
+      },
+    };
+  }, [clearError, handleOpenCloudSignIn, localRecoveryAction, sendError]);
 
   const handleModelSelect = useCallback(
     (newModelId: string) => {
@@ -1409,7 +1422,7 @@ export default function ChatScreen() {
         <SendErrorBanner
           error={providerConsentError ? null : sendError}
           freeCapacity={providerConsentError ? null : freeCapacityError}
-          action={localRecoveryAction}
+          action={sendRecoveryAction}
           onRetry={
             conversationMessages.some((m) => m.role === 'user')
               ? () => {
