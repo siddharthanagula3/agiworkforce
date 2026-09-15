@@ -58,7 +58,7 @@ describe('translateOllamaStream, truncation safety (P1-3)', () => {
     expect(stops[0]).toEqual({ type: 'stop', reason: 'end_turn' });
   });
 
-  it('still emits a fallback stop when the iterator throws partway through', async () => {
+  it('emits no stop when the iterator throws partway through; the adapter reports the failure', async () => {
     async function* throwingStream(): AsyncIterable<OllamaChatStreamChunk> {
       yield {
         model: FIXTURE_MODEL_ID,
@@ -77,7 +77,6 @@ describe('translateOllamaStream, truncation safety (P1-3)', () => {
       caught = e;
     }
     expect(caught).toBeInstanceOf(Error);
-    const stops = collected.filter((c) => c.type === 'stop');
-    expect(stops).toHaveLength(1);
+    expect(collected.filter((c) => c.type === 'stop')).toEqual([]);
   });
 });
