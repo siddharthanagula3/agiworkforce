@@ -6,7 +6,11 @@ vi.mock('react-i18next', () => ({
   I18nextProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock('sonner', () => ({ Toaster: () => null }));
-vi.mock('./i18n', () => ({ default: {}, SUPPORTED_LANGUAGES: ['en'] }));
+vi.mock('./i18n', () => ({
+  default: {},
+  SUPPORTED_LANGUAGES: ['en'],
+  selectableLanguageOrDefault: (code: string) => code,
+}));
 vi.mock('@shared/stores/query-client', () => ({
   QueryProvider: ({ children }: { children: ReactNode }) => (
     <div data-testid="query-provider">{children}</div>
