@@ -11,12 +11,7 @@ import {
   normalizeModelId,
   type ModelMetadata,
 } from '@shared/config/llm';
-import {
-  getAutoRoutingProfiles,
-  getModelsForTierAndSurface,
-  listChatModels,
-  listManagedRoutesForModel,
-} from '@agiworkforce/types';
+import { getAutoRoutingProfiles, getModelsForTierAndSurface } from '@agiworkforce/types';
 
 export interface AIModel {
   id: string;
@@ -152,16 +147,6 @@ function futureDeprecationDate(metadata: ModelMetadata): string | undefined {
   return deprecation_date;
 }
 
-function offerableChatModelIds(): string[] {
-  const surfaceOrdered = getModelsForTierAndSurface('max', 'web/cloud-chat', {
-    modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
-  }).map((model) => model.id);
-  const routable = listChatModels()
-    .filter((model) => listManagedRoutesForModel(model.id).length > 0)
-    .map((model) => model.id);
-  return [...surfaceOrdered, ...routable];
-}
-
 function buildAvailableModels(): AIModel[] {
   const seen = new Set<string>();
   const autoModeEntries = getAutoRoutingProfiles().map((profile) => ({
@@ -171,7 +156,10 @@ function buildAvailableModels(): AIModel[] {
     providerKey: 'managed_cloud',
     description: profile.description,
   }));
-  const manualEntries = offerableChatModelIds()
+  const manualEntries = getModelsForTierAndSurface('max', 'web/cloud-chat', {
+    modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+  })
+    .map((model) => model.id)
     .filter((modelId) => {
       if (seen.has(modelId)) {
         return false;

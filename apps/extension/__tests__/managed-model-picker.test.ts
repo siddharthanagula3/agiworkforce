@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CHAT_MODEL_TYPES,
   getModelEffortOptions,
+  getModelsForTierAndSurface,
   getPickerModels,
   getRoutingSlotModel,
   resolveModelEffort,
@@ -31,6 +33,30 @@ describe('managed model picker', () => {
 
     expect(options.map((option) => option.value)).toEqual(['auto', admittedModel]);
     expect(options[1]).toMatchObject({ provider: expect.any(String), label: expect.any(String) });
+  });
+
+  it('keeps every model the shared owner admits for this surface and plan', () => {
+    const subscriptionTier = 'max';
+    const modelIds = getModelsForTierAndSurface(subscriptionTier, 'chrome/managed-chat', {
+      modelTypes: [...CHAT_MODEL_TYPES],
+    }).map((model) => model.id);
+    const options = getManagedModelPickerOptions({
+      subscriptionTier,
+      modelIds,
+      allowedAutoModes: [],
+    });
+
+    expect(modelIds.length).toBeGreaterThan(0);
+    expect(options.map((option) => option.value).slice(1)).toEqual(modelIds);
+    for (const modelId of modelIds) {
+      expect(
+        reconcileManagedModelSelection(modelId, {
+          subscriptionTier,
+          modelIds,
+          allowedAutoModes: [],
+        }),
+      ).toBe(modelId);
+    }
   });
 
   it('resets stale manual and named Auto selections while preserving admitted choices', () => {
