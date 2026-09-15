@@ -190,8 +190,6 @@ pub struct AgentSession {
     /// Stable, filesystem-safe identifier for this process-local session run.
     /// Memory extraction uses it instead of user-controlled names or paths.
     pub(crate) runtime_session_id: String,
-    #[allow(dead_code)]
-    pub fallback_model: Option<String>,
     pub allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub privacy_mode: PrivacyMode,
@@ -637,7 +635,6 @@ impl AgentSession {
             checkpoints: Vec::new(),
             session_name: None,
             runtime_session_id: session_id,
-            fallback_model: None,
             allowed_tools: None,
             disallowed_tools: Vec::new(),
             privacy_mode,
@@ -1268,7 +1265,6 @@ impl AgentSession {
         self.subagent_manager = None;
         self.team_manager = None;
         self.fallback_chain = None;
-        self.fallback_model = None;
         self.fast_mode = false;
         self.original_model = None;
         self.auto_routing_tier = None;

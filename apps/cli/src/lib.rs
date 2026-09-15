@@ -3029,7 +3029,8 @@ pub async fn run_main() -> Result<()> {
                     cli.model.as_deref(),
                     &app_config.default.model,
                 );
-                let chain = routing::fallback::FallbackChain::parse(&raw_model);
+                let chain = routing::fallback::FallbackChain::parse(&raw_model)
+                    .with_fallback(cli.fallback_model.as_deref());
                 let m = chain
                     .head()
                     .map(|s| s.to_string())
@@ -3279,7 +3280,7 @@ pub async fn run_main() -> Result<()> {
                     managed_session,
                     None,
                     false,
-                    None,
+                    routing::fallback::FallbackChain::default(),
                     None,
                     false,
                     false,
@@ -3313,7 +3314,7 @@ pub async fn run_main() -> Result<()> {
                     managed_session,
                     None,
                     false,
-                    None,
+                    routing::fallback::FallbackChain::default(),
                     None,
                     false,
                     false,
@@ -4191,7 +4192,8 @@ pub async fn run_main() -> Result<()> {
     // `Exec` subcommand already parses this correctly (see `FallbackChain::parse`
     // above), mirror that here for the interactive/one-shot path so `-m`
     // behaves consistently across `agi exec` and plain `agi`.
-    let model_fallback_chain = routing::fallback::FallbackChain::parse(&model);
+    let model_fallback_chain = routing::fallback::FallbackChain::parse(&model)
+        .with_fallback(cli.fallback_model.as_deref());
     let model: String = model_fallback_chain
         .head()
         .map(|s| s.to_string())
@@ -4442,7 +4444,7 @@ pub async fn run_main() -> Result<()> {
             resume_managed_session,
             effective_max_turns,
             effective_skip_permissions,
-            cli.fallback_model,
+            model_fallback_chain.clone(),
             cli.name,
             team_mode,
             effective_auto_approve_safe,
@@ -4467,7 +4469,7 @@ pub async fn run_main() -> Result<()> {
             resume_managed_session,
             effective_max_turns,
             effective_skip_permissions,
-            cli.fallback_model,
+            model_fallback_chain.clone(),
             cli.name,
             team_mode,
             effective_auto_approve_safe,

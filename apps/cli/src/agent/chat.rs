@@ -52,6 +52,18 @@ struct CompactionUsage {
     included_in_subscription: bool,
 }
 
+fn fallback_provider_for(
+    current: &crate::models::Provider,
+    model: &str,
+) -> Option<crate::models::Provider> {
+    if *current == crate::models::Provider::ManagedCloud
+        && crate::models::gateway_models::cached_model_is_available(model)
+    {
+        return Some(crate::models::Provider::ManagedCloud);
+    }
+    crate::models::try_detect_provider(model)
+}
+
 fn record_compaction_usage(
     ledger: &mut crate::cost_ledger::CostLedger,
     model: &str,
@@ -1180,7 +1192,7 @@ impl TurnHostAdapter<'_> {
                                 // restore state and break fail-closed, never egress Local
                                 // session history to the network silently.
                                 let Some(fallback_provider) =
-                                    crate::models::try_detect_provider(fallback_model)
+                                    fallback_provider_for(&self.session.provider, fallback_model)
                                 else {
                                     last_err = anyhow::anyhow!(
                                         "Fallback model '{}' is not recognized; refusing silent provider routing.",

@@ -4129,7 +4129,7 @@ pub async fn run(
     resume_managed_session: Option<(crate::runtime::session::ManagedSession, std::path::PathBuf)>,
     max_turns: Option<usize>,
     skip_permissions: bool,
-    _fallback_model: Option<String>,
+    fallback_chain: crate::routing::fallback::FallbackChain,
     _session_name: Option<String>,
     team_mode: bool,
     auto_approve_safe: bool,
@@ -4164,6 +4164,9 @@ pub async fn run(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
+    if fallback_chain.primaries.len() > 1 {
+        session.fallback_chain = Some(fallback_chain);
+    }
     // Sprint B4: thread the initial permission mode + headless
     // auto-approve flag so the TUI launch path matches `--mode plan`
     // semantics from `repl::run_repl` and `run_oneshot`.
