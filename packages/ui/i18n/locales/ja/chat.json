@@ -288,5 +288,13 @@
     "thinkingSimple": "ご質問について考え中...",
     "workingOnGoal": "対応中... {{goal}}",
     "workingOnRequest": "リクエストを処理中..."
+  },
+  "greeting": {
+    "morning": "おはようございます",
+    "afternoon": "こんにちは",
+    "evening": "こんばんは",
+    "morningNamed": "{{name}}さん、おはようございます",
+    "afternoonNamed": "{{name}}さん、こんにちは",
+    "eveningNamed": "{{name}}さん、こんばんは"
   }
 }

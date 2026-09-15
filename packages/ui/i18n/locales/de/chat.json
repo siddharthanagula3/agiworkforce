@@ -288,5 +288,13 @@
     "thinkingSimple": "Denke über Ihre Frage nach...",
     "workingOnGoal": "Ich arbeite daran... {{goal}}",
     "workingOnRequest": "Bearbeite Ihre Anfrage..."
+  },
+  "greeting": {
+    "morning": "Guten Morgen",
+    "afternoon": "Guten Tag",
+    "evening": "Guten Abend",
+    "morningNamed": "Guten Morgen, {{name}}",
+    "afternoonNamed": "Guten Tag, {{name}}",
+    "eveningNamed": "Guten Abend, {{name}}"
   }
 }

@@ -288,5 +288,13 @@
     "thinkingSimple": "질문에 대해 생각 중...",
     "workingOnGoal": "처리 중... {{goal}}",
     "workingOnRequest": "요청을 처리하는 중..."
+  },
+  "greeting": {
+    "morning": "좋은 아침입니다",
+    "afternoon": "안녕하세요",
+    "evening": "좋은 저녁입니다",
+    "morningNamed": "{{name}}님, 좋은 아침입니다",
+    "afternoonNamed": "{{name}}님, 안녕하세요",
+    "eveningNamed": "{{name}}님, 좋은 저녁입니다"
   }
 }
