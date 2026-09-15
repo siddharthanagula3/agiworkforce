@@ -1016,3 +1016,29 @@ appears under On this device with the Desktop source.
 verification matrix for the coding surface's Local mode.
 **Impact** VERIFICATION-BLOCKING (the last leg of the Local composer proof)
 **Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
+
+## [Providers] A managed route answers with exhausted provider billing
+
+**Why founder assistance is required**
+On 2026-09-14 a direct turn on the managed route for one Anthropic model
+returned 503 with `provider_billing_exhausted` on the dev server: the
+provider account behind that route is out of credit. The route's health
+state had not been marked degraded, so the catalogue still offered the model
+and the panel showed nothing for it while Auto answered on another route.
+Topping up or changing the provider account is a billing action on the
+founder's accounts.
+**Exact action**
+Check the Anthropic account the managed cloud route uses (the key in the
+deployment's environment), top it up or replace the key, and confirm one
+cheap turn on that route answers. Then confirm the billing alert on that
+account reaches you before it runs dry again.
+**Where** The provider's billing console and the deployment's environment.
+**Needed input** The top-up, and a yes that the alert is set.
+**How to verify completion** A turn on that route returns 200 on the dev
+server and in production.
+**What remains after founder action** Engineering: the catalogue should stop
+offering a route whose last answer was a billing exhaustion until it answers
+again (recorded as F56 in the release doc).
+**Impact** USER-VISIBLE while it lasts (one provider family unusable on the
+plan), NON-BLOCKING for the release.
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
