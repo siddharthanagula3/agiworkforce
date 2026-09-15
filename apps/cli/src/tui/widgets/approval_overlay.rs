@@ -32,8 +32,8 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
 use crate::terminal_text::sanitize_terminal_text;
-use crate::tui::pad_to_cols;
 use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_warning};
+use crate::tui::{display_width, pad_to_cols};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -159,15 +159,23 @@ impl ApprovalOverlayState {
             return;
         }
 
-        // Centre a fixed-height box inside `area`.
-        let detail_lines = self.detail.len() as u16;
+        // Centre a fixed-height box inside `area`. A detail longer than the
+        // box wraps rather than clipping, so the whole command is readable
+        // before it is approved.
+        let box_width = area.width.min(82);
+        let detail_cols = usize::from(box_width.saturating_sub(2 + 4)).max(8);
+        let detail: Vec<String> = self
+            .detail
+            .iter()
+            .flat_map(|d| wrap_cols(d, detail_cols))
+            .collect();
+        let detail_lines = detail.len() as u16;
         let inner_height = 2          // top padding + prompt
             + detail_lines.max(1)     // detail or blank
             + 2                       // blank + button strip
             + 1                       // hint line
             + 1; // bottom padding
         let box_height = inner_height + 2; // borders
-        let box_width = area.width.min(82);
 
         let vert = Layout::default()
             .direction(Direction::Vertical)
@@ -212,10 +220,10 @@ impl ApprovalOverlayState {
         ]));
 
         // Detail lines
-        if self.detail.is_empty() {
+        if detail.is_empty() {
             lines.push(Line::from(""));
         } else {
-            for d in &self.detail {
+            for d in &detail {
                 lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled(d.as_str(), Style::default().fg(ui_muted())),
@@ -388,6 +396,25 @@ impl InteractiveView for ApprovalOverlayState {
     }
 }
 
+fn wrap_cols(text: &str, max_cols: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    let mut width = 0;
+    for ch in text.chars() {
+        let w = display_width(&ch.to_string());
+        if width + w > max_cols && !current.is_empty() {
+            lines.push(std::mem::take(&mut current));
+            width = 0;
+        }
+        current.push(ch);
+        width += w;
+    }
+    if !current.is_empty() || lines.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
+
 // ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
@@ -422,6 +449,40 @@ mod tests {
     /// The prompt and detail quote model-supplied tool arguments directly
     /// above the consent buttons, so an escape there could repaint the
     /// decision the operator is answering.
+    #[test]
+    fn a_long_command_wraps_inside_the_box_instead_of_clipping() {
+        let command = format!(
+            "cd /very/long/workspace/path/{} && printf hi > hello.txt",
+            "x".repeat(70)
+        );
+        let mut state = ApprovalOverlayState::default();
+        state.open("Allow this command?", vec![command.clone()]);
+
+        let terminal = draw_overlay(&state, 90, 20);
+        let buffer = terminal.backend().buffer();
+        let rows: Vec<String> = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect();
+        let painted = rows.join("\n");
+        assert!(
+            painted.contains("printf hi > hello.txt"),
+            "tail clipped: {painted}"
+        );
+        assert!(
+            rows.iter().filter(|row| row.contains("xxxx")).count() >= 2,
+            "no wrap: {painted}"
+        );
+        assert_eq!(wrap_cols("abc", 10), vec!["abc".to_string()]);
+        assert_eq!(
+            wrap_cols("abcdef", 4),
+            vec!["abcd".to_string(), "ef".to_string()]
+        );
+    }
+
     #[test]
     fn open_strips_terminal_escapes_from_prompt_and_detail() {
         let mut state = ApprovalOverlayState::default();
