@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { usePathname } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import { Brain, Mic } from 'lucide-react';
@@ -9,6 +10,8 @@ import {
   SETTINGS_NAV_GROUPS_WEB,
   SETTINGS_NAV_GROUP_DESKTOP_APP,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
+  SETTINGS_NAV_GROUP_DESKTOP,
+  SETTINGS_NAV_GROUP_SETTINGS,
 } from '@agiworkforce/ui';
 import type {
   SettingsDataAdapter,
@@ -129,6 +132,30 @@ const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_
  * The shell's own settings sit between Settings and Customize, and only when
  * there is a shell: a browser has nothing behind that group to configure.
  */
+const NAV_GROUP_LABEL_KEYS: Record<string, string> = {
+  [SETTINGS_NAV_GROUP_SETTINGS]: 'nav.groupSettings',
+  [SETTINGS_NAV_GROUP_CUSTOMIZE]: 'nav.groupCustomize',
+  [SETTINGS_NAV_GROUP_DESKTOP]: 'nav.groupDesktop',
+};
+
+function translateNavGroups(
+  groups: SettingsNavGroupResolved[],
+  t: (key: string, options: { defaultValue: string }) => string,
+): SettingsNavGroupResolved[] {
+  return groups.map((group) => ({
+    ...group,
+    ...(group.label
+      ? {
+          label: t(NAV_GROUP_LABEL_KEYS[group.label] ?? group.label, { defaultValue: group.label }),
+        }
+      : {}),
+    items: group.items.map((item) => ({
+      ...item,
+      label: t(`nav.${item.key}`, { defaultValue: item.label }),
+    })),
+  }));
+}
+
 const HOSTED_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = [
   ...WEB_SETTINGS_NAV_GROUPS.filter((group) => group.label !== SETTINGS_NAV_GROUP_CUSTOMIZE),
   SETTINGS_NAV_GROUP_DESKTOP_APP,
@@ -156,6 +183,11 @@ export function WebSettingsModal({
 }: WebSettingsModalProps) {
   const pathname = usePathname();
   const host = useDesktopHost();
+  const { t } = useTranslation('settings');
+  const navGroups = useMemo(
+    () => translateNavGroups(host ? HOSTED_SETTINGS_NAV_GROUPS : WEB_SETTINGS_NAV_GROUPS, t),
+    [host, t],
+  );
 
   // Derive section from current URL path (deep-link support)
   const sectionFromPath = (() => {
@@ -264,11 +296,10 @@ export function WebSettingsModal({
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
           sectionContent={sectionContent}
-          navGroups={host ? HOSTED_SETTINGS_NAV_GROUPS : WEB_SETTINGS_NAV_GROUPS}
+          navGroups={navGroups}
           adapter={adapter}
           directoryAdapter={connectors.directoryAdapter}
           navBadges={connectors.navBadges}
-          title="Settings"
           openCustomConnector={customConnectorOpen}
           onCustomConnectorOpenChange={handleCustomConnectorOpenChange}
         />

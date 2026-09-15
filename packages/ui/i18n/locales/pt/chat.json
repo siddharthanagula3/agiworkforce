@@ -170,7 +170,27 @@
     "voiceStopRecording": "Parar gravação",
     "voiceStopping": "Parando ação de voz",
     "voiceTranscribing": "Transcrevendo voz",
-    "voiceUnsupported": "Entrada de voz indisponível"
+    "voiceUnsupported": "Entrada de voz indisponível",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "Chat: perguntas rápidas e conversa",
+    "modeAgiWorkTitle": "AGI Work: tarefas em várias etapas com ferramentas, arquivos e entregas revisáveis",
+    "style": "Estilo",
+    "styleCustom": "Personalizado",
+    "responseStyle": "Estilo de resposta",
+    "styles": {
+      "default": "Padrão",
+      "concise": "Conciso",
+      "detailed": "Detalhado",
+      "technical": "Técnico",
+      "creative": "Criativo"
+    },
+    "styleDescs": {
+      "default": "Estilo de resposta padrão",
+      "concise": "Breve e direto",
+      "detailed": "Completo com exemplos",
+      "technical": "Preciso com exemplos de código",
+      "creative": "Expressivo e envolvente"
+    }
   },
   "bubble": {
     "assistantThinking": "O assistente está pensando",

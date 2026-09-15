@@ -74,5 +74,29 @@
     "searchLabel": "Search settings",
     "searchPlaceholder": "Search",
     "title": "Settings"
+  },
+  "nav": {
+    "general": "General",
+    "account": "Account",
+    "team": "Team",
+    "privacy": "Privacy",
+    "billing": "Billing",
+    "usage": "Usage",
+    "capabilities": "Capabilities",
+    "security": "Security",
+    "safety": "Safety",
+    "notifications": "Notifications",
+    "reflect": "Reflect",
+    "time-focus": "Time and focus",
+    "help": "Help",
+    "skills": "Skills",
+    "connectors": "Connectors",
+    "plugins": "Plugins",
+    "memory": "Memory",
+    "voice": "Voice",
+    "desktop": "General",
+    "groupSettings": "Settings",
+    "groupCustomize": "Customize",
+    "groupDesktop": "Desktop app"
   }
 }

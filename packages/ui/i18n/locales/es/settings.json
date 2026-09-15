@@ -74,5 +74,29 @@
     "searchPlaceholder": "Buscar",
     "title": "Configuración"
   },
-  "version": "Versión"
+  "version": "Versión",
+  "nav": {
+    "general": "General",
+    "account": "Cuenta",
+    "team": "Equipo",
+    "privacy": "Privacidad",
+    "billing": "Facturación",
+    "usage": "Uso",
+    "capabilities": "Capacidades",
+    "security": "Seguridad",
+    "safety": "Protección",
+    "notifications": "Notificaciones",
+    "reflect": "Reflect",
+    "time-focus": "Tiempo y concentración",
+    "help": "Ayuda",
+    "skills": "Habilidades",
+    "connectors": "Conectores",
+    "plugins": "Complementos",
+    "memory": "Memoria",
+    "voice": "Voz",
+    "desktop": "General",
+    "groupSettings": "Configuración",
+    "groupCustomize": "Personalizar",
+    "groupDesktop": "Aplicación de escritorio"
+  }
 }

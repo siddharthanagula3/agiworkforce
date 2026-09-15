@@ -170,7 +170,27 @@
     "voiceStopRecording": "रिकॉर्डिंग रोकें",
     "voiceStopping": "वॉइस एक्शन रोका जा रहा है",
     "voiceTranscribing": "वॉइस ट्रांसक्राइब हो रही है",
-    "voiceUnsupported": "वॉइस इनपुट उपलब्ध नहीं है"
+    "voiceUnsupported": "वॉइस इनपुट उपलब्ध नहीं है",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "चैट: त्वरित प्रश्न और बातचीत",
+    "modeAgiWorkTitle": "AGI Work: टूल, फ़ाइलों और समीक्षा योग्य परिणामों वाले बहु-चरणीय कार्य",
+    "style": "शैली",
+    "styleCustom": "कस्टम",
+    "responseStyle": "उत्तर शैली",
+    "styles": {
+      "default": "डिफ़ॉल्ट",
+      "concise": "संक्षिप्त",
+      "detailed": "विस्तृत",
+      "technical": "तकनीकी",
+      "creative": "रचनात्मक"
+    },
+    "styleDescs": {
+      "default": "मानक उत्तर शैली",
+      "concise": "संक्षिप्त और सीधा",
+      "detailed": "उदाहरणों के साथ विस्तृत",
+      "technical": "कोड उदाहरणों के साथ सटीक",
+      "creative": "अभिव्यंजक और आकर्षक"
+    }
   },
   "bubble": {
     "assistantThinking": "सहायक सोच रहा है",

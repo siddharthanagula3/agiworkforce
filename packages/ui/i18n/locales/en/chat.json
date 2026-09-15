@@ -170,7 +170,27 @@
     "voiceStopRecording": "Stop recording",
     "voiceStopping": "Stopping voice action",
     "voiceTranscribing": "Transcribing voice",
-    "voiceUnsupported": "Voice input unavailable"
+    "voiceUnsupported": "Voice input unavailable",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "Chat: quick questions and conversation",
+    "modeAgiWorkTitle": "AGI Work: multi-step tasks with tools, files, and reviewable deliverables",
+    "style": "Style",
+    "styleCustom": "Custom",
+    "responseStyle": "Response Style",
+    "styles": {
+      "default": "Default",
+      "concise": "Concise",
+      "detailed": "Detailed",
+      "technical": "Technical",
+      "creative": "Creative"
+    },
+    "styleDescs": {
+      "default": "Standard response style",
+      "concise": "Brief and direct",
+      "detailed": "Thorough with examples",
+      "technical": "Precise with code examples",
+      "creative": "Expressive and engaging"
+    }
   },
   "bubble": {
     "assistantThinking": "Assistant is thinking",
