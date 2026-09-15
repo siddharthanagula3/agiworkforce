@@ -121,7 +121,8 @@ extension state plus the desktop pairing record).
 | F53 | Web, found while settling the shell picker question: in the chat model picker's expanded list the filter chips (Favourites, Recent, the provider names, capability filters) are plain buttons with no pressed state or group label, so a driver walking the buttons and a screen reader user alike cannot tell a filter from a model row; a click on a provider filter reads as a selection that did nothing. The picker itself works (a row selects on the first click; the choice is per browser, not per account). | VERIFIED (defect, open) | scratchpad desktop-code-2 captures chat-07 to chat-10 |
 | F54 | Web: in the chat model picker some rows close the picker without selecting and without a word (two cheaper models outside the tier table, in a four-model A/B where two flagship-family models inside it select on the first click); the failing rows are indistinguishable in the markup and the click produces no request, no console message and no notice. Cause (web-picker-1, replacing the first reading): the composer's model store held a nineteen-model universe built from the shared allowlist union, while the catalogue and the server's send-time check admit the twenty-seven chat models a managed route can serve; a row outside the store fell through to a handler that closed the popover and then resolved the id to Auto without a word. Eight models sat in that gap. The tier gate in the footer was not at fault (it delegates to the same entitlement rule the server uses). Fixed in 0e3559126: the store's universe is the catalogue's own executability rule, one predicate governs a row's enabled state and its click, a row the store cannot hold is disabled with its reason and cannot close the picker, and the filter chips gained their labelled group (F53). Proven live: all four models select, and a real turn on a previously dead cheap model returns 200 and answers. | VERIFIED (fixed) | scratchpad desktop-code-2 chat-ab.mjs, chat-why.mjs, captures chat-11 to chat-15 |
 | F55 | Cross-surface follow-up from F54: the shared allowlist function in the contracts package (the union of the three named tier buckets, nineteen ids) feeds every surface's picker and the hosted models endpoint, while the catalogue and the server admit models entitled through the derived price floor as well (twenty-seven chat models with a managed route). Fixed in 018237259: an exported executability rule in the contracts package is the one owner, the picker projection and every consumer read it (the web store drops its private copy, the VS Code quick pick's managed universe follows it and stops filing hundreds of registry rows under an upgrade heading no plan unlocks), a contract test derived independently of the owner pins it, and live the hosted models endpoint serves every admitted model for the QA tier, the Chrome side panel lists them all, and a cheap turn on a previously dropped model answers. | VERIFIED (fixed) | `packages/contracts/types/src/model-catalog.ts`; reports/web-picker-1.md |
-| F56 | A managed route answered 503 with provider billing exhausted for one Anthropic model on the dev server while route health still reported it admitted, so the catalogue kept offering a model that answered nothing (found by models-allowlist-1). The provider account is a founder item; engineering owes a route-health rule that withholds a route after a billing exhaustion until it answers again. | VERIFIED (defect, open) | reports/models-allowlist-1.md; founder item 9 |
+| F56 | A managed route answered 503 with provider billing exhausted for one Anthropic model on the dev server while route health still reported it admitted, so the catalogue kept offering a model that answered nothing (found by models-allowlist-1). Cause: the catalogue read only the five-minute degrade marks the error boundary writes, while the dispatcher refuses every route on an unfunded credential for its own ten-minute cooldown window, so between the two the picker offered a model whose next turn was refused before any provider call. Fixed in ff92e2e0d: provider availability also reads the credential scope's unfunded fact (one owner for the picker and the dispatcher), and the hosted OpenAI-compatible list withholds what the catalogue marks temporarily unavailable and names those ids in its metadata, so the CLI's Cloud rows and the Chrome side panel follow. Proven live on the dev server: an explicit turn on the cheapest Anthropic model failed once on the unfunded direct route and the same request answered six seconds later on another route; every Anthropic model keeps three or four routes, so none is withheld, which is the right answer; unit tests pin the withholding for a model whose every route sits on such a credential. The provider account itself remains founder item 9; the residual first-turn failure is F58. | VERIFIED (fixed) | `apps/web/lib/services/provider-availability-service.ts`; scratchpad web f56-probe.mjs |
+| F58 | Follow-on from F56: the first explicit turn after a quiet window still reaches the unfunded direct route and fails with the billing code, once per provider per cooldown window, because a billing exhaustion never rotates and an explicit selection gets no same-model route retry; the next turn is steered to another transport of the same model. Candidate fix: allow one same-model transport retry on a billing-exhausted answer for an explicit selection (the router already spends on that transport for the following ten minutes), which is a routing-policy change in the never-rotate rule and is left for a reviewed slice. Two surfaces also read no live health signal at all: mobile builds its Cloud rows from the contract's executability rule, and the CLI's model list reachability comes from the bundled catalogue and the plan rather than the hosted list. | VERIFIED (defect, open) | scratchpad web f56-probe.mjs; founder item 9 |
 | F57 | Chrome: the last two provider group headings in the side panel's model menu render raw ids because the extension keeps its own provider display map instead of reading the shared PROVIDER_DISPLAY owner. Fixed in 6b2589e2b: the contracts package owns provider display resolution with the registry's declared aliases as the spelling map, the side panel and VS Code delete their private copies, and every provider a picker can group is labelled, proven in the panel. | VERIFIED (fixed) | scratchpad models-allowlist-1 side-panel-model-menu-full.png |
 
 ## 4. Founder decisions needed
@@ -185,10 +186,13 @@ extension state plus the desktop pairing record).
    the shell's run-commands consent for the QA folder" in the founder file.
    NON-BLOCKING.
 9. A managed route's provider account is out of credit: one Anthropic model
-   answers 503 with provider billing exhausted on the dev server while the
-   catalogue still offers it. Entry "[Providers] A managed route answers with
-   exhausted provider billing" in the founder file. USER-VISIBLE while it
-   lasts.
+   answers 503 with provider billing exhausted on the dev server. Entry
+   "[Providers] A managed route answers with exhausted provider billing" in
+   the founder file. The engineering half landed (F56, ff92e2e0d): the picker,
+   the dispatcher and the hosted list now read one unfunded-credential fact,
+   and a turn is steered to another transport of the same model for the
+   cooldown window; the first turn after a quiet window still fails once
+   (F58). USER-VISIBLE while it lasts.
 
 ## 5. Plan
 
@@ -331,6 +335,11 @@ goes out with this section.
   b67d72270, proven live in the fast and the slow case), the display-language
   scope copy, a desktop-route button on theme classes, a shared host-bridge
   test stub.
+- Routes (lead, F56, ff92e2e0d): the picker, the dispatcher and the hosted
+  model list read one unfunded-credential fact, so a model whose every route
+  sits on a credential the dispatcher refuses is offered as temporarily
+  unavailable on the web and withheld from the CLI's Cloud rows and the
+  Chrome side panel until the dispatcher would try it again.
 
 ### Architecture
 
@@ -379,7 +388,12 @@ where a shared call stands in for a client not driven, BLOCKED where a founder
 item or a decision gates it. Every live QA turn ran on a cheap route. The web
 pass's one uncovered control, reasoning effort under a manually selected
 reasoning model, was driven by the lead afterwards: the thinking switch, the
-slider's two ends and the choice surviving a reload all behave.
+slider's two ends and the choice surviving a reload all behave. The F56 rule
+was proven on the running dev server with two bearer-authenticated explicit
+turns on the cheapest Anthropic model: the first failed on the unfunded direct
+route with the billing code and the second, six seconds later, answered on
+another route (the hosted chat route wants a bearer token, a client surface
+header and an idempotency key; a cookie session alone is refused).
 
 ### Remaining blockers
 
