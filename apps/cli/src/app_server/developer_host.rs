@@ -3041,7 +3041,7 @@ mod tests {
         let missing =
             classify_turn_failure(&anyhow::Error::new(crate::errors::CliError::auth_missing(
                 "deepseek",
-                "No API key found. Run `agi login deepseek` or set DEEPSEEK_API_KEY.",
+                "No API key found in the auth store or DEEPSEEK_API_KEY.",
             )));
         assert_eq!(missing.code, TurnFailureCode::ProviderAuthMissing);
         assert_eq!(missing.provider.as_deref(), Some("deepseek"));

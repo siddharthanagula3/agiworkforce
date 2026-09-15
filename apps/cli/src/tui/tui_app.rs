@@ -5175,7 +5175,7 @@ async fn send_message_with_prompt(
         Some(Err(e)) => {
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
-                text: format!("Error: {:#}", e),
+                text: format!("Error: {}", crate::errors::terminal_text(&e)),
             });
         }
         None => {

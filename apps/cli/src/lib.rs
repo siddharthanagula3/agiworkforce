@@ -3240,7 +3240,7 @@ pub async fn run_main() -> Result<()> {
                             );
                         } else {
                             output::print_assistant_end();
-                            eprintln!("{}", e);
+                            eprintln!("{}", errors::terminal_text(&e));
                         }
                         exit_with_error(&e);
                     }

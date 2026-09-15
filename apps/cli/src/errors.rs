@@ -180,7 +180,7 @@ impl fmt::Display for CliError {
             CliError::AccountSignedOut { model } => {
                 write!(
                     f,
-                    "No AGI Workforce session, and no provider key for '{}'. Run `agi login`, or set that provider's key.",
+                    "No AGI Workforce session, and no provider key for '{}'.",
                     model
                 )
             }
@@ -210,6 +210,19 @@ impl fmt::Display for CliError {
 }
 
 impl std::error::Error for CliError {}
+
+/// The error and its remedy for a terminal; other surfaces take the remedy
+/// from the failure's action instead.
+pub fn terminal_text(error: &anyhow::Error) -> String {
+    let text = format!("{error:#}");
+    match error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<CliError>())
+    {
+        Some(cli) => format!("{text}\n{}", cli.hint()),
+        None => text,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Deterministic error classification, for `--json-events` and CI
@@ -265,7 +278,10 @@ impl CliError {
                  corresponding API key environment variable."
             ),
             CliError::AuthMissing { provider, .. } => {
-                if login_opens_vendor_subscription(provider) {
+                if provider == crate::models::provider_name(&crate::models::Provider::ManagedCloud)
+                {
+                    "Run `agi login` to use your AGI Workforce plan.".to_string()
+                } else if login_opens_vendor_subscription(provider) {
                     format!(
                         "Run `agi login` to use your AGI Workforce plan, or set the \
                          {provider} API key environment variable to use your own key."
@@ -657,6 +673,41 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "[google] Rate limited, please wait before retrying"
+        );
+    }
+
+    #[test]
+    fn display_account_signed_out_states_the_fact_without_a_terminal_remedy() {
+        let err = CliError::AccountSignedOut {
+            model: "fixture-model".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "No AGI Workforce session, and no provider key for 'fixture-model'."
+        );
+        assert!(!err.turn_failure().message.contains("agi login"));
+    }
+
+    #[test]
+    fn terminal_text_adds_the_remedy_under_the_error() {
+        let error = anyhow::Error::new(CliError::AccountSignedOut {
+            model: "fixture-model".to_string(),
+        })
+        .context("while running the turn");
+        let text = terminal_text(&error);
+        assert!(text.starts_with("while running the turn: No AGI Workforce session"));
+        assert!(text.ends_with(
+            "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
+        ));
+        assert_eq!(terminal_text(&anyhow::anyhow!("plain")), "plain");
+    }
+
+    #[test]
+    fn a_missing_managed_session_hint_names_only_the_plan_sign_in() {
+        let err = CliError::auth_missing("managed_cloud", "No AGI Workforce session found.");
+        assert_eq!(
+            err.hint(),
+            "Run `agi login` to use your AGI Workforce plan."
         );
     }
 
