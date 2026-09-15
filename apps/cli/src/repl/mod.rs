@@ -696,7 +696,7 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
             }
         }
         Err(e) => {
-            output::print_error(&format!("{:#}", e));
+            output::print_error(&crate::errors::terminal_text(&e));
         }
     }
 }
