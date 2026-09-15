@@ -61,6 +61,14 @@ create unique index if not exists ux_user_memories_user_import_key
   on public.user_memories (user_id, source, import_key)
   where import_key is not null;
 
+-- The deployment that precedes the one built on this migration still names
+-- `(id)` alone as its conflict target on every memory insert, and the
+-- deployment built on it names `(user_id, id)`. Both keys exist while the two
+-- overlap, so neither deployment fails a memory write during the cutover;
+-- 0193 drops the global one once the earlier deployment is gone.
+create unique index if not exists ux_user_memories_id_transition
+  on public.user_memories (id);
+
 alter table public.user_memories
   drop constraint if exists user_memories_pkey;
 
