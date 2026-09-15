@@ -5,7 +5,8 @@ import type { TurnFailureCode } from './TurnFailureCode';
 export type TurnFailure = {
   code: TurnFailureCode;
   /**
-   * The same human-readable text as the notification's `error` field.
+   * The failure as one sentence; the notification's `error` field keeps the
+   * terminal rendering with its provider prefix.
    */
   message: string;
   /**
