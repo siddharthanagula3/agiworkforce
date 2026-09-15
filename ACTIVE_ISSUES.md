@@ -317,8 +317,10 @@ by a live check on the running product, not by its tests.
    entitlement for a dedicated QA user; credentials gitignored.
 7. Plan-tier gate (D-09): read the surface from a Clerk custom session claim
    (dashboard step with the founder) and stop trusting the header.
-8. Migrations (D-23): rehearse 0185 to 0192 on a Neon branch, then apply in
-   order before deploying dependent code; never 0183 (duplicate).
+8. Migrations (D-23): rehearse 0183 to 0192 on a Neon branch, then apply in
+   order before deploying dependent code. (The withdrawn duplicate that an
+   earlier queue entry called 0183 was the reconciliation copy renumbered to
+   0181; it no longer exists, and the current 0183 and 0184 are real.)
 9. Durability (D-22/23): deploy the world transport fix once CI is green on the
    same commit and end the two stranded production runs.
 10. Dispatch pairing (D-10), TLS pins (D-11), minimum age (D-12), crash
@@ -338,6 +340,15 @@ came out of it: the callerless Tauri latest-manifest route under
 `apps/web/app/api/releases/latest/` leaves with the Tauri build, and the
 Electron package still carries the name of the hosted trust mode, so the rename
 to the surface name (D-04, derived) waits for a packaged-build check.
+Item 8 done: 0183 to 0192 rehearsed on two Neon branches (apply clean, RLS
+probe 33 tables, lease probe green) and applied to production, 192 applied, 0
+pending, 0 drift, recorded against 890dad614. Because production still runs
+107ded474, whose memory inserts name `(id)` as their conflict target, 0189 keeps
+a transitional unique index on `id` and 0193 drops it; 0193 is applied only
+once the deployment built on 0189 is live (37e1ad16c).
+Item 7 landed in 78fd99ec0: the gate binds a Clerk token to the surface its signed
+claims prove and ignores the header for anything else; proved live against the
+dev server. The mobile JWT template is the one remaining founder dashboard step.
 
 ## 4. P2, important
 
