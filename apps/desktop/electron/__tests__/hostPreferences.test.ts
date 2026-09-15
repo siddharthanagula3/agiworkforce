@@ -163,7 +163,7 @@ describe('the host preferences channel', () => {
     const state = (await invoke({ launchAtLogin: true })) as State;
 
     expect(state.preferences['launchAtLogin']).toBe(true);
-    expect(loginItem).toHaveBeenCalledWith({ openAtLogin: true, openAsHidden: true });
+    expect(loginItem).toHaveBeenCalledWith({ openAtLogin: true });
   });
 
   it('re-registers the global shortcuts when one changes', async () => {

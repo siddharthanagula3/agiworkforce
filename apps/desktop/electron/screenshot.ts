@@ -1,9 +1,10 @@
 import {
   BrowserWindow,
-  Notification,
   clipboard,
+  ClipboardItem,
   desktopCapturer,
   dialog,
+  Notification,
   screen,
   systemPreferences,
 } from 'electron';
@@ -50,7 +51,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
   if (capturing) return;
   capturing = true;
 
-  const priorText = clipboard.readText();
+  const priorText = await clipboard.readText();
   const quickAskWasVisible = isQuickAskVisible();
   const mainWasVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
 
@@ -81,7 +82,11 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
       return;
     }
 
-    clipboard.writeImage(source.thumbnail);
+    await clipboard.write([
+      new ClipboardItem({
+        'image/png': new Blob([new Uint8Array(source.thumbnail.toPNG())], { type: 'image/png' }),
+      }),
+    ]);
 
     if (!mainWindow || mainWindow.isDestroyed()) {
       notify('Screenshot copied', 'The chat window is closed, so the image is on your clipboard.');
@@ -108,7 +113,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
 
     if (priorText !== '') {
       await delay(CLIPBOARD_RESTORE_MS);
-      clipboard.writeText(priorText);
+      await clipboard.writeText(priorText);
     }
   } catch (error) {
     console.error('[screenshot] capture failed:', error);
