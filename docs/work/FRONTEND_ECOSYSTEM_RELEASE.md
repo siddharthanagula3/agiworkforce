@@ -275,16 +275,16 @@ extension state plus the desktop pairing record).
 
 ## 7. Screen Studio gate
 
-| Client            | Record today?                                          | Visible blocker                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web               | pending pass                                           | theme switch fixed for signed-in users (F35); a control-driven pass is owed                                                                                     |
-| Mobile            | YES for Local mode flows on the signed simulator build | the F37 P1s landed (mobile-fix-1); Cloud flows wait on the native QA credential and the Clerk Native API (founder items), on-device generation on a real device |
-| Electron          | YES for chat, settings and coding-session flows        | shell items and the desktop coding sessions landed; the paired browser flow after browser-tool-2                                                                |
-| Tauri Cloud       | BLOCKED                                                | decision 4.1                                                                                                                                                    |
-| Tauri Local       | BLOCKED                                                | decision 4.1                                                                                                                                                    |
-| Chrome Extension  | YES for chat flows                                     | page-context flow after one human click on Chrome's permission prompt (founder item)                                                                            |
-| VS Code Extension | YES                                                    | eight items landed (context, editor utilities, approval card, tool rows, slash Enter, lifetime, route-aware picker, typed failures)                             |
-| CLI               | YES                                                    | TUI polish cb17e54eb; tool turns clean over stdio                                                                                                               |
+| Client            | Record today?                                          | Visible blocker                                                                                                                                                     |
+| ----------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web               | YES                                                    | the control-driven settings pass ran clean on 2026-09-15: theme, accent, motion, chat font, text size and language persist from the controls with no console errors |
+| Mobile            | YES for Local mode flows on the signed simulator build | the F37 P1s landed (mobile-fix-1); Cloud flows wait on the native QA credential and the Clerk Native API (founder items), on-device generation on a real device     |
+| Electron          | YES for chat, settings and coding-session flows        | shell items and the desktop coding sessions landed; the paired browser flow after browser-tool-2                                                                    |
+| Tauri Cloud       | BLOCKED                                                | decision 4.1                                                                                                                                                        |
+| Tauri Local       | BLOCKED                                                | decision 4.1                                                                                                                                                        |
+| Chrome Extension  | YES for chat flows                                     | page-context flow after one human click on Chrome's permission prompt (founder item)                                                                                |
+| VS Code Extension | YES                                                    | eight items landed (context, editor utilities, approval card, tool rows, slash Enter, lifetime, route-aware picker, typed failures)                                 |
+| CLI               | YES                                                    | TUI polish cb17e54eb; tool turns clean over stdio                                                                                                                   |
 
 ## 8. Release report (2026-09-14, wave in progress)
 
