@@ -170,7 +170,27 @@
     "voiceStopRecording": "Остановить запись",
     "voiceStopping": "Остановка голосового действия",
     "voiceTranscribing": "Расшифровка голоса",
-    "voiceUnsupported": "Голосовой ввод недоступен"
+    "voiceUnsupported": "Голосовой ввод недоступен",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "Чат: быстрые вопросы и беседа",
+    "modeAgiWorkTitle": "AGI Work: многошаговые задачи с инструментами, файлами и проверяемыми результатами",
+    "style": "Стиль",
+    "styleCustom": "Пользовательский",
+    "responseStyle": "Стиль ответа",
+    "styles": {
+      "default": "По умолчанию",
+      "concise": "Кратко",
+      "detailed": "Подробно",
+      "technical": "Технический",
+      "creative": "Творческий"
+    },
+    "styleDescs": {
+      "default": "Стандартный стиль ответа",
+      "concise": "Кратко и по делу",
+      "detailed": "Подробно, с примерами",
+      "technical": "Точно, с примерами кода",
+      "creative": "Выразительно и увлекательно"
+    }
   },
   "bubble": {
     "assistantThinking": "Ассистент думает",

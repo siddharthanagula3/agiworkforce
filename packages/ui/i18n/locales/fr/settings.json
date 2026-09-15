@@ -74,5 +74,29 @@
     "searchLabel": "Rechercher dans les paramètres",
     "searchPlaceholder": "Rechercher",
     "title": "Paramètres"
+  },
+  "nav": {
+    "general": "Général",
+    "account": "Compte",
+    "team": "Équipe",
+    "privacy": "Confidentialité",
+    "billing": "Facturation",
+    "usage": "Utilisation",
+    "capabilities": "Fonctionnalités",
+    "security": "Sécurité",
+    "safety": "Sûreté",
+    "notifications": "Notifications",
+    "reflect": "Reflect",
+    "time-focus": "Temps et concentration",
+    "help": "Aide",
+    "skills": "Compétences",
+    "connectors": "Connecteurs",
+    "plugins": "Plugins",
+    "memory": "Mémoire",
+    "voice": "Voix",
+    "desktop": "Général",
+    "groupSettings": "Paramètres",
+    "groupCustomize": "Personnaliser",
+    "groupDesktop": "Application de bureau"
   }
 }

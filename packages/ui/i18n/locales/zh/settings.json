@@ -74,5 +74,29 @@
     "searchLabel": "搜索设置",
     "searchPlaceholder": "搜索",
     "title": "设置"
+  },
+  "nav": {
+    "general": "常规",
+    "account": "账户",
+    "team": "团队",
+    "privacy": "隐私",
+    "billing": "账单",
+    "usage": "用量",
+    "capabilities": "功能",
+    "security": "安全",
+    "safety": "安全防护",
+    "notifications": "通知",
+    "reflect": "Reflect",
+    "time-focus": "时间与专注",
+    "help": "帮助",
+    "skills": "技能",
+    "connectors": "连接器",
+    "plugins": "插件",
+    "memory": "记忆",
+    "voice": "语音",
+    "desktop": "常规",
+    "groupSettings": "设置",
+    "groupCustomize": "自定义",
+    "groupDesktop": "桌面应用"
   }
 }

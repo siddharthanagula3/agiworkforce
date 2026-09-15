@@ -170,7 +170,27 @@
     "voiceStopRecording": "إيقاف التسجيل",
     "voiceStopping": "جارٍ إيقاف الإجراء الصوتي",
     "voiceTranscribing": "جارٍ تفريغ الصوت",
-    "voiceUnsupported": "الإدخال الصوتي غير متاح"
+    "voiceUnsupported": "الإدخال الصوتي غير متاح",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "الدردشة: أسئلة سريعة ومحادثة",
+    "modeAgiWorkTitle": "AGI Work: مهام متعددة الخطوات مع أدوات وملفات ومخرجات قابلة للمراجعة",
+    "style": "الأسلوب",
+    "styleCustom": "مخصص",
+    "responseStyle": "أسلوب الرد",
+    "styles": {
+      "default": "افتراضي",
+      "concise": "موجز",
+      "detailed": "مفصّل",
+      "technical": "تقني",
+      "creative": "إبداعي"
+    },
+    "styleDescs": {
+      "default": "أسلوب الرد القياسي",
+      "concise": "مختصر ومباشر",
+      "detailed": "شامل مع أمثلة",
+      "technical": "دقيق مع أمثلة برمجية",
+      "creative": "معبّر وجذاب"
+    }
   },
   "bubble": {
     "assistantThinking": "المساعد يفكر",

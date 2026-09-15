@@ -170,7 +170,27 @@
     "voiceStopRecording": "録音を停止",
     "voiceStopping": "音声アクションを停止中",
     "voiceTranscribing": "音声を文字起こし中",
-    "voiceUnsupported": "音声入力は利用できません"
+    "voiceUnsupported": "音声入力は利用できません",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "チャット: 簡単な質問と会話",
+    "modeAgiWorkTitle": "AGI Work: ツール、ファイル、確認できる成果物を使う複数ステップのタスク",
+    "style": "スタイル",
+    "styleCustom": "カスタム",
+    "responseStyle": "応答スタイル",
+    "styles": {
+      "default": "デフォルト",
+      "concise": "簡潔",
+      "detailed": "詳細",
+      "technical": "技術的",
+      "creative": "クリエイティブ"
+    },
+    "styleDescs": {
+      "default": "標準の応答スタイル",
+      "concise": "短く直接的",
+      "detailed": "例を交えて詳しく",
+      "technical": "コード例付きで正確に",
+      "creative": "表現豊かで魅力的"
+    }
   },
   "bubble": {
     "assistantThinking": "アシスタントが考えています",
