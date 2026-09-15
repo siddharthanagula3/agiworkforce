@@ -952,13 +952,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Fetch the executorch native frameworks
-        # react-native-executorch 0.10 downloads its native libraries in a
-        # postinstall hook. pnpm 10 skips dependency build scripts unless they are
-        # allowlisted, and `pnpm rebuild` skips them the same way, so the hook is
-        # run by hand here, in the one job that links the frameworks, rather than
-        # allowlisting a download into every job's install.
-        run: pnpm --filter @agiworkforce/mobile exec node node_modules/react-native-executorch/scripts/download-libs.js
+      - name: Fetch the native frameworks the mobile pods vendor
+        # react-native-executorch 0.10 and llama.rn 0.12 download their native
+        # libraries in postinstall hooks. pnpm 10 skips dependency build scripts
+        # unless they are allowlisted, and `pnpm rebuild` skips them the same way,
+        # so the hooks run by hand here, in the one job that links the frameworks,
+        # rather than allowlisting a download into every job's install.
+        run: |
+          pnpm --filter @agiworkforce/mobile exec node node_modules/react-native-executorch/scripts/download-libs.js
+          pnpm --filter @agiworkforce/mobile exec node node_modules/llama.rn/install/download-native-artifacts.js
 
       # Homebrew now refuses third-party tap formulae until they are explicitly
       # trusted, which broke this job outright:
