@@ -85,7 +85,7 @@ async fn replay(fixture: StreamFixture) {
         "anthropic" => run_anthropic_stream(stream, IDLE_TIMEOUT, &mut on_event).await,
         "gemini" => run_gemini_stream(stream, IDLE_TIMEOUT, &mut on_event).await,
         "ollama" => run_ollama_stream(stream, IDLE_TIMEOUT, &mut on_event).await,
-        "openai" => run_openai_compat_stream(stream, IDLE_TIMEOUT, &mut on_event).await,
+        "openai" => run_openai_compat_stream(stream, IDLE_TIMEOUT, "fixture", &mut on_event).await,
         "openai_responses" => {
             run_openai_responses_stream(stream, IDLE_TIMEOUT, &mut on_event).await
         }
@@ -236,7 +236,7 @@ async fn idle_timeout_stall_yields_structured_error() {
     let stream = futures_util::stream::pending::<Result<Bytes, LlmError>>();
     let mut events = Vec::new();
     let mut on_event = |event: StreamEvent| events.push(event);
-    let err = run_openai_compat_stream(stream, Duration::from_millis(50), &mut on_event)
+    let err = run_openai_compat_stream(stream, Duration::from_millis(50), "fixture", &mut on_event)
         .await
         .expect_err("a silent stream must time out");
     assert!(matches!(err, LlmError::IdleTimeout { .. }), "got: {err}");
@@ -268,7 +268,7 @@ async fn mid_stream_read_error_propagates() {
             seen_text.push_str(&text);
         }
     };
-    let err = run_openai_compat_stream(stream, IDLE_TIMEOUT, &mut on_event)
+    let err = run_openai_compat_stream(stream, IDLE_TIMEOUT, "fixture", &mut on_event)
         .await
         .expect_err("read error must propagate");
     assert!(matches!(err, LlmError::Read { .. }), "got: {err}");

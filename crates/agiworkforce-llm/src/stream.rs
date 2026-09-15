@@ -789,13 +789,25 @@ async fn stream_openai_compat(
         return Err(error_from_response(provider_label(spec), req.model, resp).await);
     }
 
-    run_openai_compat_stream(llm_byte_stream(resp), req.idle_timeout, on_event).await
+    run_openai_compat_stream(
+        llm_byte_stream(resp),
+        req.idle_timeout,
+        provider_label(spec),
+        on_event,
+    )
+    .await
 }
+
+/// A gateway that fails after the response has started reports it inside the
+/// stream, with the HTTP status already sent as 200; without this the turn read
+/// as an empty completed answer with no tokens and no word to the user.
+const STREAM_ERROR_STATUS: u16 = 502;
 
 /// Decode an OpenAI-compatible Chat Completions SSE byte stream.
 pub async fn run_openai_compat_stream<S>(
     mut stream: S,
     idle_timeout: Duration,
+    provider: &str,
     on_event: OnEvent<'_>,
 ) -> Result<ChatOutcome, LlmError>
 where
@@ -845,6 +857,19 @@ where
                         continue;
                     }
                 };
+                if let Some(stream_error) = event.pointer("/choices/0/delta/x_stream_error") {
+                    let message = stream_error
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .filter(|text| !text.trim().is_empty())
+                        .unwrap_or("The provider stopped the stream with an error.")
+                        .to_string();
+                    return Err(LlmError::Api {
+                        provider: provider.to_string(),
+                        status: STREAM_ERROR_STATUS,
+                        message,
+                    });
+                }
                 {
                     let has_choices = event.get("choices").is_some();
                     let has_usage = event.get("usage").is_some();
@@ -2404,5 +2429,58 @@ mod credential_transport_tests {
         let s = spec(url, Auth::Bearer("sk-secret".into()));
         let builder = reqwest::Client::new().post(url);
         assert!(apply_headers(builder, url, &s).is_err());
+    }
+}
+
+#[cfg(test)]
+mod openai_compat_stream_tests {
+    use super::*;
+
+    /// The managed gateway reports usage in its own frame after the finish
+    /// reason, with an empty `choices` array, which is also how OpenAI sends
+    /// it under `stream_options.include_usage`.
+    #[tokio::test]
+    async fn a_trailing_usage_frame_with_no_choices_still_counts() {
+        let frames = concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":598,\"completion_tokens\":23,\"total_tokens\":621}}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let outcome =
+            run_openai_compat_stream(stream, Duration::from_secs(5), "gateway", &mut |_| {})
+                .await
+                .expect("the stream decodes");
+        assert_eq!(outcome.text, "ok");
+        assert_eq!(outcome.stop_reason.as_deref(), Some("stop"));
+        assert_eq!(outcome.usage.input_tokens, 598);
+        assert_eq!(outcome.usage.output_tokens, 23);
+    }
+
+    #[tokio::test]
+    async fn a_stream_error_frame_fails_the_turn_with_the_gateway_sentence() {
+        let frames = concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"x_stream_error\":{\"message\":\"This model is unavailable right now.\",\"code\":\"provider_billing_exhausted\",\"retryable\":false}},\"index\":0}]}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let error =
+            run_openai_compat_stream(stream, Duration::from_secs(5), "managed_cloud", &mut |_| {})
+                .await
+                .expect_err("the frame is an error");
+        match error {
+            LlmError::Api {
+                provider,
+                status,
+                message,
+            } => {
+                assert_eq!(provider, "managed_cloud");
+                assert_eq!(status, STREAM_ERROR_STATUS);
+                assert_eq!(message, "This model is unavailable right now.");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 }
