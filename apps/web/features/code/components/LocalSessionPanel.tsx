@@ -1,18 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ChevronDown, ChevronLeft, Square, TerminalSquare } from '@agiworkforce/icons';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Spinner,
-} from '@agiworkforce/ui';
+import { ArrowUp, ChevronLeft, Square, TerminalSquare } from '@agiworkforce/icons';
+import { Spinner } from '@agiworkforce/ui';
 import type {
   DeveloperRuntimeModels,
   LocalDeveloperSession,
@@ -22,55 +12,35 @@ import { CODE_LIMITS } from '../code-surface';
 import {
   LOCAL_CODE_COPY,
   LOCAL_FAILURE_ACTION_LABELS,
-  LOCAL_MODEL_EVIDENCE_LABELS,
-  LOCAL_MODEL_SETUP_HEADING,
   localApprovalPrompts,
   localFailureAction,
   localModelChoices,
   localModelLabel,
   localModelSetup,
-  localModelSetupCount,
   localProviderSetups,
   localSessionContext,
+  startingModelId,
   localTranscriptItems,
   localTurnIsRunning,
   type LocalFailureAction,
-  type LocalModelChoice,
-  type LocalProviderSetup,
 } from '../local-code';
-import { useLocalSession } from '../hooks/use-local-session';
+import { useLocalSession, type LocalSessionState } from '../hooks/use-local-session';
+import { LocalModelChip } from './LocalModelChip';
 import { CodeTranscriptBody } from './CodeTranscript';
 import styles from '../CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
 const SEND_GLYPH_SIZE = 16;
-const CHIP_GLYPH_SIZE = 13;
 const SUBMIT_KEY = 'Enter';
-const MENU_EDGE_GAP = 12;
-
-/**
- * The shell's title strip is a drag region, so a popover reaching into it is
- * untouchable. The height is read from its token rather than repeated here.
- */
-function menuCollisionPadding(): { top: number; bottom: number; left: number; right: number } {
-  const strip =
-    typeof window === 'undefined'
-      ? ''
-      : getComputedStyle(document.documentElement).getPropertyValue('--chat-window-title-strip');
-  const top = Number.parseFloat(strip);
-  return {
-    top: Number.isFinite(top) && top > 0 ? top + MENU_EDGE_GAP : MENU_EDGE_GAP,
-    bottom: MENU_EDGE_GAP,
-    left: MENU_EDGE_GAP,
-    right: MENU_EDGE_GAP,
-  };
-}
 
 export interface LocalSessionPanelProps {
   session: LocalDeveloperSession;
   group: Pick<DeveloperSessionGroup, 'name' | 'branch' | 'sessions'>;
   runtimeModels: DeveloperRuntimeModels | null;
   verbose: boolean;
+  /** The task typed into the main composer, which opened this session. */
+  initialPrompt?: string;
+  onPromptSent?: () => void;
   onClose: () => void;
 }
 
@@ -127,112 +97,13 @@ function CopyOffer({
   );
 }
 
-function ProviderSetupRow({ setup }: { setup: LocalProviderSetup }) {
-  const [copied, setCopied] = useState(false);
-  const offer = setup.offer;
-
-  if (offer === null || offer.kind !== 'copy') {
-    return (
-      <DropdownMenuItem className="pl-8" disabled>
-        <span className={styles['menuItemStack']}>
-          <span className={styles['menuItemTop']}>
-            <span className={styles['menuItemLabel']}>{setup.label}</span>
-            <span className={styles['menuItemCount']}>{localModelSetupCount(setup)}</span>
-          </span>
-        </span>
-      </DropdownMenuItem>
-    );
-  }
-
-  return (
-    <DropdownMenuItem
-      className="pl-8"
-      onSelect={(event) => {
-        event.preventDefault();
-        void navigator.clipboard.writeText(offer.text).then(() => setCopied(true));
-      }}
-    >
-      <span className={styles['menuItemStack']}>
-        <span className={styles['menuItemTop']}>
-          <span className={styles['menuItemLabel']}>{setup.label}</span>
-          <span className={styles['menuItemCount']}>{localModelSetupCount(setup)}</span>
-        </span>
-        <span className={styles['menuItemOffer']}>
-          {copied ? LOCAL_FAILURE_ACTION_LABELS.copied : LOCAL_FAILURE_ACTION_LABELS.copy}
-        </span>
-      </span>
-    </DropdownMenuItem>
-  );
-}
-
-function ModelChip({
-  choices,
-  setups,
-  selected,
-  unreachable,
-  disabled,
-  onSelect,
-}: {
-  choices: LocalModelChoice[];
-  setups: LocalProviderSetup[];
-  selected: string;
-  unreachable: boolean;
-  disabled: boolean;
-  onSelect: (modelId: string) => void;
-}) {
-  const groupsByEvidence = [...new Set(choices.map((choice) => choice.evidence))];
-  const triggerClass = unreachable
-    ? `${styles['controlButton']} ${styles['controlButtonWarning']}`
-    : styles['controlButton'];
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className={triggerClass} disabled={disabled}>
-          <span>{localModelLabel(selected) ?? selected}</span>
-          <ChevronDown size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        side="top"
-        collisionPadding={menuCollisionPadding()}
-        className={`w-80 ${styles['menuScroll']}`}
-      >
-        <DropdownMenuRadioGroup value={selected} onValueChange={onSelect}>
-          {groupsByEvidence.map((evidence, index) => (
-            <div key={evidence}>
-              {index > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel>{LOCAL_MODEL_EVIDENCE_LABELS[evidence]}</DropdownMenuLabel>
-              {choices
-                .filter((choice) => choice.evidence === evidence)
-                .map((choice) => (
-                  <DropdownMenuRadioItem key={choice.id} value={choice.id}>
-                    {choice.label}
-                  </DropdownMenuRadioItem>
-                ))}
-            </div>
-          ))}
-        </DropdownMenuRadioGroup>
-        {setups.length > 0 && (
-          <div>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>{LOCAL_MODEL_SETUP_HEADING}</DropdownMenuLabel>
-            {setups.map((setup) => (
-              <ProviderSetupRow key={setup.provider} setup={setup} />
-            ))}
-          </div>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 export function LocalSessionPanel({
   session,
   group,
   runtimeModels,
   verbose,
+  initialPrompt,
+  onPromptSent,
   onClose,
 }: LocalSessionPanelProps) {
   const state = useLocalSession(session);
@@ -242,9 +113,10 @@ export function LocalSessionPanel({
   const endRef = useRef<HTMLDivElement>(null);
   const choices = localModelChoices(runtimeModels, group.sessions);
   const setups = localProviderSetups(runtimeModels);
-  const activeModel = model === '' ? (choices[0]?.id ?? '') : model;
+  const preferredModel = startingModelId(runtimeModels, group.sessions);
+  const activeModel = model === '' ? (preferredModel ?? '') : model;
   const activeSetup = localModelSetup(runtimeModels, model === '' ? session.model : model);
-  const readyModel = choices[0]?.id;
+  const readyModel = preferredModel;
 
   const running = localTurnIsRunning(state.turn);
   const busy = running || state.sending;
@@ -254,6 +126,19 @@ export function LocalSessionPanel({
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [items.length, state.turn.reply]);
+
+  const opening = useRef<{ send: LocalSessionState['send']; sent: () => void }>({
+    send: state.send,
+    sent: () => undefined,
+  });
+  opening.current = { send: state.send, sent: onPromptSent ?? (() => undefined) };
+
+  useEffect(() => {
+    const text = initialPrompt?.trim() ?? '';
+    if (text === '') return;
+    opening.current.sent();
+    void opening.current.send(text);
+  }, [session.id, initialPrompt]);
 
   const submit = () => {
     const text = draft.trim();
@@ -406,7 +291,7 @@ export function LocalSessionPanel({
 
                 {choices.length > 0 && (
                   <div className={styles['controlRow']}>
-                    <ModelChip
+                    <LocalModelChip
                       choices={choices}
                       setups={setups}
                       selected={activeModel}
