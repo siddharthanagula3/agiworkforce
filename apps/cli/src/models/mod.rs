@@ -5,8 +5,8 @@ pub mod streaming;
 
 pub(crate) use provider_dispatch::is_local_provider_base_url;
 pub use provider_dispatch::{
-    decide_turn_route, detect_provider, provider_from_name, provider_name,
-    provider_persistence_name, register_custom_providers, resolve_exec_model,
+    decide_turn_route, detect_provider, plan_first_provider_override, provider_from_name,
+    provider_name, provider_persistence_name, register_custom_providers, resolve_exec_model,
     resolve_selected_provider, resolve_turn_route, select_turn_route, selection_provider_override,
     try_detect_provider, AccountRoute, TurnRoute,
 };
