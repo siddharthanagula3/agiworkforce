@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Fable (lead) for the founder
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 
 The one execution document for the multi-client productization mandate of
 2026-09-14: findings, plan, open tasks and the verification matrix. Resolved
