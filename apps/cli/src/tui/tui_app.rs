@@ -3313,7 +3313,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     ))
                 }
                 _ => SlashResult::SystemMessage(
-                    "No fallback chain set. Restart with -m a,b,c to enable."
+                    "No fallback chain set. Restart with `--fallback-model <model>` or `-m a,b,c`."
                         .to_string(),
                 ),
             }
