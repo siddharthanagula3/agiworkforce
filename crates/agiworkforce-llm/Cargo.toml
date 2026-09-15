@@ -19,7 +19,7 @@ futures-util = "0.3"
 # crate does not change the CLI's egress/TLS behavior. The workspace-wide
 # reqwest 0.13 + TLS-feature decision is the desktop-convergence PR0 concern
 # (docs/plans/rust-engine-extraction-2026-07-09.md), not this crate's.
-reqwest = { version = "0.12", features = ["stream", "json"] }
+reqwest = { version = "0.13", features = ["stream", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -27,6 +27,6 @@ tokio = { version = "1", features = ["time"] }
 tracing = "0.1"
 
 [dev-dependencies]
-base64 = "0.22"
+base64 = "0.23"
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
