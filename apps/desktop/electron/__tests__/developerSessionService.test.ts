@@ -33,6 +33,9 @@ vi.mock('node:os', () => ({ default: { homedir: () => '/Users/qa' }, homedir: ()
 vi.mock('../runtime/workspaceStore', () => ({ listRoots, getRoot }));
 vi.mock('../runtime/gitService', () => ({ readWorkspaceGit }));
 vi.mock('../config', () => ({ CLOUD_APP_ORIGIN: 'http://localhost:3100' }));
+const shellSignedCliIn = vi.fn(() => false);
+const rememberShellSignedCliIn = vi.fn();
+vi.mock('../runtime/cliAccountStore', () => ({ shellSignedCliIn, rememberShellSignedCliIn }));
 
 type Responder = (method: string, params: Record<string, unknown>) => unknown;
 
@@ -176,6 +179,7 @@ beforeEach(() => {
   getRoot.mockReturnValue(root);
   statSync.mockReturnValue({ isDirectory: () => true });
   accessSync.mockReturnValue(undefined);
+  shellSignedCliIn.mockReturnValue(false);
   process.env['PATH'] = '/Users/qa/.cargo/bin:/usr/bin';
 });
 
@@ -721,5 +725,77 @@ describe('developer session runtime', () => {
     expect(spawn).toHaveBeenCalledTimes(2);
     expect(transcript.session.id).toBe('thread-1');
     expect(transcript.messages).toHaveLength(2);
+  });
+});
+
+describe('a sign-out with no app-server running', () => {
+  it('signs this machine out through the CLI when the shell is what signed it in', async () => {
+    shellSignedCliIn.mockReturnValue(true);
+    const { service, spawn, children } = await loadService(defaultResponder, {
+      readShellIdentity: async () => ({ signedIn: false, email: null }),
+      approveDeviceCode: async () => undefined,
+    });
+
+    const pending = service.syncDeveloperAccounts();
+    await vi.waitFor(() =>
+      expect(spawn).toHaveBeenCalledWith('agi', ['logout'], expect.anything()),
+    );
+    children.at(-1)?.emit('exit', 0, null);
+    await pending;
+
+    expect(spawn).toHaveBeenCalledExactlyOnceWith(
+      'agi',
+      ['logout'],
+      expect.objectContaining({
+        env: expect.objectContaining({ AGIWORKFORCE_API_BASE: 'http://localhost:3100' }),
+      }),
+    );
+    expect(rememberShellSignedCliIn).toHaveBeenLastCalledWith(false);
+    expect((await service.readDeveloperRuntimeStatus()).accountSyncError).toBeNull();
+  });
+
+  it('starts nothing when this shell never signed the machine in', async () => {
+    shellSignedCliIn.mockReturnValue(false);
+    const { service, spawn } = await loadService(defaultResponder, {
+      readShellIdentity: async () => ({ signedIn: false, email: null }),
+      approveDeviceCode: async () => undefined,
+    });
+
+    await service.syncDeveloperAccounts();
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(rememberShellSignedCliIn).not.toHaveBeenCalled();
+  });
+
+  it('leaves the machine alone when the shell is still signed in', async () => {
+    shellSignedCliIn.mockReturnValue(true);
+    const { service, spawn } = await loadService(defaultResponder, {
+      readShellIdentity: async () => ({ signedIn: true, email: 'qa@agiworkforce.com' }),
+      approveDeviceCode: async () => undefined,
+    });
+
+    await service.syncDeveloperAccounts();
+
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('says so on the CLI row when the sign-out fails', async () => {
+    shellSignedCliIn.mockReturnValue(true);
+    const { service, spawn, children } = await loadService(defaultResponder, {
+      readShellIdentity: async () => ({ signedIn: false, email: null }),
+      approveDeviceCode: async () => undefined,
+    });
+
+    const pending = service.syncDeveloperAccounts();
+    await vi.waitFor(() =>
+      expect(spawn).toHaveBeenCalledWith('agi', ['logout'], expect.anything()),
+    );
+    children.at(-1)?.emit('exit', 3, null);
+    await pending;
+
+    expect((await service.readDeveloperRuntimeStatus()).accountSyncError).toContain(
+      'could not sign this computer out',
+    );
+    expect(rememberShellSignedCliIn).not.toHaveBeenCalled();
   });
 });

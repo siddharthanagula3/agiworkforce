@@ -28,6 +28,7 @@ import type {
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
 import { CLOUD_APP_ORIGIN } from '../config';
+import { rememberShellSignedCliIn, shellSignedCliIn } from './cliAccountStore';
 import { reconcileDeveloperAccount, type DeveloperAccountBridge } from './developerAccountSync';
 import { readWorkspaceGit } from './gitService';
 import { getRoot, listRoots } from './workspaceStore';
@@ -38,6 +39,7 @@ const CLIENT_TITLE = 'AGI Cloud for desktop';
 const DEFAULT_BINARY = 'agi';
 const REQUEST_TIMEOUT_MS = 30_000;
 const VERSION_TIMEOUT_MS = 5_000;
+const LOGOUT_TIMEOUT_MS = 15_000;
 const SHUTDOWN_GRACE_MS = 1_500;
 const MAX_FRAME_BYTES = 4 * 1024 * 1024;
 const STDERR_TAIL_BYTES = 8 * 1024;
@@ -477,6 +479,62 @@ async function refreshOtherModels(source: RunningServer): Promise<void> {
   }
 }
 
+/**
+ * Sign this machine's CLI out without an app-server to carry the request.
+ *
+ * The protocol's `account/logout` needs a running app-server, and an
+ * app-server needs an approved folder, so a shell that has neither would leave
+ * a credential behind for an account the user has signed out of. The CLI's own
+ * `logout` needs neither.
+ */
+function runCliLogout(): Promise<void> {
+  const binary = resolveBinary().trim() || DEFAULT_BINARY;
+  return new Promise((resolve, reject) => {
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawnRuntime(binary, ['logout'], {
+        env: { ...process.env, ...cloudEnvironment() },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+    } catch (error) {
+      reject(spawnFailure(binary, error as NodeJS.ErrnoException));
+      return;
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('The AGI CLI did not finish signing this computer out in time.'));
+    }, LOGOUT_TIMEOUT_MS);
+    timer.unref?.();
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(spawnFailure(binary, error as NodeJS.ErrnoException));
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else
+        reject(
+          new Error(`The AGI CLI could not sign this computer out (exit ${code ?? 'unknown'}).`),
+        );
+    });
+  });
+}
+
+async function signOutMachine(): Promise<void> {
+  const bridge = accountBridge;
+  if (!bridge || !shellSignedCliIn()) return;
+  const identity = await bridge.readShellIdentity();
+  if (identity === null || identity.signedIn) return;
+  try {
+    await runCliLogout();
+    rememberShellSignedCliIn(false);
+    accountSyncError = null;
+  } catch (error) {
+    accountSyncError = error instanceof Error ? error.message : String(error);
+  }
+}
+
 function queueAccountSync(server: RunningServer): Promise<void> {
   const bridge = accountBridge;
   if (!bridge) return accountSyncChain;
@@ -488,6 +546,8 @@ function queueAccountSync(server: RunningServer): Promise<void> {
         bridge,
       );
       accountSyncError = null;
+      if (outcome === 'signed-in') rememberShellSignedCliIn(true);
+      if (outcome === 'signed-out') rememberShellSignedCliIn(false);
       if (outcome === 'signed-in' || outcome === 'signed-out') await refreshOtherModels(server);
     } catch (error) {
       // An app-server that stopped mid-sequence says nothing about the account.
@@ -499,9 +559,12 @@ function queueAccountSync(server: RunningServer): Promise<void> {
 }
 
 export function syncDeveloperAccounts(): Promise<void> {
-  for (const server of [...servers.values()]) {
-    if (!server.closed) queueAccountSync(server);
+  const running = [...servers.values()].filter((server) => !server.closed);
+  if (running.length === 0) {
+    accountSyncChain = accountSyncChain.then(signOutMachine);
+    return accountSyncChain;
   }
+  for (const server of running) queueAccountSync(server);
   return accountSyncChain;
 }
 
