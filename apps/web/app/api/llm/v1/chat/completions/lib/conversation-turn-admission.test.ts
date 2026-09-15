@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 
-const MINIMAX_MODEL_ID = requireProviderDefaultModel('minimax');
+const ZHIPU_MODEL_ID = requireProviderDefaultModel('zhipu');
 const USER_ID = 'user-1';
 const CONVERSATION_ID = '0190a000-0000-7000-8000-0000000000ab';
 const RENDEZVOUS_TIMEOUT_MS = 25;
@@ -45,10 +45,10 @@ vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
 }));
-vi.mock('@agiworkforce/providers-minimax', () => ({
-  createMinimaxAdapter: vi.fn(() => ({
-    id: 'minimax',
-    label: 'MiniMax',
+vi.mock('@agiworkforce/providers-zhipu', () => ({
+  createZhipuAdapter: vi.fn(() => ({
+    id: 'zhipu',
+    label: 'Zhipu',
     auth: [],
     config: {},
     async catalog() {
@@ -201,7 +201,7 @@ function makeAgiWorkRequest(idempotencyKey: string): NextRequest {
       'x-agi-surface': 'web',
     },
     body: JSON.stringify({
-      model: MINIMAX_MODEL_ID,
+      model: ZHIPU_MODEL_ID,
       messages: [{ role: 'user', content: 'complete this durable task' }],
       stream: true,
       work_mode: 'agiwork',
@@ -310,7 +310,7 @@ describe('WEB-ROUTE-NEAR-SIMULTANEOUS-TURNS-SAME-01', () => {
       estimatedCostMicrousd: input.estimatedCostMicrousd,
       estimatedCostCents: input.estimatedCostCents,
     }));
-    mockGetProviderFromModel.mockReturnValue('minimax');
+    mockGetProviderFromModel.mockReturnValue('zhipu');
     workflowMocks.loadMcpTools.mockResolvedValue([]);
     workflowMocks.loadConnectorTools.mockResolvedValue({ tools: [], dropped: [], limit: 32 });
     workflowMocks.start.mockResolvedValue({
@@ -351,8 +351,8 @@ describe('WEB-ROUTE-NEAR-SIMULTANEOUS-TURNS-SAME-01', () => {
           state: 'running',
           originSurface: 'web',
           workMode: 'agiwork',
-          provider: 'minimax',
-          model: MINIMAX_MODEL_ID,
+          provider: 'zhipu',
+          model: ZHIPU_MODEL_ID,
           createdAt: '2026-09-07T00:00:00.000Z',
           updatedAt: '2026-09-07T00:00:00.000Z',
         };
@@ -410,7 +410,7 @@ describe('WEB-ROUTE-NEAR-SIMULTANEOUS-TURNS-SAME-01', () => {
       estimatedCostMicrousd: input.estimatedCostMicrousd,
       estimatedCostCents: input.estimatedCostCents,
     }));
-    mockGetProviderFromModel.mockReturnValue('minimax');
+    mockGetProviderFromModel.mockReturnValue('zhipu');
     workflowMocks.loadMcpTools.mockResolvedValue([]);
     workflowMocks.loadConnectorTools.mockResolvedValue({ tools: [], dropped: [], limit: 32 });
     workflowMocks.start.mockResolvedValue({
@@ -431,8 +431,8 @@ describe('WEB-ROUTE-NEAR-SIMULTANEOUS-TURNS-SAME-01', () => {
       state: 'running',
       originSurface: 'web',
       workMode: 'agiwork',
-      provider: 'minimax',
-      model: MINIMAX_MODEL_ID,
+      provider: 'zhipu',
+      model: ZHIPU_MODEL_ID,
       createdAt: '2026-09-07T00:00:00.000Z',
       updatedAt: '2026-09-07T00:00:00.000Z',
     });

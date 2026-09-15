@@ -4,6 +4,7 @@ import {
   listCanonicalModels,
   requireProviderDefaultModel,
   type ModelMetadata,
+  listManagedRoutesForModel,
 } from '@agiworkforce/types';
 import { getRoutePricingForModel, modelRegistry } from '@agiworkforce/model-registry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,7 +38,11 @@ const saved: Record<string, string | undefined> = {};
 const ROUTED_PROVIDERS = new Set(['minimax', 'qwen', 'zhipu']);
 const MANAGED_ROUTED_MODEL_IDS = new Set(
   listCanonicalModels()
-    .filter((model) => ROUTED_PROVIDERS.has(model.provider))
+    .filter(
+      (model) =>
+        ROUTED_PROVIDERS.has(model.provider) &&
+        listManagedRoutesForModel(model.id).some((route) => route.provider === 'open_router'),
+    )
     .map((model) => model.id),
 );
 const DIRECT_FAILOVER_PROVIDERS = new Set([
@@ -100,9 +105,22 @@ describe('aggregator routing', () => {
   });
 
   it('resolves the dispatch provider of a route id, mapping open_router to openrouter', () => {
+    const zhipuModelId = requireCatalogModel((candidate) => candidate.provider === 'zhipu').id;
+    expect(dispatchProviderForRoute(`open_router/${zhipuModelId}`)).toBe('openrouter');
+    expect(dispatchProviderForRoute(`zhipu/${zhipuModelId}`)).toBe('zhipu');
+  });
+
+  it('keeps MiniMax off the managed OpenRouter route until its terms are reviewed', () => {
+    process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
     const minimaxModelId = requireCatalogModel((candidate) => candidate.provider === 'minimax').id;
-    expect(dispatchProviderForRoute(`open_router/${minimaxModelId}`)).toBe('openrouter');
-    expect(dispatchProviderForRoute(`minimax/${minimaxModelId}`)).toBe('minimax');
+    expect(isManagedOpenRouterRoute(minimaxModelId)).toBe(false);
+    expect(
+      validateRouteSelection(`open_router/${minimaxModelId}`, {
+        modelId: minimaxModelId,
+        trustMode: 'managed_cloud',
+        hasUserProviderKey: false,
+      }),
+    ).toEqual({ ok: false, reason: 'commercial_status_not_admitted' });
   });
 
   it('has no dispatch provider for a route id the registry does not declare', () => {

@@ -335,13 +335,26 @@ test('selects the founder-approved roster and subscription bands', () => {
     assert.equal(selectableRoster.has(modelKey), false);
   }
 
+  // MiniMax stays out of managed production until its terms are reviewed
+  // (D-2026-09-15-08): its own route is customer-key only, its marketplace
+  // routes are blocked, and no plan band lists it.
   for (const modelKey of registry.providerModelKeys.minimax) {
-    const minTier = compatibility.models[modelKey].tierPolicy?.minTier;
-    const superseded = registry.models[modelKey].lifecycle.deprecated === true;
-    assert.equal(minTier, 'pro', `${modelKey} tierPolicy.minTier must match its roster band`);
-    assert.equal(compatibility.tierAllowedModels.pro_additions.includes(modelKey), !superseded);
+    assert.equal(compatibility.tierAllowedModels.pro_additions.includes(modelKey), false);
     assert.equal(basicRoster.has(modelKey), false);
-    assert.equal(selectableRoster.has(modelKey), !superseded);
+    assert.equal(selectableRoster.has(modelKey), false);
+    const routes = Object.entries(registry.routes).filter(
+      ([, route]) => route.modelKey === modelKey,
+    );
+    assert.ok(routes.length > 0, `${modelKey} keeps its routes for customer keys`);
+    for (const [routeId, route] of routes) {
+      assert.notEqual(
+        ['agi_direct', 'authorized_marketplace', 'free_commercial'].includes(
+          route.commercialStatus,
+        ),
+        true,
+        `${routeId} must not carry managed traffic before the terms review`,
+      );
+    }
   }
 
   const openAIRoutes = Object.values(compatibility.providers.openai.taskRouting);

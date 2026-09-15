@@ -4,7 +4,6 @@ import { listCanonicalModels, requireProviderDefaultModel } from '@agiworkforce/
 import { resolveWebCloudModelRoute } from '../lib/request-processor';
 
 const COMPAT_PROVIDER_CASES = [
-  { provider: 'minimax', content: 'MiniMax says hi.' },
   { provider: 'zhipu', content: 'Zhipu says hi.' },
   { provider: 'qwen', content: 'Qwen says hi.' },
   { provider: 'deepseek', content: 'DeepSeek says hi.' },
@@ -24,7 +23,16 @@ function hasManagedRoute(model: string): boolean {
   return resolveWebCloudModelRoute(model, 'pro', 'general', ZERO_COST_USAGE).status === 'selected';
 }
 
-const MINIMAX_MODEL_ID = requireProviderDefaultModel('minimax');
+const ZHIPU_MODEL_ID = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) =>
+      candidate.provider === 'zhipu' &&
+      resolveWebCloudModelRoute(candidate.id, 'free', 'general', ZERO_COST_USAGE).status ===
+        'selected',
+  );
+  if (!model) throw new Error('no Zhipu model is admitted on the free plan');
+  return model.id;
+})();
 const PERPLEXITY_TOOLLESS_MODEL_ID = (() => {
   const model = listCanonicalModels().find(
     (candidate) => candidate.provider === 'perplexity' && candidate.capabilities.tools === false,
@@ -98,11 +106,10 @@ function compatAdapterMock(providerId: string, content: string) {
   };
 }
 
-vi.mock('@agiworkforce/providers-minimax', () => compatAdapterMock('Minimax', 'MiniMax says hi.'));
+vi.mock('@agiworkforce/providers-zhipu', () => compatAdapterMock('Zhipu', 'Zhipu says hi.'));
 vi.mock('@agiworkforce/providers-moonshot', () =>
   compatAdapterMock('Moonshot', 'Moonshot says hi.'),
 );
-vi.mock('@agiworkforce/providers-zhipu', () => compatAdapterMock('Zhipu', 'Zhipu says hi.'));
 vi.mock('@agiworkforce/providers-qwen', () => compatAdapterMock('Qwen', 'Qwen says hi.'));
 vi.mock('@agiworkforce/providers-openrouter', () =>
   compatAdapterMock('OpenRouter', 'OpenRouter says hi.'),
@@ -445,10 +452,10 @@ describe('Managed Web conversation ownership', () => {
     mockGetSubscription.mockResolvedValue(makeSubscription());
     const query = vi.fn().mockResolvedValue([]);
     rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'attacker-user' });
-    mockGetProviderFromModel.mockReturnValue('minimax');
+    mockGetProviderFromModel.mockReturnValue('zhipu');
 
     const response = await POST(
-      makeRequest(MINIMAX_MODEL_ID, '0190a000-0000-7000-8000-0000000000cc'),
+      makeRequest(ZHIPU_MODEL_ID, '0190a000-0000-7000-8000-0000000000cc'),
     );
 
     expect(response.status).toBe(404);
@@ -493,7 +500,7 @@ describe('Managed Web AGI Work dispatch', () => {
       estimatedCostMicrousd: input.estimatedCostMicrousd,
       estimatedCostCents: input.estimatedCostCents,
     }));
-    mockGetProviderFromModel.mockReturnValue('minimax');
+    mockGetProviderFromModel.mockReturnValue('zhipu');
     workflowRouteMocks.loadMcpTools.mockResolvedValue([]);
     workflowRouteMocks.loadConnectorTools.mockResolvedValue({
       tools: [],
@@ -507,8 +514,8 @@ describe('Managed Web AGI Work dispatch', () => {
       state: 'queued',
       originSurface: 'web',
       workMode: 'agiwork',
-      provider: 'minimax',
-      model: MINIMAX_MODEL_ID,
+      provider: 'zhipu',
+      model: ZHIPU_MODEL_ID,
       createdAt: '2026-07-18T00:00:00.000Z',
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
@@ -571,7 +578,7 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
+    const response = await POST(makeAgiWorkRequest(ZHIPU_MODEL_ID));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
@@ -592,7 +599,7 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', undefined);
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
+    const response = await POST(makeAgiWorkRequest(ZHIPU_MODEL_ID));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
@@ -605,7 +612,7 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '0');
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
+    const response = await POST(makeAgiWorkRequest(ZHIPU_MODEL_ID));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
@@ -619,7 +626,7 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
     workflowRouteMocks.start.mockRejectedValue(new Error('workflow storage unavailable'));
 
-    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
+    const response = await POST(makeAgiWorkRequest(ZHIPU_MODEL_ID));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
@@ -665,7 +672,7 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+    const response = await POST(makeRequest(ZHIPU_MODEL_ID, undefined, true));
 
     if (response.status !== 200) {
       throw new Error(`free-trial turn refused: ${await response.text()}`);
@@ -679,7 +686,7 @@ describe('Managed Web AGI Work dispatch', () => {
     arrangeFreeTrialToolTurn();
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+    await POST(makeRequest(ZHIPU_MODEL_ID, undefined, true));
 
     const started = workflowRouteMocks.start.mock.calls[0]![0] as {
       processed: { freeTrial?: unknown; managedUsage?: unknown };
@@ -699,7 +706,7 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '0');
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+    const response = await POST(makeRequest(ZHIPU_MODEL_ID, undefined, true));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
@@ -713,7 +720,7 @@ describe('Managed Web AGI Work dispatch', () => {
     const slow = slowDurableWorkflowStream();
     workflowRouteMocks.start.mockResolvedValue(slow.workflow);
 
-    const response = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+    const response = await POST(makeRequest(ZHIPU_MODEL_ID, undefined, true));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
@@ -737,7 +744,7 @@ describe('Managed Web AGI Work dispatch', () => {
     const slow = slowDurableWorkflowStream();
     workflowRouteMocks.start.mockResolvedValue(slow.workflow);
 
-    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
+    const response = await POST(makeAgiWorkRequest(ZHIPU_MODEL_ID));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
@@ -751,9 +758,9 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.stubEnv(DURABLE_FIRST_EVENT_BUDGET_ENV, String(DURABLE_BUDGET_MS));
     workflowRouteMocks.start.mockResolvedValue(slowDurableWorkflowStream().workflow);
 
-    await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+    await POST(makeRequest(ZHIPU_MODEL_ID, undefined, true));
     workflowRouteMocks.start.mockClear();
-    const second = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+    const second = await POST(makeRequest(ZHIPU_MODEL_ID, undefined, true));
 
     expect(second.status).toBe(200);
     expect(second.headers.get('X-AGI-Tool-Loop')).toBe('active');
@@ -764,7 +771,7 @@ describe('Managed Web AGI Work dispatch', () => {
     arrangePaidAgenticTurn();
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+    const response = await POST(makeRequest(ZHIPU_MODEL_ID, undefined, true));
 
     expect(response.status).toBe(200);
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
@@ -802,7 +809,7 @@ describe('Managed Web conversation run concurrency guard', () => {
       estimatedCostMicrousd: input.estimatedCostMicrousd,
       estimatedCostCents: input.estimatedCostCents,
     }));
-    mockGetProviderFromModel.mockReturnValue('minimax');
+    mockGetProviderFromModel.mockReturnValue('zhipu');
     workflowRouteMocks.loadMcpTools.mockResolvedValue([]);
     workflowRouteMocks.loadConnectorTools.mockResolvedValue({
       tools: [],
@@ -816,13 +823,13 @@ describe('Managed Web conversation run concurrency guard', () => {
       state: 'running',
       originSurface: 'web',
       workMode: 'agiwork',
-      provider: 'minimax',
-      model: MINIMAX_MODEL_ID,
+      provider: 'zhipu',
+      model: ZHIPU_MODEL_ID,
       createdAt: '2026-07-18T00:00:00.000Z',
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
 
-    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID, conversationId));
+    const response = await POST(makeAgiWorkRequest(ZHIPU_MODEL_ID, conversationId));
 
     expect(response.status, await response.clone().text()).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
