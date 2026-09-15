@@ -40,7 +40,7 @@ pub async fn run_repl(
     resume_managed_session: Option<ManagedSessionResume>,
     max_turns: Option<usize>,
     skip_permissions: bool,
-    fallback_model: Option<String>,
+    fallback_chain: crate::routing::fallback::FallbackChain,
     session_name: Option<String>,
     team_mode: bool,
     auto_approve_safe: bool,
@@ -83,7 +83,9 @@ pub async fn run_repl(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
-    session.fallback_model = fallback_model;
+    if fallback_chain.primaries.len() > 1 {
+        session.fallback_chain = Some(fallback_chain);
+    }
     session.session_name = session_name;
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
