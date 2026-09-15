@@ -1,8 +1,10 @@
 import 'server-only';
 
 import type { ErrorCategory } from '@agiworkforce/provider-runtime';
+import { isCredentialUnfunded, resolveCredentialCooldownConfig } from '@agiworkforce/routing';
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
+import { getCredentialCooldownSnapshot } from '@/lib/services/free-lane/runtime-state-service';
 
 const DEGRADED_KEY_PREFIX = 'agi-model-avail:degraded';
 const DEGRADED_TTL_SECONDS = 5 * 60;
@@ -41,13 +43,16 @@ function degradedKey(providerKey: string): string {
   return `${DEGRADED_KEY_PREFIX}:${providerKey}`;
 }
 
+function degradedSignal(reason: string, untilMs: number): ProviderAvailabilitySignal {
+  return { state: 'degraded', reason, until: new Date(untilMs).toISOString() };
+}
+
 function toSignal(
   reason: string,
   untilMs: number,
   nowMs: number,
 ): ProviderAvailabilitySignal | null {
-  if (untilMs <= nowMs) return null;
-  return { state: 'degraded', reason, until: new Date(untilMs).toISOString() };
+  return untilMs <= nowMs ? null : degradedSignal(reason, untilMs);
 }
 
 export function markProviderDegraded(
@@ -100,15 +105,26 @@ export async function getProviderAvailabilityMap(
   nowMs: number = Date.now(),
 ): Promise<Readonly<Record<string, ProviderAvailabilitySignal>>> {
   const distinct = [...new Set(providerKeys)];
-  const results = await Promise.all(
-    distinct.map(
-      async (providerKey) =>
-        [providerKey, await getProviderAvailability(providerKey, nowMs)] as const,
+  const [marks, credentials] = await Promise.all([
+    Promise.all(
+      distinct.map(
+        async (providerKey) =>
+          [providerKey, await getProviderAvailability(providerKey, nowMs)] as const,
+      ),
     ),
-  );
+    getCredentialCooldownSnapshot(distinct, nowMs),
+  ]);
   const map: Record<string, ProviderAvailabilitySignal> = {};
-  for (const [providerKey, signal] of results) {
+  for (const [providerKey, signal] of marks) {
     if (signal) map[providerKey] = signal;
+  }
+  // The dispatcher refuses every route on an unfunded credential for the whole
+  // cooldown window; the marks above expire sooner, so without this read the
+  // catalogue offers a model the next turn cannot run.
+  const unfundedUntilMs = nowMs + resolveCredentialCooldownConfig().observationWindowMs;
+  for (const providerKey of distinct) {
+    if (map[providerKey] || !isCredentialUnfunded(credentials[providerKey])) continue;
+    map[providerKey] = degradedSignal(DEGRADED_REASON_TEXT.billing_exhausted, unfundedUntilMs);
   }
   return map;
 }

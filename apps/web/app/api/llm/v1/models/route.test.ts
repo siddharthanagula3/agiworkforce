@@ -34,8 +34,13 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   listAvailableManagedProviderIds: () => everyRoutedProvider(),
 }));
+const availabilityMocks = vi.hoisted(() => ({
+  getProviderAvailabilityMap: vi.fn(
+    async (): Promise<Record<string, { state: 'degraded'; reason: string; until: string }>> => ({}),
+  ),
+}));
 vi.mock('@/lib/services/provider-availability-service', () => ({
-  getProviderAvailabilityMap: async () => ({}),
+  getProviderAvailabilityMap: availabilityMocks.getProviderAvailabilityMap,
 }));
 vi.mock('@/lib/server/free-pools', () => ({ freePoolDecisions: () => [] }));
 
@@ -177,6 +182,43 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
       });
     },
   );
+
+  it('withholds a model whose every route is degraded and names it in the metadata', async () => {
+    const asMaxSubscriber = () => {
+      authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
+      subscriptionMocks.getSubscription.mockResolvedValueOnce({
+        plan_tier: 'max',
+        status: 'active',
+      });
+    };
+    asMaxSubscriber();
+    const offered = (
+      (await (await GET(request({ Authorization: 'Bearer valid-token' }))).json()).data as Array<{
+        id: string;
+      }>
+    ).map((model) => model.id);
+    const withheld = offered.find((modelId) => {
+      const routes = listManagedRoutesForModel(modelId);
+      return routes.length > 0 && routes.every((route) => route.provider === routes[0]?.provider);
+    });
+    expect(withheld).toBeDefined();
+    const soleProvider = listManagedRoutesForModel(withheld as string)[0]?.provider as string;
+    availabilityMocks.getProviderAvailabilityMap.mockResolvedValueOnce({
+      [soleProvider]: {
+        state: 'degraded',
+        reason: 'This provider is temporarily unavailable.',
+        until: new Date(Date.now() + 60_000).toISOString(),
+      },
+    });
+
+    asMaxSubscriber();
+    const payload = await (await GET(request({ Authorization: 'Bearer valid-token' }))).json();
+
+    expect(payload.data.map((model: { id: string }) => model.id)).not.toContain(withheld);
+    expect(payload.data.length).toBeGreaterThan(0);
+    expect(payload.x_agi_workforce.temporarily_unavailable).toContain(withheld);
+    expect(payload.x_agi_workforce.total_available).toBe(payload.data.length);
+  });
 
   it('keeps a trialing subscription on its paid catalog', async () => {
     authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
