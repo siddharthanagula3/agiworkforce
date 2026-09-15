@@ -16,6 +16,7 @@ export {
   navigatePairedBrowser,
   onDeveloperSessionEvent,
   readDeveloperRuntimeStatus,
+  reportDesktopAccount,
   readDeveloperSession,
   resumeDeveloperSession,
   startDeveloperSession,
@@ -62,6 +63,7 @@ export { useDesktopDeepLinks } from './hooks/use-desktop-deep-links';
 export { useDesktopExternalLinks } from './hooks/use-desktop-external-links';
 export { useHomeHref } from './hooks/use-home-href';
 export { useHostCommands } from './hooks/use-host-commands';
+export { useHostShortcuts, type HostShortcutRow } from './hooks/use-host-shortcuts';
 export { useWindowZoom } from './hooks/use-window-zoom';
 export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
 export { DesktopHostMount } from './components/DesktopHostMount';
