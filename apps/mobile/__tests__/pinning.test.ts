@@ -74,6 +74,12 @@ function fakeOk(): Response {
   return new Response(null, { status: 200 });
 }
 
+function fakeOkFrom(url: string): Response {
+  const response = fakeOk();
+  Object.defineProperty(response, 'url', { value: url });
+  return response;
+}
+
 /**
  * Stands in for what native/withAGITlsPinning.cjs writes into the Expo config at
  * build time. Driving this instead of mocking @/lib/pinning is the point: every
@@ -179,8 +185,10 @@ describe('provisioning the pins and turning pinning on are separate changes (CWE
   });
 
   it('stages nothing while a required host is still a placeholder, however the rollout reads', () => {
+    const pins = provisionedTable();
+    pins['api.agiworkforce.com'] = [PIN_A, PLACEHOLDER_PIN];
     for (const rollout of ['off', 'report-only', 'enforced'] as const) {
-      expect(pinningStageFor({ isDevOrTest: false, rollout })).toBe('off');
+      expect(pinningStageFor({ isDevOrTest: false, pins, rollout })).toBe('off');
     }
   });
 
@@ -307,12 +315,14 @@ describe('pinsForUrl', () => {
 });
 
 describe('provisioned pin checks', () => {
-  it('detects placeholder pins for a known host', () => {
-    expect(hasPlaceholderPinForUrl('https://agiworkforce.com/')).toBe(true);
+  it('finds no placeholder behind a required host in the shipped table', () => {
+    for (const host of REQUIRED_PINNED_HOSTS) {
+      expect(hasPlaceholderPinForUrl(`https://${host}/`)).toBe(false);
+    }
   });
 
-  it('does not treat placeholder pins as provisioned', () => {
-    expect(pinsAreProvisionedForUrl('https://agiworkforce.com/')).toBe(false);
+  it('treats the shipped pins of a required host as provisioned', () => {
+    expect(pinsAreProvisionedForUrl('https://agiworkforce.com/')).toBe(true);
   });
 
   it('does not treat unknown hosts as provisioned', () => {
@@ -340,18 +350,16 @@ describe('requiresPin', () => {
 });
 
 describe('a release runtime keeps the shipped build launchable', () => {
-  it('derives enforcement as off there instead of throwing at import', () => {
-    jest.isolateModules(() => {
-      jest.doMock('@/src/lib/runtimeMode', () => ({
-        isDevOrTestRuntime: () => false,
-        isReleaseRuntime: () => true,
-      }));
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.isolateModules needs a synchronous require to rebind the mocked runtime.
-      const pinning = require('@/lib/pinning') as typeof import('@/lib/pinning');
-      expect(pinning.PINNING_ENFORCED).toBe(false);
-      expect(pinning.pinningStartupState({ isDev: false, isTest: false })).toBe('unprovisioned');
+  it('derives the staged rollout there instead of throwing at import', async () => {
+    await inReleaseRuntime('production', async () => {
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.isolateModules needs a synchronous require to re-evaluate the module under release flags.
+        const pinning = require('@/lib/pinning') as typeof import('@/lib/pinning');
+        expect(pinning.PINNING_STAGE).toBe('report-only');
+        expect(pinning.PINNING_ENFORCED).toBe(false);
+        expect(pinning.pinningStartupState({ isDev: false, isTest: false })).toBe('staged');
+      });
     });
-    jest.dontMock('@/src/lib/runtimeMode');
   });
 });
 
@@ -412,7 +420,7 @@ describe('a pinned host reached in absolute form is refused (CWE-295 F6)', () =>
   it('resolves the trailing-dot spelling to the same pinned entry', () => {
     expect(hostHasPins('https://agiworkforce.com./api/test')).toBe(true);
     expect(pinsForUrl('https://api.agiworkforce.com./v1/chat').length).toBeGreaterThanOrEqual(2);
-    expect(pinsAreProvisionedForUrl('https://api.agiworkforce.com./v1/chat')).toBe(false);
+    expect(pinsAreProvisionedForUrl('https://api.agiworkforce.com./v1/chat')).toBe(true);
     expect(requiresPin('API.AGIWorkforce.com.')).toBe(true);
   });
 
@@ -504,11 +512,11 @@ describe('the shipped secureFetch refuses a half-pinned release (CWE-295 F6)', (
     },
   );
 
-  it('names the reason so a half-provisioned table is distinguishable from a missing plugin', async () => {
+  it('names the reason so a host the plugin skipped is distinguishable from an unprovisioned one', async () => {
     stampNativePins(['agiworkforce.com']);
     await inReleaseRuntime('production', async () => {
       await expect(secureFetch('https://signaling.agiworkforce.com/ws')).rejects.toMatchObject({
-        reason: 'unprovisioned-pins',
+        reason: 'no-native-enforcement',
         url: 'https://signaling.agiworkforce.com/ws',
       });
     });
@@ -517,6 +525,7 @@ describe('the shipped secureFetch refuses a half-pinned release (CWE-295 F6)', (
 
   it('allows the host the build actually stamped into extra.tlsPinning', async () => {
     stampNativePins(['  AGIWorkforce.com  ']);
+    mockFetch.mockResolvedValue(fakeOkFrom('https://agiworkforce.com/api/test'));
     await inReleaseRuntime('production', async () => {
       await expect(secureFetch('https://agiworkforce.com/api/test')).resolves.toEqual(
         expect.any(Response),
@@ -544,7 +553,7 @@ describe('the shipped secureFetch refuses a half-pinned release (CWE-295 F6)', (
   });
 
   it("names today's build an accepted unverified transport rather than a pass", async () => {
-    const entry = founderDecisionEntry('D-2026-09-15-11');
+    const entry = founderDecisionEntry('D-2026-09-15-11').replace(/\s+/g, ' ');
     expect(entry).toContain('CLAUDE-SECURITY-20260821-170634 F6');
     expect(entry).toContain('accepted unverified transport');
     expect(entry).toContain('./native/withAGITlsPinning.cjs');
@@ -587,7 +596,7 @@ describe('the accepted gap is announced, not passed through in silence (CWE-295 
     expect(warn).toHaveBeenCalledTimes(1);
     const message = String(warn.mock.calls[0]?.[0]);
     expect(message).toContain('api.agiworkforce.com');
-    expect(message).toContain('BLOCKED_BY_HUMAN');
+    expect(message).toContain('D-2026-09-15-11');
     expect(message).not.toContain('/v1/chat');
   });
 
@@ -982,7 +991,7 @@ describe('the shipped gate is wired to those facts, not to a flag (CWE-295 F6)',
         isRelease: true,
         hostHasPins: true,
         hostIsCanonical: true,
-        pinsProvisioned: false,
+        pinsProvisioned: true,
         nativelyPinned: false,
         buildShipsNativePins: false,
         stage: 'off',
@@ -1097,7 +1106,7 @@ describe('what the plugin covers is what the shipped gate reads back (CWE-295 F6
         'no-native-enforcement',
       );
       await expect(secureFetch('https://clerk.agiworkforce.com/v1/client')).rejects.toMatchObject({
-        reason: 'unprovisioned-pins',
+        reason: 'no-native-enforcement',
       });
     });
   });
@@ -1125,18 +1134,19 @@ describe('native pin config generation (native/tlsPinConfig.cjs)', () => {
   });
 
   it('reads every host of the shipped pin table out of lib/pinning.ts', () => {
-    expect(Object.keys(tlsPinConfig.readPinTable()).sort()).toEqual([
-      'agiworkforce.com',
-      'api.agiworkforce.com',
-      'api.anthropic.com',
-      'api.openai.com',
-      'clerk.agiworkforce.com',
-      'signaling.agiworkforce.com',
-    ]);
+    expect(Object.keys(tlsPinConfig.readPinTable()).sort()).toEqual(
+      [...REQUIRED_PINNED_HOSTS].sort(),
+    );
   });
 
-  it('emits nothing while the shipped table is placeholders, so no build can pin garbage', () => {
-    expect(tlsPinConfig.provisionedPins(tlsPinConfig.readPinTable())).toEqual({});
+  it('emits every required host of the shipped table, each with only well-formed pins', () => {
+    const emitted = tlsPinConfig.provisionedPins(tlsPinConfig.readPinTable());
+    expect(Object.keys(emitted).sort()).toEqual([...REQUIRED_PINNED_HOSTS].sort());
+    for (const digests of Object.values(emitted) as string[][]) {
+      expect(digests.length).toBeGreaterThanOrEqual(2);
+      for (const digest of digests)
+        expect(tlsPinConfig.isProvisionedPin(`sha256/${digest}`)).toBe(true);
+    }
   });
 
   it('drops a host whose pin set is only partly provisioned', () => {
