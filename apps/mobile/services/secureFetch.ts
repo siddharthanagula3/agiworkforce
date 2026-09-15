@@ -88,8 +88,7 @@ const TRAILING_DOTS = /\.+$/;
  */
 function nativelyPinnedHosts(): ReadonlySet<string> {
   const extra = Constants.expoConfig?.extra as
-    | { tlsPinning?: { hosts?: unknown } | undefined }
-    | undefined;
+    { tlsPinning?: { hosts?: unknown } | undefined } | undefined;
   const hosts = extra?.tlsPinning?.hosts;
   if (!Array.isArray(hosts)) return NO_HOSTS;
   return new Set(
@@ -163,7 +162,7 @@ export type PinTransportAllowance = Extract<PinTransportVerdict, { allow: string
  * and the build compiled no pin config, which is today's shipped build. It is a
  * verdict rather than a fall-through so callers must handle it, and secureFetch
  * answers it with a warning instead of silence. It is tracked as
- * BLOCKED_BY_HUMAN in docs/work/founder-assistance.md.
+ * D-2026-09-15-11 in docs/decisions/2026-09-15-founder-decisions.md.
  */
 export function pinTransportVerdict(facts: PinTransportFacts): PinTransportVerdict {
   if (facts.hostHasPins && !facts.isHttps) return { refuse: 'insecure-scheme' };
@@ -236,9 +235,9 @@ function warnUnverifiedTransport(host: string): void {
   warnedUnverifiedHosts.add(host);
   console.warn(
     `[pinning] "${host}" is listed in lib/pinning.ts → PINS_BY_HOST, but this build verifies ` +
-      `nothing about the certificate it presents: the pins are placeholders and no native pin ` +
+      `nothing about the certificate it presents: the rollout is not enforced and no native pin ` +
       `config shipped. Requests to it rely on the OS trust store alone, so a device-trusted CA ` +
-      `can read them. Tracked as BLOCKED_BY_HUMAN in docs/work/founder-assistance.md (mobile TLS pinning).`,
+      `can read them. Tracked under D-2026-09-15-11 in docs/decisions/2026-09-15-founder-decisions.md.`,
   );
 }
 
@@ -299,7 +298,7 @@ export function redirectVerdict(requestUrl: string, finalUrl: unknown): Redirect
  * replayed on the second hop is already on the wire by the time this runs.
  * Refusing the response still denies the attacker the answer and surfaces the
  * hop, but the token is burned and must be rotated, recorded as a residual of
- * the 'enforced' stage in docs/work/founder-assistance.md.
+ * the 'enforced' stage under D-2026-09-15-11 in docs/decisions/2026-09-15-founder-decisions.md.
  */
 function assertResponseCameFromPinnedHost(requestUrl: string, finalUrl: unknown): void {
   const verdict = redirectVerdict(requestUrl, finalUrl);

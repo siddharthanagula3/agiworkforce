@@ -29,13 +29,13 @@ function mobileReleaseTags(): string[] {
 }
 
 const webMarketingConstants = readFileSync(
-  join(repoRoot, 'apps', 'web', 'lib', 'marketing-constants.ts'),
+  join(repoRoot, 'apps', 'web', 'lib', 'surface-status.ts'),
   'utf8',
 );
 
 function webComingSoonLabel(): string {
   const match = webMarketingConstants.match(/export const COMING_SOON_LABEL = '([^']+)'/);
-  if (!match?.[1]) throw new Error('apps/web/lib/marketing-constants.ts has no COMING_SOON_LABEL');
+  if (!match?.[1]) throw new Error('apps/web/lib/surface-status.ts has no COMING_SOON_LABEL');
   return match[1];
 }
 
@@ -43,7 +43,7 @@ function webMobileStatus(): string {
   const surfaceStatus = webMarketingConstants.match(
     /export const SURFACE_STATUS = \{([\s\S]*?)\} as const;/,
   )?.[1];
-  if (!surfaceStatus) throw new Error('apps/web/lib/marketing-constants.ts has no SURFACE_STATUS');
+  if (!surfaceStatus) throw new Error('apps/web/lib/surface-status.ts has no SURFACE_STATUS');
   const mobile = surfaceStatus.match(/\bmobile:\s*([^,\n]+)/)?.[1]?.trim();
   if (!mobile) throw new Error('SURFACE_STATUS has no mobile entry');
   return mobile === 'COMING_SOON_LABEL' ? webComingSoonLabel() : mobile.replace(/^'|'$/g, '');
