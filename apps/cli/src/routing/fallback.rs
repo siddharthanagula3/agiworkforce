@@ -62,6 +62,19 @@ impl FallbackChain {
         self
     }
 
+    /// Why the chain rotated, in the words the narration and the TUI banner show.
+    pub fn reason_phrase(kind: &str) -> &'static str {
+        match kind {
+            "api_rate_limit" => "rate limited",
+            "stream_disconnect" => "the stream failed",
+            "api_server_error" => "the provider failed",
+            "network" => "no network",
+            "api_http_error" => "the request was refused",
+            "model_unavailable" => "the model was unavailable",
+            _ => "a failure",
+        }
+    }
+
     /// The current head model, if any.
     pub fn head(&self) -> Option<&str> {
         self.primaries.first().map(|s| s.as_str())
@@ -113,6 +126,19 @@ mod tests {
         assert_eq!(same.primaries, vec!["a", "b"]);
         let none = FallbackChain::parse("a").with_fallback(None);
         assert_eq!(none.tail(), &[] as &[String]);
+    }
+
+    #[test]
+    fn reason_phrase_reads_as_words() {
+        assert_eq!(
+            FallbackChain::reason_phrase("api_rate_limit"),
+            "rate limited"
+        );
+        assert_eq!(
+            FallbackChain::reason_phrase("stream_disconnect"),
+            "the stream failed"
+        );
+        assert_eq!(FallbackChain::reason_phrase("something_new"), "a failure");
     }
 
     #[test]

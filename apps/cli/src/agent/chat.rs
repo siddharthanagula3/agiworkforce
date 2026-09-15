@@ -1211,15 +1211,17 @@ impl TurnHostAdapter<'_> {
                                     last_err = boundary_err;
                                     break;
                                 }
+                                let reason =
+                                    crate::routing::fallback::FallbackChain::reason_phrase(kind);
                                 narrate!(
                                     "  {}",
                                     ts::warning(format!(
                                         "↘ Falling back: {} → {} ({})",
-                                        prev_model, fallback_model, kind
+                                        prev_model, fallback_model, reason
                                     ))
                                 );
                                 if let Some(sink) = self.session.on_fallback.as_ref() {
-                                    (sink.0)(&prev_model, fallback_model, kind);
+                                    (sink.0)(&prev_model, fallback_model, reason);
                                 }
                                 let fallback_call = if self.session.demo_mode {
                                     let demo_text = format!(
