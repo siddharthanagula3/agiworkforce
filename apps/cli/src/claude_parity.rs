@@ -756,7 +756,8 @@ pub fn render_fallback(session: &AgentSession) -> String {
             };
             format!("Fallback chain: {display}\nRotates on: {:?}", chain.on)
         }
-        _ => "No fallback chain set. Restart with -m a,b,c to enable.".to_string(),
+        _ => "No fallback chain set. Restart with `--fallback-model <model>` or `-m a,b,c`."
+            .to_string(),
     }
 }
 
