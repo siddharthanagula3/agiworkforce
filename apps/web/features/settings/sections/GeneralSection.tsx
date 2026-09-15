@@ -10,6 +10,7 @@ import { useTTS } from '@/lib/hooks/useTTS';
 import { useModelStore } from '@shared/stores/model-store';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
 import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
+import { useTranslation } from 'react-i18next';
 import { getModelReasoning, splitEffortsByEntitlement } from '@shared/config/llm';
 import {
   ACCENT_COLORS,
@@ -841,6 +842,7 @@ function SidebarItemsRow() {
   // the source, so it cannot be switched off and strand the user without a way
   // back to conversations.
   const hideable = APP_NAV_DESTINATIONS.filter((destination) => destination.hideable);
+  const { t } = useTranslation('common');
 
   return (
     <Row label="Sidebar items" hint="Hide anything you do not use from the left rail.">
@@ -853,7 +855,7 @@ function SidebarItemsRow() {
               type="button"
               role="switch"
               aria-checked={visible}
-              aria-label={destination.label}
+              aria-label={t(destination.labelKey, { defaultValue: destination.label })}
               onClick={() => setNavItemVisible(destination.id, !visible)}
               className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
                 visible
@@ -861,7 +863,7 @@ function SidebarItemsRow() {
                   : 'border-border text-muted-foreground hover:text-foreground'
               }`}
             >
-              {destination.label}
+              {t(destination.labelKey, { defaultValue: destination.label })}
             </button>
           );
         })}

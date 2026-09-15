@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { useSignOut } from '@/lib/identity/client';
 import { ChevronUp, Menu } from '@agiworkforce/icons';
 import {
@@ -326,6 +327,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // why (the two hand-maintained copies had drifted and this shell was the only
   // one exposing Tasks).
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
+  const { t } = useTranslation('common');
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
@@ -334,8 +336,9 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         navigate: (href) => router.push(href),
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
+        translate: (key, fallback) => t(key, { defaultValue: fallback }),
       }),
-    [hiddenNavIds, isWorkspaceAdmin, pathname, router],
+    [hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   // ---- Account footer ----
