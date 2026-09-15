@@ -295,6 +295,14 @@ impl CliError {
         match self {
             CliError::Api {
                 provider, status, ..
+            } if (500..600).contains(status)
+                && provider
+                    == crate::models::provider_name(&crate::models::Provider::ManagedCloud) =>
+            {
+                "Pick another model with `agi models list`, or try again later.".to_string()
+            }
+            CliError::Api {
+                provider, status, ..
             } if (500..600).contains(status) => format!(
                 "{provider} returned HTTP {status}. Retry the request, or run `agi \
                  features` to fall back to a different provider."
@@ -807,6 +815,21 @@ mod tests {
             err.hint(),
             "Run `agi login` to use your AGI Workforce plan."
         );
+    }
+
+    #[test]
+    fn a_managed_refusal_hint_points_at_the_model_list() {
+        let refused = CliError::api(
+            "managed_cloud",
+            503,
+            "This model is unavailable right now because of a problem on our side.",
+        );
+        assert_eq!(
+            refused.hint(),
+            "Pick another model with `agi models list`, or try again later."
+        );
+        let vendor = CliError::api("openai", 503, "upstream failed");
+        assert!(vendor.hint().contains("Retry the request"));
     }
 
     #[test]
