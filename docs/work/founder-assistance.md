@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -12,6 +12,10 @@ is done and the dependent behaviour is verified live.
 Impact: RELEASE-BLOCKING (a surface cannot ship publicly) · FEATURE-BLOCKING
 (one capability stays dark) · EXTERNAL-APPROVAL (waiting on a third party) ·
 NON-BLOCKING.
+
+The founder's decisions of 2026-09-15 live in
+`docs/decisions/2026-09-15-founder-decisions.md`; the items they resolved were
+removed here and their engineering is tracked in `ACTIVE_ISSUES.md` (AGI-35).
 
 ## [Billing / Stripe] Live-mode cutover, Team product and price cleanup
 
@@ -38,6 +42,8 @@ active prices.
 **Impact** RELEASE-BLOCKING
 **What remains after founder action** Until the cutover, `/api/cron/reconcile-credits` answers 500 once a day because six stored subscription ids are unknown to the live Stripe account ("refusing to guess its terminal state", production log 2026-09-10 00:30 UTC); the queue itself processes fine.
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+Decided 2026-09-15 (D-2026-09-15-17): preparation proceeds now; the cutover waits for green release-blocking billing, database and QA checks, the code catalogue is canonical, contradictory prices are retired, and the cutover is verified with one real low-value checkout, provisioning and a refund.
 
 ## [Mobile] Store submission accounts, products, listing facts
 
@@ -69,7 +75,7 @@ recurring payments from a foreign entity is a sales conversation.
 **Where** Pricing decision, Razorpay sales, accountant.
 **Needed input** One pricing decision and one external conversation.
 **How to verify completion** The decision is recorded in `docs/decisions/`; if Razorpay proceeds, its answer picks the integration shape.
-**What remains after founder action** India e-mandate delay handling (engineering) once INR billing is live.
+**What remains after founder action** Decided 2026-09-15 (D-2026-09-15-18): until Razorpay, the accountant and counsel resolve the questions above, Max 15x and Team are invoice or assisted-sales only in India and there is no INR top-up conversion; engineering enforces that in checkout now.
 **Impact** FEATURE-BLOCKING (India only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -84,7 +90,7 @@ managed route since the abroad-endpoint exclusion, and the Zhipu default has one
 **Where** `docs/decisions/2026-09-10-managed-gateway-routes.md`, each gateway's console, Vercel environment.
 **Needed input** Terms acceptance and funding per gateway.
 **How to verify completion** An explicit DeepSeek or Moonshot selection by a managed user no longer answers 422; `/operator` Routes shows each accepted gateway credentialed.
-**What remains after founder action** Flip the routes' `commercialStatus` in the catalogue, regenerate, and land the uncommitted registry work.
+**What remains after founder action** Decided 2026-09-15 (D-2026-09-15-07): option (b), the DeepSeek and Moonshot routes go through the managed routing harness with several transports; engineering does that now. A gateway serves managed customers only after the founder accepts its commercial terms and data handling, which is the part that stays here.
 **Impact** FEATURE-BLOCKING (managed routes for those vendors; cheaper capacity)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -92,27 +98,12 @@ managed route since the abroad-endpoint exclusion, and the Zhipu default has one
 
 **Why founder assistance is required**
 Settings offers twelve languages. The `v3` dictionary that names the sidebar, empty chat, response actions, thinking, artifacts, search, the account menu, customize, skills and connectors is translated for Spanish only; in the other ten languages 255 to 259 of its 330 values are still English (measured 2026-09-15), so a user who picks French, German, Japanese, Hindi, Arabic, Italian, Korean, Portuguese, Russian or Chinese sees most of the chat surface in English. ChatGPT and Claude ship every offered language fully. Producing 2,500 strings is a spend and a brand-voice call: a model-assisted pass reviewed by a native reader per language is the leaders' floor, a vendor is the ceiling.
-**Exact action** Say which of the two routes to take, or narrow the offered languages to the ones that will be reviewed; name a reviewer per kept language if there is one. Say too whether the other clients should follow the account language: today mobile follows the device locale with almost no translated strings, the Chrome extension ships one locale and VS Code has none.
+**Exact action** Decided 2026-09-15 (D-2026-09-15-03): only complete, reviewed languages are offered, so the interface now exposes English and Spanish and hides the rest until they are model-translated and reviewed. What stays with the founder: name a native reviewer per language to be re-enabled (or say that no further languages are wanted at launch).
 **Where** `packages/ui/i18n/locales/<lang>/v3.json`; the language control in Settings → General.
 **Needed input** One product decision and, for the model-assisted route, permission to spend plan credits on the batch.
 **How to verify completion** The English-value count per language in `v3.json` drops to the product names only, and the settings pass under each language shows one language on the chat surface.
-**What remains after founder action** The batch itself and its review loop; a key-parity guard already fails the chain when a locale trails the English key set, and a value-level guard for untranslated strings can follow the batch. All engineering.
+**What remains after founder action** The translation batch and each language's review loop, then re-enabling it in the shared selectable set; all engineering.
 **Impact** NON-BLOCKING for English; BLOCKING for offering the other languages honestly
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [Product] Tool-approval defaults versus the leaders (D-2026-09-10-02)
-
-**Why founder assistance is required**
-The founder set the policy on 2026-09-08 that even "run read-only actions
-without asking" still asks before code execution, web search and page
-fetches. ChatGPT and Claude run sandboxed code and search without asking, so
-a plain file-analysis question here needs two manual approvals.
-**Exact action** Say whether sandboxed code execution and web search may run without approval in the read-only mode (connector writes keep asking either way), or whether the current gate stays.
-**Where** Settings → Capabilities → Tool approvals; `apps/web/shared/types/toolApprovalPolicy.ts`.
-**Needed input** One product-security decision.
-**How to verify completion** A CSV analysis on the default model completes without an approval prompt (if relaxed), or the docs and banners say clearly that code and search ask first (if kept).
-**What remains after founder action** The policy change and the copy, both engineering.
-**Impact** NON-BLOCKING (the gate works; it is friction, not breakage)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Connectors] Register OAuth apps at six providers
@@ -127,6 +118,8 @@ developer-console registration under the company identity.
 **What remains after founder action** Credential install and a live connect test (agent).
 **Impact** FEATURE-BLOCKING (those six connectors)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+Decided 2026-09-15 (D-2026-09-15-20): launch does not wait for every registration; Google Workspace, Microsoft 365, Slack, GitHub and Linear come first, and every unregistered connector shows Needs setup or Coming soon.
 
 ## [Connectors] Partner-program allowlisting at six MCP vendors
 
@@ -169,27 +162,6 @@ third-party account, and vendor consent screens require a person.
 **Impact** NON-BLOCKING (connectors work; this closes the live-validation row)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Memory] Whether auto-memory may spend a model call per turn (AGI-29)
-
-**Why founder assistance is required**
-The extraction is written, wired and tested; what is not decided is whether
-memory may cost one cheap utility completion on every eligible turn. That is a
-per-turn spend, which is a founder call rather than an engineering one.
-**Exact action** Say yes or no. Yes means setting `AGI_MODEL_MEMORY_EXTRACTION=1` in the Vercel Production and Preview environments; no means the pattern list stays and the row closes as decided rather than open. Temporary chats, Memory-off chats, the API surface and zero-data-retention turns are never sent either way, and every failure falls back to the patterns, so the downside is spend rather than behaviour.
-**Where** Vercel environment variables, or a one-line answer.
-**Needed input** One decision.
-**How to verify completion** A fact stated with no trigger phrase, for example "I just moved to Berlin", is stored and answered in a second conversation.
-**What remains after founder action** Setting the variable and one live two-chat check, both engineering.
-**Metering** Since 2026-09-14 the extraction call is reserved and finalized on
-the managed usage ledger under the `memory_extraction` quota feature, so it
-counts against the session, weekly and flagship caps and appears on
-`GET /api/usage` like any other spend. A turn whose reservation is refused
-skips the model and keeps the pattern candidates. The only decision still open
-is the on/off call above; nothing about where the spend is recorded remains
-undecided.
-**Impact** NON-BLOCKING (memory works today for the phrasings the patterns know)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
 ## [Legal] Counsel review and grievance facts (DPDP)
 
 **Why founder assistance is required**
@@ -208,56 +180,42 @@ and mailbox are facts about the business.
 **Why founder assistance is required**
 No verifiable parental consent exists; refusing minors or buying a consent
 vendor is a legal-risk and spend decision.
-**Exact action** Choose: refuse users under the regional threshold, or name and fund a verifiable-parental-consent vendor; have counsel confirm the thresholds and whether a timezone-inferred region is defensible.
+**Exact action** Decided 2026-09-15 (D-2026-09-15-12): refuse account creation and use below the regional legal threshold; no parental-consent vendor at launch. What stays with the founder: have counsel confirm the regional thresholds and the region-detection approach the gate will use.
 **Where** `apps/mobile/src/features/auth/services/ageGate.ts`.
 **Needed input** One risk decision, possibly a vendor contract.
 **How to verify completion** The under-threshold flow matches the choice end to end; no marketing or listing claims compliance before then.
-**What remains after founder action** Build the chosen option.
+**What remains after founder action** The gate is being built on a documented default threshold table; counsel's confirmation replaces the defaults.
 **Impact** RELEASE-BLOCKING (mobile stores)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [Security] Dispatch manual pairing trust model
-
-**Why founder assistance is required**
-The relay can forge signed approval frames on the manual pairing path; the
-three fixes trade security against pairing UX and force every device to re-pair.
-**Exact action** Pick QR-only pairing, honestly labelled relay-trusted manual entry, or manual entry verified by a short authentication string; approve the `DISPATCH_HMAC_REQUIRED_AFTER` cutover date.
-**Where** Desktop Dispatch pairing; plan in `ExecutionPlan.md` SEC-16.
-**Needed input** One decision and a cutover date.
-**How to verify completion** The chosen option ships and the re-pair cutover is announced.
-**What remains after founder action** Engineering per SEC-16.
-**Impact** RELEASE-BLOCKING (desktop–mobile Dispatch)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Security] Managed Cloud plan-tier gate on bare session tokens
 
 **Why founder assistance is required**
-A free-tier account can script around the Pro-only API paywall with a bare
-session token; two remediations were rejected in review, and the durable fix
-changes what a credential carries. Registered as
-`WEB-SEC-SCAN-2026-09-09-F88`: an API key and a developer credential already
-pin their surface, a bare session token does not, so the plan gate reads the
-advisory `x-agi-surface` header the caller controls.
-**Exact action** Choose one of three: bind the surface into a Clerk custom session claim (`CLERK_SECRET_KEY` already set, no new environment variable; the claim is added in the Clerk dashboard under Sessions, Customize session token); require a surface-bearing credential for non-browser callers, which makes every CLI, extension and IDE caller mint a developer token first; or accept the residual and gate on billing audit instead.
-**Where** The header is trusted in `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts`; the plan gate that acts on it is `enforceManagedCloudSurface` in `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts`.
-**Needed input** One security-architecture decision. No new deployment secret under any of the three options.
-**How to verify completion** With a free-tier account, a bare session token sent to `POST /api/llm/v1/chat/completions` with `x-agi-surface: cli` answers `developer_surface_plan_required` rather than completing the turn.
-**What remains after founder action** Engineering.
-**Impact** RELEASE-BLOCKING (revenue integrity, no data exposure)
+Decided 2026-09-15 (D-2026-09-15-09) and built: the gateway now binds a Clerk
+token to the surface its signed claims prove (the `azp` origin for the web app
+and the browser extension) and no longer trusts `x-agi-surface`. A native
+token carries no origin, so the mobile app mints its token from a Clerk JWT
+template that stamps a `surface` claim, and JWT templates are created in the
+Clerk dashboard.
+**Exact action** In the Clerk dashboard, JWT templates, on both the
+development and the production instance: create a template named `agi-mobile`
+with the claims `{"surface": "mobile"}` and the default lifetime. Then confirm
+`CLERK_AUTHORIZED_PARTIES` on the production web deployment lists the web
+origin and the published extension's `chrome-extension://<id>` origin.
+**Where** The claim and template name are `SURFACE_TOKEN_CLAIM` and
+`MOBILE_SESSION_TOKEN_TEMPLATE` in `packages/contracts/types/src/surface-binding.ts`;
+the binding is `bindSurfaceFromClaims` in `apps/web/lib/free-chat-surface-policy.ts`;
+the mobile minter is `getSurfaceToken` in `apps/mobile/src/integrations/clerk.ts`.
+**Needed input** Two dashboard actions; no new deployment secret.
+**How to verify completion** A token minted outside a browser from a free-tier
+account, sent to `POST /api/llm/v1/chat/completions` with `x-agi-surface: web`,
+answers `managed_cloud_surface_unknown`; the same header on a browser-minted
+token still runs as web; a mobile build signed in on the development instance
+completes a turn once the template exists.
+**What remains after founder action** Nothing; until the template exists the
+mobile app's turns are refused as an unknown surface, which is loud on purpose.
+**Impact** RELEASE-BLOCKING for the mobile release only
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [Security / Mobile] TLS pin key selection
-
-**Why founder assistance is required**
-Pinning is built and report-only; choosing which CA keys to trust per host is
-a security-owner call, and a wrong choice hard-fails every installed app.
-**Exact action** Pick two or more keys per host (issuing CA and root, never the leaf); decide whether the OpenAI and Anthropic hosts are pinned at all; then run the four-step provisioning in `apps/mobile/lib/pinning.ts` and flip `PINNING_ROLLOUT`.
-**Where** `apps/mobile/lib/pinning.ts`; the build plugin `./native/withAGITlsPinning.cjs` stamps the pins.
-**Needed input** The key selection.
-**How to verify completion** `apps/mobile/__tests__/pinning.test.ts` passes with real hashes and a release build logs no report-only refusals.
-**What remains after founder action** Route the pairing WebSocket and upload paths through `secureFetch` (engineering). Closes CLAUDE-SECURITY-20260821-170634 F6 (CWE-295).
-**Impact** RELEASE-BLOCKING (mobile MITM exposure)
-**Status** BLOCKED_BY_HUMAN, FOUNDER ACTION REQUIRED
 
 ## [Infra] `ALLOWED_ORIGINS` on the signaling deploy
 
@@ -323,19 +281,6 @@ The scheduled eval needs a budgeted key; none exists as a repo secret and the
 **Impact** NON-BLOCKING (offline harness still runs)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Desktop] Approved Local model for Desktop Tasks
-
-**Why founder assistance is required**
-No installed local model carries both tools and agentic capability; picking
-the model that meets the 16 GB quality bar is a product call.
-**Exact action** Name the model tag and digest for the minimum target and approve its validation matrix.
-**Where** Model registry curation; the fail-closed guards already block Tasks in Local mode.
-**Needed input** One model choice.
-**How to verify completion** Desktop Tasks run on the approved local model through its validation matrix.
-**What remains after founder action** Registry entry and validation run.
-**Impact** FEATURE-BLOCKING (Local-mode Tasks only)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
 ## [Privacy] Legacy email digests before `EMAIL_HASH_PEPPER`
 
 **Why founder assistance is required**
@@ -354,39 +299,13 @@ date the variable went live in Vercel Production, which only the dashboard histo
 **Why founder assistance is required**
 The current no-crash-reporting privacy stance is the founder's; reversing it
 changes privacy copy and store labels.
-**Exact action** Keep the stance (and say so more prominently in the app) or supply a mobile Sentry DSN and approve the updated privacy copy and store labels.
+**Exact action** Decided 2026-09-15 (D-2026-09-15-14): production crash reporting is on, through the provider-neutral telemetry abstraction, with aggressive scrubbing. What stays with the founder: create the mobile project in the crash-reporting vendor and hand over its DSN as a secret.
 **Where** Mobile privacy copy, store listings, `apps/mobile` telemetry config.
 **Needed input** One decision.
 **How to verify completion** Copy, labels and code agree.
-**What remains after founder action** Engineering either way.
+**What remains after founder action** Wiring the DSN, the scrubbing rules, the privacy and store copy; engineering.
 **Impact** NON-BLOCKING
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [QA] A workspace-bearing QA account
-
-**Why founder assistance is required**
-The QA account has no organization, so admin and team surfaces only ever
-render their empty states.
-**Exact action** Give the QA account a real organization, or confirm a test-mode Team checkout is acceptable once the Stripe cutover lands.
-**Where** Account administration.
-**Needed input** One provisioning action.
-**How to verify completion** Team and workspace admin pages render data for the QA account.
-**What remains after founder action** Nothing; the agent seeds the rest through the product.
-**Impact** NON-BLOCKING (coverage debt)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [Billing] Search bounds and the COGS ledger split (migration 0183)
-
-**Why founder assistance is required**
-Running a production migration and changing what a paying customer is charged
-are both calls the founder reserves.
-**Exact action** DO NOT APPLY `0183`. This migration is already in production as `0180_provider_cost_events_customer_and_cogs_split.sql`, applied between 09-07 and 09-11; the two files carry the same name and differ only in the number inside their own comments. `0183` is this branch's duplicate of it and is withdrawn by the reconciliation in ACTIVE_ISSUES. The only thing still open here is confirming the search bounds shipping alongside it: 20 included searches per 30 days on Free, 300 on paid interactive chat, and 1 cent per Perplexity call or 2 cents per grounded call on API, CLI, VS Code, scheduled agents, AGI Work and deep research.
-**Where** Neon production (migration), no dashboard or env change; the two existing rate overrides `AGI_PERPLEXITY_SEARCH_MICROUSD_PER_CALL` and `AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL` are unchanged and stay unset.
-**Needed input** One confirmation of the bounds. No migration approval.
-**How to verify completion** `provider_cost_events` carries `customer_canonical_microusd` and `feature`, which it already should; a search on a paid account writes a row with `feature = 'web_search_perplexity'`; the per-user count the bounds read is non-zero.
-**What remains after founder action** Nothing; the bounds and the ledger writes ship with the migration that is already applied.
-**Impact** NON-BLOCKING (the schema is in production; only the bounds confirmation is open)
-**Status** CORRECTED 2026-09-12, NO MIGRATION TO APPLY
 
 ## [Billing] Provider cost reconciliation credentials
 
@@ -412,52 +331,6 @@ the admin economics page shows a reported figure and a gap for yesterday.
 table and the gap comparison ship with this change. Until each variable is set
 that provider is skipped and its ledger cost stays an unverified estimate.
 **Impact** NON-BLOCKING (margin stays estimate-only)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [Billing] Reconciliation storage (migration 0184)
-
-**Why founder assistance is required**
-It no longer is. This entry asked for a production migration that had already
-been applied under a different number.
-**Exact action** DO NOT APPLY `0184`. It is already in production as
-`0181_provider_cost_reconciliation_days.sql`, applied between 09-07 and 09-11.
-The two files carry the same name and differ only in the number inside their
-own comments. `0184` is this branch's duplicate and is withdrawn by the
-reconciliation in ACTIVE_ISSUES.
-**Where** Nowhere. No Neon, dashboard or environment change.
-**Needed input** None.
-**How to verify completion** `provider_cost_reconciliation_days` already
-exists; after a nightly run it holds one row per provider that answered. If it
-is absent, that is a reconciliation question, not a reason to apply `0184`.
-**What remains after founder action** Nothing.
-**Impact** NON-BLOCKING
-**Status** CORRECTED 2026-09-12, NO MIGRATION TO APPLY
-
-## [QA] A dedicated paid QA account for billing verification
-
-**Why founder assistance is required**
-Creating an account and setting its plan is an account action, and the billing
-gate cannot be proven without one. The harness must not run on the founder's
-own Max 15x account: verification spends real allowance, and the erroneous
-$1.00 settlement already landed there.
-**Exact action**
-
-1. Create a normal account, for example `qa-billing@agiworkforce.com`, through
-   the standard sign-up.
-2. Put it on a paid plan that exercises the paid ledger.
-3. Put its email and password in a gitignored local `.env.qa`, never in the
-   repository and never in a log.
-
-**Where** Production sign-up, then a local file.
-**Needed input** One account, one plan assignment, one credential handoff.
-**How to verify completion** The harness signs in through the normal login
-form, sends one Luna turn, and the resulting `managed_usage_requests` row
-settles at the token-derived cost rather than a dollar-scale amount.
-**What remains after founder action** Nothing; the emergency branch is pushed
-and the regression tests are green. Until the account exists, Preview and
-Production settlement cannot be verified with one controlled request, which is
-the gate the emergency deployment is held behind.
-**Impact** RELEASE-BLOCKING
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Providers] The Anthropic account has no API credit
@@ -492,6 +365,8 @@ deploy and no configuration change.
 **Impact** RELEASE-BLOCKING
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+Decided 2026-09-15 (D-2026-09-15-19): fund the account with auto-reload and spend alerts; the routing fallback stays regardless.
+
 ## [Event] Production environment for the public event
 
 **Why founder assistance is required**
@@ -525,21 +400,13 @@ behaviour; nothing is stored, so there is nothing to migrate back.
 **Impact** BLOCKS THE EVENT
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+Decided 2026-09-15 (D-2026-09-15-26): `AGI_EVENT_ENABLED` stays 0 until a specific event, and an event needs an explicit model allowlist, a hard global USD budget, a start instant and an end instant.
+
 ## [Providers] MiniMax and Groq hold no credential
 
 **Why founder assistance is required**
 Creating a provider account and funding it is a payment and terms decision.
-**Exact action**
-
-1. Decide whether MiniMax is kept. Its own terms have never been read
-   (the open question recorded under the gateway entry above), and it is
-   currently served only through a marketplace route.
-2. If it is kept, create a MiniMax account and set `MINIMAX_API_KEY` in
-   Production.
-3. Decide whether Groq is wanted at all. Three registry models are served only
-   by Groq, so today no plan can run them.
-4. If it is wanted, set `GROQ_API_KEY` in Production.
-
+**Exact action** Decided 2026-09-15 (D-2026-09-15-08): MiniMax stays out of managed production until its terms are reviewed and accepted; Groq stays a backend provider option. What stays with the founder: fund and hand over a Groq credential if Groq is wanted for cost, latency or resilience, and review MiniMax's commercial terms when there is time.
 **Where** Each provider's console, then Vercel Production.
 **Needed input** Two keep-or-drop decisions and, for each keep, one account.
 **How to verify completion** A live sweep on 2026-09-12 called every selectable
@@ -553,177 +420,21 @@ its three models should leave the registry rather than sit there unservable.
 **Impact** FEATURE-BLOCKING (those models only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [QA] Somewhere to exercise this work before it ships
-
-**Why founder assistance is required**
-Starting a server is a standing founder decision in this repository, and
-deploying is gated on CI and on the founder's own approval.
-**Exact action**
-
-1. Either start the dev server and say so, or approve a preview deployment of
-   `fix/provider-outage-health-2026-09-12`.
-2. Say which of the two, so the confirmations below are run in the right place.
-
-**Where** Localhost, or a Vercel preview of that branch.
-**Needed input** One decision and, for the preview, one approval.
-**How to verify completion** The branch's own confirmations become runnable.
-Each was written down with the fix that needs it, and none can be made from a
-checkout: a durable run for `LIVE-8`; a real sandbox for the attachment staging;
-a live voice session for the delegated backend cost row; a reload for the turn
-metadata and the citations; a long thread for the retry anchor; a fresh stack
-for the listener warning; and a deployment for the route that our own data
-policy excludes.
-**What remains after founder action** Nothing in code for the items above. They
-are implemented and unit tested; what is missing is observation, and every one
-of them says so in its own entry rather than claiming a confirmation that was
-never made.
-
-Narrowed 2026-09-12 by what could be observed without either: the whole web
-suite now runs against the branch in a clean worktree, 17,059 passing, and the
-live site answers read-only requests, which measured three customer-visible
-defects the branch fixes and which the same three requests will confirm after a
-deploy. What is still unobservable from a checkout is everything behind a
-session: a durable run, a real sandbox, a live voice session, a reload, and a
-long transcript.
-**Impact** BLOCKS VERIFICATION, NOT THE FIXES
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [Database] Apply migrations 0183 to 0192 in production before the next deploy
-
-**Why founder assistance is required**
-Production database credentials exist only with the founder, and the deploy job
-refuses to promote while a draft migration is unapplied.
-**Exact action**
-
-1. Rehearse on a Neon branch, then apply to production, with the procedure the
-   0175 to 0182 batch used: `pnpm db:migrate -- apply --target branch`, then
-   `pnpm db:migrate -- apply --target production --confirm-production`, with
-   the production URL exported for the command.
-2. The seven drafts: `0183_video_generation_completion_notice.sql` (a claim
-   column so a finished video job is announced once), `0184_organization_shared_artifacts.sql`
-   (artifact visibility plus the workspace grant table),
-   `0185_org_shared_artifact_policy_recursion.sql` (splits the grant policy per
-   command; without it every publish raises 42P17),
-   `0186_organization_shared_sessions.sql` (the same two-part shape for
-   conversation shares: a `visibility` column on `shared_sessions`, the
-   `organization_shared_sessions` grant table, and row level security on
-   `shared_sessions` itself with SELECT and UPDATE granted to `app_rls`, so a
-   member read is decided by a policy rather than by a route),
-   `0187_device_refresh_token_workspace_binding.sql` (an `organization_id`
-   column on `device_refresh_tokens`, so removing a member from one workspace
-   revokes the credentials that workspace issued instead of every credential on
-   their account) and
-   `0188_github_installation_verified_repositories.sql` (a
-   `verified_repositories` column on `github_installations`, so a connected
-   installation lists and clones only the repositories the linking GitHub
-   account proved it can reach) and
-   `0189_user_memories_per_user_identity.sql` (moves the `user_memories` row key
-   from a global `id` to `(user_id, id)` and adds the `import_key` dedupe column,
-   so one account can no longer occupy another's memory row id) and
-   `0190_device_step_checkpoint.sql` (the checkpoint row that holds a cloud turn
-   paused on a step the user's desktop must run, bound to one device, so the
-   tool loop can resume from that device and refuse any other). Apply all eight
-   in ascending order, 0183 first and 0190 last: each assumes the ones before it
-   have run. The deployment carrying 0187 to 0190 must not go out before
-   they are applied: the device pairing insert, the GitHub connect flow and the
-   memory import insert all name the new columns, the memory sync and
-   auto-memory inserts name `(user_id, id)` as their conflict target, which the
-   old single-column key cannot satisfy, and a desktop turn that reaches a device
-   step writes the checkpoint row before it pauses. The ninth is
-   `0191_research_report_settled_cost.sql` (a nullable `settled_cost_microusd`
-   column on `research_reports`, so a finished Deep Research report can state
-   what the managed usage ledger settled for the run instead of leaving the
-   cost unsaid). The tenth is `0192_project_knowledge_anchors.sql` (a nullable
-   `extracted_anchors` column on `project_knowledge_files`, holding where each
-   page or heading begins in the extracted text, so a turn answering from a
-   project file can say which page it read). Apply both after 0190, 0191 first.
-
-**Where** A terminal with the production database URL, as for the 0175 batch.
-**Needed input** The production database URL and the confirm flag.
-**How to verify completion** `pnpm db:migrate -- status` against production
-lists 0192 as applied; the deploy job's migration verify step passes; importing
-the same memory text twice adds it once and a memory sync push applies rather
-than conflicts; a video
-job completion produces one notice; an artifact and a conversation can each be
-shared with the workspace, read by a member, and refused to a signed-out
-visitor holding the link; a desktop pairs and refreshes without error; and the
-GitHub connect flow reconnects an installation and still lists its
-repositories; a finished Deep Research report names the credits the run
-consumed; and a question answered from a multi-page PDF in a project names the
-page it was answered from.
-**What remains after founder action** Nothing in code.
-**Impact** RELEASE-BLOCKING (the deploy job refuses to promote)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
-## [QA] A QA credential the native SDKs can use
-
-**Why founder assistance is required**
-Creating a sign-in method on the QA account is an account action.
-**Exact action**
-Give the QA account a password (or a second QA account with one) and put it in
-the local env files under the `E2E_` names the web harness reads. The web
-harness signs in with a Clerk backend ticket, which the mobile app, the Chrome
-extension and the Electron shell cannot consume, so every cloud-gated flow on
-those three surfaces (share into the app, start Work from the phone, ask a
-question about a page, approvals, cancel) was verified only at unit level today.
-Also set `CHROME_EXTENSION_PUBLIC_KEY` for local builds so the extension id is
-stable enough for Clerk to accept the sync.
-
-**Where** Clerk dashboard for the QA account; the local env files.
-**Needed input** A password or a second account, and the extension public key.
-**How to verify completion** A native sign-in on the simulator and in the loaded
-extension completes without a browser step; the deferred simulator and
-extension flows above run end to end.
-**What remains after founder action** Re-run those flows and record the captures.
-**Impact** FEATURE-BLOCKING (native surfaces cannot be exercised end to end)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
 ## [Routing] The zero-price OpenRouter router on paid plans
 
 **Why founder assistance is required**
 Whether a paying customer's prompt may reach an upstream that trains on it is a
 data-handling decision, not an engineering one.
-**Exact action**
-Decide one of: keep the privacy-safe default shipped on 2026-09-14 (an explicit
-pick of the zero-price router on any plan sends `data_collection: deny`, so
-training-permitted upstreams are excluded and the router may answer "no
-endpoints" when only those are online); allow training-permitted upstreams for
-explicit picks on paid plans; or remove the router from the paid-plan pickers.
-Also change the company OpenRouter account's privacy settings at
-openrouter.ai/settings/privacy if the first option should succeed more often.
+**Exact action** Decided 2026-09-15 (D-2026-09-15-06): the privacy-safe default stays on every plan. What stays with the founder: set the company OpenRouter privacy settings in its dashboard to match (no training-enabled upstreams, data collection denied).
 **Where** `packages/ai/model-registry/catalog/routing-policies.json`,
 `packages/ai/providers/openrouter/src/provider-routing.ts`,
 `docs/research/free-inference-tos-workbook-2026-09-01.md`, the OpenRouter dashboard.
 **Needed input** One sentence naming the option.
 **How to verify completion** A paid-plan pick of the free router answers, and the
 registry contract test still refuses `free_` slots on paid tiers.
-**What remains after founder action** Nothing for the default; a one-line policy
-and provider change for either alternative.
+**What remains after founder action** Nothing in code.
 **Impact** NON-BLOCKING (the picker entry works privacy-safe by default)
 **Status** DECISION REQUESTED
-
-## [Mobile QA] A native sign-in path for the QA account
-
-**Why founder assistance is required**
-The QA user signs in with Google only (no password, a real Gmail inbox nobody on
-the team reads), and the phone cannot mint the Clerk ticket the web and Chrome
-passes use. Every mobile Cloud flow (sync, projects, account rows, shared links)
-therefore stays unverified on the simulator, and setting a credential on an
-account the founder owns is the founder's call.
-**Exact action**
-Either sign in once on the booted iPhone 17 Pro simulator with the QA Google
-account when the mobile fix package lands, or give the QA user a password in the
-Clerk dashboard (Users, the QA user, Set password) and put it in
-`apps/web/.env.local` as `MOBILE_QA_PASSWORD` (gitignored; never in the repo).
-**Where** Clerk dashboard for the development instance; the simulator.
-**Needed input** One of the two actions above.
-**How to verify completion** The mobile Cloud sign-in screen accepts the account
-and the Settings rows resolve to the account's real values.
-**What remains after founder action** Run the mobile Cloud pass (sync, projects,
-account data) and record it in the release doc's verification matrix.
-**Impact** VERIFICATION-BLOCKING (mobile Cloud mode only; Local mode and every
-other client are unaffected)
-**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
 
 ## [Mobile] Enable the Native API on the Clerk development instance
 
@@ -772,58 +483,12 @@ verification matrix and the Screen Studio gate.
 **Impact** VERIFICATION-BLOCKING (page context in the side panel only)
 **Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
 
-## [Durability] Ship the world transport fix and end the two stranded runs
-
-**Why founder assistance is required**
-Deploying is gated on CI and on the founder's own approval, and cancelling a
-production workflow run mutates live state.
-**Exact action**
-
-1. Deploy main to production once CI is green on the same commit. The fix is the
-   `@workflow/world-vercel` override raised to `4.7.4` in the root `package.json`
-   plus the lockfile; nothing in the Vercel dashboard needs to change, because
-   `WORKFLOW_NODE_HTTP=1` is already set on production and preview and was only
-   ever being ignored.
-2. Cancel the two runs still stranded on the retired deployment
-   `dpl_BCUkf2a6vE4xsymKphDiAhDNQXcE`, which the queue redelivers every fifteen
-   minutes into an 800 s function each time:
-
-   ```
-   WORKFLOW_NODE_HTTP=1 npx workflow cancel wrun_01M29D4FY1WTT3T8FYR2T726JP \
-     --backend vercel --project agiworkforce --team siddharthanagula4 --env production
-   WORKFLOW_NODE_HTTP=1 npx workflow cancel wrun_01M27B9P5V0K81W755HBD4HVH7 \
-     --backend vercel --project agiworkforce --team siddharthanagula4 --env production
-   ```
-
-   The flag is required on the command too: without it the CLI's own world calls
-   hang and the command never returns.
-
-**Where** GitHub Actions or the Vercel project, then a terminal.
-**Needed input** One deploy approval and the two cancels.
-**How to verify completion** A signed-in AGI Work turn on the deployed build
-returns `X-AGI-Tool-Loop: durable`; the run lists as `completed` rather than
-`running`; and `/.well-known/workflow/v1/flow` stops answering 504 on the
-quarter hour. Before this change no production run had ever reached a terminal
-state other than `cancelled`.
-**What remains after founder action** Nothing in code. The transport fix, its
-regression guard, the run-age contract and the stalled-run UI are implemented
-and exercised on `:3100`; what cannot be observed from a checkout is a
-production run.
-**Impact** RELEASE-BLOCKING (AGI Work is not durable in production)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
-
 ## [Security] A Moonshot account string reached a pushed commit
 
 **Why founder assistance is required**
 Rotating a provider credential is an account action, and deciding whether the
 history needs rewriting is the repository owner's call.
-**Exact action**
-
-1. Decide whether to rotate `MOONSHOT_API_KEY`.
-2. Decide whether commit `a7bb63eb0` on
-   `fix/provider-outage-health-2026-09-12` should be rewritten, or whether
-   correcting it forward is enough.
-
+**Exact action** Decided 2026-09-15 (D-2026-09-15-13): correct forward, no history rewrite unless a real secret value turns up. What stays with the founder: rotate the Moonshot credential in its console if that is inexpensive.
 **Where** The Moonshot console, and this repository's history.
 **Needed input** One rotation decision and one history decision.
 **How to verify completion** `git grep` for the fragment finds nothing on any
@@ -884,64 +549,7 @@ verification path a missing file is indistinguishable from a tampered one to
 the user who is checking precisely because they do not trust the download)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Product] Decide which desktop app the public desktop page describes
-
-**Why founder assistance is required**
-Two desktop apps exist and both have release pipelines: the Electron shell
-"AGI Cloud" (`apps/desktop/electron`, tag scheme `v-cloud-desktop-*`, the app
-every workstream since 2026-09-05 has been building on, per the founder's
-"Electron is the desktop, leave Tauri alone" instruction) and the frozen Tauri
-app (`apps/desktop/src-tauri`, tag scheme `v-desktop-*`, last touched
-2026-09-09). The public page at `/desktop` still describes the Tauri app: its
-specification ledger names "Tauri 2, Rust backend", its computer-use copy
-describes the Tauri commands rather than the screen steps the Electron shell
-carries out, and the Linux artifacts it links are Tauri builds. Which app the public sees is a
-product decision, not an engineering one.
-**Exact action** Say one of: (a) the Electron app is the desktop, so `/desktop`
-and the release API's default should describe and serve it and the Tauri rows
-(engine, Linux AppImage) come off the page until the Electron shell has them; or (b) both stay public, with `/desktop` split into two
-named downloads and their real capability lists.
-**Where** A reply in this file's entry or in chat.
-**Needed input** The choice, and for (a) whether the Tauri Linux download stays
-linked anywhere.
-**How to verify completion** `/desktop` names one engine, lists only capabilities
-the linked build has, and the release-state guard and the surface page claim
-tests pass on the rewritten copy.
-**What remains after founder action** Engineering rewrites the page and the
-release API default in one commit. The Electron shell now carries out computer
-use itself, on macOS only, as cloud-to-device screen steps under a `computer.use`
-grant; Windows and Linux builds report it unsupported, so the rewritten page
-must say which platforms have it.
-**Impact** LAUNCH-BLOCKING for honesty (the page today promises a capability
-the app the team is shipping does not deliver)
-**Status** BLOCKED, FOUNDER DECISION REQUIRED
-
-## [Legal] Privacy and cookie policy revision dates after a material correction
-
-**Why founder assistance is required**
-Bumping a policy revision date re-asks every existing user for cookie consent,
-because `POLICY_LAST_UPDATED` feeds `COOKIE_NOTICE_VERSION` and
-`hasCurrentConsent` compares against it. Re-consenting the whole user base
-against leaving a stale date on a policy that materially changed is a
-counsel call, not an engineering one.
-**Exact action** Decide whether to bump `POLICY_LAST_UPDATED.privacy` and
-`POLICY_LAST_UPDATED.cookies`. Both policies were materially corrected on
-2026-09-12: the privacy page had denied that any per-organisation retention
-window is enforced when a nightly job does delete past it, understated the
-erasure table count, and called the sandbox reclaim daily when it is hourly;
-the cookie page listed ten device-storage entries when fourteen persisted
-stores exist, including one holding an unsent message the user typed.
-**Where** `apps/web/lib/legal-constants.ts`.
-**Needed input** One decision, and counsel's view on whether the corrections
-require re-consent.
-**How to verify completion** Either the dates are bumped and a returning user
-is re-asked once, or a dated note records the decision to leave them.
-**What remains after founder action** Nothing; the page corrections have
-shipped and are pinned by tests. The subprocessors and trust dates were bumped
-already, since those are display-only and the subprocessors page runs its
-objection window from the date it publishes.
-**Impact** NON-BLOCKING (the policies are now accurate; this is about notice)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
+Decided 2026-09-15 (D-2026-09-15-24): public CLI and Electron releases use the signed workflows and no install path is advertised while its assets or signatures are missing; engineering removes the dangling paths from the docs now.
 
 ## [QA] Re-grant Accessibility to the process that runs the agents
 
@@ -972,35 +580,6 @@ again.
 and every native-prompt proof)
 **Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
 
-## [Product] The CLI's OpenAI sign-in runs a ChatGPT-subscription OAuth flow
-
-**Why founder assistance is required**
-`agi login openai` authenticates "with OpenAI (ChatGPT Plus/Pro subscription)"
-by opening an OAuth authorization on OpenAI's server with a client id and a
-simplified-flow flag that belong to OpenAI's own Codex CLI, then asking the
-user to paste the callback code. Whether AGI Workforce may use another
-vendor's OAuth client to draw on a user's ChatGPT subscription is an
-authorization and terms question, and it sits against the product's own model
-(users pay AGI for a plan; a vendor API key is the optional "Your key" path).
-On 2026-09-14 the founder said VS Code and the CLI should run on the AGI Pro
-or Max subscription rather than ask for an OpenAI sign-in.
-**Exact action**
-Decide whether the ChatGPT-subscription flow stays. Recommendation: remove it,
-keep `agi login openai` as API-key entry for "Your key", and let `agi login`
-with no provider sign in to the AGI account. Until the decision, no client
-offer and no CLI copy leads to that flow (protocol-4 in the release doc).
-**Where** `apps/cli/src/oauth.rs` (the provider entry and the authorize URL),
-`apps/cli/src/auth.rs` (the ChatGPT client id and the subscription check).
-**Needed input** One decision: remove, or keep with the founder's own
-authorization on record.
-**How to verify completion** Either the two files no longer carry the ChatGPT
-client id and the subscription copy, and `agi login openai` asks for an API
-key, or a dated note records the authorization to keep the flow.
-**What remains after founder action** Nothing on removal beyond the commit;
-on keeping it, a release note stating the flow's basis.
-**Impact** NON-BLOCKING for the product; a terms exposure while it ships.
-**Status** BLOCKED, FOUNDER DECISION REQUIRED
-
 ## [Desktop QA] One click on the shell's run-commands consent for the QA folder
 
 **Why founder assistance is required**
@@ -1028,32 +607,3 @@ appears under On this device with the Desktop source.
 verification matrix for the coding surface's Local mode.
 **Impact** VERIFICATION-BLOCKING (the last leg of the Local composer proof)
 **Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
-
-## [Providers] A managed route answers with exhausted provider billing
-
-**Why founder assistance is required**
-On 2026-09-14 a direct turn on the managed route for one Anthropic model
-returned 503 with `provider_billing_exhausted` on the dev server: the
-provider account behind that route is out of credit. The route's health
-state had not been marked degraded, so the catalogue still offered the model
-and the panel showed nothing for it while Auto answered on another route.
-Topping up or changing the provider account is a billing action on the
-founder's accounts.
-**Exact action**
-Check the Anthropic account the managed cloud route uses (the key in the
-deployment's environment), top it up or replace the key, and confirm one
-cheap turn on that route answers. Then confirm the billing alert on that
-account reaches you before it runs dry again.
-**Where** The provider's billing console and the deployment's environment.
-**Needed input** The top-up, and a yes that the alert is set.
-**How to verify completion** A turn on that route returns 200 on the dev
-server and in production.
-**What remains after founder action** Nothing on the engineering side: F56
-landed in ff92e2e0d (the picker, the dispatcher and the hosted model list read
-one unfunded-credential fact, and a turn is steered to another transport of
-the same model for the cooldown window; the marks clear on their own once the
-route answers again). The first explicit turn after a quiet window still
-reaches the unfunded route once per window (F58 in the release doc).
-**Impact** USER-VISIBLE while it lasts (one provider family unusable on the
-plan), NON-BLOCKING for the release.
-**Status** BLOCKED, FOUNDER ACTION REQUIRED

@@ -150,11 +150,11 @@ export const SURFACES = [
   },
   {
     name: 'Desktop',
-    kind: 'Native app',
+    kind: 'macOS app',
     status: SURFACE_STATUS.desktop,
     state: surfaceState(SURFACE_STATUS.desktop),
     href: '/desktop',
-    blurb: `Local runtimes (${DESKTOP_LOCAL_RUNTIMES.label}), encrypted keys and scheduled work.`,
+    blurb: `Your account on your Mac: ${DESKTOP_LOCAL_RUNTIMES.label} models, approved folders and computer use.`,
   },
   {
     name: 'Mobile',

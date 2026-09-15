@@ -50,9 +50,9 @@ export const TOOL_APPROVAL_POLICY_OPTIONS: readonly ToolApprovalPolicyOption[] =
     policy: 'auto_approve_read_only',
     shortLabel: 'Auto',
     label: 'Run read-only actions without asking',
-    hint: 'Reads run on their own; writes still ask.',
+    hint: 'Reads, searches, page fetches and sandboxed code run on their own; writes still ask.',
     description:
-      'Actions that only read data inside AGI run on their own. Anything that writes, deletes, runs code, or can move data outside AGI, including web search and page fetches, still asks first, and a blocked tool stays blocked.',
+      'Actions that only read data, search the web, fetch a page, or run code in the AGI sandbox run on their own. Anything that writes, deletes, sends, buys, changes credentials, or runs on your own machine still asks, and so does every connector tool AGI does not know.',
   },
 ];
 

@@ -61,13 +61,13 @@ const MAX_OUTPUT_TOKENS = 256;
 const EXTRACTION_TIMEOUT_MS = 6000;
 
 /**
- * Default off. Same reader shape as `AGI_EVENT_ENABLED`: only an explicit
- * on-value engages it, so a typo or an empty deployment variable leaves the
- * pattern extractor in charge and spends nothing.
+ * On by default (D-2026-09-15-02); only an explicit off-value hands the turn
+ * back to the pattern extractor, so a typo or an empty deployment variable
+ * cannot switch model-assisted memory off by accident.
  */
 export function isModelMemoryExtractionEnabled(): boolean {
   const raw = process.env[MODEL_MEMORY_EXTRACTION_ENV]?.trim().toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'on';
+  return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
 }
 
 export interface ModelAutoMemoryExtractionInput {

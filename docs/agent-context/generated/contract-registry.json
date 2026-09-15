@@ -60,6 +60,7 @@
     "signaling",
     "subscription-entitlement",
     "suite-contracts",
+    "surface-binding",
     "tauri",
     "time-focus",
     "tool-approval-policy",

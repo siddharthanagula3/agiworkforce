@@ -47,6 +47,7 @@ import {
   CLERK_NATIVE_AUTH_OPTIONS,
   CLERK_PUBLISHABLE_KEY,
   setClerkTokenGetter,
+  getSurfaceToken,
 } from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
@@ -138,9 +139,9 @@ function ClerkTokenBridge() {
         startCloudSyncLoop();
       }
       setClerkTokenGetter(
-        () => getToken(),
+        () => getSurfaceToken(getToken),
         () => userId ?? null,
-        () => getToken({ skipCache: true }),
+        () => getSurfaceToken(getToken, { skipCache: true }),
       );
       setClerkUserId(userId);
       setCloudAccess(true);

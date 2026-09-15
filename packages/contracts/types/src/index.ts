@@ -28,6 +28,7 @@ export * from './voice';
 
 export * from './time-focus';
 export * from './tool-approval-policy';
+export * from './surface-binding';
 
 export * from './content-safety';
 

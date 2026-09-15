@@ -27,6 +27,8 @@ alter table public.user_memories
 
 drop index if exists public.ux_user_memories_user_import_key;
 
+drop index if exists public.ux_user_memories_id_transition;
+
 alter table public.user_memories
   drop column if exists import_key;
 

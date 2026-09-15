@@ -7,7 +7,7 @@ import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 export const metadata = buildMetadata({
   title: 'Provider-key configuration',
   description:
-    'Configure provider credentials for a self-hosted AGI deployment, Desktop, CLI, or VS Code without crossing trust boundaries.',
+    'Configure provider credentials for a self-hosted AGI deployment, the CLI, or VS Code without crossing trust boundaries.',
   path: '/docs/byok-env',
 });
 
@@ -31,8 +31,8 @@ export default function ByokEnvDocsPage() {
           <h1 className="agi-page-h1">Provider-key configuration</h1>
           <p className="agi-page-lede">
             Self-hosted AGI deployments read operator-managed provider keys from environment
-            variables. Desktop, CLI, and VS Code each provide a local credential flow for
-            user-managed BYOK. Hosted Web and Mobile do not expose BYOK key entry.
+            variables. The CLI and VS Code each provide a local credential flow for user-managed
+            BYOK. Hosted Web, Mobile and the Desktop app do not expose BYOK key entry.
           </p>
         </section>
 
@@ -106,14 +106,14 @@ GOOGLE_API_KEY=AIza...
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Desktop (encrypted local storage)</p>
+          <p className="agi-section-eyebrow">Desktop (your AGI account)</p>
           <div className="agi-callout">
-            <h2 className="agi-callout-h">Desktop writes to its encrypted local vault</h2>
+            <h2 className="agi-callout-h">Desktop takes no provider key</h2>
             <p className="agi-callout-p">
-              Tauri Desktop encrypts provider keys in local application storage and activates the
-              selected direct-provider route without sending the key to AGI managed cloud. The CLI
-              uses the operating system keyring; VS Code uses SecretStorage. These stores are
-              surface-local and do not sync provider keys between apps.
+              The macOS app runs on your AGI account and carries the hosted app, so it has nowhere
+              private to keep a provider key and does not ask for one. On the same machine the CLI
+              stores a key in the operating system keyring, and VS Code uses SecretStorage. These
+              stores are surface-local and do not sync provider keys between apps.
             </p>
           </div>
         </section>

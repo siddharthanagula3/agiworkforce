@@ -20,8 +20,6 @@ pub enum AuthEntry {
         refresh: String,
         access: String,
         expires: i64, // Unix timestamp milliseconds
-        #[serde(skip_serializing_if = "Option::is_none")]
-        account_id: Option<String>,
     },
     #[serde(rename = "api")]
     ApiKey { key: String },
@@ -105,15 +103,13 @@ impl fmt::Display for RedactedAuthEntry<'_> {
                 refresh,
                 access,
                 expires,
-                account_id,
             } => {
                 write!(
                     f,
-                    "OAuth(access={}, refresh={}, expires={}, account_id={})",
+                    "OAuth(access={}, refresh={}, expires={})",
                     redact_token(access),
                     redact_token(refresh),
                     expires,
-                    account_id.as_deref().unwrap_or("none"),
                 )
             }
             AuthEntry::ApiKey { key } => {
@@ -407,7 +403,6 @@ fn auth_status_from_store(
                     "agiworkforce" => "AGI Workforce OAuth".to_string(),
                     "managed_cloud" => "AGI Workforce OAuth".to_string(),
                     "copilot" => "Copilot OAuth".to_string(),
-                    "chatgpt" => "ChatGPT OAuth".to_string(),
                     _ => "oauth".to_string(),
                 };
 
@@ -469,9 +464,6 @@ fn auth_status_from_store(
 /// GitHub OAuth App client ID for Copilot device flow authentication.
 /// Public per OAuth spec (not a secret). Registered at github.com/settings/applications.
 const GITHUB_CLIENT_ID: &str = "Ov23li8tweQw6odWQebz";
-/// OpenAI/ChatGPT OAuth App client ID for device flow authentication.
-/// Public per OAuth spec (not a secret). Registered via OpenAI developer portal.
-const CHATGPT_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
 // HOST FOOTGUN NOTE: There are three different hosts in the AGI Workforce surface:
 //   - https://api.agiworkforce.com, device code login endpoints (oauth.rs device_code_login),
@@ -589,7 +581,6 @@ pub async fn login_copilot() -> Result<AuthEntry> {
                 refresh: access_token.clone(),
                 access: access_token,
                 expires: 0,
-                account_id: None,
             });
         }
 
@@ -604,258 +595,6 @@ pub async fn login_copilot() -> Result<AuthEntry> {
             None => bail!("Unexpected empty response from GitHub token endpoint"),
         }
     }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// ChatGPT Plus/Pro Login (Device Code Flow)
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct ChatGPTDeviceCodeResponse {
-    device_auth_id: String,
-    user_code: String,
-    #[serde(deserialize_with = "deserialize_u64_from_str_or_num")]
-    interval: u64,
-}
-
-/// The ChatGPT device-code endpoint returns `interval` as a JSON string
-/// (e.g. `"5"`) rather than a number, despite the OAuth device-flow spec
-/// (RFC 8628) defining it as an integer. Accept either representation.
-fn deserialize_u64_from_str_or_num<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error as _;
-
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StrOrNum {
-        Str(String),
-        Num(u64),
-    }
-
-    match StrOrNum::deserialize(deserializer)? {
-        StrOrNum::Str(s) => s
-            .parse::<u64>()
-            .map_err(|e| D::Error::custom(format!("invalid interval string {s:?}: {e}"))),
-        StrOrNum::Num(n) => Ok(n),
-    }
-}
-
-#[derive(Deserialize)]
-struct ChatGPTTokenPollResponse {
-    authorization_code: Option<String>,
-    code_verifier: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct ChatGPTOAuthTokenResponse {
-    access_token: String,
-    refresh_token: String,
-    id_token: Option<String>,
-    expires_in: i64,
-}
-
-pub async fn login_chatgpt() -> Result<AuthEntry> {
-    let client = reqwest::Client::new();
-
-    // Step 1: Request device code
-    let resp = client
-        .post("https://auth.openai.com/api/accounts/deviceauth/usercode")
-        .json(&serde_json::json!({ "client_id": CHATGPT_CLIENT_ID }))
-        .send()
-        .await
-        .context("Failed to request ChatGPT device code")?;
-
-    let device: ChatGPTDeviceCodeResponse = resp
-        .json()
-        .await
-        .context("Failed to parse ChatGPT device code response")?;
-
-    // Step 2: Show instructions to user
-    println!(
-        "\n  {}  {}\n  {}  {}\n",
-        "Go to:".bold(),
-        ts::link("https://auth.openai.com/codex/device"),
-        "Enter code:".bold(),
-        ts::success_header(&device.user_code),
-    );
-    println!("  {}", "Waiting for authorization...".dimmed());
-
-    // Step 3: Poll for authorization code
-    let poll_interval = std::cmp::max(device.interval, 5);
-    let mut attempts = 0;
-
-    let (authorization_code, code_verifier) = loop {
-        attempts += 1;
-        if attempts > MAX_POLL_ATTEMPTS {
-            bail!(
-                "Authorization timed out after {} attempts",
-                MAX_POLL_ATTEMPTS
-            );
-        }
-
-        tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
-
-        let resp = client
-            .post("https://auth.openai.com/api/accounts/deviceauth/token")
-            .json(&serde_json::json!({
-                "device_auth_id": device.device_auth_id,
-                "user_code": device.user_code,
-            }))
-            .send()
-            .await
-            .context("Failed to poll ChatGPT token endpoint")?;
-
-        let status = resp.status();
-
-        if status == reqwest::StatusCode::FORBIDDEN {
-            // 403 = authorization still pending
-            continue;
-        }
-
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            bail!("ChatGPT authorization failed (HTTP {}): {}", status, body);
-        }
-
-        let poll_resp: ChatGPTTokenPollResponse = resp
-            .json()
-            .await
-            .context("Failed to parse ChatGPT token poll response")?;
-
-        match (poll_resp.authorization_code, poll_resp.code_verifier) {
-            (Some(code), Some(verifier)) => break (code, verifier),
-            _ => bail!("ChatGPT token response missing authorization_code or code_verifier"),
-        }
-    };
-
-    // Step 4: Exchange for OAuth tokens
-    let resp = client
-        .post("https://auth.openai.com/oauth/token")
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("code", authorization_code.as_str()),
-            (
-                "redirect_uri",
-                "https://auth.openai.com/deviceauth/callback",
-            ),
-            ("client_id", CHATGPT_CLIENT_ID),
-            ("code_verifier", code_verifier.as_str()),
-        ])
-        .send()
-        .await
-        .context("Failed to exchange ChatGPT authorization code for tokens")?;
-
-    if !resp.status().is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        bail!(
-            "ChatGPT token exchange failed: {}. \
-             Please verify your ChatGPT Plus/Pro subscription is active at \
-             https://chatgpt.com/settings/subscription",
-            body,
-        );
-    }
-
-    let tokens: ChatGPTOAuthTokenResponse = resp
-        .json()
-        .await
-        .context("Failed to parse ChatGPT OAuth token response")?;
-
-    // Step 5: Extract account_id from id_token JWT
-    let account_id = tokens
-        .id_token
-        .as_deref()
-        .and_then(|jwt| extract_chatgpt_account_id(jwt).ok());
-
-    let now_ms = chrono::Utc::now().timestamp_millis();
-
-    Ok(AuthEntry::OAuth {
-        refresh: tokens.refresh_token,
-        access: tokens.access_token,
-        expires: now_ms + tokens.expires_in * 1000,
-        account_id,
-    })
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Token Refresh
-// ──────────────────────────────────────────────────────────────────────────────
-
-pub async fn refresh_chatgpt_token(entry: &AuthEntry) -> Result<AuthEntry> {
-    let refresh_token = match entry {
-        AuthEntry::OAuth { refresh, .. } => refresh,
-        AuthEntry::ApiKey { .. } => bail!("Cannot refresh an API key entry"),
-    };
-
-    let client = reqwest::Client::new();
-    let resp = match client
-        .post("https://auth.openai.com/oauth/token")
-        .form(&[
-            ("grant_type", "refresh_token"),
-            ("refresh_token", refresh_token.as_str()),
-            ("client_id", CHATGPT_CLIENT_ID),
-        ])
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            return Err(RefreshError::NetworkError(format!(
-                "Failed to connect to auth.openai.com: {}",
-                e
-            ))
-            .into());
-        }
-    };
-
-    let status = resp.status();
-
-    if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-
-        // 401 or body contains "invalid_grant" => refresh token expired/revoked
-        if status == reqwest::StatusCode::UNAUTHORIZED || body.contains("invalid_grant") {
-            return Err(RefreshError::InvalidGrant(
-                "Refresh token expired, please re-authenticate with /login".to_string(),
-            )
-            .into());
-        }
-
-        // 5xx => server error, transient
-        if status.is_server_error() {
-            return Err(RefreshError::ServerError(format!(
-                "ChatGPT auth server returned HTTP {}: {}",
-                status, body
-            ))
-            .into());
-        }
-
-        return Err(RefreshError::Unknown(format!(
-            "ChatGPT token refresh failed (HTTP {}): {}",
-            status, body
-        ))
-        .into());
-    }
-
-    let tokens: ChatGPTOAuthTokenResponse = resp
-        .json()
-        .await
-        .context("Failed to parse ChatGPT refresh response")?;
-
-    let account_id = tokens
-        .id_token
-        .as_deref()
-        .and_then(|jwt| extract_chatgpt_account_id(jwt).ok());
-
-    let now_ms = chrono::Utc::now().timestamp_millis();
-
-    Ok(AuthEntry::OAuth {
-        refresh: tokens.refresh_token,
-        access: tokens.access_token,
-        expires: now_ms + tokens.expires_in * 1000,
-        account_id,
-    })
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -944,39 +683,6 @@ pub async fn resolve_auth(
                 Some("https://api.githubcopilot.com/chat/completions".to_string()),
             )))
         }
-        "chatgpt" => {
-            let entry = match store.entries.get("chatgpt") {
-                Some(e) => e.clone(),
-                None => return Ok(None),
-            };
-
-            let now_ms = chrono::Utc::now().timestamp_millis();
-
-            // Check if token is expired (or within 30s of expiry) and refresh
-            let entry = match &entry {
-                AuthEntry::OAuth { expires, .. }
-                    if *expires > 0 && *expires < (now_ms + 30_000) =>
-                {
-                    let refreshed = refresh_chatgpt_token(&entry).await?;
-                    store
-                        .entries
-                        .insert("chatgpt".to_string(), refreshed.clone());
-                    store.save()?;
-                    refreshed
-                }
-                _ => entry,
-            };
-
-            let access_token = match &entry {
-                AuthEntry::OAuth { access, .. } => access.clone(),
-                AuthEntry::ApiKey { key } => key.clone(),
-            };
-
-            Ok(Some((
-                access_token,
-                Some("https://chatgpt.com/backend-api/codex/responses".to_string()),
-            )))
-        }
         // INTENTIONAL SEAM, managed AGI Workforce cloud auth is NOT wired here.
         // A future "agiworkforce" / "managed_cloud" arm is BLOCKED on:
         //   (a) a proven headless token-grant endpoint (device code or browser-link/poll),
@@ -994,11 +700,7 @@ pub async fn resolve_auth(
 // ──────────────────────────────────────────────────────────────────────────────
 
 pub async fn interactive_login() -> Result<()> {
-    let choices = &[
-        "GitHub Copilot (free with Copilot subscription)",
-        "ChatGPT Plus/Pro (free with subscription)",
-        "Cancel",
-    ];
+    let choices = &["GitHub Copilot (free with Copilot subscription)", "Cancel"];
 
     let selection = dialoguer::Select::new()
         .with_prompt("Choose a subscription to authenticate")
@@ -1012,11 +714,6 @@ pub async fn interactive_login() -> Result<()> {
             println!("\n{}", ts::accent("Connecting to GitHub Copilot..."));
             let entry = login_copilot().await?;
             ("copilot".to_string(), entry)
-        }
-        1 => {
-            println!("\n{}", ts::accent("Connecting to ChatGPT..."));
-            let entry = login_chatgpt().await?;
-            ("chatgpt".to_string(), entry)
         }
         _ => {
             println!("Cancelled.");
@@ -1207,20 +904,12 @@ pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()
             let entry = login_copilot().await?;
             save_auth_entry("copilot", entry)
         }
-        Some("chatgpt") => {
-            println!("\n{}", ts::accent("Connecting to ChatGPT..."));
-            let entry = login_chatgpt().await?;
-            save_auth_entry("chatgpt", entry)
-        }
         Some(pid) => {
-            if let Some(provider_cfg) = crate::oauth::get_provider(pid) {
-                let entry = crate::oauth::oauth_login(provider_cfg).await?;
-                save_auth_entry(pid, entry)
-            } else if is_api_key_provider(pid) {
+            if is_api_key_provider(pid) {
                 interactive_api_key_login_for_provider(pid).await
             } else {
                 bail!(
-                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot, chatgpt",
+                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot",
                     pid
                 )
             }
@@ -1321,20 +1010,6 @@ pub(crate) fn jwt_subject(jwt: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-fn extract_chatgpt_account_id(jwt: &str) -> Result<String> {
-    let parts: Vec<&str> = jwt.split('.').collect();
-    if parts.len() < 2 {
-        bail!("Invalid JWT: expected at least 2 parts separated by '.'");
-    }
-    let payload_bytes = base64url_decode(parts[1])?;
-    let payload: serde_json::Value =
-        serde_json::from_slice(&payload_bytes).context("Failed to parse JWT payload as JSON")?;
-    payload["chatgpt_account_id"]
-        .as_str()
-        .map(|s| s.to_string())
-        .context("JWT payload missing chatgpt_account_id field")
-}
-
 // ──────────────────────────────────────────────────────────────────────────────
 // Tests
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1342,26 +1017,6 @@ fn extract_chatgpt_account_id(jwt: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn chatgpt_device_code_response_accepts_string_interval() {
-        // Real auth.openai.com endpoint sends interval as a JSON string.
-        let json = r#"{"device_auth_id":"abc","user_code":"XYZ-123","interval":"5"}"#;
-        let parsed: ChatGPTDeviceCodeResponse =
-            serde_json::from_str(json).expect("should parse string interval");
-        assert_eq!(parsed.interval, 5);
-        assert_eq!(parsed.device_auth_id, "abc");
-        assert_eq!(parsed.user_code, "XYZ-123");
-    }
-
-    #[test]
-    fn chatgpt_device_code_response_accepts_numeric_interval() {
-        // Also accept a spec-compliant numeric interval, for robustness.
-        let json = r#"{"device_auth_id":"abc","user_code":"XYZ-123","interval":5}"#;
-        let parsed: ChatGPTDeviceCodeResponse =
-            serde_json::from_str(json).expect("should parse numeric interval");
-        assert_eq!(parsed.interval, 5);
-    }
 
     #[test]
     fn default_login_provider_targets_agiworkforce() {
@@ -1402,18 +1057,17 @@ mod tests {
         let now_ms = 1_700_000_000_000i64;
         let past_ms = now_ms - 300_000; // 5 minutes ago
         let store = make_store(vec![(
-            "chatgpt",
+            "copilot",
             AuthEntry::OAuth {
                 refresh: "refresh_tok_abc".into(),
                 access: "access_tok_abc".into(),
                 expires: past_ms,
-                account_id: None,
             },
         )]);
         let results = auth_status_from_store(&store, now_ms, true);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].status, "expired");
-        assert_eq!(results[0].auth_type, "ChatGPT OAuth");
+        assert_eq!(results[0].auth_type, "Copilot OAuth");
         // Should now show "expired 5m ago" instead of None
         assert!(results[0].expires_in.is_some());
         let display = results[0].expires_in.as_ref().unwrap();
@@ -1432,12 +1086,11 @@ mod tests {
         let now_ms = 1_700_000_000_000i64;
         let future_ms = now_ms + 9_000_000; // 2h 30m ahead
         let store = make_store(vec![(
-            "chatgpt",
+            "copilot",
             AuthEntry::OAuth {
                 refresh: "refresh_tok_abc".into(),
                 access: "access_tok_abc".into(),
                 expires: future_ms,
-                account_id: None,
             },
         )]);
         let results = auth_status_from_store(&store, now_ms, true);
@@ -1460,7 +1113,6 @@ mod tests {
                 refresh: "ghp_abcdef1234567890".into(),
                 access: "ghp_abcdef1234567890".into(),
                 expires: 0,
-                account_id: None,
             },
         )]);
         let now_ms = chrono::Utc::now().timestamp_millis();
@@ -1480,7 +1132,6 @@ mod tests {
                 refresh: "refresh".into(),
                 access: "access".into(),
                 expires: 0,
-                account_id: None,
             },
         )]);
         let now_ms = chrono::Utc::now().timestamp_millis();
@@ -1508,12 +1159,11 @@ mod tests {
     #[test]
     fn test_auth_status_no_refresh_token() {
         let store = make_store(vec![(
-            "chatgpt",
+            "copilot",
             AuthEntry::OAuth {
                 refresh: "".into(), // empty refresh token
                 access: "access_tok_abc".into(),
                 expires: 0,
-                account_id: None,
             },
         )]);
         let now_ms = chrono::Utc::now().timestamp_millis();
@@ -1539,23 +1189,6 @@ mod tests {
     }
 
     // ── JWT / base64url tests ──
-
-    #[test]
-    fn test_extract_chatgpt_account_id_valid() {
-        let payload_json = r#"{"chatgpt_account_id":"acct_123"}"#;
-        let payload_b64 = base64url_encode(payload_json.as_bytes());
-        let jwt = format!("eyJhbGciOiJub25lIn0.{}.signature", payload_b64);
-        let result = extract_chatgpt_account_id(&jwt).unwrap();
-        assert_eq!(result, "acct_123");
-    }
-
-    #[test]
-    fn test_extract_chatgpt_account_id_missing_field() {
-        let payload_json = r#"{"sub":"user_abc"}"#;
-        let payload_b64 = base64url_encode(payload_json.as_bytes());
-        let jwt = format!("eyJhbGciOiJub25lIn0.{}.sig", payload_b64);
-        assert!(extract_chatgpt_account_id(&jwt).is_err());
-    }
 
     #[test]
     fn test_base64url_decode_hello() {
@@ -1636,13 +1269,11 @@ mod tests {
             refresh: "refresh_token_abcdef1234567890".into(),
             access: "access_token_abcdef1234567890".into(),
             expires: 1700000000000,
-            account_id: Some("acct_123".into()),
         };
         let display = format!("{}", RedactedAuthEntry(&entry));
         // Must show redacted tokens
         assert!(display.contains("access_t...7890"));
         assert!(display.contains("refresh_...7890"));
-        assert!(display.contains("acct_123"));
         // Must NOT contain full tokens
         assert!(!display.contains("access_token_abcdef1234567890"));
         assert!(!display.contains("refresh_token_abcdef1234567890"));
@@ -1816,28 +1447,5 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
-    }
-
-    // ── Test helper: base64url encode (only needed by tests) ──
-
-    fn base64url_encode(input: &[u8]) -> String {
-        const CHARS: &[u8; 64] =
-            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-        let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-        for chunk in input.chunks(3) {
-            let b0 = chunk[0] as u32;
-            let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
-            let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
-            let triple = (b0 << 16) | (b1 << 8) | b2;
-            out.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
-            out.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
-            if chunk.len() > 1 {
-                out.push(CHARS[((triple >> 6) & 0x3F) as usize] as char);
-            }
-            if chunk.len() > 2 {
-                out.push(CHARS[(triple & 0x3F) as usize] as char);
-            }
-        }
-        out
     }
 }

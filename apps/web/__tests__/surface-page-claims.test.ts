@@ -119,27 +119,31 @@ describe('/business, enterprise admin controls are not underclaimed', () => {
 
 /**
  * What a workflow builds and what a user can download are different facts, and
- * this page is about the second one. An earlier pass read `release-desktop.yml`,
+ * this page is about the second one. An earlier pass read a release workflow,
  * saw macOS signed and notarized, and rewrote the page to list a notarized dmg
- * under "Published package assets". No macOS asset has ever been published: the
- * latest desktop release carries three Linux files and nothing else. Reasoning
- * from the pipeline to the shelf is the mistake these cases exist to stop.
+ * as published. No desktop installer has ever been published. Reasoning from
+ * the pipeline to the shelf is the mistake these cases exist to stop. Since
+ * D-2026-09-15-04 the desktop is the Electron app for macOS, so the page must
+ * also stop describing the Tauri build and its Linux packages.
  */
 describe('/desktop separates what is built from what is published', () => {
-  it('builds and notarizes macOS in the release workflow', () => {
+  it('signs and notarizes one macOS installer per architecture in the release workflow', () => {
     const workflow = readFileSync(
-      join(REPO_ROOT, '.github', 'workflows', 'release-desktop.yml'),
+      join(REPO_ROOT, '.github', 'workflows', 'release-desktop-cloud.yml'),
       'utf8',
     );
-    expect(workflow).toMatch(/--target universal-apple-darwin/u);
-    expect(workflow).toMatch(/build-macos:/u);
+    expect(workflow).toMatch(/electron-builder --mac --arm64 --x64/u);
+    expect(workflow).toMatch(/xcrun stapler validate/u);
   });
 
-  it('never lists a macOS asset as published', () => {
+  it('describes the Electron app and never the Tauri build or its Linux packages', () => {
     const page = collapsed('app/desktop/page.tsx');
+    expect(page).toMatch(/Electron shell/u);
     for (const [label, pattern] of [
-      ['a notarized dmg among the published assets', /Published package assets[^}]*macOS/iu],
-      ['macOS carried by the published package list', /Published package assets[^}]*\.dmg/iu],
+      ['the Tauri engine', /Tauri/u],
+      ['a Rust native app', /built in Rust/iu],
+      ['a Linux package', /AppImage|\.deb|\.rpm|Linux x64/u],
+      ['a published macOS asset', /Published package assets/u],
     ] as ReadonlyArray<readonly [string, RegExp]>) {
       expect(pattern.test(page), `page claims: ${label}`).toBe(false);
     }
@@ -148,6 +152,12 @@ describe('/desktop separates what is built from what is published', () => {
   it('says plainly that macOS is built but not yet published', () => {
     const page = collapsed('app/desktop/page.tsx');
     expect(page).toMatch(/not yet published/iu);
+  });
+
+  it('advertises computer use only as the macOS implementation supports it', () => {
+    const page = collapsed('app/desktop/page.tsx');
+    expect(page).toMatch(/Screen Recording and Accessibility/u);
+    expect(page).toMatch(/one approved step at a time/u);
   });
 
   it('keeps Windows stated as unpublished, which is still true', () => {
@@ -220,11 +230,11 @@ describe('/get-started, a bare agi login is the managed-cloud sign-in, not a BYO
 describe('/get-started, desktop availability matches the release pipeline', () => {
   it('requires Apple signing and notarization in the desktop release workflow', () => {
     const workflow = readFileSync(
-      join(REPO_ROOT, '.github', 'workflows', 'release-desktop.yml'),
+      join(REPO_ROOT, '.github', 'workflows', 'release-desktop-cloud.yml'),
       'utf8',
     );
     expect(workflow).toMatch(/build-macos:/u);
-    expect(workflow).toMatch(/Notarized/u);
+    expect(workflow).toMatch(/codesign --verify --deep --strict/u);
   });
 
   it('states the signature gate and keeps both unpublished platforms unpublished', () => {
@@ -247,13 +257,13 @@ describe('/get-started, desktop availability matches the release pipeline', () =
 });
 
 describe('/get-started, BYOK surfaces are stated with their release state', () => {
-  it('keeps VS Code out of the list of surfaces BYOK runs on today', () => {
+  it('keeps VS Code and Desktop out of the list of surfaces BYOK runs on today', () => {
     const page = collapsed('app/get-started/page.tsx');
     expect(
-      /Local and BYOK run on Desktop, the CLI and VS Code/u.test(page),
-      'page claims BYOK runs on VS Code today, which has no published release',
+      /Local and BYOK run on Desktop/u.test(page),
+      'page claims BYOK runs on Desktop, which runs on the AGI account and takes no key',
     ).toBe(false);
-    expect(page).toMatch(/Local and BYOK run on Desktop and the CLI today/u);
+    expect(page).toMatch(/Local runs on Desktop and the CLI today, BYOK on the CLI/u);
   });
 });
 
@@ -331,13 +341,11 @@ describe('/byok, VS Code is named with the release state it actually has', () =>
 
   it('states the released surfaces the way /help already does', () => {
     const page = collapsed('app/byok/page.tsx');
-    expect(page).toMatch(
-      /Desktop and the CLI have published releases\. The VS Code extension is coming soon/u,
-    );
-    expect(page).toMatch(/Released', value: 'Desktop and the CLI\. VS Code is coming soon\./u);
+    expect(page).toMatch(/The CLI has a published release\. The VS Code extension is coming soon/u);
+    expect(page).toMatch(/Released', value: 'The CLI\. VS Code is coming soon\./u);
     expect(page).toMatch(/Coming soon\. The extension hands the key/u);
     expect(collapsed('app/help/page.tsx')).toMatch(
-      /Desktop and the CLI have published releases; the VS Code extension is/u,
+      /The CLI has a published release; the VS Code extension is/u,
     );
   });
 
@@ -351,10 +359,7 @@ describe('/byok, VS Code is named with the release state it actually has', () =>
 });
 
 describe('/byok, custody names the store each runtime really writes to', () => {
-  it('reads three different stores out of the three runtimes', () => {
-    expect(
-      repoText('apps', 'desktop', 'src-tauri', 'src', 'sys', 'commands', 'mcp_oauth.rs'),
-    ).toMatch(/let encrypted = encrypt_credential\(Some\(encryption\.inner\(\)\), &key\)\?;/u);
+  it('reads two different stores out of the two runtimes that take a key', () => {
     expect(repoText('apps', 'cli', 'src', 'auth.rs')).toMatch(
       /const AUTH_KEYRING_SERVICE: &str = "com\.agiworkforce\.cli\.auth";/u,
     );
@@ -363,10 +368,14 @@ describe('/byok, custody names the store each runtime really writes to', () => {
     );
   });
 
-  it('says Desktop encrypts into its own database rather than a platform keychain', () => {
+  it('says Desktop takes no key, since the Electron shell has no private store for one', () => {
     const page = collapsed('app/byok/page.tsx');
-    expect(page).toMatch(/Desktop encrypts the key into its local settings database/u);
+    expect(page).toMatch(/Desktop runs on your AGI account and takes no provider key/u);
     expect(page).toMatch(/the CLI uses the OS keyring/u);
+    expect(
+      /Desktop encrypts the key into its local settings database/u.test(page),
+      'page still describes the Tauri key vault',
+    ).toBe(false);
   });
 
   it('never puts all three keys in a platform credential store', () => {
@@ -385,7 +394,7 @@ describe('/web, the browser surface has one route and it is managed cloud', () =
     const processor = fileText('app/api/llm/v1/chat/completions/lib/request-processor.ts');
     expect(processor).toMatch(/const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';/u);
     expect(fileText('lib/marketing-constants.ts')).toMatch(
-      /'Web, Mobile, Chrome, and the managed-only Electron shell do not accept provider keys\.'/u,
+      /'Web, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI account\.'/u,
     );
   });
 

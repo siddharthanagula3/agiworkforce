@@ -986,7 +986,6 @@ mod tests {
                 refresh: "refresh-token".to_string(),
                 access: "access-token".to_string(),
                 expires: 0,
-                account_id: None,
             },
         );
 

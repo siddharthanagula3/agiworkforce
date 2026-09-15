@@ -37,6 +37,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   { url: '/api/mission', why: 'retired, answers 410' },
   { url: '/api/usage/deduct', why: 'retired, answers 410' },
 
+  // Left over from the Tauri build, which is no longer the public desktop
+  // (D-2026-09-15-04); nothing calls it, and it leaves with that build.
+  { url: '/api/releases/latest/[platform]', why: 'Tauri latest-manifest lookup, no caller' },
+
   // Called by someone else's server, which is the whole point of the endpoint.
   { url: '/api/scim/v2/Groups', why: 'the customer identity provider calls this' },
   { url: '/api/scim/v2/Groups/[groupId]', why: 'the customer identity provider calls this' },

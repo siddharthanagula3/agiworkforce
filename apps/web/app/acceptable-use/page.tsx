@@ -55,7 +55,7 @@ const SUMMARY: readonly LedgerRow[] = [
   {
     label: 'Tools ask first',
     value:
-      'Your Tool Approvals setting decides, and it governs our own tools as well as connectors. On the default, every tool action waits for you. Choose to auto-approve read-only work and reads inside AGI run on their own, while anything that writes, runs code, or can move data outside AGI still asks, web search and page fetch included. See the full authority map on agent permissions.',
+      'Your Tool Approvals setting decides, and it governs our own tools as well as connectors. On the default, every tool action waits for you. Choose to auto-approve read-only work and reads inside AGI, web search, page fetch and code in the AGI sandbox run on their own, while anything that writes, deletes, sends, buys, changes credentials or runs on your own machine still asks, connectors we do not know included. See the full authority map on agent permissions.',
   },
   {
     label: 'A block is absolute',

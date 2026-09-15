@@ -284,7 +284,11 @@ describe('WEB-ROUTE-NEAR-SIMULTANEOUS-TURNS-SAME-01', () => {
       openRendezvous = resolve;
     });
 
-    mockGetClerkAuthUser.mockResolvedValue({ userId: USER_ID, email: 'u@example.com' });
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: USER_ID,
+      email: 'u@example.com',
+      boundSurface: 'web',
+    });
     mockGetSubscription.mockResolvedValue(makeSubscription());
     rlsMocks.getUserScopedDb.mockResolvedValue({
       db: makeLockingDb(advisoryKeys),
@@ -380,7 +384,11 @@ describe('WEB-ROUTE-NEAR-SIMULTANEOUS-TURNS-SAME-01', () => {
     vi.clearAllMocks();
     const advisoryKeys: string[] = [];
 
-    mockGetClerkAuthUser.mockResolvedValue({ userId: USER_ID, email: 'u@example.com' });
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: USER_ID,
+      email: 'u@example.com',
+      boundSurface: 'web',
+    });
     mockGetSubscription.mockResolvedValue(makeSubscription());
     rlsMocks.getUserScopedDb.mockResolvedValue({
       db: makeLockingDb(advisoryKeys),

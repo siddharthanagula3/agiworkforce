@@ -42,6 +42,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/app/i18n/index', () => ({
   SUPPORTED_LANGUAGES: [{ code: 'en' }, { code: 'fr' }, { code: 'es' }],
+  selectableLanguageOrDefault: (code: string) => (['en', 'es'].includes(code) ? code : 'en'),
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
@@ -149,13 +150,25 @@ describe('signing in', () => {
   it('adopts the language the account holds', async () => {
     session.isSignedIn = true;
     preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
+      namespace === 'appearance' ? {} : { locale: 'es' },
+    );
+
+    render(<CloudSettingsSync />);
+    await settle();
+
+    expect(language.changeLanguage).toHaveBeenCalledWith('es');
+  });
+
+  it('falls back to English when the account holds a language that is not offered', async () => {
+    session.isSignedIn = true;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
       namespace === 'appearance' ? {} : { locale: 'fr' },
     );
 
     render(<CloudSettingsSync />);
     await settle();
 
-    expect(language.changeLanguage).toHaveBeenCalledWith('fr');
+    expect(language.changeLanguage).toHaveBeenCalledWith('en');
   });
 
   it('leaves the language alone when the account already agrees with this device', async () => {

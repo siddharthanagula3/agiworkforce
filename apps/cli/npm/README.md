@@ -16,7 +16,7 @@ from source.
 | Bring your own API key                            | ❌           | ❌               | ❌         | ✅                         |
 | Run local LLMs (Ollama / LMStudio)                | ❌           | ❌               | ❌         | ✅                         |
 | Switch model mid-conversation                     | ❌           | Limited          | ❌         | ✅ Across providers        |
-| Subscription paths (Copilot / ChatGPT Plus)       | N/A          | ✅               | N/A        | ✅                         |
+| Subscription paths (Copilot)                      | N/A          | ✅               | N/A        | ✅                         |
 | MCP support                                       | ✅           | ✅               | ✅         | ✅                         |
 | TUI (Ratatui)                                     | ✅           | ✅               | ✅         | ✅                         |
 | Sandbox (Seatbelt / Bwrap / Landlock / Win Token) | ✅           | ✅               | ❌         | ✅                         |

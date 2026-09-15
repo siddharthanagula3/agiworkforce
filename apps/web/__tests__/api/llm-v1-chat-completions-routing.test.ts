@@ -262,7 +262,11 @@ describe('POST /api/llm/v1/chat/completions, canonical Pro-tier routing', () => 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'pro-user-id', email: 'pro@example.com' });
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: 'pro-user-id',
+      email: 'pro@example.com',
+      boundSurface: 'web',
+    });
 
     mockGetSubscription.mockResolvedValue(makeProSubscription());
     rlsMocks.getUserScopedDb.mockResolvedValue({

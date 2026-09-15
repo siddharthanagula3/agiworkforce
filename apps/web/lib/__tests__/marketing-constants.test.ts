@@ -14,14 +14,6 @@ import {
 
 const repoRoot = resolve(import.meta.dirname, '../../../..');
 
-function shippedVersion(manifestPath: string): string {
-  const manifest = JSON.parse(readFileSync(resolve(repoRoot, manifestPath), 'utf8')) as {
-    version?: string;
-  };
-  if (!manifest.version) throw new Error(`${manifestPath} declares no version`);
-  return manifest.version;
-}
-
 describe('marketing plan matrix', () => {
   it('uses the founder-approved shared catalog labels and prices', () => {
     expect(MARKETING_FEATURE_MATRIX.team).toEqual(
@@ -98,10 +90,10 @@ describe('model and provider counts', () => {
     expect(CATALOG_AS_OF).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it('derives the four verified Desktop local-runtime labels from the catalog', () => {
-    expect(DESKTOP_LOCAL_RUNTIMES.names).toEqual(['Ollama', 'LM Studio', 'llama.cpp', 'vLLM']);
-    expect(DESKTOP_LOCAL_RUNTIMES.label).toBe('Ollama, LM Studio, llama.cpp, and vLLM');
-    for (const providerId of ['ollama', 'lmstudio', 'llamacpp', 'vllm'] as const) {
+  it('derives the two Desktop local-runtime labels from the catalog', () => {
+    expect(DESKTOP_LOCAL_RUNTIMES.names).toEqual(['Ollama', 'LM Studio']);
+    expect(DESKTOP_LOCAL_RUNTIMES.label).toBe('Ollama and LM Studio');
+    for (const providerId of ['ollama', 'lmstudio'] as const) {
       expect(modelsCatalogJson.providers[providerId].label).toContain('(Local)');
     }
   });
@@ -113,9 +105,9 @@ describe('surface availability', () => {
     expect(statuses.every((status) => status === COMING_SOON_LABEL)).toBe(false);
   });
 
-  it('states the shipped surfaces as available, at the version each one actually ships', () => {
+  it('states the web surface as available and the unpublished desktop as coming soon', () => {
     expect(SURFACE_STATUS.web).not.toBe(COMING_SOON_LABEL);
-    expect(SURFACE_STATUS.desktop).toContain(shippedVersion('apps/desktop/package.json'));
+    expect(SURFACE_STATUS.desktop).toBe(COMING_SOON_LABEL);
   });
 
   // `publish = false` in apps/cli/Cargo.toml keeps the crate off crates.io. It

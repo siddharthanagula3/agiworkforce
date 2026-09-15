@@ -44,23 +44,32 @@ describe('classifyToolLoopInputs', () => {
     expect(result.shouldRun).toBe(true);
   });
 
-  it('still asks for web search when the account auto-approves read-only work', () => {
-    // The option's own copy: "Anything that ... can move data outside AGI,
-    // including web search and page fetches, still asks first." web_search and
-    // url_fetch are both declared createsEgressPath.
+  it('runs web search without asking when the account auto-approves read-only work', () => {
     const result = classifyToolLoopInputs([], [webSearchToolDef()], AUTO_APPROVE_READ_ONLY);
 
     expect(result.hasWebSearchTools).toBe(true);
-    expect(result.approvalMode).toBe('manual');
+    expect(result.approvalMode).toBe('auto');
   });
 
-  it('asks for sandbox execution and URL fetch under either policy', () => {
-    const tools = [...e2bExecutionToolDefs(), urlFetchToolDef()];
+  it('runs sandboxed code and a page fetch without asking once read-only work is auto-approved', () => {
+    const tools = [
+      ...e2bExecutionToolDefs().filter((tool) => tool.function.name === 'execute_code'),
+      urlFetchToolDef(),
+    ];
 
+    expect(classifyToolLoopInputs([], tools, AUTO_APPROVE_READ_ONLY)).toMatchObject({
+      hasExecutionTools: true,
+      hasUrlFetchTools: true,
+      shouldRun: true,
+      approvalMode: 'auto',
+    });
+    expect(classifyToolLoopInputs([], tools, ASK_EVERY_TIME).approvalMode).toBe('manual');
+  });
+
+  it('asks before the sandbox writes a file under either policy', () => {
     for (const policy of [ASK_EVERY_TIME, AUTO_APPROVE_READ_ONLY]) {
-      const result = classifyToolLoopInputs([], tools, policy);
+      const result = classifyToolLoopInputs([], e2bExecutionToolDefs(), policy);
       expect(result.hasExecutionTools).toBe(true);
-      expect(result.hasUrlFetchTools).toBe(true);
       expect(result.shouldRun).toBe(true);
       expect(result.approvalMode).toBe('manual');
     }

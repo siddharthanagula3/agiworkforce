@@ -12,7 +12,6 @@ pub mod agent;
 pub mod agent_events;
 pub mod agents;
 pub mod auth;
-pub mod auth_oauth;
 pub mod browser_bridge;
 pub mod claude_parity;
 pub mod cli_options;
@@ -859,9 +858,9 @@ enum Command {
         #[command(subcommand)]
         action: SyncSubcommand,
     },
-    /// Login to AGI cloud (or an LLM provider via OAuth).
+    /// Sign in to your AGI Workforce account, or store a provider API key.
     Login {
-        /// Provider to login with (agiworkforce, anthropic, openai, copilot, chatgpt). Omit for AGI Workforce.
+        /// Omit for your AGI Workforce account; name a provider (anthropic, openai, google, …) to enter its API key under Your Key; copilot uses its device flow.
         provider: Option<String>,
     },
     /// Logout from AGI cloud.

@@ -241,7 +241,7 @@ export default function ProvidersPage() {
               cards={[
                 {
                   title: 'Your key, your provider',
-                  body: `Desktop holds the encrypted key store and every local runtime URL (${SURFACE_STATUS.desktop}).`,
+                  body: 'The CLI keeps one keyring entry per provider and calls that provider directly.',
                   points: [
                     'Keys encrypted at rest on your machine',
                     'Traffic goes straight to the provider',

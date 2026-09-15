@@ -106,6 +106,7 @@ function auth(overrides: Partial<AuthGateSuccess> = {}): AuthGateSuccess {
     userId: 'user-pro',
     token: 'session-token',
     subscription: proSubscription,
+    boundSurface: 'web',
     ...overrides,
   };
 }

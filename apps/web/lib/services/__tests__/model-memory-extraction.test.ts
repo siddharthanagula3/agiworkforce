@@ -15,20 +15,17 @@ describe(MODEL_MEMORY_EXTRACTION_ENV, () => {
     delete process.env[MODEL_MEMORY_EXTRACTION_ENV];
   });
 
-  it('is off when unset', () => {
+  it('is on when unset', () => {
     delete process.env[MODEL_MEMORY_EXTRACTION_ENV];
+    expect(isModelMemoryExtractionEnabled()).toBe(true);
+  });
+
+  it.each(['0', 'false', 'off', 'no', ' OFF ', 'False'])('is off for %o', (value) => {
+    process.env[MODEL_MEMORY_EXTRACTION_ENV] = value;
     expect(isModelMemoryExtractionEnabled()).toBe(false);
   });
 
-  it.each(['', ' ', '0', 'false', 'off', 'no', 'yes', 'enabled', 'ON1'])(
-    'is off for %o',
-    (value) => {
-      process.env[MODEL_MEMORY_EXTRACTION_ENV] = value;
-      expect(isModelMemoryExtractionEnabled()).toBe(false);
-    },
-  );
-
-  it.each(['1', 'true', 'on', ' TRUE ', 'On'])('is on for %o', (value) => {
+  it.each(['', ' ', '1', 'true', 'on', 'yes', 'enabled', ' TRUE '])('is on for %o', (value) => {
     process.env[MODEL_MEMORY_EXTRACTION_ENV] = value;
     expect(isModelMemoryExtractionEnabled()).toBe(true);
   });
