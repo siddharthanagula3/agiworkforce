@@ -385,8 +385,10 @@ reach this Electron build was withdrawn: its clicks were swallowed by an
 unanswerable native sheet left open (and its window had been recreated
 several times), while desktop-code-2 drove chips, menu rows and Send through
 ordinary clicks over CDP on a clean instance. The chat page's model chip that
-would not leave Auto in that session stays open as a cheap retry on a clean
-instance, not as a server-side claim.
+would not leave Auto in that session was then driven by desktop-code-2 on
+the same page: the picker opens, a row moves it off Auto and the choice
+survives a reload, so it is not a defect; the popover is a dialog with no
+menu roles, and a driver selecting by menu roles finds nothing.
 
 ### Screen Studio flows
 
