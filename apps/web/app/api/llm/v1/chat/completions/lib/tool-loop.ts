@@ -38,6 +38,10 @@
  *   - Emits `x_tool_status` events (reused from Anthropic server-tool path) to drive
  *     `ToolTimeline` in the client.
  *   - Emits `x_tool_approval_request` events when a tool needs user approval.
+ *   - Emits one `x_tool_handoff` delta carrying OpenAI `tool_calls` and a
+ *     `tool_calls` finish when the model calls a tool the caller declared: the
+ *     caller runs its own loop for those, so the turn ends here instead of
+ *     being gated or executed on its behalf.
  *   - Emits `x_tool_result` events when a tool completes.
  *   - Emits the canonical `x_agent_event` envelope alongside those legacy
  *     fields while Web, Desktop Cloud, and Mobile Cloud migrate to one inline
@@ -223,6 +227,7 @@ import { executeSkillTool, SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import {
   isParallelSafeTool,
   isSensitiveSourceTool,
+  PLATFORM_TOOL_METADATA,
   toolAcceptsUntrustedContent,
   toolCreatesEgressPath,
 } from './tool-metadata';
@@ -848,6 +853,30 @@ function toolApprovalRequestEvent(
           },
         },
         index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+// The durable projection forwards a delta only on a key it does not treat as a
+// duplicate of a canonical event, so the calls ride under their own key beside
+// the OpenAI form the caller's parser reads.
+function toolHandoffEvent(calls: readonly PendingToolCall[], responseModel: string): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          tool_calls: calls.map((call, index) => ({
+            index,
+            id: call.id,
+            type: 'function',
+            function: { name: call.qualifiedName, arguments: JSON.stringify(call.args) },
+          })),
+          x_tool_handoff: { tool_call_ids: calls.map((call) => call.id) },
+        },
+        index: 0,
+        finish_reason: 'tool_calls',
       },
     ],
     model: responseModel,
@@ -2404,6 +2433,20 @@ export async function* runToolLoop(
     ...mcpTools.map((tool) => tool.qualifiedName),
     ...(processed.llmRequest.tools ?? []).map(functionToolName).filter(Boolean),
   ]);
+  // The CLI runs its own loop, so every tool it declares is its own even when
+  // a platform tool shares the name: its write_file is not the sandbox's. Any
+  // other caller keeps the hosted tools it names and owns only the rest.
+  const callerDeclaredTools = (processed.chatRequest?.tools ?? [])
+    .map(functionToolName)
+    .filter(Boolean);
+  const callerOwnedTools = new Set(
+    processed.chatSurface === 'cli'
+      ? callerDeclaredTools
+      : callerDeclaredTools.filter(
+          (name) =>
+            !PLATFORM_TOOL_METADATA[name] && !mcpTools.some((tool) => tool.qualifiedName === name),
+        ),
+  );
   const llmRequest = {
     ...processed.llmRequest,
     tools:
@@ -4238,6 +4281,24 @@ export async function* runToolLoop(
         releasedProviderLines = true;
         for (const held of heldProviderLines) yield* emitProviderLine(held);
         heldProviderLines.length = 0;
+      }
+
+      if (
+        finishReason === 'tool_calls' &&
+        pendingToolCalls.some((tc) => callerOwnedTools.has(tc.qualifiedName))
+      ) {
+        logger.info(
+          {
+            requestId: processed.requestId,
+            surface: processed.chatSurface,
+            step,
+            tools: pendingToolCalls.map((tc) => tc.qualifiedName),
+          },
+          '[tool-loop] returning tool calls to the caller that declared the tools',
+        );
+        yield encoder.encode(toolHandoffEvent(pendingToolCalls, responseModel));
+        yield* flushTerminal('tool-use');
+        return;
       }
 
       if (showWorkPhases) {
