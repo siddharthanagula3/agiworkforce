@@ -48,6 +48,7 @@ function fullLine(): Required<CollectedProviderLine> {
 function fullStepResult(): Required<ToolLoopProviderStepResult> {
   return {
     lines: [fullLine()],
+    providerError: { message: 'Provider stopped the stream.', code: 'stopped', retryable: false },
     finishReason: 'end_turn',
     pendingToolCalls: [{ id: 'call-1', qualifiedName: 'web_search', args: { query: 'weather' } }],
     textContent: 'The answer is here.',
