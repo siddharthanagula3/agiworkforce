@@ -11,7 +11,7 @@ import {
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
-import { ApiFreeCapacityError } from '@/services/apiErrors';
+import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import {
@@ -205,6 +205,7 @@ interface ExecutionState {
   streamingContent: string;
   streamingReasoning: string;
   error: string | null;
+  failureCode: { message: string; code: string } | null;
   paywallError: PaywallErrorState | null;
   providerConsentError: ProviderConsentErrorState | null;
   freeCapacityError: FreeCapacityErrorState | null;
@@ -869,14 +870,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   streamingContent: '',
   streamingReasoning: '',
   error: null,
+  failureCode: null,
   paywallError: null,
   providerConsentError: null,
   freeCapacityError: null,
   retryAttempts: {},
   isEditing: false,
 
-  clearError: () => set({ error: null, freeCapacityError: null }),
-  setSendError: (message: string) => set({ error: message, freeCapacityError: null }),
+  clearError: () => set({ error: null, failureCode: null, freeCapacityError: null }),
+  setSendError: (message: string) =>
+    set({ error: message, failureCode: null, freeCapacityError: null }),
   clearPaywallError: () => set({ paywallError: null }),
   setPaywallError: (paywallError) => set({ paywallError }),
   clearProviderConsentError: () => set({ providerConsentError: null }),
@@ -1452,7 +1455,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     lastDeltaTimes.set(conversationId, Date.now());
 
-    set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '', error: null });
+    set({
+      ...streamingFlags(),
+      streamingContent: '',
+      streamingReasoning: '',
+      error: null,
+      failureCode: null,
+    });
 
     try {
       if (shouldUseLocalRuntime) {
@@ -2140,21 +2149,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (__DEV__) {
               console.warn(`[chat-stream] onError ${error?.name}: ${error?.message}`);
             }
+            const failure =
+              error instanceof ApiHttpError
+                ? { message: error.message, code: error.code }
+                : { message: 'Something went wrong. Please try again.', code: null };
             if (agentActivity) {
               agentActivity = finishAgentActivityLocally(agentActivity, {
                 status: 'failed',
                 completedAtMs: Date.now(),
-                error: 'Something went wrong. Please try again.',
+                error: failure.message,
               });
             }
             turnResearch =
-              settleResearchRun(turnResearch, 'error', 'Something went wrong. Please try again.') ??
-              turnResearch;
+              settleResearchRun(turnResearch, 'error', failure.message) ?? turnResearch;
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
                     ...m,
-                    content: currentContent || 'Something went wrong. Please try again.',
+                    content: currentContent || failure.message,
                     isStreaming: false,
                     ...(agentActivity || cloudAgentRun || turnResearch
                       ? {
@@ -2179,7 +2191,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ...streamingFlags(),
               streamingContent: '',
               streamingReasoning: '',
-              error: 'Something went wrong. Please try again.',
+              error: failure.message,
+              failureCode: failure.code ? { message: failure.message, code: failure.code } : null,
             });
           },
         },
@@ -2428,7 +2441,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     streamingConversations.add(conversationId);
     cloudStreamingConversations.add(conversationId);
     lastDeltaTimes.set(conversationId, Date.now());
-    set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '', error: null });
+    set({
+      ...streamingFlags(),
+      streamingContent: '',
+      streamingReasoning: '',
+      error: null,
+      failureCode: null,
+    });
 
     const currentMsgs = msgStore.getState().messages[conversationId] ?? [];
     const currentMessage = currentMsgs.find((m) => m.id === assistantMessageId);

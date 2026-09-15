@@ -68,8 +68,10 @@ import { useThemeColors, radii } from '@/src/ui/theme';
 import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,
+  getMessageStreamErrorCode,
   getMessageStreamErrorMessage,
 } from '@/src/features/chat/utils/messageStreamError';
+import { offersModelSwitch } from '@/services/apiErrors';
 import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
 import type { ChatMessage, Artifact, ToolCall, ToolSearchResult } from '@/types/chat';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
@@ -111,6 +113,7 @@ interface MessageBubbleProps {
   onReject?: (approvalId: string, reason?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
+  onSwitchModel?: () => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
   onResolveToolApproval?: (
@@ -154,6 +157,7 @@ export const MessageBubble = memo(function MessageBubble({
   onReject,
   onDeleteMessage,
   onRetryMessage,
+  onSwitchModel,
   onEditMessage,
   onReaction,
   onResolveToolApproval,
@@ -941,6 +945,21 @@ export const MessageBubble = memo(function MessageBubble({
                       Retry
                     </Text>
                   </>
+                )}
+                {onSwitchModel && offersModelSwitch(getMessageStreamErrorCode(message)) && (
+                  <Pressable
+                    onPress={onSwitchModel}
+                    accessibilityRole="button"
+                    accessibilityLabel="Switch model"
+                    hitSlop={6}
+                    testID="stream-error-switch-model"
+                  >
+                    <Text
+                      style={{ fontSize: 12, fontWeight: '600', color: themeColors.agentError }}
+                    >
+                      Switch model
+                    </Text>
+                  </Pressable>
                 )}
               </Pressable>
             )}
