@@ -57,3 +57,14 @@ export function turnProducedNothing(signals: TurnOutputSignals): boolean {
     !signals.hasStreamError
   );
 }
+
+export function getMessageStreamErrorCode(
+  message: MessageStreamErrorLike | undefined | null,
+): string | undefined {
+  const streamError = (message?.metadata as StreamErrorLikeMetadata | undefined)?.streamError;
+  if (streamError && typeof streamError === 'object') {
+    const code = (streamError as { code?: unknown }).code;
+    if (typeof code === 'string' && code.length > 0) return code;
+  }
+  return undefined;
+}

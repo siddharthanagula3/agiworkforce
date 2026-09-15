@@ -37,6 +37,7 @@ export interface CombinedChatState {
   streamingContent: string;
   streamingReasoning: string;
   error: string | null;
+  failureCode: { message: string; code: string } | null;
   paywallError: PaywallErrorState | null;
   providerConsentError: ProviderConsentErrorState | null;
   freeCapacityError: FreeCapacityErrorState | null;
@@ -212,6 +213,7 @@ function buildCombinedState(
     streamingContent: exec.streamingContent,
     streamingReasoning: exec.streamingReasoning,
     error: exec.error,
+    failureCode: exec.failureCode,
     paywallError: exec.paywallError,
     providerConsentError: exec.providerConsentError,
     freeCapacityError: exec.freeCapacityError,
