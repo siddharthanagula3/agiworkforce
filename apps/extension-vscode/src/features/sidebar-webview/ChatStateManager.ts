@@ -175,7 +175,12 @@ export type WebviewToExtMessage =
   | {
       type: 'resolveTurnFailure';
       payload: {
-        kind: 'sign-in-provider' | 'sign-in-account' | 'upgrade-plan' | 'open-settings';
+        kind:
+          | 'sign-in-provider'
+          | 'sign-in-account'
+          | 'upgrade-plan'
+          | 'open-settings'
+          | 'switch-model';
         provider?: string;
       };
     }
@@ -969,6 +974,10 @@ export class ChatStateManager {
           await vscode.commands.executeCommand('agi-workforce.openUpgrade');
           break;
         }
+        if (msg.payload.kind === 'switch-model') {
+          await vscode.commands.executeCommand('agi-workforce.selectModel');
+          break;
+        }
         await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
         break;
       }
@@ -1344,6 +1353,7 @@ export class ChatStateManager {
     if (state.status !== 'signed-in') {
       const cli = await resolveAccountPresence(this._secrets, this._cliCapabilities);
       if (cli.source === 'cli' && cli.cli !== undefined) {
+        await recordAccountIdentityTier(this._context, cli.cli.tier);
         if (shouldPost()) {
           this._post({
             type: 'accountStatus',
@@ -2071,6 +2081,7 @@ export class ChatStateManager {
     if (currentTrustMode === undefined || currentTrustMode === 'local') {
       return this._providerBoundaryForModel(modelId);
     }
+    if (currentTrustMode === 'managed') return 'managed:managed_cloud';
     if (isAutoRoutingModel(modelId)) return `${currentTrustMode}:auto`;
     const { providerId, providerLabel } = getModelProviderInfo(modelId);
     return `${currentTrustMode}:${providerId ?? providerLabel}`;
