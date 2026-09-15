@@ -207,6 +207,31 @@ pub fn selection_provider_override<'a>(
     }
 }
 
+/// The provider a surface hands its session: an explicit choice wins, then the
+/// plan for a model the account runs, then the configured vendor for the
+/// configured model. Without the middle step every interactive surface handed
+/// the configured vendor to the route decision and asked for its key while the
+/// user was signed in.
+pub fn plan_first_provider_override(
+    account: &AccountRoute,
+    selected_model: &str,
+    configured_model: &str,
+    configured_provider: &str,
+    explicit_provider: Option<&str>,
+) -> Option<String> {
+    if let Some(provider) = explicit_provider
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(provider.to_string());
+    }
+    if account.runs_managed(selected_model) {
+        return Some(provider_name(&Provider::ManagedCloud).to_string());
+    }
+    selection_provider_override(selected_model, configured_model, configured_provider, None)
+        .map(str::to_string)
+}
+
 // ---------------------------------------------------------------------------
 // Route selection
 // ---------------------------------------------------------------------------
@@ -911,6 +936,56 @@ mod safe_provider_url_tests {
 mod tests {
     use super::*;
     use crate::models::{OllamaMode, Provider};
+
+    fn plan_model() -> String {
+        crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| {
+                model.cloud_eligible
+                    && crate::model_catalog::can_access_model_for_tier(
+                        &model.id,
+                        &crate::tier_cache::UserTier::Max,
+                    )
+            })
+            .map(|model| model.id.clone())
+            .expect("the bundled catalog carries a plan model")
+    }
+
+    #[test]
+    fn a_signed_in_account_runs_its_plan_model_before_the_configured_vendor() {
+        let model = plan_model();
+        let account = AccountRoute::with(true, Some(crate::tier_cache::UserTier::Max));
+        assert_eq!(
+            plan_first_provider_override(&account, &model, &model, "anthropic", None).as_deref(),
+            Some("managed_cloud")
+        );
+    }
+
+    #[test]
+    fn a_signed_out_account_keeps_the_configured_vendor_for_the_configured_model() {
+        let model = plan_model();
+        let account = AccountRoute::with(false, None);
+        assert_eq!(
+            plan_first_provider_override(&account, &model, &model, "anthropic", None).as_deref(),
+            Some("anthropic")
+        );
+        assert_eq!(
+            plan_first_provider_override(&account, &model, "other-model", "anthropic", None),
+            None
+        );
+    }
+
+    #[test]
+    fn an_explicit_provider_wins_over_the_plan() {
+        let model = plan_model();
+        let account = AccountRoute::with(true, Some(crate::tier_cache::UserTier::Max));
+        assert_eq!(
+            plan_first_provider_override(&account, &model, &model, "anthropic", Some("ollama"))
+                .as_deref(),
+            Some("ollama")
+        );
+    }
 
     // ── resolve_exec_model precedence: exec flag > top-level flag > config ──
 

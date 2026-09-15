@@ -3038,17 +3038,18 @@ pub async fn run_main() -> Result<()> {
                 // top-level --provider, then config. Without this, exec hardcoded
                 // None and a local/BYOK model (e.g. `exec --provider ollama`)
                 // silently fell back to the default provider (anthropic).
-                let exec_provider_override = provider.as_deref().or(cli.provider.as_deref());
+                let exec_provider_override = models::plan_first_provider_override(
+                    &models::AccountRoute::load(),
+                    &m,
+                    &app_config.default.model,
+                    &app_config.default.provider,
+                    provider.as_deref().or(cli.provider.as_deref()),
+                );
                 let mut session = agent::AgentSession::new_checked(
                     &m,
                     &sys_ctx,
                     None,
-                    models::selection_provider_override(
-                        &m,
-                        &app_config.default.model,
-                        &app_config.default.provider,
-                        exec_provider_override,
-                    ),
+                    exec_provider_override.as_deref(),
                 )?;
                 session.apply_ui_config(&app_config);
                 session.apply_tool_filters(
@@ -4827,12 +4828,14 @@ pub async fn run_oneshot(
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
 ) -> Result<()> {
-    let resolved_provider_override = models::selection_provider_override(
+    let resolved_provider_override = models::plan_first_provider_override(
+        &models::AccountRoute::load(),
         model,
         &config.default.model,
         &config.default.provider,
         provider_override,
     );
+    let resolved_provider_override = resolved_provider_override.as_deref();
     agent::AgentSession::prime_account_memory(model, resolved_provider_override).await;
     let mut session = agent::AgentSession::new_checked(
         model,

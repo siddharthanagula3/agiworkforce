@@ -54,12 +54,14 @@ pub async fn run_repl(
     agent_name: Option<String>,
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
-    let provider_override = crate::models::selection_provider_override(
+    let provider_override = crate::models::plan_first_provider_override(
+        &crate::models::AccountRoute::load(),
         model,
         &config.default.model,
         &config.default.provider,
         provider_override,
     );
+    let provider_override = provider_override.as_deref();
     let provider = crate::models::select_turn_route(
         config,
         &crate::models::AccountRoute::load(),
