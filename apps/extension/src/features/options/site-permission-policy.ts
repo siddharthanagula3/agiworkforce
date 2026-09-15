@@ -3,7 +3,7 @@ export const APPROVED_SITE_PROMPT_STORAGE_KEY = 'agi_cu_ask_before_acting';
 export type ApprovedSiteDefault = 'ask' | 'run';
 
 export const UNAPPROVED_SITE_DEFAULT_HINT =
-  'Sites you have not approved are blocked: AGI runs no browser automation there and sends none of their page text to AGI Managed Cloud. Approving a site below is the only way to override that default.';
+  'Sites you have not approved are blocked: AGI runs no browser automation, in-page assistant or page tools there. Approving a site below is the only way to override that default. Attaching a page to a side-panel message is a separate, explicit action that works on any ordinary site.';
 
 export function readApprovedSiteDefault(stored: unknown): ApprovedSiteDefault {
   return stored === false ? 'run' : 'ask';

@@ -12,13 +12,29 @@ type SpeechRecognitionCtor = new () => {
   maxAlternatives: number;
   onstart: (() => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
   onresult: ((event: { results: Array<Array<{ transcript: string }>> }) => void) | null;
   start(): void;
   stop(): void;
 };
 
-/** What the mic button says it will transcribe, so the choice is visible. */
+const VOICE_ERROR_MESSAGES: Record<string, string> = {
+  'not-allowed':
+    'Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again.',
+  'service-not-allowed': 'Voice recognition is not available in this browser profile.',
+  'audio-capture': 'No microphone was found.',
+  'no-speech': 'No speech was heard. Try again and speak after the button starts pulsing.',
+  network: 'Voice recognition needs a network connection.',
+  aborted: '',
+};
+
+export function describeVoiceError(code: string | undefined): string {
+  if (code === undefined) return 'Voice input failed. Try again.';
+  const known = VOICE_ERROR_MESSAGES[code];
+  if (known !== undefined) return known;
+  return 'Voice input failed. Try again.';
+}
+
 export function micTooltip(language: string | null): string {
   return language ? `Voice input · ${languageLabel(language)}` : 'Voice input';
 }
@@ -27,6 +43,7 @@ export function setupVoiceInput(
   micBtn: HTMLButtonElement,
   inputEl: HTMLTextAreaElement,
   autoResize: (el: HTMLTextAreaElement) => void,
+  onError: (message: string) => void = () => {},
 ): void {
   const w = window as unknown as Record<string, unknown>;
   const SpeechRecognitionCtor: SpeechRecognitionCtor | undefined =
@@ -34,11 +51,12 @@ export function setupVoiceInput(
     (w['webkitSpeechRecognition'] as SpeechRecognitionCtor | undefined);
 
   if (!SpeechRecognitionCtor) {
-    micBtn.title = 'Voice input not supported in this browser';
-    micBtn.style.opacity = '0.4';
-    micBtn.style.cursor = 'not-allowed';
+    micBtn.title = 'Voice input is not supported in this browser';
+    micBtn.disabled = true;
+    micBtn.setAttribute('aria-disabled', 'true');
     return;
   }
+  micBtn.title = micTooltip(null);
 
   let recognition: InstanceType<SpeechRecognitionCtor> | null = null;
   let listening = false;
@@ -61,8 +79,6 @@ export function setupVoiceInput(
     }
 
     recognition = new SpeechRecognitionCtor();
-    // Left at the browser's own default when this profile names no language,
-    // rather than pinning a locale the user never chose.
     if (language) recognition.lang = language;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
@@ -83,8 +99,9 @@ export function setupVoiceInput(
       }
     };
 
-    recognition.onerror = () => {
-      /* ignore */
+    recognition.onerror = (event) => {
+      const message = describeVoiceError(event?.error);
+      if (message) onError(message);
     };
 
     recognition.onend = () => {

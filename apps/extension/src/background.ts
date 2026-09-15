@@ -7,7 +7,7 @@ import type {
   InPagePromptResponse,
   ScheduledTask,
 } from './types';
-import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import { logger, originOfUrl, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
 import { timingSafeEqual } from '@agiworkforce/utils/crypto';
@@ -48,6 +48,7 @@ import {
 import {
   deliverPageCapture,
   pageCaptureFailureMessage,
+  PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE,
   PAGE_CAPTURE_UNAVAILABLE_MESSAGE,
   PAGE_CAPTURE_UNDELIVERED_TITLE,
 } from './features/background/page-capture';
@@ -83,6 +84,7 @@ import {
   type MemoryWriteResult,
 } from './background/memory-bridge';
 import { runAgentLoop } from './features/computer-use/agentLoop';
+import { ensureOnDetachListener } from './features/computer-use/cdpDriver';
 import {
   ComputerUseRunCoordinator,
   ComputerUseStartCoordinator,
@@ -126,6 +128,11 @@ import {
   type ChromeManagedChatResult,
 } from './features/cloud-bridge/managedChatHandler';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
+import {
+  isPermanentNativeDisconnect,
+  nativeReconnectDelayMs,
+  NATIVE_RECONNECT_MAX_ATTEMPTS,
+} from './features/native-bridge/reconnect';
 import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   BROWSER_COMMAND_POLL_WINDOW_MS,
@@ -190,8 +197,6 @@ interface BackgroundState {
   connectionStatus: ConnectionStatus;
   lastNativeError: string | null;
   rateLimiter: RateLimiter;
-  messageQueue: ExtensionMessage[];
-  isProcessingQueue: boolean;
 }
 
 interface NativeMessageEnvelope {
@@ -214,8 +219,6 @@ const state: BackgroundState = {
   connectionStatus: 'disconnected',
   lastNativeError: null,
   rateLimiter: new RateLimiter(120, 500),
-  messageQueue: [],
-  isProcessingQueue: false,
 };
 
 interface ActiveChatStream {
@@ -576,22 +579,11 @@ const webmcpToolsByTab = new Map<
   }
 >();
 const webmcpNavigationGenerationByTab = new Map<number, number>();
-const nlwebByTab = new Map<
-  number,
-  {
-    nlweb: import('./nlweb').NLWebDetectionResult;
-    url: string;
-    timestamp: number;
-  }
->();
 
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
 const CONTENT_SCRIPT_FORWARD_TIMEOUT_MS = 30000;
 const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
-const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
-const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
-const NATIVE_RECONNECT_MAX_ATTEMPTS = 8;
 const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
 const TAB_GROUP_NAME = 'AGI Workforce';
 
@@ -657,6 +649,48 @@ function setNativeSessionSecret(hex: string | undefined): void {
   nativeSessionSecret = bytes.buffer;
 }
 
+const NATIVE_RECONNECT_GAVE_UP_KEY = 'agi_native_reconnect_gave_up';
+const DESKTOP_PAIRED_KEY = 'connectedToDesktop';
+
+/**
+ * Held in session storage rather than a worker-local flag: MV3 restarts the
+ * worker freely, and a fresh one used to retry a host that had already been
+ * declared permanently unavailable earlier in the same browser session.
+ */
+const nativeReconnectGaveUpRestored: Promise<void> = chrome.storage.session
+  .get(NATIVE_RECONNECT_GAVE_UP_KEY)
+  .then((stored) => {
+    if (stored[NATIVE_RECONNECT_GAVE_UP_KEY] === true) _bgCtx.nativeReconnectGaveUp = true;
+  })
+  .catch((error: unknown) => {
+    logger.warn('Failed to restore the native reconnect state', error);
+  });
+
+function setNativeReconnectGaveUp(gaveUp: boolean): void {
+  _bgCtx.nativeReconnectGaveUp = gaveUp;
+  void chrome.storage.session
+    .set({ [NATIVE_RECONNECT_GAVE_UP_KEY]: gaveUp })
+    .catch((error: unknown) => {
+      logger.warn('Failed to persist the native reconnect state', error);
+    });
+}
+
+function setDesktopPaired(paired: boolean): void {
+  void storageUtils.setItem(DESKTOP_PAIRED_KEY, paired);
+}
+
+/**
+ * A user who has never paired AGI Desktop has no native host to reach, so an
+ * automatic connectNative on every worker start only produced a failed connect
+ * and a warning. Pairing, manual reconnect and any request that needs the host
+ * still connect directly.
+ */
+async function shouldAutoConnectToDesktop(): Promise<boolean> {
+  await nativeReconnectGaveUpRestored;
+  if (_bgCtx.nativeReconnectGaveUp) return false;
+  return (await storageUtils.getItem<boolean>(DESKTOP_PAIRED_KEY, false)) === true;
+}
+
 function clearNativeReconnectTimer(): void {
   if (_bgCtx.nativeReconnectTimer) {
     clearTimeout(_bgCtx.nativeReconnectTimer);
@@ -666,7 +700,7 @@ function clearNativeReconnectTimer(): void {
 
 function resetNativeReconnectState(): void {
   _bgCtx.nativeReconnectAttempt = 0;
-  _bgCtx.nativeReconnectGaveUp = false;
+  setNativeReconnectGaveUp(false);
   clearNativeReconnectTimer();
 }
 
@@ -707,18 +741,14 @@ function scheduleNativeReconnect(trigger: string): void {
     NATIVE_RECONNECT_MAX_ATTEMPTS,
   );
 
-  if (_bgCtx.nativeReconnectAttempt >= NATIVE_RECONNECT_MAX_ATTEMPTS) {
+  const delay = nativeReconnectDelayMs(_bgCtx.nativeReconnectAttempt);
+  if (delay === null) {
     logger.warn('Max native reconnect attempts reached; giving up until user action', { trigger });
-    _bgCtx.nativeReconnectGaveUp = true;
+    setNativeReconnectGaveUp(true);
     state.connectionStatus = 'disconnected';
     void notifyConnectionStatusChange();
     return;
   }
-
-  const delay = Math.min(
-    NATIVE_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(_bgCtx.nativeReconnectAttempt - 1, 0),
-    NATIVE_RECONNECT_MAX_DELAY_MS,
-  );
 
   logger.info('Scheduling native reconnect', {
     trigger,
@@ -766,9 +796,11 @@ function initialize(): void {
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
     logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
   });
-  setupContextMenu();
-  connectToNativeHost();
-  checkDesktopConnection();
+  void shouldAutoConnectToDesktop().then((autoConnect) => {
+    if (!autoConnect) return;
+    connectToNativeHost();
+    void checkDesktopConnection();
+  });
   void restoreScheduledTaskAlarms()
     .then(recoverScheduledTaskRuns)
     .catch((error) => logger.warn('Failed to restore scheduled Managed Cloud work', error));
@@ -860,23 +892,11 @@ function connectToNativeHost(): void {
         state.isNativeConnected = true;
         void pollDesktopBrowserCommands();
         _bgCtx.nativeReconnectAttempt = 0;
-        _bgCtx.nativeReconnectGaveUp = false;
+        setNativeReconnectGaveUp(false);
+        setDesktopPaired(true);
         clearNativeReconnectTimer();
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
-
-        if (state.messageQueue.length > 0 && !state.isProcessingQueue) {
-          state.isProcessingQueue = true;
-          const queued = state.messageQueue.splice(0);
-          for (const msg of queued) {
-            try {
-              await handleMessage(msg, {} as chrome.runtime.MessageSender, () => {});
-            } catch (err) {
-              logger.debug('Failed to drain queued message during reconnect', err);
-            }
-          }
-          state.isProcessingQueue = false;
-        }
       } catch (error) {
         logger.warn('Native host handshake failed', error);
         try {
@@ -999,6 +1019,25 @@ function currentWebMCPNavigationGeneration(tabId: number): number {
   return webmcpNavigationGenerationByTab.get(tabId) ?? 0;
 }
 
+/**
+ * Records the tab as watched so the navigation listeners keep invalidating it
+ * while a discovery is in flight. Without the entry the tab-event early-out
+ * would skip the generation bump that makes a stale discovery detectable.
+ */
+function watchWebMCPNavigation(tabId: number): number {
+  const generation = currentWebMCPNavigationGeneration(tabId);
+  webmcpNavigationGenerationByTab.set(tabId, generation);
+  return generation;
+}
+
+function hasWatchedTabWork(): boolean {
+  return (
+    computerUseRuns.getActive() !== null ||
+    webmcpToolsByTab.size > 0 ||
+    webmcpNavigationGenerationByTab.size > 0
+  );
+}
+
 function sendAuthenticatedWebMCPNativeUpdate(
   tabId: number,
   normalized: NormalizedWebMCPToolsUpdate,
@@ -1107,21 +1146,23 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         delete body['mac'];
         delete body['timestamp'];
         delete body['session_secret'];
-        void computeEnvelopeMac(message.id, respTs, body).then((expected) => {
-          if (expected === null || !timingSafeEqual(expected, respMac)) {
-            logger.warn(
-              '[native-mac] Response MAC mismatch, rejecting (potential shuffle attack)',
-              { id: message.id },
-            );
-            reject(new Error('Native response MAC mismatch'));
-            return;
-          }
-          if (message.success === false) {
-            reject(new Error(message.error ?? 'Native request failed'));
-          } else {
-            resolve(message as unknown as ExtensionResponse);
-          }
-        });
+        void computeEnvelopeMac(message.id, respTs, body)
+          .then((expected) => {
+            if (expected === null || !timingSafeEqual(expected, respMac)) {
+              logger.warn(
+                '[native-mac] Response MAC mismatch, rejecting (potential shuffle attack)',
+                { id: message.id },
+              );
+              reject(new Error('Native response MAC mismatch'));
+              return;
+            }
+            if (message.success === false) {
+              reject(new Error(message.error ?? 'Native request failed'));
+            } else {
+              resolve(message as unknown as ExtensionResponse);
+            }
+          })
+          .catch(reject);
         return;
       }
 
@@ -1160,14 +1201,10 @@ function handleNativeDisconnect(): void {
     return;
   }
 
-  const isPermanentError =
-    error.includes('Native host not found') ||
-    error.includes('Specified native messaging host not found') ||
-    error.includes('Access to the specified native messaging host is forbidden') ||
-    error.includes('not allowed');
-  if (isPermanentError) {
+  if (isPermanentNativeDisconnect(error)) {
     logger.warn('Native host permanently unavailable; halting reconnect', { error });
-    _bgCtx.nativeReconnectGaveUp = true;
+    setNativeReconnectGaveUp(true);
+    setDesktopPaired(false);
     return;
   }
 
@@ -1177,7 +1214,6 @@ function handleNativeDisconnect(): void {
 function showNotification(
   title: string,
   message: string,
-  tabId?: number,
   conversationId?: string,
   conversationOwner?: ManagedCloudOwner,
 ): void {
@@ -1197,9 +1233,6 @@ function showNotification(
       }
     },
   );
-  if (tabId) {
-    chrome.storage.session.set({ [`agi_notif_${notifId}`]: tabId }).catch(() => {});
-  }
   if (conversationId && conversationOwner) {
     void linkNotificationToConversation(notifId, conversationOwner, conversationId);
   }
@@ -1350,7 +1383,6 @@ async function handleReplayShortcut(
         showNotification(
           'Shortcut Replayed',
           snippet ? `"${shortcut.name}": ${snippet}` : `"${shortcut.name}" finished`,
-          undefined,
           deliveredAnswer ? delivery?.conversationId : undefined,
           deliveredOwner,
         );
@@ -1908,7 +1940,6 @@ async function notifyScheduledTaskCompleted(notice: ScheduledTaskCompletionNotic
         showNotification(
           'Task Completed',
           snippet ? `"${taskName}": ${snippet}` : `Scheduled task "${taskName}" finished`,
-          undefined,
           answer ? conversationId : undefined,
           answer ? conversationOwner : undefined,
         );
@@ -2186,8 +2217,8 @@ async function runMaintenancePass(): Promise<boolean> {
     outstanding = true;
   }
 
-  if (!_bgCtx.nativeReconnectGaveUp && !state.isNativeConnected) {
-    void connectToNativeHost();
+  if (!state.isNativeConnected && (await shouldAutoConnectToDesktop())) {
+    connectToNativeHost();
     outstanding = true;
   }
 
@@ -2757,7 +2788,7 @@ function handleMessage(
       void siteAllowlistReady.then(() => {
         if (!isAllowlistedSender(sender, msg.type)) {
           logger.warn('Rejected message from non-allowlisted sender', {
-            url: sender?.tab?.url,
+            origin: originOfUrl(sender?.tab?.url),
             type: msg.type,
           });
           sendResponse({ success: false, error: SITE_NOT_APPROVED_MESSAGE } as ExtensionResponse);
@@ -2768,7 +2799,7 @@ function handleMessage(
       return true;
     }
     logger.warn('Rejected message from non-allowlisted sender', {
-      url: sender?.tab?.url,
+      origin: originOfUrl(sender?.tab?.url),
       type: msg.type,
     });
     sendResponse({
@@ -2807,7 +2838,7 @@ function dispatchAuthorizedMessage(
       )
     ) {
       logger.warn('Rejected extension-page-only message from non-UI sender', {
-        url: sender?.tab?.url,
+        origin: originOfUrl(sender?.tab?.url),
         type: msg.type,
       });
       sendResponse({
@@ -2968,7 +2999,7 @@ async function handleMessageAsync(
   message: ExtensionMessage,
   sender: chrome.runtime.MessageSender,
 ): Promise<ExtensionResponse> {
-  logger.debug('Processing message', { type: message.type, sender: sender.url });
+  logger.debug('Processing message', { type: message.type, sender: originOfUrl(sender.url) });
 
   const tabId = resolveMessageTargetTabId(
     {
@@ -3028,7 +3059,8 @@ async function handleMessageAsync(
       if (
         !state.isNativeConnected &&
         !_bgCtx.nativeHandshakeInFlight &&
-        !_bgCtx.nativeReconnectGaveUp
+        !_bgCtx.nativeReconnectGaveUp &&
+        (await shouldAutoConnectToDesktop())
       ) {
         connectToNativeHost();
       }
@@ -3388,30 +3420,6 @@ async function handleMessageAsync(
       }
     }
 
-    case 'SET_COOKIE': {
-      const cookieMsg = message as import('./types').SetCookieMessage;
-      return handleSetCookie(cookieMsg);
-    }
-
-    case 'GET_ALL_TABS': {
-      return handleGetAllTabs();
-    }
-
-    case 'CREATE_TAB': {
-      const tabMsg = message as import('./types').CreateTabMessage;
-      return handleCreateTab(tabMsg);
-    }
-
-    case 'CLOSE_TAB': {
-      const tabMsg = message as import('./types').CloseTabMessage;
-      return handleCloseTab(tabMsg);
-    }
-
-    case 'SWITCH_TAB': {
-      const tabMsg = message as import('./types').SwitchTabMessage;
-      return handleSwitchTab(tabMsg);
-    }
-
     case 'GET_ACCESSIBILITY_TREE': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -3478,7 +3486,7 @@ async function handleMessageAsync(
       if (!resolvedTabId) {
         return { success: false, error: 'No tab ID' } as ExtensionResponse;
       }
-      const navigationGeneration = currentWebMCPNavigationGeneration(resolvedTabId);
+      const navigationGeneration = watchWebMCPNavigation(resolvedTabId);
       const targetBefore = await chrome.tabs.get(resolvedTabId);
       const targetUrl = targetBefore.url;
       const response = await forwardToContentScript(resolvedTabId, message);
@@ -3550,33 +3558,6 @@ async function handleMessageAsync(
       }
       if (!publishNormalizedWebMCPToolsUpdate(toolsTabId, normalized, navigationGeneration)) {
         return { success: false, error: 'WebMCP page changed during publication' };
-      }
-      return { success: true } as ExtensionResponse;
-    }
-
-    case 'NLWEB_DETECTED': {
-      const nlwebMsg = message as import('./types').NLWebDetectedMessage;
-      const nlwebTabId = sender?.tab?.id;
-      if (nlwebTabId) {
-        nlwebByTab.set(nlwebTabId, {
-          nlweb: nlwebMsg.nlweb,
-          url: nlwebMsg.url || '',
-          timestamp: Date.now(),
-        });
-        logger.info('NLWeb detected on tab', {
-          tabId: nlwebTabId,
-          url: nlwebMsg.url,
-          endpoints: nlwebMsg.nlweb.endpoints.length,
-        });
-        chrome.runtime
-          .sendMessage({
-            type: 'NLWEB_DETECTED',
-            nlweb: nlwebMsg.nlweb,
-            url: nlwebMsg.url,
-          })
-          .catch(() => {
-            // Popup / side panel may not be open; ignore
-          });
       }
       return { success: true } as ExtensionResponse;
     }
@@ -3800,73 +3781,6 @@ async function handleMessageAsync(
         : undefined;
       if (response.success && journal) await abandonScheduledTaskRun(journal, credential);
       return response;
-    }
-
-    case 'NLWEB_PROBE' as ExtensionMessage['type']: {
-      const probe = message as unknown as { probeUrl?: string; method?: 'GET' | 'HEAD' };
-      const probeUrl = probe.probeUrl;
-      const method = probe.method ?? 'HEAD';
-      if (!probeUrl || typeof probeUrl !== 'string') {
-        return { success: false, error: 'Missing probeUrl' } as ExtensionResponse;
-      }
-      if (!isAllowedProbeUrl(probeUrl)) {
-        return { success: false, error: 'Probe URL not allowed' } as ExtensionResponse;
-      }
-      if (!sender.tab?.url) {
-        return {
-          success: false,
-          error: 'NLWeb probes can only originate from a content script.',
-        } as ExtensionResponse;
-      }
-      try {
-        const senderOrigin = new URL(sender.tab.url).origin;
-        const probeOrigin = new URL(probeUrl).origin;
-        if (probeOrigin !== senderOrigin) {
-          logger.warn('Rejected cross-origin NLWEB_PROBE', {
-            senderOrigin,
-            probeOrigin,
-          });
-          return {
-            success: false,
-            error: "NLWeb probes are restricted to the page's own origin.",
-          } as ExtensionResponse;
-        }
-      } catch {
-        return { success: false, error: 'Invalid probe URL' } as ExtensionResponse;
-      }
-      {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        try {
-          const resp = await fetch(probeUrl, {
-            method,
-            signal: controller.signal,
-            credentials: 'omit',
-            cache: 'no-store',
-          });
-          const headers: Record<string, string> = {};
-          resp.headers.forEach((value, key) => {
-            headers[key.toLowerCase()] = value;
-          });
-          let body: string | undefined;
-          if (method === 'GET' && resp.ok) {
-            try {
-              const raw = await resp.text();
-              body = raw.substring(0, MAX_PROBE_RESPONSE_BYTES);
-            } catch {
-              /* non-fatal */
-            }
-          }
-          return { success: true, status: resp.status, headers, body } as ExtensionResponse;
-        } catch (e) {
-          return {
-            success: false,
-            error: e instanceof Error ? e.message : 'Probe fetch failed',
-          } as ExtensionResponse;
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      }
     }
 
     case 'IN_PAGE_PROMPT': {
@@ -4443,198 +4357,6 @@ async function handleMessageAsync(
   }
 }
 
-type CookieBlockEntry = { value: string; mode: 'exact' | 'suffix' | 'substring' };
-
-const BLOCKED_COOKIE_DOMAINS: ReadonlyArray<CookieBlockEntry> = [
-  { value: 'bank', mode: 'substring' },
-  { value: 'paypal', mode: 'substring' },
-  { value: 'venmo', mode: 'substring' },
-  { value: 'chase', mode: 'substring' },
-  { value: 'wellsfargo', mode: 'substring' },
-  { value: 'citibank', mode: 'substring' },
-  { value: 'fidelity', mode: 'substring' },
-  { value: 'schwab', mode: 'substring' },
-  { value: 'coinbase', mode: 'substring' },
-  { value: 'binance', mode: 'substring' },
-  { value: 'kraken', mode: 'substring' },
-  { value: 'stripe.com', mode: 'suffix' },
-  { value: 'plaid.com', mode: 'suffix' },
-  { value: 'gov', mode: 'suffix' },
-  { value: 'mil', mode: 'suffix' },
-  { value: 'healthcare', mode: 'substring' },
-  { value: 'medical', mode: 'substring' },
-  { value: 'health.com', mode: 'suffix' },
-  { value: 'aws.amazon.com', mode: 'suffix' },
-  { value: 'console.cloud.google.com', mode: 'suffix' },
-  { value: 'portal.azure.com', mode: 'suffix' },
-  { value: 'github.com', mode: 'suffix' },
-  { value: 'gitlab.com', mode: 'suffix' },
-  { value: 'bitbucket.org', mode: 'suffix' },
-  { value: 'accounts.google.com', mode: 'suffix' },
-  { value: 'login.microsoftonline.com', mode: 'suffix' },
-  { value: 'auth0.com', mode: 'suffix' },
-  { value: 'okta.com', mode: 'suffix' },
-  { value: 'mail.google.com', mode: 'suffix' },
-  { value: 'outlook.live.com', mode: 'suffix' },
-  { value: 'outlook.office.com', mode: 'suffix' },
-  { value: 'facebook.com', mode: 'suffix' },
-  { value: 'twitter.com', mode: 'suffix' },
-  { value: 'x.com', mode: 'suffix' },
-  { value: 'instagram.com', mode: 'suffix' },
-  { value: 'linkedin.com', mode: 'suffix' },
-  { value: 'slack.com', mode: 'suffix' },
-  { value: 'notion.so', mode: 'suffix' },
-  { value: 'figma.com', mode: 'suffix' },
-  { value: 'lever.co', mode: 'suffix' },
-  { value: 'greenhouse.io', mode: 'suffix' },
-  { value: 'workday.com', mode: 'suffix' },
-  { value: 'agiworkforce.com', mode: 'suffix' },
-];
-
-function matchCookieBlock(hostname: string, entry: CookieBlockEntry): boolean {
-  const value = entry.value.toLowerCase();
-  switch (entry.mode) {
-    case 'exact':
-      return hostname === value;
-    case 'suffix':
-      return hostname === value || hostname.endsWith(`.${value}`);
-    case 'substring':
-      return hostname.includes(value);
-  }
-}
-
-function isCookieDomainAllowed(urlOrDomain: string): boolean {
-  if (!urlOrDomain) return false;
-  let hostname: string;
-  try {
-    const normalized = urlOrDomain.includes('://')
-      ? urlOrDomain
-      : `https://${(urlOrDomain.split('/')[0] ?? '').toLowerCase()}`;
-    hostname = new URL(normalized).hostname.toLowerCase();
-  } catch {
-    return false;
-  }
-  if (!hostname) return false;
-  return !BLOCKED_COOKIE_DOMAINS.some((entry) => matchCookieBlock(hostname, entry));
-}
-
-async function handleSetCookie(
-  message: import('./types').SetCookieMessage,
-): Promise<ExtensionResponse> {
-  try {
-    const { name, value, domain, path, secure, httpOnly, url } = message.cookie;
-    const targetUrl = url || (domain ? `https://${domain}` : undefined);
-    if (!targetUrl) {
-      return {
-        success: false,
-        error: 'Must specify url or domain for cookie.',
-      } as ExtensionResponse;
-    }
-    if (!isCookieDomainAllowed(targetUrl)) {
-      return {
-        success: false,
-        error: 'Setting cookies for this domain is blocked for security.',
-      } as ExtensionResponse;
-    }
-    await chrome.cookies.set({
-      url: targetUrl,
-      name,
-      value,
-      domain,
-      path: path || '/',
-      secure: secure !== false,
-      httpOnly: httpOnly !== false,
-    });
-    return { success: true } as ExtensionResponse;
-  } catch (error) {
-    logger.error('Failed to set cookie', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to set cookie',
-    } as ExtensionResponse;
-  }
-}
-
-async function handleGetAllTabs(): Promise<ExtensionResponse> {
-  try {
-    const tabs = await chrome.tabs.query({});
-    const tabsInfo = tabs.map((tab) => ({
-      id: tab.id,
-      url: tab.url,
-      title: tab.title,
-      favIconUrl: tab.favIconUrl,
-      active: tab.active,
-      windowId: tab.windowId,
-      status: tab.status,
-    }));
-    return { success: true, data: tabsInfo } as ExtensionResponse;
-  } catch (error) {
-    logger.error('Failed to get all tabs', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to get tabs',
-    } as ExtensionResponse;
-  }
-}
-
-async function handleCreateTab(
-  message: import('./types').CreateTabMessage,
-): Promise<ExtensionResponse> {
-  try {
-    const tab = await chrome.tabs.create({
-      url: message.url,
-      active: message.active !== false,
-    });
-    if (tab.id) {
-      void ensureTabGroup(tab.id);
-    }
-    return {
-      success: true,
-      data: {
-        id: tab.id,
-        url: tab.url,
-        title: tab.title,
-      },
-    } as ExtensionResponse;
-  } catch (error) {
-    logger.error('Failed to create tab', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create tab',
-    } as ExtensionResponse;
-  }
-}
-
-async function handleCloseTab(
-  message: import('./types').CloseTabMessage,
-): Promise<ExtensionResponse> {
-  try {
-    await chrome.tabs.remove(message.tabId);
-    return { success: true } as ExtensionResponse;
-  } catch (error) {
-    logger.error('Failed to close tab', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to close tab',
-    } as ExtensionResponse;
-  }
-}
-
-async function handleSwitchTab(
-  message: import('./types').SwitchTabMessage,
-): Promise<ExtensionResponse> {
-  try {
-    await chrome.tabs.update(message.tabId, { active: true });
-    return { success: true } as ExtensionResponse;
-  } catch (error) {
-    logger.error('Failed to switch tab', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to switch tab',
-    } as ExtensionResponse;
-  }
-}
-
 async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionResponse> {
   try {
     const response = (await forwardToContentScript(tabId, {
@@ -4678,6 +4400,12 @@ async function forwardToContentScript(
   }
 }
 
+/**
+ * `connectedToDesktop` records that the native host has answered on this
+ * profile, not that it is answering right now. A closed Desktop app is a
+ * reconnect, not an unpairing, so only a permanently unavailable host or an
+ * explicit unpair clears it.
+ */
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
     if (!_bgCtx.nativeReconnectGaveUp && !_bgCtx.nativeHandshakeInFlight) {
@@ -4699,7 +4427,7 @@ async function checkDesktopConnection(): Promise<void> {
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
       }
-      await storageUtils.setItem('connectedToDesktop', true);
+      setDesktopPaired(true);
       return;
     } catch (error) {
       logger.warn('Native ping failed', error);
@@ -4712,7 +4440,6 @@ async function checkDesktopConnection(): Promise<void> {
     state.connectionStatus = 'disconnected';
     void notifyConnectionStatusChange();
   }
-  await storageUtils.setItem('connectedToDesktop', false);
   scheduleNativeReconnect('ping_failed');
 }
 
@@ -4740,32 +4467,35 @@ async function notifyConnectionStatusChange(): Promise<void> {
   }
 }
 
-function setupContextMenu(): void {
+const CONTEXT_MENU_ITEMS: ReadonlyArray<chrome.contextMenus.CreateProperties> = [
+  { id: 'ask-agi-workforce', title: t('menuAskAgi'), contexts: ['selection'] },
+  { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
+  { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
+  { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
+  { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
+  // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
+  // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
+];
+
+/**
+ * Chrome keeps context menus across worker restarts, so rebuilding them on
+ * every start duplicated the work and raced `create` against a `removeAll`
+ * that had not settled. Install and update are the only times the set changes.
+ */
+async function rebuildContextMenus(): Promise<void> {
   if (!chrome.contextMenus?.removeAll || !chrome.contextMenus?.create) {
     logger.warn('contextMenus API unavailable; skipping context menu setup');
     return;
   }
 
-  chrome.contextMenus.removeAll(() => {
-    if (chrome.runtime.lastError) {
-      logger.warn('contextMenus.removeAll failed', chrome.runtime.lastError.message);
-    }
-  });
+  try {
+    await chrome.contextMenus.removeAll();
+  } catch (error) {
+    logger.warn('contextMenus.removeAll failed', error);
+    return;
+  }
 
-  const menuItems: chrome.contextMenus.CreateProperties[] = [
-    { id: 'ask-agi-workforce', title: t('menuAskAgi'), contexts: ['selection'] },
-    { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
-    { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
-    { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
-    { id: 'capture-element', title: t('menuCaptureElement'), contexts: ['all'] },
-    { id: 'get-element-info', title: t('menuGetElementInfo'), contexts: ['all'] },
-    { id: 'discover-webmcp-tools', title: t('menuDiscoverWebmcpTools'), contexts: ['all'] },
-    { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
-    // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
-    // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
-  ];
-
-  for (const item of menuItems) {
+  for (const item of CONTEXT_MENU_ITEMS) {
     chrome.contextMenus.create(item, () => {
       if (chrome.runtime.lastError) {
         logger.warn(
@@ -4775,148 +4505,102 @@ function setupContextMenu(): void {
       }
     });
   }
+}
 
-  chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (!tab?.id) return;
+function handleContextMenuClick(
+  info: chrome.contextMenus.OnClickData,
+  tab: chrome.tabs.Tab | undefined,
+): void {
+  if (!tab?.id) return;
 
-    if (info.menuItemId === 'capture-element') {
-      chrome.tabs
-        .sendMessage(tab.id, {
-          type: 'CAPTURE_ELEMENT',
-        })
-        .catch((err: unknown) => {
-          logger.warn('Failed to send CAPTURE_ELEMENT to tab', err);
-        });
-    } else if (info.menuItemId === 'get-element-info') {
-      chrome.tabs
-        .sendMessage(tab.id, {
-          type: 'GET_ELEMENT_INFO',
-        })
-        .catch((err: unknown) => {
-          logger.warn('Failed to send GET_ELEMENT_INFO to tab', err);
-        });
-    } else if (info.menuItemId === 'discover-webmcp-tools') {
-      const discoveryTabId = tab.id;
-      const discoveryTabUrl = tab.url;
-      const navigationGeneration = currentWebMCPNavigationGeneration(discoveryTabId);
-      chrome.tabs.sendMessage(
-        discoveryTabId,
-        { type: 'WEBMCP_DISCOVER_TOOLS' },
-        (response: { tools?: unknown; url?: unknown } | undefined) => {
-          if (chrome.runtime.lastError) {
-            logger.warn('WebMCP discover failed', chrome.runtime.lastError.message);
-            return;
-          }
-          void chrome.tabs
-            .get(discoveryTabId)
-            .then((currentTab) => {
-              if (
-                typeof discoveryTabUrl !== 'string' ||
-                currentTab.url !== discoveryTabUrl ||
-                navigationGeneration !== currentWebMCPNavigationGeneration(discoveryTabId)
-              ) {
-                logger.debug('Discarded stale WebMCP context-menu discovery');
-                return;
-              }
-              const normalized = normalizeWebMCPToolsUpdate(
-                response?.tools,
-                response?.url,
-                discoveryTabUrl,
-              );
-              if (!normalized) {
-                logger.warn('WebMCP context-menu discovery returned invalid metadata');
-                return;
-              }
-              publishNormalizedWebMCPToolsUpdate(discoveryTabId, normalized, navigationGeneration);
-            })
-            .catch((error) => {
-              logger.debug('WebMCP context-menu tab lookup failed', error);
-            });
-        },
-      );
-    } else if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
-      try {
-        const pending = createSelectionContextHandoff({
-          selectedText: info.selectionText,
-          pageUrl: info.pageUrl ?? tab.url ?? '',
-          tabId: tab.id,
-        });
-        void chrome.storage.session
-          .set({ [CONTEXT_HANDOFF_STORAGE_KEY]: pending })
-          .catch((error: unknown) => {
-            logger.warn('Failed to prepare selected-context handoff', error);
-            showNotification(
-              'Context handoff unavailable',
-              'The selected context was not sent. Open the side panel and try again.',
-            );
-          });
-        void chrome.sidePanel?.open({ tabId: pending.tabId }).catch((error: unknown) => {
-          logger.warn('Failed to open selected-context preview', error);
+  if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
+    try {
+      const pending = createSelectionContextHandoff({
+        selectedText: info.selectionText,
+        pageUrl: info.pageUrl ?? tab.url ?? '',
+        tabId: tab.id,
+      });
+      void chrome.storage.session
+        .set({ [CONTEXT_HANDOFF_STORAGE_KEY]: pending })
+        .catch((error: unknown) => {
+          logger.warn('Failed to prepare selected-context handoff', error);
           showNotification(
-            'Context preview ready',
-            'Open the AGI side panel to review and approve the selected context.',
+            'Context handoff unavailable',
+            'The selected context was not sent. Open the side panel and try again.',
           );
         });
-      } catch (error) {
-        logger.warn('Rejected selected-context handoff', error);
+      void chrome.sidePanel?.open({ tabId: pending.tabId }).catch((error: unknown) => {
+        logger.warn('Failed to open selected-context preview', error);
         showNotification(
-          'Context handoff unavailable',
-          error instanceof Error ? error.message : 'The selected context was not sent.',
+          'Context preview ready',
+          'Open the AGI side panel to review and approve the selected context.',
         );
-      }
-    } else if (info.menuItemId === 'explain-selection' && info.selectionText && tab.id) {
-      chrome.storage.session
-        .set({
-          agi_pending_chat: {
-            type: 'explain',
-            text: info.selectionText,
-            url: info.pageUrl ?? '',
-            timestamp: Date.now(),
-          },
-        })
-        .catch((err) => {
-          logger.warn('Failed to store pending chat (explain)', err);
-        });
-      if (chrome.sidePanel) {
-        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-      }
-    } else if (info.menuItemId === 'translate-selection' && info.selectionText && tab.id) {
-      chrome.storage.session
-        .set({
-          agi_pending_chat: {
-            type: 'translate',
-            text: info.selectionText,
-            url: info.pageUrl ?? '',
-            timestamp: Date.now(),
-          },
-        })
-        .catch((err) => {
-          logger.warn('Failed to store pending chat (translate)', err);
-        });
-      if (chrome.sidePanel) {
-        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-      }
-    } else if (info.menuItemId === 'summarize-page' && tab.id) {
-      chrome.storage.session
-        .set({
-          agi_pending_chat: {
-            type: 'summarize',
-            text: '',
-            url: info.pageUrl ?? '',
-            timestamp: Date.now(),
-          },
-        })
-        .catch((err) => {
-          logger.warn('Failed to store pending chat (summarize)', err);
-        });
-      if (chrome.sidePanel) {
-        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-      }
-    } else if (info.menuItemId === 'add-to-tab-group' && tab.id) {
-      void ensureTabGroup(tab.id);
+      });
+    } catch (error) {
+      logger.warn('Rejected selected-context handoff', error);
+      showNotification(
+        'Context handoff unavailable',
+        error instanceof Error ? error.message : 'The selected context was not sent.',
+      );
     }
-  });
+  } else if (info.menuItemId === 'explain-selection' && info.selectionText && tab.id) {
+    chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'explain',
+          text: info.selectionText,
+          url: info.pageUrl ?? '',
+          timestamp: Date.now(),
+        },
+      })
+      .catch((err) => {
+        logger.warn('Failed to store pending chat (explain)', err);
+      });
+    if (chrome.sidePanel) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+  } else if (info.menuItemId === 'translate-selection' && info.selectionText && tab.id) {
+    chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'translate',
+          text: info.selectionText,
+          url: info.pageUrl ?? '',
+          timestamp: Date.now(),
+        },
+      })
+      .catch((err) => {
+        logger.warn('Failed to store pending chat (translate)', err);
+      });
+    if (chrome.sidePanel) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+  } else if (info.menuItemId === 'summarize-page' && tab.id) {
+    chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'summarize',
+          text: '',
+          url: info.pageUrl ?? '',
+          timestamp: Date.now(),
+        },
+      })
+      .catch((err) => {
+        logger.warn('Failed to store pending chat (summarize)', err);
+      });
+    if (chrome.sidePanel) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+  } else if (info.menuItemId === 'add-to-tab-group' && tab.id) {
+    void ensureTabGroup(tab.id);
+  }
 }
+
+chrome.contextMenus?.onClicked?.addListener(handleContextMenuClick);
+
+chrome.runtime.onInstalled.addListener(() => {
+  void rebuildContextMenus();
+});
 
 function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
   return sendNativeRequest(message)
@@ -4936,11 +4620,14 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   forgetPageWatchTab(tabId);
   webmcpToolsByTab.delete(tabId);
   webmcpNavigationGenerationByTab.delete(tabId);
-  nlwebByTab.delete(tabId);
-  logger.debug('Cleaned up rate limit, webmcp tools, and nlweb for tab', { tabId });
 });
 
+// chrome.tabs.onUpdated takes no filter argument (the UpdateFilter overload is
+// Firefox-only), so every favicon, title and audible change on every open tab
+// reaches this listener. The first line is the cheapest possible answer for the
+// common case: nothing is being driven and no tab's tools are cached.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!hasWatchedTabWork()) return;
   const lease = computerUseRuns.getActive();
   if (
     lease?.tabId === tabId &&
@@ -4959,13 +4646,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
   if (changeInfo.url === undefined && changeInfo.status !== 'loading') return;
   invalidateWebMCPToolsForNavigation(tabId);
-  nlwebByTab.delete(tabId);
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   const lease = computerUseRuns.getActive();
+  if (!lease) return;
   if (
-    !lease ||
     lease.windowId === undefined ||
     activeInfo.windowId !== lease.windowId ||
     activeInfo.tabId === lease.tabId
@@ -4999,6 +4685,16 @@ async function captureCurrentPage(): Promise<void> {
       return;
     }
 
+    try {
+      await authorizeBrowserToolTab(tab.id);
+    } catch (error) {
+      showNotification(
+        PAGE_CAPTURE_UNDELIVERED_TITLE,
+        `${error instanceof Error ? error.message : PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE} Nothing was captured.`,
+      );
+      return;
+    }
+
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
       format: 'png',
       quality: 90,
@@ -5023,40 +4719,6 @@ async function captureCurrentPage(): Promise<void> {
       PAGE_CAPTURE_UNDELIVERED_TITLE,
       pageCaptureFailureMessage(error instanceof Error ? error.message : ''),
     );
-  }
-}
-
-const MAX_PROBE_RESPONSE_BYTES = 262_144;
-
-function isPrivateOrReservedHost(hostname: string): boolean {
-  const h = hostname.replace(/^\[|\]$/g, '');
-
-  if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fd')) return true;
-
-  if (h === 'localhost' || h === '0.0.0.0') return true;
-
-  const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
-  if (ipv4Match) {
-    const [, a, b] = ipv4Match.map(Number);
-    if (a === 10) return true;
-    if (a === 172 && b !== undefined && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 127) return true;
-    if (a === 0) return true;
-  }
-
-  return false;
-}
-
-function isAllowedProbeUrl(raw: string): boolean {
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-    if (isPrivateOrReservedHost(parsed.hostname)) return false;
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -5721,6 +5383,11 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 initialize();
 installBackgroundErrorReporting();
 
+// chrome.debugger.onDetach has to be attached in the worker's first turn: a
+// user pressing Cancel on Chrome's debugging bar wakes a worker that would
+// otherwise register the listener only once a run started.
+ensureOnDetachListener();
+
 for (const retired of RETIRED_ALARM_NAMES) {
   void chrome.alarms.clear(retired);
 }
@@ -5740,13 +5407,22 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     void loadScheduledTasks()
       .then(async (tasks) => {
         const task = tasks.find((t) => t.id === taskId);
-        if (!task?.enabled) return;
+        if (!task?.enabled) {
+          // Chrome keeps an alarm until it is cleared, so a deleted or disabled
+          // task went on waking the worker on its old period forever.
+          await chrome.alarms.clear(alarm.name);
+          return;
+        }
         await executeScheduledTask(task, expectedGeneration);
       })
       .catch((err) => {
         logger.warn(`Failed to load/execute scheduled task ${taskId}`, err);
       });
   }
+});
+
+chrome.runtime.onSuspendCanceled.addListener(() => {
+  _bgCtx.nativeSuspendInProgress = false;
 });
 
 chrome.runtime.onSuspend.addListener(() => {

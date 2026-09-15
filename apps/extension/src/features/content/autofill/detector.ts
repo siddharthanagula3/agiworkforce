@@ -270,35 +270,35 @@ function inferProfileKey(
     .replace(/[^a-z0-9 ]/g, ' ');
 
   if (el instanceof HTMLInputElement && el.type === 'file') {
-    if (/cover.?letter/i.test(text)) return 'files.coverLetter';
-    if (/resume|cv|curriculum/i.test(text)) return 'files.resume';
+    if (/\bcover.?letter\b/i.test(text)) return 'files.coverLetter';
+    if (/\b(?:resume|cv|curriculum)\b/i.test(text)) return 'files.resume';
     return null;
   }
 
-  if (/first.?name|given.?name/i.test(text)) return 'firstName';
-  if (/last.?name|surname|family.?name/i.test(text)) return 'lastName';
-  if (/^name$|full.?name|your name/i.test(text)) return 'fullName';
+  if (/\b(?:first.?name|given.?name)\b/i.test(text)) return 'firstName';
+  if (/\b(?:last.?name|surname|family.?name)\b/i.test(text)) return 'lastName';
+  if (/^name$|\b(?:full.?name|your name)\b/i.test(text)) return 'fullName';
 
-  if (/e.?mail/i.test(text)) return 'email';
-  if (/phone|mobile|cell/i.test(text)) return 'phone';
+  if (/\be.?mail\b/i.test(text)) return 'email';
+  if (/\b(?:phone|mobile|cell)\b/i.test(text)) return 'phone';
 
-  if (/city/i.test(text)) return 'locationCity';
-  if (/state|province/i.test(text)) return 'locationState';
-  if (/country/i.test(text)) return 'locationCountry';
+  if (/\bcity\b/i.test(text)) return 'locationCity';
+  if (/\b(?:state|province)\b/i.test(text)) return 'locationState';
+  if (/\bcountry\b/i.test(text)) return 'locationCountry';
 
-  if (/linkedin/i.test(text)) return 'linkedinUrl';
-  if (/github/i.test(text)) return 'githubUrl';
-  if (/portfolio|personal.?site|website/i.test(text)) return 'portfolioUrl';
+  if (/\blinkedin\b/i.test(text)) return 'linkedinUrl';
+  if (/\bgithub\b/i.test(text)) return 'githubUrl';
+  if (/\b(?:portfolio|personal.?site|website)\b/i.test(text)) return 'portfolioUrl';
 
-  if (/company|employer|organization/i.test(text)) return 'currentCompany';
-  if (/title|position|role/i.test(text)) return 'currentTitle';
-  if (/years?.* exp|experience.* years?/i.test(text)) return 'yearsOfExperience';
-  if (/authoriz|eligib|work.* permit/i.test(text)) return 'workAuthorization';
-  if (/sponsor/i.test(text)) return 'requiresSponsorship';
-  if (/salary|compensation|pay/i.test(text)) return 'salaryExpectation';
+  if (/\b(?:company|employer|organization)\b/i.test(text)) return 'currentCompany';
+  if (/\b(?:title|position|role)\b/i.test(text)) return 'currentTitle';
+  if (/\byears?\b.*\bexp|\bexperience\b.*\byears?\b/i.test(text)) return 'yearsOfExperience';
+  if (/\bauthoriz|\beligib|\bwork\b.*\bpermit\b/i.test(text)) return 'workAuthorization';
+  if (/\bsponsor/i.test(text)) return 'requiresSponsorship';
+  if (/\b(?:salary|compensation|pay)\b/i.test(text)) return 'salaryExpectation';
 
-  if (/cover.?letter|motivation|introduction/i.test(text)) return 'coverLetterText';
-  if (/resume|cv/i.test(text) && el instanceof HTMLTextAreaElement) return 'resumeText';
+  if (/\b(?:cover.?letter|motivation|introduction)\b/i.test(text)) return 'coverLetterText';
+  if (/\b(?:resume|cv)\b/i.test(text) && el instanceof HTMLTextAreaElement) return 'resumeText';
 
   return null;
 }

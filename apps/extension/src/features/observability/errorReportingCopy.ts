@@ -1,4 +1,4 @@
-export const ERROR_REPORTING_CONSENT_LABEL = 'Share crash and usage telemetry';
+export const ERROR_REPORTING_CONSENT_LABEL = 'Share crash reports';
 
 export function describeErrorReportingConsent(enabled: boolean): string {
   return enabled

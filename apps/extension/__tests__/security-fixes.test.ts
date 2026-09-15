@@ -14,10 +14,8 @@ describe('C-1 + M-02 validateGatewayUrl, exact-match allowlist', () => {
     );
   });
 
-  it('accepts the allowlisted staging subdomain (exact match)', () => {
-    expect(validateGatewayUrl('https://staging-api.agiworkforce.com')).toBe(
-      'https://staging-api.agiworkforce.com',
-    );
+  it('REJECTS the staging subdomain, which no shipped build should reach', () => {
+    expect(validateGatewayUrl('https://staging-api.agiworkforce.com')).toBeNull();
   });
 
   it('REJECTS any other agiworkforce.com subdomain (M-02 tightening)', () => {
@@ -492,39 +490,6 @@ describe('H-07 pairing token shape', () => {
 
   it('fingerprint rejects values under 4 chars', () => {
     expect(PAIRING_FINGERPRINT_RE.test('abc')).toBe(false);
-  });
-});
-
-describe('H-01 NLWEB_PROBE same-origin enforcement', () => {
-  function isSameOrigin(senderUrl: string, probeUrl: string): boolean {
-    try {
-      return new URL(probeUrl).origin === new URL(senderUrl).origin;
-    } catch {
-      return false;
-    }
-  }
-
-  it('allows same-origin probes', () => {
-    expect(isSameOrigin('https://example.com/a', 'https://example.com/.well-known/nlweb')).toBe(
-      true,
-    );
-  });
-
-  it('rejects cross-origin probes', () => {
-    expect(isSameOrigin('https://example.com/a', 'https://internal.corp.example.com')).toBe(false);
-    expect(isSameOrigin('https://example.com/a', 'https://attacker.example.com')).toBe(false);
-  });
-
-  it('rejects probes on a different scheme', () => {
-    expect(isSameOrigin('https://example.com/a', 'http://example.com/x')).toBe(false);
-  });
-
-  it('rejects probes on a different port', () => {
-    expect(isSameOrigin('https://example.com/a', 'https://example.com:8443/x')).toBe(false);
-  });
-
-  it('rejects malformed probe URLs', () => {
-    expect(isSameOrigin('https://example.com/a', 'not-a-url')).toBe(false);
   });
 });
 

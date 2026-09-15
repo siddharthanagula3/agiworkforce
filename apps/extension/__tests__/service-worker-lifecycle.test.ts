@@ -40,10 +40,43 @@ describe('the worker is only woken when there is work', () => {
     expect(background).toContain('void chrome.alarms.clear(MAINTENANCE_ALARM)');
   });
 
+  it('clears a task alarm whose task is gone instead of waking for it forever', () => {
+    const alarmHandler = background.slice(
+      background.indexOf('chrome.alarms.onAlarm.addListener'),
+      background.indexOf('chrome.runtime.onSuspendCanceled.addListener'),
+    );
+    expect(alarmHandler).toMatch(
+      /if \(!task\?\.enabled\) \{[\s\S]*?await chrome\.alarms\.clear\(alarm\.name\);\s*return;/,
+    );
+  });
+
   it('clears the alarms older builds registered, which Chrome would keep firing', () => {
     expect(background).toContain("const RETIRED_ALARM_NAMES = ['keep-alive', SYNC_SWEEP_ALARM]");
     expect(background).toMatch(
       /for \(const retired of RETIRED_ALARM_NAMES\) \{\s*void chrome\.alarms\.clear\(retired\);/,
+    );
+  });
+
+  it('rebuilds the context menus on install, not on every worker start', () => {
+    expect(background).toMatch(
+      /chrome\.runtime\.onInstalled\.addListener\(\(\) => \{\s*void rebuildContextMenus\(\);/,
+    );
+    expect(background).toMatch(
+      /async function rebuildContextMenus\(\)[\s\S]*?await chrome\.contextMenus\.removeAll\(\)[\s\S]*?chrome\.contextMenus\.create\(item/,
+    );
+    const initialize = background.slice(
+      background.indexOf('function initialize(): void {'),
+      background.indexOf('function handleManagedChatKeepalivePort('),
+    );
+    expect(initialize).not.toContain('ContextMenu');
+  });
+
+  it('registers the context-menu click listener at module evaluation', () => {
+    expect(background).toContain(
+      'chrome.contextMenus?.onClicked?.addListener(handleContextMenuClick);',
+    );
+    expect(background).not.toMatch(
+      /function [A-Za-z]+\([\s\S]*?chrome\.contextMenus\.onClicked\.addListener/,
     );
   });
 
@@ -86,6 +119,13 @@ describe('a computer-use run that dies with the worker ends visibly', () => {
       /case 'GET_COMPUTER_USE_STATE'[\s\S]*computerUseRuns\.getActive\(\)[\s\S]*running: true[\s\S]*runId: activeLease\.runId/,
     );
     expect(panel).toContain('void adoptBackgroundRun();');
+  });
+
+  it('attaches the debugger detach listener in the first turn of the worker', () => {
+    expect(background).toMatch(/^ensureOnDetachListener\(\);$/m);
+    expect(background).toContain(
+      "import { ensureOnDetachListener } from './features/computer-use/cdpDriver';",
+    );
   });
 
   it("treats Chrome's own debugger Cancel as a stop, not a hiccup", () => {
