@@ -1,4 +1,3 @@
-
 import { resources } from './resources';
 
 export { resources };
@@ -27,6 +26,22 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = [
 ] as const;
 
 export const DEFAULT_LANGUAGE = 'en';
+
+// A language is offered only once its catalogue is complete and reviewed (D-2026-09-15-03);
+// the others stay loaded for the strings they already carry but are never selectable.
+export const SELECTABLE_LANGUAGE_CODES: readonly string[] = ['en', 'es'];
+
+export const SELECTABLE_LANGUAGES: readonly SupportedLanguage[] = SUPPORTED_LANGUAGES.filter(
+  (lang) => SELECTABLE_LANGUAGE_CODES.includes(lang.code),
+);
+
+export function isSelectableLanguage(code: unknown): code is string {
+  return typeof code === 'string' && SELECTABLE_LANGUAGE_CODES.includes(code);
+}
+
+export function selectableLanguageOrDefault(code: unknown): string {
+  return isSelectableLanguage(code) ? code : DEFAULT_LANGUAGE;
+}
 
 export const NAMESPACES = [
   'common',

@@ -1,4 +1,3 @@
-
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getLocales } from 'expo-localization';
@@ -8,6 +7,7 @@ import {
   DEFAULT_LANGUAGE,
   SUPPORTED_LANGUAGES,
   baseInitOptions,
+  isSelectableLanguage,
   isSupportedLanguage,
   languageFor,
 } from '@agiworkforce/i18n';
@@ -27,7 +27,7 @@ I18nManager.swapLeftAndRightInRTL(true);
 export function getDeviceLanguage(): string {
   for (const locale of getLocales()) {
     const base = locale.languageCode ?? locale.languageTag?.split('-')[0];
-    if (base && isSupportedLanguage(base)) return base;
+    if (base && isSelectableLanguage(base)) return base;
   }
   return DEFAULT_LANGUAGE;
 }
