@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { useChatStore } from '@/stores/chatStore';
 import { requestMicPermission } from '@/src/features/voice/services/voiceInput';
 import {
@@ -181,8 +182,20 @@ export function useLiveVoiceSession({
       },
     );
 
+    const appState = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' || cancelled) return;
+      const session = sessionRef.current;
+      sessionRef.current = null;
+      if (session) void session.close().then((closed) => finish(session, closed));
+      setStatus('idle');
+      setAssistantSpeaking(false);
+      setBackendBusy(false);
+      endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
+    });
+
     return () => {
       cancelled = true;
+      appState.remove();
       const session = sessionRef.current;
       sessionRef.current = null;
       setStatus('idle');

@@ -164,14 +164,20 @@ to be described as submitted.
 
 Declared in `app.config.js` → `android.permissions`:
 
-| Permission                          | Why                                                                                                                       |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `CAMERA`                            | Taking a photo to attach to a chat, and document/text scanning for on-device OCR (`native/android/withAGIVisionOCR.cjs`). |
-| `RECORD_AUDIO`                      | Voice input in the chat composer (`src/features/voice/services/voiceInput.ts`).                                           |
-| `READ_EXTERNAL_STORAGE`             | Choosing an existing image or document to attach (`expo-image-picker`, `expo-document-picker`).                           |
-| `USE_BIOMETRIC` / `USE_FINGERPRINT` | Optional App Lock, opt-in from Settings → Safety & Security. Off by default.                                              |
+| Permission     | Why                                                                                                                                                                                                                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RECORD_AUDIO` | Voice input in the chat composer (`src/features/voice/services/voiceInput.ts`), and live voice mode in an AGI Cloud chat, which streams the microphone to AGI Cloud over WebRTC for the session (`src/features/voice/services/liveVoiceSession.ts`). Declared as "Voice or sound recordings" in Data safety. |
 
 Merged into the manifest by library config plugins rather than listed above:
+
+- `CAMERA` from `expo-camera`, for taking a photo to attach to a chat and for
+  document/text scanning with on-device OCR (`native/android/withAGIVisionOCR.cjs`).
+- `USE_BIOMETRIC` from `expo-local-authentication`, for the optional App Lock,
+  opt-in from Settings → Safety & Security. Off by default.
+- `READ_EXTERNAL_STORAGE` (`android:maxSdkVersion="32"`) from `expo-image-picker`
+  and `expo-file-system`, for choosing an existing image or document to attach on
+  Android 12 and earlier. Android 13+ uses the photo picker and the document
+  picker, which need no storage permission.
 
 - `POST_NOTIFICATIONS` and `RECEIVE_BOOT_COMPLETED` from `expo-notifications`,
   which is only added to production and preview builds (`conditionalPlugins` in
@@ -181,9 +187,8 @@ Merged into the manifest by library config plugins rather than listed above:
   "only after you enable device calendar context".
 - `com.android.vending.BILLING` from `expo-iap`, see **Billing** below.
 - `WRITE_EXTERNAL_STORAGE` (`android:maxSdkVersion="32"`) from `expo-image-picker`'s
-  own `AndroidManifest.xml`, alongside the `READ_EXTERNAL_STORAGE` declared above.
-  It is legacy-only: on Android 13+ it is stripped by `maxSdkVersion` and the app
-  never requests it.
+  own `AndroidManifest.xml`. It is legacy-only: on Android 13+ it is stripped by
+  `maxSdkVersion` and the app never requests it.
 
 **Runtime behaviour.** The permissions in the table above are requested on first
 use, from a user action, never on launch and never on screen mount. The request
