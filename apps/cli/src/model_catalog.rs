@@ -511,6 +511,15 @@ pub fn api_wire_id(model_id: &str) -> String {
         .unwrap_or_else(|| model_id.to_string())
 }
 
+/// The shared catalog's own id for a model named by either its id or its
+/// vendor wire id. The managed gateway and the hosted model list speak this
+/// id; a vendor's dated wire id is an unknown selection to them.
+pub fn canonical_model_id(model_id: &str) -> String {
+    shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id).map(|model| model.id.clone()))
+        .unwrap_or_else(|| model_id.to_string())
+}
+
 fn shared_catalog_lookup_aliases() -> Vec<(String, String)> {
     let Some(catalog) = shared_catalog() else {
         return Vec::new();
@@ -1777,6 +1786,28 @@ pub fn is_known_model(model_id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_vendor_wire_id_resolves_to_the_catalog_id_and_unknown_ids_pass_through() {
+        let catalog = shared_catalog().expect("embedded catalog must deserialize");
+        let dated = catalog
+            .models
+            .values()
+            .find(|model| {
+                model
+                    .api_model_id
+                    .as_deref()
+                    .is_some_and(|api| api != model.id)
+            })
+            .expect("some model carries a vendor wire id that differs from its id");
+        let api_id = dated.api_model_id.clone().expect("checked above");
+        assert_eq!(canonical_model_id(&api_id), dated.id);
+        assert_eq!(canonical_model_id(&dated.id), dated.id);
+        assert_eq!(
+            canonical_model_id("a-model-nobody-ships"),
+            "a-model-nobody-ships"
+        );
+    }
 
     fn assert_source_has_no_catalog_model_literals(file: &str, source: &str) {
         let catalog = shared_catalog().expect("embedded catalog must deserialize");
