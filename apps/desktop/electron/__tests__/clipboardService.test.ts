@@ -1,55 +1,67 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_CLIPBOARD_TEXT_LENGTH } from '@agiworkforce/local-runtime-contract';
 
-const readText = vi.fn<() => string>();
-const readImage = vi.fn();
+const readText = vi.fn<() => Promise<string>>();
+const read = vi.fn<() => Promise<unknown[]>>();
+const createFromBuffer = vi.fn();
 
-vi.mock('electron', () => ({ clipboard: { readText, readImage } }));
+vi.mock('electron', () => ({
+  clipboard: { readText, read },
+  nativeImage: { createFromBuffer },
+}));
 
 const { readClipboard } = await import('../runtime/clipboardService');
 
-function image(options: { empty: boolean; width?: number; height?: number }) {
+const PNG = Buffer.from([1, 2, 3]);
+
+function imageItem() {
   return {
-    isEmpty: () => options.empty,
-    getSize: () => ({ width: options.width ?? 4, height: options.height ?? 2 }),
-    toPNG: () => Buffer.from([1, 2, 3]),
+    types: ['image/png'],
+    getType: async () => ({
+      arrayBuffer: async () => PNG.buffer.slice(PNG.byteOffset, PNG.byteOffset + PNG.byteLength),
+    }),
   };
 }
 
 beforeEach(() => {
-  readText.mockReset().mockReturnValue('');
-  readImage.mockReset().mockReturnValue(image({ empty: true }));
+  readText.mockReset().mockResolvedValue('');
+  read.mockReset().mockResolvedValue([]);
+  createFromBuffer.mockReset().mockReturnValue({ getSize: () => ({ width: 800, height: 600 }) });
 });
 
 describe('readClipboard', () => {
-  it('reports an empty clipboard as empty', () => {
-    expect(readClipboard()).toEqual({ textTruncated: false });
+  it('reports an empty clipboard as empty', async () => {
+    await expect(readClipboard()).resolves.toEqual({ textTruncated: false });
   });
 
-  it('returns copied text', () => {
-    readText.mockReturnValue('hello');
-    expect(readClipboard()).toEqual({ text: 'hello', textTruncated: false });
+  it('returns copied text', async () => {
+    readText.mockResolvedValue('hello');
+    await expect(readClipboard()).resolves.toEqual({ text: 'hello', textTruncated: false });
   });
 
-  it('returns a copied image as base64 png with its size', () => {
-    readImage.mockReturnValue(image({ empty: false, width: 800, height: 600 }));
-    expect(readClipboard()).toEqual({
+  it('returns a copied image as base64 png with its size', async () => {
+    read.mockResolvedValue([imageItem()]);
+    await expect(readClipboard()).resolves.toEqual({
       textTruncated: false,
-      image: { base64: Buffer.from([1, 2, 3]).toString('base64'), width: 800, height: 600 },
+      image: { base64: PNG.toString('base64'), width: 800, height: 600 },
     });
+    expect(createFromBuffer).toHaveBeenCalledWith(PNG);
   });
 
-  it('returns both when a copy carries text and an image', () => {
-    readText.mockReturnValue('cell');
-    readImage.mockReturnValue(image({ empty: false }));
-    const snapshot = readClipboard();
+  it('returns both when a copy carries text and an image', async () => {
+    readText.mockResolvedValue('cell');
+    read.mockResolvedValue([
+      { types: ['text/plain'], getType: async () => new Blob([]) },
+      imageItem(),
+    ]);
+    const snapshot = await readClipboard();
     expect(snapshot.text).toBe('cell');
     expect(snapshot.image).toBeDefined();
   });
 
-  it('bounds very long text and says it did', () => {
-    readText.mockReturnValue('x'.repeat(MAX_CLIPBOARD_TEXT_LENGTH + 10));
-    const snapshot = readClipboard();
+  it('bounds very long text and says it did', async () => {
+    readText.mockResolvedValue('x'.repeat(MAX_CLIPBOARD_TEXT_LENGTH + 10));
+    const snapshot = await readClipboard();
     expect(snapshot.text).toHaveLength(MAX_CLIPBOARD_TEXT_LENGTH);
     expect(snapshot.textTruncated).toBe(true);
   });

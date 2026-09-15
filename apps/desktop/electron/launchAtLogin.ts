@@ -15,12 +15,12 @@ export function isLaunchAtLoginEnabled(): boolean {
 
 export function applyLaunchAtLogin(): void {
   if (!isLaunchAtLoginEnabled()) return;
-  app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+  app.setLoginItemSettings({ openAtLogin: true });
 }
 
 export function setLaunchAtLogin(enabled: boolean): boolean {
   saveSettings({ launchAtLogin: enabled });
-  app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: enabled });
+  app.setLoginItemSettings({ openAtLogin: enabled });
   return enabled;
 }
 

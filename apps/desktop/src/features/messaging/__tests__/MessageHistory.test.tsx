@@ -3,9 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MessageHistory } from '../MessageHistory';
 import { invoke } from '@/lib/tauri-mock';
 
-vi.mock('@radix-ui/react-select', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const React = require('react');
+vi.mock('@radix-ui/react-select', async () => {
+  const React = await vi.importActual<typeof import('react')>('react');
   return {
     Root: ({
       children,
