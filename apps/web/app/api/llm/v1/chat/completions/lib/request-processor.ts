@@ -2009,6 +2009,26 @@ export async function processRequest(
     };
   }
 
+  // OpenAI clients send an assistant message that only carries tool_calls
+  // with no content at all; the loop's own continuation shape is an empty
+  // string, so it is normalised to that before the schema sees it.
+  if (
+    body &&
+    typeof body === 'object' &&
+    Array.isArray((body as { messages?: unknown }).messages)
+  ) {
+    for (const message of (body as { messages: unknown[] }).messages) {
+      if (!message || typeof message !== 'object') continue;
+      const record = message as Record<string, unknown>;
+      if (
+        record['role'] === 'assistant' &&
+        Array.isArray(record['tool_calls']) &&
+        (record['content'] === undefined || record['content'] === null)
+      ) {
+        record['content'] = '';
+      }
+    }
+  }
   const validationResult = ChatCompletionRequestSchema.safeParse(body);
   if (!validationResult.success) {
     return {
