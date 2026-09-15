@@ -26,7 +26,9 @@ const NOT_PUBLISHED_TEXT = 'Not published';
 const COMING_SOON_TAG_LABEL = 'Coming soon';
 const ENVIRONMENT_TAG_LABEL = 'Beta';
 const RAIL_LABEL = 'Model developers';
+const CHIP_GROUP_LABEL = 'Filter by capability';
 const UNAVAILABLE_TEXT = 'Temporarily unavailable';
+const NOT_OFFERED_TEXT = 'Not available in this app';
 const EVENT_TAG_LABEL = 'Free during event';
 
 const RAIL_CLASS =
@@ -245,6 +247,7 @@ export interface ModelCatalogueProps {
   onBack: () => void;
   initialDeveloperKey?: string;
   isEnvironmentLocked: (requiresEnvironment: string) => { locked: boolean; reason?: string };
+  isSelectable?: (modelId: string) => boolean;
 }
 
 export function ModelCatalogue({
@@ -263,6 +266,7 @@ export function ModelCatalogue({
   onBack,
   initialDeveloperKey,
   isEnvironmentLocked,
+  isSelectable,
 }: ModelCatalogueProps) {
   const favourites = useMemo(() => new Set(favouriteModelIds), [favouriteModelIds]);
   const recentRank = useMemo(
@@ -380,7 +384,7 @@ export function ModelCatalogue({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className={CHIP_ROW_CLASS}>
+          <div role="group" aria-label={CHIP_GROUP_LABEL} className={CHIP_ROW_CLASS}>
             {CAPABILITY_CHIPS.map((chip) => {
               const isActive = activeChips.has(chip.key);
               return (
@@ -449,7 +453,9 @@ export function ModelCatalogue({
                   ? isEnvironmentLocked(entry.requiresEnvironment)
                   : { locked: false };
                 const planLocked = !entry.admitted;
-                const hardLocked = comingSoon || environment.locked || entry.temporarilyUnavailable;
+                const notOffered = isSelectable ? !isSelectable(entry.id) : false;
+                const hardLocked =
+                  comingSoon || environment.locked || entry.temporarilyUnavailable || notOffered;
                 const locked = planLocked || hardLocked;
                 return (
                   <div key={entry.id} className="flex items-center gap-0">
@@ -463,7 +469,9 @@ export function ModelCatalogue({
                           ? COMING_SOON_TAG_LABEL
                           : entry.temporarilyUnavailable
                             ? UNAVAILABLE_TEXT
-                            : environment.reason
+                            : notOffered
+                              ? NOT_OFFERED_TEXT
+                              : environment.reason
                       }
                       aria-label={
                         comingSoon
@@ -472,9 +480,11 @@ export function ModelCatalogue({
                             ? `${entry.displayName} - ${UNAVAILABLE_TEXT}`
                             : environment.locked
                               ? `${entry.displayName} - ${environment.reason ?? ENVIRONMENT_TAG_LABEL}`
-                              : planLocked && entry.minimumPlanLabel
-                                ? `${entry.displayName} - ${entry.minimumPlanLabel} and above`
-                                : entry.displayName
+                              : notOffered
+                                ? `${entry.displayName} - ${NOT_OFFERED_TEXT}`
+                                : planLocked && entry.minimumPlanLabel
+                                  ? `${entry.displayName} - ${entry.minimumPlanLabel} and above`
+                                  : entry.displayName
                       }
                       onClick={() => {
                         if (hardLocked) return;
@@ -546,6 +556,13 @@ export function ModelCatalogue({
                             className={`${TAG_CLASS} whitespace-nowrap bg-muted/50 text-muted-foreground`}
                           >
                             {UNAVAILABLE_TEXT}
+                          </span>
+                        )}
+                        {notOffered && !comingSoon && !entry.temporarilyUnavailable && (
+                          <span
+                            className={`${TAG_CLASS} whitespace-nowrap bg-muted/50 text-muted-foreground`}
+                          >
+                            {NOT_OFFERED_TEXT}
                           </span>
                         )}
                         {!hardLocked && planLocked && entry.minimumPlanLabel && (

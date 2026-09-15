@@ -41,7 +41,13 @@ import {
 import { formatLocalModelSize, type LocalModel } from '@agiworkforce/local-runtime-contract';
 import { useLocalModelSelection, useLocalModels } from '@features/desktop-host';
 import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
-import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
+import {
+  useModelStore,
+  AVAILABLE_MODELS,
+  findSelectableModel,
+  isSelectableModelId,
+  type AIModel,
+} from '@shared/stores/model-store';
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
@@ -1273,10 +1279,10 @@ export function ComposerFooter({
                       query={searchQuery}
                       onQueryChange={setSearchQuery}
                       onSelect={(modelId) => {
-                        const target = AVAILABLE_MODELS.find((model) => model.id === modelId);
+                        const target = findSelectableModel(modelId);
                         if (target) handleSelectModel(target);
-                        else void commitModel(modelId);
                       }}
+                      isSelectable={isSelectableModelId}
                       onToggleFavourite={toggleFavourite}
                       onUpgradeRequest={onUpgradeRequest}
                       isEnvironmentLocked={(requiresEnvironment) => {

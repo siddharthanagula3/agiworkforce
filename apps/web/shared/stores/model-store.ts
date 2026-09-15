@@ -11,7 +11,12 @@ import {
   normalizeModelId,
   type ModelMetadata,
 } from '@shared/config/llm';
-import { getAutoRoutingProfiles, getModelsForTierAndSurface } from '@agiworkforce/types';
+import {
+  getAutoRoutingProfiles,
+  getModelsForTierAndSurface,
+  listChatModels,
+  listManagedRoutesForModel,
+} from '@agiworkforce/types';
 
 export interface AIModel {
   id: string;
@@ -147,6 +152,16 @@ function futureDeprecationDate(metadata: ModelMetadata): string | undefined {
   return deprecation_date;
 }
 
+function offerableChatModelIds(): string[] {
+  const surfaceOrdered = getModelsForTierAndSurface('max', 'web/cloud-chat', {
+    modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+  }).map((model) => model.id);
+  const routable = listChatModels()
+    .filter((model) => listManagedRoutesForModel(model.id).length > 0)
+    .map((model) => model.id);
+  return [...surfaceOrdered, ...routable];
+}
+
 function buildAvailableModels(): AIModel[] {
   const seen = new Set<string>();
   const autoModeEntries = getAutoRoutingProfiles().map((profile) => ({
@@ -156,11 +171,7 @@ function buildAvailableModels(): AIModel[] {
     providerKey: 'managed_cloud',
     description: profile.description,
   }));
-  const orderedIds = getModelsForTierAndSurface('max', 'web/cloud-chat', {
-    modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
-  }).map((model) => model.id);
-
-  const manualEntries = orderedIds
+  const manualEntries = offerableChatModelIds()
     .filter((modelId) => {
       if (seen.has(modelId)) {
         return false;
@@ -171,7 +182,10 @@ function buildAvailableModels(): AIModel[] {
     .map((modelId) => getModelMetadata(modelId))
     .filter(
       (metadata): metadata is ModelMetadata =>
-        !!metadata && CHAT_MODEL_TYPES.has(metadata.modelType) && isCurrentModel(metadata),
+        !!metadata &&
+        CHAT_MODEL_TYPES.has(metadata.modelType) &&
+        isCurrentModel(metadata) &&
+        metadata.availability !== 'coming_soon',
     )
     .map((metadata) => {
       const deprecationDate = futureDeprecationDate(metadata);
@@ -242,6 +256,24 @@ function isSelectableModel(model: AIModel): boolean {
 }
 
 /**
+ * The one answer to "can this store hold that selection". A picker row that
+ * offers a model this rejects is a control that does nothing, so the row's
+ * enabled state and the setter are both read from here.
+ */
+export function findSelectableModel(modelId: string | null | undefined): AIModel | null {
+  if (!modelId) return null;
+  const canonicalModelId = normalizeModelId(modelId) ?? modelId;
+  return (
+    AVAILABLE_MODELS.find((model) => model.id === canonicalModelId && isSelectableModel(model)) ??
+    null
+  );
+}
+
+export function isSelectableModelId(modelId: string | null | undefined): boolean {
+  return findSelectableModel(modelId) !== null;
+}
+
+/**
  * Resolve any persisted, URL-derived, or caller-supplied value to a model the
  * current catalog actually admits. This runs independently of Zustand's
  * storage version so deleting a model from the catalog cannot leave a
@@ -250,9 +282,7 @@ function isSelectableModel(model: AIModel): boolean {
  */
 export function resolveSelectableModelId(modelId: string | null | undefined): string {
   const canonicalModelId = modelId ? (normalizeModelId(modelId) ?? modelId) : DEFAULT_MODEL_ID;
-  return AVAILABLE_MODELS.some((model) => model.id === canonicalModelId && isSelectableModel(model))
-    ? canonicalModelId
-    : DEFAULT_MODEL_ID;
+  return isSelectableModelId(canonicalModelId) ? canonicalModelId : DEFAULT_MODEL_ID;
 }
 
 export interface ModelSubstitution {

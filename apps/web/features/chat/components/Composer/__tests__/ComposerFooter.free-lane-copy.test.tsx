@@ -35,6 +35,19 @@ vi.mock('@shared/stores/web-auth-store', () => ({
     }),
 }));
 
+const FIXTURE_AVAILABLE_MODELS = vi.hoisted(
+  () =>
+    [
+      {
+        id: 'fixture-economy-auto',
+        name: 'Economy Auto',
+        provider: 'AGI',
+        providerKey: 'managed_cloud',
+        description: 'Cheapest routed mode',
+      },
+    ] as Record<string, unknown>[],
+);
+
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (
     selector: (s: {
@@ -54,15 +67,10 @@ vi.mock('@shared/stores/model-store', () => ({
         description: 'Cheapest routed mode',
       }),
     }),
-  AVAILABLE_MODELS: [
-    {
-      id: 'fixture-economy-auto',
-      name: 'Economy Auto',
-      provider: 'AGI',
-      providerKey: 'managed_cloud',
-      description: 'Cheapest routed mode',
-    },
-  ],
+  AVAILABLE_MODELS: FIXTURE_AVAILABLE_MODELS,
+  findSelectableModel: (id: string) =>
+    FIXTURE_AVAILABLE_MODELS.find((model) => model['id'] === id) ?? null,
+  isSelectableModelId: (id: string) => FIXTURE_AVAILABLE_MODELS.some((model) => model['id'] === id),
 }));
 
 vi.mock('@shared/config/llm', async (importOriginal) => ({
