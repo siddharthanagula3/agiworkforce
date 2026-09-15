@@ -112,7 +112,7 @@ mongodb = { version = "3.8", optional = true, default-features = false, features
   "dns-resolver",
   "bson-3",
 ] }
-redis = { version = "~1.1", features = ["aio", "tokio-comp", "connection-manager"], optional = true }
+redis = { version = "~1.2", features = ["aio", "tokio-comp", "connection-manager"], optional = true }
 bson = { version = "3.1", optional = true }
 
 
