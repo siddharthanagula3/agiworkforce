@@ -649,6 +649,70 @@ describe('LocalRuntimeClient', () => {
     await client.dispose();
   });
 
+  it('keeps a failed turn whose failure names a plan-first code, and one it has never seen', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const failures: Array<{ code: string; action: string } | null | undefined> = [];
+    client.onEvent((event) => {
+      if (event.type === 'turn_failed') failures.push(event.failure);
+    });
+    await client.initialize();
+    const terminal = {
+      threadId: 't',
+      turnId: 'r',
+      status: 'failed',
+      response: '',
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/failed',
+        params: {
+          ...terminal,
+          error: 'No AGI Workforce session.',
+          failure: {
+            code: 'account_signed_out',
+            message: 'No AGI Workforce session.',
+            retryable: false,
+            action: 'sign_in_account',
+          },
+        },
+      })}\n`,
+    );
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/failed',
+        params: {
+          ...terminal,
+          error: 'Something new.',
+          failure: {
+            code: 'a_code_from_a_newer_cli',
+            message: 'Something new.',
+            retryable: false,
+            action: 'an_action_from_a_newer_cli',
+          },
+        },
+      })}\n`,
+    );
+    runtime.stdout.write(
+      `${JSON.stringify({ method: 'turn/failed', params: { ...terminal, error: 'Malformed.', failure: { code: 'unknown' } } })}\n`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(failures).toEqual([
+      expect.objectContaining({ code: 'account_signed_out', action: 'sign_in_account' }),
+      expect.objectContaining({ code: 'unknown', action: 'none' }),
+      null,
+    ]);
+    await client.dispose();
+  });
+
   it('routes steering, cancellation, and approvals through the same runtime', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
