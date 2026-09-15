@@ -380,12 +380,13 @@ prompt; the Accessibility grant for the process that runs the agents. Not
 founder-gated but open: on-device generation on the simulator
 (needs one run on a real device); and the shell's local coding sessions,
 settings through their real controls and the chords pressed for real wait on
-founder items 6 and 8. The desktop pass's report of a picker that would not
-leave Auto and of pointer presses never reaching the shell was an artifact:
-its clicks were swallowed by an unanswerable native sheet left open, and the
-control it could not move was the approval mode, not the model chip;
-desktop-code-2 drove the chip, menu rows and Send through ordinary clicks
-over CDP on a shell with no sheet pending.
+founder items 6 and 8. The desktop pass's report that pointer presses never
+reach this Electron build was withdrawn: its clicks were swallowed by an
+unanswerable native sheet left open (and its window had been recreated
+several times), while desktop-code-2 drove chips, menu rows and Send through
+ordinary clicks over CDP on a clean instance. The chat page's model chip that
+would not leave Auto in that session stays open as a cheap retry on a clean
+instance, not as a server-side claim.
 
 ### Screen Studio flows
 
