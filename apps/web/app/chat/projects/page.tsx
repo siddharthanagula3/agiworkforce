@@ -164,7 +164,7 @@ export default function ProjectsPage() {
 
   return (
     <WebAppShell>
-      <main
+      <section
         data-design="agi"
         style={{
           minHeight: '100%',
@@ -530,7 +530,7 @@ export default function ProjectsPage() {
             }}
           />
         )}
-      </main>
+      </section>
     </WebAppShell>
   );
 }

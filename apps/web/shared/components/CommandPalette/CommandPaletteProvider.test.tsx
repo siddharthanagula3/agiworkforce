@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { CommandPaletteProvider } from './CommandPaletteProvider';
 
-vi.mock('./CommandPalette', () => ({
-  CommandPalette: ({ open }: { open: boolean }) => (
-    <div data-testid="palette" data-open={open ? 'true' : 'false'} />
-  ),
-}));
+const paletteModule = vi.hoisted(() => ({ loads: 0 }));
+
+vi.mock('./CommandPalette', () => {
+  paletteModule.loads += 1;
+  return {
+    CommandPalette: ({ open }: { open: boolean }) => (
+      <div data-testid="palette" data-open={open ? 'true' : 'false'} />
+    ),
+  };
+});
 
 const pressCmdK = () => fireEvent.keyDown(document, { key: 'k', metaKey: true });
 const isOpen = (el: HTMLElement) => el.getAttribute('data-open') === 'true';
@@ -20,31 +25,42 @@ const isOpen = (el: HTMLElement) => el.getAttribute('data-open') === 'true';
  * capture phase and calling stopPropagation, verified below against a
  * simulated bubble-phase listener since jsdom, unlike a real browser, has
  * no capture/bubble distinction a naive test would catch on its own.
+ *
+ * The palette module itself is loaded on the first shortcut, not on mount:
+ * it carries the model catalogue and the app stores, which a legal page or
+ * the sign-in form never needs.
  */
 describe('CommandPaletteProvider global Cmd/Ctrl+K', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('opens the palette on Cmd/Ctrl+K', () => {
-    const { getByTestId } = render(<CommandPaletteProvider />);
-    expect(isOpen(getByTestId('palette'))).toBe(false);
-    pressCmdK();
-    expect(isOpen(getByTestId('palette'))).toBe(true);
+  it('does not mount or load the palette until the shortcut is used', () => {
+    const loadsBefore = paletteModule.loads;
+    const { queryByTestId } = render(<CommandPaletteProvider />);
+    expect(queryByTestId('palette')).toBeNull();
+    expect(paletteModule.loads).toBe(loadsBefore);
   });
 
-  it('opens on the chat route, where a bubble-phase listener used to own the shortcut', () => {
-    const { getByTestId } = render(<CommandPaletteProvider />);
+  it('opens the palette on Cmd/Ctrl+K', async () => {
+    const { findByTestId } = render(<CommandPaletteProvider />);
     pressCmdK();
-    expect(isOpen(getByTestId('palette'))).toBe(true);
+    expect(isOpen(await findByTestId('palette'))).toBe(true);
   });
 
-  it('toggles closed on a second Cmd/Ctrl+K', () => {
-    const { getByTestId } = render(<CommandPaletteProvider />);
+  it('opens on the chat route, where a bubble-phase listener used to own the shortcut', async () => {
+    const { findByTestId } = render(<CommandPaletteProvider />);
     pressCmdK();
-    expect(isOpen(getByTestId('palette'))).toBe(true);
+    expect(isOpen(await findByTestId('palette'))).toBe(true);
+  });
+
+  it('toggles closed on a second Cmd/Ctrl+K', async () => {
+    const { findByTestId } = render(<CommandPaletteProvider />);
     pressCmdK();
-    expect(isOpen(getByTestId('palette'))).toBe(false);
+    const palette = await findByTestId('palette');
+    expect(isOpen(palette)).toBe(true);
+    pressCmdK();
+    expect(isOpen(await findByTestId('palette'))).toBe(false);
   });
 
   it('stops the event from reaching a bubble-phase document listener registered after it', () => {
@@ -57,8 +73,8 @@ describe('CommandPaletteProvider global Cmd/Ctrl+K', () => {
   });
 
   it('leaves an unrelated keydown alone', () => {
-    const { getByTestId } = render(<CommandPaletteProvider />);
+    const { queryByTestId } = render(<CommandPaletteProvider />);
     fireEvent.keyDown(document, { key: 'j', metaKey: true });
-    expect(isOpen(getByTestId('palette'))).toBe(false);
+    expect(queryByTestId('palette')).toBeNull();
   });
 });

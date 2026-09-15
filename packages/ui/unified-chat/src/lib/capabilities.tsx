@@ -1,10 +1,10 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import type { SyncedAppSurface } from '@agiworkforce/types';
 import {
   getPlatformCapabilities,
   isCapabilityEnabled as matrixIsCapabilityEnabled,
   type PlatformCapability,
-  type SyncedAppSurface,
-} from '@agiworkforce/types';
+} from '@agiworkforce/types/capabilities';
 
 const CapabilityContext = createContext<SyncedAppSurface>('web');
 

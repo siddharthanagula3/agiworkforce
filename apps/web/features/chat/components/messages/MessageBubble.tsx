@@ -1333,6 +1333,8 @@ const MessageBubbleComponent = function MessageBubble({
     }
   }, [artifacts, isUser, message.id, artifactConversationId, upsertArtifact]);
 
+  const metadataSearchResults = message.metadata?.searchResults;
+  const metadataCitations = message.metadata?.citations;
   const { searchSources, searchQuery, citationsByMarker } = useMemo(
     () =>
       isUser
@@ -1341,8 +1343,11 @@ const MessageBubbleComponent = function MessageBubble({
             searchQuery: undefined,
             citationsByMarker: [] as ResearchSource[],
           }
-        : collectMessageResearchSources(message.metadata),
-    [isUser, message.metadata],
+        : collectMessageResearchSources({
+            searchResults: metadataSearchResults,
+            citations: metadataCitations,
+          }),
+    [isUser, metadataSearchResults, metadataCitations],
   );
 
   const cleanedContent = useMemo(() => {

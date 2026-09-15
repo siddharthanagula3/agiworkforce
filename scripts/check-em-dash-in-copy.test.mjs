@@ -79,3 +79,12 @@ test('skips a line the allow marker covers', () => {
   ].join('\n');
   assert.equal(findEmDashes(source, 'a.ts').length, 0);
 });
+
+test('flags an em dash written as a CSS escape, and leaves a longer hex escape alone', () => {
+  const found = findEmDashes(
+    "[data-design='agi'] .eyebrow::before { content: '\\2014 '; }",
+    'a.css',
+  );
+  assert.equal(found.length, 1);
+  assert.equal(findEmDashes("content: '\\2014a';", 'b.css').length, 0);
+});

@@ -10,11 +10,14 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const guard = path.join(repoRoot, 'scripts/check-web-ui-invariants.mjs');
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 
-function seedFixture({ source, baselineViolations = [] }) {
+function seedFixture({ source, stylesheet, baselineViolations = [] }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'web-ui-invariants-'));
   fs.mkdirSync(path.join(root, 'apps/web/features'), { recursive: true });
   fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
   fs.writeFileSync(path.join(root, 'apps/web/features/Fixture.tsx'), source);
+  if (stylesheet !== undefined) {
+    fs.writeFileSync(path.join(root, 'apps/web/features/fixture.css'), stylesheet);
+  }
   fs.writeFileSync(
     path.join(root, 'scripts/.web-ui-invariants-baseline.json'),
     JSON.stringify({ violations: baselineViolations }),
@@ -75,6 +78,26 @@ test('flags type below the legibility floor and allows the floor itself', () => 
   assert.match(bad.out, /tiny-type/);
 
   const good = check(`export const A = () => <p className="text-[12px]">x</p>;\n`);
+  assert.equal(good.code, 0);
+});
+
+test('flags a stylesheet font-size below the floor, and reads stylesheets for nothing else', () => {
+  const bad = runGuard(
+    seedFixture({
+      source: 'export const A = () => null;\n',
+      stylesheet: '.eyebrow { font-size: 11px; color: #ffffff; }\n.body { font-size: 12px; }\n',
+    }),
+  );
+  assert.equal(bad.code, 1);
+  assert.match(bad.out, /tiny-type-css/);
+  assert.doesNotMatch(bad.out, /raw-bw|arbitrary-color/);
+
+  const good = runGuard(
+    seedFixture({
+      source: 'export const A = () => null;\n',
+      stylesheet: '.body { font-size: 12px; }\n',
+    }),
+  );
   assert.equal(good.code, 0);
 });
 

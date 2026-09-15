@@ -1,10 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CommandPalette } from './CommandPalette';
+import dynamic from 'next/dynamic';
+
+const CommandPalette = dynamic(
+  () => import('./CommandPalette').then((m) => ({ default: m.CommandPalette })),
+  { ssr: false },
+);
 
 export function CommandPaletteProvider() {
   const [open, setOpen] = useState(false);
+  const [requested, setRequested] = useState(false);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -16,6 +22,7 @@ export function CommandPaletteProvider() {
       // reaches the bubble-phase listener, so every page, chat included, gets
       // ONE consistent shortcut: this palette.
       e.stopPropagation();
+      setRequested(true);
       setOpen((v) => !v);
     }
   }, []);
@@ -25,5 +32,6 @@ export function CommandPaletteProvider() {
     return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, [handleKeyDown]);
 
+  if (!requested) return null;
   return <CommandPalette open={open} onOpenChange={setOpen} />;
 }

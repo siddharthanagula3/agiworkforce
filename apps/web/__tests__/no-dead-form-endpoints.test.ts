@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 
 const ROOT = resolve(__dirname, '..');
@@ -14,11 +14,6 @@ describe('no dead form endpoints, guard', () => {
     expect(src).not.toMatch(/fetch\s*\(\s*['"`]\/api\/contact['"`]/);
   });
 
-  it('/forgot-password page does not fetch /api/auth/forgot-password (route does not exist)', () => {
-    const src = readPage('app/forgot-password/page.tsx');
-    expect(src).not.toMatch(/fetch\s*\(\s*['"`]\/api\/auth\/forgot-password['"`]/);
-  });
-
   it('/auth/update-password page does not fetch /api/auth/update-password (route does not exist)', () => {
     const src = readPage('app/auth/update-password/page.tsx');
     expect(src).not.toMatch(/fetch\s*\(\s*['"`]\/api\/auth\/update-password['"`]/);
@@ -30,11 +25,10 @@ describe('no dead form endpoints, guard', () => {
     expect(src).toContain('window.location.href');
   });
 
-  it('/forgot-password page does not call a dead server route and redirects to /login', () => {
-    const src = readPage('app/forgot-password/page.tsx');
-    expect(src).toContain('/login');
-    expect(src).not.toMatch(/fetch\s*\(\s*['"`]\/api\/auth\/forgot-password['"`]/);
-    expect(src).not.toMatch(/fetch\s*\(\s*['"`]\/api\//);
+  it('/forgot-password is a config redirect to /login, not a page that could fetch a dead route', () => {
+    expect(existsSync(resolve(ROOT, 'app/forgot-password'))).toBe(false);
+    const config = readPage('next.config.ts');
+    expect(config).toMatch(/source: '\/forgot-password', destination: '\/login'/);
   });
 
   it('/auth/update-password page redirects to /login (no dead fetch)', () => {

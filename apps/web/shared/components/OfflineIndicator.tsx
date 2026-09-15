@@ -122,14 +122,14 @@ export function OfflineIndicator({
 
   return (
     <div
-      className={`fixed ${position}-0 left-0 right-0 z-50 ${className}`}
+      className={`pointer-events-none fixed ${position}-0 left-0 right-0 z-50 ${className}`}
       role="status"
       aria-live="polite"
       aria-label="Network status indicator"
     >
       <div
         className={`
-          mx-4 mb-4 px-4 py-3 rounded-lg border
+          pointer-events-auto mx-4 mb-4 px-4 py-3 rounded-lg border
           flex items-center justify-between gap-3
           ${bgColor} ${borderColor} ${textColor}
           transition-all duration-200 ease-in-out

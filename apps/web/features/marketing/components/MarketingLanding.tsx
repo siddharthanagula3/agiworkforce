@@ -348,7 +348,7 @@ export function MarketingLanding() {
               points: [
                 'Every admitted model behind one selector, with Auto as the default',
                 'Projects, memory, artifacts and web search on the first day',
-                'A served-by receipt under every reply',
+                'Every reply names the model that answered it',
                 'Desktop, CLI and the extensions on the same account',
               ],
               cta: { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },

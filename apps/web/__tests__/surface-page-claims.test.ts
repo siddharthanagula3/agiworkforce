@@ -334,7 +334,7 @@ function repoText(...segments: string[]): string {
 
 describe('/byok, VS Code is named with the release state it actually has', () => {
   it('reads VS Code as coming soon out of the shared surface table', () => {
-    const constants = fileText('lib/marketing-constants.ts');
+    const constants = fileText('lib/surface-status.ts');
     expect(constants).toMatch(/vscode: COMING_SOON_LABEL/u);
     expect(constants).toMatch(/COMING_SOON_LABEL = 'Coming soon'/u);
   });
@@ -436,14 +436,20 @@ describe('/web, the served-by label is stated where the code renders it', () => 
     expect(page).toMatch(/whenever Auto left the model you pinned/u);
   });
 
-  it('never promises a receipt under every reply', () => {
-    const page = collapsed('app/web/page.tsx');
-    for (const [label, pattern] of [
-      ['a served-by receipt under every reply', /served-by receipt under every reply/u],
-      ['a receipt on every reply', /Receipt · on every reply/u],
-      ['the reply itself names its route', /the reply names the route that served it/u],
-    ] as ReadonlyArray<readonly [string, RegExp]>) {
-      expect(pattern.test(page), `page still claims: ${label}`).toBe(false);
+  it('never promises a receipt under every reply, on any page that describes the web app', () => {
+    for (const file of [
+      'app/web/page.tsx',
+      'app/features/page.tsx',
+      'features/marketing/components/MarketingLanding.tsx',
+    ]) {
+      const page = collapsed(file);
+      for (const [label, pattern] of [
+        ['a served-by receipt under every reply', /served-by receipt under every reply/u],
+        ['a receipt on every reply', /Receipt · on every reply/u],
+        ['the reply itself names its route', /the reply names the route that served it/u],
+      ] as ReadonlyArray<readonly [string, RegExp]>) {
+        expect(pattern.test(page), `${file} still claims: ${label}`).toBe(false);
+      }
     }
   });
 });
@@ -475,7 +481,7 @@ describe('/vscode-extension and /solutions keep VS Code unpublished', () => {
     expect(repoText('apps', 'extension-vscode', 'src', 'utils', 'api.ts')).toMatch(
       /vscode\.SecretStorage/u,
     );
-    expect(fileText('lib/marketing-constants.ts')).toMatch(/vscode: COMING_SOON_LABEL/u);
+    expect(fileText('lib/surface-status.ts')).toMatch(/vscode: COMING_SOON_LABEL/u);
   });
 
   it('says plainly that no VSIX has been published', () => {

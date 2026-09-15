@@ -36,6 +36,7 @@ const ROOT_DOCS = new Set([
   'README.md',
   'SECURITY.md',
   'THIRD_PARTY_LICENSES.md',
+  'WEB_PUBLIC_RELEASE_AUDIT.md',
 ]);
 
 // Markdown that is not documentation: shipped content, tool-owned output,

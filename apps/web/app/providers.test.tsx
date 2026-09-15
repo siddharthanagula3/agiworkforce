@@ -2,10 +2,19 @@ import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+const navigation = vi.hoisted(() => ({ pathname: '/' }));
+vi.mock('next/navigation', () => ({ usePathname: () => navigation.pathname }));
+vi.mock('./AppRuntimeMounts', () => ({
+  default: () => <div data-testid="app-runtime-mounts" />,
+}));
+
 vi.mock('react-i18next', () => ({
   I18nextProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
-vi.mock('sonner', () => ({ Toaster: () => null }));
+vi.mock('@agiworkforce/ui', async (importActual) => ({
+  ...(await importActual<typeof import('@agiworkforce/ui')>()),
+  SonnerToaster: () => null,
+}));
 vi.mock('./i18n', () => ({
   default: {},
   SUPPORTED_LANGUAGES: ['en'],
@@ -15,9 +24,6 @@ vi.mock('@shared/stores/query-client', () => ({
   QueryProvider: ({ children }: { children: ReactNode }) => (
     <div data-testid="query-provider">{children}</div>
   ),
-}));
-vi.mock('@shared/components/CommandPalette/CommandPaletteProvider', () => ({
-  CommandPaletteProvider: () => null,
 }));
 vi.mock('@/features/marketing/components/WaitlistModal', () => ({
   WaitlistModalProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -30,23 +36,11 @@ vi.mock('@shared/components/ThemeProvider', () => ({
     <div data-testid="theme-provider">{children}</div>
   ),
 }));
-vi.mock('@agiworkforce/unified-chat', () => ({
+vi.mock('@agiworkforce/unified-chat/capabilities', () => ({
   CapabilityProvider: ({ children }: { children: ReactNode }) => (
     <div data-testid="capability-provider">{children}</div>
   ),
 }));
-// Renders null in production too. Stubbed here for the same reason as the
-// other leaves below: this test asserts PROVIDER NESTING, and the real
-// component calls Clerk's useAuth, which throws outside a ClerkProvider.
-// which layout.tsx supplies and this structural test deliberately does not.
-vi.mock('@/features/settings/components/CloudSettingsSync', () => ({
-  CloudSettingsSync: () => null,
-}));
-vi.mock('@shared/components/TelemetryConsentSync', () => ({
-  TelemetryConsentSync: () => null,
-}));
-vi.mock('@shared/components/OfflineIndicator', () => ({ OfflineIndicator: () => null }));
-vi.mock('@shared/components/SessionTimeoutGuard', () => ({ SessionTimeoutGuard: () => null }));
 
 import Providers from './providers';
 
@@ -65,6 +59,27 @@ describe('Providers', () => {
     expect(themeProvider).toContainElement(capabilityProvider);
     expect(capabilityProvider).toContainElement(queryProvider);
     expect(themeProvider.parentElement).toBe(container);
+  });
+
+  it('mounts the app runtime on an app route and nowhere else', async () => {
+    navigation.pathname = '/pricing';
+    const marketing = render(
+      <Providers>
+        <span>App content</span>
+      </Providers>,
+    );
+    expect(marketing.queryByTestId('app-runtime-mounts')).toBeNull();
+    marketing.unmount();
+
+    navigation.pathname = '/chat';
+    const app = render(
+      <Providers>
+        <span>App content</span>
+      </Providers>,
+    );
+    expect(await app.findByTestId('app-runtime-mounts')).toBeInTheDocument();
+    app.unmount();
+    navigation.pathname = '/';
   });
 
   it('does not remove or replace the server-rendered structured data', () => {

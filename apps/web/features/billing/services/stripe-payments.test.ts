@@ -7,7 +7,7 @@ const stripeJsMocks = vi.hoisted(() => ({
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'token') }));
 vi.mock('@/lib/client/csrf', () => ({ addCsrfHeaders: vi.fn(async (headers) => headers) }));
-vi.mock('@stripe/stripe-js', () => ({
+vi.mock('@stripe/stripe-js/pure', () => ({
   loadStripe: (...args: unknown[]) => stripeJsMocks.loadStripe(...args),
 }));
 

@@ -1,22 +1,19 @@
 'use client';
 
+import dynamic from 'next/dynamic';
+import { usePathname } from 'next/navigation';
 import { I18nextProvider } from 'react-i18next';
-import { Toaster } from 'sonner';
 import i18n from './i18n';
 import { QueryProvider } from '@shared/stores/query-client';
-import { CommandPaletteProvider } from '@shared/components/CommandPalette/CommandPaletteProvider';
 import { WaitlistModalProvider } from '@/features/marketing/components/WaitlistModal';
 import { SettingsModalProvider } from '@/features/settings/components/SettingsModalProvider';
 import { ThemeProvider } from '@shared/components/ThemeProvider';
-import { CapabilityProvider } from '@agiworkforce/unified-chat';
-import { OfflineIndicator } from '@shared/components/OfflineIndicator';
-import { AppearancePreferences } from '@shared/components/AppearancePreferences';
-import { TelemetryConsentSync } from '@shared/components/TelemetryConsentSync';
-import { CloudSettingsSync } from '@/features/settings/components/CloudSettingsSync';
-import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
+import { SonnerToaster } from '@agiworkforce/ui';
+import { CapabilityProvider } from '@agiworkforce/unified-chat/capabilities';
 import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
-import { ConnectorOutcomeAnnouncer } from '@/features/connectors/components/ConnectorOutcomeAnnouncer';
-import { DesktopHostMount } from '@/features/desktop-host';
+import { isProductPath } from '@agiworkforce/types/product-routes';
+
+const AppRuntimeMounts = dynamic(() => import('./AppRuntimeMounts'), { ssr: false });
 
 export default function Providers({
   children,
@@ -25,25 +22,19 @@ export default function Providers({
   children: React.ReactNode;
   nonce?: string;
 }) {
+  const pathname = usePathname();
   return (
     <ThemeProvider nonce={nonce}>
       <CapabilityProvider platform="web">
         <QueryProvider>
           <I18nextProvider i18n={i18n}>
             <WaitlistModalProvider>
-              <AppearancePreferences />
-              <TelemetryConsentSync />
-              <CloudSettingsSync />
+              {isProductPath(pathname) && <AppRuntimeMounts />}
               <SettingsModalProvider>{children}</SettingsModalProvider>
-              <CommandPaletteProvider />
-              <OfflineIndicator position="bottom" />
-              <SessionTimeoutGuard />
               {/* Global support widget. Renders nothing unless
                   NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED === '1'. */}
               <SupportWidgetMount />
-              <Toaster position="top-center" richColors closeButton />
-              <ConnectorOutcomeAnnouncer />
-              <DesktopHostMount />
+              <SonnerToaster position="top-center" richColors closeButton />
             </WaitlistModalProvider>
           </I18nextProvider>
         </QueryProvider>

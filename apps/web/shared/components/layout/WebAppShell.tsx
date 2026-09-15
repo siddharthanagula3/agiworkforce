@@ -562,7 +562,14 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         )}
 
         {/* Content area, scrolls inside the shell (the outer wrapper is fixed). */}
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</div>
+        <div
+          id="main-content"
+          role="main"
+          tabIndex={-1}
+          className="min-h-0 min-w-0 flex-1 overflow-auto"
+        >
+          {children}
+        </div>
 
         <div id={CONTENT_OVERLAY_ROOT_ID} className="pointer-events-none absolute inset-0" />
       </div>
