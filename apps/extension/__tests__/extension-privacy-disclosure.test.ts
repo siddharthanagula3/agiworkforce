@@ -175,11 +175,13 @@ describe('options data-handling disclosure', () => {
     expect(DATA_HANDLING_DISCLOSURES.map((entry) => entry.id)).toEqual([
       'page-injection',
       'debugger',
+      'cookies',
       'cloud-mirroring',
     ]);
     expect(text).toContain('every http and https page');
     expect(text).toContain('Chrome debugger permission');
-    expect(text).not.toContain('cookies permission');
+    expect(text).toContain('reads only your AGI sign-in');
+    expect(text).toContain('never sets a cookie');
     expect(text).toContain('copied to your AGI account');
   });
 
