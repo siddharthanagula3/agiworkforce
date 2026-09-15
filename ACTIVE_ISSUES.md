@@ -293,6 +293,47 @@ classified as a safety refusal, which never rotates, so the turn ended and the
 reader was told a safety system had blocked their own document. The
 classification now rides the chunk and is validated before it is trusted.
 
+### `AGI-35` Founder decisions of 2026-09-15: execution queue
+
+**Severity:** P1
+**Status:** Open; the decisions are in `docs/decisions/2026-09-15-founder-decisions.md`
+and the founder file keeps only the external actions.
+**Area:** every client and the gateway
+
+Engineering unlocked by the decisions, in dependency order. Each item closes
+by a live check on the running product, not by its tests.
+
+1. Localization (D-03): expose only English and Spanish until a language is
+   reviewed; every client follows the account language with English fallback.
+2. Auto-memory (D-02): model-assisted extraction on by default on the
+   cheapest utility route, exclusions and metering unchanged.
+3. Tool approvals (D-01): in the read-only mode, sandboxed code execution,
+   web search, page fetch and other non-mutating tools run without asking.
+4. CLI sign-in (D-05): remove the ChatGPT-subscription OAuth flow; provider
+   logins enter API keys only.
+5. Desktop (D-04): `/desktop`, downloads, docs and the release APIs describe
+   Electron; Tauri claims and the Tauri Linux AppImage leave the public flows.
+6. QA account (D-21): a native-compatible sign-in, a workspace and a paid test
+   entitlement for a dedicated QA user; credentials gitignored.
+7. Plan-tier gate (D-09): read the surface from a Clerk custom session claim
+   (dashboard step with the founder) and stop trusting the header.
+8. Migrations (D-23): rehearse 0185 to 0192 on a Neon branch, then apply in
+   order before deploying dependent code; never 0183 (duplicate).
+9. Durability (D-22/23): deploy the world transport fix once CI is green on the
+   same commit and end the two stranded production runs.
+10. Dispatch pairing (D-10), TLS pins (D-11), minimum age (D-12), crash
+    reporting (D-14, needs the DSN), India checkout rule (D-18), policy dates
+    (D-25), MiniMax off and Groq gating (D-08), DeepSeek and Moonshot through
+    the managed harness (D-07), connector availability states (D-20), signed
+    release docs (D-24), event guardrails (D-26), local Desktop Tasks model
+    benchmark (D-15).
+
+Progress, 2026-09-15: item 1 landed in 50925e177, item 2 in 27cb8a08a, item 3
+in b288fffd0 (each still owes a live check on the running product), item 4 in
+50925e177 (checked on the rebuilt binary). Item 6: the QA user now has a
+password sign-in for the native SDKs (web sign-in stays the Clerk ticket
+flow); its workspace and the credential handling are still open.
+
 ## 4. P2, important
 
 ### `AGI-3` Tool timeline and reasoning are still client-owned
