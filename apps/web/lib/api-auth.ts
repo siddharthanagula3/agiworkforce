@@ -18,6 +18,7 @@ import { getIdentityProvider, getRequestIdentity } from '@/lib/server/identity';
 import { resolveIdentityUserId } from '@/lib/server/identity-user';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
+import { bindSurfaceFromClaims, type BoundSurface } from '@/lib/free-chat-surface-policy';
 
 export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
@@ -25,6 +26,7 @@ export interface AuthResult {
   userId: string;
   email?: string;
   surfaceClass?: 'developer';
+  boundSurface?: BoundSurface;
 }
 
 export interface AuthOptions {
@@ -178,7 +180,12 @@ async function verifyBearerToken(token: string): Promise<AuthResult | null> {
   if (claims) {
     const userId = await resolveIdentityUserId(claims.subject);
     if (!userId) return null;
-    return { userId, email: claims.email ?? undefined };
+    const boundSurface = bindSurfaceFromClaims(claims.raw);
+    return {
+      userId,
+      email: claims.email ?? undefined,
+      ...(boundSurface ? { boundSurface } : {}),
+    };
   }
 
   return null;

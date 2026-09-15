@@ -431,6 +431,23 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       expect(queriedApiKeysTable()).toBe(false);
     });
 
+    it.each([
+      ['the web origin', { azp: 'https://agiworkforce.com' }, 'web'],
+      ['the extension origin', { azp: 'chrome-extension://abcdefghijklmnop' }, 'chrome'],
+      ['the mobile template claim', { surface: 'mobile' }, 'mobile'],
+    ])('binds a Clerk bearer token to the surface %s proves', async (_label, claims, bound) => {
+      makeFakeDb();
+      mockAuth.mockResolvedValueOnce(authSession(null));
+      mockVerifyToken.mockResolvedValueOnce({ sub: 'clerk-jwt-user', ...claims });
+      process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
+
+      const result = await getClerkAuthUser(
+        makeBearerRequest('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbGVyay1qd3QtdXNlciJ9.sig'),
+      );
+
+      expect(result).toEqual({ userId: 'clerk-jwt-user', boundSurface: bound });
+    });
+
     it('authenticates a first-party developer device token and enforces its subject', async () => {
       makeFakeDb();
       const token = jwt.sign(
