@@ -894,11 +894,10 @@ Severity: P4 | `settings/index.tsx:152-154,178-180,283-286,646-648`, `permission
 
 Severity: P4 | `src/features/settings/permissions/registry.ts:33-37`
 
-### MOBILE-085 TLS pinning ships inert with placeholder pins, and has lost its tracker
+### MOBILE-085 TLS pinning is provisioned report-only, not yet enforcing
 
-Severity: P3 (was P4, acceptable while tracked) | `lib/pinning.ts`, `native/withAGITlsPinning.cjs`, `docs/work/founder-assistance.md`
-Fails closed on standard TLS; `check:tls-pins` passing does not mean pinning is on. Provision real SPKI hashes per the runbook in `lib/pinning.ts:126-145` when ready.
-Update, main `74654afd` (2026-09-15): the founder-assistance restructure removed the `CLAUDE-SECURITY-20260821-170634 F6` section, which was the entry naming this an accepted unverified transport, `BLOCKED_BY_HUMAN`. The thirteen placeholder pins are unchanged, so the gap is open and now tracked nowhere: the marker appears in no file under `docs/`, and the founder's own decision `D-2026-09-15-11` records the pinning policy without recording that the shipped build still has none. `apps/mobile/__tests__/pinning.test.ts:545-549` asserts that entry exists and is red on main because of it, which is the guard doing its job. Restoring a tracker, or repointing the guard at whichever file now owns open security items, is the maintainer's call; the audit's earlier "acceptable" rating rested on the gap being tracked.
+Severity: P4 | `lib/pinning.ts`, `native/withAGITlsPinning.cjs`, `docs/decisions/2026-09-15-founder-decisions.md`
+Update, main `a84036b13` (2026-09-15): the placeholder pins are gone. `lib/pinning.ts` carries real SPKI hashes for the four AGI hosts and the Clerk frontend host, two per host plus the issuing CAs, with `PINNING_ROLLOUT = 'report-only'` under D-2026-09-15-11, and `apps/mobile/__tests__/pinning.test.ts` reads that decision entry rather than the founder file. What stays open is the rollout step: a pin mismatch is reported, not refused, until a release has run report-only long enough to trust the pin set. Track the switch to enforcing under D-2026-09-15-11.
 
 ### MOBILE-086 New Architecture and Hermes are inferred from SDK defaults, not pinned
 
