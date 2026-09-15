@@ -15,7 +15,7 @@ use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 use super::common::{
-    generate_simple_diff, preview_string, print_tool_status, truncate_line,
+    display_path, generate_simple_diff, preview_string, print_tool_status, truncate_line,
     truncate_output_with_save, validate_file_path, validate_file_write_path, MAX_FILE_LINES,
 };
 use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
@@ -458,9 +458,10 @@ pub(super) async fn execute_write_file(
         }
     };
 
-    print_tool_status("write_file", &format!("Write({})", path));
-
     let file_path = validated_path.as_path();
+    let shown_path = display_path(file_path);
+    print_tool_status("write_file", &format!("Write({})", shown_path));
+
     if let Err(message) = crate::file_state::ensure_previously_read_and_fresh(file_path) {
         return Ok(ToolResult {
             tool_name: "write_file".to_string(),
@@ -490,7 +491,7 @@ pub(super) async fn execute_write_file(
                             path: file_path.to_path_buf(),
                         },
                         "Allow this file write?",
-                        file_write_detail(path, content, file_path, line_count),
+                        file_write_detail(&shown_path, content, file_path, line_count),
                     ),
                 )
                 .await
@@ -691,7 +692,10 @@ pub(super) async fn execute_edit_file(
         }
     };
 
-    print_tool_status("edit_file", &format!("Edit({})", path));
+    print_tool_status(
+        "edit_file",
+        &format!("Edit({})", display_path(&validated_path)),
+    );
 
     let file_path = validated_path.as_path();
     if !file_path.exists() {

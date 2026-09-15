@@ -18,7 +18,12 @@ import {
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { agiWorkPlanSentence, buildAgentActivitySummary } from '@agiworkforce/unified-chat';
-import { formatDeliverableTypeLine, type CloudWorkMode } from '@agiworkforce/types';
+import {
+  formatDeliverableTypeLine,
+  runStatusLabel,
+  toolCallStatusLabel,
+  type CloudWorkMode,
+} from '@agiworkforce/types';
 import type { Message } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -70,6 +75,9 @@ const DETAIL_SEPARATOR = ' · ';
 const ARTIFACT_OUTPUT_DETAIL = 'Artifact';
 const CLOSE_ACTION_VERB = 'Close';
 const OPEN_ACTION_VERB = 'Open';
+const PAUSED_STATUS_LABEL = 'Paused';
+const PARTIAL_STATUS_LABEL = 'Finished with errors';
+const IDLE_STATUS_LABEL = 'Ready';
 
 interface WorkSessionPanelProps {
   messages: Message[];
@@ -87,22 +95,24 @@ interface WorkSessionToggleButtonProps {
 
 function statusLabel(status: TaskDockSummary['status']): string {
   switch (status) {
+    case 'pending':
+      return runStatusLabel('queued');
     case 'running':
-      return 'Running';
+      return runStatusLabel('running');
     case 'awaiting-approval':
-      return 'Needs approval';
+      return toolCallStatusLabel('awaiting_approval');
     case 'paused':
-      return 'Paused';
+      return PAUSED_STATUS_LABEL;
     case 'completed':
-      return 'Complete';
+      return runStatusLabel('completed');
     case 'partial':
-      return 'Finished with errors';
+      return PARTIAL_STATUS_LABEL;
     case 'failed':
-      return 'Failed';
+      return runStatusLabel('failed');
     case 'cancelled':
-      return 'Cancelled';
+      return runStatusLabel('cancelled');
     default:
-      return 'Ready';
+      return IDLE_STATUS_LABEL;
   }
 }
 

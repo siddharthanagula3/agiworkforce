@@ -69,6 +69,8 @@ vi.mock('../runtime/filesystemService', () => ({
   writeTextFile: vi.fn(),
 }));
 vi.mock('../runtime/gitService', () => ({ readWorkspaceGit: vi.fn() }));
+const reportShellIdentity = vi.fn();
+const syncDeveloperAccounts = vi.fn(async () => undefined);
 vi.mock('../runtime/localInferenceService', () => ({
   listLocalServers,
   listLocalModels,
@@ -83,6 +85,12 @@ vi.mock('../runtime/localModelSettingsStore', () => ({
   readLocalModelSettings,
   readLocalBaseUrl: vi.fn(),
   writeLocalModelSettings,
+}));
+
+vi.mock('../shellIdentity', () => ({ reportShellIdentity }));
+vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  syncDeveloperAccounts,
 }));
 
 const { dispatch } = await import('../runtime/dispatcher');
@@ -434,5 +442,103 @@ describe('dispatch, local models', () => {
     expect(writeLocalModelSettings).toHaveBeenCalledWith({
       baseUrls: { ollama: 'http://127.0.0.1:11434' },
     });
+  });
+});
+
+/**
+ * The prompt is the only place a user gets to say no, so its sentence has to
+ * be one they can answer: who is asking, where, and what they are being asked
+ * to allow.
+ */
+describe('the browser capability prompt', () => {
+  beforeEach(() => {
+    getPermissionState.mockReturnValue('prompt');
+    requestPermission.mockResolvedValue('denied');
+  });
+
+  async function ask(caller?: {
+    name: string;
+    subject: string;
+    folder: string | null;
+    path: string | null;
+  }) {
+    const { runBrowserCommand } = await import('../runtime/dispatcher');
+    await runBrowserCommand(null, 'browser_read_page', {}, caller);
+    const call = requestPermission.mock.calls.at(-1) as unknown[] | undefined;
+    return {
+      scope: call?.[2] as PermissionScope,
+      reason: String(call?.[3] ?? ''),
+      question: (call?.[4] ?? {}) as { subject?: string; objectPhrase?: string },
+    };
+  }
+
+  it('asks about the browser, with the client as the subject', async () => {
+    const { question, scope } = await ask({
+      name: 'agi',
+      subject: 'The AGI CLI',
+      folder: 'qa-project',
+      path: '/work/qa-project',
+    });
+    // "Allow agi to use the paired browser?" rather than the old
+    // "Allow AGI Workforce to browse agi?", which read as though the client
+    // were a website. The title uses the name the user would type; the body
+    // says who that is in words.
+    expect(question.subject).toBe('agi');
+    expect(question.objectPhrase).toBe('use the paired browser');
+    // The grant is the client's, so the user answers once per client.
+    expect(scope).toEqual({ kind: 'application', target: 'agi' });
+  });
+
+  it('names the client, the folder and the whole path in the body', async () => {
+    const { reason } = await ask({
+      name: 'agi',
+      subject: 'The AGI CLI',
+      folder: 'qa-project',
+      path: '/private/tmp/a-very-long-scratch-directory/qa-project',
+    });
+    expect(reason).toContain('The AGI CLI running in qa-project is asking.');
+    expect(reason).toContain('/private/tmp/a-very-long-scratch-directory/qa-project');
+    expect(reason).toContain('will not ask again for each action');
+    expect(reason).toContain('approved-sites list');
+  });
+
+  it('says nothing about a folder when the client named none', async () => {
+    const { reason } = await ask({
+      name: 'agi',
+      subject: 'The AGI CLI',
+      folder: null,
+      path: null,
+    });
+    expect(reason).toContain('The AGI CLI is asking.');
+    expect(reason).not.toContain('running in');
+  });
+
+  it('leaves the renderer path exactly as it was', async () => {
+    const { scope, question } = await ask();
+    expect(scope).toEqual({ kind: 'global' });
+    expect(question.subject).toBeUndefined();
+  });
+});
+
+describe('the account the shell hands its app-servers', () => {
+  it('passes the renderer account on and resyncs every running app-server', async () => {
+    const response = await dispatch(window, 'developer_account_report', {
+      signedIn: true,
+      email: 'qa@agiworkforce.com',
+    });
+
+    expect(response).toEqual({ ok: true, value: true });
+    expect(reportShellIdentity).toHaveBeenCalledExactlyOnceWith({
+      signedIn: true,
+      email: 'qa@agiworkforce.com',
+    });
+    expect(syncDeveloperAccounts).toHaveBeenCalledOnce();
+  });
+
+  it('passes a sign-out on with no account attached to it', async () => {
+    await dispatch(window, 'developer_account_report', { signedIn: false });
+
+    expect(reportShellIdentity).toHaveBeenCalledExactlyOnceWith({ signedIn: false, email: null });
+    expect(syncDeveloperAccounts).toHaveBeenCalledOnce();
   });
 });

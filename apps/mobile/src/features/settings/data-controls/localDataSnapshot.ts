@@ -136,7 +136,6 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
       chat_preferences: {
         mode: chatView.chatMode,
         style: chatView.chatStyle,
-        tool_access: chatView.toolAccess,
         features: { ...chatView.features },
       },
     },
@@ -181,7 +180,6 @@ export async function resetLocalInMemoryState(): Promise<void> {
     isSearching: false,
     chatMode: 'chat',
     chatStyle: 'concise',
-    toolAccess: 'auto',
     features: {
       webSearch: true,
       imageGen: true,

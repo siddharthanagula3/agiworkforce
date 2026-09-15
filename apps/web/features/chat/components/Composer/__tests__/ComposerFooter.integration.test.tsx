@@ -12,6 +12,30 @@ import React from 'react';
 const toastErrorMock = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }));
 
+const FIXTURE_AVAILABLE_MODELS = vi.hoisted(
+  () =>
+    [
+      {
+        id: 'fixture-primary-model',
+        name: 'Primary Model',
+        provider: 'OpenAI',
+        providerKey: 'openai',
+      },
+      {
+        id: 'fixture-secondary-model',
+        name: 'Secondary Model',
+        provider: 'Anthropic',
+        providerKey: 'anthropic',
+      },
+      {
+        id: 'fixture-locked-model',
+        name: 'Locked Model',
+        provider: 'Fixture Provider',
+        providerKey: 'fixture-provider',
+      },
+    ] as Record<string, unknown>[],
+);
+
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (
     selector: (s: {
@@ -31,26 +55,10 @@ vi.mock('@shared/stores/model-store', () => ({
     };
     return selector(state);
   },
-  AVAILABLE_MODELS: [
-    {
-      id: 'fixture-primary-model',
-      name: 'Primary Model',
-      provider: 'OpenAI',
-      providerKey: 'openai',
-    },
-    {
-      id: 'fixture-secondary-model',
-      name: 'Secondary Model',
-      provider: 'Anthropic',
-      providerKey: 'anthropic',
-    },
-    {
-      id: 'fixture-locked-model',
-      name: 'Locked Model',
-      provider: 'Fixture Provider',
-      providerKey: 'fixture-provider',
-    },
-  ],
+  AVAILABLE_MODELS: FIXTURE_AVAILABLE_MODELS,
+  findSelectableModel: (id: string) =>
+    FIXTURE_AVAILABLE_MODELS.find((model) => model['id'] === id) ?? null,
+  isSelectableModelId: (id: string) => FIXTURE_AVAILABLE_MODELS.some((model) => model['id'] === id),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({

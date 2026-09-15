@@ -4,6 +4,7 @@ import {
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
+  TOOL_APPROVAL_ACTION_LABELS,
 } from '@agiworkforce/types';
 import type { CloudCodeAgentStopReason } from './services/cloud-code-api';
 
@@ -92,7 +93,6 @@ export const CODE_COPY = {
   repositoryBranchPlaceholder: 'Leave empty for the default branch',
   repositoryApply: 'Use this repository',
   repositoryClear: 'Clear repository',
-  environmentChip: 'Environment',
   openEmptyEnvironment: 'Open an empty environment',
   environmentHeading: 'Network access',
   environmentImageHeading: 'Coding harness',
@@ -136,8 +136,8 @@ export const CODE_COPY = {
   readAloud: 'Read aloud',
   stopReading: 'Stop reading',
   approvalHeading: 'Approval required',
-  approve: 'Approve and continue',
-  reject: 'Reject',
+  approve: `${TOOL_APPROVAL_ACTION_LABELS.approve} and continue`,
+  reject: TOOL_APPROVAL_ACTION_LABELS.deny,
   agentWorking: 'Working',
   deploymentDisabled:
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
@@ -177,10 +177,8 @@ export const CODE_COPY = {
   usageUnavailable: 'Usage is not available right now.',
 
   environmentLocal: 'Local',
-  environmentLocalHint: 'Desktop only',
   environmentCloud: 'Cloud',
-  environmentRemote: 'Remote control',
-  environmentRemoteHint: 'Desktop only',
+  environmentFolderUnavailable: 'Cannot run here',
 
   repositoryChange: 'Change repository',
   branchEdit: 'Change the branch',
@@ -284,6 +282,25 @@ export const DEFAULT_RUNTIME_LABEL = 'Default image';
 
 export function networkAccessLabel(access: CloudCodeNetworkAccess): string {
   return CODE_NETWORK_OPTIONS.find((option) => option.id === access)?.label ?? access;
+}
+
+export const CODE_ENVIRONMENTS = ['local', 'cloud'] as const;
+export type CodeEnvironment = (typeof CODE_ENVIRONMENTS)[number];
+export const DEFAULT_CODE_ENVIRONMENT: CodeEnvironment = 'cloud';
+
+const ENVIRONMENT_SEPARATOR = ' · ';
+
+export function environmentChipLabel(
+  environment: CodeEnvironment,
+  networkAccess: CloudCodeNetworkAccess,
+  folderName: string | null,
+): string {
+  if (environment === 'local') {
+    return folderName
+      ? `${CODE_COPY.environmentLocal}${ENVIRONMENT_SEPARATOR}${folderName}`
+      : CODE_COPY.environmentLocal;
+  }
+  return `${CODE_COPY.environmentCloud}${ENVIRONMENT_SEPARATOR}${networkAccessLabel(networkAccess)}`;
 }
 
 const SESSION_STATE_LABELS: Record<CloudCodeSession['state'], string> = {

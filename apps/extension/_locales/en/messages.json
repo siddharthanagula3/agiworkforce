@@ -147,6 +147,16 @@
     "message": "Add",
     "description": "Button that adds the active origin to the automation allowlist"
   },
+  "spAllowlistHostPermissionRefused": {
+    "message": "Chrome did not grant access to $ORIGIN$, so it was not approved.",
+    "description": "Shown when the user declines Chrome's host-permission prompt for a site being added to the allowlist",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
   "spMemoryDeleteConfirm": {
     "message": "Confirm?",
     "description": "Memory row delete button waiting for the second click"
@@ -216,6 +226,10 @@
   "spCloudFreeTier": {
     "message": "Free tier",
     "description": "Account tier row before entitlements are read"
+  },
+  "spCloudSignOutSyncFailed": {
+    "message": "Signed out here. The web session could not be ended.",
+    "description": "Shown next to Sign out when the sync host session revoke call fails"
   },
   "spCloudAvatarFallback": {
     "message": "A",
@@ -368,10 +382,6 @@
   "spComposerPlaceholder": {
     "message": "How can I help you today?",
     "description": "Composer input placeholder while chat is usable"
-  },
-  "spComposerPlaceholderChecking": {
-    "message": "Checking your AGI account…",
-    "description": "Composer input placeholder while the account gate is still being verified"
   },
   "spComposerPlaceholderSignedOut": {
     "message": "Sign in to chat",

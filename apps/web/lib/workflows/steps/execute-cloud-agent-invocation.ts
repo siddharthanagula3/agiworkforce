@@ -210,9 +210,18 @@ const thinkingBlockSchemaCoversThinkingBlock: SameKeys<
 > = true;
 void thinkingBlockSchemaCoversThinkingBlock;
 
+const ProviderStreamErrorSchema = z
+  .object({
+    message: z.string(),
+    code: z.string().optional(),
+    retryable: z.boolean().optional(),
+  })
+  .strict();
+
 const ProviderStepResultSchema = z
   .object({
     lines: z.array(CollectedProviderLineSchema).optional(),
+    providerError: ProviderStreamErrorSchema.optional(),
     finishReason: z.string().nullable(),
     pendingToolCalls: z.array(PendingToolCallSchema),
     textContent: z.string(),

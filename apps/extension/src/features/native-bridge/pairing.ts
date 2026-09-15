@@ -368,6 +368,14 @@ export async function beginPairing(): Promise<PairingState> {
 }
 
 export async function unpair(): Promise<PairingState> {
+  // Tell the desktop first, while the pairing still exists to authorise the
+  // message. Without this the two sides disagree: this extension forgets the
+  // pairing and the desktop keeps its record, so every local client goes on
+  // offering browser tools that can never answer.
+  if (typeof chrome.runtime?.sendMessage === 'function') {
+    await chrome.runtime.sendMessage({ type: 'UNPAIR_NATIVE' }).catch(() => undefined);
+  }
+
   try {
     await removeSession([
       STORAGE_KEY_PAIR_TOKEN,

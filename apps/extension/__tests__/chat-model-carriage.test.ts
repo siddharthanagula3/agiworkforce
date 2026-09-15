@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -84,6 +83,15 @@ describe('background forwards the carried selection to the managed owner', () =>
     for (const field of ROUTING_FIELDS) {
       expect(body).toMatch(new RegExp(`${field}:\\s*message\\.${field}`));
     }
+  });
+
+  it('handleInPagePrompt asks for an unattended completion, since the in-page panel cannot show a tool-approval card', () => {
+    const start = backgroundSource.indexOf('async function handleInPagePrompt');
+    const end = backgroundSource.indexOf('function isValidMessage', start);
+    const body = stripComments(backgroundSource.slice(start, end));
+
+    expect(body).toContain('executeChromeManagedChat');
+    expect(body).toMatch(/completionMode:\s*'unattended'/);
   });
 });
 

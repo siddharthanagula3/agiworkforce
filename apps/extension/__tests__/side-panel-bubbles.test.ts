@@ -143,7 +143,7 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     ['failed', 'Failed after 2s', 'path[d="m15 9-6 6"]', false],
     ['cancelled', 'Cancelled after 2s', 'path[d="m15 9-6 6"]', false],
     ['paused', 'Paused after 1s', 'polyline[points="12 6 12 12 16 14"]', false],
-    ['awaiting-approval', 'Needs approval · 1s', 'polyline[points="12 6 12 12 16 14"]', false],
+    ['awaiting-approval', 'Needs your approval · 1s', 'polyline[points="12 6 12 12 16 14"]', false],
   ] as const)(
     'renders the %s agent run with explicit copy and the correct status icon',
     (status, label, iconSelector, usesLoader) => {
@@ -211,6 +211,38 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     expect(node.textContent).toContain('Download unavailable in Chrome');
   });
 
+  it('opens the activity block and asks for approval when a paused run holds a waiting tool', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-4', {
+      schemaVersion: 4,
+      sessionId: 'session-1',
+      turnId: 'turn-4',
+      sequence: 1,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'approval-requested',
+        approvalId: 'approval-2',
+        toolCallId: 'call-2',
+        name: 'read_page',
+        category: 'browser',
+        summary: 'Read the current page',
+        input: {},
+        riskLevel: 'low',
+      },
+    });
+    assistant.agentActivity!.status = 'paused';
+
+    const node = buildBubbleWithTools(assistant, { onResolveApproval: vi.fn() });
+    const details = node.querySelector<HTMLDetailsElement>('details.sp-agent-activity');
+
+    expect(details?.open).toBe(true);
+    expect(details?.querySelector('summary')?.textContent).toContain('Needs your approval');
+    expect(
+      node.querySelector<HTMLDetailsElement>('details.sp-agent-step--awaiting-approval')?.open,
+    ).toBe(true);
+    expect(node.querySelector('[aria-label="Approve read_page"]')).not.toBeNull();
+  });
+
   it('renders actionable approve and decline controls for a managed tool boundary', () => {
     const messages: SidePanelChatMessage[] = [];
     const assistant = applyCanonicalAgentEvent(messages, 'stream-3', {
@@ -261,5 +293,49 @@ describe('side-panel buildToolCallEl (real render)', () => {
     });
     expect(node.textContent).toContain('search');
     expect(node.textContent).toContain('find files');
+  });
+});
+
+describe('interrupted reply (reload mid-stream)', () => {
+  it('shows the shared "Cancelled" state and a Retry control, not a dead streaming cursor', () => {
+    const node = buildBubbleWithTools(
+      msg({ role: 'assistant', content: 'partial answer captured before', interrupted: true }),
+      { onRetry: vi.fn() },
+    );
+    expect(node.textContent).toContain('partial answer captured before');
+    expect(node.textContent).toContain('Cancelled');
+    expect(node.querySelector('.sp-bubble-retry-btn')).not.toBeNull();
+    expect(node.querySelector('.sp-bubble')?.className).not.toContain('sp-cursor');
+  });
+
+  it('still renders the Cancelled state and Retry with no captured text at all', () => {
+    const node = buildBubbleWithTools(msg({ role: 'assistant', content: '', interrupted: true }), {
+      onRetry: vi.fn(),
+    });
+    expect(node.textContent).toContain('Cancelled');
+    expect(node.querySelector('.sp-bubble-retry-btn')).not.toBeNull();
+  });
+
+  it('never shows the interrupted footer for an ordinary finished reply', () => {
+    const node = buildBubbleWithTools(msg({ role: 'assistant', content: 'a normal answer' }));
+    expect(node.querySelector('.sp-bubble-interrupted-footer')).toBeNull();
+  });
+
+  it('never shows the interrupted footer for a live, still-streaming reply', () => {
+    const node = buildBubbleWithTools(
+      msg({ role: 'assistant', content: 'typing...', streaming: true }),
+    );
+    expect(node.querySelector('.sp-bubble-interrupted-footer')).toBeNull();
+    expect(node.querySelector('.sp-bubble')?.className).toContain('sp-cursor');
+  });
+
+  it('retries an interrupted reply the same way a failed one retries', () => {
+    const onRetry = vi.fn();
+    const node = buildBubbleWithTools(
+      msg({ id: 'stream-9', role: 'assistant', content: '', interrupted: true }),
+      { onRetry },
+    );
+    node.querySelector<HTMLButtonElement>('.sp-bubble-retry-btn')?.click();
+    expect(onRetry).toHaveBeenCalledWith('stream-9');
   });
 });

@@ -301,6 +301,7 @@ pub enum ThreadStatus {
 pub enum DeveloperSessionSource {
     Cli,
     Vscode,
+    Desktop,
 }
 
 /// Durable trust boundary for a developer session.
@@ -341,6 +342,21 @@ pub struct ThreadSummary {
     pub updated_at: String,
     pub created_by: DeveloperSessionSource,
     pub status: ThreadStatus,
+    /// Checked-out branch as the host last persisted it. Listing never
+    /// recomputes it, so a long list costs no git invocations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub git_branch: Option<String>,
+    /// Top level of the thread's git worktree. Distinct from `cwd`, which may
+    /// be a subdirectory of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub worktree_root: Option<String>,
+    /// `clientInfo.name` of the connection that created the thread, where
+    /// `created_by` is only the coarse surface.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -444,11 +460,52 @@ impl LocalModelProvider {
     }
 }
 
+/// Why a model on this host cannot be used right now.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ModelUnreachable {
+    pub code: TurnFailureCode,
+    pub action: TurnFailureAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub provider: Option<String>,
+}
+
+/// One model this host knows about, and whether it can actually reach it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HostModelSummary {
+    pub id: String,
+    /// Route name as the host knows it, not a display name.
+    pub provider: String,
+    /// Whether a turn on this model could start. Not whether it is allowed.
+    pub reachable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub unreachable: Option<ModelUnreachable>,
+    /// The boundary a turn on this model would cross.
+    pub trust_mode: DeveloperSessionTrustMode,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ModelListParams {
+    /// Recompute instead of answering from what this session already resolved.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub refresh: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct LocalModelListResponse {
     pub models: Vec<LocalModelSummary>,
+    /// Every route this host knows about with its verdict.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub host_models: Vec<HostModelSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -578,6 +635,169 @@ pub struct TurnSummary {
 #[ts(rename_all = "camelCase")]
 pub struct TurnStartResponse {
     pub turn: TurnSummary,
+}
+
+/// Why a turn ended without completing: the closed set a client may branch on,
+/// which prose that changes with every provider cannot be.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum TurnFailureCode {
+    /// The route has no credential at all, so there is nothing to refresh.
+    ProviderAuthMissing,
+    /// No AGI Workforce session, and no other route can run the model.
+    AccountSignedOut,
+    /// Signed in, but the account's plan does not include the model.
+    PlanExcludesModel,
+    /// A credential exists and the provider rejected it.
+    ProviderAuthInvalid,
+    ProviderRateLimited,
+    /// The provider answered without a usable response.
+    ProviderUnavailable,
+    ContextWindowExceeded,
+    /// The request never reached the provider.
+    Network,
+    /// A tool call was refused, at the approval prompt or by policy.
+    ToolDenied,
+    /// The user or the client stopped the turn.
+    Interrupted,
+    Timeout,
+    /// The turn was rejected before any provider call.
+    InvalidRequest,
+    Unknown,
+}
+
+/// What a client should offer the user next.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum TurnFailureAction {
+    /// Send the user to a sign-in for `provider`.
+    SignInProvider,
+    /// Send the user to the AGI Workforce sign-in.
+    SignInAccount,
+    /// Send the user to the account's upgrade route.
+    UpgradePlan,
+    /// Send the user to settings: the route, the model, or the config is wrong.
+    OpenSettings,
+    /// Running the same turn again may work.
+    Retry,
+    /// Nothing for the client to offer.
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnFailure {
+    pub code: TurnFailureCode,
+    /// The failure as one sentence; the notification's `error` field keeps the
+    /// terminal rendering with its provider prefix.
+    pub message: String,
+    /// The route that failed, when the failure belongs to one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub provider: Option<String>,
+    pub retryable: bool,
+    pub action: TurnFailureAction,
+}
+
+impl TurnFailure {
+    pub fn new(code: TurnFailureCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            provider: None,
+            retryable: code.is_retryable(),
+            action: code.default_action(),
+        }
+    }
+
+    pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
+        self.provider = Some(provider.into());
+        self
+    }
+
+    /// Fallback for the shared engine's errors, so a host with its own richer
+    /// taxonomy cannot drift into a separate code set.
+    pub fn from_agiworkforce_err(error: &crate::error::AgiworkforceErr) -> Self {
+        use crate::error::AgiworkforceErr as E;
+        let code = match error {
+            E::ContextWindowExceeded => TurnFailureCode::ContextWindowExceeded,
+            E::Interrupted | E::TurnAborted => TurnFailureCode::Interrupted,
+            E::Timeout => TurnFailureCode::Timeout,
+            E::ConnectionFailed(_) => TurnFailureCode::Network,
+            E::UsageLimitReached(_) | E::QuotaExceeded => TurnFailureCode::ProviderRateLimited,
+            E::RefreshTokenFailed(_) => TurnFailureCode::ProviderAuthInvalid,
+            E::UsageNotIncluded => TurnFailureCode::ProviderAuthMissing,
+            E::Stream(..)
+            | E::ServerOverloaded
+            | E::InternalServerError
+            | E::ResponseStreamFailed(_)
+            | E::RetryLimit(_)
+            | E::UnexpectedStatus(_) => TurnFailureCode::ProviderUnavailable,
+            E::InvalidRequest(_)
+            | E::InvalidImageRequest()
+            | E::UnsupportedOperation(_)
+            | E::ThreadNotFound(_)
+            | E::AgentLimitReached { .. }
+            | E::EnvVar(_) => TurnFailureCode::InvalidRequest,
+            E::Sandbox(_) | E::CyberPolicy { .. } | E::LandlockSandboxExecutableNotProvided => {
+                TurnFailureCode::ToolDenied
+            }
+            _ => TurnFailureCode::Unknown,
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+impl TurnFailureCode {
+    pub fn is_retryable(self) -> bool {
+        matches!(
+            self,
+            TurnFailureCode::ProviderRateLimited
+                | TurnFailureCode::ProviderUnavailable
+                | TurnFailureCode::Network
+                | TurnFailureCode::Timeout
+        )
+    }
+
+    pub fn default_action(self) -> TurnFailureAction {
+        match self {
+            TurnFailureCode::ProviderAuthMissing | TurnFailureCode::ProviderAuthInvalid => {
+                TurnFailureAction::SignInProvider
+            }
+            TurnFailureCode::AccountSignedOut => TurnFailureAction::SignInAccount,
+            TurnFailureCode::PlanExcludesModel => TurnFailureAction::UpgradePlan,
+            TurnFailureCode::ContextWindowExceeded | TurnFailureCode::InvalidRequest => {
+                TurnFailureAction::OpenSettings
+            }
+            TurnFailureCode::ProviderRateLimited
+            | TurnFailureCode::ProviderUnavailable
+            | TurnFailureCode::Network
+            | TurnFailureCode::Timeout => TurnFailureAction::Retry,
+            TurnFailureCode::ToolDenied
+            | TurnFailureCode::Interrupted
+            | TurnFailureCode::Unknown => TurnFailureAction::None,
+        }
+    }
+}
+
+/// Params of both `turn/completed` and `turn/failed`, one shape so a client
+/// parses the end of a turn once. `error` stays for clients that predate
+/// `failure` and carries the same text.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnEndedNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub status: TurnStatus,
+    pub response: String,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub error: Option<String>,
+    pub failure: Option<TurnFailure>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

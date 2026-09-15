@@ -58,6 +58,8 @@ export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** Still mid-reply as of the last save; see `SidePanelChatMessage.interrupted`. */
+  streaming?: boolean;
   backgroundDeliveryId?: string;
   agentEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
@@ -330,6 +332,7 @@ function normalizeHistoryMessage(
       normalized.cloudApprovalError = message['cloudApprovalError'];
     }
     if (message['managedQuickMode'] === true) normalized.managedQuickMode = true;
+    if (message['streaming'] === true) normalized.streaming = true;
     if (isSafeModelReference(message['model'])) {
       const modelMetadata = getModelMetadataById(message['model']);
       if (modelMetadata) {

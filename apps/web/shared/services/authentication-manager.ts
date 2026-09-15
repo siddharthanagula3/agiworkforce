@@ -1,5 +1,7 @@
 import { logger } from '@shared/lib/logger';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
+import { signedOutRedirectUrl } from '@/lib/identity/client';
 import { requestMe } from './me-request';
 
 export interface AuthUser {
@@ -85,14 +87,25 @@ class AuthService {
     return { user: null, error: 'Use Clerk sign-up flow' };
   }
 
+  /**
+   * This is the sign-out that actually navigates.
+   *
+   * Every caller follows it with `identitySignOut({ redirectUrl })`, and that
+   * second call never runs: the provider has already sent the page to its own
+   * after-sign-out URL, the marketing home. In a browser that is the intended
+   * destination. Inside the desktop shell it is a page the shell hands to the
+   * browser, so the window stayed on the screen the user had just signed out
+   * of; the destination is resolved here instead.
+   */
   async logout(): Promise<{ error: string | null }> {
     if (typeof window === 'undefined') return { error: null };
     const clerk = (window as unknown as Record<string, unknown>)['Clerk'] as
-      | { signOut?: () => Promise<void> }
+      | { signOut?: (options?: { redirectUrl?: string }) => Promise<void> }
       | undefined;
     if (typeof clerk?.signOut !== 'function') return { error: null };
+    const redirectUrl = signedOutRedirectUrl(undefined, isDesktopHost());
     try {
-      await clerk.signOut();
+      await (redirectUrl === undefined ? clerk.signOut() : clerk.signOut({ redirectUrl }));
       return { error: null };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };

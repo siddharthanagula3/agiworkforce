@@ -46,6 +46,7 @@
     "paywall-vocabulary",
     "places-search",
     "plugins",
+    "product-routes",
     "project-file-citations",
     "prompt-enhancement",
     "provider",
@@ -109,5 +110,5 @@
     "tool-approval-resume",
     "tool-events"
   ],
-  "generatedProtocolTypeCount": 341
+  "generatedProtocolTypeCount": 348
 }

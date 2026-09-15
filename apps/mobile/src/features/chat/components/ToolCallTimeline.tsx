@@ -19,6 +19,7 @@ import {
   getToolDisplayLabel,
   getToolSourceBadge,
   getFileExtensionIconName,
+  TOOL_APPROVAL_ACTION_LABELS,
 } from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
 
@@ -251,7 +252,11 @@ function ToolCallTimelineRow({
               <>
                 <Text style={{ fontSize: 12.5, color: colors.textPrimary }}>
                   {tool.approvalDecision
-                    ? `Decision saved: ${tool.approvalDecision === 'approved' ? 'allow' : 'deny'}`
+                    ? `Decision saved: ${
+                        tool.approvalDecision === 'approved'
+                          ? TOOL_APPROVAL_ACTION_LABELS.allowed
+                          : TOOL_APPROVAL_ACTION_LABELS.denied
+                      }`
                     : `${nameText} wants to run. Review the request before allowing it to proceed.`}
                 </Text>
                 {tool.input ? (
@@ -266,7 +271,7 @@ function ToolCallTimelineRow({
                   <Pressable
                     onPress={() => onResolveApproval?.(tool.toolCallId!, 'rejected')}
                     accessibilityRole="button"
-                    accessibilityLabel={`Deny ${nameText}`}
+                    accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny} ${nameText}`}
                     style={{
                       flex: 1,
                       paddingVertical: 8,
@@ -276,13 +281,15 @@ function ToolCallTimelineRow({
                     }}
                   >
                     <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>
-                      {tool.approvalDecision === 'rejected' ? 'Denied' : 'Deny'}
+                      {tool.approvalDecision === 'rejected'
+                        ? TOOL_APPROVAL_ACTION_LABELS.denied
+                        : TOOL_APPROVAL_ACTION_LABELS.deny}
                     </Text>
                   </Pressable>
                   <Pressable
                     onPress={() => onResolveApproval?.(tool.toolCallId!, 'approved')}
                     accessibilityRole="button"
-                    accessibilityLabel={`Allow ${nameText}`}
+                    accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allow} ${nameText}`}
                     style={{
                       flex: 1,
                       paddingVertical: 8,
@@ -292,7 +299,9 @@ function ToolCallTimelineRow({
                     }}
                   >
                     <Text style={{ fontSize: 13, fontWeight: '600', color: colors.surfaceBase }}>
-                      {tool.approvalDecision === 'approved' ? 'Allowed' : 'Allow'}
+                      {tool.approvalDecision === 'approved'
+                        ? TOOL_APPROVAL_ACTION_LABELS.allowed
+                        : TOOL_APPROVAL_ACTION_LABELS.allow}
                     </Text>
                   </Pressable>
                 </View>

@@ -1,10 +1,15 @@
 export type SessionSource = 'local' | 'cloud';
 
+/** Which surface started the session, as the protocol's `createdBy` reports it. */
+export type SessionOrigin = 'cli' | 'vscode' | 'desktop';
+
 export interface SessionRowInput {
   id: string;
   title: string;
   updatedAt: string;
   source: SessionSource;
+  origin?: SessionOrigin;
+  branch?: string;
 }
 
 export interface SessionRow {
@@ -13,12 +18,29 @@ export interface SessionRow {
   age: string;
   source: SessionSource;
   sourceLabel: string;
+  branch?: string;
 }
 
 const SOURCE_LABELS: Record<SessionSource, string> = {
   local: 'Local',
   cloud: 'Cloud',
 };
+
+/**
+ * A local session says which surface opened it rather than the word "Local",
+ * because every row in that list is local and the useful distinction is the
+ * one the protocol now carries.
+ */
+const ORIGIN_LABELS: Record<SessionOrigin, string> = {
+  cli: 'CLI',
+  vscode: 'VS Code',
+  desktop: 'Desktop',
+};
+
+function sourceLabelFor(input: SessionRowInput): string {
+  if (input.source === 'local' && input.origin !== undefined) return ORIGIN_LABELS[input.origin];
+  return SOURCE_LABELS[input.source];
+}
 
 export function formatSessionAge(updatedAt: number, now: number): string {
   const diff = Math.max(0, now - updatedAt);
@@ -45,6 +67,9 @@ export function mergeSessionRows(
       title: input.title.trim() === '' ? 'Untitled session' : input.title.trim(),
       age: formatSessionAge(updatedAt, now),
       source: input.source,
-      sourceLabel: SOURCE_LABELS[input.source],
+      sourceLabel: sourceLabelFor(input),
+      ...(input.branch === undefined || input.branch.trim() === ''
+        ? {}
+        : { branch: input.branch.trim() }),
     }));
 }

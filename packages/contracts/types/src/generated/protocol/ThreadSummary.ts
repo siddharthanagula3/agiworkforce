@@ -19,4 +19,19 @@ export type ThreadSummary = {
   updatedAt: string;
   createdBy: DeveloperSessionSource;
   status: ThreadStatus;
+  /**
+   * Checked-out branch as the host last persisted it. Listing never
+   * recomputes it, so a long list costs no git invocations.
+   */
+  gitBranch?: string;
+  /**
+   * Top level of the thread's git worktree. Distinct from `cwd`, which may
+   * be a subdirectory of it.
+   */
+  worktreeRoot?: string;
+  /**
+   * `clientInfo.name` of the connection that created the thread, where
+   * `created_by` is only the coarse surface.
+   */
+  client?: string;
 };

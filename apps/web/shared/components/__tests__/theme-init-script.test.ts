@@ -6,12 +6,13 @@ import { THEME_INIT_SCRIPT } from '../seo/theme-init-script';
 
 const script = readFileSync(resolve(process.cwd(), 'public/theme-init.js'), 'utf8');
 
-function renderWithPersistedTheme(theme: string) {
+function renderWithPersistedTheme(theme: string, host?: { platform: unknown }) {
   return new JSDOM(`<!doctype html><html><head><script>${script}</script></head></html>`, {
     url: 'https://agi.localhost/',
     runScripts: 'dangerously',
     beforeParse(window) {
       window.localStorage.setItem('theme', theme);
+      if (host) Object.assign(window, { agiHost: host });
     },
   });
 }
@@ -40,5 +41,29 @@ describe('theme-init.js', () => {
 
     expect(root).toHaveClass('dark');
     expect(root).not.toHaveClass('light');
+  });
+
+  // The desktop shell hides the native title bar and hands the top of the
+  // window back to the page. The page has to know that before it paints, or the
+  // brand mark renders under the window buttons and then jumps.
+  it('marks the document with the desktop host before first paint', () => {
+    const dom = renderWithPersistedTheme('dark', { platform: 'electron-darwin' });
+
+    expect(dom.window.document.documentElement).toHaveAttribute(
+      'data-desktop-host',
+      'electron-darwin',
+    );
+  });
+
+  it('leaves the attribute off in a browser', () => {
+    const dom = renderWithPersistedTheme('dark');
+
+    expect(dom.window.document.documentElement).not.toHaveAttribute('data-desktop-host');
+  });
+
+  it('ignores a host that does not name its platform', () => {
+    const dom = renderWithPersistedTheme('dark', { platform: 7 });
+
+    expect(dom.window.document.documentElement).not.toHaveAttribute('data-desktop-host');
   });
 });

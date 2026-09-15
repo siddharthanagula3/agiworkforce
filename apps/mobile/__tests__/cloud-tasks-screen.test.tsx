@@ -90,7 +90,7 @@ const RUN = {
   updatedAt: '2026-07-17T20:00:00.000Z',
 };
 
-const CARD_LABEL = 'Open Audit the launch checklist. Waiting on you. Started on Mobile';
+const CARD_LABEL = 'Open Audit the launch checklist. Waiting for input. Started on Mobile';
 
 describe('Mobile Cloud tasks screen', () => {
   let appStateListener: ((state: AppStateStatus) => void) | undefined;
@@ -185,7 +185,7 @@ describe('Mobile Cloud tasks screen', () => {
     );
 
     const { getByLabelText, queryByLabelText } = render(<CloudTasksScreen />);
-    const label = 'Open AGI work task. Waiting on you. Started on Mobile';
+    const label = 'Open AGI work task. Waiting for input. Started on Mobile';
     await waitFor(() => expect(getByLabelText(label)).toBeTruthy());
 
     await act(async () => {
@@ -276,7 +276,7 @@ describe('Mobile Cloud tasks screen', () => {
     expect(mockListRuns).toHaveBeenLastCalledWith(
       expect.objectContaining({ cursor: 'cursor-2', limit: 25 }),
     );
-    expect(getAllByText('Waiting on you')).toHaveLength(1);
+    expect(getAllByText('Waiting for input')).toHaveLength(1);
   });
 
   it('polls only while mounted in foreground Cloud mode', async () => {

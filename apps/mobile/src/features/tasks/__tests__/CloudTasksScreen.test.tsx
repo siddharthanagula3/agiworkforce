@@ -175,7 +175,7 @@ describe('Cloud tasks screen', () => {
     const { getByLabelText, getByText } = render(<CloudTasksScreen />);
 
     await waitFor(() => expect(getByText('Research task')).toBeTruthy());
-    fireEvent.press(getByLabelText('Open Research task. Waiting on you. Started on CLI'));
+    fireEvent.press(getByLabelText('Open Research task. Waiting for input. Started on CLI'));
 
     await waitFor(() => expect(mockFollowRun).toHaveBeenCalledWith(RUN.id, expect.anything()));
     await waitFor(() => expect(getByText('rm -rf build')).toBeTruthy());

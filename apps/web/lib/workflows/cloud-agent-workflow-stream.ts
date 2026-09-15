@@ -25,6 +25,7 @@ interface WorkflowStreamChoiceDelta {
 
 interface WorkflowStreamPayload {
   choices?: Array<{ delta?: WorkflowStreamChoiceDelta }>;
+  usage?: unknown;
 }
 
 const RECONSTRUCTED_DELTA_KEYS = new Set([
@@ -81,6 +82,13 @@ export function projectCloudAgentWorkflowChunk(
     try {
       payload = JSON.parse(line.slice(6)) as WorkflowStreamPayload;
     } catch {
+      continue;
+    }
+
+    // The usage frame carries no choice, so the loop below never sees it, and
+    // an OpenAI-compatible client counts tokens from nothing else.
+    if (payload.usage !== null && typeof payload.usage === 'object') {
+      projected.push({ sse: `${line}\n\n` });
       continue;
     }
 

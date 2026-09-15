@@ -15,8 +15,18 @@ import {
   normalizeCapabilityEntries,
   surfaceSectionItem,
 } from '../features/surfaces';
-import { resolveAccountPresence, resolveAccountToken } from '../features/surfaces/accountAccess';
+import {
+  resolveAccountPresence,
+  resolveAccountToken,
+  signIn,
+} from '../features/surfaces/accountAccess';
+import { signInToAgiCloud } from '../features/account-auth/deviceAuth';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
+
+vi.mock('../features/account-auth/deviceAuth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../features/account-auth/deviceAuth')>()),
+  signInToAgiCloud: vi.fn(async () => false),
+}));
 
 function manifestCommands(): string[] {
   const manifest = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8')) as {
@@ -237,5 +247,58 @@ describe('single sign-in', () => {
       token: 'extension-token',
       source: 'extension',
     });
+  });
+
+  it('opens the browser and waits for the CLI device grant before reporting a sign-in', async () => {
+    const waited: string[] = [];
+    const adapter = new CliCapabilityAdapter(
+      poolWith({
+        startAccountLogin: async () => ({
+          loginId: 'login-1',
+          verificationUrl: 'http://localhost:3100/auth/device',
+          userCode: 'AB12-CD34',
+        }),
+        waitForAccountLogin: async (loginId: string) => {
+          waited.push(loginId);
+          return { outcome: 'completed', account: { signedIn: true } };
+        },
+      }),
+    );
+
+    await expect(signIn(secretsWith(undefined), adapter)).resolves.toBe(true);
+
+    expect(waited).toEqual(['login-1']);
+    expect(vscode.env.openExternal).toHaveBeenCalled();
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Signed in to AGI Cloud.');
+  });
+
+  it('reports an expired grant instead of pretending the sign-in happened', async () => {
+    const adapter = new CliCapabilityAdapter(
+      poolWith({
+        startAccountLogin: async () => ({
+          loginId: 'login-2',
+          verificationUrl: 'http://localhost:3100/auth/device',
+        }),
+        waitForAccountLogin: async () => ({
+          outcome: 'expired',
+          message: 'The device code expired before it was approved',
+          account: { signedIn: false },
+        }),
+      }),
+    );
+
+    await expect(signIn(secretsWith(undefined), adapter)).resolves.toBe(false);
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'The device code expired before it was approved',
+    );
+  });
+
+  it('falls back to the extension device flow when the CLI cannot start a login', async () => {
+    const adapter = new CliCapabilityAdapter(poolWith({}));
+
+    await expect(signIn(secretsWith(undefined), adapter)).resolves.toBe(false);
+
+    expect(signInToAgiCloud).toHaveBeenCalled();
   });
 });

@@ -11,7 +11,7 @@ import {
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
-import { ApiFreeCapacityError } from '@/services/apiErrors';
+import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import {
@@ -205,6 +205,7 @@ interface ExecutionState {
   streamingContent: string;
   streamingReasoning: string;
   error: string | null;
+  failureCode: { message: string; code: string } | null;
   paywallError: PaywallErrorState | null;
   providerConsentError: ProviderConsentErrorState | null;
   freeCapacityError: FreeCapacityErrorState | null;
@@ -238,6 +239,11 @@ interface ExecutionState {
     decision: 'approved' | 'rejected',
   ) => Promise<void>;
 }
+
+// Exported so the composer can offer a download or a ready model against this
+// exact failure instead of leaving the user with a dead Retry.
+export const LOCAL_NO_MODEL_MESSAGE =
+  'Local Mode is active, but no on-device model is ready yet. Open Models to download or select a local model.';
 
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
@@ -524,8 +530,13 @@ function sanitizeLocalOutput(raw: string): string {
     .trimEnd();
 }
 
+// Every local failure leaves through here, so a runtime exception string never
+// reaches the transcript. A raw `FoundationModels.LanguageModelSession.\
+// GenerationError error -1.` told the user nothing and read as a crash.
 function localSetupMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
+  if (raw) console.warn('[chat] local inference failed:', raw);
+
   if (
     raw.includes('No model path') ||
     raw.includes('No local runtime') ||
@@ -533,12 +544,30 @@ function localSetupMessage(error: unknown): string {
     raw.includes('not downloaded') ||
     raw.includes('not available on this device')
   ) {
-    return 'Local Mode is active, but no on-device model is ready yet. Open Models to download or select a local model.';
+    return LOCAL_NO_MODEL_MESSAGE;
   }
-  return (
-    raw ||
-    'Local inference failed. Check device storage, thermal state, and installed model status.'
-  );
+  if (raw.includes('APPLE_INTELLIGENCE_UNAVAILABLE')) {
+    return 'Apple Intelligence is not available on this device. Choose another on-device model to keep chatting privately.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_ASSETS_UNAVAILABLE')) {
+    return 'Apple Intelligence is still preparing its on-device model. Try again shortly, or choose another on-device model.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_CONTEXT_EXCEEDED')) {
+    return 'This conversation is too long for Apple Intelligence. Start a new chat or choose a model with a larger context window.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_REFUSED')) {
+    return 'Apple Intelligence declined to answer this message. Rephrase it, or choose another on-device model.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_RATE_LIMITED')) {
+    return 'Apple Intelligence is busy on this device. Wait a moment and try again.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_FAILED') || raw.includes('FoundationModels')) {
+    return 'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.';
+  }
+  if (raw.includes('out of memory') || raw.includes('OOM')) {
+    return 'This device ran out of memory for the on-device model. Close other apps, or choose a smaller model.';
+  }
+  return 'Local inference failed. Check device storage, thermal state, and installed model status.';
 }
 
 async function uploadWithRetry(
@@ -841,14 +870,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   streamingContent: '',
   streamingReasoning: '',
   error: null,
+  failureCode: null,
   paywallError: null,
   providerConsentError: null,
   freeCapacityError: null,
   retryAttempts: {},
   isEditing: false,
 
-  clearError: () => set({ error: null, freeCapacityError: null }),
-  setSendError: (message: string) => set({ error: message, freeCapacityError: null }),
+  clearError: () => set({ error: null, failureCode: null, freeCapacityError: null }),
+  setSendError: (message: string) =>
+    set({ error: message, failureCode: null, freeCapacityError: null }),
   clearPaywallError: () => set({ paywallError: null }),
   setPaywallError: (paywallError) => set({ paywallError }),
   clearProviderConsentError: () => set({ providerConsentError: null }),
@@ -1424,7 +1455,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     lastDeltaTimes.set(conversationId, Date.now());
 
-    set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '', error: null });
+    set({
+      ...streamingFlags(),
+      streamingContent: '',
+      streamingReasoning: '',
+      error: null,
+      failureCode: null,
+    });
 
     try {
       if (shouldUseLocalRuntime) {
@@ -2112,21 +2149,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (__DEV__) {
               console.warn(`[chat-stream] onError ${error?.name}: ${error?.message}`);
             }
+            const failure =
+              error instanceof ApiHttpError
+                ? { message: error.message, code: error.code }
+                : { message: 'Something went wrong. Please try again.', code: null };
             if (agentActivity) {
               agentActivity = finishAgentActivityLocally(agentActivity, {
                 status: 'failed',
                 completedAtMs: Date.now(),
-                error: 'Something went wrong. Please try again.',
+                error: failure.message,
               });
             }
             turnResearch =
-              settleResearchRun(turnResearch, 'error', 'Something went wrong. Please try again.') ??
-              turnResearch;
+              settleResearchRun(turnResearch, 'error', failure.message) ?? turnResearch;
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
                     ...m,
-                    content: currentContent || 'Something went wrong. Please try again.',
+                    content: currentContent || failure.message,
                     isStreaming: false,
                     ...(agentActivity || cloudAgentRun || turnResearch
                       ? {
@@ -2151,7 +2191,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ...streamingFlags(),
               streamingContent: '',
               streamingReasoning: '',
-              error: 'Something went wrong. Please try again.',
+              error: failure.message,
+              failureCode: failure.code ? { message: failure.message, code: failure.code } : null,
             });
           },
         },
@@ -2400,7 +2441,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     streamingConversations.add(conversationId);
     cloudStreamingConversations.add(conversationId);
     lastDeltaTimes.set(conversationId, Date.now());
-    set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '', error: null });
+    set({
+      ...streamingFlags(),
+      streamingContent: '',
+      streamingReasoning: '',
+      error: null,
+      failureCode: null,
+    });
 
     const currentMsgs = msgStore.getState().messages[conversationId] ?? [];
     const currentMessage = currentMsgs.find((m) => m.id === assistantMessageId);

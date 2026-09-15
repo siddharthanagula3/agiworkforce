@@ -71,6 +71,19 @@ impl PrivacyMode {
         }
     }
 
+    /// The trust-boundary word shown to a person: "Local" / "Your key" /
+    /// "Managed", the same vocabulary the VS Code extension and the TUI's
+    /// `AccessMode::trust_word` use. `label` stays the lowercase config value
+    /// (persisted project settings, `--privacy` arg parsing) and must not
+    /// change to match.
+    pub fn trust_word(self) -> &'static str {
+        match self {
+            Self::Local => "Local",
+            Self::Byok => "Your key",
+            Self::Managed => "Managed",
+        }
+    }
+
     pub fn description(self) -> &'static str {
         match self {
             Self::Local => "no prompt, chat, or file context should leave this device",
@@ -208,6 +221,19 @@ pub struct ManagedSession {
     pub workspace_root: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
+    /// `clientInfo.name` of the app-server connection that created this
+    /// session. `created_by` is the coarse surface; this is the exact client.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
+    /// Workspace branch and worktree root as of the last turn.
+    ///
+    /// Persisted rather than probed: listing a hundred threads must not shell
+    /// out to git a hundred times, and a thread whose checkout has since moved
+    /// still reports where its work actually happened.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree_root: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
     // --- v2 session-state fields (all optional for backward compat with v1 files) ---
@@ -233,48 +259,61 @@ pub struct ManagedSession {
     pub routing_authority: Option<ManagedSessionRoutingAuthority>,
 }
 
+/// The header record's payload, boxed by the record enum below.
+///
+/// Its own struct so the enum stays small: the header carries every persisted
+/// session field and the message record carries one message, and an enum is as
+/// large as its largest variant, so every message record would otherwise pay
+/// the header's size. A field added here costs the enum nothing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ManagedSessionJsonlHeader {
+    version: u32,
+    session_id: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fork: Option<Box<ManagedSessionForkMetadata>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    workspace_root: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    created_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    client: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    git_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    worktree_root: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    archived_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    permission_mode: Option<PermissionMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    plan_mode: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    plan_approved: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_plan: Option<Plan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fast_mode: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    output_style: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fallback_model_ids: Box<Option<Vec<String>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    auto_routing: Option<Box<ManagedSessionAutoRouting>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    routing_authority: Option<Box<ManagedSessionRoutingAuthority>>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "record_type", rename_all = "snake_case")]
 enum ManagedSessionJsonlRecord {
-    Header {
-        version: u32,
-        session_id: String,
-        created_at: DateTime<Utc>,
-        updated_at: DateTime<Utc>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        fork: Option<Box<ManagedSessionForkMetadata>>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        title: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        model: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        workspace_root: Option<PathBuf>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        created_by: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        archived_at: Option<DateTime<Utc>>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        permission_mode: Option<PermissionMode>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        plan_mode: Option<bool>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        plan_approved: Option<bool>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        current_plan: Option<Plan>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        fast_mode: Option<bool>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        output_style: Option<String>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        fallback_model_ids: Box<Option<Vec<String>>>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        auto_routing: Option<Box<ManagedSessionAutoRouting>>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        routing_authority: Option<Box<ManagedSessionRoutingAuthority>>,
-    },
-    Message {
-        message: Message,
-    },
+    Header(Box<ManagedSessionJsonlHeader>),
+    Message { message: Message },
 }
 
 impl ManagedSession {
@@ -291,6 +330,9 @@ impl ManagedSession {
             model: None,
             workspace_root: None,
             created_by: None,
+            client: None,
+            git_branch: None,
+            worktree_root: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -374,6 +416,9 @@ impl ManagedSession {
             model: source.model.clone(),
             workspace_root: source.workspace_root.clone(),
             created_by: source.created_by.clone(),
+            client: source.client.clone(),
+            git_branch: source.git_branch.clone(),
+            worktree_root: source.worktree_root.clone(),
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -540,51 +585,35 @@ impl ManagedSession {
                 })?;
 
             match record {
-                ManagedSessionJsonlRecord::Header {
-                    version,
-                    session_id,
-                    created_at,
-                    updated_at,
-                    fork,
-                    title,
-                    model,
-                    workspace_root,
-                    created_by,
-                    archived_at,
-                    permission_mode,
-                    plan_mode,
-                    plan_approved,
-                    current_plan,
-                    fast_mode,
-                    output_style,
-                    fallback_model_ids,
-                    auto_routing,
-                    routing_authority,
-                } => {
+                ManagedSessionJsonlRecord::Header(record) => {
                     if header.is_some() {
                         bail!("Managed session JSONL file contains more than one header record");
                     }
+                    let record = *record;
                     header = Some(ManagedSession {
-                        version,
-                        session_id,
-                        created_at,
-                        updated_at,
+                        version: record.version,
+                        session_id: record.session_id,
+                        created_at: record.created_at,
+                        updated_at: record.updated_at,
                         messages: Vec::new(),
-                        fork: fork.map(|fork| *fork),
-                        title,
-                        model,
-                        workspace_root,
-                        created_by,
-                        archived_at,
-                        permission_mode,
-                        plan_mode,
-                        plan_approved,
-                        current_plan,
-                        fast_mode,
-                        output_style,
-                        fallback_model_ids: *fallback_model_ids,
-                        auto_routing: auto_routing.map(|routing| *routing),
-                        routing_authority: routing_authority.map(|authority| *authority),
+                        fork: record.fork.map(|fork| *fork),
+                        title: record.title,
+                        model: record.model,
+                        workspace_root: record.workspace_root,
+                        created_by: record.created_by,
+                        client: record.client,
+                        git_branch: record.git_branch,
+                        worktree_root: record.worktree_root,
+                        archived_at: record.archived_at,
+                        permission_mode: record.permission_mode,
+                        plan_mode: record.plan_mode,
+                        plan_approved: record.plan_approved,
+                        current_plan: record.current_plan,
+                        fast_mode: record.fast_mode,
+                        output_style: record.output_style,
+                        fallback_model_ids: *record.fallback_model_ids,
+                        auto_routing: record.auto_routing.map(|routing| *routing),
+                        routing_authority: record.routing_authority.map(|authority| *authority),
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -665,7 +694,7 @@ impl ManagedSession {
     }
 
     fn write_jsonl(&self, writer: &mut impl Write) -> Result<()> {
-        let header = ManagedSessionJsonlRecord::Header {
+        let header = ManagedSessionJsonlRecord::Header(Box::new(ManagedSessionJsonlHeader {
             version: self.version,
             session_id: self.session_id.clone(),
             created_at: self.created_at,
@@ -675,6 +704,9 @@ impl ManagedSession {
             model: self.model.clone(),
             workspace_root: self.workspace_root.clone(),
             created_by: self.created_by.clone(),
+            client: self.client.clone(),
+            git_branch: self.git_branch.clone(),
+            worktree_root: self.worktree_root.clone(),
             archived_at: self.archived_at,
             permission_mode: self.permission_mode,
             plan_mode: self.plan_mode,
@@ -685,7 +717,7 @@ impl ManagedSession {
             fallback_model_ids: Box::new(self.fallback_model_ids.clone()),
             auto_routing: self.auto_routing.clone().map(Box::new),
             routing_authority: self.routing_authority.clone().map(Box::new),
-        };
+        }));
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
         writer
@@ -717,6 +749,20 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use std::path::PathBuf;
     use tempfile::tempdir;
+
+    /// The config value (`label`) and the person-facing word (`trust_word`)
+    /// must never collapse into the same string: the boundary notice in
+    /// `cloud::client::CloudError` reads `trust_word`, while persisted project
+    /// settings and `--privacy` parsing read `label`.
+    #[test]
+    fn label_stays_the_config_value_trust_word_reads_for_a_person() {
+        assert_eq!(PrivacyMode::Local.label(), "local");
+        assert_eq!(PrivacyMode::Byok.label(), "byok");
+        assert_eq!(PrivacyMode::Managed.label(), "managed");
+        assert_eq!(PrivacyMode::Local.trust_word(), "Local");
+        assert_eq!(PrivacyMode::Byok.trust_word(), "Your key");
+        assert_eq!(PrivacyMode::Managed.trust_word(), "Managed");
+    }
 
     fn sample_messages() -> Vec<Message> {
         vec![
@@ -797,6 +843,9 @@ mod tests {
             model: Some("registry/model-key".to_string()),
             workspace_root: Some(temp_dir.path().to_path_buf()),
             created_by: Some("vscode".to_string()),
+            client: None,
+            git_branch: None,
+            worktree_root: None,
             archived_at: None,
             permission_mode,
             plan_mode,
@@ -842,6 +891,9 @@ mod tests {
             model: None,
             workspace_root: None,
             created_by: None,
+            client: None,
+            git_branch: None,
+            worktree_root: None,
             archived_at: None,
             permission_mode,
             plan_mode,

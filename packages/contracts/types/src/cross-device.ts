@@ -39,6 +39,8 @@
  * };
  * ```
  */
+import type { AgentTaskState } from './generated/protocol/AgentTaskState';
+
 export interface CrossDeviceThread {
   id: string;
 
@@ -135,6 +137,45 @@ export type DispatchTaskLifecycleStatus =
   | 'failed'
   | 'cancelled'
   | 'rejected';
+
+export const RUN_STATUS_LABELS: Readonly<Record<DispatchTaskLifecycleStatus, string>> =
+  Object.freeze({
+    accepted: 'Queued',
+    queued: 'Queued',
+    running: 'Running',
+    awaiting_input: 'Waiting for input',
+    ready_for_review: 'Ready for review',
+    completed: 'Completed',
+    failed: 'Failed',
+    cancelled: 'Cancelled',
+    rejected: 'Rejected',
+  });
+
+export function runStatusLabel(status: DispatchTaskLifecycleStatus): string {
+  return RUN_STATUS_LABELS[status];
+}
+
+/**
+ * The same words for the engine's own lifecycle. `AgentTaskState` and
+ * `DispatchTaskLifecycleStatus` overlap on seven states and must never drift
+ * into two vocabularies, so the shared ones are read from the labels above and
+ * only the two states dispatch has no word for are added here.
+ */
+export const AGENT_TASK_STATE_LABELS: Readonly<Record<AgentTaskState, string>> = Object.freeze({
+  queued: RUN_STATUS_LABELS.queued,
+  running: RUN_STATUS_LABELS.running,
+  awaiting_input: RUN_STATUS_LABELS.awaiting_input,
+  ready_for_review: RUN_STATUS_LABELS.ready_for_review,
+  completed: RUN_STATUS_LABELS.completed,
+  failed: RUN_STATUS_LABELS.failed,
+  cancelled: RUN_STATUS_LABELS.cancelled,
+  paused: 'Paused',
+  archived: 'Archived',
+});
+
+export function agentTaskStateLabel(state: AgentTaskState): string {
+  return AGENT_TASK_STATE_LABELS[state];
+}
 
 export interface DispatchTaskStatusEvent {
   action: 'dispatch.task.status';

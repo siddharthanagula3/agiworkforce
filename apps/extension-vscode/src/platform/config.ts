@@ -33,6 +33,7 @@ export interface MutableConfigValues {
   cliPath: string;
   'composer.followUpBehavior': ComposerFollowUpBehavior;
   contextLines: number;
+  'editorContext.autoAttach': boolean;
   telemetryEnabled: boolean;
   hoverEnabled: boolean;
   codeLensEnabled: boolean;
@@ -44,8 +45,6 @@ export interface MutableConfigValues {
   'agent.mode': ExtensionAgentMode;
   'agent.effort': ExtensionAgentEffort;
   'agent.thinking': boolean;
-  'desktopBridge.enabled': boolean;
-  'desktopBridge.port': number;
   telemetryEndpoint: string;
 }
 
@@ -76,8 +75,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'agent.effort',
   'agent.thinking',
   'composer.followUpBehavior',
-  'desktopBridge.enabled',
-  'desktopBridge.port',
+  'editorContext.autoAttach',
   'telemetryEndpoint',
 ] as const satisfies readonly MutableConfigKey[];
 
@@ -103,10 +101,9 @@ const DEFAULTS = {
   model: 'auto',
   composerFollowUpBehavior: 'queue',
   contextLines: 50,
+  editorContextAutoAttach: true,
   telemetryEnabled: false,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
-  desktopBridgeEnabled: false,
-  desktopBridgePort: 8787,
   currentTier: 'unknown',
   cliPath: 'agi',
 } as const;
@@ -181,15 +178,11 @@ export const Config = {
   contextLines(): number {
     return get<number>('contextLines', DEFAULTS.contextLines);
   },
+  editorContextAutoAttach(): boolean {
+    return get<boolean>('editorContext.autoAttach', DEFAULTS.editorContextAutoAttach);
+  },
   apiEndpoint(): string {
     return getUserScoped<string>('apiEndpoint', DEFAULTS.apiEndpoint);
-  },
-
-  desktopBridgeEnabled(): boolean {
-    return getUserScoped<boolean>('desktopBridge.enabled', DEFAULTS.desktopBridgeEnabled);
-  },
-  desktopBridgePort(): number {
-    return getUserScoped<number>('desktopBridge.port', DEFAULTS.desktopBridgePort);
   },
 
   telemetryEnabled(): boolean {
@@ -222,6 +215,7 @@ export const Config = {
         cliPath: this.cliPath(),
         'composer.followUpBehavior': this.composerFollowUpBehavior(),
         contextLines: this.contextLines(),
+        'editorContext.autoAttach': this.editorContextAutoAttach(),
         telemetryEnabled: this.telemetryEnabled(),
         hoverEnabled: this.hoverEnabled(),
         codeLensEnabled: this.codeLensEnabled(),
@@ -233,8 +227,6 @@ export const Config = {
         'agent.mode': this.agentMode(),
         'agent.effort': this.agentEffort(),
         'agent.thinking': this.agentThinking(),
-        'desktopBridge.enabled': this.desktopBridgeEnabled(),
-        'desktopBridge.port': this.desktopBridgePort(),
         telemetryEndpoint: this.telemetryEndpoint(),
         currentTier: this.currentTier(),
         currentTierLabel: currentTierLabel(this.currentTier()),

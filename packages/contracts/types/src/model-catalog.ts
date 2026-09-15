@@ -20,6 +20,12 @@
 
 import modelsCatalogJson from './models.json';
 import {
+  PROVIDER_DISPLAY,
+  PROVIDER_DISPLAY_ALIASES,
+  type ProviderDisplay,
+  type ProviderId,
+} from './design-system/provider-display';
+import {
   lifecycleStageAtOrAfter,
   modelRegistry,
   type LifecycleStage,
@@ -1303,6 +1309,49 @@ export const providerLabels: Record<string, string> = {
 
 export const PROVIDERS_IN_ORDER = [...modelsCatalog.providersInOrder];
 
+/**
+ * Every spelling of a provider that a surface can meet, mapped to the one
+ * display identity. A picker that looks a wire key up in the display map
+ * directly misses whenever the two spellings differ and then renders the raw
+ * id as a heading, so the mapping is derived here from the aliases the registry
+ * already declares rather than copied into each surface.
+ */
+const PROVIDER_DISPLAY_ID_BY_KEY: ReadonlyMap<string, ProviderId> = (() => {
+  const displayIds = new Set<string>(Object.keys(PROVIDER_DISPLAY));
+  const byKey = new Map<string, ProviderId>();
+  for (const displayId of displayIds) byKey.set(displayId, displayId as ProviderId);
+  for (const [providerId, providerConfig] of Object.entries(modelsCatalog.providers)) {
+    const spellings = [providerId, ...(providerConfig.aliases ?? [])];
+    const displayId =
+      spellings.find((spelling) => displayIds.has(spelling)) ??
+      spellings.map((spelling) => PROVIDER_DISPLAY_ALIASES[spelling]).find(Boolean);
+    if (!displayId) continue;
+    for (const spelling of spellings) byKey.set(spelling, displayId as ProviderId);
+  }
+  for (const [spelling, displayId] of Object.entries(PROVIDER_DISPLAY_ALIASES)) {
+    byKey.set(spelling, displayId);
+  }
+  return byKey;
+})();
+
+export function resolveProviderDisplayId(
+  provider: Provider | string | null | undefined,
+): ProviderId | null {
+  if (typeof provider !== 'string' || !provider) return null;
+  return PROVIDER_DISPLAY_ID_BY_KEY.get(provider) ?? null;
+}
+
+export function getProviderDisplay(
+  provider: Provider | string | null | undefined,
+): ProviderDisplay | null {
+  const displayId = resolveProviderDisplayId(provider);
+  return displayId ? PROVIDER_DISPLAY[displayId] : null;
+}
+
+export function getProviderDisplayLabel(provider: Provider | string): string {
+  return getProviderDisplay(provider)?.label ?? providerLabels[provider] ?? provider;
+}
+
 export const DEVELOPER_LABELS: Readonly<Record<string, string>> = Object.freeze(
   Object.fromEntries(
     Object.entries(modelsCatalog.developers).map(([developerId, developer]) => [
@@ -2423,18 +2472,20 @@ function formatCoreModelDetail(model: ModelMetadata): string {
   return bestFor ? `${tier} · ${bestFor}` : tier;
 }
 
+function toCoreModelOption(model: ModelMetadata): CoreModelOption {
+  const providerLabel = providerLabels[model.provider] ?? model.provider;
+  return {
+    id: model.id,
+    label: model.name,
+    provider: model.provider,
+    providerLabel,
+    description: `${providerLabel}, ${describeQualityBand(model)}`,
+    detail: formatCoreModelDetail(model),
+  };
+}
+
 export function getCoreManualModelOptions(): CoreModelOption[] {
-  return getManualOverrideModels().map((model) => {
-    const providerLabel = providerLabels[model.provider] ?? model.provider;
-    return {
-      id: model.id,
-      label: model.name,
-      provider: model.provider,
-      providerLabel,
-      description: `${providerLabel}, ${describeQualityBand(model)}`,
-      detail: formatCoreModelDetail(model),
-    };
-  });
+  return getManualOverrideModels().map(toCoreModelOption);
 }
 
 export const NON_US_PROVIDERS: ReadonlySet<string> = Object.freeze(
@@ -2516,12 +2567,18 @@ export function getPickerModelTier(modelId: string | null | undefined): PickerMo
   return 'economy';
 }
 
-function getUnifiedAllowedModelIds(): string[] {
-  return normalizeModelList([
-    ...getAllowedModelsForTier('economy'),
-    ...getAllowedModelsForTier('pro_additions'),
-    ...getAllowedModelsForTier('flagship_additions'),
-  ]);
+/**
+ * The one answer to which models a surface may offer, and the reason a surface
+ * must not keep its own. A narrower list silently refuses a model the send
+ * path would serve; the tier tables name a subset, so they cannot be it.
+ * Surface and plan narrow this downstream, never the other way round.
+ */
+export function getExecutableModelIds(): string[] {
+  return normalizeModelList(
+    listChatModels()
+      .filter((model) => isModelLive(model) && isManagedTrafficPermitted(model.id))
+      .map((model) => model.id),
+  );
 }
 
 export function getPickerModels(options: PickerModelOptions = {}): PickerModelView[] {
@@ -2545,7 +2602,7 @@ export function getPickerModels(options: PickerModelOptions = {}): PickerModelVi
     premium: 2,
   };
 
-  return getUnifiedAllowedModelIds()
+  return getExecutableModelIds()
     .map((modelId) => getModelMetadataById(modelId))
     .filter((model): model is ModelMetadata => Boolean(model))
     .filter((model) => includeDeprecated || model.status !== 'deprecated')
@@ -2629,6 +2686,15 @@ export function getModelsForTierAndSurface(
   return getPickerModelsForRuntimeProfile(runtimeProfileId, options).filter((model) =>
     canAccessModelForSubscriptionTier(model.id, subscriptionTier),
   );
+}
+
+export function getSurfaceManualModelOptions(runtimeProfileId: string): CoreModelOption[] {
+  return getPickerModelsForRuntimeProfile(runtimeProfileId, {
+    modelTypes: [...CHAT_MODEL_TYPES],
+  })
+    .map((model) => getModelMetadataById(model.id))
+    .filter((model): model is ModelMetadata => model !== null)
+    .map(toCoreModelOption);
 }
 
 export function getModelContextLimits(modelIds?: string[]): Record<string, number> {

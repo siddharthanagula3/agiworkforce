@@ -35,6 +35,38 @@ const { nearDeprecationDate, farDeprecationDate } = vi.hoisted(() => {
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
+const FIXTURE_AVAILABLE_MODELS = vi.hoisted(
+  () =>
+    [
+      // No deprecationDate at all, must show no badge.
+      {
+        id: 'fixture-live-model',
+        name: 'Live Model',
+        provider: 'OpenAI',
+        providerKey: 'openai',
+        description: 'No scheduled retirement',
+      },
+      // Within the 30-day warning window, must show the badge.
+      {
+        id: 'fixture-near-deprecation-model',
+        name: 'Sunsetting Model',
+        provider: 'OpenAI',
+        providerKey: 'openai',
+        description: 'Retiring soon',
+        deprecationDate: nearDeprecationDate,
+      },
+      // Scheduled, but outside the warning window, must show no badge yet.
+      {
+        id: 'fixture-far-deprecation-model',
+        name: 'Far Future Model',
+        provider: 'OpenAI',
+        providerKey: 'openai',
+        description: 'Retiring eventually',
+        deprecationDate: farDeprecationDate,
+      },
+    ] as Record<string, unknown>[],
+);
+
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (
     selector: (s: {
@@ -62,34 +94,10 @@ vi.mock('@shared/stores/model-store', () => ({
     };
     return selector(state);
   },
-  AVAILABLE_MODELS: [
-    // No deprecationDate at all, must show no badge.
-    {
-      id: 'fixture-live-model',
-      name: 'Live Model',
-      provider: 'OpenAI',
-      providerKey: 'openai',
-      description: 'No scheduled retirement',
-    },
-    // Within the 30-day warning window, must show the badge.
-    {
-      id: 'fixture-near-deprecation-model',
-      name: 'Sunsetting Model',
-      provider: 'OpenAI',
-      providerKey: 'openai',
-      description: 'Retiring soon',
-      deprecationDate: nearDeprecationDate,
-    },
-    // Scheduled, but outside the warning window, must show no badge yet.
-    {
-      id: 'fixture-far-deprecation-model',
-      name: 'Far Future Model',
-      provider: 'OpenAI',
-      providerKey: 'openai',
-      description: 'Retiring eventually',
-      deprecationDate: farDeprecationDate,
-    },
-  ],
+  AVAILABLE_MODELS: FIXTURE_AVAILABLE_MODELS,
+  findSelectableModel: (id: string) =>
+    FIXTURE_AVAILABLE_MODELS.find((model) => model['id'] === id) ?? null,
+  isSelectableModelId: (id: string) => FIXTURE_AVAILABLE_MODELS.some((model) => model['id'] === id),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({

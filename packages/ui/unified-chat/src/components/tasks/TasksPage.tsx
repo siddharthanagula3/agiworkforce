@@ -16,6 +16,7 @@ import {
   type CloudAgentRunSnapshotPage,
   type ManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { toUserMessageWithStatus } from '../../lib/network-error';
@@ -655,7 +656,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           {resolvingApprovalId === run.id ? (
                             <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                           ) : null}
-                          Approve
+                          {TOOL_APPROVAL_ACTION_LABELS.approve}
                         </Button>
                         <Button
                           variant="outline"
@@ -664,7 +665,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           disabled={resolvingApprovalId === run.id}
                           onClick={() => void handleApproval(run, 'rejected')}
                         >
-                          Deny
+                          {TOOL_APPROVAL_ACTION_LABELS.deny}
                         </Button>
                         <span className="text-[12px] text-muted-foreground">
                           asked{' '}

@@ -286,6 +286,7 @@ export function buildProjectsDrawerSection(
   let openProjectId: string | null = null;
   let conversationsByProjectId = new Map<string, ChromeProjectConversation[] | 'failed'>();
   let inFlight: AbortController | null = null;
+  let listed = false;
 
   function setStatus(message: string): void {
     statusEl.replaceChildren(document.createTextNode(message));
@@ -465,7 +466,7 @@ export function buildProjectsDrawerSection(
       fragment.appendChild(item);
     }
     listEl.replaceChildren(fragment);
-    emptyEl.hidden = projects.length > 0 || !statusEl.hidden;
+    emptyEl.hidden = !listed || projects.length > 0 || !statusEl.hidden;
   }
 
   async function loadConversations(projectId: string): Promise<void> {
@@ -495,6 +496,7 @@ export function buildProjectsDrawerSection(
       if (result.code === 'auth_required') {
         projects = [];
         conversationsByProjectId = new Map();
+        listed = true;
       }
       reportFailure(result);
       render();
@@ -502,6 +504,7 @@ export function buildProjectsDrawerSection(
     }
     projects = result.projects;
     conversationsByProjectId = new Map();
+    listed = true;
     setStatus('');
     render();
     return true;

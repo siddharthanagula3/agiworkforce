@@ -21,7 +21,7 @@ function describeFetchError(error: unknown): string {
   return error.message;
 }
 
-async function resolveApiBase(): Promise<string> {
+export async function resolveApiBase(): Promise<string> {
   if (apiBaseUrlOverride) return apiBaseUrlOverride;
   const stored = await getSecret('api_base_url');
   if (stored && isAllowedApiBaseUrl(stored)) return stored.replace(/\/+$/, '');

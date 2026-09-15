@@ -26,6 +26,7 @@ interface MessageListProps {
   onReject?: (approvalId: string, reason?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
+  onSwitchModel?: () => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -49,6 +50,7 @@ export function MessageList({
   onReject,
   onDeleteMessage,
   onRetryMessage,
+  onSwitchModel,
   onEditMessage,
   onRefresh,
   refreshing = false,
@@ -103,6 +105,7 @@ export function MessageList({
           onReject={onReject}
           onDeleteMessage={onDeleteMessage}
           onRetryMessage={onRetryMessage}
+          onSwitchModel={onSwitchModel}
           onEditMessage={onEditMessage}
           onReaction={onReaction}
           onResolveToolApproval={onResolveToolApproval}
@@ -119,6 +122,7 @@ export function MessageList({
       onReject,
       onDeleteMessage,
       onRetryMessage,
+      onSwitchModel,
       onEditMessage,
       onQuoteReply,
       onReaction,

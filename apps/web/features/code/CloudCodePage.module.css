@@ -11,12 +11,15 @@
 /* ---------- left column ---------- */
 
 .rail {
+  --code-rail-padding: 10px;
+  --agi-window-title-strip-region-padding: var(--code-rail-padding);
+
   display: flex;
   flex-direction: column;
   gap: 2px;
   width: 290px;
   min-height: 0;
-  padding: 10px 10px 12px;
+  padding: var(--code-rail-padding) var(--code-rail-padding) 12px;
   background: var(--chat-sidebar-bg);
 }
 
@@ -228,6 +231,55 @@ svg + .menuRowLabel {
   color: var(--chat-text-muted);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.railGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 0 8px 2px;
+  color: var(--chat-text-muted);
+  font-size: 12px;
+}
+
+.railGroupName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.railGroupBranch {
+  overflow: hidden;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.railLocalRow {
+  min-height: 44px;
+  align-items: flex-start;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.railLocalText {
+  display: flex;
+  overflow: hidden;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.railRowMeta {
+  overflow: hidden;
+  color: var(--chat-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .railEmptyAction {
@@ -835,6 +887,46 @@ svg + .menuRowLabel {
   min-width: 0;
 }
 
+.menuItemStack {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuItemTop {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.menuItemLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuScroll {
+  max-height: min(70vh, var(--radix-dropdown-menu-content-available-height, 70vh));
+  overflow-y: auto;
+}
+
+.menuItemCount {
+  flex: none;
+  padding-left: 8px;
+  color: var(--chat-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.menuItemOffer {
+  color: var(--chat-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .field {
   border: 1px solid var(--chat-border-strong);
   border-radius: var(--chat-radius-2xl);
@@ -907,6 +999,12 @@ svg + .menuRowLabel {
 .controlButton:hover {
   background: var(--chat-surface-hover);
   color: var(--chat-text-primary);
+}
+
+.controlButtonWarning {
+  border-color: var(--chat-warning-border);
+  background: var(--chat-warning-bg);
+  color: var(--chat-warning-fg);
 }
 
 .controlButtonMode {

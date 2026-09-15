@@ -52,13 +52,11 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "API endpoint, CLI path, model boundary, Desktop bridge, auto-apply, telemetry endpoint, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
+      "description": "API endpoint, CLI path, model boundary, auto-apply, telemetry endpoint, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
       "restrictedConfigurations": [
         "agiWorkforce.apiEndpoint",
         "agiWorkforce.cliPath",
         "agiWorkforce.model",
-        "agiWorkforce.desktopBridge.enabled",
-        "agiWorkforce.desktopBridge.port",
         "agiWorkforce.autoApplyFixes",
         "agiWorkforce.memory.enabled",
         "agiWorkforce.telemetryEnabled",
@@ -129,6 +127,11 @@
         "command": "agi-workforce.signOut",
         "title": "AGI: Sign out of AGI Cloud",
         "icon": "$(sign-out)"
+      },
+      {
+        "command": "agi-workforce.openUpgrade",
+        "title": "AGI: Upgrade your plan",
+        "icon": "$(rocket)"
       },
       {
         "command": "agi-workforce.setApiKey",
@@ -209,6 +212,11 @@
         "command": "agi-workforce.runCommand",
         "title": "AGI Workforce: Run Terminal Command",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "agi-workforce.signInProvider",
+        "title": "AGI Workforce: Sign In to a Provider",
+        "icon": "$(key)"
       },
       {
         "command": "agi-workforce.explainTerminal",
@@ -309,11 +317,6 @@
         "command": "agi-workforce.showPatchLogs",
         "title": "AGI Workforce: Show Patch Logs",
         "icon": "$(output)"
-      },
-      {
-        "command": "agi-workforce.bridgeReconnect",
-        "title": "AGI Workforce: Reconnect Desktop Bridge",
-        "icon": "$(debug-restart)"
       },
       {
         "command": "agi-workforce.addToContext",
@@ -964,6 +967,12 @@
           "maximum": 500,
           "description": "Number of surrounding lines to include as context"
         },
+        "agiWorkforce.editorContext.autoAttach": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send."
+        },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
           "default": false,
@@ -1049,18 +1058,6 @@
           "type": "boolean",
           "default": false,
           "description": "Enable extended thinking for cloud-backed editor utilities such as Explain, Fix, diagnostics, and inline completion. This setting does not affect local @agi, sidebar, or editor developer sessions, whose reasoning effort is controlled by the Effort setting."
-        },
-        "agiWorkforce.desktopBridge.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show authenticated AGI Desktop availability over the local health bridge"
-        },
-        "agiWorkforce.desktopBridge.port": {
-          "type": "number",
-          "default": 8787,
-          "minimum": 1024,
-          "maximum": 65535,
-          "description": "Local port for AGI Workforce desktop bridge connection"
         },
         "agiWorkforce.telemetryEndpoint": {
           "type": "string",

@@ -19,3 +19,19 @@ describe('HelpSection keyboard shortcuts hint', () => {
     expect(hint.textContent).not.toMatch(/Press\s+\?/);
   });
 });
+
+describe('HelpSection links', () => {
+  // Every row draws an external-link icon. A row that navigated in place would
+  // be making a promise the icon does not keep, and inside the desktop shell it
+  // would replace the product with a documentation page.
+  it('opens every row where its icon says it will', () => {
+    render(<HelpSection />);
+
+    const rows = screen.getAllByRole('link');
+    expect(rows.length).toBeGreaterThan(4);
+    for (const row of rows) {
+      expect(row.getAttribute('target'), row.textContent ?? '').toBe('_blank');
+      expect(row.getAttribute('rel'), row.textContent ?? '').toContain('noopener');
+    }
+  });
+});
