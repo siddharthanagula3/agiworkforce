@@ -5,12 +5,14 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import {
   DEFAULT_LANGUAGE,
+  SELECTABLE_LANGUAGES,
   SUPPORTED_LANGUAGES,
   baseInitOptions,
   languageFor,
+  selectableLanguageOrDefault,
 } from '@agiworkforce/i18n';
 
-export { SUPPORTED_LANGUAGES };
+export { SELECTABLE_LANGUAGES, SUPPORTED_LANGUAGES, selectableLanguageOrDefault };
 export type SupportedLanguage = string;
 export const defaultLanguage = DEFAULT_LANGUAGE;
 
@@ -71,7 +73,7 @@ function applyDocumentLanguage(code: string): void {
 if (typeof window !== 'undefined') {
   i18n.on('languageChanged', applyDocumentLanguage);
   window.setTimeout(() => {
-    void i18n.changeLanguage(cachedLanguageAtLoad ?? undefined);
+    void i18n.changeLanguage(selectableLanguageOrDefault(cachedLanguageAtLoad));
   }, 0);
 }
 

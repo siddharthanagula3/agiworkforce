@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
+import { SELECTABLE_LANGUAGES } from '@/app/i18n/index';
 
 const TRANSLATION_SCOPE_FALLBACK =
   "Translates pricing, marketing pages, device sign-in, and the app's navigation - sidebar, menus, and the composer's own labels. Settings field labels and your conversations are unaffected.";
@@ -33,7 +33,7 @@ export function LanguageSelector() {
           cursor: 'pointer',
         }}
       >
-        {SUPPORTED_LANGUAGES.map((lang) => (
+        {SELECTABLE_LANGUAGES.map((lang) => (
           <option key={lang.code} value={lang.code}>
             {lang.flag} {lang.nativeName}
           </option>
