@@ -59,6 +59,18 @@ export class ApiHttpError extends Error {
 
 export const CLOUD_SIGN_IN_MESSAGE = 'Sign in to AGI Cloud to continue.';
 
+const NO_MODEL_SWITCH_CODES = new Set([
+  'auth_required',
+  'request_cancelled',
+  'max_output_tokens_exceeded',
+  'tool_call_invalid',
+  FREE_CAPACITY_UNAVAILABLE_CODE,
+]);
+
+export function offersModelSwitch(code: string | null | undefined): boolean {
+  return typeof code === 'string' && code.length > 0 && !NO_MODEL_SWITCH_CODES.has(code);
+}
+
 export function httpErrorFrom(status: number, body: string): ApiHttpError {
   if (status === 401) return new ApiHttpError(CLOUD_SIGN_IN_MESSAGE, status, 'auth_required');
   const parsed = parseJsonBody(body);

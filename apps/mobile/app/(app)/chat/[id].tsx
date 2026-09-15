@@ -100,7 +100,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
-import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
+import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
 import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
@@ -189,6 +189,7 @@ export default function ChatScreen() {
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const sendError = useChatStore((s) => s.error);
+  const sendFailureCode = useChatStore((s) => s.failureCode);
   const providerConsentError = useChatStore((s) => s.providerConsentError);
   const freeCapacityError = useChatStore((s) => s.freeCapacityError);
   const clearProviderConsentError = useChatStore((s) => s.clearProviderConsentError);
@@ -668,15 +669,37 @@ export default function ChatScreen() {
 
   const sendRecoveryAction = useMemo(() => {
     if (localRecoveryAction) return localRecoveryAction;
-    if (sendError !== CLOUD_SIGN_IN_MESSAGE) return null;
-    return {
-      label: 'Sign in',
-      onPress: () => {
-        clearError();
-        handleOpenCloudSignIn();
-      },
-    };
-  }, [clearError, handleOpenCloudSignIn, localRecoveryAction, sendError]);
+    if (sendError === CLOUD_SIGN_IN_MESSAGE) {
+      return {
+        label: 'Sign in',
+        onPress: () => {
+          clearError();
+          handleOpenCloudSignIn();
+        },
+      };
+    }
+    if (
+      sendFailureCode &&
+      sendFailureCode.message === sendError &&
+      offersModelSwitch(sendFailureCode.code)
+    ) {
+      return {
+        label: 'Switch model',
+        onPress: () => {
+          clearError();
+          handleOpenModelPicker();
+        },
+      };
+    }
+    return null;
+  }, [
+    clearError,
+    handleOpenCloudSignIn,
+    handleOpenModelPicker,
+    localRecoveryAction,
+    sendError,
+    sendFailureCode,
+  ]);
 
   const handleModelSelect = useCallback(
     (newModelId: string) => {
@@ -1384,6 +1407,7 @@ export default function ChatScreen() {
             onDeleteMessage={handleDeleteMessage}
             onReaction={handleReaction}
             onRetryMessage={handleRetryMessage}
+            onSwitchModel={handleOpenModelPicker}
             onResearchPlanDecision={handleResearchPlanDecision}
             onRetryResearch={handleRetryResearch}
             onStopResearch={handleStop}
