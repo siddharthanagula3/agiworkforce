@@ -1152,14 +1152,14 @@ Evidence: `apps/mobile/app.config.js:60` `orientation: 'portrait'` with `support
 Recommended fix: `requireFullScreen: true`, or declare the iPad orientations and give the primary screens a wide layout; change the test to assert the chosen pair.
 Verification: `expo prebuild` then Xcode Validate App.
 
-### [PG-MOB-11] Four modals drift from the house modal pattern
+### [PG-MOB-11] Three modals drift from the house modal pattern
 
 Severity: P3
 Surface: Mobile
 Area: Accessibility
 Status: Accessibility
-Evidence: `apps/mobile/app/(app)/chat/[id].tsx:1467` rename modal lacks `accessibilityViewIsModal` and scrim suppression; `apps/mobile/src/features/chat/components/ModeSwitchModal.tsx:89` buttons have no `accessibilityRole`; `apps/mobile/src/features/edge-cases/components/ModelLoadingFirstRunModal.tsx` and `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx` mount `<Modal>` with no `onRequestClose`, so Android back is inert (state whether that is intentional).
-Recommended fix: extract the pattern from `apps/mobile/src/features/settings/notifications/index.tsx:163` into a `ModalShell` and migrate the four.
+Evidence: `apps/mobile/app/(app)/chat/[id].tsx:1467` rename modal lacks `accessibilityViewIsModal` and scrim suppression; `apps/mobile/src/features/chat/components/ModeSwitchModal.tsx:89` buttons have no `accessibilityRole`; `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx` mounts `<Modal>` with no `onRequestClose`, so Android back is inert (state whether that is intentional).
+Recommended fix: extract the pattern from `apps/mobile/src/features/settings/notifications/index.tsx:163` into a `ModalShell` and migrate the three.
 
 ### [PG-MOB-12] `loadConversations` paginates the entire cloud history before first paint
 
