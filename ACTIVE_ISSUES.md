@@ -330,7 +330,7 @@ by a live check on the running product, not by its tests.
 
 Progress, 2026-09-15: item 1 landed in 50925e177, item 2 in 27cb8a08a, item 3
 in b288fffd0 (each still owes a live check on the running product), item 4 in
-50925e177 (checked on the rebuilt binary). Item 6: the QA user now has a
+2ceb62b4e (checked on the rebuilt binary). Item 6: the QA user now has a
 password sign-in for the native SDKs (web sign-in stays the Clerk ticket
 flow); its workspace and the credential handling are still open.
 
