@@ -157,11 +157,15 @@ capabilities hidden or clearly unavailable, never presented as working.
 - Decision: pin AGI-controlled production hosts with at least the issuing CA
   and root (never a leaf alone); never hard-pin OpenAI or Anthropic
   infrastructure; staged report-only rollout before enforcement, failing safe.
-- Follow-through: until the pins are provisioned, today's mobile build is an
-  accepted unverified transport: `./native/withAGITlsPinning.cjs` still
-  stamps placeholder pins, `secureFetch` announces the gap rather than passing
-  it in silence, and finding CLAUDE-SECURITY-20260821-170634 F6 stays open
-  until the report-only rollout and then enforcement close it.
+- Follow-through: the pin table now carries the issuing intermediates and
+  roots captured from the live chains of the four AGI-controlled hosts (Let's
+  Encrypt for agiworkforce.com and its subdomains, Google Trust Services for
+  the Clerk host); OpenAI and Anthropic left the required-host list. The
+  rollout stays report-only, so today's mobile build is still an accepted
+  unverified transport: `./native/withAGITlsPinning.cjs` emits no native pin
+  config until the rollout is flipped in its own change, `secureFetch`
+  announces the gap rather than passing it in silence, and finding
+  CLAUDE-SECURITY-20260821-170634 F6 stays open until enforcement closes it.
 
 ## D-2026-09-15-12 Minimum age
 
