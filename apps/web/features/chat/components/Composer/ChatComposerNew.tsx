@@ -3666,8 +3666,13 @@ const ChatComposerNewComponent = ({
                     )}
                     aria-label={
                       hasOverflowActive
-                        ? `Add attachments and tools: ${overflowActiveCount} active`
-                        : 'Add attachments and tools'
+                        ? tChat('composer.addAttachmentsAndToolsActive', {
+                            count: overflowActiveCount,
+                            defaultValue: `Add attachments and tools: ${overflowActiveCount} active`,
+                          })
+                        : tChat('composer.addAttachmentsAndTools', {
+                            defaultValue: 'Add attachments and tools',
+                          })
                     }
                     aria-pressed={hasOverflowActive}
                     aria-expanded={showOverflowMenu}
