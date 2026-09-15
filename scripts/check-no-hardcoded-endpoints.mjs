@@ -109,11 +109,6 @@ const BUDGETS = [
     why: 'BYOK base-URL presets shown to the user for prefill; not an outbound endpoint.',
   },
   {
-    file: 'apps/mobile/lib/pinning.ts',
-    max: 4,
-    why: 'Certificate-pinning host table, pins are declared per literal host by definition.',
-  },
-  {
     file: 'apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs',
     max: 14,
     why: "Desktop's default_base_url() provider table plus RETIRED_PROVIDER_HOSTS, the canonical desktop declaration.",
