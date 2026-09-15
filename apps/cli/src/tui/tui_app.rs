@@ -119,6 +119,7 @@ enum ChatRole {
     Assistant,
     System,
     Tool,
+    Error,
 }
 
 /// A live tool-call row in the transcript. Populated from the agent's tool
@@ -1369,7 +1370,9 @@ fn render_header_divider(frame: &mut ratatui::Frame, area: Rect) {
 }
 
 fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
-    use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_cloud, ui_muted, ui_success};
+    use crate::tui::terminal_palette::{
+        ui_accent, ui_brand, ui_cloud, ui_danger, ui_muted, ui_success,
+    };
     let mut lines: Vec<Line> = Vec::new();
 
     if ctx.chat_messages.is_empty() && !ctx.is_loading {
@@ -1441,6 +1444,12 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         .add_modifier(Modifier::BOLD),
                 ),
                 ChatRole::Tool => ("  ▸ ", Style::default().fg(ui_accent())),
+                ChatRole::Error => (
+                    "  ✗ ",
+                    Style::default()
+                        .fg(ui_danger())
+                        .add_modifier(Modifier::BOLD),
+                ),
             };
 
             // Render prefix line
@@ -1456,6 +1465,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                     let style = match msg.role {
                         ChatRole::User => Style::default(),
                         ChatRole::System => Style::default(),
+                        ChatRole::Error => Style::default(),
                         ChatRole::Tool => Style::default().fg(ui_muted()),
                         // Assistant is handled by the outer if-branch; reaching
                         // here would be a logic error but we render it as plain
@@ -5175,8 +5185,8 @@ async fn send_message_with_prompt(
         }
         Some(Err(e)) => {
             app.chat_messages.push(ChatMessage {
-                role: ChatRole::System,
-                text: format!("Error: {}", crate::errors::terminal_text(&e)),
+                role: ChatRole::Error,
+                text: crate::errors::terminal_text(&e),
             });
         }
         None => {
