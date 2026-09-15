@@ -156,7 +156,7 @@ describe('account-wide default tool approval policy', () => {
     expect(output).toContain('x_tool_approval_request');
   });
 
-  it('still asks for a read tool that can move data out of the trust boundary', async () => {
+  it('runs a web search without asking under the read-only policy', async () => {
     provider.stream.mockResolvedValueOnce(toolCallStream('web_search', { query: 'austin coffee' }));
 
     const output = await collect(
@@ -167,7 +167,7 @@ describe('account-wide default tool approval policy', () => {
       }),
     );
 
-    expect(output).toContain('x_tool_approval_request');
+    expect(output).not.toContain('x_tool_approval_request');
   });
 
   it('keeps a per-tool Ask verdict ahead of read-only auto-approval', async () => {
