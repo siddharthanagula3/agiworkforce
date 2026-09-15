@@ -100,42 +100,42 @@ describe('resolveProviderFromModel', () => {
   });
 
   it('dispatches the provider of an explicitly selected route over the model default', () => {
-    const model = requireProviderDefaultModel('minimax');
+    const model = requireProviderDefaultModel('zhipu');
     expect(resolveProviderFromModel(model, `open_router/${model}`)).toBe('openrouter');
   });
 
   it('redirects an explicitly selected direct route to OpenRouter when the direct key is absent', () => {
     process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
     getOptionalEnv.mockReturnValue(undefined);
-    const model = requireProviderDefaultModel('minimax');
+    const model = requireProviderDefaultModel('zhipu');
 
-    expect(resolveProviderFromModel(model, `minimax/${model}`)).toBe('openrouter');
+    expect(resolveProviderFromModel(model, `zhipu/${model}`)).toBe('openrouter');
   });
 
   it('trusts an explicitly selected direct route once its managed key is configured', () => {
     process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
     getOptionalEnv.mockImplementation((key) =>
-      key === 'MINIMAX_API_KEY' ? 'fixture-minimax-key' : undefined,
+      key === 'ZHIPU_API_KEY' ? 'fixture-zhipu-key' : undefined,
     );
-    const model = requireProviderDefaultModel('minimax');
+    const model = requireProviderDefaultModel('zhipu');
 
-    expect(resolveProviderFromModel(model, `minimax/${model}`)).toBe('minimax');
+    expect(resolveProviderFromModel(model, `zhipu/${model}`)).toBe('zhipu');
   });
 
   it('dispatches the direct provider when its managed key is configured, even with OpenRouter also configured', () => {
     process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
     getOptionalEnv.mockImplementation((key) =>
-      key === 'MINIMAX_API_KEY' ? 'fixture-minimax-key' : undefined,
+      key === 'ZHIPU_API_KEY' ? 'fixture-zhipu-key' : undefined,
     );
 
-    expect(resolveProviderFromModel(requireProviderDefaultModel('minimax'))).toBe('minimax');
+    expect(resolveProviderFromModel(requireProviderDefaultModel('zhipu'))).toBe('zhipu');
   });
 
   it('falls back to the registry-admitted OpenRouter route when the direct managed key is absent', () => {
     process.env['OPENROUTER_API_KEY'] = 'fixture-openrouter-key';
     getOptionalEnv.mockReturnValue(undefined);
 
-    expect(resolveProviderFromModel(requireProviderDefaultModel('minimax'))).toBe('openrouter');
+    expect(resolveProviderFromModel(requireProviderDefaultModel('zhipu'))).toBe('openrouter');
   });
 
   it('never falls back to OpenRouter for a provider the registry does not admit to managed traffic', () => {
@@ -166,10 +166,10 @@ describe('resolveProviderFromModel', () => {
   });
 
   it('falls back to default resolution when the selected route is closed to the request trust mode', () => {
-    const model = requireProviderDefaultModel('minimax');
+    const model = requireProviderDefaultModel('zhipu');
 
     expect(resolveProviderFromModel(model, `open_router/${model}`, { trustMode: 'local' })).toBe(
-      'minimax',
+      'zhipu',
     );
     expect(loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -265,7 +265,7 @@ describe('listAvailableManagedProviderIds', () => {
   it('excludes a provider with no configured key', () => {
     getOptionalEnv.mockReturnValue(undefined);
 
-    expect(listAvailableManagedProviderIds().has('minimax')).toBe(false);
+    expect(listAvailableManagedProviderIds().has('zhipu')).toBe(false);
   });
 });
 

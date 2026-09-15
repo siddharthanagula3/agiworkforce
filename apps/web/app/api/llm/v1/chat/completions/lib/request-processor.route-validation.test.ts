@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { requireProviderDefaultModel } from '@agiworkforce/types';
+import { requireProviderDefaultModel, listCanonicalModels } from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({ loggerWarn: vi.fn() }));
 
@@ -15,43 +15,51 @@ vi.mock('@/lib/logger', () => ({
 import { resolveWebCloudModelRoute } from './request-processor';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 
-const MINIMAX_MODEL_ID = requireProviderDefaultModel('minimax');
-const OPEN_ROUTER_MINIMAX_ROUTE_ID = `open_router/${MINIMAX_MODEL_ID}`;
+const ZHIPU_MODEL_ID = (() => {
+  const model = listCanonicalModels().find((candidate) => {
+    if (candidate.provider !== 'zhipu') return false;
+    const decision = resolveWebCloudModelRoute(candidate.id, 'pro', 'general');
+    return decision.status === 'selected' && decision.routeId.startsWith('open_router/');
+  });
+  if (!model) throw new Error('no Zhipu model resolves to its OpenRouter route on the pro plan');
+  return model.id;
+})();
+const OPEN_ROUTER_ZHIPU_ROUTE_ID = `open_router/${ZHIPU_MODEL_ID}`;
 const MISMATCHED_ROUTE_ID = `anthropic/${requireProviderDefaultModel('anthropic')}`;
 const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
 const PRO_SUBSCRIPTION_TIER = 'pro';
 const GENERAL_TASK_TYPE = 'general';
 
 const savedOpenRouterKey = process.env['OPENROUTER_API_KEY'];
-const savedMinimaxKey = process.env['MINIMAX_API_KEY'];
+const savedZhipuKey = process.env['ZHIPU_API_KEY'];
 
 beforeEach(() => {
   mocks.loggerWarn.mockReset();
   process.env['OPENROUTER_API_KEY'] = 'sk-or-test';
-  delete process.env['MINIMAX_API_KEY'];
+  delete process.env['ZHIPU_API_KEY'];
 });
 
 afterEach(() => {
   if (savedOpenRouterKey === undefined) delete process.env['OPENROUTER_API_KEY'];
   else process.env['OPENROUTER_API_KEY'] = savedOpenRouterKey;
-  if (savedMinimaxKey === undefined) delete process.env['MINIMAX_API_KEY'];
-  else process.env['MINIMAX_API_KEY'] = savedMinimaxKey;
+  if (savedZhipuKey === undefined) delete process.env['ZHIPU_API_KEY'];
+  else process.env['ZHIPU_API_KEY'] = savedZhipuKey;
 });
 
 describe('dispatch follows the route the resolver selected', () => {
-  it('dispatches openrouter when the resolver selects the OpenRouter route for the MiniMax default model', () => {
+  it('dispatches openrouter when the resolver selects the OpenRouter route for the Zhipu default model', () => {
     const decision = resolveWebCloudModelRoute(
-      MINIMAX_MODEL_ID,
+      ZHIPU_MODEL_ID,
       PRO_SUBSCRIPTION_TIER,
       GENERAL_TASK_TYPE,
       undefined,
       undefined,
-      { preferredRouteId: OPEN_ROUTER_MINIMAX_ROUTE_ID },
+      { preferredRouteId: OPEN_ROUTER_ZHIPU_ROUTE_ID },
     );
 
     expect(decision.status).toBe('selected');
     if (decision.status !== 'selected') return;
-    expect(decision.routeId).toBe(OPEN_ROUTER_MINIMAX_ROUTE_ID);
+    expect(decision.routeId).toBe(OPEN_ROUTER_ZHIPU_ROUTE_ID);
 
     const provider = resolveProviderFromModel(decision.modelKey, decision.routeId, {
       trustMode: MANAGED_CLOUD_TRUST_MODE,
@@ -63,7 +71,7 @@ describe('dispatch follows the route the resolver selected', () => {
 
   it('falls back to the default provider resolution when the route id belongs to a different model', () => {
     const decision = resolveWebCloudModelRoute(
-      MINIMAX_MODEL_ID,
+      ZHIPU_MODEL_ID,
       PRO_SUBSCRIPTION_TIER,
       GENERAL_TASK_TYPE,
     );
@@ -78,7 +86,7 @@ describe('dispatch follows the route the resolver selected', () => {
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({
         routeId: MISMATCHED_ROUTE_ID,
-        model: MINIMAX_MODEL_ID,
+        model: ZHIPU_MODEL_ID,
         reason: 'model_mismatch',
       }),
       expect.stringContaining('Rejected selected route'),

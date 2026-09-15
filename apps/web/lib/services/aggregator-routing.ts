@@ -5,6 +5,7 @@ import {
   getRegistryRoute,
   isModelLive,
   listCanonicalModels,
+  listManagedRoutesForModel,
   type ModelMetadata,
   type RouteCommercialStatus,
 } from '@agiworkforce/types';
@@ -44,8 +45,9 @@ export function isManagedOpenRouterRoute(apiModelId: string): boolean {
   if (!process.env['OPENROUTER_API_KEY']) return false;
   const model = getModelMetadataById(apiModelId);
   if (!model) return false;
-  const route = getRegistryRoute(`${OPEN_ROUTER_PROVIDER}/${model.id}`);
-  return route?.trustModes.includes(MANAGED_CLOUD_TRUST_MODE) ?? false;
+  return listManagedRoutesForModel(model.id).some(
+    (route) => route.provider === OPEN_ROUTER_PROVIDER,
+  );
 }
 
 export function dispatchProviderForRoute(routeId: string): string | undefined {

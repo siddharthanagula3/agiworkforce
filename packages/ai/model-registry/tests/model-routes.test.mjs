@@ -103,7 +103,9 @@ const MANAGED_OPEN_ROUTER_MODEL_KEYS = Object.entries(declarations.models)
   .filter(([, declaration]) =>
     (declaration.additionalRoutes ?? []).some(
       (route) =>
-        route.provider === 'open_router' && route.harnessId === MANAGED_OPEN_ROUTER_HARNESS_ID,
+        route.provider === 'open_router' &&
+        route.harnessId === MANAGED_OPEN_ROUTER_HARNESS_ID &&
+        route.commercialStatus !== 'blocked',
     ),
   )
   .map(([modelKey]) => modelKey)
@@ -112,7 +114,8 @@ const MANAGED_OPEN_ROUTER_MODEL_KEYS = Object.entries(declarations.models)
 test('the openrouter route admits managed traffic only for the models the registry names', () => {
   for (const [routeId, route] of Object.entries(registry.routes)) {
     if (route.provider !== 'open_router' || route.harnessId.startsWith('open_router/')) continue;
-    const admitsManaged = route.trustModes.includes('managed_cloud');
+    const admitsManaged =
+      route.trustModes.includes('managed_cloud') && route.commercialStatus !== 'blocked';
     assert.equal(
       admitsManaged,
       MANAGED_OPEN_ROUTER_MODEL_KEYS.includes(route.modelKey),

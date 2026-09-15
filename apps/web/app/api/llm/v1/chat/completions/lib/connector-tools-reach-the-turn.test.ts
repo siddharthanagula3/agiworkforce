@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 
-const MINIMAX_MODEL_ID = requireProviderDefaultModel('minimax');
+const ZHIPU_MODEL_ID = requireProviderDefaultModel('zhipu');
 const USER_ID = 'user-1';
 const GITHUB_SERVER_ID = 'github';
 
@@ -42,10 +42,10 @@ vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
 }));
-vi.mock('@agiworkforce/providers-minimax', () => ({
-  createMinimaxAdapter: vi.fn(() => ({
-    id: 'minimax',
-    label: 'MiniMax',
+vi.mock('@agiworkforce/providers-zhipu', () => ({
+  createZhipuAdapter: vi.fn(() => ({
+    id: 'zhipu',
+    label: 'Zhipu',
     auth: [],
     config: {},
     async catalog() {
@@ -232,7 +232,7 @@ function makeRequest(disabledConnectorIds?: string[]): NextRequest {
       'x-agi-surface': 'web',
     },
     body: JSON.stringify({
-      model: MINIMAX_MODEL_ID,
+      model: ZHIPU_MODEL_ID,
       messages: [{ role: 'user', content: 'open the pull request diff' }],
       stream: true,
       ...(disabledConnectorIds ? { disabled_connector_ids: disabledConnectorIds } : {}),
@@ -274,7 +274,7 @@ function arrangePaidTurn(): void {
     estimatedCostMicrousd: input.estimatedCostMicrousd,
     estimatedCostCents: input.estimatedCostCents,
   }));
-  mockGetProviderFromModel.mockReturnValue('minimax');
+  mockGetProviderFromModel.mockReturnValue('zhipu');
   workflowMocks.loadMcpTools.mockResolvedValue([]);
   workflowMocks.start.mockResolvedValue({
     workflowRunId: 'wrun_connector_1',
@@ -293,8 +293,8 @@ function arrangePaidTurn(): void {
     state: 'running',
     originSurface: 'web',
     workMode: 'chat',
-    provider: 'minimax',
-    model: MINIMAX_MODEL_ID,
+    provider: 'zhipu',
+    model: ZHIPU_MODEL_ID,
     createdAt: '2026-09-07T00:00:00.000Z',
     updatedAt: '2026-09-07T00:00:00.000Z',
   });
