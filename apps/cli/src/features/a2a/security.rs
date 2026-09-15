@@ -167,11 +167,11 @@ pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
 /// construction for an authentication secret, deriving the token by hashing
 /// UUID v4 bytes adds no entropy and is a non-standard, harder-to-audit shape.
 pub fn generate_random_token(byte_length: usize) -> String {
-    use rand::RngCore;
+    use rand::Rng;
 
     let mut bytes = vec![0u8; byte_length];
     rand::rng().fill_bytes(&mut bytes);
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    crate::hex::encode(&bytes)
 }
 
 #[cfg(test)]

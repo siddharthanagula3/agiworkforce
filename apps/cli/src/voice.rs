@@ -265,6 +265,7 @@ pub async fn run_voice_mode(
                         turn.input_tokens,
                         turn.output_tokens,
                         turn.cost_usd,
+                        crate::design_system::AccessMode::for_provider(&session.provider),
                     );
                 }
             }

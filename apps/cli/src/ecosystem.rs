@@ -1031,14 +1031,13 @@ fn json_server_entry(
 
 /// Parse TOML-based MCP configs (Codex CLI config.toml).
 fn parse_toml_mcp(source: &str, contents: &str) -> Vec<ImportedMcpServer> {
-    let parsed: toml::Value = match contents.parse() {
+    let parsed: toml::Table = match toml::from_str(contents) {
         Ok(v) => v,
         Err(_) => return Vec::new(),
     };
 
     let mut servers = Vec::new();
 
-    // Look for [mcp_servers."server-name"] tables
     if let Some(mcp_table) = parsed.get("mcp_servers").and_then(|v| v.as_table()) {
         for (name, config) in mcp_table {
             let command = config

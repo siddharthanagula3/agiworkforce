@@ -198,7 +198,7 @@ impl McpServerOAuthStore {
 
     fn credential_id(server: &str) -> String {
         let digest = Sha256::digest(server.as_bytes());
-        format!("server:{digest:x}")
+        format!("server:{}", crate::hex::encode(&digest))
     }
 
     fn fallback_path(&self, server: &str) -> PathBuf {
@@ -249,7 +249,7 @@ impl McpServerOAuthStore {
         if self.use_keyring {
             let entry = keyring::Entry::new(KEYRING_SERVICE, &Self::credential_id(server))
                 .context("open the OS credential store for MCP OAuth")?;
-            match entry.delete_password() {
+            match entry.delete_credential() {
                 Ok(()) | Err(keyring::Error::NoEntry) => {}
                 Err(error) => {
                     return Err(error)
