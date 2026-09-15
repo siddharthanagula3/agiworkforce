@@ -16,6 +16,8 @@ import {
   EMPTY_LOCAL_TURN,
   localModelChoices,
   localFailureAction,
+  localFolderChoice,
+  localFolderChoices,
   localModelLabel,
   localModelSetup,
   localProviderSetups,
@@ -27,6 +29,7 @@ import {
   localTurnIsRunning,
   localTurnStopReason,
   newSessionLabel,
+  preferredLocalRootId,
   sharedUnavailableLine,
 } from './local-code';
 
@@ -330,5 +333,137 @@ describe('local code surface', () => {
     ).toBeNull();
 
     expect(sharedUnavailableLine([group()])).toBeNull();
+  });
+});
+
+describe('the folder a new local session starts in', () => {
+  const touched = (id: string, at: string): LocalDeveloperSession => ({
+    ...session,
+    id,
+    updatedAt: at,
+  });
+
+  it('prefers the folder whose sessions were touched last', () => {
+    expect(
+      preferredLocalRootId([
+        group({ rootId: 'older', sessions: [touched('a', '2026-09-10T09:00:00Z')] }),
+        group({ rootId: 'newer', sessions: [touched('b', '2026-09-14T09:00:00Z')] }),
+      ]),
+    ).toBe('newer');
+  });
+
+  it('falls back to an approved folder that has never been used', () => {
+    expect(preferredLocalRootId([group({ rootId: 'fresh', sessions: [] })])).toBe('fresh');
+  });
+
+  it('never proposes a folder whose runtime cannot start one', () => {
+    const missing = { message: 'No CLI.', hint: 'Install it.' };
+    expect(
+      preferredLocalRootId([group({ rootId: 'blocked', sessions: [], unavailable: missing })]),
+    ).toBeNull();
+    expect(preferredLocalRootId([])).toBeNull();
+  });
+});
+
+describe('localFolderChoices', () => {
+  it('carries the folder name, its branch and why it cannot run', () => {
+    const missing = { message: 'No CLI.', hint: 'Install it.' };
+    expect(
+      localFolderChoices([
+        group({ rootId: 'ok' }),
+        group({ rootId: 'blocked', branch: null, unavailable: missing }),
+      ]),
+    ).toEqual([
+      { rootId: 'ok', name: 'qa-project', branch: 'main', unavailable: null },
+      { rootId: 'blocked', name: 'qa-project', branch: null, unavailable: 'No CLI. Install it.' },
+    ]);
+  });
+
+  it('finds one folder by its root, and nothing without a root', () => {
+    expect(localFolderChoice([group({ rootId: 'ok' })], 'ok')?.name).toBe('qa-project');
+    expect(localFolderChoice([group({ rootId: 'ok' })], null)).toBeNull();
+    expect(localFolderChoice([group({ rootId: 'ok' })], 'other')).toBeNull();
+  });
+});
+
+describe('the model a new local session starts on', () => {
+  const at = (id: string, model: string, updatedAt: string): LocalDeveloperSession => ({
+    ...session,
+    id,
+    model,
+    updatedAt,
+  });
+  const host = (id: string) => ({
+    id,
+    provider: 'qa-provider',
+    reachable: true,
+    trustMode: 'byok' as const,
+    unreachable: null,
+  });
+  const total = ([, value]: [string, { inputCost: number; outputCost: number }]) =>
+    value.inputCost + value.outputCost;
+  const priceOf = (id: string): [string, { inputCost: number; outputCost: number }] => {
+    const entry = modelsCatalog.models[id];
+    if (!entry) throw new Error(`no catalog entry for ${id}`);
+    return [id, entry];
+  };
+  const byTier = (tier: string) =>
+    Object.entries(modelsCatalog.models).filter(([, value]) => value.qualityTier === tier);
+  const topTierId = byTier('best').sort((a, b) => total(b) - total(a))[0]?.[0] as string;
+  const cheapId = byTier('fast')
+    .filter(([, value]) => value.inputCost > 0)
+    .sort((a, b) => total(a) - total(b))[0]?.[0] as string;
+
+  it('reads a real top tier route and a real cheap one out of the catalog', () => {
+    expect(topTierId).toBeTruthy();
+    expect(cheapId).toBeTruthy();
+    expect(total(priceOf(cheapId))).toBeLessThan(total(priceOf(topTierId)));
+  });
+
+  it('takes the folder`s last used model when the host can still reach it', () => {
+    const runtimeWithBoth: DeveloperRuntimeModels = {
+      models: [],
+      hostModels: [host(topTierId), host(cheapId)],
+      defaultModelId: topTierId,
+      managedSignedIn: false,
+    };
+
+    expect(
+      startingModelId(runtimeWithBoth, [
+        at('a', topTierId, '2026-09-10T09:00:00Z'),
+        at('b', cheapId, '2026-09-14T09:00:00Z'),
+      ]),
+    ).toBe(cheapId);
+  });
+
+  it('never makes a top tier route the silent default of a fresh folder', () => {
+    const runtimeTopDefault: DeveloperRuntimeModels = {
+      models: [],
+      hostModels: [host(topTierId), host(cheapId)],
+      defaultModelId: topTierId,
+      managedSignedIn: false,
+    };
+
+    expect(startingModelId(runtimeTopDefault, [])).toBe(cheapId);
+  });
+
+  it('takes the host default over the cheapest when it is not top tier', () => {
+    const runtimeCheapDefault: DeveloperRuntimeModels = {
+      models: [],
+      hostModels: [host(topTierId), host(cheapId)],
+      defaultModelId: cheapId,
+      managedSignedIn: false,
+    };
+
+    expect(startingModelId(runtimeCheapDefault, [])).toBe(cheapId);
+  });
+
+  it('offers nothing when the host can reach nothing', () => {
+    expect(
+      startingModelId(
+        { models: [], hostModels: [], defaultModelId: null, managedSignedIn: false },
+        [],
+      ),
+    ).toBeUndefined();
   });
 });

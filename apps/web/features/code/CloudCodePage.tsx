@@ -56,11 +56,25 @@ import {
   type CodeTurnRecord,
 } from './code-transcript';
 import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
+import {
+  localFolderChoice,
+  localFolderChoices,
+  localModelChoices,
+  localModelSetup,
+  localProviderSetups,
+  preferredLocalRootId,
+  startingModelId,
+} from './local-code';
 import { useLocalSessions } from './hooks/use-local-sessions';
 import { LocalSessionsSection } from './components/LocalSessionsSection';
 import { LocalSessionPanel } from './components/LocalSessionPanel';
 import { CodeRail } from './components/CodeRail';
-import { CodeComposer, EMPTY_CODE_DRAFT, type CodeDraft } from './components/CodeComposer';
+import {
+  CodeComposer,
+  EMPTY_CODE_DRAFT,
+  type CodeDraft,
+  type CodeLocalState,
+} from './components/CodeComposer';
 import { CodeTranscript } from './components/CodeTranscript';
 import { CodeChangesPanel } from './components/CodeChangesPanel';
 import { CodeSessionMenu } from './components/CodeSessionMenu';
@@ -158,7 +172,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
   const [localSession, setLocalSession] = useState<LocalDeveloperSession | null>(null);
+  const [localPrompt, setLocalPrompt] = useState('');
   const local = useLocalSessions();
+  const environmentChosen = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const railTriggerRef = useRef<HTMLButtonElement>(null);
   const hiddenProbeRef = useRef(false);
@@ -262,6 +278,30 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     void loadSessions(statusFilter, controller.signal);
     return () => controller.abort();
   }, [loadSessions, statusFilter]);
+
+  useEffect(() => {
+    if (environmentChosen.current) return;
+    const rootId = preferredLocalRootId(local.groups);
+    if (rootId === null) return;
+    setDraft((current) => ({ ...current, environment: 'local', localRootId: rootId }));
+  }, [local.groups]);
+
+  const handleDraftChange = useCallback((patch: Partial<CodeDraft>) => {
+    if (patch.environment !== undefined) environmentChosen.current = true;
+    setDraft((current) => ({
+      ...current,
+      ...(patch.localRootId !== undefined && patch.localRootId !== current.localRootId
+        ? { localModelId: '' }
+        : {}),
+      ...patch,
+    }));
+  }, []);
+
+  const draftGroup = local.groups.find((group) => group.rootId === draft.localRootId) ?? null;
+  const draftRuntime = draft.localRootId === null ? null : local.modelsFor(draft.localRootId);
+  const localChoices = localModelChoices(draftRuntime, draftGroup?.sessions ?? []);
+  const localModelId =
+    draft.localModelId || startingModelId(draftRuntime, draftGroup?.sessions ?? []) || '';
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedId) ?? null,
@@ -489,7 +529,12 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         setSelectedId(body.session.id);
         setEntries(body.terminalEntries);
         setTurns([]);
-        setDraft(EMPTY_CODE_DRAFT);
+        setDraft((current) => ({
+          ...EMPTY_CODE_DRAFT,
+          environment: current.environment,
+          localRootId: current.localRootId,
+          localModelId: current.localModelId,
+        }));
         router.push(codeSessionPath(body.session.id));
         return body.session;
       } catch (createError) {
@@ -503,9 +548,34 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     [api, busy, canCreate, draft, replaceSession, router],
   );
 
+  const startLocalSession = useCallback(
+    async (rootId: string, text: string, model: string) => {
+      setBusy(true);
+      try {
+        const started = await local.startSession(rootId, model || undefined);
+        if (!started) return;
+        setTask('');
+        setLocalPrompt(text);
+        setLocalSession(started);
+        setRailDrawerOpen(false);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [local],
+  );
+
   const handleSubmit = useCallback(
     async (text: string) => {
-      if (!canCreate || busy) return;
+      if (busy) return;
+
+      if (draft.environment === 'local' && !selectedSession) {
+        if (draft.localRootId === null) return;
+        await startLocalSession(draft.localRootId, text, localModelId);
+        return;
+      }
+
+      if (!canCreate) return;
 
       if (selectedSession && selectedSession.state === 'ready') {
         setTask('');
@@ -521,7 +591,17 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
       setTask('');
       if (created.state === 'ready') await startTurn(created, text);
     },
-    [busy, canCreate, createSession, selectedSession, startTurn],
+    [
+      busy,
+      canCreate,
+      createSession,
+      draft.environment,
+      draft.localRootId,
+      localModelId,
+      selectedSession,
+      startLocalSession,
+      startTurn,
+    ],
   );
 
   const handleOpenEmptyEnvironment = useCallback(() => {
@@ -754,12 +834,14 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         selectedId={localSession?.id ?? null}
         onSelect={(session) => {
           setRailDrawerOpen(false);
+          setLocalPrompt('');
           setLocalSession(session);
         }}
         onNewSession={(rootId) => {
           void local.startSession(rootId).then((session) => {
             if (session) {
               setRailDrawerOpen(false);
+              setLocalPrompt('');
               setLocalSession(session);
             }
           });
@@ -770,6 +852,20 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   };
 
   const localGroup = local.groups.find((group) => group.rootId === localSession?.rootId) ?? null;
+  const draftFolder = localFolderChoice(local.groups, draft.localRootId);
+  const isLocalDraft = draft.environment === 'local';
+  const localDraftBlocked = isLocalDraft ? (draftFolder?.unavailable ?? null) : null;
+  const composerLocal: CodeLocalState = {
+    supported: local.supported,
+    folders: localFolderChoices(local.groups),
+    models: localChoices,
+    setups: localProviderSetups(draftRuntime),
+    modelId: localModelId,
+    modelUnreachable: localModelSetup(draftRuntime, localModelId) !== null,
+    adding: local.adding,
+    onAddFolder: () => void local.addFolder(),
+    onModelChange: (modelId) => handleDraftChange({ localModelId: modelId }),
+  };
 
   const unavailableNotice = availability
     ? !availability.deploymentEnabled
@@ -789,10 +885,22 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
 
   const notices = (
     <>
-      {unavailableNotice && (
+      {unavailableNotice && (!isLocalDraft || selectedSession !== null) && (
         <div className={styles['notice']} role="status">
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{unavailableNotice}</span>
+        </div>
+      )}
+      {localDraftBlocked && !selectedSession && (
+        <div className={styles['notice']} role="status">
+          <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+          <span>{localDraftBlocked}</span>
+        </div>
+      )}
+      {isLocalDraft && !selectedSession && local.error !== null && (
+        <div className={`${styles['notice']} ${styles['noticeError']}`} role="alert">
+          <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+          <span>{local.error}</span>
         </div>
       )}
       {routeNotice && (
@@ -892,6 +1000,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
               group={localGroup}
               runtimeModels={local.modelsFor(localGroup.rootId)}
               verbose={verbose}
+              initialPrompt={localPrompt}
+              onPromptSent={() => setLocalPrompt('')}
               onClose={() => setLocalSession(null)}
             />
           ) : (
@@ -1079,15 +1189,22 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                       value={task}
                       onChange={setTask}
                       onSubmit={(text) => void handleSubmit(text)}
-                      disabled={!canCreate}
+                      disabled={
+                        isLocalDraft && !selectedSession
+                          ? draftFolder === null || localDraftBlocked !== null
+                          : !canCreate
+                      }
                       busy={busy}
                       showChips={!selectedSession}
-                      showHint={!selectedSession && sessions.length === 0 && !hintDismissed}
+                      showHint={
+                        !selectedSession && !isLocalDraft && sessions.length === 0 && !hintDismissed
+                      }
                       onDismissHint={() => setHintDismissed(true)}
                       draft={draft}
-                      onDraftChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+                      onDraftChange={handleDraftChange}
                       onOpenEmptyEnvironment={handleOpenEmptyEnvironment}
                       runtimes={runtimes}
+                      local={composerLocal}
                       api={api}
                       turnRunning={turnRunning}
                       stopping={stopping}

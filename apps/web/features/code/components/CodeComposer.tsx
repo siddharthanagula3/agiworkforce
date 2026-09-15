@@ -64,14 +64,23 @@ import {
   CODE_LIMITS,
   CODE_NETWORK_OPTIONS,
   CODE_ROUTES,
+  DEFAULT_CODE_ENVIRONMENT,
   DEFAULT_NETWORK_ACCESS,
   DEFAULT_RUNTIME_ID,
   REPOSITORY_MINIMUM_NETWORK_ACCESS,
   contextWindowLabel,
+  environmentChipLabel,
   formatResetIn,
-  networkAccessLabel,
   repositoryLabel,
+  type CodeEnvironment,
 } from '../code-surface';
+import {
+  LOCAL_CODE_COPY,
+  type LocalFolderChoice,
+  type LocalModelChoice,
+  type LocalProviderSetup,
+} from '../local-code';
+import { LocalModelChip } from './LocalModelChip';
 import { describeRuntime, runtimeHelpText } from '../code-runtime';
 import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
 import type { CloudCodeApi, CloudCodeRepository } from '../services/cloud-code-api';
@@ -91,6 +100,9 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERCENT_MAX = 100;
 
 export interface CodeDraft {
+  environment: CodeEnvironment;
+  localRootId: string | null;
+  localModelId: string;
   networkAccess: CloudCodeNetworkAccess;
   fullNetworkAccepted: boolean;
   extraHosts: string;
@@ -101,6 +113,9 @@ export interface CodeDraft {
 }
 
 export const EMPTY_CODE_DRAFT: CodeDraft = {
+  environment: DEFAULT_CODE_ENVIRONMENT,
+  localRootId: null,
+  localModelId: '',
   networkAccess: DEFAULT_NETWORK_ACCESS,
   fullNetworkAccepted: false,
   extraHosts: '',
@@ -109,6 +124,18 @@ export const EMPTY_CODE_DRAFT: CodeDraft = {
   repositoryBranch: '',
   repository: null,
 };
+
+export interface CodeLocalState {
+  supported: boolean;
+  folders: LocalFolderChoice[];
+  models: LocalModelChoice[];
+  setups: LocalProviderSetup[];
+  modelId: string;
+  modelUnreachable: boolean;
+  adding: boolean;
+  onAddFolder: () => void;
+  onModelChange: (modelId: string) => void;
+}
 
 export function draftRepositoryLabel(draft: CodeDraft): string {
   return draft.repository ? draft.repository.fullName : repositoryLabel(draft.repositoryUrl);
@@ -259,37 +286,85 @@ function EnvironmentSettings({
 function EnvironmentChip({
   draft,
   runtimes,
+  local,
+  folder,
   disabled,
   onDraftChange,
   onOpenEmpty,
 }: {
   draft: CodeDraft;
   runtimes: CloudCodeRuntime[];
+  local: CodeLocalState;
+  folder: LocalFolderChoice | null;
   disabled: boolean;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
   onOpenEmpty: () => void;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const isLocal = draft.environment === 'local';
 
   return (
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button type="button" className={styles['chip']}>
-            <Cloud size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-            <span>{networkAccessLabel(draft.networkAccess)}</span>
+            {isLocal ? (
+              <Monitor size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+            ) : (
+              <Cloud size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+            )}
+            <span>
+              {environmentChipLabel(draft.environment, draft.networkAccess, folder?.name ?? null)}
+            </span>
           </button>
         </DropdownMenuTrigger>
-        {/* One level rather than the reference's Cloud submenu: the three cloud
-            tiers are the only rows this surface can act on, and the desktop rows
-            below them are links. A submenu would bury the working rows. */}
         <DropdownMenuContent align="start" side="top" className="w-72">
+          {local.supported && (
+            <>
+              <DropdownMenuLabel>{CODE_COPY.environmentLocal}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={isLocal ? (draft.localRootId ?? '') : ''}
+                onValueChange={(value) =>
+                  onDraftChange({ environment: 'local', localRootId: value })
+                }
+              >
+                {local.folders.map((choice) => (
+                  <DropdownMenuRadioItem key={choice.rootId} value={choice.rootId}>
+                    <span className={styles['menuRowLabel']}>
+                      <span className={styles['optionLabel']}>{choice.name}</span>
+                      {(choice.unavailable ?? choice.branch) && (
+                        <span className={styles['optionCopy']}>
+                          {choice.unavailable ?? choice.branch}
+                        </span>
+                      )}
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              <DropdownMenuItem
+                disabled={local.adding}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setMenuOpen(false);
+                  local.onAddFolder();
+                }}
+              >
+                <Plus size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                <span className={styles['menuRowLabel']}>
+                  {local.adding ? LOCAL_CODE_COPY.addingFolder : LOCAL_CODE_COPY.addFolder}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+
           <DropdownMenuLabel>{CODE_COPY.environmentCloud}</DropdownMenuLabel>
           <DropdownMenuRadioGroup
-            value={draft.networkAccess}
+            value={isLocal ? '' : draft.networkAccess}
             onValueChange={(value) =>
               onDraftChange({
+                environment: 'cloud',
                 networkAccess: value as CloudCodeNetworkAccess,
                 ...(value === 'full' ? {} : { fullNetworkAccepted: false }),
               })
@@ -317,22 +392,6 @@ function EnvironmentChip({
             }}
           >
             <span className={styles['menuRowLabel']}>{CODE_COPY.editEnvironment}</span>
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link href={CODE_ROUTES.desktop}>
-              <Monitor size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-              <span className={styles['menuRowLabel']}>{CODE_COPY.environmentLocal}</span>
-              <DropdownMenuShortcut>{CODE_COPY.environmentLocalHint}</DropdownMenuShortcut>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href={CODE_ROUTES.desktop}>
-              <Monitor size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-              <span className={styles['menuRowLabel']}>{CODE_COPY.environmentRemote}</span>
-              <DropdownMenuShortcut>{CODE_COPY.environmentRemoteHint}</DropdownMenuShortcut>
-            </Link>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -978,6 +1037,7 @@ export interface CodeComposerProps {
   onDraftChange: (patch: Partial<CodeDraft>) => void;
   onOpenEmptyEnvironment: () => void;
   runtimes: CloudCodeRuntime[];
+  local: CodeLocalState;
   api: CloudCodeApi;
   turnRunning: boolean;
   stopping: boolean;
@@ -999,6 +1059,7 @@ export function CodeComposer({
   onDraftChange,
   onOpenEmptyEnvironment,
   runtimes,
+  local,
   api,
   turnRunning,
   stopping,
@@ -1007,6 +1068,7 @@ export function CodeComposer({
   contextWindow,
 }: CodeComposerProps) {
   const [focused, setFocused] = useState(false);
+  const folder = local.folders.find((choice) => choice.rootId === draft.localRootId) ?? null;
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dictation = useDictation({
     onInsert: (text) => onChange(value ? `${value} ${text}` : text),
@@ -1033,11 +1095,22 @@ export function CodeComposer({
             <EnvironmentChip
               draft={draft}
               runtimes={runtimes}
+              local={local}
+              folder={folder}
               disabled={disabled || busy}
               onDraftChange={onDraftChange}
               onOpenEmpty={onOpenEmptyEnvironment}
             />
-            <RepositoryChips draft={draft} onDraftChange={onDraftChange} api={api} />
+            {draft.environment === 'local' ? (
+              folder?.branch && (
+                <span className={`${styles['chip']} ${styles['chipStatic']}`}>
+                  <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                  <span>{folder.branch}</span>
+                </span>
+              )
+            ) : (
+              <RepositoryChips draft={draft} onDraftChange={onDraftChange} api={api} />
+            )}
           </div>
         )}
 
@@ -1129,7 +1202,20 @@ export function CodeComposer({
                   <Mic size={CONTROL_GLYPH_SIZE} aria-hidden="true" />
                 </button>
                 <span className={styles['controlSpacer']} />
-                <ComposerFooter inline showStyleSelector={false} />
+                {draft.environment === 'local' ? (
+                  local.models.length > 0 && (
+                    <LocalModelChip
+                      choices={local.models}
+                      setups={local.setups}
+                      selected={local.modelId}
+                      unreachable={local.modelUnreachable}
+                      disabled={disabled || busy}
+                      onSelect={local.onModelChange}
+                    />
+                  )
+                ) : (
+                  <ComposerFooter inline showStyleSelector={false} />
+                )}
                 <UsageRing contextTokens={contextTokens} contextWindow={contextWindow} />
               </>
             )}
