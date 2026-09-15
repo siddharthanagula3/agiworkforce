@@ -630,6 +630,16 @@ try {
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1000);
+    await page
+      .waitForFunction(
+        () => {
+          const input = document.getElementById('sp-input');
+          return input instanceof HTMLTextAreaElement && input.placeholder === 'Sign in to chat';
+        },
+        undefined,
+        { timeout: 15000 },
+      )
+      .catch(() => {});
 
     const visibleSecondaryChrome = await page.evaluate(() =>
       ['sp-auth-bar', 'sp-toolbar', 'sp-prompt-chips'].filter((id) => {

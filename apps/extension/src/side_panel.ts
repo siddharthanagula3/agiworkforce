@@ -450,6 +450,7 @@ function setManagedCloudChatState(
     if (state === 'ready') input.placeholder = t('spComposerPlaceholder');
     else if (state === 'signed_out') input.placeholder = t('spComposerPlaceholderSignedOut');
     else if (state === 'unavailable') input.placeholder = t('spComposerPlaceholderNoAccess');
+    else if (state === 'loading') input.placeholder = t('spComposerPlaceholderChecking');
   }
   updateSendButton();
   if (becameReady) checkPendingChat();

@@ -369,6 +369,10 @@
     "message": "How can I help you today?",
     "description": "Composer input placeholder while chat is usable"
   },
+  "spComposerPlaceholderChecking": {
+    "message": "Checking your AGI account…",
+    "description": "Composer input placeholder while the account gate is still being verified"
+  },
   "spComposerPlaceholderSignedOut": {
     "message": "Sign in to chat",
     "description": "Composer input placeholder while signed out"
