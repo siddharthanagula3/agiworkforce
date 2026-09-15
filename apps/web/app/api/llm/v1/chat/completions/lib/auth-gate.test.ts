@@ -66,7 +66,7 @@ describe('runAuthGate rate limiting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.withRateLimit.mockResolvedValue(null);
-    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123' });
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
     mocks.getSubscription.mockResolvedValue({
       id: 'subscription-123',
       status: 'active',
@@ -106,7 +106,7 @@ describe('runAuthGate enterprise collection grace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.withRateLimit.mockResolvedValue(null);
-    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123' });
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
     mocks.dbQuery.mockResolvedValue([{ organization_id: 'org-123' }]);
   });
 
@@ -269,7 +269,7 @@ describe('runAuthGate first-token cost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.withRateLimit.mockResolvedValue(null);
-    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123' });
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
     mocks.getSubscription.mockResolvedValue({
       id: 'subscription-123',
       status: 'active',
@@ -310,7 +310,7 @@ describe('runAuthGate organization seats', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.withRateLimit.mockResolvedValue(null);
-    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'member-1' });
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'member-1', boundSurface: 'web' });
     mocks.getSubscription.mockResolvedValue(null);
     mocks.getOrCreateAccount.mockResolvedValue('account-1');
   });

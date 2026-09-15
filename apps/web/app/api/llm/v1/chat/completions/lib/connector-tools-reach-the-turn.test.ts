@@ -241,7 +241,11 @@ function makeRequest(disabledConnectorIds?: string[]): NextRequest {
 }
 
 function arrangePaidTurn(): void {
-  mockGetClerkAuthUser.mockResolvedValue({ userId: USER_ID, email: 'u@example.com' });
+  mockGetClerkAuthUser.mockResolvedValue({
+    userId: USER_ID,
+    email: 'u@example.com',
+    boundSurface: 'web',
+  });
   mockGetSubscription.mockResolvedValue({
     id: 'sub_1',
     status: 'active',
