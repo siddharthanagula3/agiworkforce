@@ -126,6 +126,10 @@ capabilities hidden or clearly unavailable, never presented as working.
   accordingly; no Groq-only models for the sake of count unless they pass the
   quality criteria. MiniMax stays out of managed production until its terms
   are reviewed and accepted, then joins through the neutral layer.
+- Follow-through: the registry marks MiniMax's own route customer-key only
+  and blocks its marketplace routes, the managed OpenRouter check reads route
+  status rather than harness trust modes, and the Groq models stay
+  unselectable; the terms review is the founder-file item.
 
 ## D-2026-09-15-09 Managed Cloud plan-tier gate
 
@@ -153,6 +157,11 @@ capabilities hidden or clearly unavailable, never presented as working.
 - Decision: pin AGI-controlled production hosts with at least the issuing CA
   and root (never a leaf alone); never hard-pin OpenAI or Anthropic
   infrastructure; staged report-only rollout before enforcement, failing safe.
+- Follow-through: until the pins are provisioned, today's mobile build is an
+  accepted unverified transport: `./native/withAGITlsPinning.cjs` still
+  stamps placeholder pins, `secureFetch` announces the gap rather than passing
+  it in silence, and finding CLAUDE-SECURITY-20260821-170634 F6 stays open
+  until the report-only rollout and then enforcement close it.
 
 ## D-2026-09-15-12 Minimum age
 
@@ -248,6 +257,9 @@ capabilities hidden or clearly unavailable, never presented as working.
 - Decision: update the privacy and cookie policy revision dates after the
   material corrections and re-consent once if the versioning mechanism
   requires it; counsel may review the notice mechanics afterwards.
+- Follow-through: both dates now read 2026-09-12, the day of the correction;
+  the consent ledger's notice version and the cookie banner's version derive
+  from them, so each asks once more (5ecc126f1).
 
 ## D-2026-09-15-26 Public event
 
@@ -255,3 +267,6 @@ capabilities hidden or clearly unavailable, never presented as working.
   explicit model allowlist, a hard global USD budget, a start instant and an
   end instant; fast, low-cost models for free access; paid entitlements
   independent of event switches.
+- Follow-through: the overlay is inactive unless the allowlist, the global
+  budget, the start instant and the end instant are all set and the window is
+  well-formed; the flag alone opens nothing (2a1f7bc77).

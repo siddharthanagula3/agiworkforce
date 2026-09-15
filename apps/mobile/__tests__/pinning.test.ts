@@ -58,9 +58,9 @@ function readSource(...segments: string[]): string {
   return fs.readFileSync(path.join(MOBILE_ROOT, ...segments), 'utf8');
 }
 
-function foundersAssistanceEntry(marker: string): string {
+function founderDecisionEntry(marker: string): string {
   const doc = fs.readFileSync(
-    path.join(MOBILE_ROOT, '..', '..', 'docs/work/founder-assistance.md'),
+    path.join(MOBILE_ROOT, '..', '..', 'docs/decisions/2026-09-15-founder-decisions.md'),
     'utf8',
   );
   return doc.split(/^## /m).find((section) => section.includes(marker)) ?? '';
@@ -543,8 +543,9 @@ describe('the shipped secureFetch refuses a half-pinned release (CWE-295 F6)', (
   });
 
   it("names today's build an accepted unverified transport rather than a pass", async () => {
-    const entry = foundersAssistanceEntry('CLAUDE-SECURITY-20260821-170634 F6');
-    expect(entry).toContain('BLOCKED_BY_HUMAN');
+    const entry = founderDecisionEntry('D-2026-09-15-11');
+    expect(entry).toContain('CLAUDE-SECURITY-20260821-170634 F6');
+    expect(entry).toContain('accepted unverified transport');
     expect(entry).toContain('./native/withAGITlsPinning.cjs');
     expect(hasPlaceholderPins()).toBe(true);
 
