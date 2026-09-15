@@ -3,7 +3,9 @@ import {
   canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
   getCoreManualModelOptions,
+  getProviderDisplayLabel,
   getSurfaceManualModelOptions,
+  resolveProviderDisplayId,
   getModelContextLimits,
   getModelCostRates,
   getModelMetadataById,
@@ -30,20 +32,8 @@ export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvai
   return { configured: false };
 }
 
-const PROVIDER_TO_DISPLAY_ID: Partial<Record<string, ProviderId>> = {
-  managed_cloud: 'agi-cloud',
-  ollama_cloud: 'ollama',
-  lmstudio: 'lmstudio',
-};
-
 function resolveProviderId(provider: string): ProviderId | null {
-  if (PROVIDER_TO_DISPLAY_ID[provider] !== undefined) {
-    return PROVIDER_TO_DISPLAY_ID[provider] as ProviderId;
-  }
-  if (provider in PROVIDER_DISPLAY) {
-    return provider as ProviderId;
-  }
-  return null;
+  return resolveProviderDisplayId(provider);
 }
 
 function codiconForProvider(providerId: ProviderId): string {
@@ -299,8 +289,7 @@ export interface ModelProviderInfo {
  * up as a name the registry never issued.
  */
 export function providerDisplayLabel(provider: string): string {
-  const providerId = resolveProviderId(provider);
-  return providerId === null ? provider : PROVIDER_DISPLAY[providerId].label;
+  return getProviderDisplayLabel(provider);
 }
 
 export const AGI_CLOUD_BRAND_COLOR = 'var(--vscode-activityBarBadge-background)';
