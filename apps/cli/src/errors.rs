@@ -304,8 +304,8 @@ impl CliError {
             CliError::Api {
                 provider, status, ..
             } if (500..600).contains(status) => format!(
-                "{provider} returned HTTP {status}. Retry the request, or run `agi \
-                 features` to fall back to a different provider."
+                "{provider} returned HTTP {status}. Retry the request, or run again with \
+                 `--fallback-model <model>`."
             ),
             CliError::Api {
                 provider, status, ..
@@ -354,12 +354,12 @@ impl CliError {
                 retry_after,
             } => match retry_after {
                 Some(secs) => format!(
-                    "{provider} is rate-limiting. Wait {secs}s, or use a fallback model: \
-                     `--model <primary>,<fallback>`."
+                    "{provider} is rate-limiting. Wait {secs}s, or run again with \
+                     `--fallback-model <model>`."
                 ),
                 None => format!(
-                    "{provider} is rate-limiting. Switch to a fallback model with \
-                     `--model <primary>,<fallback>`."
+                    "{provider} is rate-limiting. Run again with `--fallback-model <model>`, \
+                     or wait and retry."
                 ),
             },
             CliError::StreamError { is_retryable, .. } => if *is_retryable {
@@ -830,6 +830,21 @@ mod tests {
         );
         let vendor = CliError::api("openai", 503, "upstream failed");
         assert!(vendor.hint().contains("Retry the request"));
+    }
+
+    #[test]
+    fn fallback_hints_name_the_real_flag() {
+        let limited = CliError::RateLimited {
+            provider: "openai".to_string(),
+            retry_after: Some(12),
+        };
+        assert_eq!(
+            limited.hint(),
+            "openai is rate-limiting. Wait 12s, or run again with `--fallback-model <model>`."
+        );
+        let vendor = CliError::api("openai", 503, "upstream failed");
+        assert!(vendor.hint().contains("`--fallback-model <model>`"));
+        assert!(!vendor.hint().contains("agi features"));
     }
 
     #[test]
