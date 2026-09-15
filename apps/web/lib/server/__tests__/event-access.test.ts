@@ -17,6 +17,7 @@ import {
   eventModelIdsFor,
   readEventPromotion,
 } from '@/lib/server/event-access';
+import { EVENT_BUDGET_USD_ENV } from '@/lib/server/event-budget';
 
 const ENV_KEYS = [
   EVENT_ENABLED_ENV,
@@ -25,6 +26,7 @@ const ENV_KEYS = [
   EVENT_DISABLED_PROVIDERS_ENV,
   EVENT_STARTS_AT_ENV,
   EVENT_ENDS_AT_ENV,
+  EVENT_BUDGET_USD_ENV,
 ];
 
 /**
@@ -73,6 +75,19 @@ function setEvent(values: Partial<Record<string, string>>) {
   }
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
+function live(values: Partial<Record<string, string>> = {}) {
+  const now = Date.now();
+  setEvent({
+    [EVENT_ENABLED_ENV]: '1',
+    [EVENT_STARTS_AT_ENV]: new Date(now - HOUR_MS).toISOString(),
+    [EVENT_ENDS_AT_ENV]: new Date(now + HOUR_MS).toISOString(),
+    [EVENT_BUDGET_USD_ENV]: '250',
+    ...values,
+  });
+}
+
 describe('event access overlay', () => {
   const original: Record<string, string | undefined> = {};
 
@@ -95,7 +110,7 @@ describe('event access overlay', () => {
   });
 
   it('grants the allowlisted models to free when the flag is on', () => {
-    setEvent({ [EVENT_ENABLED_ENV]: '1', [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}` });
+    live({ [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}` });
 
     expect(eventAllowsModel(PROMOTED, 'free')).toBe(true);
     expect(eventAllowsModel(PROMOTED_OTHER, 'free')).toBe(true);
@@ -104,9 +119,9 @@ describe('event access overlay', () => {
 
   it('expires on its own once the window closes', () => {
     const now = Date.parse('2026-09-12T12:00:00Z');
-    setEvent({
-      [EVENT_ENABLED_ENV]: '1',
+    live({
       [EVENT_MODELS_ENV]: PROMOTED,
+      [EVENT_STARTS_AT_ENV]: '2026-09-12T08:00:00Z',
       [EVENT_ENDS_AT_ENV]: '2026-09-12T10:00:00Z',
     });
 
@@ -116,10 +131,10 @@ describe('event access overlay', () => {
 
   it('has not begun before its start time', () => {
     const now = Date.parse('2026-09-12T08:00:00Z');
-    setEvent({
-      [EVENT_ENABLED_ENV]: '1',
+    live({
       [EVENT_MODELS_ENV]: PROMOTED,
       [EVENT_STARTS_AT_ENV]: '2026-09-12T10:00:00Z',
+      [EVENT_ENDS_AT_ENV]: '2026-09-12T23:00:00Z',
     });
 
     expect(readEventPromotion(now).active).toBe(false);
@@ -127,8 +142,7 @@ describe('event access overlay', () => {
 
   it('is live inside the window', () => {
     const now = Date.parse('2026-09-12T11:00:00Z');
-    setEvent({
-      [EVENT_ENABLED_ENV]: '1',
+    live({
       [EVENT_MODELS_ENV]: PROMOTED,
       [EVENT_STARTS_AT_ENV]: '2026-09-12T10:00:00Z',
       [EVENT_ENDS_AT_ENV]: '2026-09-12T23:00:00Z',
@@ -138,9 +152,35 @@ describe('event access overlay', () => {
     expect(eventAllowsModel(PROMOTED, 'free', readEventPromotion(now))).toBe(true);
   });
 
+  it.each([
+    ['a start instant', EVENT_STARTS_AT_ENV],
+    ['an end instant', EVENT_ENDS_AT_ENV],
+    ['a global budget', EVENT_BUDGET_USD_ENV],
+  ])('stays closed without %s, whatever the flag says', (_label, key) => {
+    live({ [EVENT_MODELS_ENV]: PROMOTED, [key]: undefined });
+
+    expect(readEventPromotion().active).toBe(false);
+    expect(eventAllowsModel(PROMOTED, 'free')).toBe(false);
+  });
+
+  it('stays closed when the window ends before it starts', () => {
+    live({
+      [EVENT_MODELS_ENV]: PROMOTED,
+      [EVENT_STARTS_AT_ENV]: '2026-09-12T23:00:00Z',
+      [EVENT_ENDS_AT_ENV]: '2026-09-12T10:00:00Z',
+    });
+
+    expect(readEventPromotion(Date.parse('2026-09-12T11:00:00Z')).active).toBe(false);
+  });
+
+  it('stays closed on a zero budget', () => {
+    live({ [EVENT_MODELS_ENV]: PROMOTED, [EVENT_BUDGET_USD_ENV]: '0' });
+
+    expect(readEventPromotion().active).toBe(false);
+  });
+
   it('drops a single model without touching the rest', () => {
-    setEvent({
-      [EVENT_ENABLED_ENV]: '1',
+    live({
       [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}`,
       [EVENT_DISABLED_MODELS_ENV]: PROMOTED,
     });
@@ -150,7 +190,7 @@ describe('event access overlay', () => {
   });
 
   it('fails closed on an id the registry does not know', () => {
-    setEvent({ [EVENT_ENABLED_ENV]: '1', [EVENT_MODELS_ENV]: `${UNKNOWN_ID},  ,${PROMOTED}` });
+    live({ [EVENT_MODELS_ENV]: `${UNKNOWN_ID},  ,${PROMOTED}` });
 
     const promotion = readEventPromotion();
     expect(promotion.active).toBe(true);
@@ -159,13 +199,13 @@ describe('event access overlay', () => {
   });
 
   it('is inactive when every allowlisted id is unusable', () => {
-    setEvent({ [EVENT_ENABLED_ENV]: '1', [EVENT_MODELS_ENV]: UNKNOWN_ID });
+    live({ [EVENT_MODELS_ENV]: UNKNOWN_ID });
 
     expect(readEventPromotion().active).toBe(false);
   });
 
   it.each(PAID_TIERS)('never changes what %s can reach', (tier) => {
-    setEvent({ [EVENT_ENABLED_ENV]: '1', [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}` });
+    live({ [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}` });
 
     // The overlay adds nothing for a paid plan, and because it only ever adds,
     // it cannot take anything away either.
@@ -174,7 +214,7 @@ describe('event access overlay', () => {
   });
 
   it('reports the promoted set for badges', () => {
-    setEvent({ [EVENT_ENABLED_ENV]: '1', [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}` });
+    live({ [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}` });
 
     expect([...eventModelIdsFor('free')].sort()).toEqual([PROMOTED, PROMOTED_OTHER]);
     expect(eventModelIdsFor('pro').size).toBe(0);
@@ -198,8 +238,7 @@ describe('event access overlay', () => {
 
     it('withdraws every promoted model a disabled provider serves', () => {
       const [provider] = PROVIDER_OF(PROMOTED);
-      setEvent({
-        [EVENT_ENABLED_ENV]: '1',
+      live({
         [EVENT_MODELS_ENV]: PROMOTED,
         [EVENT_DISABLED_PROVIDERS_ENV]: PROVIDER_OF(PROMOTED).join(','),
       });
@@ -209,8 +248,7 @@ describe('event access overlay', () => {
     });
 
     it('leaves models served by other providers promoted', () => {
-      setEvent({
-        [EVENT_ENABLED_ENV]: '1',
+      live({
         [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}`,
         [EVENT_DISABLED_PROVIDERS_ENV]: PROVIDER_OF(PROMOTED).join(','),
       });
@@ -219,8 +257,7 @@ describe('event access overlay', () => {
     });
 
     it('is inert when it names a provider nobody serves', () => {
-      setEvent({
-        [EVENT_ENABLED_ENV]: '1',
+      live({
         [EVENT_MODELS_ENV]: PROMOTED,
         [EVENT_DISABLED_PROVIDERS_ENV]: 'not-a-provider',
       });
@@ -229,8 +266,7 @@ describe('event access overlay', () => {
     });
 
     it('goes inactive when it withdraws the last promoted model', () => {
-      setEvent({
-        [EVENT_ENABLED_ENV]: '1',
+      live({
         [EVENT_MODELS_ENV]: PROMOTED,
         [EVENT_DISABLED_PROVIDERS_ENV]: PROVIDER_OF(PROMOTED).join(','),
       });
@@ -240,20 +276,19 @@ describe('event access overlay', () => {
 
     it('reverses cleanly, restoring the promoted set', () => {
       const disabled = PROVIDER_OF(PROMOTED).join(',');
-      setEvent({
-        [EVENT_ENABLED_ENV]: '1',
+      live({
         [EVENT_MODELS_ENV]: PROMOTED,
         [EVENT_DISABLED_PROVIDERS_ENV]: disabled,
       });
       expect(eventAllowsModel(PROMOTED, 'free')).toBe(false);
 
-      setEvent({ [EVENT_ENABLED_ENV]: '1', [EVENT_MODELS_ENV]: PROMOTED });
+      live({ [EVENT_MODELS_ENV]: PROMOTED });
       expect(eventAllowsModel(PROMOTED, 'free')).toBe(true);
     });
   });
 
   it('turns off cleanly, restoring permanent free behaviour', () => {
-    setEvent({ [EVENT_ENABLED_ENV]: '1', [EVENT_MODELS_ENV]: PROMOTED });
+    live({ [EVENT_MODELS_ENV]: PROMOTED });
     expect(eventAllowsModel(PROMOTED, 'free')).toBe(true);
 
     setEvent({ [EVENT_MODELS_ENV]: PROMOTED }); // flag removed, nothing else changed

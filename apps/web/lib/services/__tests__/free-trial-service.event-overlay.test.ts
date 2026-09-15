@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { canAccessModelForSubscriptionTier, listCanonicalModels } from '@agiworkforce/types';
 
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
-import { EVENT_ENABLED_ENV, EVENT_MODELS_ENV } from '@/lib/server/event-access';
+import {
+  EVENT_ENABLED_ENV,
+  EVENT_ENDS_AT_ENV,
+  EVENT_MODELS_ENV,
+  EVENT_STARTS_AT_ENV,
+} from '@/lib/server/event-access';
+import { EVENT_BUDGET_USD_ENV } from '@/lib/server/event-budget';
 import { isFreeTrialRequest } from '@/lib/services/free-trial-service';
 
 /**
@@ -22,18 +28,35 @@ const UNPROMOTED_MODEL = listCanonicalModels()
   .find((id) => id !== EVENT_MODEL && !canAccessModelForSubscriptionTier(id, 'free'))!;
 const PAID_TIERS = ['basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'] as const;
 
+const EVENT_KEYS = [
+  EVENT_ENABLED_ENV,
+  EVENT_MODELS_ENV,
+  EVENT_STARTS_AT_ENV,
+  EVENT_ENDS_AT_ENV,
+  EVENT_BUDGET_USD_ENV,
+];
+
+function openEvent() {
+  const now = Date.now();
+  process.env[EVENT_ENABLED_ENV] = '1';
+  process.env[EVENT_MODELS_ENV] = EVENT_MODEL;
+  process.env[EVENT_STARTS_AT_ENV] = new Date(now - 3_600_000).toISOString();
+  process.env[EVENT_ENDS_AT_ENV] = new Date(now + 3_600_000).toISOString();
+  process.env[EVENT_BUDGET_USD_ENV] = '250';
+}
+
 describe('free trial admission · event overlay', () => {
   const saved: Record<string, string | undefined> = {};
 
   beforeEach(() => {
-    for (const key of [EVENT_ENABLED_ENV, EVENT_MODELS_ENV]) {
+    for (const key of EVENT_KEYS) {
       saved[key] = process.env[key];
       delete process.env[key];
     }
   });
 
   afterEach(() => {
-    for (const key of [EVENT_ENABLED_ENV, EVENT_MODELS_ENV]) {
+    for (const key of EVENT_KEYS) {
       if (saved[key] === undefined) delete process.env[key];
       else process.env[key] = saved[key];
     }
@@ -48,8 +71,7 @@ describe('free trial admission · event overlay', () => {
   });
 
   it('serves the event model on the free budget while the promotion is on', () => {
-    process.env[EVENT_ENABLED_ENV] = '1';
-    process.env[EVENT_MODELS_ENV] = EVENT_MODEL;
+    openEvent();
 
     expect(isFreeTrialRequest({ requestedModel: EVENT_MODEL, planTier: 'free' })).toBe(true);
   });
@@ -58,28 +80,24 @@ describe('free trial admission · event overlay', () => {
     const permanent = FREE_TRIAL_MODELS[0] as string;
     expect(isFreeTrialRequest({ requestedModel: permanent, planTier: 'free' })).toBe(true);
 
-    process.env[EVENT_ENABLED_ENV] = '1';
-    process.env[EVENT_MODELS_ENV] = EVENT_MODEL;
+    openEvent();
     expect(isFreeTrialRequest({ requestedModel: permanent, planTier: 'free' })).toBe(true);
   });
 
   it('still refuses a model the promotion does not name', () => {
-    process.env[EVENT_ENABLED_ENV] = '1';
-    process.env[EVENT_MODELS_ENV] = EVENT_MODEL;
+    openEvent();
 
     expect(isFreeTrialRequest({ requestedModel: UNPROMOTED_MODEL, planTier: 'free' })).toBe(false);
   });
 
   it.each(PAID_TIERS)('does not put %s on the free budget', (tier) => {
-    process.env[EVENT_ENABLED_ENV] = '1';
-    process.env[EVENT_MODELS_ENV] = EVENT_MODEL;
+    openEvent();
 
     expect(isFreeTrialRequest({ requestedModel: EVENT_MODEL, planTier: tier })).toBe(false);
   });
 
   it('matches the canonical id regardless of casing or padding', () => {
-    process.env[EVENT_ENABLED_ENV] = '1';
-    process.env[EVENT_MODELS_ENV] = EVENT_MODEL;
+    openEvent();
 
     expect(
       isFreeTrialRequest({ requestedModel: `  ${EVENT_MODEL.toUpperCase()} `, planTier: 'free' }),
