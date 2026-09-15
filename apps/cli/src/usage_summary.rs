@@ -189,63 +189,63 @@ pub fn account_lines_blocking() -> Vec<String> {
 fn unavailable_lines(reason: &str) -> Vec<String> {
     vec![
         "Account usage".to_string(),
-        format!("  unavailable: {reason}"),
+        format!("  Unavailable: {reason}"),
     ]
 }
 
 pub fn render_account_usage(usage: &AccountUsage, now: DateTime<Utc>) -> Vec<String> {
     let mut lines = vec![
         "Account usage".to_string(),
-        format!("  plan: {}", plan_label(&usage.plan_tier)),
+        format!("  Plan: {}", plan_label(&usage.plan_tier)),
     ];
 
     if usage.usage_allocation.as_deref() == Some("pending") {
-        lines.push("  allowance: not provisioned yet".to_string());
+        lines.push("  Allowance: not provisioned yet".to_string());
     }
 
     match usage.credits.as_ref() {
         Some(credits) => {
-            lines.push(credit_line("5-hour", &credits.five_hour, now));
-            lines.push(credit_line("weekly", &credits.weekly, now));
-            lines.push(credit_line("monthly", &credits.monthly, now));
+            lines.push(credit_line("5-hour window", &credits.five_hour, now));
+            lines.push(credit_line("Weekly", &credits.weekly, now));
+            lines.push(credit_line("Monthly", &credits.monthly, now));
             if let Some(flagship) = credits.flagship_weekly.as_ref() {
-                lines.push(credit_line("flagship weekly", flagship, now));
+                lines.push(credit_line("Flagship weekly", flagship, now));
             }
             lines.push(purchased_line(&credits.purchased));
         }
         None => {
             lines.push(percent_line(
-                "5-hour",
+                "5-hour window",
                 usage.session_usage_percentage,
                 usage.session_reset_at.as_deref(),
                 now,
             ));
             lines.push(percent_line(
-                "weekly",
+                "Weekly",
                 usage.weekly_usage_percentage,
                 usage.weekly_reset_at.as_deref(),
                 now,
             ));
             lines.push(percent_line(
-                "monthly",
+                "Monthly",
                 usage.usage_percentage,
                 usage.usage_reset_at.as_deref(),
                 now,
             ));
             if usage.flagship_weekly_usage_percentage > 0.0 {
                 lines.push(percent_line(
-                    "flagship weekly",
+                    "Flagship weekly",
                     usage.flagship_weekly_usage_percentage,
                     usage.flagship_weekly_reset_at.as_deref(),
                     now,
                 ));
             }
-            lines.push("  credits: not reported by this server".to_string());
+            lines.push("  Credits: not reported by this server".to_string());
         }
     }
 
     if !usage.has_usage_remaining {
-        lines.push("  no allowance remaining on this plan".to_string());
+        lines.push("  No allowance remaining on this plan".to_string());
     }
     lines
 }
@@ -288,7 +288,7 @@ fn purchased_line(purchased: &PurchasedCredits) -> String {
     } else {
         "overage off"
     };
-    format!("  purchased credits: {balance}, {overage}")
+    format!("  Purchased credits: {balance}, {overage}")
 }
 
 fn fmt_credits(value: f64) -> String {
@@ -456,25 +456,26 @@ mod tests {
     fn renders_each_meter_with_remaining_and_reset() {
         let usage = parse_account_usage(contract_fixture()).expect("contract fixture must parse");
         let rendered = render_account_usage(&usage, fixture_now()).join("\n");
-        assert!(rendered.contains("plan: Max 15x"), "{rendered}");
+        assert!(rendered.contains("Plan: Max 15x"), "{rendered}");
         assert!(
-            rendered.contains("5-hour: 10.25 of 200 credits used, 189.75 left, resets in 3h 0m"),
+            rendered
+                .contains("5-hour window: 10.25 of 200 credits used, 189.75 left, resets in 3h 0m"),
             "{rendered}"
         );
         assert!(
-            rendered.contains("weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h"),
+            rendered.contains("Weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h"),
             "{rendered}"
         );
         assert!(
-            rendered.contains("monthly: 4200.50 of 10000 credits used"),
+            rendered.contains("Monthly: 4200.50 of 10000 credits used"),
             "{rendered}"
         );
         assert!(
-            rendered.contains("flagship weekly: 15 of 500 credits used"),
+            rendered.contains("Flagship weekly: 15 of 500 credits used"),
             "{rendered}"
         );
         assert!(
-            rendered.contains("purchased credits: 120.50 credits, overage on"),
+            rendered.contains("Purchased credits: 120.50 credits, overage on"),
             "{rendered}"
         );
     }
@@ -496,9 +497,9 @@ mod tests {
         let usage = parse_account_usage(body).expect("older summary must still parse");
         assert!(usage.credits.is_none());
         let rendered = render_account_usage(&usage, fixture_now()).join("\n");
-        assert!(rendered.contains("monthly: 61% used"), "{rendered}");
+        assert!(rendered.contains("Monthly: 61% used"), "{rendered}");
         assert!(
-            rendered.contains("credits: not reported by this server"),
+            rendered.contains("Credits: not reported by this server"),
             "{rendered}"
         );
         assert!(!rendered.contains("0 credits"), "{rendered}");
@@ -521,7 +522,7 @@ mod tests {
             credits: None,
         };
         let rendered = render_account_usage(&usage, fixture_now()).join("\n");
-        assert!(rendered.contains("no allowance remaining"), "{rendered}");
+        assert!(rendered.contains("No allowance remaining"), "{rendered}");
     }
 
     #[test]
@@ -531,7 +532,7 @@ mod tests {
         usage.usage_allocation = Some("pending".to_string());
         let rendered = render_account_usage(&usage, fixture_now()).join("\n");
         assert!(
-            rendered.contains("allowance: not provisioned yet"),
+            rendered.contains("Allowance: not provisioned yet"),
             "{rendered}"
         );
     }

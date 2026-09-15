@@ -1197,14 +1197,14 @@ mod tests {
             model: "fixture-render-model".into(),
             account_lines: vec![
                 "Account usage".into(),
-                "  plan: Max 15x".into(),
-                "  weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h".into(),
+                "  Plan: Max 15x".into(),
+                "  Weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h".into(),
             ],
         };
         let s = render_usage(&usage);
         assert!(s.contains("Usage"));
         assert!(s.contains("Account usage"));
-        assert!(s.contains("plan: Max 15x"));
+        assert!(s.contains("Plan: Max 15x"));
         assert!(s.contains("2050 left"));
         assert!(s.contains("Session estimate"));
         assert!(s.contains("Input tokens:"));
