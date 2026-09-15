@@ -9,9 +9,14 @@ import { useTheme } from '@/src/ui/theme';
 // away the open conversation and restarted routing at the root.
 export function AppLockOverlay({
   onUnlock,
+  onReset,
   variant = 'locked',
 }: {
   onUnlock: () => void;
+  // A user whose biometrics changed, or whose device lost its enrolment, can
+  // never satisfy the gate again. Without this the only way out is a reinstall,
+  // which deletes every Local Mode conversation on the device.
+  onReset?: () => void;
   variant?: 'locked' | 'cover';
 }) {
   const { colors } = useTheme();
@@ -50,6 +55,19 @@ export function AppLockOverlay({
       >
         <Text style={[styles.buttonLabel, { color: colors.accentText }]}>Unlock</Text>
       </Pressable>
+      {onReset ? (
+        <Pressable
+          testID="app-lock-reset"
+          onPress={onReset}
+          accessibilityRole="button"
+          accessibilityLabel="Reset app lock and sign out"
+          style={styles.resetButton}
+        >
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+            Can&apos;t unlock? Reset app lock and sign out
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -66,4 +84,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   buttonLabel: { fontWeight: '600' },
+  resetButton: {
+    marginTop: 16,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
 });

@@ -419,10 +419,6 @@ export function ChatInput({
     inputRef.current?.focus();
   }, []);
 
-  const handleAttach = useCallback((newAttachments: Attachment[]) => {
-    setAttachments((prev) => [...prev, ...newAttachments]);
-  }, []);
-
   const handleRemoveAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);

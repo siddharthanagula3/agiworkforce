@@ -54,21 +54,25 @@ attached within one business day.
 
 ## Why the app asks for each permission
 
-Every permission is requested **on first use, from a user action**, never on
-launch and never on screen mount (`src/features/settings/permissions/registry.ts`).
+Every permission except notifications is requested **on first use, from a user
+action**, never on launch and never on screen mount
+(`src/features/settings/permissions/registry.ts`). Notification permission is
+requested once, after the user signs in to AGI Cloud, because push delivery is
+part of what signing in to Cloud enables (`app/_layout.tsx`,
+`services/notifications.ts`).
 Declining any one of them leaves the rest of the app fully usable. There is also
 a Settings → Permissions screen that shows current status for each.
 
-| Permission                                                 | Where it is used                                                                                                                                    |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Camera (`NSCameraUsageDescription`)                        | Taking a photo to attach to a chat and scanning documents/text for on-device OCR.                                                                   |
-| Microphone (`NSMicrophoneUsageDescription`)                | Voice input in the chat composer.                                                                                                                   |
-| Speech Recognition (`NSSpeechRecognitionUsageDescription`) | Transcribing that voice input. Uses the on-device iOS Speech framework via `expo-speech-recognition` (`src/features/voice/services/voiceInput.ts`). |
-| Photo Library (`NSPhotoLibraryUsageDescription`)           | Choosing an existing image to attach to a chat.                                                                                                     |
-| Face ID (`NSFaceIDUsageDescription`)                       | Optional app lock, opt-in from Settings → Safety & Security (`src/features/auth/hooks/useBiometricGate.ts`). Off by default.                        |
-| Calendar / Reminders                                       | Same optional device-context connector, for "what's on my calendar" style questions. Off by default.                                                |
-| Translation (`NSTranslationUsageDescription`)              | On-device translation through Apple's Translation framework (`native/ios/AGITranslate.swift`). No text is sent to a server.                         |
-| Notifications                                              | Optional; used for background task and cloud job completion alerts.                                                                                 |
+| Permission                                                 | Where it is used                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Camera (`NSCameraUsageDescription`)                        | Taking a photo to attach to a chat and scanning documents/text for on-device OCR.                                                                                                                                                                                                            |
+| Microphone (`NSMicrophoneUsageDescription`)                | Voice input in the chat composer, and live voice mode in an AGI Cloud chat, which streams the microphone to AGI Cloud over WebRTC for the session (`src/features/voice/services/liveVoiceSession.ts`) and saves the transcript to that chat. Declared as Audio Data in the privacy manifest. |
+| Speech Recognition (`NSSpeechRecognitionUsageDescription`) | Transcribing that voice input. Uses the on-device iOS Speech framework via `expo-speech-recognition` (`src/features/voice/services/voiceInput.ts`).                                                                                                                                          |
+| Photo Library (`NSPhotoLibraryUsageDescription`)           | Choosing an existing image to attach to a chat.                                                                                                                                                                                                                                              |
+| Face ID (`NSFaceIDUsageDescription`)                       | Optional app lock, opt-in from Settings → Safety & Security (`src/features/auth/hooks/useBiometricGate.ts`). Off by default.                                                                                                                                                                 |
+| Calendar / Reminders                                       | Same optional device-context connector, for "what's on my calendar" style questions. Off by default.                                                                                                                                                                                         |
+| Translation (`NSTranslationUsageDescription`)              | On-device translation through Apple's Translation framework (`native/ios/AGITranslate.swift`). No text is sent to a server.                                                                                                                                                                  |
+| Notifications                                              | Optional; used for background task and cloud job completion alerts.                                                                                                                                                                                                                          |
 
 The app does **not** link `expo-location` and requests no location permission.
 The app contains no HealthKit code and requests no Health permission, the Apple

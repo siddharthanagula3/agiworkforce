@@ -189,6 +189,7 @@ exports[`Composer, voice scaffolding snapshots VoiceInputButton locks disabled m
     accessible={true}
     collapsable={false}
     focusable={true}
+    hitSlop={8}
     onBlur={[Function]}
     onClick={[Function]}
     onFocus={[Function]}
@@ -249,6 +250,7 @@ exports[`Composer, voice scaffolding snapshots VoiceInputButton locks idle mic b
     accessible={true}
     collapsable={false}
     focusable={true}
+    hitSlop={8}
     onBlur={[Function]}
     onClick={[Function]}
     onFocus={[Function]}

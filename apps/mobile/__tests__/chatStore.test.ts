@@ -762,6 +762,7 @@ describe('chatStore, streaming state', () => {
 
     it('uses per-send task options over persisted chat mode', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
       useChatStore.setState({ chatMode: 'chat', chatStyle: 'normal' });
 
       mockStreamChat.mockImplementation(
@@ -777,7 +778,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'fix this function', MODEL, undefined, {
+        await getState().sendMessage(CONV_ID, 'fix this function', CLOUD_MODEL, undefined, {
           mode: 'create',
           taskInstruction: 'Task: Code. Write a focused patch.',
         });
@@ -801,6 +802,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('sets isStreaming=true while streaming, then clears it on onDone', async () => {
+      seedCloudConversation();
       let capturedCallbacks: StreamCallbacks | null = null;
 
       mockStreamChat.mockImplementation(
@@ -816,7 +818,7 @@ describe('chatStore, streaming state', () => {
       );
 
       const sendPromise = act(async () => {
-        await getState().sendMessage(CONV_ID, 'Hi', MODEL);
+        await getState().sendMessage(CONV_ID, 'Hi', CLOUD_MODEL);
       });
 
       await sendPromise;
@@ -828,6 +830,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('accumulates streaming content via onDelta', async () => {
+      seedCloudConversation();
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
@@ -841,7 +844,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'test', MODEL);
+        await getState().sendMessage(CONV_ID, 'test', CLOUD_MODEL);
       });
 
       const msgs = getState().messages[CONV_ID] ?? [];
@@ -1008,7 +1011,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'question', MODEL);
+        await getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
       });
 
       expect(getState().streamingContent).toBe('');
@@ -1016,6 +1019,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('strips <thinking> tags from cloud delta.content into reasoning instead of rendering them raw', async () => {
+      seedCloudConversation();
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
@@ -1031,7 +1035,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'question', MODEL);
+        await getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
       });
 
       const msgs = getState().messages[CONV_ID] ?? [];
@@ -1043,6 +1047,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('leaves reasoning undefined when the turn never emitted thinking (no "Thought for 0s")', async () => {
+      seedCloudConversation();
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
@@ -1055,7 +1060,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'question', MODEL);
+        await getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
       });
 
       const msgs = getState().messages[CONV_ID] ?? [];
@@ -1065,6 +1070,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('extracts tag reasoning split across chunk boundaries without duplication', async () => {
+      seedCloudConversation();
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
@@ -1079,7 +1085,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'question', MODEL);
+        await getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
       });
 
       const msgs = getState().messages[CONV_ID] ?? [];
@@ -1388,38 +1394,48 @@ describe('chatStore, streaming state', () => {
       expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
     });
 
-    it('captures only after a successful local-mode BYOK stream completes', async () => {
+    it('never captures durable facts on the device from a cloud stream', async () => {
+      seedCloudConversation();
       mockRemoteDisabledReason.mockReturnValue(null);
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
-            expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
             callbacks.onDelta({ content: 'Nice to meet you.' });
-            expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
             callbacks.onDone();
             resolve();
           }),
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', MODEL);
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', CLOUD_MODEL);
       });
 
-      expect(mockConsolidateFactsFromTurn).toHaveBeenCalledTimes(1);
-      expect(mockConsolidateFactsFromTurn).toHaveBeenCalledWith({
-        message: 'My name is Grace Hopper.',
-        conversationId: CONV_ID,
-      });
+      expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
     });
 
-    it('does not capture durable facts when a local-mode BYOK stream has no answer', async () => {
+    it('refuses a local conversation whose model no longer resolves instead of streaming it to cloud', async () => {
+      mockRemoteDisabledReason.mockReturnValue(null);
+
+      let accepted: boolean | undefined;
+      await act(async () => {
+        accepted = await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', MODEL);
+      });
+
+      expect(accepted).toBe(false);
+      expect(mockStreamChat).not.toHaveBeenCalled();
+      expect(mockLocalGenerate).not.toHaveBeenCalled();
+      expect(getState().error).toContain('no longer available on this device');
+    });
+
+    it('does not capture durable facts when a cloud stream has no answer', async () => {
+      seedCloudConversation();
       mockRemoteDisabledReason.mockReturnValue(null);
       mockStreamChat.mockImplementation(async (_body, callbacks) => {
         callbacks.onDone();
       });
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', MODEL);
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', CLOUD_MODEL);
       });
 
       expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
@@ -2013,7 +2029,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'question', MODEL);
+        await getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
       });
 
       expect(getState().isStreaming).toBe(false);
@@ -2032,7 +2048,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'question', MODEL);
+        await getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
       });
 
       expect(getState().streamingContent).toBe('');
@@ -2040,6 +2056,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('paints a visible error in the assistant bubble when the stream errors with no content', async () => {
+      seedCloudConversation();
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
@@ -2053,7 +2070,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'question', MODEL);
+        await getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
       });
 
       const msgs = getState().messages[CONV_ID] ?? [];
@@ -2076,7 +2093,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'question', MODEL);
+        await getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
       });
 
       const msgs = getState().messages[CONV_ID] ?? [];
@@ -2125,6 +2142,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('fires onAccepted when the user message commits, before the stream finishes', async () => {
+      seedCloudConversation();
       const onAccepted = jest.fn();
       let acceptedBeforeDone = false;
 
@@ -2142,7 +2160,7 @@ describe('chatStore, streaming state', () => {
 
       let accepted: boolean | undefined;
       await act(async () => {
-        accepted = await getState().sendMessage(CONV_ID, 'hello', MODEL, undefined, {
+        accepted = await getState().sendMessage(CONV_ID, 'hello', CLOUD_MODEL, undefined, {
           onAccepted,
         });
       });
@@ -2153,6 +2171,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('tracks streaming per conversation via streamingConversationIds', async () => {
+      seedCloudConversation();
       let idsDuringStream: string[] = [];
 
       mockStreamChat.mockImplementation(
@@ -2168,7 +2187,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'scope me', MODEL);
+        await getState().sendMessage(CONV_ID, 'scope me', CLOUD_MODEL);
       });
 
       expect(idsDuringStream).toContain(CONV_ID);
@@ -2180,7 +2199,7 @@ describe('chatStore, streaming state', () => {
       mockStreamChat.mockImplementation(() => Promise.resolve());
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'silent stream', MODEL);
+        await getState().sendMessage(CONV_ID, 'silent stream', CLOUD_MODEL);
       });
 
       expect(getState().isStreaming).toBe(false);
@@ -2190,6 +2209,7 @@ describe('chatStore, streaming state', () => {
     });
 
     it('honors the per-model thinking toggle instead of forcing thinking on', async () => {
+      seedCloudConversation();
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { useModelStore } = require('../src/features/model-picker/store');
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
@@ -2206,17 +2226,17 @@ describe('chatStore, streaming state', () => {
 
       useModelStore.setState({ thinkingEnabledPerModel: {} });
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'no thinking', MODEL);
+        await getState().sendMessage(CONV_ID, 'no thinking', CLOUD_MODEL);
       });
       expect(capturedBody?.thinking).toBe(false);
-      expect(capturedBody?.effort).toBeUndefined();
+      const effortWithoutThinking = capturedBody?.effort;
 
-      useModelStore.setState({ thinkingEnabledPerModel: { [MODEL]: true } });
+      useModelStore.setState({ thinkingEnabledPerModel: { [CLOUD_MODEL]: true } });
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'with thinking', MODEL);
+        await getState().sendMessage(CONV_ID, 'with thinking', CLOUD_MODEL);
       });
       expect(capturedBody?.thinking).toBe(true);
-      expect(capturedBody?.effort).toBeUndefined();
+      expect(capturedBody?.effort).toBe(effortWithoutThinking);
     });
   });
 
@@ -2417,7 +2437,7 @@ describe('chatStore, streaming state', () => {
 
       act(() => {
         useChatStore.setState({ currentConversationId: CONV_ID, isStreaming: true });
-        getState().sendMessage(CONV_ID, 'hi', MODEL);
+        getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
       });
 
       await act(async () => {
@@ -2436,7 +2456,7 @@ describe('chatStore, streaming state', () => {
           isStreaming: true,
           streamingContent: 'partial content',
         });
-        getState().sendMessage(CONV_ID, 'hi', MODEL);
+        getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
       });
 
       await act(async () => {

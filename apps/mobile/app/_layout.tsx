@@ -9,6 +9,7 @@ import { reloadAppAsync } from 'expo';
 import {
   View,
   ActivityIndicator,
+  Alert,
   Appearance,
   BackHandler,
   Platform,
@@ -35,7 +36,7 @@ import {
   clearPushTokenAccountSession,
 } from '@/src/features/auth/services/pushTokenAccountLifecycle';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
-import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
+import { clearBiometricFlag, hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { AppLockOverlay } from '@/src/features/auth/components/AppLockOverlay';
 import { SecureStorageUnavailable } from '@/src/features/auth/components/SecureStorageUnavailable';
@@ -52,7 +53,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
-import { getAuthToken } from '@/services/authSession';
+import { clearAuthSession, getAuthToken } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
 import { restoreStoredLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
@@ -223,6 +224,28 @@ export default function RootLayout() {
     );
   }, [themeMode]);
   const { isUnlocked, isCovered, isReady: isBiometricReady, authenticate } = useBiometricGate();
+
+  const resetAppLock = useCallback(() => {
+    Alert.alert(
+      'Reset app lock and sign out?',
+      'App Lock is turned off and you are signed out of AGI Cloud on this device. Local chats stay on this device. Cloud chats are available again after you sign in.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset and sign out',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              await clearAuthSession();
+              await clearBiometricFlag();
+            })().catch((err) => {
+              console.warn('[RootLayout] App lock reset failed:', err);
+            });
+          },
+        },
+      ],
+    );
+  }, []);
 
   const openSecureStorage = useCallback(() => {
     setStorageStatus('pending');
@@ -503,7 +526,7 @@ export default function RootLayout() {
   }, [url, isClerkSignedIn, isInitialized, router]);
 
   useEffect(() => {
-    if (!isInitialized || !isClerkSignedIn) return;
+    if (!isInitialized) return;
     return subscribeToIOSShareInbox(
       ({ text, truncated, files }) => {
         const handoffKey = stageSharedFileAttachments(files);
@@ -519,7 +542,7 @@ export default function RootLayout() {
         console.warn('[RootLayout] Could not import iOS shared content:', error);
       },
     );
-  }, [isInitialized, isClerkSignedIn, router]);
+  }, [isInitialized, router]);
 
   useEffect(() => {
     if (!url || !isInitialized) return;
@@ -718,7 +741,11 @@ export default function RootLayout() {
             {/* The lock covers the app, it does not replace it: unmounting the
                 navigator on every resume discarded the open conversation. */}
             {isUnlocked && !isCovered ? null : (
-              <AppLockOverlay onUnlock={authenticate} variant={isUnlocked ? 'cover' : 'locked'} />
+              <AppLockOverlay
+                onUnlock={authenticate}
+                onReset={resetAppLock}
+                variant={isUnlocked ? 'cover' : 'locked'}
+              />
             )}
           </SafeAreaProvider>
         </GestureHandlerRootView>
