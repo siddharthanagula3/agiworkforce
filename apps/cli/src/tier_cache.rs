@@ -1003,13 +1003,13 @@ mod tests {
     #[test]
     fn a_plan_list_matches_ids_regardless_of_case() {
         let listed = vec![
-            "claude-haiku-4-5".to_string(),
-            "Deepseek-V4-Flash".to_string(),
+            "listed-model-one".to_string(),
+            "Listed-Model-Two".to_string(),
         ];
-        assert!(plan_lists(&listed, "Claude-Haiku-4-5"));
-        assert!(plan_lists(&listed, "deepseek-v4-flash"));
-        assert!(!plan_lists(&listed, "gpt-6-astra"));
-        assert!(!plan_lists(&[], "claude-haiku-4-5"));
+        assert!(plan_lists(&listed, "Listed-Model-One"));
+        assert!(plan_lists(&listed, "listed-model-two"));
+        assert!(!plan_lists(&listed, "unlisted-model"));
+        assert!(!plan_lists(&[], "listed-model-one"));
     }
 
     #[test]
