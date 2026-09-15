@@ -64,10 +64,10 @@ export function contactMailto(subject?: string): string {
 
 export const POLICY_LAST_UPDATED = {
   terms: '2026-08-11',
-  privacy: '2026-08-14',
+  privacy: '2026-09-12',
   acceptableUse: '2026-08-05',
   dpa: '2026-08-17',
-  cookies: '2026-08-14',
+  cookies: '2026-09-12',
   subprocessors: '2026-09-12',
   security: '2026-08-14',
   trust: '2026-09-12',
