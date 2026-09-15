@@ -15,7 +15,6 @@ import {
   RefreshCw,
   ShieldCheck,
   Telescope,
-  Wrench,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -33,7 +32,6 @@ import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
-import type { ToolAccess } from '@/stores/chat/chatViewStore';
 
 type CapabilityTone = 'active' | 'local' | 'device' | 'cloud' | 'desktop' | 'review';
 type ToggleCapability = 'webSearch' | 'imageGen' | 'codeExecution' | 'research';
@@ -54,20 +52,13 @@ interface CapabilitySection {
   rows: CapabilityRowMeta[];
 }
 
-const TOOL_ACCESS_LABELS: Record<ToolAccess, string> = {
-  auto: 'Auto',
-  'on-demand': 'On demand',
-  always: 'Always',
-};
-
 function makeSections(input: {
   cloudUnlocked: boolean;
   appMode: MobileChatAppMode;
   toolApprovalPolicy: ToolApprovalPolicy;
-  toolAccess: ToolAccess;
   memoryFreshness: string | null;
 }): CapabilitySection[] {
-  const { cloudUnlocked, appMode, toolApprovalPolicy, toolAccess, memoryFreshness } = input;
+  const { cloudUnlocked, appMode, toolApprovalPolicy, memoryFreshness } = input;
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
   const localModeActive = appMode === 'local';
   const memoryDescription = localModeActive
@@ -175,15 +166,6 @@ function makeSections(input: {
           ...(FEATURES.webSearch ? { toggle: 'webSearch' as const } : {}),
         },
         {
-          key: 'tool-access',
-          icon: Wrench,
-          tone: 'cloud',
-          label: 'Tool access',
-          description: 'Choose how eagerly Cloud chats load tool definitions.',
-          value: TOOL_ACCESS_LABELS[toolAccess],
-          href: '/(app)/settings/tool-access',
-        },
-        {
           key: 'continuity',
           icon: RefreshCw,
           tone: 'cloud',
@@ -222,7 +204,6 @@ export default function CapabilitiesScreen() {
   const setFeature = useChatStore((s) => s.setFeature);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const toolApprovalPolicy = useSettingsStore((s) => s.toolApprovalPolicy);
-  const toolAccess = useChatStore((s) => s.toolAccess);
   const memoryEntries = useMemoryStore((s) => s.entries);
   const fetchMemories = useMemoryStore((s) => s.fetchMemories);
   useEffect(() => {
@@ -233,7 +214,6 @@ export default function CapabilitiesScreen() {
     cloudUnlocked,
     appMode,
     toolApprovalPolicy,
-    toolAccess,
     memoryFreshness,
   });
 

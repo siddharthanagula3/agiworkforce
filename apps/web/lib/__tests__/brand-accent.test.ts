@@ -83,8 +83,15 @@ function hexToRgb(value: string): Rgb {
   ].map((channel) => channel / 255) as Rgb;
 }
 
+function resolveReference(value: string): string {
+  const reference = value.match(/^var\(--([a-z0-9-]+)\)$/i);
+  if (!reference) return value;
+  return resolveReference(tokenValue(foundationBlock(':root'), reference[1]!));
+}
+
 function cssColorToRgb(value: string): Rgb {
-  return value.startsWith('#') ? hexToRgb(value) : hslToRgb(value);
+  const resolved = resolveReference(value);
+  return resolved.startsWith('#') ? hexToRgb(resolved) : hslToRgb(resolved);
 }
 
 function relativeLuminance(rgb: Rgb): number {

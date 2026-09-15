@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRODUCT_ROUTE_PREFIXES } from '@agiworkforce/types/product-routes';
 
 const APP_DIR = path.resolve(__dirname, '..', '..');
 
@@ -176,9 +177,11 @@ const COUNT_WORDS: Record<number, string> = {
 
 function protectedRouteGroups(): string[] {
   const source = readFileSync(PROXY_SOURCE, 'utf8');
-  const block = /const isProtectedAppRoute = [^[]*\[([\s\S]*?)\]/u.exec(source);
-  expect(block, 'isProtectedAppRoute is gone from proxy.ts').not.toBeNull();
-  return [...block![1]!.matchAll(/'\/([a-z-]+)\(\.\*\)'/gu)].map((match) => match[1]!);
+  expect(
+    /isProtectedAppRoute = [^;]*routeMatcherPatterns\(PRODUCT_ROUTE_PREFIXES\)/u.test(source),
+    'isProtectedAppRoute no longer reads PRODUCT_ROUTE_PREFIXES in proxy.ts',
+  ).toBe(true);
+  return PRODUCT_ROUTE_PREFIXES.map((prefix) => prefix.slice(1));
 }
 
 function cronSchedule(cronPath: string): string {

@@ -16,7 +16,22 @@ jest.mock('@/lib/biometricFlagStore', () => ({
   hydrateBiometricFlag: jest.fn().mockResolvedValue(undefined),
 }));
 
+import { AppState, type AppStateStatus } from 'react-native';
+
 import { useBiometricGate } from '../src/features/auth/hooks/useBiometricGate';
+
+const appStateListeners: Array<(state: AppStateStatus) => void> = [];
+jest
+  .spyOn(AppState, 'addEventListener')
+  .mockImplementation((_event: string, handler: (state: AppStateStatus) => void) => {
+    appStateListeners.push(handler);
+    return {
+      remove: () => {
+        const index = appStateListeners.indexOf(handler);
+        if (index >= 0) appStateListeners.splice(index, 1);
+      },
+    } as ReturnType<typeof AppState.addEventListener>;
+  });
 
 let consoleWarnSpy: jest.SpyInstance;
 
@@ -129,6 +144,52 @@ describe('useBiometricGate, fail-closed on error', () => {
 
     expect(returned).toBe(true);
     expect(result.current.isUnlocked).toBe(true);
+  });
+});
+
+describe('useBiometricGate, switcher cover', () => {
+  it('covers as the app leaves the foreground, before any prompt', async () => {
+    mockAuthenticateAsync.mockResolvedValue({ success: true });
+    mockHasHardwareAsync.mockResolvedValue(true);
+    mockIsEnrolledAsync.mockResolvedValue(true);
+
+    const { result } = renderHook(() => useBiometricGate());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.isCovered).toBe(false);
+
+    const listener = appStateListeners.at(-1);
+    expect(listener).toBeDefined();
+
+    const promptCallsBefore = mockAuthenticateAsync.mock.calls.length;
+    act(() => listener!('inactive'));
+    expect(result.current.isCovered).toBe(true);
+    expect(mockAuthenticateAsync.mock.calls.length).toBe(promptCallsBefore);
+
+    act(() => listener!('background'));
+    expect(result.current.isCovered).toBe(true);
+  });
+
+  it('lifts the cover when the app comes back', async () => {
+    mockAuthenticateAsync.mockResolvedValue({ success: true });
+    mockHasHardwareAsync.mockResolvedValue(true);
+    mockIsEnrolledAsync.mockResolvedValue(true);
+
+    const { result } = renderHook(() => useBiometricGate());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const listener = appStateListeners.at(-1)!;
+    act(() => listener('background'));
+    expect(result.current.isCovered).toBe(true);
+
+    await act(async () => {
+      listener('active');
+      await Promise.resolve();
+    });
+    expect(result.current.isCovered).toBe(false);
   });
 });
 

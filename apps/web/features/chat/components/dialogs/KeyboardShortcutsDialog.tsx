@@ -14,6 +14,7 @@ import { safePlatform } from '@shared/utils/browser-utils';
 import type { KeyboardShortcutDoc } from '../../hooks/use-keyboard-shortcuts';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { memoWhenClosed } from '@shared/lib/memo-when-closed';
+import { useHostShortcuts } from '@/features/desktop-host';
 
 interface KeyboardShortcutsDialogProps {
   open: boolean;
@@ -27,6 +28,7 @@ function KeyboardShortcutsDialogImpl({
   shortcuts,
 }: KeyboardShortcutsDialogProps) {
   const isMac = safePlatform.isMac();
+  const hostShortcuts = useHostShortcuts();
 
   // Same coalescing as the nav list: an older persisted store has no such key.
   const disabledIds = useSettingsStore((state) => state.disabledShortcutIds) ?? [];
@@ -133,6 +135,34 @@ function KeyboardShortcutsDialogImpl({
                 Object.keys(groupedShortcuts).length - 1 && <Separator className="my-4" />}
             </div>
           ))}
+
+          {hostShortcuts.length > 0 ? (
+            <div>
+              <Separator className="my-4" />
+              <h3 className="mb-3 text-sm font-semibold text-foreground">Desktop app</h3>
+              {/*
+                No switch on these rows: the shell's menu owns the chord and the
+                page cannot stop it firing, so a control here would be a promise
+                the page cannot keep.
+              */}
+              <div className="space-y-2">
+                {hostShortcuts.map((shortcut) => (
+                  <div
+                    key={shortcut.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3"
+                  >
+                    <span className="text-sm text-foreground">{shortcut.description}</span>
+                    <Badge
+                      variant="outline"
+                      className="min-w-[32px] justify-center font-mono text-xs"
+                    >
+                      {shortcut.chord}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {disabledIds.length > 0 ? (

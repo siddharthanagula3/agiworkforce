@@ -198,8 +198,9 @@ pub fn active_theme_idx() -> u8 {
     ACTIVE_THEME.load(Ordering::Relaxed)
 }
 
-fn active_palette() -> Palette {
-    match ACTIVE_THEME.load(Ordering::Relaxed) {
+/// Resolve a theme index to its palette. Out-of-range → Dark.
+fn palette_for(idx: u8) -> Palette {
+    match idx {
         1 => PALETTE_LIGHT,
         2 => PALETTE_ANSI,
         3 => PALETTE_SOLARIZED_DARK,
@@ -207,6 +208,10 @@ fn active_palette() -> Palette {
         5 => PALETTE_COLORBLIND,
         _ => PALETTE_DARK,
     }
+}
+
+fn active_palette() -> Palette {
+    palette_for(ACTIVE_THEME.load(Ordering::Relaxed))
 }
 
 /// Primary interactive accent for selection, prompts, and active controls.
@@ -743,15 +748,13 @@ mod colorfgbg_tests {
 mod theme_tests {
     use super::*;
 
+    /// Resolution is asserted through `palette_for`, not through the process
+    /// global: every `TuiApp` a sibling test builds applies its own theme, so a
+    /// set-then-read here raced them and failed on whichever ran in between.
     #[test]
-    fn set_active_theme_switches_the_semantic_palette() {
-        set_active_theme(0); // Dark (= v3 brand defaults)
-        assert_eq!(active_theme_idx(), 0);
-        let dark = active_palette();
-
-        set_active_theme(5); // Colorblind
-        assert_eq!(active_theme_idx(), 5);
-        let cb = active_palette();
+    fn each_theme_index_resolves_to_its_own_semantic_palette() {
+        let dark = palette_for(0);
+        let cb = palette_for(5);
 
         // The whole point of the re-route: a different theme yields different
         // semantic colors. Colorblind swaps green/red for bluish-green/vermillion.
@@ -760,26 +763,17 @@ mod theme_tests {
         assert_ne!(dark.accent, cb.accent);
 
         // Out-of-range index falls back to Dark rather than panicking.
-        set_active_theme(99);
-        assert_eq!(active_palette().accent, PALETTE_DARK.accent);
-
-        // Restore the default so char-only render snapshots stay deterministic.
-        set_active_theme(0);
+        assert_eq!(palette_for(99).accent, PALETTE_DARK.accent);
     }
 
     #[test]
     fn every_theme_index_resolves_to_a_distinct_dark_or_light_base() {
         // Dark/Ansi/SolarizedDark/Colorblind are dark-based; Light/SolarizedLight
         // are light-based, their status-bar backgrounds must differ accordingly.
-        set_active_theme(1); // Light
-        let light_bar = active_palette().status_bar_bg;
-        set_active_theme(0); // Dark
-        let dark_bar = active_palette().status_bar_bg;
         let lightness = |(r, g, b): (u8, u8, u8)| r as u16 + g as u16 + b as u16;
         assert!(
-            lightness(light_bar) > lightness(dark_bar),
+            lightness(palette_for(1).status_bar_bg) > lightness(palette_for(0).status_bar_bg),
             "light theme status bar should be brighter than dark"
         );
-        set_active_theme(0);
     }
 }

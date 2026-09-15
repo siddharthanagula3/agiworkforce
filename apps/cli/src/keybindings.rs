@@ -13,15 +13,17 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 pub enum KeybindingAction {
     Quit,
     CycleMode,
+    Redraw,
     ClearChat,
     ClearInput,
     OpenPalette,
 }
 
 impl KeybindingAction {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Quit,
         Self::CycleMode,
+        Self::Redraw,
         Self::ClearChat,
         Self::ClearInput,
         Self::OpenPalette,
@@ -31,19 +33,23 @@ impl KeybindingAction {
         match self {
             Self::Quit => "quit",
             Self::CycleMode => "cycle_mode",
+            Self::Redraw => "redraw",
             Self::ClearChat => "clear_chat",
             Self::ClearInput => "clear_input",
             Self::OpenPalette => "open_palette",
         }
     }
 
-    const fn default_binding(self) -> &'static str {
+    /// `None` means the action ships with no default chord: a user opts in
+    /// by naming it under `[ui.keybindings]`, and it stays inert otherwise.
+    const fn default_binding(self) -> Option<&'static str> {
         match self {
-            Self::Quit => "esc",
-            Self::CycleMode => "shift+tab",
-            Self::ClearChat => "ctrl+l",
-            Self::ClearInput => "ctrl+c",
-            Self::OpenPalette => "/",
+            Self::Quit => Some("esc"),
+            Self::CycleMode => Some("shift+tab"),
+            Self::Redraw => Some("ctrl+l"),
+            Self::ClearChat => None,
+            Self::ClearInput => Some("ctrl+c"),
+            Self::OpenPalette => Some("/"),
         }
     }
 
@@ -51,7 +57,8 @@ impl KeybindingAction {
         match self {
             Self::Quit => "Quit",
             Self::CycleMode => "Cycle permission mode",
-            Self::ClearChat => "Clear screen",
+            Self::Redraw => "Redraw the screen",
+            Self::ClearChat => "Clear the conversation",
             Self::ClearInput => "Clear current input",
             Self::OpenPalette => "Open command palette",
         }
@@ -61,6 +68,15 @@ impl KeybindingAction {
         Self::ALL
             .into_iter()
             .find(|action| action.config_key() == value)
+    }
+}
+
+/// The chord that would govern `action`: a project or user override if one is
+/// named, else the action's default, else `None` when it ships unbound.
+fn effective_binding(action: KeybindingAction, custom: &BTreeMap<String, String>) -> Option<&str> {
+    match custom.get(action.config_key()) {
+        Some(configured) => Some(configured.as_str()),
+        None => action.default_binding(),
     }
 }
 
@@ -107,13 +123,11 @@ impl Keybindings {
         };
         let mut entries = BTreeMap::new();
         for action in KeybindingAction::ALL {
-            let configured = custom
-                .get(action.config_key())
-                .map(String::as_str)
-                .unwrap_or_else(|| action.default_binding());
-            let (display, chord) = parse_binding(configured).unwrap_or_else(|_| {
-                parse_binding(action.default_binding()).expect("default binding must parse")
-            });
+            let Some(value) = effective_binding(action, custom) else {
+                continue;
+            };
+            let (display, chord) =
+                parse_binding(value).expect("configured and default bindings are pre-validated");
             entries.insert(action.config_key(), (display, chord));
         }
         Self { entries }
@@ -128,7 +142,11 @@ impl Keybindings {
     pub fn render_help(&self, edit_mode: &str) -> String {
         let mut lines = vec!["Keybindings".to_string()];
         for action in KeybindingAction::ALL {
-            let binding = &self.entries[action.config_key()].0;
+            let binding = self
+                .entries
+                .get(action.config_key())
+                .map(|(display, _)| display.as_str())
+                .unwrap_or("(unbound)");
             lines.push(format!("  {binding:<14} {}", action.label()));
         }
         lines.extend([
@@ -141,7 +159,14 @@ impl Keybindings {
             "  edit_mode = \"vi\" # or \"emacs\"".to_string(),
             "  [ui.keybindings]".to_string(),
             "  open_palette = \"ctrl+p\"".to_string(),
-            "Actions: quit, cycle_mode, clear_chat, clear_input, open_palette".to_string(),
+            format!(
+                "Actions: {}",
+                KeybindingAction::ALL
+                    .iter()
+                    .map(|action| action.config_key())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         ]);
         lines.join("\n")
     }
@@ -173,10 +198,9 @@ pub fn validate_config(custom: &BTreeMap<String, String>) -> Result<(), String> 
 
     let mut seen = HashSet::new();
     for action in KeybindingAction::ALL {
-        let value = custom
-            .get(action.config_key())
-            .map(String::as_str)
-            .unwrap_or_else(|| action.default_binding());
+        let Some(value) = effective_binding(action, custom) else {
+            continue;
+        };
         let (_, chord) = parse_binding(value).expect("bindings were parsed above or are defaults");
         if !seen.insert(chord) {
             return Err(format!(
@@ -288,7 +312,7 @@ mod tests {
             KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)
         ));
         assert!(bindings.matches(
-            KeybindingAction::ClearChat,
+            KeybindingAction::Redraw,
             KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL)
         ));
     }
@@ -314,6 +338,37 @@ mod tests {
         assert!(help.contains("REPL editor    vi"));
     }
 
+    /// Regression: commit 3fcbc96e0 renamed the `clear_chat` action to
+    /// `redraw` in place, so a config still naming `clear_chat` was rejected
+    /// as unknown. `clear_chat` is a real action again (discards the
+    /// conversation, the way `/clear` does), ships unbound, and a config
+    /// naming either it or `redraw` must load.
+    #[test]
+    fn clear_chat_and_redraw_both_load_by_name() {
+        assert_eq!(KeybindingAction::ClearChat.default_binding(), None);
+        let defaults = Keybindings::from_config(&BTreeMap::new());
+        assert!(!defaults.matches(
+            KeybindingAction::ClearChat,
+            KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL)
+        ));
+        assert!(defaults.render_help("emacs").contains("(unbound)"));
+
+        let custom = BTreeMap::from([
+            ("clear_chat".to_string(), "ctrl+k".to_string()),
+            ("redraw".to_string(), "ctrl+r".to_string()),
+        ]);
+        validate_config(&custom).unwrap();
+        let bindings = Keybindings::from_config(&custom);
+        assert!(bindings.matches(
+            KeybindingAction::ClearChat,
+            KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL)
+        ));
+        assert!(bindings.matches(
+            KeybindingAction::Redraw,
+            KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL)
+        ));
+    }
+
     #[test]
     fn validation_rejects_unknown_actions_unsafe_characters_and_duplicates() {
         assert!(validate_config(&BTreeMap::from([(
@@ -324,7 +379,7 @@ mod tests {
         assert!(validate_config(&BTreeMap::from([("quit".to_string(), "q".to_string())])).is_err());
         assert!(validate_config(&BTreeMap::from([
             ("quit".to_string(), "ctrl+x".to_string()),
-            ("clear_chat".to_string(), "ctrl+x".to_string()),
+            ("redraw".to_string(), "ctrl+x".to_string()),
         ]))
         .is_err());
     }

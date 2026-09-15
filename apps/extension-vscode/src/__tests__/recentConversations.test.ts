@@ -9,7 +9,12 @@ import type { ConversationTreeProvider } from '../features/trees/conversationTre
 
 const NOW = Date.parse('2026-09-13T12:00:00.000Z');
 
-function thread(id: string, title: string, updatedAt: string): ThreadSummary {
+function thread(
+  id: string,
+  title: string,
+  updatedAt: string,
+  overrides: Partial<ThreadSummary> = {},
+): ThreadSummary {
   return {
     id,
     title,
@@ -21,6 +26,7 @@ function thread(id: string, title: string, updatedAt: string): ThreadSummary {
     updatedAt,
     createdBy: 'vscode',
     status: 'idle',
+    ...overrides,
   };
 }
 
@@ -131,6 +137,28 @@ describe('sidebar recent conversations', () => {
       'thread-e',
       'thread-f',
     ]);
-    expect(message?.type === 'sessionsList' && message.payload.rows[0]?.sourceLabel).toBe('Local');
+    expect(message?.type === 'sessionsList' && message.payload.rows[0]?.sourceLabel).toBe(
+      'VS Code',
+    );
+  });
+
+  it('names the surface that opened each session and shows its branch', async () => {
+    const { manager, posted } = makeManager(async () => [
+      thread('from-desktop', 'Started in the app', '2026-09-13T11:59:00.000Z', {
+        createdBy: 'desktop',
+        gitBranch: 'chore/repo-restructure',
+      }),
+      thread('from-cli', 'Started in the terminal', '2026-09-13T11:58:00.000Z', {
+        createdBy: 'cli',
+      }),
+    ]);
+
+    await manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+
+    const message = posted.find((entry) => entry.type === 'sessionsList');
+    const rows = message?.type === 'sessionsList' ? message.payload.rows : [];
+    expect(rows.map((row) => row.sourceLabel)).toEqual(['Desktop', 'CLI']);
+    expect(rows[0]?.branch).toBe('chore/repo-restructure');
+    expect(rows[1]?.branch).toBeUndefined();
   });
 });

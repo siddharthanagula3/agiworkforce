@@ -225,6 +225,10 @@
         "to": "@agiworkforce/types"
       },
       {
+        "from": "@agiworkforce/local-runtime-contract",
+        "to": "@agiworkforce/types"
+      },
+      {
         "from": "@agiworkforce/mobile",
         "to": "@agiworkforce/agent-core"
       },

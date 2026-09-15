@@ -15,7 +15,8 @@ export class ConversationTreeItem extends vscode.TreeItem {
   constructor(public readonly thread: ThreadSummary) {
     super(thread.title, vscode.TreeItemCollapsibleState.None);
     this.description = formatRelativeTime(Date.parse(thread.updatedAt));
-    this.tooltip = `${thread.model ?? 'Configured model'} · ${thread.cwd ?? 'workspace'}`;
+    const branch = thread.gitBranch === undefined ? '' : ` · ${thread.gitBranch}`;
+    this.tooltip = `${thread.model ?? 'Configured model'} · ${thread.cwd ?? 'workspace'}${branch}`;
     this.iconPath = new vscode.ThemeIcon(thread.status === 'running' ? 'loading~spin' : 'comment');
     this.accessibilityInformation = { label: thread.title, role: 'treeitem' };
     this.contextValue = 'conversation';

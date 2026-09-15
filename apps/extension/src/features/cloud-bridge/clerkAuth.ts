@@ -1,4 +1,5 @@
 import { createClerkClient } from '@clerk/chrome-extension/client';
+import { configuredAgiWebOrigin } from '../../lib/webOrigin';
 import {
   managedCloudOwnerFromSessionToken,
   normalizeManagedCloudOwner,
@@ -238,6 +239,46 @@ export async function signOutClerk(): Promise<void> {
     ? await getBackgroundClient()
     : await getForegroundClient();
   await clerk.signOut({ redirectUrl: getExtensionPageUrl() });
+}
+
+async function fetchSyncHostCsrfToken(baseUrl: string): Promise<string> {
+  const response = await fetch(`${baseUrl}/api/csrf`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch CSRF token: ${response.status}`);
+  }
+  const data = (await response.json()) as { token?: unknown };
+  if (typeof data.token !== 'string' || data.token.length === 0) {
+    throw new Error('CSRF token response was invalid');
+  }
+  return data.token;
+}
+
+export async function revokeSyncedWebSession(): Promise<void> {
+  if (!isClerkExtensionAuthConfigured()) return;
+  const baseUrl = configuredAgiWebOrigin();
+  if (!baseUrl) return;
+
+  const authContext = await getFreshClerkAuthContext();
+  const sessionId = authContext?.owner.authIncarnation;
+  if (!sessionId) return;
+
+  const csrfToken = await fetchSyncHostCsrfToken(baseUrl);
+  const response = await fetch(`${baseUrl}/api/settings/sessions/${sessionId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      'content-type': 'application/json',
+      'x-csrf-token': csrfToken,
+      'x-requested-with': 'agiworkforce-chrome-extension',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to revoke the synced session: ${response.status}`);
+  }
 }
 
 export async function signOutClerkIfCurrent(expected: ClerkAuthContext): Promise<boolean> {

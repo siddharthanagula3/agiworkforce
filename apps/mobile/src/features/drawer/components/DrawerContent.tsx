@@ -7,6 +7,7 @@ import {
   BookImage,
   BookOpen,
   Bot,
+  Bell,
   CalendarClock,
   FolderOpen,
   HelpCircle,
@@ -23,6 +24,7 @@ import {
 import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
+import { useNotificationCenter } from '@/services/notifications';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useThemeColors } from '@/src/ui/theme';
@@ -252,6 +254,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const conversations = useChatStore((s) => s.conversations);
   const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
   const { openActions, rename } = useConversationActions();
+  const { unreadCount } = useNotificationCenter();
 
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
@@ -533,6 +536,15 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           icon={Settings}
           active={pathname.includes('/settings')}
           onPress={() => navigate('/(app)/(tabs)/settings')}
+        />
+        {/* The unread pip on the drawer button cannot be a 44pt control without
+            swallowing the drawer's own taps, so the way in lives here. */}
+        <NavRow
+          label="Notifications"
+          icon={Bell}
+          active={pathname.includes('/notifications')}
+          tag={unreadCount > 0 ? String(unreadCount) : undefined}
+          onPress={() => navigate('/(app)/notifications')}
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>

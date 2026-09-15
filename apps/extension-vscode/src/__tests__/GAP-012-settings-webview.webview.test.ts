@@ -23,8 +23,6 @@ const initialState: SettingsPanelState = {
     'agent.mode': 'auto',
     'agent.effort': 'medium',
     'agent.thinking': false,
-    'desktopBridge.enabled': false,
-    'desktopBridge.port': 8787,
     telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
     currentTier: 'pro',
   },

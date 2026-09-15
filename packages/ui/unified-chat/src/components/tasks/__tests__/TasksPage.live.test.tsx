@@ -60,6 +60,16 @@ async function openDetails() {
   fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
 }
 
+async function advanceUntilCalled(
+  mock: { mock: { calls: unknown[] } },
+  times: number,
+): Promise<void> {
+  for (let step = 0; step < 5 && mock.mock.calls.length < times; step += 1) {
+    await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS + 1);
+  }
+  await waitFor(() => expect(mock.mock.calls.length).toBe(times));
+}
+
 describe('Tasks, in-flight journal auto-refresh', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -117,10 +127,9 @@ describe('Tasks, in-flight journal auto-refresh', () => {
     expect(screen.getByTestId('task-auto-refreshing')).toBeTruthy();
     expect(getRun).toHaveBeenCalledTimes(1);
 
-    await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS + 1);
-    await waitFor(() => expect(getRun).toHaveBeenCalledTimes(2));
+    await advanceUntilCalled(getRun, 2);
 
-    await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS + 1);
+    await advanceUntilCalled(getRun, 3);
     expect(await screen.findByText('Wrote the summary')).toBeTruthy();
     expect(getRun).toHaveBeenCalledTimes(3);
 

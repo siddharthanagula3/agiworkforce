@@ -5,7 +5,9 @@ import {
   desktopCapturer,
   dialog,
   ipcMain,
+  nativeTheme,
   protocol,
+  screen,
   session,
   shell,
 } from 'electron';
@@ -28,14 +30,22 @@ import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   type BrowserPairRequestPrompt,
   type BrowserPairingState,
+  type HostCommand,
+  type HostPreferences,
+  type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
-import { startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
+import { BrowserBridgeError, startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
-import { dispatch as dispatchDesktopRuntime } from './runtime/dispatcher';
+import { dispatch as dispatchDesktopRuntime, runBrowserCommand } from './runtime/dispatcher';
 import { cancelAllShellRuns } from './runtime/shellService';
+import {
+  configureDeveloperSessions,
+  stopAllDeveloperRuntimes,
+} from './runtime/developerSessionService';
+import { approveDeviceCode, readShellIdentity } from './shellIdentity';
 import { stopComputerUseHelper } from './runtime/computerUseService';
 import { installAppMenu } from './appMenu';
-import { applyLaunchAtLogin } from './launchAtLogin';
+import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
 import {
   CLOUD_APP_ORIGIN,
   DEEP_LINK_SCHEME,
@@ -46,13 +56,31 @@ import {
   RENDERER_ORIGIN,
   RENDERER_SCHEME,
 } from './config';
-import { pickableCaptureSources } from './garnishCore';
+import {
+  MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
+  SHORTCUT_KEYS,
+  ZOOM_LEVEL_STEP,
+  clampZoomLevel,
+  fillsWorkArea,
+  frameIsOnScreen,
+  hostShortcutKeyFor,
+  isAppearance,
+  pickableCaptureSources,
+  type WindowFrame,
+} from './garnishCore';
 import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
 import { captureToChat } from './screenshot';
-import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcuts';
-import { createTray } from './tray';
+import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
+import {
+  registerGarnishShortcuts,
+  shortcutRegistrations,
+  unregisterGarnishShortcuts,
+} from './shortcuts';
+import { createTray, destroyTray } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
-import { applyRemoteWindowPolicy } from './windowPolicy';
+import { applyRemoteWindowPolicy, openExternally } from './windowPolicy';
+import { pageBackgroundColor, titleBarChrome } from './windowChrome';
 import { handleWorkspaceDrop } from './workspaceDrop';
 import {
   isTrustedCloudRendererOrigin,
@@ -69,6 +97,8 @@ function installedMacArchitecture(): DesktopCloudMacArchitecture {
 }
 
 const QUICK_ASK_WARMUP_MS = 5000;
+
+const SUPPORT_PATH = '/support';
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -199,6 +229,31 @@ async function startPairingBridge(): Promise<void> {
             title: 'Pair Chrome with AGI Cloud',
             body: `Pairing code ${prompt.code}. Type it in the extension within two minutes.`,
           }).show();
+        }
+      },
+      appVersion: app.getVersion(),
+      // The bridge holds the routes; the gate lives with the renderer's own
+      // dispatch. Injected here so neither module has to import the other.
+      runBrowserCommand: async (command, args, caller) => {
+        try {
+          const outcome = await runBrowserCommand(mainWindow, command, args, caller);
+          return outcome.ok
+            ? { ok: true, value: outcome.value }
+            : { ok: false, error: outcome.error.message, code: outcome.error.code };
+        } catch (error) {
+          // The bridge rejects when the extension never answered, when the
+          // page refused, and when the bridge closed under a waiting command.
+          // It says which; reporting all three as a timeout told the user to
+          // check that Chrome was running when the real answer was that the
+          // site was not approved.
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'The browser did not answer.',
+            code:
+              error instanceof BrowserBridgeError && typeof error.code === 'string'
+                ? error.code
+                : 'timeout',
+          };
         }
       },
       ...(extraDirectories.length > 0 ? { extraManifestDirectories: extraDirectories } : {}),
@@ -368,6 +423,21 @@ function registerIpcHandlers(): void {
     await handleWorkspaceDrop(BrowserWindow.fromWebContents(event.sender), candidates);
   });
 
+  /**
+   * The page's theme decides the appearance of this process's own dialogs.
+   *
+   * macOS draws a message box from the process appearance, not from the page's
+   * stylesheet, so a user on the light theme was getting a dark permission
+   * prompt and the Settings theme control could not reach it. "system" hands
+   * the decision back to macOS, which is what the user asked for there.
+   */
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.rendererTheme, async (event, theme) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (!isAppearance(theme)) return;
+    nativeTheme.themeSource = theme;
+    if (getPreferences().appearance !== theme) saveSettings({ appearance: theme });
+  });
+
   ipcMain.handle(ELECTRON_IPC_CHANNELS.relaunch, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     app.relaunch();
@@ -382,6 +452,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle(ELECTRON_IPC_CHANNELS.openUpdateInstaller, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     await shell.openExternal(desktopCloudInstallerDownloadUrl(installedMacArchitecture()));
+  });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.hostPreferences, async (event, patch) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (patch === null || patch === undefined) return hostPreferencesState();
+    if (typeof patch !== 'object' || Array.isArray(patch)) {
+      throw new Error('A preferences write takes an object.');
+    }
+    return writeHostPreferences(patch as Partial<HostPreferences>);
   });
 }
 
@@ -413,7 +492,7 @@ function deliverDeepLink(url: string): void {
         `"${RENDERER_MODE}" loads ${CLOUD_APP_ORIGIN} top-level with no preload, so no IPC ` +
         'receiver is attached. Unset AGI_CLOUD_RENDERER to restore native deep links.',
     );
-    focusMainWindow();
+    showMainWindow();
     return;
   }
 
@@ -422,6 +501,7 @@ function deliverDeepLink(url: string): void {
     mainWindow.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, url);
   } else {
     pendingDeepLink = url;
+    showMainWindow();
   }
 }
 
@@ -501,16 +581,80 @@ function offlineScreenUrl(targetUrl: string, detail: string): string {
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
+function rememberedFrame(): WindowFrame | null {
+  const frame = getPreferences().windowFrame;
+  if (!frame) return null;
+  const workAreas = screen.getAllDisplays().map((display) => display.workArea);
+  return frameIsOnScreen(frame, workAreas) ? frame : null;
+}
+
+/**
+ * Follows the window's frame so a launch can put it back where it was.
+ *
+ * The restore size is only ever taken from a frame the user chose: a zoomed
+ * window reports its own bounds as normal on macOS while it settles, and
+ * writing that down is what makes a remembered window creep outwards a little
+ * on every launch until it fills the screen.
+ */
+function followWindowFrame(win: BrowserWindow, restored: WindowFrame | null): () => void {
+  let bounds = restored
+    ? { x: restored.x, y: restored.y, width: restored.width, height: restored.height }
+    : win.getBounds();
+  let maximized = restored?.maximized ?? false;
+  let pending: ReturnType<typeof setTimeout> | null = null;
+
+  const persist = () => {
+    saveSettings({ windowFrame: { ...bounds, maximized } });
+  };
+
+  const readSettled = () => {
+    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return;
+    const current = win.getBounds();
+    if (win.isMaximized() || fillsWorkArea(current, screen.getDisplayMatching(current).workArea)) {
+      maximized = true;
+      return;
+    }
+    bounds = current;
+    maximized = false;
+  };
+
+  const schedule = () => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => {
+      pending = null;
+      readSettled();
+      persist();
+    }, 400);
+    pending.unref?.();
+  };
+
+  win.on('resize', schedule);
+  win.on('move', schedule);
+  win.on('maximize', schedule);
+  win.on('unmaximize', schedule);
+
+  // Closing never reads the window. A zoom is still animating when the frame is
+  // torn down, and the size it reports mid-animation is the one that would be
+  // written down as the size to restore to.
+  return () => {
+    if (pending) clearTimeout(pending);
+    persist();
+  };
+}
+
 function createMainWindow(): void {
   const isRemote = RENDERER_MODE === 'remote';
+  const frame = rememberedFrame();
 
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    width: frame?.width ?? 1280,
+    height: frame?.height ?? 800,
+    ...(frame ? { x: frame.x, y: frame.y } : {}),
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     show: false,
-    backgroundColor: '#212121',
+    backgroundColor: pageBackgroundColor(nativeTheme.shouldUseDarkColors),
+    ...titleBarChrome(process.platform),
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
@@ -533,9 +677,14 @@ function createMainWindow(): void {
 
   applyRemoteWindowPolicy(mainWindow);
 
+  if (frame?.maximized) mainWindow.maximize();
+
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
+
+  const flushWindowFrame = followWindowFrame(mainWindow, frame);
+  mainWindow.on('close', flushWindowFrame);
 
   mainWindow.webContents.once('did-finish-load', () => {
     if (pendingDeepLink) {
@@ -545,10 +694,25 @@ function createMainWindow(): void {
     }
   });
 
+  // Chromium's zoom is per origin and per session, so it survives a navigation
+  // but not a relaunch. Reapplying it on every load is what makes View > Zoom
+  // In outlive quitting the app.
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.setZoomLevel(getPreferences().zoomLevel);
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
     if (process.platform !== 'darwin') destroyQuickAsk();
   });
+
+  const followSystemTheme = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setBackgroundColor(pageBackgroundColor(nativeTheme.shouldUseDarkColors));
+    }
+  };
+  nativeTheme.on('updated', followSystemTheme);
+  mainWindow.once('closed', () => nativeTheme.off('updated', followSystemTheme));
 
   const entryUrl = isRemote ? `${CLOUD_APP_ORIGIN}/chat` : `${RENDERER_ORIGIN}/index.html`;
 
@@ -590,6 +754,120 @@ function openSettings(): void {
 
 function openLogsFolder(): void {
   void shell.openPath(app.getPath('logs'));
+}
+
+const garnishHandlers = {
+  onOpen: showMainWindow,
+  onNewChat: openNewChat,
+  onQuickAsk: () => toggleQuickAsk(mainWindow),
+  onScreenshot: () => void captureToChat(mainWindow),
+  onVoice: () => void toggleGlobalDictation(mainWindow),
+  onCheckForUpdates: () => void checkForCloudUpdate(),
+};
+
+function applyGarnishShortcuts(): void {
+  unregisterGarnishShortcuts();
+  registerGarnishShortcuts({
+    onQuickAsk: garnishHandlers.onQuickAsk,
+    onScreenshot: garnishHandlers.onScreenshot,
+    onVoice: garnishHandlers.onVoice,
+  });
+}
+
+/**
+ * What the hosted settings panel sees.
+ *
+ * The status is read back from the registration rather than assumed from the
+ * write: a chord the OS refused is a preference that saved and a shortcut that
+ * does not work, and the panel has to be able to say which.
+ */
+function hostPreferencesState(): HostPreferencesState {
+  const preferences = getPreferences();
+  const shortcuts = getShortcuts();
+  const registrations = shortcutRegistrations();
+
+  return {
+    preferences: {
+      launchAtLogin: preferences.launchAtLogin,
+      showInMenuBar: preferences.showInMenuBar,
+      cliPath: preferences.cliPath,
+      quickAskShortcut: shortcuts.quickAskShortcut,
+      screenshotShortcut: shortcuts.screenshotShortcut,
+      voiceShortcut: shortcuts.voiceShortcut,
+    },
+    shortcutStatus: Object.fromEntries(
+      SHORTCUT_KEYS.map((key) => [
+        hostShortcutKeyFor(key),
+        shortcuts[key] === ''
+          ? 'off'
+          : (registrations.find((registration) => registration.key === key)?.status ?? 'off'),
+      ]),
+    ) as HostPreferencesState['shortcutStatus'],
+  };
+}
+
+function writeHostPreferences(patch: Partial<HostPreferences>): HostPreferencesState {
+  const before = getPreferences();
+
+  if ('launchAtLogin' in patch && typeof patch.launchAtLogin === 'boolean') {
+    setLaunchAtLogin(patch.launchAtLogin);
+  }
+
+  const shortcutPatch = Object.fromEntries(
+    SHORTCUT_KEYS.filter((key) => typeof patch[key] === 'string').map((key) => [key, patch[key]]),
+  );
+  if (Object.keys(shortcutPatch).length > 0) {
+    saveSettings(shortcutPatch);
+    applyGarnishShortcuts();
+  }
+
+  if (typeof patch.cliPath === 'string' && patch.cliPath.trim() !== before.cliPath) {
+    saveSettings({ cliPath: patch.cliPath.trim() });
+  }
+
+  if (typeof patch.showInMenuBar === 'boolean' && patch.showInMenuBar !== before.showInMenuBar) {
+    saveSettings({ showInMenuBar: patch.showInMenuBar });
+    if (patch.showInMenuBar) createTray(garnishHandlers);
+    else destroyTray();
+  }
+
+  return hostPreferencesState();
+}
+
+function openSupport(): void {
+  openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
+}
+
+/**
+ * A menu item the page is the only thing that can carry out. The window is
+ * raised first: choosing Toggle Sidebar from the menu bar while the window is
+ * behind something else would otherwise change a surface the user cannot see.
+ */
+function sendHostCommand(command: HostCommand): void {
+  showMainWindow();
+  mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
+}
+
+function goBack(): void {
+  const history = mainWindow?.webContents.navigationHistory;
+  if (history?.canGoBack()) history.goBack();
+}
+
+function goForward(): void {
+  const history = mainWindow?.webContents.navigationHistory;
+  if (history?.canGoForward()) history.goForward();
+}
+
+function applyZoomLevel(level: number): void {
+  const clamped = clampZoomLevel(level);
+  saveSettings({ zoomLevel: clamped });
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.setZoomLevel(clamped);
+  }
+}
+
+function stepZoomLevel(steps: number): void {
+  applyZoomLevel(getPreferences().zoomLevel + steps * ZOOM_LEVEL_STEP);
 }
 
 async function checkForCloudUpdate(): Promise<void> {
@@ -659,7 +937,7 @@ if (!hasSingleInstanceLock) {
   app.on('second-instance', (_event, argv) => {
     const link = argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
     if (link) deliverDeepLink(link);
-    focusMainWindow();
+    showMainWindow();
   });
 
   app.on('open-url', (event, url) => {
@@ -673,6 +951,7 @@ if (!hasSingleInstanceLock) {
     // the other end of it. `isTrustedSender` is what decides who may call, not
     // which mode we booted in.
     registerIpcHandlers();
+    nativeTheme.themeSource = getPreferences().appearance;
     if (RENDERER_MODE === 'bundled') {
       protocol.handle(RENDERER_SCHEME, serveRenderer);
       configureSession(session.defaultSession);
@@ -682,27 +961,34 @@ if (!hasSingleInstanceLock) {
 
     createMainWindow();
 
-    const garnishHandlers = {
-      onOpen: showMainWindow,
-      onNewChat: openNewChat,
-      onQuickAsk: () => toggleQuickAsk(mainWindow),
-      onScreenshot: () => void captureToChat(mainWindow),
-      onVoice: () => void toggleGlobalDictation(mainWindow),
-      onCheckForUpdates: () => void checkForCloudUpdate(),
-    };
-    createTray(garnishHandlers);
-    installAppMenu({
-      newChat: garnishHandlers.onNewChat,
-      toggleQuickAsk: garnishHandlers.onQuickAsk,
-      captureScreenshot: garnishHandlers.onScreenshot,
-      openSettings,
-      openLogs: openLogsFolder,
-    });
+    if (getPreferences().showInMenuBar) createTray(garnishHandlers);
+    installAppMenu(
+      {
+        newChat: garnishHandlers.onNewChat,
+        toggleQuickAsk: garnishHandlers.onQuickAsk,
+        captureScreenshot: garnishHandlers.onScreenshot,
+        openSettings,
+        openLogs: openLogsFolder,
+        openSupport,
+        checkForUpdates: garnishHandlers.onCheckForUpdates,
+        sendHostCommand,
+        goBack,
+        goForward,
+        setZoomLevel: applyZoomLevel,
+        stepZoomLevel,
+      },
+      {
+        quickAsk: getShortcuts().quickAskShortcut,
+        screenshot: getShortcuts().screenshotShortcut,
+      },
+    );
     applyLaunchAtLogin();
-    registerGarnishShortcuts({
-      onQuickAsk: garnishHandlers.onQuickAsk,
-      onScreenshot: garnishHandlers.onScreenshot,
-      onVoice: garnishHandlers.onVoice,
+    applyGarnishShortcuts();
+
+    configureDeveloperSessions({
+      emit: (rootId, event) => sendRuntimeEvent({ kind: 'developer-session', rootId, event }),
+      resolveBinary: () => getPreferences().cliPath,
+      accountBridge: { readShellIdentity, approveDeviceCode },
     });
 
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
@@ -716,6 +1002,7 @@ if (!hasSingleInstanceLock) {
   app.on('will-quit', () => {
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
+    stopAllDeveloperRuntimes();
     stopComputerUseHelper();
     void stopBrowserBridge();
   });

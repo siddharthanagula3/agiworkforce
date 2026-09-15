@@ -2,6 +2,11 @@ import {
   objectStorageUploadOrigins,
   resolveObjectStorageConfig,
 } from '@agiworkforce/object-storage/config';
+import {
+  PRODUCT_ROUTE_PREFIXES,
+  SESSION_AUTH_ROUTE_PREFIXES,
+  routeMatcherPatterns,
+} from '@agiworkforce/types/product-routes';
 import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withCorsAndSecurityHeaders } from './lib/cors';
@@ -120,21 +125,12 @@ function buildSignedOutRedirect(request: NextRequest): NextResponse {
   return response;
 }
 
-const isProtectedAppRoute = identityMiddleware.createRouteMatcher([
-  '/chat(.*)',
-  '/code(.*)',
-  '/library(.*)',
-  '/models(.*)',
-  '/schedules(.*)',
-  '/tasks(.*)',
-  '/settings(.*)',
-  '/billing(.*)',
-  '/upgrade(.*)',
-  '/admin(.*)',
-  '/workspace(.*)',
-  '/operator(.*)',
-  '/welcome(.*)',
-]);
+// The prefixes come from @agiworkforce/types/product-routes, which the desktop
+// shell reads too: a route this gates but the shell opens in a browser would
+// send the user to a sign-in page outside the app.
+const isProtectedAppRoute = identityMiddleware.createRouteMatcher(
+  routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES),
+);
 
 const isPublicApiRoute = identityMiddleware.createRouteMatcher([
   '/api/health',
@@ -145,23 +141,8 @@ const isPublicApiRoute = identityMiddleware.createRouteMatcher([
 ]);
 
 const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
-  '/__clerk/(.*)',
-  '/login',
-  '/login/complete',
-  '/signup',
-  '/chat(.*)',
-  '/code(.*)',
-  '/library(.*)',
-  '/models(.*)',
-  '/schedules(.*)',
-  '/tasks(.*)',
-  '/settings(.*)',
-  '/billing(.*)',
-  '/upgrade(.*)',
-  '/admin(.*)',
-  '/workspace(.*)',
-  '/operator(.*)',
-  '/welcome(.*)',
+  ...routeMatcherPatterns(SESSION_AUTH_ROUTE_PREFIXES),
+  ...routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES),
   // A published artifact shared with a workspace is readable only by a member,
   // and the page resolves that through the request's session. Without this the
   // route carries no identity context, `getCurrentUserRlsDb` answers null, and

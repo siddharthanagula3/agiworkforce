@@ -78,6 +78,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
 
   QUEUE_MESSAGE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RECONNECT_NATIVE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  UNPAIR_NATIVE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   TAB_READY: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   SYNC_PAGE_CONTEXT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
@@ -160,6 +161,13 @@ export const EXTENSION_PAGE_ONLY_MESSAGE_TYPES: ReadonlySet<string> = new Set(
 );
 
 export const SITE_ALLOWLIST_STORAGE_KEY = 'agi_site_allowlist';
+
+/**
+ * The side panel's selected-model preference. Sticky across new chats and
+ * panel reloads, like the web's model store; cleared only on sign-out or an
+ * account switch, in transitionManagedCloudOwner, not on every new chat.
+ */
+export const SELECTED_MODEL_STORAGE_KEY = 'agi_model';
 
 export const MAX_CONTEXT_HTML_CHARS = 100_000;
 

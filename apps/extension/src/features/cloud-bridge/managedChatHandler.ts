@@ -482,7 +482,7 @@ export async function executeChromeManagedChat(
     idempotencyKey: request.idempotencyKey ?? (await managedChatIdempotencyKey('send', request.id)),
     ...(effort ? { effort } : {}),
     extendedThinking: request.extendedThinking,
-    workMode: 'agiwork',
+    workMode: 'chat',
     ...(request.conversationId ? { conversationId: request.conversationId } : {}),
     ...(request.assistantMessageId ? { assistantMessageId: request.assistantMessageId } : {}),
     signal: request.signal,

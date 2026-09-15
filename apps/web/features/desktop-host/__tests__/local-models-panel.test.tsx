@@ -6,6 +6,7 @@ import {
   type HostBridge,
   type LocalModelSettings,
 } from '@agiworkforce/local-runtime-contract';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 const listWorkspaceRoots = vi.fn();
 const pickWorkspaceRoot = vi.fn();
@@ -39,6 +40,7 @@ const SETTINGS: LocalModelSettings = {
 
 function installHost() {
   window.agiHost = {
+    ...hostBridgeStub(),
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     invokeRuntime: async () => ({

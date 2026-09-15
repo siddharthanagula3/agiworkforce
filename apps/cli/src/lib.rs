@@ -13,6 +13,7 @@ pub mod agent_events;
 pub mod agents;
 pub mod auth;
 pub mod auth_oauth;
+pub mod browser_bridge;
 pub mod claude_parity;
 pub mod cli_options;
 pub mod cloud;
@@ -99,6 +100,7 @@ pub mod init;
 pub mod keybindings;
 pub mod local_models;
 pub mod model_catalog;
+pub mod model_reachability;
 pub mod models_cache;
 pub mod oauth;
 pub mod onboarding;
@@ -3027,7 +3029,8 @@ pub async fn run_main() -> Result<()> {
                     cli.model.as_deref(),
                     &app_config.default.model,
                 );
-                let chain = routing::fallback::FallbackChain::parse(&raw_model);
+                let chain = routing::fallback::FallbackChain::parse(&raw_model)
+                    .with_fallback(cli.fallback_model.as_deref());
                 let m = chain
                     .head()
                     .map(|s| s.to_string())
@@ -3036,17 +3039,19 @@ pub async fn run_main() -> Result<()> {
                 // top-level --provider, then config. Without this, exec hardcoded
                 // None and a local/BYOK model (e.g. `exec --provider ollama`)
                 // silently fell back to the default provider (anthropic).
-                let exec_provider_override = provider.as_deref().or(cli.provider.as_deref());
+                crate::tier_cache::ensure_plan_models_cached().await;
+                let exec_provider_override = models::plan_first_provider_override(
+                    &models::AccountRoute::load(),
+                    &m,
+                    &app_config.default.model,
+                    &app_config.default.provider,
+                    provider.as_deref().or(cli.provider.as_deref()),
+                );
                 let mut session = agent::AgentSession::new_checked(
                     &m,
                     &sys_ctx,
                     None,
-                    models::selection_provider_override(
-                        &m,
-                        &app_config.default.model,
-                        &app_config.default.provider,
-                        exec_provider_override,
-                    ),
+                    exec_provider_override.as_deref(),
                 )?;
                 session.apply_ui_config(&app_config);
                 session.apply_tool_filters(
@@ -3211,7 +3216,7 @@ pub async fn run_main() -> Result<()> {
                                 }))?
                             );
                         } else {
-                            println!();
+                            output::print_assistant_end();
                         }
                         Ok(())
                     }
@@ -3229,14 +3234,11 @@ pub async fn run_main() -> Result<()> {
                         } else if *json {
                             eprintln!(
                                 "{}",
-                                serde_json::to_string_pretty(&serde_json::json!({
-                                    "type": "result",
-                                    "is_error": true,
-                                    "error": format!("{e:#}"),
-                                }))?
+                                serde_json::to_string_pretty(&errors::result_error_json(&e))?
                             );
                         } else {
-                            eprintln!("{}", e);
+                            output::print_assistant_end();
+                            eprintln!("{}", errors::terminal_text(&e));
                         }
                         exit_with_error(&e);
                     }
@@ -3278,7 +3280,7 @@ pub async fn run_main() -> Result<()> {
                     managed_session,
                     None,
                     false,
-                    None,
+                    routing::fallback::FallbackChain::default(),
                     None,
                     false,
                     false,
@@ -3312,7 +3314,7 @@ pub async fn run_main() -> Result<()> {
                     managed_session,
                     None,
                     false,
-                    None,
+                    routing::fallback::FallbackChain::default(),
                     None,
                     false,
                     false,
@@ -4190,7 +4192,8 @@ pub async fn run_main() -> Result<()> {
     // `Exec` subcommand already parses this correctly (see `FallbackChain::parse`
     // above), mirror that here for the interactive/one-shot path so `-m`
     // behaves consistently across `agi exec` and plain `agi`.
-    let model_fallback_chain = routing::fallback::FallbackChain::parse(&model);
+    let model_fallback_chain = routing::fallback::FallbackChain::parse(&model)
+        .with_fallback(cli.fallback_model.as_deref());
     let model: String = model_fallback_chain
         .head()
         .map(|s| s.to_string())
@@ -4441,7 +4444,7 @@ pub async fn run_main() -> Result<()> {
             resume_managed_session,
             effective_max_turns,
             effective_skip_permissions,
-            cli.fallback_model,
+            model_fallback_chain.clone(),
             cli.name,
             team_mode,
             effective_auto_approve_safe,
@@ -4466,7 +4469,7 @@ pub async fn run_main() -> Result<()> {
             resume_managed_session,
             effective_max_turns,
             effective_skip_permissions,
-            cli.fallback_model,
+            model_fallback_chain.clone(),
             cli.name,
             team_mode,
             effective_auto_approve_safe,
@@ -4824,12 +4827,15 @@ pub async fn run_oneshot(
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
 ) -> Result<()> {
-    let resolved_provider_override = models::selection_provider_override(
+    crate::tier_cache::ensure_plan_models_cached().await;
+    let resolved_provider_override = models::plan_first_provider_override(
+        &models::AccountRoute::load(),
         model,
         &config.default.model,
         &config.default.provider,
         provider_override,
     );
+    let resolved_provider_override = resolved_provider_override.as_deref();
     agent::AgentSession::prime_account_memory(model, resolved_provider_override).await;
     let mut session = agent::AgentSession::new_checked(
         model,
@@ -5078,12 +5084,8 @@ pub async fn run_oneshot(
                 println!("{}", serde_json::to_string_pretty(&json_out)?);
             }
             Err(e) => {
-                let json_out = serde_json::json!({
-                    "type": "result",
-                    "is_error": true,
-                    "error": format!("{:#}", e),
-                    "duration_ms": duration_ms,
-                });
+                let mut json_out = errors::result_error_json(&e);
+                json_out["duration_ms"] = duration_ms.into();
                 eprintln!("{}", serde_json::to_string_pretty(&json_out)?);
                 exit_with_error(&e);
             }
@@ -5102,9 +5104,10 @@ pub async fn run_oneshot(
 
         match result {
             Ok(_turn) => {
-                println!();
+                output::print_assistant_end();
             }
             Err(e) => {
+                output::print_assistant_end();
                 eprintln!("{}", e);
                 exit_with_error(&e);
             }
@@ -5149,7 +5152,7 @@ pub async fn run_oneshot(
                 }
             }
             Err(e) => {
-                output::print_error(&format!("{:#}", e));
+                output::print_error(&errors::terminal_text(&e));
                 exit_with_error(&e);
             }
         }

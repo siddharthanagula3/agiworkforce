@@ -48,6 +48,10 @@ export type SettingsNavKey =
   | 'voice'
   | 'extensions'
   | 'developer'
+  // The desktop shell's own settings. Absent from SETTINGS_NAV_GROUPS_WEB: a
+  // browser has no shell to configure, and the modal appends the group only
+  // when it is running inside one.
+  | 'desktop'
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer, see apps/desktop settings-ia contract test).
   | 'security'
@@ -253,6 +257,24 @@ export interface SettingsNavGroupResolved {
 
 export const SETTINGS_NAV_GROUP_SETTINGS = 'Settings';
 export const SETTINGS_NAV_GROUP_CUSTOMIZE = 'Customize';
+export const SETTINGS_NAV_GROUP_DESKTOP = 'Desktop app';
+
+/**
+ * The group a hosted page adds between Settings and Customize. It is a
+ * resolved group rather than an entry in SETTINGS_NAV_GROUPS_WEB because a
+ * browser must never show it: there is no shell behind it to configure.
+ */
+export const SETTINGS_NAV_GROUP_DESKTOP_APP: SettingsNavGroupResolved = {
+  label: SETTINGS_NAV_GROUP_DESKTOP,
+  items: [
+    {
+      key: 'desktop',
+      label: 'General',
+      icon: Laptop,
+      keywords: ['desktop', 'shortcut', 'startup', 'menu bar', 'update'],
+    },
+  ],
+};
 
 export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
   {

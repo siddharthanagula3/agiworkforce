@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { registerContextHandoffUriHandler } from './features/context-handoff';
 import { Config } from './platform/config';
-import { activateDesktopBridge } from './features/desktop-bridge';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
@@ -21,6 +20,7 @@ import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache, watchAccountTierInvalidation } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
 import { ChatEditorPanel } from './providers/chatEditorPanel';
+import { setEditorUtilityChat } from './features/editor-utilities';
 import {
   initializeAgentModeConsent,
   reconcileAgentControlConsent,
@@ -50,17 +50,6 @@ export function activate(context: vscode.ExtensionContext): void {
   runBoot('model-metrics', () => {
     initModelMetrics(context);
   });
-
-  try {
-    context.subscriptions.push(activateDesktopBridge(context));
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    recordFailure('desktop-bridge', err);
-    vscode.window.showWarningMessage(
-      `AGI Workforce: Desktop bridge failed to initialize, ${errMsg}. ` +
-        'Some features may be unavailable.',
-    );
-  }
 
   let providerState: ProviderState | undefined;
   try {
@@ -122,6 +111,20 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
+  setEditorUtilityChat(
+    sidebarProvider === undefined
+      ? undefined
+      : async (prompt: string) => {
+          sidebarProvider.askInChat(prompt);
+          try {
+            await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
+          } finally {
+            sidebarProvider.reveal();
+          }
+        },
+  );
+  context.subscriptions.push({ dispose: () => setEditorUtilityChat(undefined) });
+
   const refreshRuntimeSurfaces = (): void => {
     sidebarProvider?.refreshRuntimeStatus();
     ChatEditorPanel.refreshRuntimeStatus();
@@ -129,7 +132,12 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   context.subscriptions.push(
     vscode.workspace.onDidGrantWorkspaceTrust(refreshRuntimeSurfaces),
-    vscode.workspace.onDidChangeWorkspaceFolders(refreshRuntimeSurfaces),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      void localRuntimes.retainWorkspaces(
+        (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+      );
+      refreshRuntimeSurfaces();
+    }),
   );
 
   if (chatState !== undefined && providerState !== undefined) {
@@ -203,9 +211,7 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.model') ||
         e.affectsConfiguration('agiWorkforce.agent.planMode') ||
         e.affectsConfiguration('agiWorkforce.agent.mode') ||
-        e.affectsConfiguration('agiWorkforce.agent.effort') ||
-        e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
-        e.affectsConfiguration('agiWorkforce.desktopBridge.port')
+        e.affectsConfiguration('agiWorkforce.agent.effort')
       ) {
         updateStatusBar();
       }
@@ -228,16 +234,16 @@ export function activate(context: vscode.ExtensionContext): void {
         syncCodeLensProvider?.();
       }
 
+      if (e.affectsConfiguration('agiWorkforce.editorContext.autoAttach')) {
+        sidebarProvider?.pushEditorContext();
+      }
+
       if (e.affectsConfiguration('agiWorkforce.composer.followUpBehavior')) {
         sidebarProvider?.pushFollowUpBehavior();
         ChatEditorPanel.pushFollowUpBehavior();
       }
 
-      if (
-        e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled') ||
-        e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
-        e.affectsConfiguration('agiWorkforce.desktopBridge.port')
-      ) {
+      if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
         void validateAdvancedFeatureFlags(context);
       }
     }),

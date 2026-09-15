@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { useSignOut } from '@/lib/identity/client';
 import { ChevronUp, Menu } from '@agiworkforce/icons';
 import {
@@ -77,6 +78,7 @@ import { ComposerFeedbackDialog } from '@/features/chat/components/Composer/Comp
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { toUserMessage } from '@/lib/user-error-message';
+import { onAppCommand } from '@shared/lib/app-commands';
 
 // A fresh [] each render changes the identity every time and defeats the
 // memoization below, which is what the exhaustive-deps warning was pointing at.
@@ -149,6 +151,17 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
+
+  // The same overlay commands the chat surface answers, so a native menu item
+  // or a keyboard shortcut reaches them on the project surfaces too.
+  useEffect(() => {
+    const stopSearch = onAppCommand('open-search', () => setSearchDialogOpen(true));
+    const stopShortcuts = onAppCommand('open-shortcuts', () => setKeyboardShortcutsOpen(true));
+    return () => {
+      stopSearch();
+      stopShortcuts();
+    };
+  }, []);
 
   // Escape closes; focus moves into the drawer on open and back to the
   // trigger on close (the cleanup also runs on unmount, which is harmless).
@@ -314,6 +327,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // why (the two hand-maintained copies had drifted and this shell was the only
   // one exposing Tasks).
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
+  const { t } = useTranslation('common');
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
@@ -322,8 +336,9 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         navigate: (href) => router.push(href),
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
+        translate: (key, fallback) => t(key, { defaultValue: fallback }),
       }),
-    [hiddenNavIds, isWorkspaceAdmin, pathname, router],
+    [hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   // ---- Account footer ----
@@ -522,7 +537,10 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         inert={rail && isNarrowViewport && mobileNavOpen ? true : undefined}
       >
         {isNarrowViewport && (
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2">
+          <header
+            data-app-header=""
+            className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2"
+          >
             {rail && (
               <button
                 ref={mobileNavTriggerRef}

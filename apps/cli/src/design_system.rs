@@ -18,6 +18,7 @@ pub enum ProviderId {
     Perplexity,
     Qwen,
     Moonshot,
+    MiniMax,
     Zhipu,
     OpenRouter,
     Ollama,
@@ -37,6 +38,7 @@ impl ProviderId {
         ProviderId::Perplexity,
         ProviderId::Qwen,
         ProviderId::Moonshot,
+        ProviderId::MiniMax,
         ProviderId::Zhipu,
         ProviderId::OpenRouter,
         ProviderId::Ollama,
@@ -56,6 +58,7 @@ impl ProviderId {
             "perplexity" => Some(ProviderId::Perplexity),
             "qwen" | "dashscope" => Some(ProviderId::Qwen),
             "moonshot" | "kimi" => Some(ProviderId::Moonshot),
+            "minimax" => Some(ProviderId::MiniMax),
             "zhipu" | "glm" => Some(ProviderId::Zhipu),
             "openrouter" | "open-router" | "open_router" => Some(ProviderId::OpenRouter),
             "ollama" | "ollama-local" | "ollama_local" | "ollama-cloud" | "ollama_cloud" => {
@@ -161,6 +164,18 @@ impl AccessMode {
         }
     }
 
+    /// The trust-boundary word shown to a person in the welcome banner and the
+    /// status-bar chip: "Local" / "Your key" / "Managed", the same vocabulary
+    /// the VS Code extension uses. `label`/`tagline` stay full-sentence forms
+    /// for the model picker's section headers.
+    pub fn trust_word(self) -> &'static str {
+        match self {
+            AccessMode::Local => "Local",
+            AccessMode::Byok => "Your key",
+            AccessMode::Cloud => "Managed",
+        }
+    }
+
     /// One-line value-prop tagline shown under the section header. Kept short so
     /// it fits beside the label inside a narrow (≈70-col) picker without
     /// truncating.
@@ -189,6 +204,38 @@ pub struct ProviderDisplay {
     pub is_local: bool,
     /// True when provider has an explicit thinking/effort axis (matches `supportsEffort` in TS).
     pub supports_effort: bool,
+}
+
+impl ProviderId {
+    /// Classify a runtime provider. The `OpenAICompatible` and `Custom`
+    /// variants carry the vendor in their `name`, which is the same spelling
+    /// the catalog uses.
+    pub fn for_provider(provider: &crate::models::Provider) -> Option<ProviderId> {
+        use crate::models::{OllamaMode, Provider};
+        match provider {
+            Provider::ManagedCloud => Some(ProviderId::AGICloud),
+            Provider::Anthropic => Some(ProviderId::Anthropic),
+            Provider::Google => Some(ProviderId::Google),
+            Provider::Ollama(OllamaMode::Local | OllamaMode::Cloud) => Some(ProviderId::Ollama),
+            Provider::OpenAICompatible { name, .. } => ProviderId::from_catalog_name(name),
+            Provider::Custom { name, .. } => ProviderId::from_catalog_name(name),
+        }
+    }
+}
+
+/// The provider's human-readable name, the one the model picker and
+/// `agi models list` print. Falls back to the endpoint's own name for a
+/// user-defined provider the catalog does not know.
+pub fn provider_label(provider: &crate::models::Provider) -> String {
+    use crate::models::Provider;
+    if let Some(id) = ProviderId::for_provider(provider) {
+        return provider_display(id).label.to_string();
+    }
+    match provider {
+        Provider::OpenAICompatible { name, .. } => (*name).to_string(),
+        Provider::Custom { name, .. } => name.clone(),
+        other => format!("{other:?}"),
+    }
 }
 
 /// Returns the canonical display metadata for a provider.
@@ -249,6 +296,13 @@ pub fn provider_display(id: ProviderId) -> ProviderDisplay {
             id,
             label: "Moonshot",
             brand_color: "#16A34A",
+            is_local: false,
+            supports_effort: false,
+        },
+        ProviderId::MiniMax => ProviderDisplay {
+            id,
+            label: "MiniMax",
+            brand_color: "#E73562",
             is_local: false,
             supports_effort: false,
         },
@@ -457,6 +511,18 @@ mod tests {
             assert_eq!(d.id, id);
             assert!(!d.label.is_empty());
             assert!(d.brand_color.starts_with('#'));
+        }
+    }
+
+    /// The welcome banner and status chip must read for a person: no bare
+    /// "BYOK" acronym, matching the words the VS Code extension shows.
+    #[test]
+    fn access_mode_trust_words_have_no_jargon() {
+        assert_eq!(AccessMode::Local.trust_word(), "Local");
+        assert_eq!(AccessMode::Byok.trust_word(), "Your key");
+        assert_eq!(AccessMode::Cloud.trust_word(), "Managed");
+        for &mode in AccessMode::ORDER {
+            assert!(!mode.trust_word().to_uppercase().contains("BYOK"));
         }
     }
 

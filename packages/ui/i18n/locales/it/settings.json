@@ -74,5 +74,29 @@
     "searchLabel": "Cerca nelle impostazioni",
     "searchPlaceholder": "Cerca",
     "title": "Impostazioni"
+  },
+  "nav": {
+    "general": "Generale",
+    "account": "Account",
+    "team": "Team",
+    "privacy": "Privacy",
+    "billing": "Fatturazione",
+    "usage": "Utilizzo",
+    "capabilities": "Funzionalità",
+    "security": "Sicurezza",
+    "safety": "Tutela",
+    "notifications": "Notifiche",
+    "reflect": "Reflect",
+    "time-focus": "Tempo e concentrazione",
+    "help": "Aiuto",
+    "skills": "Skill",
+    "connectors": "Connettori",
+    "plugins": "Plugin",
+    "memory": "Memoria",
+    "voice": "Voce",
+    "desktop": "Generale",
+    "groupSettings": "Impostazioni",
+    "groupCustomize": "Personalizza",
+    "groupDesktop": "App desktop"
   }
 }

@@ -10,13 +10,15 @@ use agiworkforce_protocol::developer_session::{
     AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort,
     DeveloperRoutingTaskType, DeveloperSessionSource, DeveloperSessionTrustMode, HookListResponse,
-    LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpLoginParams,
-    McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse, PluginListResponse,
-    PluginSetEnabledParams, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
-    SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus,
-    ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
+    ModelListParams, PluginListResponse, PluginSetEnabledParams, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
+    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams, TurnStartParams,
+    TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -32,7 +34,7 @@ use uuid::Uuid;
 
 use super::account;
 use super::surfaces;
-use crate::agent::{AgentSession, ToolApprovalSink, ToolEventSink};
+use crate::agent::{AgentSession, ContinuationSink, ToolApprovalSink, ToolEventSink};
 use crate::config::CliConfig;
 use crate::context;
 use crate::models::{self, ContentBlock};
@@ -239,6 +241,7 @@ pub struct CliDeveloperSessionHost {
     shutdown_started: Arc<AtomicBool>,
     lifecycle: Arc<RwLock<()>>,
     pending_logins: Arc<Mutex<HashMap<String, PendingDeviceLogin>>>,
+    host_models: Arc<RwLock<Option<Vec<HostModelSummary>>>>,
 }
 
 /// A device grant this host started and has not yet resolved.
@@ -284,6 +287,7 @@ impl CliDeveloperSessionHost {
             shutdown_started: Arc::new(AtomicBool::new(false)),
             lifecycle: Arc::new(RwLock::new(())),
             pending_logins: Arc::new(Mutex::new(HashMap::new())),
+            host_models: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -602,6 +606,19 @@ impl CliDeveloperSessionHost {
         ThreadStatus::Idle
     }
 
+    /// Held for the life of the connection: every local runtime is probed and
+    /// every route's credential looked up, so this cannot run per request.
+    async fn host_models(&self, refresh: bool) -> Vec<HostModelSummary> {
+        if !refresh {
+            if let Some(cached) = self.host_models.read().await.clone() {
+                return cached;
+            }
+        }
+        let resolved = crate::model_reachability::host_models(&self.config).await;
+        *self.host_models.write().await = Some(resolved.clone());
+        resolved
+    }
+
     async fn thread_summary(&self, summary: ManagedSessionSummary) -> ThreadSummary {
         let compatible_authority = summary.routing_authority.as_ref().filter(|authority| {
             summary.model.as_deref().is_some_and(|model| {
@@ -670,6 +687,12 @@ impl CliDeveloperSessionHost {
             updated_at: summary.updated_at.to_rfc3339(),
             created_by: source_from_stored(summary.created_by.as_deref()),
             status: self.status_for(&summary).await,
+            git_branch: summary.git_branch.clone(),
+            worktree_root: summary
+                .worktree_root
+                .as_ref()
+                .map(|path| path.display().to_string()),
+            client: summary.client.clone(),
         }
     }
 
@@ -876,13 +899,18 @@ impl CliDeveloperSessionHost {
     fn configured_auto_trust_mode(
         &self,
     ) -> Result<agiworkforce_model_registry::TrustMode, DeveloperSessionHostError> {
-        let configured_provider = models::provider_from_name(&self.config.default.provider)
-            .ok_or_else(|| {
-                DeveloperSessionHostError::invalid_request(format!(
-                    "Unknown configured provider '{}' for Auto routing",
-                    self.config.default.provider
-                ))
-            })?;
+        let configured = self.config.default.provider.as_str();
+        if configured == crate::model_catalog::default_provider()
+            && models::AccountRoute::load().signed_in()
+        {
+            return Ok(agiworkforce_model_registry::TrustMode::ManagedCloud);
+        }
+        let configured_provider = models::provider_from_name(configured).ok_or_else(|| {
+            DeveloperSessionHostError::invalid_request(format!(
+                "Unknown configured provider '{}' for Auto routing",
+                self.config.default.provider
+            ))
+        })?;
         let trust_mode = match configured_provider {
             Provider::ManagedCloud => agiworkforce_model_registry::TrustMode::ManagedCloud,
             Provider::Ollama(OllamaMode::Local)
@@ -1003,8 +1031,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         env!("CARGO_PKG_VERSION")
     }
 
-    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+    async fn list_local_models(
+        &self,
+        params: ModelListParams,
+    ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        let host_models = self.host_models(params.refresh).await;
         let probes = crate::local_models::discover_all(&self.config).await;
         let models = crate::local_models::discovered_models(&probes)
             .into_iter()
@@ -1020,7 +1052,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 })
             })
             .collect();
-        Ok(LocalModelListResponse { models })
+        Ok(LocalModelListResponse {
+            models,
+            host_models,
+        })
     }
 
     async fn start_thread(
@@ -1035,27 +1070,36 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .clone()
             .unwrap_or_else(|| self.config.default.model.clone());
         let requested_provider = params.provider.map(LocalModelProvider::as_str);
+        crate::tier_cache::ensure_plan_models_cached().await;
         let resolved_model = self.resolve_thread_model(&requested_model)?;
         let model = resolved_model.provider_model_id.clone();
         let title = clean_title(params.title);
         let source = source_from_client(&client);
 
         let system_context = context::gather_system_context();
-        let provider_override = if resolved_model.auto_routing.as_ref().is_some_and(|state| {
-            state.trust_mode == agiworkforce_model_registry::TrustMode::ManagedCloud
-        }) {
+        let auto_trust = resolved_model
+            .auto_routing
+            .as_ref()
+            .map(|state| state.trust_mode);
+        let auto_vendor = match auto_trust {
+            Some(agiworkforce_model_registry::TrustMode::ManagedCloud) | None => None,
+            Some(_) => models::resolve_selected_provider(&model, None)
+                .ok()
+                .map(|provider| models::provider_name(&provider).to_string()),
+        };
+        let provider_override = match auto_trust {
             // Auto resolves to an upstream provider model ID, but Managed
             // sessions must retain the AGI gateway as their provider/trust
             // authority. Detecting from the concrete model here would silently
             // turn Managed Auto into a direct BYOK route.
-            Some("managed_cloud")
-        } else {
-            models::selection_provider_override(
+            Some(agiworkforce_model_registry::TrustMode::ManagedCloud) => Some("managed_cloud"),
+            Some(_) => auto_vendor.as_deref(),
+            None => models::selection_provider_override(
                 &model,
                 &self.config.default.model,
                 &self.config.default.provider,
                 requested_provider,
-            )
+            ),
         };
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
@@ -1073,6 +1117,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .then_some(resolved_model.fallback_model_ids);
         managed.workspace_root = Some(self.workspace_root.clone());
         managed.created_by = Some(source_to_stored(source).to_string());
+        managed.client = Some(client.name.clone());
+        let (git_branch, worktree_root) = workspace_git_state(&self.workspace_root);
+        managed.git_branch = git_branch;
+        managed.worktree_root = worktree_root;
         let store = self.store.clone();
         let managed_to_save = managed.clone();
         let path = tokio::task::spawn_blocking(move || store.save(&managed_to_save))
@@ -1251,6 +1299,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let source_id = params.thread_id;
         let title = clean_title(params.title);
         let created_by = source_to_stored(source_from_client(&client)).to_string();
+        let client_name = client.name.clone();
         let resolved = tokio::task::spawn_blocking(move || {
             let forked = store.fork(ManagedSessionReference::SessionId(source_id))?;
             let mut session = store.load(forked.reference.clone())?;
@@ -1258,6 +1307,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 session.title = title;
             }
             session.created_by = Some(created_by);
+            session.client = Some(client_name);
             store.save(&session)?;
             store.resolve(ManagedSessionReference::SessionId(session.session_id))
         })
@@ -1345,6 +1395,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             )));
         }
 
+        let mut refused_turn: Option<anyhow::Error> = None;
         {
             let mut agent = session.lock().await;
             let snapshot = TurnSetupSnapshot::capture(&agent);
@@ -1374,10 +1425,19 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     Self::apply_auto_thread_model(&mut agent, resolved)?;
                 } else if let Some(model) = params.model.as_deref() {
                     if model != agent.model {
-                        if agent.privacy_mode == crate::agent::PrivacyMode::Managed {
-                            agent.switch_managed_model(model).map_err(invalid_request)?;
+                        let switched = if agent.privacy_mode == crate::agent::PrivacyMode::Managed {
+                            agent.switch_managed_model(model)
                         } else {
-                            agent.switch_model(model).map_err(invalid_request)?;
+                            agent.switch_model(model)
+                        };
+                        if let Err(error) = switched {
+                            if error.chain().any(|cause| {
+                                cause.downcast_ref::<crate::errors::CliError>().is_some()
+                            }) {
+                                refused_turn = Some(error);
+                            } else {
+                                return Err(invalid_request(error));
+                            }
                         }
                     }
                     agent.fallback_chain = None;
@@ -1420,6 +1480,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let task_thread_id = thread_id.clone();
         let task_turn_id = turn_id.clone();
         let task_event_sequence = Arc::new(StdMutex::new(0_u64));
+        let task_store = self.store.clone();
+        let task_workspace_root = self.workspace_root.clone();
         let process_owner = crate::process_tree::ProcessTreeOwner::new();
         let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
             if start_receiver.await.is_err() {
@@ -1435,33 +1497,61 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut next_input = Some(prepared);
             let mut final_status = TurnStatus::Completed;
             let mut final_error: Option<String> = None;
+            let mut final_failure: Option<TurnFailure> = None;
             let mut last_response = String::new();
             let mut cumulative_input_tokens = 0u32;
             let mut cumulative_output_tokens = 0u32;
 
-            if let Ok(notification) = task_state_notification(
-                task_turn_id.clone(),
-                AgentTaskState::Running,
-                Some(AgentTaskState::Queued),
-                Some("Agent started working.".to_string()),
-            ) {
-                let _ = task_notifications.send(notification);
+            // A route that cannot start is refused before any work is announced,
+            // so a client shows the failure alone rather than an activity row
+            // that ended with an error.
+            let route_block = match refused_turn {
+                Some(error) => Some(error),
+                None => {
+                    let agent = task_session.lock().await;
+                    models::turn_can_start(&task_config, &agent.provider, &agent.model)
+                        .await
+                        .err()
+                }
+            };
+            let work_started = route_block.is_none();
+            if let Some(error) = route_block {
+                final_status = TurnStatus::Failed;
+                final_error = Some(format!("{error:#}"));
+                final_failure = Some(classify_turn_failure(&error));
+                next_input = None;
+                close_running_turn_claim(
+                    task_running.as_ref(),
+                    task_steering.as_ref(),
+                    &task_thread_id,
+                    &task_turn_id,
+                )
+                .await;
+            } else {
+                if let Ok(notification) = task_state_notification(
+                    task_turn_id.clone(),
+                    AgentTaskState::Running,
+                    Some(AgentTaskState::Queued),
+                    Some("Agent started working.".to_string()),
+                ) {
+                    let _ = task_notifications.send(notification);
+                }
+                emit_agent_event(
+                    &task_thread_id,
+                    &task_turn_id,
+                    &task_event_sequence,
+                    &task_notifications,
+                    AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
+                        progress_id: "turn-work".to_string(),
+                        summary: "Working on your request".to_string(),
+                        detail: Some(
+                            "Reviewing the available context and choosing the next safe action."
+                                .to_string(),
+                        ),
+                        status: AgentEventProgressStatus::Running,
+                    }),
+                );
             }
-            emit_agent_event(
-                &task_thread_id,
-                &task_turn_id,
-                &task_event_sequence,
-                &task_notifications,
-                AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
-                    progress_id: "turn-work".to_string(),
-                    summary: "Working on your request".to_string(),
-                    detail: Some(
-                        "Reviewing the available context and choosing the next safe action."
-                            .to_string(),
-                    ),
-                    status: AgentEventProgressStatus::Running,
-                }),
-            );
 
             while let Some(input) = next_input {
                 let mut agent = task_session.lock().await;
@@ -1480,35 +1570,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_notifications.clone(),
                 )));
 
-                let delta_notifications = task_notifications.clone();
-                let delta_thread = task_thread_id.clone();
-                let delta_turn = task_turn_id.clone();
-                let delta_partial = task_partial.clone();
+                let on_chunk = install_output_deltas(
+                    &mut agent,
+                    output_delta_callback(
+                        task_thread_id.clone(),
+                        task_turn_id.clone(),
+                        task_partial.clone(),
+                        task_notifications.clone(),
+                    ),
+                );
                 let turn_config = turn_config_pinned_to_session_route(&task_config, &agent);
-                let result = agent
-                    .send(
-                        &turn_config,
-                        &input.text,
-                        Box::new(move |chunk| {
-                            match delta_partial.lock() {
-                                Ok(mut partial) => partial.push_str(chunk),
-                                Err(poisoned) => poisoned.into_inner().push_str(chunk),
-                            }
-                            if let Ok(notification) = AppServerNotification::new(
-                                "turn/output_delta",
-                                serde_json::json!({
-                                    "threadId": delta_thread,
-                                    "turnId": delta_turn,
-                                    "delta": chunk,
-                                }),
-                            ) {
-                                let _ = delta_notifications.send(notification);
-                            }
-                        }),
-                    )
-                    .await;
+                let result = agent.send(&turn_config, &input.text, on_chunk).await;
                 agent.on_tool_approval = None;
                 agent.on_tool_event = None;
+                agent.on_continuation_chunk = None;
 
                 match result {
                     Ok(turn) => {
@@ -1521,6 +1596,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     Err(error) => {
                         final_status = TurnStatus::Failed;
                         final_error = Some(format!("{error:#}"));
+                        final_failure = Some(classify_turn_failure(&error));
                         drop(agent);
                         close_running_turn_claim(
                             task_running.as_ref(),
@@ -1587,37 +1663,50 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         AgentEventProgressStatus::Failed,
                     )
                 };
-            emit_agent_event(
-                &task_thread_id,
-                &task_turn_id,
-                &task_event_sequence,
-                &task_notifications,
-                AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
-                    progress_id: "turn-work".to_string(),
-                    summary: progress_summary.to_string(),
-                    detail: progress_detail,
-                    status: progress_status,
-                }),
-            );
+            if work_started {
+                emit_agent_event(
+                    &task_thread_id,
+                    &task_turn_id,
+                    &task_event_sequence,
+                    &task_notifications,
+                    AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
+                        progress_id: "turn-work".to_string(),
+                        summary: progress_summary.to_string(),
+                        detail: progress_detail,
+                        status: progress_status,
+                    }),
+                );
+            }
             if let Ok(notification) = task_state_notification(
                 task_turn_id.clone(),
                 state,
-                Some(AgentTaskState::Running),
+                Some(if work_started {
+                    AgentTaskState::Running
+                } else {
+                    AgentTaskState::Queued
+                }),
                 Some(summary.to_string()),
             ) {
                 let _ = task_notifications.send(notification);
             }
+            refresh_persisted_workspace_state(
+                &task_store,
+                &task_workspace_root,
+                task_thread_id.clone(),
+            )
+            .await;
             if let Ok(notification) = AppServerNotification::new(
                 method,
-                serde_json::json!({
-                    "threadId": task_thread_id,
-                    "turnId": task_turn_id,
-                    "status": final_status,
-                    "response": last_response,
-                    "inputTokens": cumulative_input_tokens,
-                    "outputTokens": cumulative_output_tokens,
-                    "error": final_error,
-                }),
+                TurnEndedNotification {
+                    thread_id: task_thread_id,
+                    turn_id: task_turn_id,
+                    status: final_status,
+                    response: last_response,
+                    input_tokens: cumulative_input_tokens,
+                    output_tokens: cumulative_output_tokens,
+                    error: final_error,
+                    failure: final_failure,
+                },
             ) {
                 let _ = task_notifications.send(notification);
             }
@@ -1895,6 +1984,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 crate::oauth::DeviceCodePoll::Authorized(entry) => {
                     account::save_device_grant(*entry)
                         .map_err(|error| DeveloperSessionHostError::internal(error.to_string()))?;
+                    *self.host_models.write().await = None;
                     return Ok(AccountLoginWaitResponse {
                         outcome: AccountLoginOutcome::Completed,
                         message: None,
@@ -1908,6 +1998,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     async fn account_logout(&self) -> Result<(), DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
         self.pending_logins.lock().await.clear();
+        *self.host_models.write().await = None;
         account::logout().map_err(|error| DeveloperSessionHostError::internal(error.to_string()))
     }
 
@@ -2254,6 +2345,42 @@ fn emit_agent_event(
     }
 }
 
+/// Backs both halves of a reply. Without the continuation sink the engine
+/// writes it to the terminal, which under stdio is the protocol channel.
+fn output_delta_callback(
+    thread_id: String,
+    turn_id: String,
+    partial: Arc<StdMutex<String>>,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> Arc<dyn Fn(&str) + Send + Sync> {
+    Arc::new(move |chunk: &str| {
+        match partial.lock() {
+            Ok(mut partial) => partial.push_str(chunk),
+            Err(poisoned) => poisoned.into_inner().push_str(chunk),
+        }
+        if let Ok(notification) = AppServerNotification::new(
+            "turn/output_delta",
+            serde_json::json!({
+                "threadId": thread_id,
+                "turnId": turn_id,
+                "delta": chunk,
+            }),
+        ) {
+            let _ = notifications.send(notification);
+        }
+    })
+}
+
+/// The only way to obtain a turn's `on_chunk`, so the continuation sink it
+/// also installs is not a separate statement a later edit can drop.
+fn install_output_deltas(
+    agent: &mut AgentSession,
+    deltas: Arc<dyn Fn(&str) + Send + Sync>,
+) -> crate::models::StreamCallback {
+    agent.on_continuation_chunk = Some(ContinuationSink(deltas.clone()));
+    Box::new(move |chunk: &str| deltas(chunk))
+}
+
 fn tool_event_callback(
     thread_id: String,
     turn_id: String,
@@ -2503,19 +2630,106 @@ fn apply_agent_controls(
     }
 }
 
+/// Classify the error that ended a turn into the protocol's closed set.
+///
+/// The CLI's own taxonomy is the richer one and wins: it knows which provider
+/// failed and whether a credential was missing or rejected. The shared engine's
+/// taxonomy is the fallback, so a turn that fails below the CLI layer still
+/// reaches a client as a code rather than as prose.
+fn classify_turn_failure(error: &anyhow::Error) -> TurnFailure {
+    for cause in error.chain() {
+        if let Some(cli) = cause.downcast_ref::<crate::errors::CliError>() {
+            return cli.turn_failure();
+        }
+        if let Some(engine) = cause.downcast_ref::<agiworkforce_protocol::error::AgiworkforceErr>()
+        {
+            return TurnFailure::from_agiworkforce_err(engine);
+        }
+    }
+    TurnFailure::new(TurnFailureCode::Unknown, format!("{error:#}"))
+}
+
+/// Re-persist the thread's branch and worktree root now that a turn has ended.
+///
+/// Best effort: a thread that cannot be reloaded or saved keeps the state it
+/// had, because failing a finished turn over stale metadata would be worse
+/// than the stale metadata.
+async fn refresh_persisted_workspace_state(
+    store: &ManagedSessionStore,
+    workspace_root: &Path,
+    thread_id: String,
+) {
+    let store = store.clone();
+    let workspace_root = workspace_root.to_path_buf();
+    let _ = tokio::task::spawn_blocking(move || {
+        let (git_branch, worktree_root) = workspace_git_state(&workspace_root);
+        if git_branch.is_none() && worktree_root.is_none() {
+            return;
+        }
+        let Ok(mut session) = store.load(ManagedSessionReference::SessionId(thread_id)) else {
+            return;
+        };
+        if session.git_branch == git_branch && session.worktree_root == worktree_root {
+            return;
+        }
+        session.git_branch = git_branch;
+        session.worktree_root = worktree_root;
+        let _ = store.save(&session);
+    })
+    .await;
+}
+
+/// Branch and worktree root of `root`.
+///
+/// Both are persisted on the thread rather than probed while listing: a client
+/// that opens a picker over a hundred threads must not cost a hundred process
+/// spawns, and a thread whose checkout later moves or switches branch should
+/// still say where its work happened.
+///
+/// Two invocations rather than one: `rev-parse --abbrev-ref HEAD` fails
+/// outright in a repository with no commits, which would lose the worktree
+/// root as well as the branch. `branch --show-current` answers there, and
+/// answers empty on a detached HEAD, where there is genuinely no branch.
+fn workspace_git_state(root: &Path) -> (Option<String>, Option<PathBuf>) {
+    fn git(root: &Path, args: &[&str]) -> Option<String> {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        (!value.is_empty()).then_some(value)
+    }
+
+    (
+        git(root, &["branch", "--show-current"]),
+        git(root, &["rev-parse", "--show-toplevel"]).map(PathBuf::from),
+    )
+}
+
+/// Which surface a connection speaks for, from the name it introduced itself
+/// with. The exact name is kept separately on the thread; this is the coarse
+/// bucket a client groups and filters by.
 fn source_from_client(client: &AppServerClientInfo) -> DeveloperSessionSource {
-    if client.name.to_ascii_lowercase().contains("vscode") {
+    let name = client.name.to_ascii_lowercase();
+    if name.contains("vscode") {
         DeveloperSessionSource::Vscode
+    } else if name.contains("desktop") {
+        DeveloperSessionSource::Desktop
     } else {
         DeveloperSessionSource::Cli
     }
 }
 
 fn source_from_stored(source: Option<&str>) -> DeveloperSessionSource {
-    if source.is_some_and(|source| source.eq_ignore_ascii_case("vscode")) {
-        DeveloperSessionSource::Vscode
-    } else {
-        DeveloperSessionSource::Cli
+    match source {
+        Some(source) if source.eq_ignore_ascii_case("vscode") => DeveloperSessionSource::Vscode,
+        Some(source) if source.eq_ignore_ascii_case("desktop") => DeveloperSessionSource::Desktop,
+        _ => DeveloperSessionSource::Cli,
     }
 }
 
@@ -2523,6 +2737,7 @@ fn source_to_stored(source: DeveloperSessionSource) -> &'static str {
     match source {
         DeveloperSessionSource::Cli => "cli",
         DeveloperSessionSource::Vscode => "vscode",
+        DeveloperSessionSource::Desktop => "desktop",
     }
 }
 
@@ -2584,6 +2799,7 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 mod tests {
     use super::*;
     use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
+    use agiworkforce_protocol::developer_session::TurnFailureAction;
     use tempfile::tempdir;
 
     fn text_input(text: &str) -> UserInput {
@@ -2735,6 +2951,153 @@ mod tests {
             .expect_err("late steer must conflict");
         assert!(error.to_string().contains("No running turn"));
         assert!(!host.steering.lock().await.contains_key(&thread_id));
+    }
+
+    /// `createdBy` is the coarse surface a client groups by; `client` is the
+    /// exact name the connection introduced itself with. A desktop client used
+    /// to land in the `cli` bucket, so every desktop thread was
+    /// indistinguishable from one started in a terminal.
+    #[test]
+    fn a_clients_name_decides_its_surface_in_both_directions() {
+        for (name, expected) in [
+            ("agi_vscode", DeveloperSessionSource::Vscode),
+            ("agi-vscode-insiders", DeveloperSessionSource::Vscode),
+            ("agi-desktop", DeveloperSessionSource::Desktop),
+            ("agi", DeveloperSessionSource::Cli),
+            ("fable_probe", DeveloperSessionSource::Cli),
+        ] {
+            let client = AppServerClientInfo {
+                name: name.to_string(),
+                title: name.to_string(),
+                version: "0.0.0".to_string(),
+            };
+            let source = source_from_client(&client);
+            assert_eq!(source, expected, "surface for {name}");
+            assert_eq!(
+                source_from_stored(Some(source_to_stored(source))),
+                source,
+                "the stored spelling for {name} must round-trip"
+            );
+        }
+
+        // A value stored before `desktop` existed still reads, rather than
+        // failing the listing that contains it.
+        assert_eq!(source_from_stored(None), DeveloperSessionSource::Cli);
+        assert_eq!(
+            source_from_stored(Some("something-new")),
+            DeveloperSessionSource::Cli
+        );
+    }
+
+    /// The branch comes from what the host persisted, never from probing while
+    /// listing: a picker over a hundred threads must not spawn a hundred git
+    /// processes, and a thread whose checkout has since moved should still say
+    /// where its work happened.
+    #[tokio::test]
+    async fn a_threads_branch_and_worktree_come_from_what_was_persisted() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+
+        let mut session = ManagedSession::new("session-branch", chrono::Utc::now());
+        session.workspace_root = Some(workspace.path().to_path_buf());
+        session.created_by = Some("desktop".to_string());
+        session.client = Some("agi-desktop".to_string());
+        session.git_branch = Some("feature/typed-failures".to_string());
+        session.worktree_root = Some(workspace.path().to_path_buf());
+        host.store.save(&session).expect("save session");
+
+        let resolved = host
+            .store
+            .resolve(ManagedSessionReference::SessionId(
+                "session-branch".to_string(),
+            ))
+            .expect("resolve session");
+        let summary = host.thread_summary(resolved.summary).await;
+        assert_eq!(
+            summary.git_branch.as_deref(),
+            Some("feature/typed-failures")
+        );
+        assert_eq!(
+            summary.worktree_root,
+            Some(workspace.path().display().to_string())
+        );
+        assert_eq!(summary.client.as_deref(), Some("agi-desktop"));
+        assert_eq!(summary.created_by, DeveloperSessionSource::Desktop);
+
+        // A thread persisted before these fields existed reports none of them,
+        // rather than borrowing the host's own branch.
+        let legacy = ManagedSession::new("session-legacy", chrono::Utc::now());
+        host.store.save(&legacy).expect("save legacy session");
+        let resolved = host
+            .store
+            .resolve(ManagedSessionReference::SessionId(
+                "session-legacy".to_string(),
+            ))
+            .expect("resolve legacy session");
+        let summary = host.thread_summary(resolved.summary).await;
+        assert_eq!(summary.git_branch, None);
+        assert_eq!(summary.worktree_root, None);
+        assert_eq!(summary.client, None);
+    }
+
+    /// A free-text error cannot tell a client whether to offer a sign-in, a
+    /// retry, or nothing at all. The code can, and it is derived from the
+    /// typed error rather than by matching on prose that changes per provider.
+    #[test]
+    fn a_failed_turn_classifies_into_a_code_a_client_can_act_on() {
+        let missing =
+            classify_turn_failure(&anyhow::Error::new(crate::errors::CliError::auth_missing(
+                "deepseek",
+                "No API key found in the auth store or DEEPSEEK_API_KEY.",
+            )));
+        assert_eq!(missing.code, TurnFailureCode::ProviderAuthMissing);
+        assert_eq!(missing.provider.as_deref(), Some("deepseek"));
+        assert_eq!(missing.action, TurnFailureAction::SignInProvider);
+        assert!(!missing.retryable);
+        assert!(missing.message.contains("No API key found"));
+
+        // A rejected credential has a different remedy from an absent one.
+        let invalid = classify_turn_failure(&anyhow::Error::new(crate::errors::CliError::auth(
+            "anthropic",
+            "key revoked",
+        )));
+        assert_eq!(invalid.code, TurnFailureCode::ProviderAuthInvalid);
+
+        let limited =
+            classify_turn_failure(&anyhow::Error::new(crate::errors::CliError::RateLimited {
+                provider: "openai".to_string(),
+                retry_after: Some(30),
+            }));
+        assert_eq!(limited.code, TurnFailureCode::ProviderRateLimited);
+        assert!(limited.retryable);
+        assert_eq!(limited.action, TurnFailureAction::Retry);
+
+        // The typed error arrives wrapped in anyhow context, which is how the
+        // turn loop actually hands it over.
+        let wrapped = classify_turn_failure(
+            &anyhow::Error::new(crate::errors::CliError::auth_missing("deepseek", "no key"))
+                .context("while running the turn"),
+        );
+        assert_eq!(wrapped.code, TurnFailureCode::ProviderAuthMissing);
+
+        // The shared engine's taxonomy is the fallback, not a second vocabulary.
+        let engine = classify_turn_failure(&anyhow::Error::new(
+            agiworkforce_protocol::error::AgiworkforceErr::ContextWindowExceeded,
+        ));
+        assert_eq!(engine.code, TurnFailureCode::ContextWindowExceeded);
+
+        // Anything else is `unknown`, never a guessed code.
+        let opaque = classify_turn_failure(&anyhow::anyhow!("something went wrong"));
+        assert_eq!(opaque.code, TurnFailureCode::Unknown);
+        assert_eq!(opaque.action, TurnFailureAction::None);
+        assert_eq!(opaque.message, "something went wrong");
     }
 
     #[tokio::test]
@@ -3265,6 +3628,45 @@ mod tests {
         assert!(completed.is_error);
         assert_eq!(completed.elapsed_ms, Some(125));
         assert_eq!(completed.output["text"], "provider timed out");
+    }
+
+    #[tokio::test]
+    async fn a_turns_continuation_reaches_the_client_instead_of_the_protocol_stream() {
+        let (notifications, mut receiver) = broadcast::channel(8);
+        let partial = Arc::new(StdMutex::new(String::new()));
+        let mut agent = test_agent();
+
+        let mut on_chunk = install_output_deltas(
+            &mut agent,
+            output_delta_callback(
+                "thread-1".to_string(),
+                "turn-1".to_string(),
+                partial.clone(),
+                notifications,
+            ),
+        );
+
+        assert!(
+            agent.on_continuation_chunk.is_some(),
+            "the turn path must leave the engine no terminal fallback to take"
+        );
+
+        on_chunk("First line of ");
+        (agent.continuation_sink())("`README.md`");
+
+        let first = receiver.recv().await.expect("first completion delta");
+        let continuation = receiver.recv().await.expect("continuation delta");
+        assert_eq!(first.method, "turn/output_delta");
+        assert_eq!(first.params["delta"], "First line of ");
+        assert_eq!(continuation.method, "turn/output_delta");
+        assert_eq!(continuation.params["threadId"], "thread-1");
+        assert_eq!(continuation.params["turnId"], "turn-1");
+        assert_eq!(continuation.params["delta"], "`README.md`");
+
+        assert_eq!(
+            partial.lock().expect("partial").as_str(),
+            "First line of `README.md`"
+        );
     }
 
     #[tokio::test]

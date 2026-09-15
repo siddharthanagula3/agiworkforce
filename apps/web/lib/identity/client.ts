@@ -2,6 +2,9 @@
 
 import { useAuth, useClerk, useUser } from '@clerk/nextjs';
 import { useCallback, useMemo } from 'react';
+import { getHostBridge } from '@agiworkforce/local-runtime-contract';
+import { isAuthPath } from '@agiworkforce/types/product-routes';
+import { AUTH_LOGIN_PATH } from '@/features/auth/authRoutes';
 
 /**
  * The browser half of the identity port. Components take the session, the
@@ -77,11 +80,30 @@ export function useCurrentUser(): IdentityCurrentUserState {
   return { isLoaded, isSignedIn: isSignedIn === true, user: mapped };
 }
 
+/**
+ * Where a sign-out lands.
+ *
+ * In a browser the caller's choice stands. The desktop shell holds the product
+ * and the sign-in flow and hands the rest of the site to the browser, so a
+ * hosted sign-out aimed at the marketing home would open a browser window and
+ * leave the app sitting on the screen the user just signed out of. Every
+ * destination that is not part of signing in becomes the sign-in route there.
+ */
+export function signedOutRedirectUrl(
+  redirectUrl: string | undefined,
+  hosted: boolean,
+): string | undefined {
+  if (!hosted) return redirectUrl;
+  if (redirectUrl === undefined || !redirectUrl.startsWith('/')) return AUTH_LOGIN_PATH;
+  return isAuthPath(redirectUrl) ? redirectUrl : AUTH_LOGIN_PATH;
+}
+
 export function useSignOut(): IdentitySignOut {
   const { signOut } = useClerk();
   return useCallback(
     async (options?: IdentitySignOutOptions) => {
-      await signOut(options);
+      const redirectUrl = signedOutRedirectUrl(options?.redirectUrl, getHostBridge() !== null);
+      await signOut(redirectUrl === undefined ? options : { ...options, redirectUrl });
     },
     [signOut],
   );

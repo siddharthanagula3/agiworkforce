@@ -6,9 +6,13 @@ import {
   NOTEBOOK_TEMPLATE_ID,
   type CloudCodeSession,
 } from '@agiworkforce/types';
+import type {
+  DeveloperSessionGroup,
+  LocalDeveloperSession,
+} from '@agiworkforce/local-runtime-contract';
 import { useUIStore } from '@shared/stores/layout-store';
 import { getModelMetadata } from '@shared/config/llm';
-import { contextWindowLabel } from './code-surface';
+import { CODE_COPY, contextWindowLabel } from './code-surface';
 import {
   TOOL_APPROVAL_POLICY_OPTIONS,
   type ToolApprovalPreferences,
@@ -70,6 +74,64 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
   fetchPreferenceNamespace: vi.fn(async (_namespace: string, fallback: unknown) => fallback),
   savePreferenceNamespace: vi.fn(async () => undefined),
 }));
+
+type FakeHost = Record<string, never> | null;
+let host: FakeHost = null;
+const localSession: LocalDeveloperSession = {
+  id: 'thread-1',
+  rootId: 'root-recent',
+  title: 'Quote the readme',
+  cwd: '/work/qa-project',
+  model: 'qa-provider/qa-model',
+  provider: 'qa-provider',
+  trustMode: 'byok',
+  status: 'idle',
+  createdAt: '2026-09-14T11:00:00Z',
+  updatedAt: '2026-09-14T11:05:00Z',
+  origin: 'cli',
+};
+let localGroups: DeveloperSessionGroup[] = [];
+const listDeveloperSessions = vi.fn(async () => ({ groups: localGroups }));
+const startDeveloperSession = vi.fn(async (rootId: string, _model?: string) => ({
+  ...localSession,
+  rootId,
+}));
+const startDeveloperTurn = vi.fn(async () => ({ turnId: 'turn-1' }));
+const readDeveloperSession = vi.fn(async () => ({
+  session: localSession,
+  messages: [],
+  truncated: false,
+}));
+const pickWorkspaceRoot = vi.fn(async () => ({ rootId: 'root-added' }));
+let localHostModels: { id: string; provider: string; reachable: boolean; unreachable: null }[] = [];
+const listDeveloperModels = vi.fn(async () => ({
+  models: [],
+  hostModels: localHostModels,
+  defaultModelId: null,
+}));
+
+vi.mock('@/features/desktop-host', () => ({
+  useDesktopHost: () => host,
+  answerDeveloperApproval: vi.fn(async () => true),
+  interruptDeveloperTurn: vi.fn(async () => true),
+  listDeveloperModels: (...args: unknown[]) => listDeveloperModels(...(args as [])),
+  listDeveloperSessions: () => listDeveloperSessions(),
+  onDeveloperSessionEvent: () => () => undefined,
+  pickWorkspaceRoot: () => pickWorkspaceRoot(),
+  readDeveloperSession: () => readDeveloperSession(),
+  startDeveloperSession: (rootId: string, model?: string) => startDeveloperSession(rootId, model),
+  startDeveloperTurn: (...args: unknown[]) => startDeveloperTurn(...(args as [])),
+}));
+
+beforeEach(() => {
+  host = null;
+  localGroups = [];
+  localHostModels = [];
+  listDeveloperSessions.mockClear();
+  startDeveloperSession.mockClear();
+  startDeveloperTurn.mockClear();
+  pickWorkspaceRoot.mockClear();
+});
 
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -217,9 +279,8 @@ async function openSession(user: ReturnType<typeof userEvent.setup>, title: stri
 }
 
 async function openEnvironment(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(
-    await screen.findByRole('button', { name: /^Isolated|Trusted hosts|Full internet/ }),
-  );
+  await user.click(await screen.findByRole('button', { name: /^(Cloud|Local) ·/ }));
+  return screen.findByRole('menu');
 }
 
 /** The tier radios and the harness picker live in the Edit environment dialog. */
@@ -625,7 +686,7 @@ describe('CloudCodePage', () => {
     await openSession(user, session.title);
 
     expect(await screen.findByText('Deleting files is destructive.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: CODE_COPY.reject })).toBeEnabled();
   });
 
   it('shows the closed banner in the composer slot and no composer', async () => {
@@ -2022,5 +2083,304 @@ describe('CloudCodePage', () => {
     await screen.findByRole('button', { name: 'Changes' });
 
     expect(screen.queryByTestId('notebook-panel')).not.toBeInTheDocument();
+  });
+});
+
+function folder(overrides: Partial<DeveloperSessionGroup> = {}): DeveloperSessionGroup {
+  return {
+    rootId: 'root-recent',
+    name: 'qa-project',
+    path: '/work/qa-project',
+    branch: 'main',
+    sessions: [localSession],
+    ...overrides,
+  };
+}
+
+describe('the environment the composer starts a session in', () => {
+  it('names the cloud environment and keeps the network level under it, in a browser', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    expect(await screen.findByRole('button', { name: 'Cloud · Isolated' })).toBeInTheDocument();
+
+    const menu = await openEnvironment(user);
+
+    expect(within(menu).getByText('Cloud')).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitemradio', { name: /Isolated/ })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitemradio', { name: /Trusted hosts/ })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitemradio', { name: /Full internet/ })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Edit environment' })).toBeInTheDocument();
+  });
+
+  it('offers no local or remote row in a browser, where neither can be acted on', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    const menu = await openEnvironment(user);
+
+    expect(within(menu).queryByText('Local')).not.toBeInTheDocument();
+    expect(within(menu).queryByText('Remote control')).not.toBeInTheDocument();
+    expect(within(menu).queryByText('Desktop only')).not.toBeInTheDocument();
+    expect(within(menu).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('starts a shell session in the folder used last, named on the chip', async () => {
+    host = {};
+    localGroups = [
+      folder({ rootId: 'root-older', name: 'older-project', sessions: [localSession] }),
+      folder({
+        rootId: 'root-recent',
+        sessions: [{ ...localSession, updatedAt: '2026-09-14T18:00:00Z' }],
+      }),
+    ];
+    render(<CloudCodePage api={createApi()} />);
+
+    expect(await screen.findByRole('button', { name: 'Local · qa-project' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Select repository' })).not.toBeInTheDocument();
+  });
+
+  it('stays on cloud in the shell when no folder is open to AGI', async () => {
+    host = {};
+    localGroups = [];
+    render(<CloudCodePage api={createApi()} />);
+
+    expect(await screen.findByRole('button', { name: 'Cloud · Isolated' })).toBeInTheDocument();
+  });
+
+  it('never proposes a folder whose runtime cannot start a session', async () => {
+    host = {};
+    localGroups = [
+      folder({ unavailable: { message: 'The AGI CLI is missing.', hint: 'Install it.' } }),
+    ];
+    render(<CloudCodePage api={createApi()} />);
+
+    expect(await screen.findByRole('button', { name: 'Cloud · Isolated' })).toBeInTheDocument();
+  });
+
+  it('lists the approved folders and the folder action above cloud, in the shell', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder(), folder({ rootId: 'root-two', name: 'second-project', sessions: [] })];
+    render(<CloudCodePage api={createApi()} />);
+
+    const menu = await openEnvironment(user);
+
+    expect(within(menu).getByText('Local')).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitemradio', { name: /qa-project/ })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitemradio', { name: /second-project/ })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Add a folder' })).toBeInTheDocument();
+    expect(within(menu).getByText('Cloud')).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Edit environment' })).toBeInTheDocument();
+  });
+
+  it('asks the host for a folder from the environment menu', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    render(<CloudCodePage api={createApi()} />);
+
+    const menu = await openEnvironment(user);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Add a folder' }));
+
+    await waitFor(() => expect(pickWorkspaceRoot).toHaveBeenCalled());
+  });
+
+  it('switches to the cloud environment, which brings the repository chip back', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    render(<CloudCodePage api={createApi()} />);
+
+    const menu = await openEnvironment(user);
+    await user.click(within(menu).getByRole('menuitemradio', { name: /Trusted hosts/ }));
+
+    expect(
+      await screen.findByRole('button', { name: 'Cloud · Trusted hosts' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select repository' })).toBeInTheDocument();
+  });
+
+  it('sends a local task through the host, never through the managed API', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    const api = createApi();
+    render(<CloudCodePage api={api} />);
+
+    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'quote the readme',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    await waitFor(() =>
+      expect(startDeveloperSession).toHaveBeenCalledWith('root-recent', 'qa-provider/qa-model'),
+    );
+    await waitFor(() =>
+      expect(startDeveloperTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rootId: 'root-recent',
+          threadId: 'thread-1',
+          text: 'quote the readme',
+        }),
+      ),
+    );
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cloud isolation claim off the screen while the environment is local', async () => {
+    host = {};
+    localGroups = [folder()];
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('button', { name: 'Local · qa-project' });
+
+    expect(screen.queryByText(CODE_COPY.firstRunHint)).not.toBeInTheDocument();
+  });
+});
+
+describe('the model a local session starts on', () => {
+  const reachable = (id: string) => ({
+    id,
+    provider: 'qa-provider',
+    reachable: true,
+    unreachable: null,
+  });
+
+  it('names the model that will answer instead of the cloud model selector', async () => {
+    host = {};
+    localGroups = [folder()];
+    localHostModels = [reachable('qa-provider/first'), reachable('qa-provider/second')];
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('button', { name: 'Local · qa-project' });
+
+    expect(await screen.findByRole('button', { name: /qa-provider\/first/ })).toBeInTheDocument();
+    expect(screen.queryByTestId('model-trigger')).not.toBeInTheDocument();
+  });
+
+  it('starts the session on the model chosen in the composer', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    localHostModels = [reachable('qa-provider/first'), reachable('qa-provider/second')];
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: /qa-provider\/first/ }));
+    await user.click(await screen.findByRole('menuitemradio', { name: 'qa-provider/second' }));
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'quote the readme',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    await waitFor(() =>
+      expect(startDeveloperSession).toHaveBeenCalledWith('root-recent', 'qa-provider/second'),
+    );
+  });
+
+  it('keeps the cloud model selector on the cloud environment', async () => {
+    render(<CloudCodePage api={createApi()} />);
+
+    expect(await screen.findByRole('button', { name: 'Cloud · Isolated' })).toBeInTheDocument();
+    expect(screen.getByTestId('model-trigger')).toBeInTheDocument();
+  });
+});
+
+describe('a cloud session open while the draft is local', () => {
+  it('continues the cloud session rather than starting a local one', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await openSession(user, session.title);
+    await screen.findByRole('button', { name: 'Changes' });
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'run the tests',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalled());
+    expect(startDeveloperSession).not.toHaveBeenCalled();
+  });
+
+  it('reports a local start failure where the composer is, not only in the rail', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    startDeveloperSession.mockRejectedValueOnce(new Error('the runtime refused'));
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'quote the readme',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    const notices = await screen.findByTestId('code-notices');
+    expect(await within(notices).findByRole('alert')).toHaveTextContent('the runtime refused');
+  });
+});
+
+describe('what the local chip row and menu say about a folder', () => {
+  it('follows the folder with its branch, and drops the chip when there is none', async () => {
+    host = {};
+    localGroups = [folder({ branch: 'release-1' })];
+    const { unmount } = render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('button', { name: 'Local · qa-project' });
+    expect(
+      within(screen.getByTestId('code-composer-area')).getByText('release-1'),
+    ).toBeInTheDocument();
+    unmount();
+
+    localGroups = [folder({ branch: null })];
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('button', { name: 'Local · qa-project' });
+    expect(
+      within(screen.getByTestId('code-composer-area')).queryByText('release-1'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says why an unavailable folder cannot run, and refuses to send into it', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [
+      folder(),
+      folder({
+        rootId: 'root-gone',
+        name: 'moved-project',
+        sessions: [],
+        unavailable: { message: 'moved-project is no longer on this Mac.', hint: 'Add it again.' },
+      }),
+    ];
+    render(<CloudCodePage api={createApi()} />);
+
+    const menu = await openEnvironment(user);
+    const row = within(menu).getByRole('menuitemradio', { name: /moved-project/ });
+    expect(row).toHaveTextContent('Cannot run here');
+    expect(row).not.toHaveTextContent('Add it again');
+    await user.click(row);
+
+    expect(
+      await screen.findByRole('button', { name: 'Local · moved-project' }),
+    ).toBeInTheDocument();
+    const notices = await screen.findByTestId('code-notices');
+    expect(within(notices).getByText(/no longer on this Mac\. Add it again\./)).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+    ).toBeDisabled();
   });
 });

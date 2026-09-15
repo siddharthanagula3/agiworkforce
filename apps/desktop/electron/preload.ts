@@ -1,16 +1,17 @@
 /**
- * Sandboxed preload for the Electron cloud shell.
- *
- * Exposes exactly the `ElectronHostBridge` contract
+ * Sandboxed preload exposing exactly the `ElectronHostBridge` contract
  * (`src/lib/tauri-electron/bridgeContract.ts`) as `window.agiHost`, the only
- * surface the renderer has beyond the DOM. No Node globals leak into the page
- * (`contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`).
+ * surface the renderer has beyond the DOM.
  */
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  isHostCommand,
   type DesktopRuntimeEvent,
   type DesktopRuntimeResponse,
+  type HostCommand,
+  type HostPreferences,
+  type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
 import {
   ELECTRON_BRIDGE_COMMANDS,
@@ -69,6 +70,16 @@ const agiHost: ElectronHostBridge = {
     };
   },
 
+  onHostCommand(callback: (command: HostCommand) => void): () => void {
+    const listener = (_event: unknown, command: unknown) => {
+      if (isHostCommand(command)) callback(command);
+    };
+    ipcRenderer.on(ELECTRON_IPC_CHANNELS.hostCommand, listener);
+    return () => {
+      ipcRenderer.removeListener(ELECTRON_IPC_CHANNELS.hostCommand, listener);
+    };
+  },
+
   onRuntimeEvent(callback: (event: DesktopRuntimeEvent) => void): () => void {
     const listener = (_event: unknown, payload: unknown) => {
       if (payload && typeof payload === 'object' && 'kind' in payload) {
@@ -79,6 +90,20 @@ const agiHost: ElectronHostBridge = {
     return () => {
       ipcRenderer.removeListener(DESKTOP_RUNTIME_EVENT_CHANNEL, listener);
     };
+  },
+
+  async readPreferences(): Promise<HostPreferencesState> {
+    return (await ipcRenderer.invoke(
+      ELECTRON_IPC_CHANNELS.hostPreferences,
+      null,
+    )) as HostPreferencesState;
+  },
+
+  async writePreferences(patch: Partial<HostPreferences>): Promise<HostPreferencesState> {
+    return (await ipcRenderer.invoke(
+      ELECTRON_IPC_CHANNELS.hostPreferences,
+      patch,
+    )) as HostPreferencesState;
   },
 
   async openExternal(url: string): Promise<void> {
@@ -114,20 +139,14 @@ const agiHost: ElectronHostBridge = {
 };
 
 /**
- * Exposed unconditionally; the main process decides who may actually call.
- *
- * An earlier version of this checked `location.origin` here and refused to
- * expose the object off-origin. It never exposed anything at all: a sandboxed
- * preload runs before the document exists, so there was no location to read.
- * `isTrustedSender` in `main.ts` is the real gate, and it is the better place
- * for one, because the main process cannot be lied to about the caller.
+ * Exposed unconditionally. A sandboxed preload runs before the document, so
+ * there is no origin to read here; `isTrustedSender` in `main.ts` is the gate.
  */
 contextBridge.exposeInMainWorld('agiHost', agiHost);
 
 /**
- * A dropped folder never reaches the page: a directory has no bytes for the
- * DOM to hand over, so the main process is told its path and asks for a
- * workspace grant. Files fall through untouched to the page's own handler.
+ * A directory has no bytes for the DOM to hand over, so its path goes to the
+ * main process for a workspace grant. Files fall through to the page.
  */
 window.addEventListener('drop', (event) => {
   const dropped = Array.from((event as DragEvent).dataTransfer?.files ?? []);
@@ -136,3 +155,28 @@ window.addEventListener('drop', (event) => {
   if (paths.length === 0) return;
   void ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.workspaceDrop, paths);
 });
+
+/**
+ * The shell's dialogs are drawn by macOS, which takes their appearance from
+ * the process rather than the page's stylesheet. `data-theme` carries the
+ * page's choice, and is absent on "system", where macOS is already right.
+ */
+function reportResolvedTheme(): void {
+  const declared = document.documentElement.getAttribute('data-theme');
+  const theme = declared === 'dark' || declared === 'light' ? declared : 'system';
+  void ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.rendererTheme, theme).catch(() => undefined);
+}
+
+function watchResolvedTheme(): void {
+  reportResolvedTheme();
+  new MutationObserver(reportResolvedTheme).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  });
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', watchResolvedTheme, { once: true });
+} else {
+  watchResolvedTheme();
+}

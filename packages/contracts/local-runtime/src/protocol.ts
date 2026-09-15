@@ -1,4 +1,5 @@
 import type { BrowserPairingState } from './browser-bridge';
+import type { DeveloperSessionEvent } from './developer-sessions';
 import type { DesktopCapability, PermissionRequest, PermissionScope } from './capabilities';
 
 export const DESKTOP_RUNTIME_CHANNEL = 'agi:desktop-runtime';
@@ -16,6 +17,7 @@ export const DESKTOP_RUNTIME_ERROR_CODES = [
   'io-error',
   'unsupported-platform',
   'cancelled',
+  'runtime-unavailable',
 ] as const;
 
 export type DesktopRuntimeErrorCode = (typeof DESKTOP_RUNTIME_ERROR_CODES)[number];
@@ -82,4 +84,5 @@ export type DesktopRuntimeEvent =
   | { kind: 'permission-changed'; capability: DesktopCapability; scope: PermissionScope }
   | { kind: 'shell-output'; runId: string; stream: 'stdout' | 'stderr'; chunk: string }
   | { kind: 'browser-pairing-changed'; state: BrowserPairingState }
-  | { kind: 'local-chat-delta'; runId: string; channel: 'text' | 'thinking'; delta: string };
+  | { kind: 'local-chat-delta'; runId: string; channel: 'text' | 'thinking'; delta: string }
+  | { kind: 'developer-session'; rootId: string; event: DeveloperSessionEvent };

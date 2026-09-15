@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import * as vscode from 'vscode';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
+import { AGENT_TASK_STATE_LABELS } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   CLOUD_TASKS_REFRESH_INTERVAL_MS,
@@ -26,7 +27,9 @@ import {
 import {
   cloudRunDescription,
   cloudRunQuietLabel,
+  cloudRunStateLabel,
   readCloudRunSteps,
+  type CloudRunState,
 } from '../features/cloud-tasks/cloudRunPresentation';
 import { CLOUD_TASK_ROW_ACTIONS } from '../features/surfaces';
 
@@ -73,6 +76,13 @@ describe('cloud task presentation', () => {
     const description = cloudRunDescription(makeRun({ staleForMs: 90_000 }), NOW);
 
     expect(description).toBe('Running · updated 2m ago · quiet 1m');
+  });
+
+  it('reads every state word from the contracts owner', () => {
+    for (const state of Object.keys(AGENT_TASK_STATE_LABELS) as CloudRunState[]) {
+      expect(cloudRunStateLabel(state)).toBe(AGENT_TASK_STATE_LABELS[state]);
+    }
+    expect(cloudRunStateLabel('awaiting_input')).toBe('Waiting for input');
   });
 
   it('says nothing about quiet time when the server reports none', () => {

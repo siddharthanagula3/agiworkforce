@@ -74,5 +74,29 @@
     "searchLabel": "설정 검색",
     "searchPlaceholder": "검색",
     "title": "설정"
+  },
+  "nav": {
+    "general": "일반",
+    "account": "계정",
+    "team": "팀",
+    "privacy": "개인정보",
+    "billing": "결제",
+    "usage": "사용량",
+    "capabilities": "기능",
+    "security": "보안",
+    "safety": "안전",
+    "notifications": "알림",
+    "reflect": "Reflect",
+    "time-focus": "시간과 집중",
+    "help": "도움말",
+    "skills": "스킬",
+    "connectors": "커넥터",
+    "plugins": "플러그인",
+    "memory": "메모리",
+    "voice": "음성",
+    "desktop": "일반",
+    "groupSettings": "설정",
+    "groupCustomize": "맞춤 설정",
+    "groupDesktop": "데스크톱 앱"
   }
 }

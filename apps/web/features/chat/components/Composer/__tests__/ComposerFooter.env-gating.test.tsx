@@ -8,6 +8,28 @@ vi.mock('next/navigation', () => ({
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
+const FIXTURE_AVAILABLE_MODELS = vi.hoisted(
+  () =>
+    [
+      {
+        id: 'fixture-standard-model',
+        name: 'Standard Model',
+        provider: 'OpenAI',
+        providerKey: 'openai',
+        description: 'Fast and capable',
+        // requiresEnvironment absent
+      },
+      {
+        id: 'hypothetical-e2b-model',
+        name: 'E2B Sandbox Model',
+        provider: 'Anthropic',
+        providerKey: 'anthropic',
+        description: 'Requires E2B sandbox',
+        requiresEnvironment: 'e2b' as const,
+      },
+    ] as Record<string, unknown>[],
+);
+
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (
     selector: (s: {
@@ -37,24 +59,10 @@ vi.mock('@shared/stores/model-store', () => ({
     };
     return selector(state);
   },
-  AVAILABLE_MODELS: [
-    {
-      id: 'fixture-standard-model',
-      name: 'Standard Model',
-      provider: 'OpenAI',
-      providerKey: 'openai',
-      description: 'Fast and capable',
-      // requiresEnvironment absent
-    },
-    {
-      id: 'hypothetical-e2b-model',
-      name: 'E2B Sandbox Model',
-      provider: 'Anthropic',
-      providerKey: 'anthropic',
-      description: 'Requires E2B sandbox',
-      requiresEnvironment: 'e2b' as const,
-    },
-  ],
+  AVAILABLE_MODELS: FIXTURE_AVAILABLE_MODELS,
+  findSelectableModel: (id: string) =>
+    FIXTURE_AVAILABLE_MODELS.find((model) => model['id'] === id) ?? null,
+  isSelectableModelId: (id: string) => FIXTURE_AVAILABLE_MODELS.some((model) => model['id'] === id),
 }));
 
 const CATALOGUE_ENTRIES = vi.hoisted(() => [

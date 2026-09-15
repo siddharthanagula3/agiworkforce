@@ -142,6 +142,7 @@ export interface PreferenceSaveOptions {
   merge?: boolean;
   /** Refuse the write, with a conflict, if the stored revision moved on. */
   expectedVersion?: string | null;
+  keepalive?: boolean;
 }
 
 export interface PreferenceSaveResult {
@@ -158,6 +159,7 @@ export async function savePreferenceNamespace<T extends object>(
     method: 'PUT',
     headers,
     credentials: 'include',
+    keepalive: options?.keepalive === true,
     body: JSON.stringify({
       namespace,
       ...(options?.merge ? { patch: value } : { value }),

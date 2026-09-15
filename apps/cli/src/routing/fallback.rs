@@ -52,6 +52,29 @@ impl FallbackChain {
         }
     }
 
+    /// The chain with `--fallback-model` appended once, after any comma-separated tail.
+    pub fn with_fallback(mut self, fallback: Option<&str>) -> Self {
+        if let Some(model) = fallback.map(str::trim).filter(|model| !model.is_empty()) {
+            if !self.primaries.iter().any(|primary| primary == model) {
+                self.primaries.push(model.to_string());
+            }
+        }
+        self
+    }
+
+    /// Why the chain rotated, in the words the narration and the TUI banner show.
+    pub fn reason_phrase(kind: &str) -> &'static str {
+        match kind {
+            "api_rate_limit" => "rate limited",
+            "stream_disconnect" => "the stream failed",
+            "api_server_error" => "the provider failed",
+            "network" => "no network",
+            "api_http_error" => "the request was refused",
+            "model_unavailable" => "the model was unavailable",
+            _ => "a failure",
+        }
+    }
+
     /// The current head model, if any.
     pub fn head(&self) -> Option<&str> {
         self.primaries.first().map(|s| s.as_str())
@@ -93,6 +116,29 @@ mod tests {
             c.primaries,
             vec!["fixture-primary-model", "fixture-fallback-model"]
         );
+    }
+
+    #[test]
+    fn with_fallback_appends_the_flag_model_once() {
+        let c = FallbackChain::parse("a,b").with_fallback(Some(" c "));
+        assert_eq!(c.primaries, vec!["a", "b", "c"]);
+        let same = FallbackChain::parse("a,b").with_fallback(Some("b"));
+        assert_eq!(same.primaries, vec!["a", "b"]);
+        let none = FallbackChain::parse("a").with_fallback(None);
+        assert_eq!(none.tail(), &[] as &[String]);
+    }
+
+    #[test]
+    fn reason_phrase_reads_as_words() {
+        assert_eq!(
+            FallbackChain::reason_phrase("api_rate_limit"),
+            "rate limited"
+        );
+        assert_eq!(
+            FallbackChain::reason_phrase("stream_disconnect"),
+            "the stream failed"
+        );
+        assert_eq!(FallbackChain::reason_phrase("something_new"), "a failure");
     }
 
     #[test]

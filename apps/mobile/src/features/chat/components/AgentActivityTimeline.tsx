@@ -19,6 +19,7 @@ import type {
   AgentActivityState,
   AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { WebSearchResultCard } from './WebSearchResultCard';
@@ -215,7 +216,7 @@ function ToolRow({
                 onPress={() => onResolveApproval?.(entry.toolCallId, 'approved')}
                 disabled={!onResolveApproval}
                 accessibilityRole="button"
-                accessibilityLabel={`Allow ${entry.summary}`}
+                accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allow} ${entry.summary}`}
               >
                 <View
                   style={{
@@ -227,7 +228,7 @@ function ToolRow({
                   }}
                 >
                   <Text style={{ color: colors.white, fontSize: 12, fontWeight: '600' }}>
-                    Allow
+                    {TOOL_APPROVAL_ACTION_LABELS.allow}
                   </Text>
                 </View>
               </Pressable>
@@ -235,7 +236,7 @@ function ToolRow({
                 onPress={() => onResolveApproval?.(entry.toolCallId, 'rejected')}
                 disabled={!onResolveApproval}
                 accessibilityRole="button"
-                accessibilityLabel={`Deny ${entry.summary}`}
+                accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny} ${entry.summary}`}
               >
                 <View
                   style={{
@@ -248,7 +249,7 @@ function ToolRow({
                   }}
                 >
                   <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600' }}>
-                    Deny
+                    {TOOL_APPROVAL_ACTION_LABELS.deny}
                   </Text>
                 </View>
               </Pressable>

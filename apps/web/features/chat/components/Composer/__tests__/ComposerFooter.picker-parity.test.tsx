@@ -83,6 +83,10 @@ vi.mock('@shared/stores/model-store', () => ({
       getSelectedModel: () => MODELS.find((m) => m['id'] === sel.id) ?? MODELS[0],
     }),
   AVAILABLE_MODELS: MODELS,
+  findSelectableModel: (id: string) =>
+    MODELS.find((model) => model['id'] === id && model['availability'] !== 'coming_soon') ?? null,
+  isSelectableModelId: (id: string) =>
+    MODELS.some((model) => model['id'] === id && model['availability'] !== 'coming_soon'),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({

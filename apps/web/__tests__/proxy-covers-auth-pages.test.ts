@@ -1,6 +1,11 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  PRODUCT_ROUTE_PREFIXES,
+  SESSION_AUTH_ROUTE_PREFIXES,
+  routeMatcherPatterns,
+} from '@agiworkforce/types/product-routes';
 
 /**
  * Every page that calls `getRequestIdentity()` must be covered by the proxy
@@ -52,12 +57,20 @@ function pagesCallingAuth(dir: string, base = '', out: string[] = []): string[] 
   return out;
 }
 
-function matcherPatterns(name: string): string[] {
-  const proxy = readFileSync(join(process.cwd(), 'proxy.ts'), 'utf8');
+const proxySource = readFileSync(join(process.cwd(), 'proxy.ts'), 'utf8');
+
+/**
+ * The route literals still written inline in one of the proxy's matchers.
+ *
+ * The product and session-auth prefixes moved to
+ * `@agiworkforce/types/product-routes`, which the desktop shell reads too. What
+ * stays inline here is proxy-only: share links, the marketing aliases and the
+ * API surface.
+ */
+function inlinePatterns(name: string): string[] {
   const block = new RegExp(
     `${name} = (?:identityMiddleware\\.)?createRouteMatcher\\(\\[([\\s\\S]*?)\\]\\)`,
-  ).exec(proxy);
-  expect(block, `${name} not found in proxy.ts`).not.toBeNull();
+  ).exec(proxySource);
   return [...(block?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
 }
 
@@ -91,11 +104,26 @@ function covers(patterns: string[], route: string): boolean {
 
 describe('proxy covers every page that calls getRequestIdentity()', () => {
   const routes = [...new Set(pagesCallingAuth(APP))].filter((r) => !r.includes('['));
-  const protectedPatterns = matcherPatterns('isProtectedAppRoute');
-  const sessionPatterns = matcherPatterns('isIdentitySessionRoute');
+  const protectedPatterns = routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES);
+  const sessionPatterns = [
+    ...routeMatcherPatterns(SESSION_AUTH_ROUTE_PREFIXES),
+    ...protectedPatterns,
+    ...inlinePatterns('isIdentitySessionRoute'),
+  ];
 
   it('finds the pages to check', () => {
     expect(routes.length).toBeGreaterThan(3);
+  });
+
+  // The patterns above are only the ones the proxy enforces while it keeps
+  // building them from the contract. If it goes back to its own list, this file
+  // would be checking a set nothing reads.
+  it('builds both matchers from the shared route contract', () => {
+    expect(proxySource).toContain(
+      'identityMiddleware.createRouteMatcher(\n  routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES),\n)',
+    );
+    expect(proxySource).toContain('...routeMatcherPatterns(SESSION_AUTH_ROUTE_PREFIXES),');
+    expect(proxySource).toContain('...routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES),');
   });
 
   for (const route of [...routes].sort()) {

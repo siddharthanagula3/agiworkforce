@@ -1150,7 +1150,7 @@ function buildPage(): void {
   const allowlistUl = el('ul', { class: 'opt-allowlist-list', id: 'opt-allowlist-list' });
   const allowlistEmpty = el(
     'p',
-    { class: 'opt-allowlist-empty', id: 'opt-allowlist-empty' },
+    { class: 'opt-allowlist-empty', id: 'opt-allowlist-empty', hidden: '' },
     'No sites allowlisted yet.',
   );
   const allowlistStatus = el('p', {

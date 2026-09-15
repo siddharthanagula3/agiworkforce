@@ -52,7 +52,7 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import { useChatStore } from '../stores/chatStore';
-import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { migratePersistedChatView, useChatViewStore } from '../stores/chat/chatViewStore';
 
 function getState() {
   return useChatStore.getState();
@@ -62,7 +62,6 @@ function resetWave2State() {
   useChatStore.setState({
     chatMode: 'chat',
     chatStyle: 'normal',
-    toolAccess: 'auto',
     features: { webSearch: true, imageGen: true, health: false },
   });
 }
@@ -119,28 +118,6 @@ describe('chatStore, Wave 2 additions', () => {
       getState().setChatStyle('detailed');
       getState().setChatStyle('normal');
       expect(getState().chatStyle).toBe('normal');
-    });
-  });
-
-  describe('toolAccess', () => {
-    it('defaults to "auto"', () => {
-      expect(getState().toolAccess).toBe('auto');
-    });
-
-    it('setToolAccess changes to "on-demand"', () => {
-      getState().setToolAccess('on-demand');
-      expect(getState().toolAccess).toBe('on-demand');
-    });
-
-    it('setToolAccess changes to "always"', () => {
-      getState().setToolAccess('always');
-      expect(getState().toolAccess).toBe('always');
-    });
-
-    it('setToolAccess back to "auto" after changing', () => {
-      getState().setToolAccess('always');
-      getState().setToolAccess('auto');
-      expect(getState().toolAccess).toBe('auto');
     });
   });
 
@@ -212,13 +189,24 @@ describe('chatStore, Wave 2 additions', () => {
         expect(getState().chatStyle).toBe(style);
       }
     });
+  });
+});
 
-    it('ToolAccess type accepts only valid values', () => {
-      const validAccess = ['auto', 'on-demand', 'always'] as const;
-      for (const access of validAccess) {
-        getState().setToolAccess(access);
-        expect(getState().toolAccess).toBe(access);
-      }
+describe('chat view persistence migration', () => {
+  it('drops a tool access value written by an older install', () => {
+    const migrated = migratePersistedChatView({ chatStyle: 'detailed', toolAccess: 'always' }, 0);
+
+    expect(migrated).not.toHaveProperty('toolAccess');
+    expect(migrated).toMatchObject({ chatStyle: 'detailed' });
+  });
+
+  it('leaves a payload with nothing to drop untouched', () => {
+    expect(migratePersistedChatView({ chatMode: 'research' }, 1)).toEqual({
+      chatMode: 'research',
     });
+  });
+
+  it('survives a missing payload', () => {
+    expect(migratePersistedChatView(undefined, 0)).toEqual({});
   });
 });

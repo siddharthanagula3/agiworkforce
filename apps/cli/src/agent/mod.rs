@@ -87,6 +87,22 @@ impl std::fmt::Debug for ToolEventSink {
     }
 }
 
+/// Where an agentic turn's continuation text goes after a tool call.
+///
+/// The first completion streams to the caller's own callback; every completion
+/// after a tool call used to fall back to `print!`, which under the full-screen
+/// TUI wrote straight past ratatui's buffer and left the model's answer on the
+/// frame's borders instead of in the transcript. A surface that owns the
+/// terminal installs this so both halves of one reply land in the same place.
+#[derive(Clone)]
+pub struct ContinuationSink(pub std::sync::Arc<dyn Fn(&str) + Send + Sync>);
+
+impl std::fmt::Debug for ContinuationSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ContinuationSink(<callback>)")
+    }
+}
+
 /// Stable identifiers shared by every SDK stream event in one CLI turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SdkStreamContext {
@@ -155,6 +171,14 @@ pub struct AgentSession {
     pub auto_approve_safe: bool,
     pub on_tool_approval: Option<ToolApprovalSink>,
     pub on_tool_event: Option<ToolEventSink>,
+    pub on_continuation_chunk: Option<ContinuationSink>,
+    /// Whether the desktop shell is running with a browser paired to it.
+    ///
+    /// `None` until the first turn resolves it. Resolved once per session
+    /// rather than per request: building the schema list happens on every
+    /// model call, and a round trip to the shell there would put a stall in
+    /// front of every turn.
+    pub(crate) browser_available: Option<bool>,
     pub quiet: bool,
     #[allow(dead_code)]
     pub fast_mode: bool,
@@ -166,8 +190,6 @@ pub struct AgentSession {
     /// Stable, filesystem-safe identifier for this process-local session run.
     /// Memory extraction uses it instead of user-controlled names or paths.
     pub(crate) runtime_session_id: String,
-    #[allow(dead_code)]
-    pub fallback_model: Option<String>,
     pub allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub privacy_mode: PrivacyMode,
@@ -479,7 +501,13 @@ impl AgentSession {
         custom_system_prompt: Option<&str>,
         provider_override: Option<&str>,
     ) -> Result<Self> {
-        let provider = models::resolve_selected_provider(model, provider_override)?;
+        let config = crate::config::CliConfig::load().unwrap_or_default();
+        let provider = models::select_turn_route(
+            &config,
+            &models::AccountRoute::load(),
+            model,
+            provider_override,
+        )?;
         Ok(Self::new_with_provider(
             model,
             sys_context,
@@ -599,13 +627,14 @@ impl AgentSession {
             auto_approve_safe: false,
             on_tool_approval: None::<ToolApprovalSink>,
             on_tool_event: None::<ToolEventSink>,
+            on_continuation_chunk: None::<ContinuationSink>,
+            browser_available: None,
             quiet: false,
             fast_mode: false,
             original_model: None,
             checkpoints: Vec::new(),
             session_name: None,
             runtime_session_id: session_id,
-            fallback_model: None,
             allowed_tools: None,
             disallowed_tools: Vec::new(),
             privacy_mode,
@@ -688,12 +717,14 @@ impl AgentSession {
             .as_ref()
             .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
         let planning_locked = self.plan_mode && !self.plan_approved;
-        let mut tool_definitions = crate::runtime::tool_catalog::effective_tool_definitions(
-            planning_locked,
-            self.team_manager.is_some(),
-            self.allowed_tools.as_deref(),
-            mcp_tool_definitions.as_deref(),
-        );
+        let mut tool_definitions =
+            crate::runtime::tool_catalog::effective_tool_definitions_with_browser(
+                planning_locked,
+                self.team_manager.is_some(),
+                self.browser_available.unwrap_or(false),
+                self.allowed_tools.as_deref(),
+                mcp_tool_definitions.as_deref(),
+            );
 
         if !self.disallowed_tools.is_empty() {
             tool_definitions.retain(|tool_definition| {
@@ -707,6 +738,19 @@ impl AgentSession {
         }
 
         tool_definitions
+    }
+
+    /// Ask the desktop shell, once per session, whether a browser is paired.
+    ///
+    /// A tool the model can call and this machine cannot honour costs a turn
+    /// and teaches the model nothing, so the family is offered only when the
+    /// answer is yes. Cheap when no shell is running: there is no file to
+    /// read, so nothing is sent.
+    pub(crate) async fn refresh_browser_availability(&mut self) {
+        if self.browser_available.is_some() {
+            return;
+        }
+        self.browser_available = Some(crate::browser_bridge::browser_state().await.is_paired());
     }
 
     /// Generate an A2A AgentCard representing this session's capabilities.
@@ -792,10 +836,10 @@ impl AgentSession {
             );
         }
         if !crate::models::gateway_models::cached_model_is_available(model) {
-            anyhow::bail!(
-                "model '{}' is not in the live managed gateway catalog; run `agi models list` and choose an available Cloud model",
-                model
-            );
+            return Err(crate::errors::CliError::ModelUnavailable {
+                model: model.to_string(),
+            }
+            .into());
         }
         self.model = model.to_string();
         self.provider = models::Provider::ManagedCloud;
@@ -1221,7 +1265,6 @@ impl AgentSession {
         self.subagent_manager = None;
         self.team_manager = None;
         self.fallback_chain = None;
-        self.fallback_model = None;
         self.fast_mode = false;
         self.original_model = None;
         self.auto_routing_tier = None;

@@ -11,8 +11,6 @@
 //! file. Add a root here only when a type family is NOT reachable from the
 //! existing envelopes.
 
-use std::path::Path;
-
 use ts_rs::TS;
 
 #[test]
@@ -55,6 +53,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session thread graph");
     agiworkforce_protocol::developer_session::LocalModelListResponse::export_all_to(dir)
         .expect("export developer-session local model graph");
+    agiworkforce_protocol::developer_session::ModelListParams::export_all_to(dir)
+        .expect("export developer-session model list params graph");
     agiworkforce_protocol::developer_session::ThreadReadResponse::export_all_to(dir)
         .expect("export developer-session thread history graph");
     agiworkforce_protocol::developer_session::ThreadIdParams::export_all_to(dir)
@@ -69,6 +69,10 @@ fn export_typescript_bindings() {
         .expect("export developer-session turn response graph");
     agiworkforce_protocol::developer_session::TurnInterruptParams::export_all_to(dir)
         .expect("export developer-session interrupt graph");
+    // `turn/completed` and `turn/failed` params, and with them the typed
+    // failure a client branches on. No envelope references them.
+    agiworkforce_protocol::developer_session::TurnEndedNotification::export_all_to(dir)
+        .expect("export developer-session turn ended graph");
     agiworkforce_protocol::developer_session::ApprovalResponseParams::export_all_to(dir)
         .expect("export developer-session approval graph");
     agiworkforce_protocol::developer_session::AcknowledgedResponse::export_all_to(dir)

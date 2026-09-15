@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { CheckCircle2, XCircle, Clock, RefreshCw, Loader } from 'lucide-react-native';
+import { runStatusLabel } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { useScheduleStore, type ScheduleRun } from '../store';
@@ -41,6 +42,8 @@ function formatDuration(start: string, end: string | null): string {
   }
 }
 
+const TIMED_OUT_STATUS_LABEL = 'Timed out';
+
 interface RunRowProps {
   run: ScheduleRun;
 }
@@ -71,14 +74,14 @@ function RunRow({ run }: RunRowProps) {
         : colors.textMuted;
 
   const statusLabel = isSuccess
-    ? 'Success'
+    ? runStatusLabel('completed')
     : isFailed
-      ? 'Failed'
+      ? runStatusLabel('failed')
       : isTimeout
-        ? 'Timed out'
+        ? TIMED_OUT_STATUS_LABEL
         : isCancelled
-          ? 'Cancelled'
-          : 'Running';
+          ? runStatusLabel('cancelled')
+          : runStatusLabel('running');
 
   const duration = formatDuration(run.startedAt, run.completedAt);
   const timeLabel = formatRunTime(run.startedAt);

@@ -8,6 +8,8 @@ import {
   BROWSER_BRIDGE_DEFAULT_PORT,
   BROWSER_BRIDGE_LOOPBACK_ADDRESS,
   BROWSER_BRIDGE_ROUTES,
+  LOCAL_CLIENT_PROTOCOL_VERSION,
+  type LocalClientFailureCode,
   BROWSER_COMMAND_POLL_WINDOW_MS,
   BROWSER_COMMAND_PROTOCOL_VERSION,
   BROWSER_COMMAND_TIMEOUT_MS,
@@ -16,17 +18,26 @@ import {
   MAX_PENDING_PAIR_REQUESTS,
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
+  NATIVE_BROWSER_UNPAIR_MESSAGE,
   NATIVE_HOST_TOKEN_HEADER,
   PAIR_CODE_ALPHABET,
   PAIR_CODE_LENGTH,
   PAIR_REQUEST_TTL_MS,
   isBrowserCommandResult,
+  isLocalClientFailureCode,
   isValidExtensionId,
   isValidPairCode,
   normalizePairCode,
   type BrowserCommand,
   type BrowserCommandRequest,
 } from '@agiworkforce/types';
+import {
+  describeLocalClient,
+  isAuthorizedLocalClient,
+  parseLocalClientCommand,
+  publishLocalClientBridge,
+  withdrawLocalClientBridge,
+} from './localClient';
 import { installNativeHost, installedManifestPaths, uninstallNativeHost } from './hostInstaller';
 import { bridgeToken, clearPairing, hostToken, readPairing, savePairing } from './pairingStore';
 
@@ -55,6 +66,16 @@ export interface BridgeDependencies {
   extraManifestDirectories?: readonly string[];
   port?: number;
   home?: string;
+  appVersion?: string;
+  /**
+   * Injected rather than imported, so this module keeps no dependency on the
+   * runtime dispatcher, which imports it.
+   */
+  runBrowserCommand?: (
+    command: string,
+    args: Record<string, unknown>,
+    caller: { name: string; subject: string; folder: string | null; path: string | null },
+  ) => Promise<{ ok: boolean; value?: unknown; error?: string; code?: string }>;
 }
 
 let server: Server | null = null;
@@ -67,7 +88,19 @@ const queuedCommands: BrowserCommandRequest[] = [];
 const pollWaiters: PollWaiter[] = [];
 const pendingResults = new Map<string, PendingResult>();
 
-export class BrowserBridgeError extends Error {}
+/**
+ * A bridge failure carrying why, not only what. A refusal and a browser that
+ * never answered need different things from the user, so they cannot share a
+ * code.
+ */
+export class BrowserBridgeError extends Error {
+  constructor(
+    message: string,
+    readonly code: LocalClientFailureCode = 'timeout',
+  ) {
+    super(message);
+  }
+}
 
 function extraDirectories(): readonly string[] {
   return deps?.extraManifestDirectories ?? [];
@@ -251,8 +284,6 @@ function handlePairRequestRoute(response: ServerResponse, body: Record<string, u
     expiresInMs: PAIR_REQUEST_TTL_MS,
     codeLength: PAIR_CODE_LENGTH,
   });
-  // After the answer, never before: showing the code is the shell's business
-  // and a modal there must not hold the browser's request open.
   setImmediate(() => {
     deps?.onPairRequest(prompt);
     publishState();
@@ -343,7 +374,12 @@ function handleCommandResult(body: Record<string, unknown>): void {
   if (result.ok) {
     pending.resolve(result.value);
   } else {
-    pending.reject(new BrowserBridgeError(result.error ?? 'The browser refused that action.'));
+    pending.reject(
+      new BrowserBridgeError(
+        result.error ?? 'The browser refused that action.',
+        'permission-denied',
+      ),
+    );
   }
 }
 
@@ -384,6 +420,12 @@ function handleNativeMessageRoute(
   if (!wasConnected) publishState();
 
   const type = (message as Record<string, unknown>)['type'];
+  if (type === NATIVE_BROWSER_UNPAIR_MESSAGE) {
+    // Keeping the record would leave clients offering tools that never answer.
+    removeHostAndPairing();
+    sendJson(response, 200, { success: true });
+    return;
+  }
   if (type === NATIVE_BROWSER_POLL_MESSAGE) {
     handlePoll(response);
     return;
@@ -394,6 +436,72 @@ function handleNativeMessageRoute(
     return;
   }
   sendJson(response, 200, { success: true });
+}
+
+/**
+ * One page command from another program on this machine. The shell decides:
+ * the renderer's own gate runs here, scoped to the client's name.
+ */
+async function handleLocalClientCommandRoute(
+  response: ServerResponse,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const parsed = parseLocalClientCommand(body);
+  if (!parsed) {
+    sendJson(response, 400, {
+      version: LOCAL_CLIENT_PROTOCOL_VERSION,
+      ok: false,
+      error: 'Malformed browser command.',
+      code: 'not-paired',
+    });
+    return;
+  }
+  if (!pairingState().paired) {
+    sendJson(response, 200, {
+      version: LOCAL_CLIENT_PROTOCOL_VERSION,
+      ok: false,
+      error: 'No browser is paired with this desktop app.',
+      code: 'not-paired',
+    });
+    return;
+  }
+
+  const run = deps?.runBrowserCommand;
+  if (!run) {
+    sendJson(response, 200, {
+      version: LOCAL_CLIENT_PROTOCOL_VERSION,
+      ok: false,
+      error: 'This desktop app cannot run browser commands.',
+      code: 'not-paired',
+    });
+    return;
+  }
+
+  const described = describeLocalClient(parsed.client);
+  recordLocalClientActivity(described.label, parsed.command);
+  // An uncaught throw becomes a plain-text 500, which a client parsing JSON
+  // reads as a broken connection rather than the refusal it was.
+  let outcome: { ok: boolean; value?: unknown; error?: string; code?: string };
+  try {
+    outcome = await run(parsed.command, parsed.args, {
+      name: parsed.client.name.trim().slice(0, 60),
+      ...described,
+    });
+  } catch (error) {
+    // Read the code off the error rather than testing its class: `instanceof`
+    // is per module instance, so an error thrown by another copy of this
+    // module would silently lose its code and read as a timeout.
+    const code = (error as { code?: unknown } | null)?.code;
+    outcome = {
+      ok: false,
+      error: error instanceof Error ? error.message : 'The browser did not answer.',
+      code: isLocalClientFailureCode(code) ? code : 'timeout',
+    };
+  }
+  sendJson(response, 200, {
+    version: LOCAL_CLIENT_PROTOCOL_VERSION,
+    ...outcome,
+  });
 }
 
 async function route(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -409,8 +517,11 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   const path = (request.url ?? '').split('?')[0] ?? '';
   const isNative = path === BROWSER_BRIDGE_ROUTES.nativeMessage;
+  const isLocalClient =
+    path === BROWSER_BRIDGE_ROUTES.clientState || path === BROWSER_BRIDGE_ROUTES.clientCommand;
   const known =
     isNative ||
+    isLocalClient ||
     path === BROWSER_BRIDGE_ROUTES.pair ||
     path === BROWSER_BRIDGE_ROUTES.pairRequest ||
     path === BROWSER_BRIDGE_ROUTES.pairConfirm;
@@ -427,6 +538,33 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     );
   } catch (error) {
     sendText(response, 400, error instanceof Error ? error.message : 'Bad Request');
+    return;
+  }
+
+  if (isLocalClient) {
+    // The local-client token is a separate grant from the extension's: an
+    // extension that somehow reached these routes still has to present it.
+    if (!isAuthorizedLocalClient(request.headers as Record<string, unknown>)) {
+      sendJson(response, 401, {
+        version: LOCAL_CLIENT_PROTOCOL_VERSION,
+        ok: false,
+        error: 'This client is not authorized to use the browser bridge.',
+        code: 'unauthorized',
+      });
+      return;
+    }
+    if (path === BROWSER_BRIDGE_ROUTES.clientState) {
+      const state = pairingState();
+      sendJson(response, 200, {
+        version: LOCAL_CLIENT_PROTOCOL_VERSION,
+        paired: state.paired,
+        answering: state.connected,
+        ...(state.extensionId ? { extensionId: state.extensionId } : {}),
+        ...(deps?.appVersion ? { appVersion: deps.appVersion } : {}),
+      });
+      return;
+    }
+    await handleLocalClientCommandRoute(response, body);
     return;
   }
 
@@ -473,15 +611,17 @@ export async function startBrowserBridge(dependencies: BridgeDependencies): Prom
   server = instance;
   const address = instance.address();
   listeningPort = typeof address === 'object' && address ? address.port : port;
+  publishLocalClientBridge(listeningPort, deps.home ? { home: deps.home } : {});
   publishState();
   return listeningPort;
 }
 
 export async function stopBrowserBridge(): Promise<void> {
+  withdrawLocalClientBridge();
   for (const waiter of pollWaiters.splice(0)) waiter(null);
   for (const [, pending] of pendingResults) {
     clearTimeout(pending.timer);
-    pending.reject(new BrowserBridgeError('AGI Cloud closed the browser bridge.'));
+    pending.reject(new BrowserBridgeError('AGI Cloud closed the browser bridge.', 'cancelled'));
   }
   pendingResults.clear();
   queuedCommands.length = 0;
@@ -492,11 +632,8 @@ export async function stopBrowserBridge(): Promise<void> {
 }
 
 /**
- * Hands one command to the paired browser and waits for its answer.
- *
- * The extension is the only side that can act, so a desktop command is parked
- * until the extension's next poll; if nothing is polling, the command times out
- * rather than sitting in the queue forever.
+ * The extension is the only side that can act, so a command is parked until
+ * its next poll and times out rather than sitting in the queue forever.
  */
 export function sendBrowserCommand(
   command: BrowserCommand,
@@ -505,7 +642,10 @@ export function sendBrowserCommand(
   const pairing = readPairing();
   if (!pairing) {
     return Promise.reject(
-      new BrowserBridgeError('No browser is paired with AGI Cloud yet. Pair one in Settings.'),
+      new BrowserBridgeError(
+        'No browser is paired with AGI Cloud yet. Pair one in Settings.',
+        'not-paired',
+      ),
     );
   }
 
@@ -547,11 +687,42 @@ export function installHostForPairedExtension(): string[] {
   return manifestPaths;
 }
 
+/**
+ * The one owner: the shell's Unpair control and the browser's own unpair both
+ * land here, so the two cannot leave different state behind.
+ */
 export function removeHostAndPairing(): void {
+  for (const waiter of pollWaiters.splice(0)) waiter(null);
+  for (const [, pending] of pendingResults) {
+    clearTimeout(pending.timer);
+    pending.reject(
+      new BrowserBridgeError('The browser is no longer paired with this Mac.', 'not-paired'),
+    );
+  }
+  pendingResults.clear();
+  queuedCommands.length = 0;
   uninstallNativeHost(extraDirectories(), deps?.home);
   clearPairing();
   lastSeenMs = 0;
   publishState();
+}
+
+/** Bounded, so a runaway client cannot grow it without limit. */
+const localClientActivity: { atMs: number; client: string; command: string }[] = [];
+const MAX_LOCAL_CLIENT_ACTIVITY = 200;
+
+function recordLocalClientActivity(client: string, command: string): void {
+  localClientActivity.push({ atMs: Date.now(), client, command });
+  if (localClientActivity.length > MAX_LOCAL_CLIENT_ACTIVITY) localClientActivity.shift();
+  console.debug(`[browser-bridge] ${client} ran ${command} in the paired browser`);
+}
+
+export function listLocalClientActivity(): readonly {
+  atMs: number;
+  client: string;
+  command: string;
+}[] {
+  return localClientActivity;
 }
 
 export function resetBridgeForTests(): void {

@@ -22,6 +22,14 @@ pub enum LlmError {
     /// Authentication failures (missing key, expired token, revoked).
     #[error("[{provider}] Authentication failed: {message}")]
     Auth { provider: String, message: String },
+    /// The provider reported a failure inside an open stream, after the HTTP
+    /// status was already sent; `retryable` is the provider's own verdict.
+    #[error("[{provider}] Stream error: {message}")]
+    StreamError {
+        provider: String,
+        message: String,
+        retryable: bool,
+    },
     /// Rate limiting from the provider (`Retry-After` seconds when sent).
     #[error("[{provider}] Rate limited{}", retry_after.map(|s| format!(", retry after {s}s")).unwrap_or_default())]
     RateLimited {
@@ -67,6 +75,7 @@ impl LlmError {
             LlmError::Paywall { .. } => "paywall",
             LlmError::IdleTimeout { .. } => "idle_timeout",
             LlmError::Read { .. } => "read",
+            LlmError::StreamError { .. } => "stream_error",
         }
     }
 
@@ -78,6 +87,7 @@ impl LlmError {
         match self {
             LlmError::RateLimited { .. } | LlmError::Network { .. } => true,
             LlmError::Api { status, .. } => RETRYABLE_API_STATUSES.contains(status),
+            LlmError::StreamError { retryable, .. } => *retryable,
             _ => false,
         }
     }

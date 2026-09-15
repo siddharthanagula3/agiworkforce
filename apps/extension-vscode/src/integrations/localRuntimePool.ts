@@ -29,7 +29,7 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
       throw new Error('AGI local runtime pool is shutting down');
     }
     const resolved = path.resolve(cwd);
-    const key = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+    const key = this.keyFor(resolved);
     const existing = this.clients.get(key);
     if (existing !== undefined) return existing.client;
     const client = this.factory(resolved);
@@ -57,6 +57,17 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
     return restart;
   }
 
+  /**
+   * A workspace folder that is gone has no window left to own its server, so
+   * its client is disposed rather than left holding a detached child process.
+   */
+  async retainWorkspaces(cwds: readonly string[]): Promise<void> {
+    const retained = new Set(cwds.map((cwd) => this.keyFor(cwd)));
+    const dropped = [...this.clients.entries()].filter(([key]) => !retained.has(key));
+    for (const [key] of dropped) this.clients.delete(key);
+    await Promise.all(dropped.map(([, target]) => target.client.dispose().catch(() => undefined)));
+  }
+
   dispose(): void {
     void this.shutdownAll();
   }
@@ -75,6 +86,11 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
     })();
     this.shutdownPromise = shutdown;
     return shutdown;
+  }
+
+  private keyFor(cwd: string): string {
+    const resolved = path.resolve(cwd);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
   }
 
   private async restartTargets(

@@ -297,8 +297,28 @@ export interface CodeTranscriptProps {
   onRetryTask: (goal: string) => void;
 }
 
-export function CodeTranscript({
-  session,
+export function CodeTranscript({ session, ...rest }: CodeTranscriptProps) {
+  const cloning = session.state === 'provisioning' && Boolean(session.repositoryUrl);
+  return (
+    <CodeTranscriptBody
+      {...rest}
+      header={<InitializedSession session={session} />}
+      pending={cloning ? CODE_COPY.cloningRepository : null}
+    />
+  );
+}
+
+export interface CodeTranscriptBodyProps extends Omit<
+  CodeTranscriptProps,
+  'session' | 'busySince'
+> {
+  busySince: string | null;
+  header?: React.ReactNode;
+  /** A one-line status between the transcript and the working row. */
+  pending?: string | null;
+}
+
+export function CodeTranscriptBody({
   items,
   approvals,
   busy,
@@ -306,13 +326,14 @@ export function CodeTranscript({
   verbose,
   onDecideApproval,
   onRetryTask,
-}: CodeTranscriptProps) {
+  header,
+  pending,
+}: CodeTranscriptBodyProps) {
   const lastReplyId = [...items].reverse().find((item) => item.kind === 'reply')?.id ?? null;
-  const cloning = session.state === 'provisioning' && Boolean(session.repositoryUrl);
 
   return (
     <div className={styles['transcript']} data-testid="code-transcript">
-      <InitializedSession session={session} />
+      {header}
 
       {items.map((item) => {
         if (item.kind === 'commands') {
@@ -335,15 +356,17 @@ export function CodeTranscript({
                 <MarkdownContent content={item.text} />
               </div>
             )}
-            <p
-              className={
-                stopReasonIsFailure(item.stopReason)
-                  ? styles['activityFailure']
-                  : styles['statusLine']
-              }
-            >
-              {stopReasonLabel(item.stopReason)}
-            </p>
+            {item.stopReason && (
+              <p
+                className={
+                  stopReasonIsFailure(item.stopReason)
+                    ? styles['activityFailure']
+                    : styles['statusLine']
+                }
+              >
+                {stopReasonLabel(item.stopReason)}
+              </p>
+            )}
             {item.retryGoal && (
               <button
                 type="button"
@@ -390,10 +413,10 @@ export function CodeTranscript({
         </div>
       ))}
 
-      {cloning && (
+      {pending && (
         <div className={styles['activityRow']} role="status">
           <Spinner size="sm" aria-hidden="true" />
-          <span>{CODE_COPY.cloningRepository}</span>
+          <span>{pending}</span>
         </div>
       )}
 

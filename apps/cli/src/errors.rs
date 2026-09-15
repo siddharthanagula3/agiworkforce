@@ -1,3 +1,4 @@
+use agiworkforce_protocol::developer_session::{TurnFailure, TurnFailureCode};
 use regex::Regex;
 use std::fmt;
 use std::sync::LazyLock;
@@ -77,8 +78,15 @@ pub enum CliError {
         status: u16,
         message: String,
     },
-    /// Authentication failures (missing key, expired token, revoked).
+    /// Authentication failures where a credential exists and was rejected:
+    /// expired, revoked, wrong key.
     Auth { provider: String, message: String },
+    /// No credential exists for the route at all.
+    ///
+    /// Separate from [`CliError::Auth`] because the remedy is different and a
+    /// client has to be able to tell them apart: nothing can be refreshed, the
+    /// user has to sign in or set a key for the first time.
+    AuthMissing { provider: String, message: String },
     /// Configuration errors (missing config, parse failure).
     Config { message: String },
     /// Tool execution errors (tool not found, execution failed).
@@ -102,6 +110,12 @@ pub enum CliError {
         message: String,
         is_retryable: bool,
     },
+    /// No AGI Workforce session, and no other route can run the model.
+    AccountSignedOut { model: String },
+    /// Signed in, but the account's plan does not include the model.
+    PlanExcludesModel { model: String, tier: String },
+    /// On the plan, but the hosted list withholds the model right now.
+    ModelUnavailable { model: String },
     /// AGI Workforce managed-cloud paywall, user's tier cap reached.
     ///
     /// HTTP 429 + `{"kind":"paywall", "feature":..., "requiredTier":..., "reason":...}`
@@ -130,6 +144,9 @@ impl fmt::Display for CliError {
             CliError::Auth { provider, message } => {
                 write!(f, "[{}] Authentication failed: {}", provider, message)
             }
+            CliError::AuthMissing { provider, message } => {
+                write!(f, "[{}] Authentication failed: {}", provider, message)
+            }
             CliError::Config { message } => write!(f, "Configuration error: {}", message),
             CliError::Tool { tool_name, message } => {
                 write!(f, "Tool '{}' failed: {}", tool_name, message)
@@ -146,21 +163,30 @@ impl fmt::Display for CliError {
                 "Context overflow for model '{}': {} tokens exceeds limit of {}",
                 model, token_count, limit
             ),
-            CliError::RateLimited {
-                provider,
-                retry_after,
-            } => match retry_after {
-                Some(secs) => write!(f, "[{}] Rate limited, retry after {}s", provider, secs),
-                None => write!(
-                    f,
-                    "[{}] Rate limited, please wait before retrying",
-                    provider
-                ),
-            },
+            CliError::RateLimited { provider, .. } => {
+                write!(f, "[{}] {}", provider, self.detail())
+            }
             CliError::StreamError {
                 provider, message, ..
             } => {
                 write!(f, "[{}] Stream error: {}", provider, message)
+            }
+            CliError::AccountSignedOut { model } => {
+                write!(
+                    f,
+                    "No AGI Workforce session, and no provider key for '{}'.",
+                    model
+                )
+            }
+            CliError::PlanExcludesModel { model, tier } => {
+                write!(
+                    f,
+                    "Your {} plan does not include '{}', and no provider key for it is set.",
+                    tier, model
+                )
+            }
+            CliError::ModelUnavailable { model } => {
+                write!(f, "'{}' is unavailable on your plan right now.", model)
             }
             CliError::Paywall {
                 feature,
@@ -180,11 +206,65 @@ impl fmt::Display for CliError {
     }
 }
 
+impl CliError {
+    /// The failure as one sentence without the terminal's provider prefix; a
+    /// client shows it beside the provider the failure names.
+    pub fn detail(&self) -> String {
+        match self {
+            CliError::Api { message, .. }
+            | CliError::Auth { message, .. }
+            | CliError::AuthMissing { message, .. }
+            | CliError::StreamError { message, .. } => message.clone(),
+            CliError::RateLimited { retry_after, .. } => match retry_after {
+                Some(secs) => format!("Rate limited, retry after {secs}s"),
+                None => "Rate limited, please wait before retrying".to_string(),
+            },
+            other => other.to_string(),
+        }
+    }
+}
+
 impl std::error::Error for CliError {}
+
+/// The error and its remedy for a terminal; other surfaces take the remedy
+/// from the failure's action instead.
+pub fn terminal_text(error: &anyhow::Error) -> String {
+    let text = format!("{error:#}");
+    match cli_cause(error) {
+        Some(cli) => format!("{text}\n{}", cli.hint()),
+        None => text,
+    }
+}
+
+/// The `--json` result for a failed turn, with the typed kind and the remedy
+/// beside the text so a script reads them without parsing prose.
+pub fn result_error_json(error: &anyhow::Error) -> serde_json::Value {
+    let cli = cli_cause(error);
+    serde_json::json!({
+        "type": "result",
+        "is_error": true,
+        "error": format!("{error:#}"),
+        "kind": cli.map(CliError::kind),
+        "hint": cli.map(CliError::hint),
+    })
+}
+
+fn cli_cause(error: &anyhow::Error) -> Option<&CliError> {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<CliError>())
+}
 
 // ---------------------------------------------------------------------------
 // Deterministic error classification, for `--json-events` and CI
 // ---------------------------------------------------------------------------
+
+/// `agi login <provider>` for these opens a vendor subscription sign-in rather
+/// than an API-key prompt, which is a founder decision still open, so no copy
+/// may send a user there.
+pub fn login_opens_vendor_subscription(provider: &str) -> bool {
+    matches!(provider, "openai" | "anthropic")
+}
 
 impl CliError {
     /// Stable, machine-readable kind. Never localized, never reformatted; safe
@@ -194,12 +274,16 @@ impl CliError {
             CliError::Api { status, .. } if (500..600).contains(status) => "api_server_error",
             CliError::Api { .. } => "api_http_error",
             CliError::Auth { .. } => "auth_expired",
+            CliError::AuthMissing { .. } => "auth_missing",
             CliError::Config { .. } => "config_invalid",
             CliError::Tool { .. } => "tool_failed",
             CliError::Network { .. } => "network",
             CliError::ContextOverflow { .. } => "context_overflow",
             CliError::RateLimited { .. } => "api_rate_limit",
             CliError::StreamError { .. } => "stream_disconnect",
+            CliError::AccountSignedOut { .. } => "account_signed_out",
+            CliError::PlanExcludesModel { .. } => "plan_excludes_model",
+            CliError::ModelUnavailable { .. } => "model_unavailable",
             CliError::Paywall { .. } => "paywall",
         }
     }
@@ -211,9 +295,17 @@ impl CliError {
         match self {
             CliError::Api {
                 provider, status, ..
+            } if (500..600).contains(status)
+                && provider
+                    == crate::models::provider_name(&crate::models::Provider::ManagedCloud) =>
+            {
+                "Pick another model with `agi models list`, or try again later.".to_string()
+            }
+            CliError::Api {
+                provider, status, ..
             } if (500..600).contains(status) => format!(
-                "{provider} returned HTTP {status}. Retry the request, or run `agi \
-                 features` to fall back to a different provider."
+                "{provider} returned HTTP {status}. Retry the request, or run again with \
+                 `--fallback-model <model>`."
             ),
             CliError::Api {
                 provider, status, ..
@@ -225,6 +317,22 @@ impl CliError {
                 "Run `agi login {provider}` to refresh credentials, or set the \
                  corresponding API key environment variable."
             ),
+            CliError::AuthMissing { provider, .. } => {
+                if provider == crate::models::provider_name(&crate::models::Provider::ManagedCloud)
+                {
+                    "Run `agi login` to use your AGI Workforce plan.".to_string()
+                } else if login_opens_vendor_subscription(provider) {
+                    format!(
+                        "Run `agi login` to use your AGI Workforce plan, or set the \
+                         {provider} API key environment variable to use your own key."
+                    )
+                } else {
+                    format!(
+                        "Run `agi login` to use your AGI Workforce plan, or run \
+                         `agi login {provider}` to use your own key."
+                    )
+                }
+            }
             CliError::Config { .. } => {
                 "Run `agi init` to regenerate the default config, or fix the indicated \
                  file path manually."
@@ -246,21 +354,35 @@ impl CliError {
                 retry_after,
             } => match retry_after {
                 Some(secs) => format!(
-                    "{provider} is rate-limiting. Wait {secs}s, or use a fallback model: \
-                     `--model <primary>,<fallback>`."
+                    "{provider} is rate-limiting. Wait {secs}s, or run again with \
+                     `--fallback-model <model>`."
                 ),
                 None => format!(
-                    "{provider} is rate-limiting. Switch to a fallback model with \
-                     `--model <primary>,<fallback>`."
+                    "{provider} is rate-limiting. Run again with `--fallback-model <model>`, \
+                     or wait and retry."
                 ),
             },
             CliError::StreamError { is_retryable, .. } => if *is_retryable {
                 "Stream disconnected. Retrying automatically; if it persists, check provider \
                  status."
             } else {
-                "Stream disconnected with a non-retryable signal. Re-run the command."
+                "Pick another model with `agi models list`, or try again later."
             }
             .to_string(),
+            CliError::AccountSignedOut { .. } => {
+                "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
+                    .to_string()
+            }
+            CliError::PlanExcludesModel { .. } => {
+                "Upgrade at https://agiworkforce.com/pricing, choose a model your plan includes, \
+                 or set that provider's own key."
+                    .to_string()
+            }
+            CliError::ModelUnavailable { .. } => {
+                "Choose another model, or try again shortly; `agi models list` shows what is \
+                 available now."
+                    .to_string()
+            }
             CliError::Paywall { required_tier, .. } => format!(
                 "Visit https://agiworkforce.com/pricing to upgrade to {required_tier}, \
                  or switch to a BYOK provider with `--provider anthropic`."
@@ -294,9 +416,17 @@ impl CliError {
         }
     }
 
-    /// Create an authentication error.
+    /// Create an authentication error for a credential that was rejected.
     pub fn auth(provider: impl Into<String>, message: impl Into<String>) -> Self {
         CliError::Auth {
+            provider: provider.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Create an authentication error for a route with no credential at all.
+    pub fn auth_missing(provider: impl Into<String>, message: impl Into<String>) -> Self {
+        CliError::AuthMissing {
             provider: provider.into(),
             message: message.into(),
         }
@@ -382,6 +512,60 @@ impl CliError {
             _ => 1,
         }
     }
+
+    /// Project this error onto the protocol's closed turn-failure set.
+    ///
+    /// The `error` string a client receives today is prose: it names a
+    /// provider, a status code and a remedy in one sentence that changes with
+    /// every provider. A client cannot branch on it. This is the same
+    /// information as a code the client can act on.
+    pub fn turn_failure(&self) -> TurnFailure {
+        let (code, provider) = match self {
+            CliError::AuthMissing { provider, .. } => {
+                (TurnFailureCode::ProviderAuthMissing, Some(provider))
+            }
+            CliError::Auth { provider, .. } => {
+                (TurnFailureCode::ProviderAuthInvalid, Some(provider))
+            }
+            CliError::RateLimited { provider, .. } => {
+                (TurnFailureCode::ProviderRateLimited, Some(provider))
+            }
+            // A paywall is a quota the account has spent, not a broken
+            // credential: the same shape as a rate limit, and the remedy is
+            // the plan rather than a sign-in.
+            CliError::AccountSignedOut { .. } => (TurnFailureCode::AccountSignedOut, None),
+            CliError::PlanExcludesModel { .. } => (TurnFailureCode::PlanExcludesModel, None),
+            CliError::ModelUnavailable { .. } => (TurnFailureCode::ProviderUnavailable, None),
+            CliError::Paywall { .. } => (TurnFailureCode::ProviderRateLimited, None),
+            CliError::Api {
+                provider, status, ..
+            } => (
+                match status {
+                    401 | 403 => TurnFailureCode::ProviderAuthInvalid,
+                    429 => TurnFailureCode::ProviderRateLimited,
+                    408 | 504 => TurnFailureCode::Timeout,
+                    500..=599 => TurnFailureCode::ProviderUnavailable,
+                    _ => TurnFailureCode::InvalidRequest,
+                },
+                Some(provider),
+            ),
+            CliError::StreamError { provider, .. } => {
+                (TurnFailureCode::ProviderUnavailable, Some(provider))
+            }
+            CliError::Network { .. } => (TurnFailureCode::Network, None),
+            CliError::ContextOverflow { .. } => (TurnFailureCode::ContextWindowExceeded, None),
+            CliError::Tool { .. } => (TurnFailureCode::ToolDenied, None),
+            CliError::Config { .. } => (TurnFailureCode::InvalidRequest, None),
+        };
+        let failure = TurnFailure::new(code, self.detail());
+        match (provider, self) {
+            (Some(provider), _) => failure.with_provider(provider.clone()),
+            (None, CliError::ModelUnavailable { .. }) => failure.with_provider(
+                crate::models::provider_name(&crate::models::Provider::ManagedCloud),
+            ),
+            (None, _) => failure,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -411,7 +595,9 @@ impl CliError {
     /// - `StreamError` when `is_retryable` is set
     pub fn is_retryable(&self) -> bool {
         match self {
-            CliError::RateLimited { .. } | CliError::Network { .. } => true,
+            CliError::RateLimited { .. }
+            | CliError::Network { .. }
+            | CliError::ModelUnavailable { .. } => true,
             CliError::Api { status, .. } => RETRYABLE_API_STATUSES.contains(status),
             CliError::StreamError { is_retryable, .. } => *is_retryable,
             _ => false,
@@ -539,6 +725,126 @@ mod tests {
             err.to_string(),
             "[google] Rate limited, please wait before retrying"
         );
+    }
+
+    #[test]
+    fn display_account_signed_out_states_the_fact_without_a_terminal_remedy() {
+        let err = CliError::AccountSignedOut {
+            model: "fixture-model".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "No AGI Workforce session, and no provider key for 'fixture-model'."
+        );
+        assert!(!err.turn_failure().message.contains("agi login"));
+    }
+
+    #[test]
+    fn a_withheld_plan_model_fails_as_a_route_outage_without_a_terminal_hint() {
+        let err = CliError::ModelUnavailable {
+            model: "fixture-model".to_string(),
+        };
+        let failure = err.turn_failure();
+        assert_eq!(failure.code, TurnFailureCode::ProviderUnavailable);
+        assert_eq!(failure.provider.as_deref(), Some("managed_cloud"));
+        assert!(failure.retryable);
+        assert_eq!(
+            failure.message,
+            "'fixture-model' is unavailable on your plan right now."
+        );
+        assert!(err.hint().contains("agi models list"));
+    }
+
+    #[test]
+    fn the_protocol_message_drops_the_terminal_prefix() {
+        let sentence = "The model failed to produce a response.";
+        let stream = CliError::stream_error("managed_cloud", sentence, false);
+        assert_eq!(stream.turn_failure().message, sentence);
+        assert_eq!(
+            stream.to_string(),
+            format!("[managed_cloud] Stream error: {sentence}")
+        );
+        let api = CliError::api("openai", 400, "messages.0.content: Invalid input");
+        assert_eq!(
+            api.turn_failure().message,
+            "messages.0.content: Invalid input"
+        );
+        assert_eq!(
+            CliError::rate_limited("anthropic", Some(30))
+                .turn_failure()
+                .message,
+            "Rate limited, retry after 30s"
+        );
+    }
+
+    #[test]
+    fn terminal_text_adds_the_remedy_under_the_error() {
+        let error = anyhow::Error::new(CliError::AccountSignedOut {
+            model: "fixture-model".to_string(),
+        })
+        .context("while running the turn");
+        let text = terminal_text(&error);
+        assert!(text.starts_with("while running the turn: No AGI Workforce session"));
+        assert!(text.ends_with(
+            "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
+        ));
+        assert_eq!(terminal_text(&anyhow::anyhow!("plain")), "plain");
+    }
+
+    #[test]
+    fn the_json_result_carries_the_kind_and_the_remedy_beside_the_text() {
+        let error = anyhow::Error::new(CliError::AccountSignedOut {
+            model: "fixture-model".to_string(),
+        });
+        let json = result_error_json(&error);
+        assert_eq!(json["is_error"], true);
+        assert_eq!(json["kind"], "account_signed_out");
+        assert!(json["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("No AGI Workforce session"));
+        assert!(json["hint"].as_str().unwrap().contains("agi login"));
+        let plain = result_error_json(&anyhow::anyhow!("plain"));
+        assert!(plain["kind"].is_null() && plain["hint"].is_null());
+    }
+
+    #[test]
+    fn a_missing_managed_session_hint_names_only_the_plan_sign_in() {
+        let err = CliError::auth_missing("managed_cloud", "No AGI Workforce session found.");
+        assert_eq!(
+            err.hint(),
+            "Run `agi login` to use your AGI Workforce plan."
+        );
+    }
+
+    #[test]
+    fn a_managed_refusal_hint_points_at_the_model_list() {
+        let refused = CliError::api(
+            "managed_cloud",
+            503,
+            "This model is unavailable right now because of a problem on our side.",
+        );
+        assert_eq!(
+            refused.hint(),
+            "Pick another model with `agi models list`, or try again later."
+        );
+        let vendor = CliError::api("openai", 503, "upstream failed");
+        assert!(vendor.hint().contains("Retry the request"));
+    }
+
+    #[test]
+    fn fallback_hints_name_the_real_flag() {
+        let limited = CliError::RateLimited {
+            provider: "openai".to_string(),
+            retry_after: Some(12),
+        };
+        assert_eq!(
+            limited.hint(),
+            "openai is rate-limiting. Wait 12s, or run again with `--fallback-model <model>`."
+        );
+        let vendor = CliError::api("openai", 503, "upstream failed");
+        assert!(vendor.hint().contains("`--fallback-model <model>`"));
+        assert!(!vendor.hint().contains("agi features"));
     }
 
     #[test]

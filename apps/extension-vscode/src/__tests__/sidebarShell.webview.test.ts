@@ -103,16 +103,17 @@ describe('the sidebar overflow menu', () => {
     expect(document.getElementById('menuAccountName')?.textContent).toBe('dev@example.com');
     expect(document.getElementById('menuAccountPlan')?.textContent).toBe('Max plan');
     expect(document.getElementById('menuAccountActionLabel')?.textContent).toBe('Sign out');
-    expect((document.getElementById('emptyStateSignIn') as HTMLElement).hidden).toBe(true);
+    expect((document.getElementById('composerStatusSignIn') as HTMLElement).hidden).toBe(true);
   });
 
-  it('offers a single sign-in button in the empty state while signed out', () => {
+  it('keeps sign-in a quiet link in the status line, never a primary empty-state button', () => {
     const postMessage = boot();
 
     deliver({ type: 'accountStatus', payload: { status: 'signed-out' } });
-    expect((document.getElementById('emptyStateSignIn') as HTMLElement).hidden).toBe(false);
+    expect(document.querySelector('.empty-state-signin')).toBeNull();
+    expect((document.getElementById('composerStatusSignIn') as HTMLElement).hidden).toBe(false);
 
-    click('#emptyStateSignIn');
+    click('#composerStatusSignIn');
 
     expect(postMessage).toHaveBeenCalledWith({
       type: 'openSurface',
@@ -304,6 +305,146 @@ describe('the composer command list', () => {
       payload: { name: '/clear' },
     });
     expect(input.value).toBe('');
+  });
+
+  it('runs the highlighted command on Enter instead of sending "/model" as a message', () => {
+    const postMessage = boot();
+    deliver({
+      type: 'slashCommands',
+      payload: {
+        items: [
+          { name: '/model', description: 'Choose the model' },
+          { name: '/models', description: 'List every model' },
+        ],
+      },
+    });
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    input.value = '/model';
+    input.dispatchEvent(new Event('input'));
+
+    expect(
+      document.querySelector('.slash-menu-item.highlighted .slash-menu-item-name')?.textContent,
+    ).toBe('/model');
+
+    postMessage.mockClear();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'runSlashCommand',
+      payload: { name: '/model' },
+    });
+    expect(postMessage.mock.calls.some((call) => call[0]?.type === 'sendMessage')).toBe(false);
+    expect(input.value).toBe('');
+    expect(document.getElementById('slashMenu')?.classList.contains('open')).toBe(false);
+  });
+
+  it('moves the highlight with the arrow keys and runs whichever row is lit', () => {
+    const postMessage = boot();
+    deliver({
+      type: 'slashCommands',
+      payload: {
+        items: [
+          { name: '/model', description: 'Choose the model' },
+          { name: '/models', description: 'List every model' },
+        ],
+      },
+    });
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    input.value = '/model';
+    input.dispatchEvent(new Event('input'));
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(
+      document.querySelector('.slash-menu-item.highlighted .slash-menu-item-name')?.textContent,
+    ).toBe('/models');
+
+    postMessage.mockClear();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'runSlashCommand',
+      payload: { name: '/models' },
+    });
+  });
+
+  it('closes on Escape without sending anything', () => {
+    const postMessage = boot();
+    deliver({
+      type: 'slashCommands',
+      payload: { items: [{ name: '/model', description: 'Choose the model' }] },
+    });
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    input.value = '/model';
+    input.dispatchEvent(new Event('input'));
+
+    postMessage.mockClear();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(document.getElementById('slashMenu')?.classList.contains('open')).toBe(false);
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(input.value).toBe('/model');
+  });
+
+  it('never leaves the popup floating over an idle composer after a send', () => {
+    const postMessage = boot();
+    deliver({
+      type: 'slashCommands',
+      payload: { items: [{ name: '/model', description: 'Choose the model' }] },
+    });
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    input.value = '/model';
+    input.dispatchEvent(new Event('input'));
+    expect(document.getElementById('slashMenu')?.classList.contains('open')).toBe(true);
+
+    input.value = 'ship it';
+    postMessage.mockClear();
+    click('#sendBtn');
+
+    expect(postMessage.mock.calls.some((call) => call[0]?.type === 'sendMessage')).toBe(true);
+    expect(document.getElementById('slashMenu')?.classList.contains('open')).toBe(false);
+    expect(input.value).toBe('');
+  });
+
+  it('keeps the composer icon buttons at a clickable size', () => {
+    boot();
+    const rule = Array.from(document.querySelectorAll('style'))
+      .map((node) => node.textContent ?? '')
+      .join('\n')
+      .match(/\.plus-btn\s*\{[^}]*\}/u);
+
+    expect(rule, 'the composer + and / buttons have no size rule').toBeTruthy();
+    expect(Number(/height:\s*(\d+)px/u.exec(rule![0])?.[1])).toBeGreaterThanOrEqual(28);
+    expect(Number(/width:\s*(\d+)px/u.exec(rule![0])?.[1])).toBeGreaterThanOrEqual(28);
+  });
+
+  it('resumes a session without narrating the resume, and keeps a panel that says something', () => {
+    boot();
+
+    deliver({
+      type: 'conversationLoaded',
+      payload: {
+        threadId: 't2',
+        title: 'A replayed session',
+        trustMode: 'byok',
+        provider: 'DeepSeek',
+        messages: [
+          { role: 'user', text: 'Reply with exactly: shell ok' },
+          { role: 'assistant', text: 'shell ok' },
+        ],
+      },
+    });
+
+    const log = document.getElementById('messages') as HTMLElement;
+    expect(log.textContent).toContain('shell ok');
+    expect(log.textContent).not.toContain('Resumed developer session');
+    expect(log.querySelector('#emptyState')).toBeNull();
+
+    deliver({
+      type: 'conversationLoaded',
+      payload: { threadId: 't3', title: 'Nothing to replay', trustMode: 'byok', messages: [] },
+    });
+
+    expect(log.querySelector('#emptyState')).not.toBeNull();
+    expect(log.textContent).toContain('Build with AGI');
   });
 
   it('states the trust boundary and the permission mode under the composer', () => {

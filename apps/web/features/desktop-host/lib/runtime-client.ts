@@ -14,6 +14,14 @@ import {
   type LocalModel,
   type LocalModelSettings,
   type LocalModelSnapshot,
+  type DeveloperApprovalAnswer,
+  type DeveloperRuntimeModels,
+  type DeveloperRuntimeStatus,
+  type LocalDeveloperSession,
+  type DeveloperSessionEvent,
+  type DeveloperSessionList,
+  type DeveloperSessionTranscript,
+  type DeveloperTurnRequest,
   type ShellPolicy,
   type ShellRunResult,
   type WorkspaceRoot,
@@ -335,4 +343,83 @@ export function startLocalChat(
   })();
 
   return { runId, result };
+}
+
+export function readDeveloperRuntimeStatus(): Promise<DeveloperRuntimeStatus> {
+  return invoke<DeveloperRuntimeStatus>('developer_runtime_status');
+}
+
+export function reportDesktopAccount(signedIn: boolean, email: string | null): Promise<boolean> {
+  return invoke<boolean>('developer_account_report', {
+    signedIn,
+    ...(email === null ? {} : { email }),
+  });
+}
+
+export function listDeveloperModels(
+  rootId: string,
+  options: { refresh?: boolean } = {},
+): Promise<DeveloperRuntimeModels> {
+  return invoke<DeveloperRuntimeModels>('developer_model_list', {
+    rootId,
+    ...(options.refresh === true ? { refresh: true } : {}),
+  });
+}
+
+export function listDeveloperSessions(): Promise<DeveloperSessionList> {
+  return invoke<DeveloperSessionList>('developer_session_list');
+}
+
+export function readDeveloperSession(
+  rootId: string,
+  threadId: string,
+): Promise<DeveloperSessionTranscript> {
+  return invoke<DeveloperSessionTranscript>('developer_session_read', { rootId, threadId });
+}
+
+export function resumeDeveloperSession(
+  rootId: string,
+  threadId: string,
+): Promise<LocalDeveloperSession> {
+  return invoke<LocalDeveloperSession>('developer_session_resume', { rootId, threadId });
+}
+
+export function startDeveloperSession(
+  rootId: string,
+  model?: string,
+): Promise<LocalDeveloperSession> {
+  return invoke<LocalDeveloperSession>('developer_session_start', {
+    rootId,
+    ...(model ? { model } : {}),
+  });
+}
+
+export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ turnId: string }> {
+  return invoke<{ turnId: string }>('developer_turn_start', { ...request });
+}
+
+export function interruptDeveloperTurn(
+  rootId: string,
+  threadId: string,
+  turnId: string,
+): Promise<boolean> {
+  return invoke<boolean>('developer_turn_interrupt', { rootId, threadId, turnId });
+}
+
+export function answerDeveloperApproval(answer: DeveloperApprovalAnswer): Promise<boolean> {
+  return invoke<boolean>('developer_approval_answer', { ...answer });
+}
+
+/**
+ * Developer-session progress for one folder. The turn outlives the request that
+ * started it, so the answer arrives here rather than in that promise.
+ */
+export function onDeveloperSessionEvent(
+  listener: (rootId: string, event: DeveloperSessionEvent) => void,
+): () => void {
+  const host = getHostBridge();
+  if (!host) return () => undefined;
+  return host.onRuntimeEvent((event) => {
+    if (event.kind === 'developer-session') listener(event.rootId, event.event);
+  });
 }

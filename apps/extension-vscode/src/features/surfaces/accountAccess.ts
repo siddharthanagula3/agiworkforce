@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getAccountToken } from '../../utils/api';
-import { signInToAgiCloud } from '../account-auth/deviceAuth';
+import { signInToAgiCloud, tryOpenDeviceAuthorizationUrl } from '../account-auth/deviceAuth';
 import { type CliAccountStatus, type CliCapabilityAdapter } from './cliCapabilities';
 
 export type AccountTokenSource = 'cli' | 'extension';
@@ -43,13 +43,49 @@ export async function signIn(
 ): Promise<boolean> {
   const challenge = await adapter.login();
   if (challenge.status !== 'ok') return signInToAgiCloud(secrets);
-  const { verificationUrl, userCode } = challenge.value;
-  const open = await vscode.window.showInformationMessage(
+  const { loginId, verificationUrl, userCode } = challenge.value;
+  const instruction =
     userCode === undefined
       ? `Finish signing in at ${verificationUrl}.`
-      : `Enter code ${userCode} at ${verificationUrl} to finish signing in.`,
-    'Open sign-in page',
+      : `Enter code ${userCode} at ${verificationUrl} to finish signing in.`;
+  if ((await tryOpenDeviceAuthorizationUrl(verificationUrl)) !== 'opened') {
+    void vscode.window.showWarningMessage(instruction, 'Copy sign-in link').then(async (action) => {
+      if (action !== 'Copy sign-in link') return;
+      await vscode.env.clipboard.writeText(verificationUrl);
+    });
+  }
+  return vscode.window.withProgress<boolean>(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'Signing in to AGI Cloud…',
+      cancellable: true,
+    },
+    async (progress, cancelToken) => {
+      progress.report({
+        message:
+          userCode === undefined
+            ? 'Approve the sign-in in your browser.'
+            : `Approve code ${userCode} in your browser.`,
+      });
+      const grant = await Promise.race([
+        adapter.loginWait(loginId),
+        new Promise<undefined>((resolve) => {
+          cancelToken.onCancellationRequested(() => resolve(undefined));
+        }),
+      ]);
+      if (grant === undefined) return false;
+      if (grant.status !== 'ok') {
+        vscode.window.showErrorMessage(grant.reason);
+        return false;
+      }
+      if (grant.value.outcome === 'completed') {
+        vscode.window.showInformationMessage('Signed in to AGI Cloud.');
+        return true;
+      }
+      vscode.window.showWarningMessage(
+        grant.value.message ?? 'AGI Cloud sign-in expired. Start again.',
+      );
+      return false;
+    },
   );
-  if (open !== undefined) await vscode.env.openExternal(vscode.Uri.parse(verificationUrl));
-  return true;
 }

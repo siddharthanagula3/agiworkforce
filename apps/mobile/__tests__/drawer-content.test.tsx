@@ -340,9 +340,14 @@ describe('DrawerContent', () => {
     });
   });
 
-  it('no longer duplicates Notifications in the drawer', () => {
-    const { queryByLabelText } = renderDrawer();
+  it('gives the notification centre its own row, separate from notification settings', () => {
+    const { getByLabelText } = renderDrawer();
 
-    expect(queryByLabelText('Notifications')).toBeNull();
+    // The row that used to be removed as a duplicate pointed at
+    // /(app)/settings/notifications, the preferences screen. This one is the
+    // centre itself, which had no entry point at all once the unread pip on the
+    // drawer button became an indicator rather than a control.
+    fireEvent.press(getByLabelText('Notifications'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/notifications');
   });
 });

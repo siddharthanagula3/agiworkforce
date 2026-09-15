@@ -14,6 +14,7 @@ const COUNTDOWN_TICK_MS = 1_000;
 interface SendErrorBannerProps {
   error: string | null;
   freeCapacity?: FreeCapacityErrorState | null;
+  action?: { label: string; onPress: () => void } | null;
   onRetry?: () => void;
   onDismiss: () => void;
 }
@@ -21,6 +22,7 @@ interface SendErrorBannerProps {
 export function SendErrorBanner({
   error,
   freeCapacity = null,
+  action = null,
   onRetry,
   onDismiss,
 }: SendErrorBannerProps) {
@@ -69,6 +71,20 @@ export function SendErrorBanner({
       >
         {message}
       </Text>
+      {action && !waitingForCapacity ? (
+        <Pressable
+          testID="send-error-action"
+          onPress={action.onPress}
+          hitSlop={8}
+          style={{ minHeight: 24, justifyContent: 'center' }}
+          accessibilityLabel={action.label}
+          accessibilityRole="button"
+        >
+          <Text style={{ fontSize: 12, color: colors.agentError, fontWeight: '700' }}>
+            {action.label}
+          </Text>
+        </Pressable>
+      ) : null}
       {onRetry && (
         <Pressable
           onPress={onRetry}

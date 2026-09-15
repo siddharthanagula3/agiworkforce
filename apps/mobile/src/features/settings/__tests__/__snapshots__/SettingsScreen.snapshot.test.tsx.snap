@@ -373,7 +373,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             }
           >
             <View
-              color="#f59e0b"
+              color="#aaa"
               size={19}
               strokeWidth={1.8}
               testID="icon-Shield"
@@ -390,30 +390,20 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             >
               Account Security
             </Text>
-            <View
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
               style={
                 {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
+                  "color": "#777",
+                  "flexShrink": 1,
+                  "fontSize": 13,
+                  "textAlign": "right",
                 }
               }
             >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 10,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Sign in
-              </Text>
-            </View>
+              Sign in
+            </Text>
             <View
               color="#777"
               size={17}
@@ -547,7 +537,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             }
           >
             <View
-              color="#f59e0b"
+              color="#aaa"
               size={19}
               strokeWidth={1.8}
               testID="icon-Share2"
@@ -564,30 +554,20 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             >
               Shared Links
             </Text>
-            <View
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
               style={
                 {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
+                  "color": "#777",
+                  "flexShrink": 1,
+                  "fontSize": 13,
+                  "textAlign": "right",
                 }
               }
             >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 10,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Sign in
-              </Text>
-            </View>
+              Sign in
+            </Text>
             <View
               color="#777"
               size={17}
@@ -639,7 +619,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             }
           >
             <View
-              color="#f59e0b"
+              color="#aaa"
               size={19}
               strokeWidth={1.8}
               testID="icon-Users"
@@ -656,30 +636,20 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             >
               Workspace
             </Text>
-            <View
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
               style={
                 {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
+                  "color": "#777",
+                  "flexShrink": 1,
+                  "fontSize": 13,
+                  "textAlign": "right",
                 }
               }
             >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 10,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Sign in
-              </Text>
-            </View>
+              Sign in
+            </Text>
             <View
               color="#777"
               size={17}

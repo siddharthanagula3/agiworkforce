@@ -1,6 +1,7 @@
 'use client';
 
 import { Building2, Check, Loader2, UserRound, Users } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@agiworkforce/ui';
 import {
   useOrganizationOverview,
@@ -12,6 +13,7 @@ export interface WorkspaceMenuItemsProps {
 }
 
 export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
+  const { t } = useTranslation('common');
   const overview = useOrganizationOverview();
   const switchWorkspace = useSwitchWorkspace();
   const selectedId = overview.data?.activeOrganizationId ?? null;
@@ -19,12 +21,12 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
   return (
     <>
       <DropdownMenuLabel className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-        Workspace
+        {t('navWorkspaceSection', { defaultValue: 'Workspace' })}
       </DropdownMenuLabel>
       {overview.isLoading ? (
         <DropdownMenuItem disabled>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-          Loading workspaces…
+          {t('navLoadingWorkspaces', { defaultValue: 'Loading workspaces…' })}
         </DropdownMenuItem>
       ) : overview.isError ? (
         <DropdownMenuItem
@@ -45,7 +47,9 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
             className="gap-2"
           >
             <UserRound className="h-4 w-4" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">Personal</span>
+            <span className="min-w-0 flex-1 truncate">
+              {t('navPersonalWorkspace', { defaultValue: 'Personal' })}
+            </span>
             {selectedId === null ? <Check className="h-4 w-4" aria-label="Selected" /> : null}
           </DropdownMenuItem>
           {(overview.data?.workspaces ?? []).map((workspace) => (
@@ -68,7 +72,7 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
       )}
       <DropdownMenuItem onSelect={onManage}>
         <Users className="mr-2 h-4 w-4" aria-hidden="true" />
-        Manage workspaces
+        {t('navManageWorkspaces', { defaultValue: 'Manage workspaces' })}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
     </>

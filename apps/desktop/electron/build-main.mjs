@@ -7,8 +7,11 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { readShellTokens } from './shellTokens.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const shellTokens = readShellTokens(path.join(__dirname, '..', '..', '..'));
 
 const shared = {
   bundle: true,
@@ -20,6 +23,11 @@ const shared = {
   outdir: path.join(__dirname, 'dist'),
   outExtension: { '.js': '.cjs' },
   logLevel: 'info',
+  define: {
+    AGI_PAGE_BACKGROUND_LIGHT: JSON.stringify(shellTokens.pageBackgroundLight),
+    AGI_PAGE_BACKGROUND_DARK: JSON.stringify(shellTokens.pageBackgroundDark),
+    AGI_TITLE_STRIP_HEIGHT: JSON.stringify(shellTokens.titleStripHeight),
+  },
 };
 
 await build({

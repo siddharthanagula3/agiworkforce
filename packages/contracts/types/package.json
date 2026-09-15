@@ -7,12 +7,16 @@
   "exports": {
     ".": "./src/index.ts",
     "./models.json": "./src/models.json",
-    "./protocol": "./src/generated/protocol/index.ts"
+    "./protocol": "./src/generated/protocol/index.ts",
+    "./product-routes": "./src/product-routes.ts"
   },
   "typesVersions": {
     "*": {
       "protocol": [
         "./src/generated/protocol/index.ts"
+      ],
+      "product-routes": [
+        "./src/product-routes.ts"
       ]
     }
   },

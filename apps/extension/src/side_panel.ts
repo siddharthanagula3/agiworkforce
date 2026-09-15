@@ -21,11 +21,11 @@ import {
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
   normalizeModelId,
-  PROVIDER_DISPLAY,
+  getProviderDisplayLabel,
+  PROVIDERS_IN_ORDER,
   resolveModelEffort,
   type Effort,
   type InteractiveCard,
-  type ProviderId,
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
@@ -58,6 +58,10 @@ import {
   restoreConversationOwnerIfCurrent,
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
+import {
+  removeApprovedSiteHostPermission,
+  requestApprovedSiteHostPermission,
+} from './features/options/site-allowlist';
 import {
   backgroundConversationId,
   takePendingResultConversation,
@@ -102,6 +106,7 @@ import {
   DEFAULT_AGI_BRIDGE_URL,
   validateBridgeUrl,
   sanitizePageText,
+  SELECTED_MODEL_STORAGE_KEY,
 } from './background/policy';
 import {
   FilePen,
@@ -192,6 +197,8 @@ import {
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
   openClerkSignIn,
+  revokeSyncedWebSession,
+  signOutClerk,
 } from './features/cloud-bridge/clerkAuth';
 import {
   formatManagedTierLabel,
@@ -447,10 +454,9 @@ function setManagedCloudChatState(
   }
   if (input) {
     input.disabled = state !== 'ready';
-    if (state === 'ready') input.placeholder = t('spComposerPlaceholder');
-    else if (state === 'signed_out') input.placeholder = t('spComposerPlaceholderSignedOut');
+    if (state === 'signed_out') input.placeholder = t('spComposerPlaceholderSignedOut');
     else if (state === 'unavailable') input.placeholder = t('spComposerPlaceholderNoAccess');
-    else if (state === 'loading') input.placeholder = t('spComposerPlaceholderChecking');
+    else input.placeholder = t('spComposerPlaceholder');
   }
   updateSendButton();
   if (becameReady) checkPendingChat();
@@ -466,6 +472,7 @@ interface ChatChunk {
   text: string;
   done: boolean;
   error?: string;
+  errorCode?: string;
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
@@ -679,6 +686,11 @@ function managedTurnPersistencePayload(streamId: string): {
 // Provider display order in the grouped picker.
 const UNKNOWN_PROVIDER_KEY = 'unknown-provider';
 
+function modelGroupHeading(providerKey: string): string {
+  if (providerKey === UNKNOWN_PROVIDER_KEY) return t('spModelsOtherProvider');
+  return getProviderDisplayLabel(providerKey);
+}
+
 const CONNECTORS_URL = 'https://agiworkforce.com/connectors?from=chrome-extension';
 
 const RECENTS_SEARCH_THRESHOLD = 10;
@@ -688,22 +700,6 @@ const RELATIVE_TIME_STEPS: { ms: number; unit: Intl.RelativeTimeFormatUnit }[] =
   { ms: 86_400_000, unit: 'day' },
   { ms: 3_600_000, unit: 'hour' },
   { ms: 60_000, unit: 'minute' },
-];
-
-const PROVIDER_GROUP_ORDER: ProviderId[] = [
-  'anthropic',
-  'openai',
-  'google',
-  'deepseek',
-  'xai',
-  'perplexity',
-  'qwen',
-  'moonshot',
-  'zhipu',
-  'ollama',
-  'lmstudio',
-  'custom-openai-compatible',
-  'agi-cloud',
 ];
 
 function getModelBadgeLabel(modelId: string): string {
@@ -720,6 +716,15 @@ const resolvedRouteByStreamId = new Map<string, { model: string; provider: strin
 const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
 const assistantCloudIdByStreamId = new Map<string, string>();
+
+/**
+ * A save on every text delta would be a storage write per token. Throttled
+ * to once per interval instead; the placeholder pushed at stream start and
+ * the unconditional save at stream end are what keep a reload from ever
+ * landing on nothing, this only bounds how stale a mid-stream save can be.
+ */
+const STREAM_TEXT_PERSIST_INTERVAL_MS = 1_500;
+let lastStreamPersistAtMs = 0;
 
 let currentPageHostname = '';
 let activePageSource: PageContextSource | null = null;
@@ -743,6 +748,7 @@ function serializeMessagesForHistory() {
     timestamp: message.timestamp,
     ...(message.runtime ? { runtime: message.runtime } : {}),
     ...(message.error ? { error: true } : {}),
+    ...(message.role === 'assistant' && message.streaming ? { streaming: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
     ...(message.role === 'assistant' && message.agentEvents
       ? { agentEvents: message.agentEvents }
@@ -948,13 +954,11 @@ function clearStoredMessages(): void {
   _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
-  _ctx.selectedModel = 'auto';
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
   refreshModelPickerUI();
   refreshEffortUI();
-  chrome.storage.local.remove('agi_model').catch(() => {});
   const owner = _ctx.managedCloudOwner;
   if (!owner) return;
   startNewConversation(owner).catch((err) => {
@@ -1011,7 +1015,10 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.activeProject = null;
   delete _ctx.pendingProjectBinding;
   refreshProjectChip();
-  _ctx.selectedModel = 'auto';
+  if (previousOwner) {
+    _ctx.selectedModel = 'auto';
+    chrome.storage.local.remove(SELECTED_MODEL_STORAGE_KEY).catch(() => {});
+  }
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
@@ -1376,6 +1383,23 @@ function injectStyles(): void {
     }
     .sp-bubble-retry-btn:hover:not(:disabled) { background: var(--agi-ext-hover); }
     .sp-bubble-retry-btn:disabled { opacity: 0.5; cursor: default; }
+    /* Interrupted footer: a reply cut off by a reload or a closed tab, not a
+       failure, so it takes the neutral text tone, not the danger one. */
+    .sp-bubble-interrupted-footer {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-bubble-interrupted-text {
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--agi-ext-text-muted);
+      overflow-wrap: anywhere;
+    }
     /* ── Bubble action row (timestamp + copy) ── */
     .sp-bubble-actions {
       display: flex;
@@ -2986,6 +3010,8 @@ function injectStyles(): void {
     }
     .sp-drawer-allowlist-item-remove:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
     .sp-drawer-allowlist-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
+    .sp-drawer-allowlist-status { font-size: 11px; color: var(--agi-ext-danger); line-height: 1.5; padding: 4px 0; }
+    .sp-drawer-allowlist-status[hidden] { display: none; }
     /* Memory */
     .sp-drawer-memory-help { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; margin-bottom: 8px; }
     .sp-drawer-memory-add-btn {
@@ -3227,6 +3253,12 @@ function injectStyles(): void {
       transition: color 0.15s, border-color 0.15s;
     }
     .sp-cloud-signout-btn:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+    .sp-cloud-signout-status {
+      width: 100%;
+      font-size: 10px;
+      color: var(--agi-ext-danger);
+    }
+    .sp-cloud-signout-status:empty { display: none; }
 
     /* Quota bar */
     .sp-quota-bar-wrap {
@@ -4398,6 +4430,7 @@ function renderMessages(): void {
           onResolveApproval: (toolCallId, decision) =>
             resolveManagedToolApproval(msg.id, toolCallId, decision),
           onRetry: (messageId) => retryFailedMessage(messageId),
+          onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
         }),
       );
     }
@@ -4439,8 +4472,12 @@ function updateStreamingBubble(id: string, fullText: string, done: boolean): voi
 const PAGE_CONTEXT_MAX_CHARS = 5_000;
 
 const PAGE_CONTEXT_DENIED_REASON =
-  "Chrome does not let extensions read this page. That covers Chrome's own pages, the Web Store, " +
-  'and pages an administrator has restricted. Open an ordinary site and try again.';
+  'Chrome would not let the extension read this page. Approve this site under Settings, Site ' +
+  'Allowlist in this panel, reload the page, and try again.';
+
+const PAGE_CONTEXT_BLOCKED_REASON =
+  "Chrome does not let extensions read this page at all. That covers Chrome's own pages, the " +
+  'Web Store, and pages an administrator has restricted. Open an ordinary site and try again.';
 
 const PAGE_CONTEXT_EMPTY_REASON = 'This page had no readable text to attach.';
 
@@ -4452,11 +4489,13 @@ export type PageContextCapture =
   | { ok: false; reason: string };
 
 function describePageContextFailure(message: string): string {
-  return /cannot access|host permission|must request permission|chrome:\/\/|extension gallery/i.test(
-    message,
-  )
-    ? PAGE_CONTEXT_DENIED_REASON
-    : `The page could not be read: ${message}`;
+  if (/chrome:\/\/|extension gallery|chrome-untrusted|view-source/i.test(message)) {
+    return PAGE_CONTEXT_BLOCKED_REASON;
+  }
+  if (/cannot access|host permission|must request permission/i.test(message)) {
+    return PAGE_CONTEXT_DENIED_REASON;
+  }
+  return `The page could not be read: ${message}`;
 }
 
 /**
@@ -4826,6 +4865,17 @@ function sendMessage(text: string): void {
 
         const history = selectModelHistory(_ctx.messages, userMsg.id);
 
+        _ctx.messages.push({
+          id: streamId,
+          role: 'assistant',
+          content: '',
+          streaming: true,
+          timestamp: Date.now(),
+          runtime: 'managed-cloud',
+        });
+        lastStreamPersistAtMs = Date.now();
+        saveMessages();
+
         chrome.runtime.sendMessage(
           {
             type: 'CHAT_MESSAGE',
@@ -4885,6 +4935,17 @@ function sendMessage(text: string): void {
 
   const history = selectModelHistory(_ctx.messages, userMsg.id);
 
+  _ctx.messages.push({
+    id: streamId,
+    role: 'assistant',
+    content: '',
+    streaming: true,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+  });
+  lastStreamPersistAtMs = Date.now();
+  saveMessages();
+
   chrome.runtime.sendMessage(
     {
       type: 'CHAT_MESSAGE',
@@ -4937,8 +4998,20 @@ function retryFailedMessage(messageId: string): void {
   sendMessage(promptText);
 }
 
-function handleStreamError(id: string, errorText: string): void {
+function handleStreamError(id: string, errorText: string, errorCode?: string): void {
   if (_ctx.currentStreamId !== id) return;
+  const errorAction =
+    errorCode !== undefined &&
+    ![
+      'auth_required',
+      'plan_required',
+      'quota_exceeded',
+      'cancelled',
+      'invalid_request',
+      'protocol_error',
+    ].includes(errorCode)
+      ? 'switch-model'
+      : undefined;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
   const assistantCloudId = assistantCloudIdByStreamId.get(id);
   resolvedRouteByStreamId.delete(id);
@@ -4965,7 +5038,7 @@ function handleStreamError(id: string, errorText: string): void {
     existing.cloudApprovalDecisions = undefined;
     existing.cloudApprovalError = errorText.slice(0, 500);
   } else {
-    applyStreamFailure(_ctx.messages, id, errorText);
+    applyStreamFailure(_ctx.messages, id, errorText, Date.now(), errorAction);
   }
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
@@ -5976,6 +6049,7 @@ function buildUI(): void {
             : resolveModelEffort(m.value, _ctx.reasoningEffort);
       }
       _ctx.selectedModel = m.value;
+      chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: m.value }).catch(() => {});
       updateModelBadge(m.value);
       renderModelDropdown();
       refreshEffortUI();
@@ -6132,27 +6206,19 @@ function buildUI(): void {
     }
 
     const rendered = new Set<string>();
-    for (const providerId of PROVIDER_GROUP_ORDER) {
-      const options = grouped.get(providerId);
+    for (const providerKey of PROVIDERS_IN_ORDER) {
+      const options = grouped.get(providerKey);
       if (!options || options.length === 0) continue;
-      rendered.add(providerId);
+      rendered.add(providerKey);
       modelDropdownEl.appendChild(
-        el(
-          'div',
-          { class: 'sp-model-group-header' },
-          PROVIDER_DISPLAY[providerId]?.label ?? providerId,
-        ),
+        el('div', { class: 'sp-model-group-header' }, modelGroupHeading(providerKey)),
       );
       appendModelRows(options);
     }
     for (const [providerKey, options] of grouped.entries()) {
       if (rendered.has(providerKey)) continue;
       modelDropdownEl.appendChild(
-        el(
-          'div',
-          { class: 'sp-model-group-header' },
-          providerKey === UNKNOWN_PROVIDER_KEY ? t('spModelsOtherProvider') : providerKey,
-        ),
+        el('div', { class: 'sp-model-group-header' }, modelGroupHeading(providerKey)),
       );
       appendModelRows(options);
     }
@@ -6257,11 +6323,15 @@ function buildUI(): void {
       modelSelectorBtn.setAttribute('aria-expanded', 'false');
     }
   });
-  chrome.storage.local.get(['agi_thinking_enabled'], (result) => {
+  chrome.storage.local.get(['agi_thinking_enabled', SELECTED_MODEL_STORAGE_KEY], (result) => {
     if (chrome.runtime.lastError) return;
     const storedThinking = result['agi_thinking_enabled'] as boolean | undefined;
     if (storedThinking !== undefined) {
       _ctx.thinkingEnabled = storedThinking;
+    }
+    const storedModel = result[SELECTED_MODEL_STORAGE_KEY] as string | undefined;
+    if (storedModel) {
+      _ctx.selectedModel = storedModel;
     }
     renderModelDropdown();
     renderModelTrigger();
@@ -7429,10 +7499,18 @@ function buildUI(): void {
     { class: 'sp-drawer-allowlist-empty', id: 'sp-drawer-allowlist-empty', hidden: '' },
     'No sites allowlisted yet.',
   );
+  const allowlistStatus = el('div', {
+    class: 'sp-drawer-allowlist-status',
+    id: 'sp-drawer-allowlist-status',
+    role: 'alert',
+    hidden: '',
+  });
   allowlistSection.appendChild(allowlistList);
   allowlistSection.appendChild(allowlistEmpty);
+  allowlistSection.appendChild(allowlistStatus);
   settingsGroupBody.appendChild(allowlistSection);
 
+  let currentAllowlistOrigin: string | null = null;
   async function drawerReadAllowlist(): Promise<string[]> {
     try {
       const res = await chrome.storage.local.get(SP_SITE_ALLOWLIST_KEY);
@@ -7506,6 +7584,7 @@ function buildUI(): void {
         'Remove',
       );
       removeBtn.addEventListener('click', async () => {
+        await removeApprovedSiteHostPermission(origin);
         const cur = await drawerReadAllowlist();
         await drawerWriteAllowlist(cur.filter((o) => o !== origin));
         await refreshDrawerAllowlist();
@@ -7516,6 +7595,8 @@ function buildUI(): void {
   }
   async function refreshDrawerAllowlist(): Promise<void> {
     const [list, origin] = await Promise.all([drawerReadAllowlist(), drawerCurrentTabOrigin()]);
+    currentAllowlistOrigin = origin;
+    allowlistStatus.setAttribute('hidden', '');
     allowlistOriginLabel.textContent = origin ?? t('spAllowlistNoSite');
     (allowlistToggleBtn as HTMLButtonElement).disabled = !origin;
     if (origin) {
@@ -7529,11 +7610,29 @@ function buildUI(): void {
     await renderDrawerAllowlistList(list, origin);
   }
   allowlistToggleBtn.addEventListener('click', async () => {
-    const origin = await drawerCurrentTabOrigin();
+    const origin = currentAllowlistOrigin;
     if (!origin) return;
+    allowlistStatus.setAttribute('hidden', '');
+    const removing = allowlistToggleBtn.classList.contains('is-remove');
+    if (removing) {
+      await removeApprovedSiteHostPermission(origin);
+      const list = await drawerReadAllowlist();
+      await drawerWriteAllowlist(list.filter((o) => o !== origin));
+      await refreshDrawerAllowlist();
+      return;
+    }
+    // Must be the first await after the click: Chrome only honours
+    // chrome.permissions.request inside the still-live user gesture, and the
+    // allowlist must never claim a site is approved when Chrome refused it
+    // the read access page context actually needs.
+    const hostGranted = await requestApprovedSiteHostPermission(origin);
+    if (!hostGranted) {
+      allowlistStatus.textContent = t('spAllowlistHostPermissionRefused', [origin]);
+      allowlistStatus.removeAttribute('hidden');
+      return;
+    }
     const list = await drawerReadAllowlist();
-    const present = list.includes(origin);
-    await drawerWriteAllowlist(present ? list.filter((o) => o !== origin) : [...list, origin]);
+    await drawerWriteAllowlist(list.includes(origin) ? list : [...list, origin]);
     await refreshDrawerAllowlist();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -7961,6 +8060,11 @@ function buildUI(): void {
   signedInView.appendChild(avatarEl);
   signedInView.appendChild(userInfoEl);
   signedInView.appendChild(signoutBtn);
+  const signoutStatusEl = el('div', {
+    class: 'sp-cloud-signout-status',
+    id: 'sp-cloud-signout-status',
+    role: 'status',
+  });
 
   const quotaWrap = el('div', {
     class: 'sp-quota-bar-wrap',
@@ -7991,6 +8095,7 @@ function buildUI(): void {
 
   cloudAccountEl.appendChild(signinPrompt);
   cloudAccountEl.appendChild(signedInView);
+  cloudAccountEl.appendChild(signoutStatusEl);
   cloudAccountEl.appendChild(quotaWrap);
   const cloudLinkHint = el(
     'div',
@@ -8074,16 +8179,10 @@ function buildUI(): void {
 
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
+    const accountProfilePromise = getClerkAccountProfile().catch(() => null);
     let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
-    let accountProfile: Awaited<ReturnType<typeof getClerkAccountProfile>> | null;
     try {
-      [authContext, accountProfile] = await withTimeout(
-        Promise.all([
-          getManagedCloudAuthContext(forceAuthRefresh),
-          getClerkAccountProfile().catch(() => null),
-        ]),
-        8_000,
-      );
+      authContext = await withTimeout(getManagedCloudAuthContext(forceAuthRefresh), 8_000);
     } catch {
       if (refreshGeneration !== cloudAccountRefreshGeneration) return;
       managedModelAccess = null;
@@ -8105,10 +8204,6 @@ function buildUI(): void {
     const ownerChanged = await transitionManagedCloudOwner(authContext?.owner ?? null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const token = authContext?.token ?? null;
-    const currentAccountProfile =
-      authContext && sameManagedCloudOwner(accountProfile?.owner, authContext.owner)
-        ? accountProfile
-        : null;
     if (!token) {
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
@@ -8138,6 +8233,13 @@ function buildUI(): void {
       });
       return;
     }
+
+    const accountProfile = await withTimeout(accountProfilePromise, 8_000).catch(() => null);
+    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+    const currentAccountProfile =
+      authContext && sameManagedCloudOwner(accountProfile?.owner, authContext.owner)
+        ? accountProfile
+        : null;
 
     let access: ManagedModelAccess;
     try {
@@ -8297,6 +8399,18 @@ function buildUI(): void {
   };
 
   signoutBtn.addEventListener('click', async () => {
+    signoutStatusEl.textContent = '';
+    try {
+      await revokeSyncedWebSession();
+    } catch (error) {
+      console.warn('[SidePanel] Revoking the synced web session failed:', error);
+      signoutStatusEl.textContent = t('spCloudSignOutSyncFailed');
+    }
+    try {
+      await signOutClerk();
+    } catch (error) {
+      console.warn('[SidePanel] Clerk sign-out failed:', error);
+    }
     await transitionManagedCloudOwner(null);
     await clearAuthToken();
     await refreshCloudAccountUI();
@@ -9527,7 +9641,7 @@ function buildUI(): void {
 
   const inputEl = el('textarea', {
     id: 'sp-input',
-    placeholder: 'Type / for commands',
+    placeholder: t('spComposerPlaceholder'),
     rows: '1',
     name: 'message',
     'aria-label': 'Message AGI',
@@ -10579,7 +10693,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       handleStreamError(chunk.id, 'Sign in to AGI Cloud to send messages.');
       return;
     }
-    handleStreamError(chunk.id, chunk.error);
+    handleStreamError(chunk.id, chunk.error, chunk.errorCode);
     return;
   }
 
@@ -10706,6 +10820,13 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     } else {
       removeThinking();
       renderMessages();
+    }
+    if (!chunk.done) {
+      const now = Date.now();
+      if (now - lastStreamPersistAtMs >= STREAM_TEXT_PERSIST_INTERVAL_MS) {
+        lastStreamPersistAtMs = now;
+        saveMessages();
+      }
     }
   }
 

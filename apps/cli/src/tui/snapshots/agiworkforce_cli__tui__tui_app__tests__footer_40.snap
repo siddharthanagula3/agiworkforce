@@ -1,6 +1,5 @@
 ---
 source: apps/cli/src/tui/tui_app.rs
-assertion_line: 5970
 expression: "draw_footer(40, \"High\", None)"
 ---
- Def  byok 42% sb✓ e:H  ↑1234 ↓567
+ Def  Your key 42% e:H  T3↑1234↓567

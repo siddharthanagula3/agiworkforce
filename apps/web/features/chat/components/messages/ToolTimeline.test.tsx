@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { ToolTimeline } from './ToolTimeline';
 
 vi.mock('framer-motion', () => ({
@@ -18,6 +18,10 @@ vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useReducedMotion: () => false,
 }));
+
+function approvalPrompt(): HTMLElement {
+  return screen.getByText(/this tool requires approval before execution/i).parentElement!;
+}
 
 describe('ToolTimeline · expand and collapse', () => {
   it('starts collapsed when no tools are running', () => {
@@ -328,7 +332,7 @@ describe('ToolTimeline · audit-trail collapse lifecycle', () => {
     fireEvent.click(screen.getByRole('button', { name: /toggle tool timeline/i }));
     await waitFor(() => {
       expect(screen.getByText('Read')).toBeInTheDocument();
-      expect(screen.getByText('Done')).toBeInTheDocument();
+      expect(screen.getByText('Completed')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /toggle tool timeline/i }));
@@ -348,10 +352,20 @@ describe('ToolTimeline · manual approval', () => {
     parameters: { owner: 'acme', repo: 'app', pull_number: 7 },
   };
 
-  it('auto-expands and renders approve/reject for an awaiting_approval tool', () => {
+  it('auto-expands and renders the shared allow and deny verbs for an awaiting_approval tool', () => {
     render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} />);
-    expect(screen.getByText('Approve')).toBeInTheDocument();
-    expect(screen.getByText('Reject')).toBeInTheDocument();
+    const prompt = within(approvalPrompt());
+    expect(prompt.getByRole('button', { name: 'Allow' })).toBeInTheDocument();
+    expect(prompt.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+  });
+
+  it('offers the remembered permission levels in the same vocabulary', () => {
+    render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} />);
+    const remember = within(screen.getByRole('group', { name: /remember permission/i }));
+    expect(remember.getByRole('button', { name: 'Always allow' })).toBeInTheDocument();
+    expect(remember.getByRole('button', { name: 'Ask' })).toBeInTheDocument();
+    expect(remember.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+    expect(remember.queryByRole('button', { name: 'Block' })).toBeNull();
   });
 
   it('never labels a tool awaiting approval as running, and does not claim the timeline is busy', () => {
@@ -367,14 +381,14 @@ describe('ToolTimeline · manual approval', () => {
   it('calls onApprove with the exact tool_call_id', () => {
     const onApprove = vi.fn();
     render(<ToolTimeline tools={[awaitingTool]} onApprove={onApprove} onReject={() => {}} />);
-    fireEvent.click(screen.getByText('Approve'));
+    fireEvent.click(within(approvalPrompt()).getByRole('button', { name: 'Allow' }));
     expect(onApprove).toHaveBeenCalledWith('call_1');
   });
 
   it('calls onReject with the exact tool_call_id', () => {
     const onReject = vi.fn();
     render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={onReject} />);
-    fireEvent.click(screen.getByText('Reject'));
+    fireEvent.click(within(approvalPrompt()).getByRole('button', { name: 'Deny' }));
     expect(onReject).toHaveBeenCalledWith('call_1');
   });
 });
@@ -389,12 +403,12 @@ describe('ToolTimeline · expired approval', () => {
     parameters: { owner: 'acme', repo: 'app', pull_number: 7 },
   };
 
-  it('renders an expired notice instead of live Approve/Reject buttons', () => {
+  it('renders an expired notice instead of live allow and deny buttons', () => {
     render(
       <ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} expired />,
     );
-    expect(screen.queryByText('Approve')).not.toBeInTheDocument();
-    expect(screen.queryByText('Reject')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Allow' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Deny' })).not.toBeInTheDocument();
     expect(screen.getByText(/this approval request expired/i)).toBeInTheDocument();
   });
 
@@ -424,7 +438,7 @@ describe('ToolTimeline · expired approval', () => {
   it('does NOT show the expired notice when not expired (live buttons render as normal)', () => {
     render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} />);
     expect(screen.queryByText(/this approval request expired/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Approve')).toBeInTheDocument();
+    expect(within(approvalPrompt()).getByRole('button', { name: 'Allow' })).toBeInTheDocument();
   });
 });
 

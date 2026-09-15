@@ -38,10 +38,10 @@ impl std::fmt::Display for CloudError {
             }
             CloudError::NotManaged(mode) => write!(
                 f,
-                "{} privacy mode keeps this conversation on this device, nothing was sent to your \
-                 account. Switch to Managed mode to share history, projects and memory across your \
-                 clients.",
-                mode.label()
+                "{}: this conversation stays on this device and is not saved to your account. \
+                 Switch to Managed with /model to sync history, projects and memory across your \
+                 devices.",
+                mode.trust_word()
             ),
             CloudError::ApiBase(base) => write!(
                 f,
@@ -331,6 +331,23 @@ mod tests {
     fn the_signed_out_error_names_the_login_command() {
         assert!(CloudError::SignedOut.to_string().contains("agi login"));
         assert!(CloudError::SignedOut.is_boundary());
+    }
+
+    /// The boundary notice must read for a person: the trust-boundary word,
+    /// never the bare `byok` config value.
+    #[test]
+    fn the_not_managed_notice_names_the_trust_word_not_the_config_value() {
+        let byok = CloudError::NotManaged(PrivacyMode::Byok).to_string();
+        assert_eq!(
+            byok,
+            "Your key: this conversation stays on this device and is not saved to your \
+             account. Switch to Managed with /model to sync history, projects and memory \
+             across your devices."
+        );
+        assert!(!byok.to_lowercase().contains("byok"));
+
+        let local = CloudError::NotManaged(PrivacyMode::Local).to_string();
+        assert!(local.starts_with("Local:"));
     }
 
     #[test]

@@ -27,6 +27,7 @@ export type NativeMessageType =
   | 'GET_CLOUD_AUTH_TOKEN'
   | 'MANAGED_CLOUD_AUTH_CHANGED'
   | 'RECONNECT_NATIVE'
+  | 'UNPAIR_NATIVE'
   | 'CONNECTION_STATUS_CHANGED'
   | 'TAB_READY'
   | 'SYNC_PAGE_CONTEXT'
@@ -388,6 +389,11 @@ export interface ReconnectNativeMessage extends BaseMessage {
   type: 'RECONNECT_NATIVE';
 }
 
+/** Tells the desktop this browser has unpaired, so it drops its record too. */
+export interface UnpairNativeMessage extends BaseMessage {
+  type: 'UNPAIR_NATIVE';
+}
+
 export interface ConnectionStatusResponse {
   success: boolean;
   nativeConnected: boolean;
@@ -535,6 +541,7 @@ export interface ChatChunkMessage {
   text: string;
   done: boolean;
   error?: string;
+  errorCode?: string;
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
@@ -997,6 +1004,7 @@ export type ExtensionMessage =
   | GetCloudAuthTokenMessage
   | ManagedCloudAuthChangedMessage
   | ReconnectNativeMessage
+  | UnpairNativeMessage
   | ConnectionStatusChangedMessage
   | TabReadyMessage
   | SyncPageContextMessage

@@ -8,8 +8,6 @@ export type ChatMode = 'chat' | 'research' | 'create';
 
 export type ChatStyle = 'normal' | 'concise' | 'detailed' | 'creative';
 
-export type ToolAccess = 'auto' | 'on-demand' | 'always';
-
 export interface ChatFeatures {
   webSearch: boolean;
   imageGen: boolean;
@@ -49,7 +47,6 @@ interface ViewState {
   chatMode: ChatMode;
   workMode: CloudWorkMode;
   chatStyle: ChatStyle;
-  toolAccess: ToolAccess;
   features: ChatFeatures;
   /** Output kind the composer is aimed at. See {@link MediaMode}. */
   mediaMode: MediaMode;
@@ -62,7 +59,6 @@ interface ViewState {
   setChatMode: (mode: ChatMode) => void;
   setWorkMode: (mode: CloudWorkMode) => void;
   setChatStyle: (style: ChatStyle) => void;
-  setToolAccess: (access: ToolAccess) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
   setMediaMode: (mode: MediaMode) => void;
   setMediaModel: (kind: 'image' | 'video', modelId: string) => void;
@@ -218,6 +214,15 @@ async function runSearch(
   set({ searchResults: results, ...EMPTY_REMOTE_MATCHES, isSearching: false });
 }
 
+export function migratePersistedChatView(
+  persisted: unknown,
+  _version: number,
+): Record<string, unknown> {
+  const next = { ...((persisted ?? {}) as Record<string, unknown>) };
+  delete next.toolAccess;
+  return next;
+}
+
 export const useChatViewStore = create<ViewState>()(
   persist(
     (set, get) => ({
@@ -228,7 +233,6 @@ export const useChatViewStore = create<ViewState>()(
       chatMode: 'chat',
       workMode: 'chat',
       chatStyle: 'concise',
-      toolAccess: 'auto',
       features: {
         webSearch: true,
         imageGen: true,
@@ -273,7 +277,6 @@ export const useChatViewStore = create<ViewState>()(
       setChatMode: (mode) => set({ chatMode: mode }),
       setWorkMode: (mode) => set({ workMode: mode }),
       setChatStyle: (style) => set({ chatStyle: style }),
-      setToolAccess: (access) => set({ toolAccess: access }),
       setFeature: (feature, enabled) =>
         set((state) => ({ features: { ...state.features, [feature]: enabled } })),
       setMediaMode: (mode) => set({ mediaMode: mode }),
@@ -293,12 +296,13 @@ export const useChatViewStore = create<ViewState>()(
     {
       name: 'chat-view-store',
       storage: createJSONStorage(() => mmkvStorage),
+      version: 1,
+      migrate: migratePersistedChatView,
       skipHydration: true,
       partialize: (state) => ({
         chatMode: state.chatMode,
         workMode: state.workMode,
         chatStyle: state.chatStyle,
-        toolAccess: state.toolAccess,
         features: state.features,
         selectedMediaModel: state.selectedMediaModel,
         videoAspectRatio: state.videoAspectRatio,

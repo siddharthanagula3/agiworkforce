@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { PRODUCT_ROUTE_PREFIXES } from '@agiworkforce/types/product-routes';
 
 /**
  * Pre-release claim audit of the legal and trust surface, 2026-09-12.
@@ -157,10 +158,15 @@ const COUNT_WORDS: Record<number, string> = {
 
 describe('/trust counts what the code has, not what it had', () => {
   it('names the protected route-group count the proxy matcher enforces', () => {
+    // The prefixes moved out of proxy.ts into the contract the desktop shell
+    // reads as well, so the count comes from there and proxy.ts is checked for
+    // still building its matcher from it.
     const proxy = readFileSync(path.join(WEB_DIR, 'proxy.ts'), 'utf8');
-    const block = /const isProtectedAppRoute = [^[]*\[([\s\S]*?)\]/u.exec(proxy);
-    expect(block, 'isProtectedAppRoute is gone from proxy.ts').not.toBeNull();
-    const groups = [...block![1]!.matchAll(/'\/([a-z-]+)\(\.\*\)'/gu)].map((match) => match[1]!);
+    expect(
+      proxy,
+      'proxy.ts no longer builds isProtectedAppRoute from the route contract',
+    ).toContain('routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES)');
+    const groups = [...PRODUCT_ROUTE_PREFIXES];
     expect(groups.length).toBeGreaterThan(1);
 
     const word = COUNT_WORDS[groups.length];
@@ -168,7 +174,7 @@ describe('/trust counts what the code has, not what it had', () => {
     expect(flat('trust')).toContain(`${word} protected route groups`);
     expect(
       flat('trust').includes('Six protected route groups'),
-      `/trust claims six protected route groups; proxy.ts matches ${groups.length}`,
+      `/trust claims six protected route groups; the route contract has ${groups.length}`,
     ).toBe(groups.length === 6);
   });
 

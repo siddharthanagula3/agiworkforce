@@ -789,13 +789,20 @@ async fn stream_openai_compat(
         return Err(error_from_response(provider_label(spec), req.model, resp).await);
     }
 
-    run_openai_compat_stream(llm_byte_stream(resp), req.idle_timeout, on_event).await
+    run_openai_compat_stream(
+        llm_byte_stream(resp),
+        req.idle_timeout,
+        provider_label(spec),
+        on_event,
+    )
+    .await
 }
 
 /// Decode an OpenAI-compatible Chat Completions SSE byte stream.
 pub async fn run_openai_compat_stream<S>(
     mut stream: S,
     idle_timeout: Duration,
+    provider: &str,
     on_event: OnEvent<'_>,
 ) -> Result<ChatOutcome, LlmError>
 where
@@ -845,6 +852,25 @@ where
                         continue;
                     }
                 };
+                // A gateway that fails after the response has opened reports
+                // it here with the HTTP status already sent as 200; without this
+                // the turn read as an empty completed answer with no tokens.
+                if let Some(stream_error) = event.pointer("/choices/0/delta/x_stream_error") {
+                    let message = stream_error
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .filter(|text| !text.trim().is_empty())
+                        .unwrap_or("The provider stopped the stream with an error.")
+                        .to_string();
+                    return Err(LlmError::StreamError {
+                        provider: provider.to_string(),
+                        message,
+                        retryable: stream_error
+                            .get("retryable")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
+                    });
+                }
                 {
                     let has_choices = event.get("choices").is_some();
                     let has_usage = event.get("usage").is_some();
@@ -2160,6 +2186,98 @@ mod anthropic_request_tests {
         let body = build_gemini_request_body(&req);
         assert!(body.pointer("/generationConfig/thinkingConfig").is_none());
     }
+
+    /// Gemini answers an unknown schema keyword with HTTP 400 and refuses the
+    /// whole request, so one built-in tool carrying `additionalProperties`
+    /// takes down every Google turn. The declarations must therefore be clean
+    /// at every depth, not just at the top level of `parameters`.
+    #[test]
+    fn gemini_declarations_carry_no_json_schema_keyword_gemini_rejects() {
+        let messages = vec![Message::text("user", "Plan.")];
+        let tools = vec![ToolDefinition {
+            name: "agent".to_string(),
+            description: "Run one named agent".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "additionalProperties": false,
+                "properties": {
+                    "action": {"type": "string", "enum": ["list", "run"], "default": "list"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string", "default": "x", "examples": ["a"]}
+                    },
+                    "choice": {
+                        "anyOf": [
+                            {"type": "string", "default": "a"},
+                            {"type": "integer", "const": 7, "exclusiveMinimum": 0}
+                        ]
+                    },
+                    "nested": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "patternProperties": {"^x": {"type": "string"}},
+                        "properties": {
+                            "inner": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {"leaf": {"type": "string", "default": "y"}}
+                            }
+                        }
+                    }
+                },
+                "required": ["action"]
+            }),
+            is_read_only: true,
+            is_concurrency_safe: true,
+            max_result_size_chars: None,
+            should_defer: false,
+            aliases: Vec::new(),
+            owner: String::new(),
+            permission_class: String::new(),
+            diagnostic_tags: Vec::new(),
+        }];
+        let mut req = base_request(&messages);
+        req.tools = Some(&tools);
+
+        let body = build_gemini_request_body(&req);
+        let declarations = serde_json::to_string(&body["tools"]).expect("serialize declarations");
+
+        for keyword in [
+            "additionalProperties",
+            "patternProperties",
+            "$schema",
+            "$id",
+            "$ref",
+            "$defs",
+            "definitions",
+            "default",
+            "examples",
+            "const",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+            "not",
+        ] {
+            assert!(
+                !declarations.contains(&format!("\"{keyword}\"")),
+                "Gemini rejects `{keyword}`, but it survived in {declarations}"
+            );
+        }
+
+        let params = &body["tools"][0]["functionDeclarations"][0]["parameters"];
+        assert_eq!(params["type"], "object");
+        assert_eq!(params["required"][0], "action");
+        assert_eq!(params["properties"]["action"]["enum"][1], "run");
+        assert_eq!(params["properties"]["tags"]["items"]["type"], "string");
+        assert_eq!(
+            params["properties"]["choice"]["anyOf"][1]["type"],
+            "integer"
+        );
+        assert_eq!(
+            params["properties"]["nested"]["properties"]["inner"]["properties"]["leaf"]["type"],
+            "string"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -2312,5 +2430,58 @@ mod credential_transport_tests {
         let s = spec(url, Auth::Bearer("sk-secret".into()));
         let builder = reqwest::Client::new().post(url);
         assert!(apply_headers(builder, url, &s).is_err());
+    }
+}
+
+#[cfg(test)]
+mod openai_compat_stream_tests {
+    use super::*;
+
+    /// The managed gateway reports usage in its own frame after the finish
+    /// reason, with an empty `choices` array, which is also how OpenAI sends
+    /// it under `stream_options.include_usage`.
+    #[tokio::test]
+    async fn a_trailing_usage_frame_with_no_choices_still_counts() {
+        let frames = concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":598,\"completion_tokens\":23,\"total_tokens\":621}}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let outcome =
+            run_openai_compat_stream(stream, Duration::from_secs(5), "gateway", &mut |_| {})
+                .await
+                .expect("the stream decodes");
+        assert_eq!(outcome.text, "ok");
+        assert_eq!(outcome.stop_reason.as_deref(), Some("stop"));
+        assert_eq!(outcome.usage.input_tokens, 598);
+        assert_eq!(outcome.usage.output_tokens, 23);
+    }
+
+    #[tokio::test]
+    async fn a_stream_error_frame_fails_the_turn_with_the_gateway_sentence() {
+        let frames = concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"x_stream_error\":{\"message\":\"This model is unavailable right now.\",\"code\":\"provider_billing_exhausted\",\"retryable\":false}},\"index\":0}]}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let error =
+            run_openai_compat_stream(stream, Duration::from_secs(5), "managed_cloud", &mut |_| {})
+                .await
+                .expect_err("the frame is an error");
+        match error {
+            LlmError::StreamError {
+                provider,
+                message,
+                retryable,
+            } => {
+                assert_eq!(provider, "managed_cloud");
+                assert_eq!(message, "This model is unavailable right now.");
+                assert!(!retryable, "the gateway said not to retry");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 }

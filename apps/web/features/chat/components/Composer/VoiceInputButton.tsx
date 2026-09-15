@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Mic } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 
@@ -34,6 +35,7 @@ export function VoiceInputButton({
   disabled,
   className,
 }: VoiceInputButtonProps) {
+  const { t } = useTranslation('chat');
   const [showHint, setShowHint] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
 
@@ -56,7 +58,11 @@ export function VoiceInputButton({
         type="button"
         onClick={handleClick}
         disabled={disabled}
-        aria-label={isSupported ? LABEL.start : LABEL.unsupported}
+        aria-label={
+          isSupported
+            ? t('composer.voiceStart', { defaultValue: LABEL.start })
+            : t('composer.voiceUnsupportedBrowser', { defaultValue: LABEL.unsupported })
+        }
         aria-pressed={active}
         className={cn(
           'relative flex h-8 min-h-0 w-8 touch-manipulation items-center justify-center rounded-full transition-all duration-150 sm:h-9 sm:w-9',
@@ -79,7 +85,7 @@ export function VoiceInputButton({
             'text-center text-xs text-popover-foreground shadow-md',
           )}
         >
-          {LABEL.unsupportedHint}
+          {t('composer.voiceUnsupportedHint', { defaultValue: LABEL.unsupportedHint })}
           <span
             className="absolute left-1/2 top-full block h-0 w-0 -translate-x-1/2 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-border"
             aria-hidden="true"

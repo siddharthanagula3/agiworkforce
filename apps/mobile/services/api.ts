@@ -23,7 +23,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
 
-import { ApiHttpError, ApiPaywallError, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
+import { ApiPaywallError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 
 export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
 export type { ApiPaywallRecoveryAction } from './apiErrors';
@@ -312,37 +312,11 @@ async function request<T>(
         }
       }
 
-      let friendlyMessage: string | null = null;
-      let errorCode: string | null = null;
-      try {
-        const parsed = JSON.parse(body) as Record<string, unknown>;
-        const candidate = parsed.error ?? parsed.message;
-        if (typeof candidate === 'string' && candidate.trim()) {
-          friendlyMessage = candidate;
-        } else if (candidate && typeof candidate === 'object') {
-          const nested = candidate as { code?: unknown; message?: unknown };
-          if (typeof nested.code === 'string') errorCode = nested.code;
-          if (typeof nested.message === 'string' && nested.message.trim()) {
-            friendlyMessage = nested.message;
-          }
-        }
-      } catch (err) {
-        void err;
-      }
-      if (friendlyMessage) {
-        throw new ApiHttpError(friendlyMessage, response.status, errorCode);
-      }
       if (__DEV__) {
         const safeBody = body.length > 500 ? body.slice(0, 500) + '...(truncated)' : body;
         console.warn(`[api] ${init.method ?? 'GET'} ${path} -> HTTP ${response.status}:`, safeBody);
       }
-      throw new ApiHttpError(
-        response.status >= 500
-          ? 'The server hit a problem handling this request. Please try again.'
-          : `Request failed (HTTP ${response.status}). Please try again.`,
-        response.status,
-        errorCode,
-      );
+      throw httpErrorFrom(response.status, body);
     }
 
     const result = (await response.json()) as T;

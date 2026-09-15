@@ -865,7 +865,7 @@ pub fn render_keybindings() -> String {
         "    Global".to_string(),
         "      Ctrl+C       Cancel current turn / interrupt".to_string(),
         "      Ctrl+D       Exit AGI".to_string(),
-        "      Ctrl+L       Clear screen (preserve session)".to_string(),
+        "      Ctrl+L       Redraw the screen (preserve session)".to_string(),
         "      Tab          Toggle plan mode".to_string(),
         "      Shift+Tab    Cycle plan / accept / reject".to_string(),
         String::new(),
@@ -873,6 +873,7 @@ pub fn render_keybindings() -> String {
         "      /            Open palette".to_string(),
         "      ↑/↓          Navigate commands".to_string(),
         "      Enter        Run selected command".to_string(),
+        "      Tab          Fill the composer without running".to_string(),
         "      Esc          Close palette".to_string(),
         "      type         Filter commands".to_string(),
         String::new(),
@@ -885,8 +886,9 @@ pub fn render_keybindings() -> String {
         "    Editor".to_string(),
         "      Ctrl+E       Open external editor for current input".to_string(),
         "      Enter        Send message".to_string(),
-        "      Shift+Enter  Insert newline (multiline)".to_string(),
-        "      Alt+Enter    Insert newline (multiline, alternate)".to_string(),
+        "      Ctrl+J       Insert newline (multiline)".to_string(),
+        "      Shift+Enter  Insert newline, where the terminal sends it".to_string(),
+        "      Ctrl+U       Delete to line start".to_string(),
     ];
     frame("Keybindings".to_string(), &body, "Esc to close")
 }
@@ -1195,14 +1197,14 @@ mod tests {
             model: "fixture-render-model".into(),
             account_lines: vec![
                 "Account usage".into(),
-                "  plan: Max 15x".into(),
-                "  weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h".into(),
+                "  Plan: Max 15x".into(),
+                "  Weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h".into(),
             ],
         };
         let s = render_usage(&usage);
         assert!(s.contains("Usage"));
         assert!(s.contains("Account usage"));
-        assert!(s.contains("plan: Max 15x"));
+        assert!(s.contains("Plan: Max 15x"));
         assert!(s.contains("2050 left"));
         assert!(s.contains("Session estimate"));
         assert!(s.contains("Input tokens:"));

@@ -129,6 +129,7 @@ export function buildArtifactsDrawerSection(
   sectionEl.appendChild(statusEl);
 
   let artifacts: ChromeArtifact[] = [];
+  let listed = false;
   let inFlight: AbortController | null = null;
 
   function setStatus(message: string): void {
@@ -224,7 +225,7 @@ export function buildArtifactsDrawerSection(
     const fragment = document.createDocumentFragment();
     for (const artifact of artifacts) fragment.appendChild(buildRow(artifact));
     listEl.replaceChildren(fragment);
-    emptyEl.hidden = artifacts.length > 0 || !statusEl.hidden;
+    emptyEl.hidden = !listed || artifacts.length > 0 || !statusEl.hidden;
   }
 
   async function refresh(): Promise<void> {
@@ -238,12 +239,16 @@ export function buildArtifactsDrawerSection(
       if (result.code === 'cancelled') return;
       // Signed out means there is nothing to list. Any other failure means this
       // device could not ask, so what it already read stays on screen.
-      if (result.code === 'auth_required') artifacts = [];
+      if (result.code === 'auth_required') {
+        artifacts = [];
+        listed = true;
+      }
       reportFailure(result);
       render();
       return;
     }
     artifacts = result.artifacts;
+    listed = true;
     setStatus('');
     render();
   }
