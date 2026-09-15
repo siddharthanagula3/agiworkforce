@@ -224,7 +224,7 @@ fn select_auth_provider() -> Result<AuthChoice> {
     let choices = &[
         "Local model                      Run AI locally, no account required",
         "Provide your own API key         Pay for what you use (Anthropic, OpenAI, Google)",
-        "Other providers                  ChatGPT, Anthropic, GitHub Copilot OAuth",
+        "Other providers                  GitHub Copilot, OpenRouter, NVIDIA, local servers",
         "AGI cloud                        Sign in to get started, open to everyone",
         "Skip for now                     Configure later with /login",
     ];
@@ -241,8 +241,6 @@ fn select_auth_provider() -> Result<AuthChoice> {
 
 fn select_other_provider() -> Result<AuthChoice> {
     let choices = &[
-        "Sign in with ChatGPT             Usage included with Plus, Pro, Business, Enterprise",
-        "Sign in with Anthropic           Usage included with Pro, Max, Team, Enterprise",
         "Sign in with GitHub Copilot      Usage included with Copilot subscription",
         "OpenRouter                       API key, access 200+ models",
         "NVIDIA NIM                       API key, NVIDIA hosted models",
@@ -368,13 +366,11 @@ fn local_provider_preference(auth_choice: &AuthChoice) -> Option<&'static str> {
 /// Local submenu entries must resolve to LOCAL providers, never cloud login.
 fn other_provider_choice_for_index(selection: usize) -> AuthChoice {
     match selection {
-        0 => AuthChoice::Provider("openai"),
-        1 => AuthChoice::Provider("anthropic"),
-        2 => AuthChoice::Provider("copilot"),
-        3 => AuthChoice::ApiKeyProvider("openrouter"),
-        4 => AuthChoice::ApiKeyProvider("nvidia"),
-        5 => AuthChoice::Local("ollama"),
-        6 => AuthChoice::Local("lmstudio"),
+        0 => AuthChoice::Provider("copilot"),
+        1 => AuthChoice::ApiKeyProvider("openrouter"),
+        2 => AuthChoice::ApiKeyProvider("nvidia"),
+        3 => AuthChoice::Local("ollama"),
+        4 => AuthChoice::Local("lmstudio"),
         _ => AuthChoice::Skip,
     }
 }
@@ -1003,9 +999,9 @@ mod local_first_run_tests {
 
     #[test]
     fn other_providers_ollama_entry_resolves_to_local() {
-        // "Other providers" submenu index 5 = "Ollama (local)".
+        // "Other providers" submenu index 3 = "Ollama (local)".
         assert_eq!(
-            other_provider_choice_for_index(5),
+            other_provider_choice_for_index(3),
             AuthChoice::Local("ollama")
         );
     }
@@ -1013,7 +1009,7 @@ mod local_first_run_tests {
     #[test]
     fn other_providers_lmstudio_entry_resolves_to_local() {
         assert_eq!(
-            other_provider_choice_for_index(6),
+            other_provider_choice_for_index(4),
             AuthChoice::Local("lmstudio")
         );
     }
@@ -1026,14 +1022,6 @@ mod local_first_run_tests {
         );
         assert_eq!(
             other_provider_choice_for_index(0),
-            AuthChoice::Provider("openai")
-        );
-        assert_eq!(
-            other_provider_choice_for_index(1),
-            AuthChoice::Provider("anthropic")
-        );
-        assert_eq!(
-            other_provider_choice_for_index(2),
             AuthChoice::Provider("copilot")
         );
     }
@@ -1041,11 +1029,11 @@ mod local_first_run_tests {
     #[test]
     fn api_key_providers_do_not_route_to_oauth_login() {
         assert_eq!(
-            other_provider_choice_for_index(3),
+            other_provider_choice_for_index(1),
             AuthChoice::ApiKeyProvider("openrouter")
         );
         assert_eq!(
-            other_provider_choice_for_index(4),
+            other_provider_choice_for_index(2),
             AuthChoice::ApiKeyProvider("nvidia")
         );
     }

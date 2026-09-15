@@ -1,5 +1,5 @@
 // OAuth provider authentication for AGI Workforce CLI
-// Supports: Anthropic (Claude Max), OpenAI (ChatGPT Plus/Pro), GitHub Copilot
+// Supports: the AGI Workforce device flow; provider keys are entered, never OAuth'd (D-2026-09-15-05)
 
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -27,32 +27,6 @@ pub struct OAuthProvider {
     pub echoes_state_in_code: bool,
 }
 
-pub const ANTHROPIC_OAUTH: OAuthProvider = OAuthProvider {
-    id: "anthropic",
-    name: "Anthropic",
-    description: "Claude Max or Console subscription",
-    client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-    authorize_url: "https://claude.ai/oauth/authorize",
-    token_url: "https://console.anthropic.com/v1/oauth/token",
-    redirect_uri: "https://console.anthropic.com/oauth/code/callback",
-    scopes: "org:create_api_key user:profile user:inference",
-    echoes_state_in_code: true,
-};
-
-pub const OPENAI_OAUTH: OAuthProvider = OAuthProvider {
-    id: "openai",
-    name: "OpenAI",
-    description: "ChatGPT Plus/Pro subscription",
-    client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
-    authorize_url: "https://auth.openai.com/oauth/authorize",
-    token_url: "https://auth.openai.com/oauth/token",
-    redirect_uri: "http://127.0.0.1:1455/callback",
-    scopes: "openid profile email offline_access",
-    // OpenAI uses a loopback callback; the pasted code does not carry a
-    // `#state` fragment, so the code-fragment check does not apply here.
-    echoes_state_in_code: false,
-};
-
 pub const AGIWORKFORCE_OAUTH: OAuthProvider = OAuthProvider {
     id: "agiworkforce",
     name: "AGI",
@@ -66,8 +40,7 @@ pub const AGIWORKFORCE_OAUTH: OAuthProvider = OAuthProvider {
     echoes_state_in_code: false,
 };
 
-pub const ALL_PROVIDERS: &[&OAuthProvider] =
-    &[&AGIWORKFORCE_OAUTH, &ANTHROPIC_OAUTH, &OPENAI_OAUTH];
+pub const ALL_PROVIDERS: &[&OAuthProvider] = &[&AGIWORKFORCE_OAUTH];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PKCE (Proof Key for Code Exchange)
@@ -326,7 +299,6 @@ pub async fn oauth_login(provider: &OAuthProvider) -> Result<crate::auth::AuthEn
         refresh: tokens.refresh_token.unwrap_or_default(),
         access: tokens.access_token,
         expires,
-        account_id: None,
     })
 }
 
@@ -468,7 +440,6 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
             refresh: tokens.refresh_token.unwrap_or_default(),
             access: tokens.access_token,
             expires,
-            account_id: None,
         },
     )))
 }
