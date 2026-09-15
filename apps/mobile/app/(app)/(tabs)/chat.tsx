@@ -1,5 +1,13 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { View, Alert, Keyboard, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Alert,
+  Keyboard,
+  Linking,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
@@ -28,7 +36,10 @@ import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAtt
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
-import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
+import {
+  VoiceOnboardingSheet,
+  type VoiceOnboardingMode,
+} from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
@@ -570,7 +581,11 @@ export default function ChatTabScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Camera Access',
-          'Camera permission is required to take photos. Please enable it in Settings.',
+          'Camera permission is required to take photos. Allow it in Settings to attach a photo.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+          ],
         );
         return;
       }
@@ -641,6 +656,17 @@ export default function ChatTabScreen() {
       chatInputAttachRef.current?.addAttachments([attachment]);
     },
     [],
+  );
+
+  const voiceOnboardingMode: VoiceOnboardingMode = useMemo(
+    () =>
+      liveVoiceModeUnavailableReason({
+        executionMode: activeMode === 'cloud' ? 'cloud' : 'local',
+        signedIn: isClerkSignedIn,
+      })
+        ? 'on-device'
+        : 'live',
+    [activeMode, isClerkSignedIn],
   );
 
   const startVoiceMode = useCallback(() => {
@@ -918,6 +944,7 @@ export default function ChatTabScreen() {
       {/* First-run voice intro + recording disclosure, gating the overlay below */}
       <VoiceOnboardingSheet
         visible={voiceIntroVisible}
+        mode={voiceOnboardingMode}
         onContinue={handleVoiceIntroContinue}
         onDismiss={handleVoiceIntroDismiss}
       />

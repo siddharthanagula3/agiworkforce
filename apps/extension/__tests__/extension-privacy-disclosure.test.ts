@@ -1,9 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * The extension injects a content script into every page, holds the debugger and
- * cookies permissions, and mirrors Managed Cloud chats to the account. This file
- * proves the user is told all four things inside the extension's own UI, and that
+ * The extension injects a content script into every page, holds the debugger
+ * permission, and mirrors Managed Cloud chats to the account. This file proves
+ * the user is told all three things inside the extension's own UI, and that
  * declining the mirror actually stops the network copy.
  */
 import { readFileSync } from 'node:fs';
@@ -165,7 +165,7 @@ describe('cloud mirroring opt-out', () => {
 });
 
 describe('options data-handling disclosure', () => {
-  it('names the all-URLs script, debugger, cookies and cloud mirroring', () => {
+  it('names the all-URLs script, debugger and cloud mirroring', () => {
     const section = createDataHandlingSection({
       get: (key) => chromeMock.storage.local.get(key) as Promise<Record<string, unknown>>,
       set: (items) => chromeMock.storage.local.set(items) as Promise<void>,
@@ -180,8 +180,25 @@ describe('options data-handling disclosure', () => {
     ]);
     expect(text).toContain('every http and https page');
     expect(text).toContain('Chrome debugger permission');
-    expect(text).toContain('cookies permission');
+    expect(text).toContain('reads only your AGI sign-in');
+    expect(text).toContain('never sets a cookie');
     expect(text).toContain('copied to your AGI account');
+  });
+
+  it('describes the page attach the extension actually performs', () => {
+    const pageInjection = DATA_HANDLING_DISCLOSURES.find((entry) => entry.id === 'page-injection')!;
+
+    expect(pageInjection.body).toContain('read and change all your data on all websites');
+    expect(pageInjection.body).toContain('5,000 characters');
+    expect(pageInjection.body).toContain('redacted');
+    // The attach is explicit and per-request; the list governs the in-page
+    // surfaces. Saying it reads page text "only on approved sites" was the
+    // wrong gate and made the disclosure both narrower and untrue.
+    expect(pageInjection.body).not.toMatch(/only when you ask for it on a site you approved/);
+
+    const sidePanel = readSource('src/side_panel.ts');
+    expect(sidePanel).toContain('const PAGE_CONTEXT_MAX_CHARS = 5_000;');
+    expect(sidePanel).toContain('sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS)');
   });
 
   it('stores the decline the sync gate reads', async () => {

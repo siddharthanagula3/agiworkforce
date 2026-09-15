@@ -24,6 +24,9 @@ const STORAGE_KEY_BRIDGE_SECRET = 'agi_bridge_secret';
 const STORAGE_KEY_PAIR_TOKEN = 'agi_pair_token';
 const STORAGE_KEY_FINGERPRINT = 'agi_pairing_fingerprint';
 const STORAGE_KEY_PAIR_REQUEST = 'agi_pair_request';
+// Owned by the background worker, which reads it to decide whether a worker
+// start should attempt connectNative at all.
+const STORAGE_KEY_DESKTOP_PAIRED = 'connectedToDesktop';
 
 const PAIRING_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
 const PAIRING_FINGERPRINT_RE = /^[A-Za-z0-9_-]{4,32}$/;
@@ -381,6 +384,12 @@ export async function unpair(): Promise<PairingState> {
     ]);
   } catch {
     // Storage removal failure should not block state reset
+  }
+
+  try {
+    await chrome.storage.local.remove(STORAGE_KEY_DESKTOP_PAIRED);
+  } catch {
+    // The background falls back to a failed connect attempt; do not block reset.
   }
 
   _state = { ...IDLE_STATE };

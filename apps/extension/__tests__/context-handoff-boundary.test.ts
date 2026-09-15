@@ -60,7 +60,7 @@ describe('Chrome native-session integrity boundary', () => {
   it('sends WebMCP metadata only through the authenticated native request path', () => {
     const webmcpBranch = backgroundSource.slice(
       backgroundSource.indexOf("case 'WEBMCP_TOOLS_CHANGED'"),
-      backgroundSource.indexOf("case 'NLWEB_DETECTED'"),
+      backgroundSource.indexOf("case 'GET_TAB_GROUP_STATE'"),
     );
     const nativeStart = backgroundSource.indexOf('function sendAuthenticatedWebMCPNativeUpdate');
     const nativeEnd = backgroundSource.indexOf('function handleNativeMessage', nativeStart);

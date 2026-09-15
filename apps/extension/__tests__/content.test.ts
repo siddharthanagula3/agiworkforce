@@ -20,6 +20,16 @@ if (typeof CSS.escape !== 'function') {
   CSS.escape = (value: string) => value.replace(/([^\w-])/g, '\\$1');
 }
 
+const documentListenerTypes = vi.hoisted(() => {
+  const recorded: string[] = [];
+  const original = document.addEventListener.bind(document);
+  document.addEventListener = ((type: string, ...rest: unknown[]) => {
+    recorded.push(type);
+    return (original as (...args: unknown[]) => void)(type, ...rest);
+  }) as typeof document.addEventListener;
+  return recorded;
+});
+
 const chromeMock = vi.hoisted(() => {
   const mock = {
     runtime: {
@@ -92,7 +102,7 @@ vi.mock('../src/webmcp', () => ({
     timestamp: Date.now(),
   })),
   callTool: vi.fn().mockResolvedValue({ success: true }),
-  watchForToolChanges: vi.fn(),
+  startToolChangeReporting: vi.fn(),
 }));
 
 vi.mock('../src/page-metadata', () => ({
@@ -111,12 +121,6 @@ vi.mock('../src/page-metadata', () => ({
     jsonLd: [],
     schemaTypes: [],
   })),
-}));
-
-vi.mock('../src/nlweb', () => ({
-  detectNLWeb: vi
-    .fn()
-    .mockResolvedValue({ supported: false, endpoints: [], schemaTypes: [], url: '' }),
 }));
 
 import { automationState, handleMessage, checkConnectionStatus } from '../src/content.ts';
@@ -142,6 +146,21 @@ beforeEach(() => {
 
 afterEach(() => {
   clearBody();
+});
+
+describe('content-script initialization', () => {
+  it('does not track the pointer on every page', () => {
+    expect(documentListenerTypes).not.toContain('mousemove');
+  });
+
+  it('registers its listeners once even if the script is injected again', async () => {
+    const registeredBefore = chromeMock.runtime.onMessage.addListener.mock.calls.length;
+
+    vi.resetModules();
+    await import('../src/content.ts');
+
+    expect(chromeMock.runtime.onMessage.addListener.mock.calls.length).toBe(registeredBefore);
+  });
 });
 
 describe('handleMessage, invalid messages are rejected', () => {
@@ -658,30 +677,93 @@ describe('handleMessage, additional message types routing', () => {
     expect(response).toMatchObject({ success: true });
   });
 
-  it('CAPTURE_ELEMENT: returns error when no element is under pointer', async () => {
-    const response = await dispatchMessage({ type: 'CAPTURE_ELEMENT' });
-    expect(response).toMatchObject({ success: false, error: 'No element under pointer' });
+  it('CAPTURE_ELEMENT and GET_ELEMENT_INFO are no longer accepted message types', async () => {
+    for (const type of ['CAPTURE_ELEMENT', 'GET_ELEMENT_INFO']) {
+      expect(await dispatchMessage({ type })).toMatchObject({
+        success: false,
+        error: 'Invalid message',
+      });
+    }
   });
 
-  it('GET_ELEMENT_INFO: returns error when no active element', async () => {
-    const response = await dispatchMessage({ type: 'GET_ELEMENT_INFO' });
-    expect(typeof (response as Record<string, unknown>).success).toBe('boolean');
-  });
+  it('FILL_FORM: refuses to write to every form on the page', async () => {
+    document.body.innerHTML =
+      '<form id="a"><input name="email" /></form><form id="b"><input name="email" /></form>';
+    const { formUtils } = await import('../src/utils');
 
-  it('FILL_FORM: returns success with fieldsFilled count', async () => {
-    const response = (await dispatchMessage({
+    const response = await dispatchMessage({
       type: 'FILL_FORM',
       formSelector: null,
+      data: { email: 'test@example.com' },
+    });
+
+    expect(response).toMatchObject({
+      success: false,
+      error: 'FILL_FORM requires a valid formSelector',
+    });
+    expect(formUtils.getFormFields).not.toHaveBeenCalled();
+    expect(formUtils.fillField).not.toHaveBeenCalled();
+  });
+
+  it('FILL_FORM: fails when the selector resolves to no form', async () => {
+    const response = await dispatchMessage({
+      type: 'FILL_FORM',
+      formSelector: '#missing',
+      data: { email: 'test@example.com' },
+    });
+    expect(response).toMatchObject({ success: false, error: 'Form not found: #missing' });
+  });
+
+  it('FILL_FORM: fills only the named form', async () => {
+    document.body.innerHTML =
+      '<form id="a"><input name="email" /></form><form id="b"><input name="email" /></form>';
+    const { formUtils } = await import('../src/utils');
+    (formUtils.getFormFields as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      (form: HTMLFormElement) => Array.from(form.querySelectorAll('input')),
+    );
+
+    const response = (await dispatchMessage({
+      type: 'FILL_FORM',
+      formSelector: '#a',
       data: { email: 'test@example.com' },
     })) as { success: boolean; fieldsFilled: number };
 
     expect(response.success).toBe(true);
-    expect(typeof response.fieldsFilled).toBe('number');
+    expect(response.fieldsFilled).toBe(1);
+    expect(formUtils.getFormFields).toHaveBeenCalledWith(document.getElementById('a'));
   });
 
-  it('SUBMIT_FORM: calls submitForm and returns success', async () => {
+  it("SUBMIT_FORM: refuses to submit the page's first form without a target", async () => {
+    document.body.innerHTML = '<form id="a"></form>';
+    const { formUtils } = await import('../src/utils');
+
     const response = await dispatchMessage({ type: 'SUBMIT_FORM', formSelector: null });
-    expect(response).toMatchObject({ success: expect.any(Boolean) });
+
+    expect(response).toMatchObject({
+      success: false,
+      error: 'SUBMIT_FORM requires a valid formSelector',
+    });
+    expect(formUtils.submitForm).not.toHaveBeenCalled();
+  });
+
+  it('SUBMIT_FORM: fails when the selector does not resolve to a form', async () => {
+    document.body.innerHTML = '<div id="d"></div>';
+    const { formUtils } = await import('../src/utils');
+
+    const response = await dispatchMessage({ type: 'SUBMIT_FORM', formSelector: '#d' });
+
+    expect(response).toMatchObject({ success: false, error: 'Form not found: #d' });
+    expect(formUtils.submitForm).not.toHaveBeenCalled();
+  });
+
+  it('SUBMIT_FORM: submits the named form', async () => {
+    document.body.innerHTML = '<form id="a"></form>';
+    const { formUtils } = await import('../src/utils');
+
+    const response = await dispatchMessage({ type: 'SUBMIT_FORM', formSelector: '#a' });
+
+    expect(response).toMatchObject({ success: true });
+    expect(formUtils.submitForm).toHaveBeenCalledWith(document.getElementById('a'));
   });
 
   it('WAIT_FOR_SELECTOR: returns success with found=false after timeout', async () => {

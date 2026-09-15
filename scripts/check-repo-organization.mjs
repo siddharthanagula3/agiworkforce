@@ -11,6 +11,9 @@ const warnings = [];
 
 const allowedRootFiles = new Set([
   'ACTIVE_ISSUES.md',
+  // Product completeness register across the six surfaces; sits beside
+  // ACTIVE_ISSUES.md because it is the entry point for launch-readiness work.
+  'PRODUCT_GAPS.md',
   '.git',
   '.agi-guardian.yml',
   '.claudeignore',

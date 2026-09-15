@@ -416,8 +416,16 @@ export default function CompareScreen() {
       {/* Rendered outside KeyboardAvoidingView so they overlay correctly */}
       {isCloudMode ? (
         <>
-          <ModelPickerSheet sheetRef={modelPickerARef} onSelect={handleSelectModelA} />
-          <ModelPickerSheet sheetRef={modelPickerBRef} onSelect={handleSelectModelB} />
+          <ModelPickerSheet
+            sheetRef={modelPickerARef}
+            modelScope="cloud"
+            onSelect={handleSelectModelA}
+          />
+          <ModelPickerSheet
+            sheetRef={modelPickerBRef}
+            modelScope="cloud"
+            onSelect={handleSelectModelB}
+          />
         </>
       ) : null}
     </SafeAreaView>

@@ -36,10 +36,10 @@ import {
 } from './features/content/autofill/filler';
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
-import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
-import { detectNLWeb } from './nlweb';
+import { discoverAllTools, callTool, startToolChangeReporting } from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
+import { isDomSmallEnoughToRead } from './dom-helpers';
 import {
   validateShortcutActions,
   MAX_CONTEXT_HTML_CHARS,
@@ -47,22 +47,13 @@ import {
   SITE_ALLOWLIST_STORAGE_KEY,
 } from './background/policy';
 
-const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
-const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
-
 function extractPageHtmlSafely(): string {
   try {
-    const elementCount = document.querySelectorAll('*').length;
-    if (elementCount > MAX_DOM_ELEMENTS_FOR_EXTRACTION) {
-      logger.debug('Skipping page-text extraction, DOM too large', { elementCount });
+    if (!isDomSmallEnoughToRead()) {
+      logger.debug('Skipping page-text extraction, DOM too large');
       return '';
     }
-    const extractStart = Date.now();
     const rawText = document.body?.innerText ?? document.documentElement?.innerText ?? '';
-    if (Date.now() - extractStart >= PAGE_EXTRACTION_TIMEOUT_MS) {
-      logger.warn('Page-text extraction timed out, using empty content');
-      return '';
-    }
     const collapsed = rawText
       .replace(/[\t \u00a0]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
@@ -90,7 +81,6 @@ const automationState: AutomationState = {
   connectionStatus: 'disconnected',
   captureValues: false,
 };
-let lastPointerTarget: Element | null = null;
 
 /**
  * Whether this page's origin carries the user's approval.
@@ -113,14 +103,21 @@ const originApproved: Promise<boolean> = (async () => {
   }
 })();
 
+interface ContentScriptScope {
+  __agiWorkforceContentScriptReady?: boolean;
+}
+
 function initialize(): void {
-  void setupInPagePanel(logger);
+  const scope = window as Window & ContentScriptScope;
+  if (scope.__agiWorkforceContentScriptReady) {
+    logger.debug('Content script already initialized in this frame, skipping re-injection');
+    return;
+  }
+  scope.__agiWorkforceContentScriptReady = true;
+
+  void setupInPagePanel(originApproved, logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);
-  document.addEventListener('mousemove', (event) => {
-    const target = event.target;
-    lastPointerTarget = target instanceof Element ? target : null;
-  });
 
   void originApproved.then((approved) => {
     if (!approved) return;
@@ -224,10 +221,6 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'SUBMIT_FORM':
       return handleSubmitForm(message as SubmitFormMessage);
-    case 'CAPTURE_ELEMENT':
-      return handleCaptureElement();
-    case 'GET_ELEMENT_INFO':
-      return handleGetElementInfo();
     case 'RUN_PAGE_ACTIONS':
       return handleRunPageActions(message as RunPageActionsMessage);
     case 'AUTO_FILL_JOB_APPLICATION':
@@ -597,75 +590,6 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
     screenshot,
     error: firstError,
   } as ExtensionResponse;
-}
-
-function serializeElement(target: Element | null): Record<string, unknown> | null {
-  if (!target) {
-    return null;
-  }
-
-  const rect = target.getBoundingClientRect();
-  const html = target.outerHTML || '';
-  return {
-    tag: target.tagName.toLowerCase(),
-    id: target.id || null,
-    className: target.className || null,
-    text: (target.textContent || '').trim().slice(0, 400),
-    selector: buildElementSelector(target),
-    rect: {
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height,
-    },
-    html: html.slice(0, 4000),
-  };
-}
-
-function buildElementSelector(element: Element): string {
-  if (element.id) {
-    return `#${CSS.escape(element.id)}`;
-  }
-
-  const parts: string[] = [];
-  let current: Element | null = element;
-  while (current && current.parentElement && parts.length < 4) {
-    const tag = current.tagName.toLowerCase();
-    const classPart =
-      typeof current.className === 'string' && current.className.trim()
-        ? `.${current.className
-            .trim()
-            .split(/\s+/)
-            .slice(0, 2)
-            .map((cls) => CSS.escape(cls))
-            .join('.')}`
-        : '';
-    const siblings = Array.from(current.parentElement.children).filter(
-      (child) => child.tagName === current!.tagName,
-    );
-    const nth = siblings.length > 1 ? `:nth-of-type(${siblings.indexOf(current) + 1})` : '';
-    parts.unshift(`${tag}${classPart}${nth}`);
-    current = current.parentElement;
-  }
-  return parts.join(' > ');
-}
-
-function handleCaptureElement(): ExtensionResponse {
-  const payload = serializeElement(lastPointerTarget);
-  if (!payload) {
-    return { success: false, error: 'No element under pointer' };
-  }
-
-  return { success: true, element: payload } as ExtensionResponse;
-}
-
-function handleGetElementInfo(): ExtensionResponse {
-  const active = document.activeElement instanceof Element ? document.activeElement : null;
-  const payload = serializeElement(active || lastPointerTarget);
-  if (!payload) {
-    return { success: false, error: 'No active element found' };
-  }
-  return { success: true, element: payload } as ExtensionResponse;
 }
 
 async function handleClick(message: ClickMessage): Promise<ClickResponse> {
@@ -1122,7 +1046,14 @@ async function handleFillForm(message: FillFormMessage): Promise<ExtensionRespon
   try {
     const { formSelector, data, options = {} } = message;
 
-    const form = formSelector ? domUtils.querySelector(formSelector) : null;
+    if (!formSelector || !validators.isValidSelector(formSelector)) {
+      return { success: false, error: 'FILL_FORM requires a valid formSelector' };
+    }
+
+    const form = domUtils.querySelector(formSelector);
+    if (!form) {
+      return { success: false, error: `Form not found: ${formSelector}` };
+    }
 
     const fields = formUtils.getFormFields(form as HTMLFormElement);
 
@@ -1276,13 +1207,16 @@ async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionRe
   try {
     const { formSelector } = message;
 
-    const form = formSelector
-      ? (domUtils.querySelector(formSelector) as HTMLFormElement | null)
-      : null;
+    if (!formSelector || !validators.isValidSelector(formSelector)) {
+      return { success: false, error: 'SUBMIT_FORM requires a valid formSelector' };
+    }
 
-    const success = formUtils.submitForm(form);
+    const form = domUtils.querySelector(formSelector);
+    if (!(form instanceof HTMLFormElement)) {
+      return { success: false, error: `Form not found: ${formSelector}` };
+    }
 
-    return { success };
+    return { success: formUtils.submitForm(form) };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -1799,70 +1733,43 @@ async function checkConnectionStatus(): Promise<void> {
   }
 }
 
+function sendWebMCPTools(tools: import('./webmcp').WebMCPToolInfo[], url: string): void {
+  chrome.runtime
+    .sendMessage({
+      type: 'WEBMCP_TOOLS_CHANGED',
+      tools,
+      url,
+      timestamp: Date.now(),
+    })
+    .catch((err) => {
+      logger.debug('WebMCP tools notification failed', err);
+    });
+}
+
 function initWebMCP(): void {
   setTimeout(() => {
+    let discoveredTools: import('./webmcp').WebMCPToolInfo[] = [];
     try {
       const discovery = discoverAllTools();
+      discoveredTools = discovery.tools;
       if (discovery.tools.length > 0) {
         logger.info(`WebMCP: discovered ${discovery.tools.length} tool(s)`, {
           tools: discovery.tools.map((t) => t.name),
           url: discovery.url,
         });
-        chrome.runtime
-          .sendMessage({
-            type: 'WEBMCP_TOOLS_CHANGED',
-            tools: discovery.tools,
-            url: discovery.url,
-            timestamp: Date.now(),
-          })
-          .catch(() => {
-            // Background may not be listening yet
-          });
+        sendWebMCPTools(discovery.tools, discovery.url);
       }
     } catch (err) {
       logger.debug('WebMCP tool discovery failed (non-fatal)', err);
     }
 
     try {
-      watchForToolChanges((tools) => {
-        chrome.runtime
-          .sendMessage({
-            type: 'WEBMCP_TOOLS_CHANGED',
-            tools,
-            url: window.location.href,
-            timestamp: Date.now(),
-          })
-          .catch((err) => {
-            logger.debug('WebMCP tools changed notification failed', err);
-          });
+      startToolChangeReporting(discoveredTools, (tools) => {
+        sendWebMCPTools(tools, window.location.href);
       });
     } catch (err) {
-      logger.debug('WebMCP watchForToolChanges failed (non-fatal)', err);
+      logger.debug('WebMCP startToolChangeReporting failed (non-fatal)', err);
     }
-
-    detectNLWeb(window.location.href)
-      .then((nlwebResult) => {
-        if (nlwebResult.supported) {
-          logger.info('NLWeb: detected support', {
-            endpoints: nlwebResult.endpoints.length,
-            schemaTypes: nlwebResult.schemaTypes,
-            url: nlwebResult.url,
-          });
-          chrome.runtime
-            .sendMessage({
-              type: 'NLWEB_DETECTED',
-              nlweb: nlwebResult,
-              url: window.location.href,
-              timestamp: Date.now(),
-            })
-            .catch((err) => {
-              logger.debug('NLWeb notification to background failed', err);
-            });
-        }
-      })
-      .catch((err) => {
-        logger.debug('NLWeb detection failed (non-fatal)', err);
-      });
   }, 1000);
 }
 
@@ -1898,8 +1805,6 @@ const VALID_MESSAGE_TYPES = new Set([
   'GET_FORMS',
   'FILL_FORM',
   'SUBMIT_FORM',
-  'CAPTURE_ELEMENT',
-  'GET_ELEMENT_INFO',
   'RUN_PAGE_ACTIONS',
   'AUTO_FILL_JOB_APPLICATION',
   'GET_CONNECTION_STATUS',

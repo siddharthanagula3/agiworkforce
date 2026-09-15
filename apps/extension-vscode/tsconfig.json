@@ -7,7 +7,7 @@
     // types (PerformanceEntry, Node, DOMRectReadOnly) that TS 6 needs
     // to resolve through the type-source check even when the import is
     // never instantiated.
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "outDir": "./out",
     "rootDir": "./src",
     "strict": true,

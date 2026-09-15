@@ -23,6 +23,7 @@ const SUBMIT_BUTTON_KEYWORDS = [
   'finish',
 ];
 const PROGRESS_BUTTON_KEYWORDS = ['next', 'continue', 'review', 'proceed'];
+const AMBIGUOUS_SUBMIT_LABELS = ['finish', 'apply now'];
 const START_APPLICATION_BUTTON_KEYWORDS = [
   'easy apply',
   'quick apply',
@@ -90,10 +91,7 @@ export function detectPlatformFromUrl(url) {
 
     if (
       hostMatches(host, 'greenhouse.io') ||
-      hostMatches(host, 'boards.greenhouse.io') ||
-      hostMatches(host, 'job-boards.greenhouse.io') ||
       path.includes('/job_app') ||
-      path.includes('/application') ||
       query.includes('gh_jid=')
     ) {
       return 'greenhouse';
@@ -729,28 +727,40 @@ function boolToText(value) {
   return value ? 'yes' : 'no';
 }
 
+const USER_TEXT_SKIP_REASON = 'already holds text entered on the page';
+
+function resolvedTextValue(resolved) {
+  if (resolved.kind === 'text') {
+    return resolved.value;
+  }
+  if (resolved.kind === 'boolean') {
+    return boolToText(resolved.value);
+  }
+  return null;
+}
+
 async function fillFieldValue(element, resolved, delayMs) {
   if (element instanceof HTMLInputElement && element.type.toLowerCase() === 'file') {
     if (resolved.kind !== 'file') {
-      return false;
+      return { filled: false };
     }
     const success = setFileInput(element, resolved.dataUrl, resolved.fileName);
     if (success && delayMs > 0) {
       await sleep(delayMs);
     }
-    return success;
+    return { filled: success };
   }
 
   if (element instanceof HTMLSelectElement) {
     if (resolved.kind !== 'text' && resolved.kind !== 'boolean') {
-      return false;
+      return { filled: false };
     }
     const selectValue = resolved.kind === 'boolean' ? boolToText(resolved.value) : resolved.value;
     const success = trySetSelectValue(element, selectValue);
     if (success && delayMs > 0) {
       await sleep(delayMs);
     }
-    return success;
+    return { filled: success };
   }
 
   if (element instanceof HTMLInputElement) {
@@ -758,12 +768,12 @@ async function fillFieldValue(element, resolved, delayMs) {
 
     if (inputType === 'radio') {
       if (resolved.kind !== 'boolean' && resolved.kind !== 'text') {
-        return false;
+        return { filled: false };
       }
 
       const selectedRadio = pickRadioForResolvedValue(element, resolved);
       if (!selectedRadio) {
-        return false;
+        return { filled: false };
       }
 
       selectedRadio.focus();
@@ -772,60 +782,43 @@ async function fillFieldValue(element, resolved, delayMs) {
       if (delayMs > 0) {
         await sleep(delayMs);
       }
-      return true;
+      return { filled: true };
     }
 
     if (inputType === 'checkbox') {
       if (resolved.kind !== 'boolean') {
-        return false;
+        return { filled: false };
       }
       element.checked = resolved.value;
       dispatchInputEvents(element);
       if (delayMs > 0) {
         await sleep(delayMs);
       }
-      return true;
+      return { filled: true };
     }
-
-    const textValue =
-      resolved.kind === 'text'
-        ? resolved.value
-        : resolved.kind === 'boolean'
-          ? boolToText(resolved.value)
-          : null;
-    if (!textValue) {
-      return false;
-    }
-
-    element.focus();
-    setInputValueWithNativeSetter(element, textValue);
-    dispatchInputEvents(element);
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-    return true;
   }
 
-  if (element instanceof HTMLTextAreaElement) {
-    const textValue =
-      resolved.kind === 'text'
-        ? resolved.value
-        : resolved.kind === 'boolean'
-          ? boolToText(resolved.value)
-          : null;
-    if (!textValue) {
-      return false;
-    }
-    element.focus();
-    setInputValueWithNativeSetter(element, textValue);
-    dispatchInputEvents(element);
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-    return true;
+  if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) {
+    return { filled: false };
   }
 
-  return false;
+  const textValue = resolvedTextValue(resolved);
+  if (!textValue) {
+    return { filled: false };
+  }
+
+  const existing = String(element.value ?? '');
+  if (existing.trim() !== '' && existing !== textValue) {
+    return { filled: false, skippedReason: USER_TEXT_SKIP_REASON };
+  }
+
+  element.focus();
+  setInputValueWithNativeSetter(element, textValue);
+  dispatchInputEvents(element);
+  if (delayMs > 0) {
+    await sleep(delayMs);
+  }
+  return { filled: true };
 }
 
 function isRequired(element) {
@@ -946,15 +939,17 @@ async function runAutofillPass(platform, profile, options, alreadyFilled, deadli
     }
 
     try {
-      const success = await fillFieldValue(field, resolved, delayMs);
-      if (success) {
+      const outcome = await fillFieldValue(field, resolved, delayMs);
+      if (outcome.filled) {
         alreadyFilled.add(fingerprint);
         filledCount += 1;
         filledFields.push(summary);
         missingRequired.delete(summary);
       } else {
         skippedCount += 1;
-        skippedFields.push(summary);
+        skippedFields.push(
+          outcome.skippedReason ? `${summary}: ${outcome.skippedReason}` : summary,
+        );
         if (isEmptyRequiredField(field)) {
           missingRequired.add(summary);
         }
@@ -994,12 +989,38 @@ function buttonLabel(button) {
   return normalize(text);
 }
 
+function buttonDisplayLabel(button) {
+  const text =
+    button.textContent ||
+    button.getAttribute('aria-label') ||
+    button.getAttribute('value') ||
+    button.getAttribute('data-automation-id') ||
+    '';
+  return String(text).replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+
+function confirmApplyClick(button) {
+  const label = buttonDisplayLabel(button);
+  return {
+    label,
+    confirmed: window.confirm(
+      `AGI Workforce: click "${label}" on ${window.location.host}?\n\n` +
+        'This button can start or send a job application. Click OK to click it, or Cancel to ' +
+        'leave the page alone.',
+    ),
+  };
+}
+
 function isNegativeButton(label) {
   return NEGATIVE_BUTTON_KEYWORDS.some((keyword) => label.includes(keyword));
 }
 
 function isSubmitButton(label) {
   return SUBMIT_BUTTON_KEYWORDS.some((keyword) => label.includes(keyword));
+}
+
+function needsApplyConfirmation(label) {
+  return AMBIGUOUS_SUBMIT_LABELS.includes(label.trim());
 }
 
 function isProgressButton(label) {
@@ -1101,7 +1122,7 @@ function getGenericFlowButtons() {
 }
 
 function clickElement(element) {
-  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
   element.click();
 }
 
@@ -1119,6 +1140,15 @@ async function startGenericApplicationFlow(delayMs, deadlineEpochMs) {
   const preferred = buttons.find((entry) => entry.label.includes('easy apply')) || buttons[0];
   if (!preferred) {
     return { started: false, clickedLabel: null };
+  }
+
+  const { label, confirmed } = confirmApplyClick(preferred.button);
+  if (!confirmed) {
+    return {
+      started: false,
+      clickedLabel: null,
+      skippedReason: `Declined to click "${label}"`,
+    };
   }
 
   clickElement(preferred.button);
@@ -1145,6 +1175,10 @@ async function runGenericSubmitSweep(delayMs, deadlineEpochMs, maxClicks = 2) {
       .find((entry) => isSubmitButton(entry.label));
 
     if (!candidate) {
+      break;
+    }
+
+    if (needsApplyConfirmation(candidate.label) && !confirmApplyClick(candidate.button).confirmed) {
       break;
     }
 

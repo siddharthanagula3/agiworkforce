@@ -158,6 +158,27 @@
         </dict>
 
         <!--
+          Audio Data: live voice mode in an AGI Cloud chat streams the
+          microphone to AGI Cloud over WebRTC for the duration of the
+          session (src/features/voice/services/liveVoiceSession.ts) and
+          saves the transcript to that chat. Dictation and the turn-based
+          voice companion transcribe on the device and upload no audio.
+          Local Mode has no live voice.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeAudioData</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
           Photos or Videos: images picked from the photo library or
           shot with the camera are uploaded as chat attachments
           (services/api.ts uploadFile) and as the account avatar.

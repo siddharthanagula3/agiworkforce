@@ -1,4 +1,5 @@
 import { act, render, renderHook, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { AccessibilityInfo, Animated } from 'react-native';
 
 jest.mock('../src/ui/theme', () => ({
@@ -20,7 +21,6 @@ jest.mock('../hooks/useNetworkStatus', () => ({
 
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useReduceMotion } from '../src/ui/theme/useReduceMotion';
-import { ModelLoadingFirstRunModal } from '../src/features/edge-cases/components/ModelLoadingFirstRunModal';
 import { OfflineBanner } from '../src/features/edge-cases/components/OfflineBanner';
 
 const mockedUseNetworkStatus = useNetworkStatus as unknown as jest.Mock;
@@ -56,6 +56,15 @@ async function primeReduceMotion(enabled: boolean): Promise<void> {
   const { result, unmount } = renderHook(() => useReduceMotion());
   await waitFor(() => expect(result.current).toBe(enabled));
   unmount();
+}
+
+const SAFE_AREA: Metrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
+function withSafeArea(node: React.ReactElement): React.ReactElement {
+  return <SafeAreaProvider initialMetrics={SAFE_AREA}>{node}</SafeAreaProvider>;
 }
 
 describe('useReduceMotion', () => {
@@ -122,46 +131,17 @@ describe('reduce-motion is honoured by mounted animated components', () => {
     jest.restoreAllMocks();
   });
 
-  it('does not animate the first-run progress bar when the OS setting is already on', async () => {
-    mockAccessibility(true);
-    await primeReduceMotion(true);
-    timing.mockClear();
-    setValue.mockClear();
-
-    render(<ModelLoadingFirstRunModal visible progress={0.5} />);
-
-    expect(timing).not.toHaveBeenCalled();
-    expect(setValue).toHaveBeenCalledWith(0.5);
-  });
-
-  it('stops animating the progress bar when the OS setting is turned on after mount', async () => {
-    const { emit } = mockAccessibility(false);
-    await primeReduceMotion(false);
-
-    const screen = render(<ModelLoadingFirstRunModal visible progress={0.2} />);
-    await waitFor(() => expect(timing).toHaveBeenCalled());
-
-    act(() => emit(true));
-    timing.mockClear();
-    setValue.mockClear();
-
-    screen.rerender(<ModelLoadingFirstRunModal visible progress={0.8} />);
-
-    expect(timing).not.toHaveBeenCalled();
-    expect(setValue).toHaveBeenCalledWith(0.8);
-  });
-
   it('snaps the offline banner into place when reduce motion turns on after mount', async () => {
     const { emit } = mockAccessibility(false);
     await primeReduceMotion(false);
 
-    const screen = render(<OfflineBanner />);
+    const screen = render(withSafeArea(<OfflineBanner />));
     act(() => emit(true));
     parallel.mockClear();
     setValue.mockClear();
 
     mockedUseNetworkStatus.mockReturnValue({ isOnline: false });
-    screen.rerender(<OfflineBanner />);
+    screen.rerender(withSafeArea(<OfflineBanner />));
 
     expect(parallel).not.toHaveBeenCalled();
     expect(setValue).toHaveBeenCalledWith(0);

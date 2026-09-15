@@ -8,7 +8,7 @@ export const DATA_HANDLING_DISCLOSURES: DataHandlingDisclosure[] = [
   {
     id: 'page-injection',
     label: 'A content script loads on every page',
-    body: 'AGI injects a content script into every http and https page you open so the side panel can read the page you point it at. It reads page text only when you ask for it on a site you approved below; it sends nothing from sites you have not approved.',
+    body: 'AGI loads a content script into every http and https page you open, which is what Chrome’s “read and change all your data on all websites” warning refers to. On a site that is not on your approved list it adds no panel and sends nothing. Page text leaves the browser only when you ask for it: the page chip in the composer, a slash command that needs the page, or the Summarize entry in the right-click menu. That attach takes up to 5,000 characters of the visible text of the tab you point it at, with secret-like values redacted first. The approved-sites list below governs the in-page panel, the page tools and browser automation.',
   },
   {
     id: 'debugger',
@@ -17,8 +17,8 @@ export const DATA_HANDLING_DISCLOSURES: DataHandlingDisclosure[] = [
   },
   {
     id: 'cookies',
-    label: 'The cookies permission only writes, never reads',
-    body: 'AGI holds the cookies permission so a run can set a cookie on a site you are working in. Only AGI’s own extension pages can ask for it, banking, government, health, cloud-console, identity and mail domains are refused outright, and AGI never reads the cookies any site has stored.',
+    label: 'The cookies permission reads only your AGI sign-in',
+    body: 'AGI holds the cookies permission so it can read your own agiworkforce.com sign-in session and act as the account you already signed into on the web. It never sets a cookie and never reads cookies from any other site.',
   },
   {
     id: 'cloud-mirroring',

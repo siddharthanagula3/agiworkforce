@@ -143,7 +143,7 @@ function MessageActionButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      hitSlop={6}
+      hitSlop={10}
       style={{ padding: 6, borderRadius: 8 }}
     >
       <Icon size={16} color={color} />

@@ -1517,6 +1517,7 @@ function buildPage(): void {
   const saveStatus = el(
     'span',
     {
+      id: 'opt-profile-status',
       class: 'opt-save-status',
       role: 'status',
       'aria-live': 'polite',
@@ -1580,7 +1581,31 @@ function buildPage(): void {
     }
   });
 
+  let deleteProfileConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+  const resetDeleteProfileConfirm = (): void => {
+    if (deleteProfileConfirmTimer !== null) {
+      clearTimeout(deleteProfileConfirmTimer);
+      deleteProfileConfirmTimer = null;
+    }
+    deleteProfileBtn.classList.remove('is-confirm');
+    deleteProfileBtn.textContent = 'Delete profile';
+    deleteProfileBtn.removeAttribute('aria-describedby');
+  };
   deleteProfileBtn.addEventListener('click', async () => {
+    if (!deleteProfileBtn.classList.contains('is-confirm')) {
+      deleteProfileBtn.classList.add('is-confirm');
+      deleteProfileBtn.textContent = 'Click again to delete';
+      deleteProfileBtn.setAttribute('aria-describedby', saveStatus.id);
+      saveStatus.textContent =
+        'Click again to erase every saved profile field from this device. It cannot be recovered.';
+      saveStatus.className = 'opt-save-status';
+      deleteProfileConfirmTimer = setTimeout(() => {
+        resetDeleteProfileConfirm();
+        saveStatus.textContent = '';
+      }, 4000);
+      return;
+    }
+    resetDeleteProfileConfirm();
     deleteProfileBtn.disabled = true;
     if (profileStatusTimer !== null) {
       clearTimeout(profileStatusTimer);

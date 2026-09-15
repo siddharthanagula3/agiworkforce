@@ -95,6 +95,7 @@ const harness = vi.hoisted(() => {
       onInstalled: event(),
       onStartup: event(),
       onSuspend: event(),
+      onSuspendCanceled: event(),
       sendMessage: vi.fn(() => Promise.resolve()),
       connectNative: vi.fn(() => ({
         name: 'com.agiworkforce.browser',
@@ -242,6 +243,9 @@ describe('background service worker security guards', () => {
   beforeAll(async () => {
     harness.localStore[SITE_ALLOWLIST_KEY] = [SITE_A, SITE_B];
     harness.localStore[CONSENT_KEY] = [SITE_A];
+    // The worker connects to the native host only for a profile that has
+    // already paired AGI Desktop, which is what these handshake cases exercise.
+    harness.localStore['connectedToDesktop'] = true;
     await import('../src/background');
     await new Promise((resolve) => setTimeout(resolve, 0));
   });

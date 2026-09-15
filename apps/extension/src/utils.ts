@@ -1,10 +1,19 @@
 import type { RateLimitState } from './types';
 
+/**
+ * Vite materialises `import.meta.env.DEV` in both the worker and the content
+ * builds, so the two verbose levels fold away entirely in a packaged release.
+ * They carried page URLs, message payload shapes and per-tab bookkeeping into
+ * a console anyone with the user's machine can read; warn and error stay
+ * because a support report needs them.
+ */
 export const logger = {
   debug: (message: string, data?: unknown) => {
+    if (!import.meta.env.DEV) return;
     console.debug('[AGI Workforce] %s', message, data);
   },
   info: (message: string, data?: unknown) => {
+    if (!import.meta.env.DEV) return;
     // eslint-disable-next-line no-console
     console.info('[AGI Workforce] %s', message, data);
   },
@@ -15,6 +24,19 @@ export const logger = {
     console.error('[AGI Workforce] %s', message, error);
   },
 };
+
+/**
+ * A log line identifies the site a message came from, not the page the user is
+ * reading: the path and query carry document ids, search terms and tokens.
+ */
+export function originOfUrl(url: string | undefined | null): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -242,15 +264,13 @@ export const formUtils = {
     }
   },
 
-  submitForm(form: HTMLFormElement | null = null): boolean {
+  submitForm(form: HTMLFormElement | null): boolean {
+    if (!form) return false;
     try {
-      const target = form ?? this.getForms()[0] ?? null;
-      if (target) {
-        if (typeof target.requestSubmit === 'function') {
-          target.requestSubmit();
-        } else {
-          target.submit();
-        }
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.submit();
       }
       return true;
     } catch (error) {
