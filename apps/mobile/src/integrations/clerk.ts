@@ -1,3 +1,4 @@
+import { MOBILE_SESSION_TOKEN_TEMPLATE } from '@agiworkforce/types';
 import { getClerkInstance } from '@clerk/expo';
 
 const DEVELOPMENT_CLERK_PUBLISHABLE_KEY =
@@ -34,6 +35,35 @@ export function setClerkTokenGetter(
   tokenRefreshGetter = getTokenFresh;
 }
 
+type TokenMinter = (options?: { template?: string; skipCache?: boolean }) => Promise<string | null>;
+
+let templateMissingWarned = false;
+
+/**
+ * A native token carries no origin, so the gateway cannot tell the app from a
+ * script minting tokens with the same account. The mobile JWT template stamps
+ * the surface claim Clerk signs; without the template the plain session token
+ * is sent and the gateway refuses it as an unknown surface, which is the loud
+ * failure we want until the template exists.
+ */
+export async function getSurfaceToken(
+  mint: TokenMinter,
+  options: { skipCache?: boolean } = {},
+): Promise<string | null> {
+  try {
+    return await mint({ template: MOBILE_SESSION_TOKEN_TEMPLATE, ...options });
+  } catch (err) {
+    if (!templateMissingWarned) {
+      templateMissingWarned = true;
+      console.warn(
+        `[clerk] could not mint a ${MOBILE_SESSION_TOKEN_TEMPLATE} token; sending the plain session token`,
+        err,
+      );
+    }
+    return mint(options);
+  }
+}
+
 export async function getClerkToken(): Promise<string | null> {
   if (tokenGetter) {
     try {
@@ -45,7 +75,9 @@ export async function getClerkToken(): Promise<string | null> {
   }
   try {
     const clerk = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY });
-    return (await clerk.session?.getToken()) ?? null;
+    const session = clerk.session;
+    if (!session) return null;
+    return getSurfaceToken((options) => session.getToken(options));
   } catch {
     return null;
   }
@@ -62,7 +94,9 @@ export async function getClerkTokenFresh(): Promise<string | null> {
   }
   try {
     const clerk = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY });
-    return (await clerk.session?.getToken({ skipCache: true })) ?? null;
+    const session = clerk.session;
+    if (!session) return null;
+    return getSurfaceToken((options) => session.getToken(options), { skipCache: true });
   } catch {
     return null;
   }

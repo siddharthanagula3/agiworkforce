@@ -93,6 +93,7 @@ function auth(overrides: Partial<AuthGateSuccess> = {}): AuthGateSuccess {
     userId: 'user-pro',
     token: 'session-token',
     subscription: proSubscription,
+    boundSurface: 'web',
     ...overrides,
   };
 }
@@ -128,7 +129,7 @@ beforeEach(() => {
 });
 
 describe('processRequest surface binding', () => {
-  it('classifies a browser session by the advisory header and offers the web-only card', async () => {
+  it('classifies a browser session by the surface its token is bound to and offers the web-only card', async () => {
     const result = await processRequest(mapIntentRequest('surface-web-1'), auth());
 
     expect(result.ok).toBe(true);

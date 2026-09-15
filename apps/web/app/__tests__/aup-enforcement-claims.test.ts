@@ -77,14 +77,14 @@ describe('Q-1 · "Your Tool Approvals setting decides, and it governs our own to
     expect(builtInsOnly.approvalMode).toBe('manual');
   });
 
-  it('still asks for web search and page fetch when read-only work is auto-approved', () => {
-    expect(AUP).toContain('web search and page fetch included');
+  it('runs web search and page fetch without asking when read-only work is auto-approved', () => {
+    expect(AUP).toContain('web search, page fetch and code in the AGI sandbox run on their own');
     const result = classifyToolLoopInputs(
       [],
       [{ function: { name: 'web_search' } }, { function: { name: 'url_fetch' } }],
       'auto_approve_read_only',
     );
-    expect(result.approvalMode).toBe('manual');
+    expect(result.approvalMode).toBe('auto');
   });
 });
 

@@ -208,7 +208,7 @@ pub struct CompletionResult {
     /// rate (some providers add a 25% premium). 0 when no cache write or
     /// provider doesn't support caching.
     pub cache_creation_input_tokens: u32,
-    /// True when the request was routed through a subscription (Copilot, ChatGPT Plus).
+    /// True when the request was routed through a subscription (Copilot).
     /// Cost display should show $0.00 when this is set.
     pub via_subscription: bool,
     /// The reason the model stopped generating (e.g. "end_turn", "tool_use", "stop", "tool_calls").

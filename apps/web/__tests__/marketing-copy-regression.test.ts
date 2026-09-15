@@ -193,9 +193,8 @@ describe('public marketing copy regressions', () => {
     );
     expect(byokSetup).not.toContain('Desktop reads from OS keychain');
     expect(byokSetup).toContain('Settings, Models &amp; Keys');
-    expect(byokSetup).toContain(
-      'Tauri Desktop encrypts provider keys in local application storage',
-    );
+    expect(byokSetup).toContain('Desktop takes no provider key');
+    expect(byokSetup).not.toContain('Tauri');
     expect(apiDocs).not.toContain('SSO &amp; org-seat early access');
     expect(apiDocs).toContain('Enterprise SSO early access');
     expect(waitlist).not.toContain('Team is already live at /pricing');

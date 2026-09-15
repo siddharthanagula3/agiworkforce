@@ -65,6 +65,13 @@ export interface ToolMetadata {
   acceptsUntrustedContent: boolean;
   createsEgressPath: boolean;
   declared: boolean;
+  /**
+   * Runs without asking under the read-only policy even though it reaches the
+   * public internet or the sandbox: web search, page fetch and sandboxed code
+   * are the leaders' automatic tools (D-2026-09-15-01). Never set on a tool
+   * that can write, send, buy, change credentials or touch the user's machine.
+   */
+  autoInReadOnlyMode?: boolean;
 }
 
 export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
@@ -74,6 +81,7 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     acceptsUntrustedContent: true,
     createsEgressPath: true,
     declared: true,
+    autoInReadOnlyMode: true,
   },
   search_maps: {
     actionClass: 'read',
@@ -88,6 +96,7 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     acceptsUntrustedContent: true,
     createsEgressPath: true,
     declared: true,
+    autoInReadOnlyMode: true,
   },
   execute_code: {
     actionClass: 'execute',
@@ -95,6 +104,7 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     acceptsUntrustedContent: false,
     createsEgressPath: true,
     declared: true,
+    autoInReadOnlyMode: true,
   },
   write_file: {
     actionClass: 'write',
@@ -279,18 +289,17 @@ export function toContractToolDefinition(
  * able to ask it without pulling a server-only module into its import graph.
  *
  * `ask_every_time` auto-approves nothing, which is what the setting says. Under
- * `auto_approve_read_only` a tool has to be all four things: declared by us (an
- * MCP or connector tool we know nothing about never qualifies), observing
- * rather than changing state, undoable, and unable to move bytes outside the
- * trust boundary. `web_search` and `url_fetch` fail the last one, which is why
- * the setting's own copy says they still ask.
+ * `auto_approve_read_only` a tool runs on its own when it is all four things:
+ * declared by us (an MCP or connector tool we know nothing about never
+ * qualifies), observing rather than changing state, undoable, and unable to
+ * move bytes outside the trust boundary; or when its metadata names it one of
+ * the leaders' automatic tools, web search, page fetch and sandboxed code
+ * (D-2026-09-15-01).
  */
-export function policyAutoApprovesTool(
-  policy: ToolApprovalPolicy,
-  qualifiedName: string,
-): boolean {
+export function policyAutoApprovesTool(policy: ToolApprovalPolicy, qualifiedName: string): boolean {
   if (policy !== 'auto_approve_read_only') return false;
   const metadata = resolveToolMetadata(qualifiedName);
+  if (metadata.declared && metadata.autoInReadOnlyMode === true) return true;
   return (
     metadata.declared &&
     metadata.actionClass === 'read' &&

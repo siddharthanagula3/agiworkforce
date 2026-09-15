@@ -18,12 +18,12 @@ const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 const CHECKSUM_FILE = 'SHA256SUMS';
 const CHECKSUM_BUNDLE = `${CHECKSUM_FILE}.sigstore.json`;
 const SAMPLE_ARCHIVE = 'agiworkforce-darwin-arm64.tar.gz';
-const CLOUD_INSTALLER = 'agiworkforce-cloud.dmg';
-const CLOUD_APP_PATH = '/Applications/AGI Cloud.app';
+const DESKTOP_INSTALLER = 'agiworkforce.dmg';
+const DESKTOP_APP_PATH = '/Applications/AGI Cloud.app';
 const CERTIFICATE_ISSUER = 'https://token.actions.githubusercontent.com';
 const RELEASE_REPOSITORY = 'siddharthanagula3/agiworkforce';
 const CERTIFICATE_IDENTITY = `https://github.com/${RELEASE_REPOSITORY}/.github/workflows/release-cli.yml@refs/tags/v-cli-<version>`;
-const UPDATER_ENDPOINT = '/api/releases/{target}-{arch}/{current_version}';
+const UPDATER_ENDPOINT = '/api/releases/desktop-cloud/latest';
 
 const COSIGN_COMMAND = `cosign verify-blob --bundle ${CHECKSUM_BUNDLE} \\
     --certificate-oidc-issuer ${CERTIFICATE_ISSUER} \\
@@ -43,9 +43,9 @@ const SELF_VERIFY_TRANSCRIPT = `# CLI archives, against the checksum file signed
 $ shasum -a 256 -c ${CHECKSUM_FILE}
 $ ${COSIGN_COMMAND}
 
-# the AGI Cloud desktop app, once you have moved it to Applications
-$ codesign -d --verbose=4 "${CLOUD_APP_PATH}"
-$ xcrun stapler validate ~/Downloads/${CLOUD_INSTALLER}`;
+# the AGI Desktop app, once you have moved it to Applications
+$ codesign -d --verbose=4 "${DESKTOP_APP_PATH}"
+$ xcrun stapler validate ~/Downloads/${DESKTOP_INSTALLER}`;
 
 const HERO_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
   { kind: 'cmd', text: `shasum -a 256 -c ${CHECKSUM_FILE}` },
@@ -57,16 +57,16 @@ const HERO_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
 
 const RELEASE_CHECKS: { title: string; body: string }[] = [
   {
-    title: 'Signed and re-checked inside the same run',
-    body: 'The desktop workflow builds each artifact with the release signing key, then verifies that artifact against its own .sig using the updater public key committed in this repository. A mismatch stops the release before anyone sees it.',
+    title: 'One installer per architecture, checked as such',
+    body: 'The desktop workflow packages Apple silicon and Intel builds separately, then reads each app back: the bundle version it claims, the URL scheme sign-in relies on, and, with lipo, that the binary carries exactly the architecture its installer is named for.',
   },
   {
-    title: 'A draft until a clean machine can install it',
-    body: 'A bare Ubuntu container installs the Debian package with no build toolchain present, proves the installed binary resolves every shared library, and a second job installs the previous release, upgrades to this one, and rolls back. The release is published once all of that passes.',
+    title: 'Signed with a Developer ID and assessed like your Mac would',
+    body: 'codesign --verify --deep --strict runs against each app, the Developer ID authority and hardened runtime are confirmed, and spctl puts the bundle through the same Gatekeeper assessment your Mac will.',
   },
   {
-    title: 'macOS builds are signed, notarized, and stapled',
-    body: 'Both macOS jobs run codesign --verify --deep --strict against the app, confirm the Developer ID authority and hardened runtime, put the bundle through the same Gatekeeper assessment your Mac will, and validate the notarization ticket stapled onto every DMG they ship.',
+    title: 'Notarized and stapled before upload',
+    body: 'Every app and every DMG is validated with stapler; a missing ticket is stapled and validated again. Only then are the installers uploaded to the draft release.',
   },
   {
     title: 'CLI checksums carry a Sigstore signature',
@@ -94,8 +94,8 @@ export default function DownloadPage() {
                 We check the signature <em className="agi-ds-accent">before you download.</em>
               </h1>
               <Prose size="lg">
-                Desktop artifacts are signed with the release key and re-verified in the same
-                workflow run. CLI archives ship a checksum file signed with Sigstore, verified
+                Desktop installers are signed with a Developer ID, notarized, and re-verified in the
+                same workflow run. CLI archives ship a checksum file signed with Sigstore, verified
                 before the release exists. This page then asks the release API again on load, so a
                 platform gets a control only once the API confirms a published asset for it.
               </Prose>
@@ -181,15 +181,7 @@ export default function DownloadPage() {
               caption="Release contents"
               rows={[
                 {
-                  label: 'AGI Desktop · Linux x86_64',
-                  value: 'An .AppImage with its matching .sig, plus a .deb for Debian and Ubuntu',
-                },
-                {
-                  label: 'AGI Desktop · macOS universal',
-                  value: 'A notarized .dmg, plus an .app.tar.gz updater with its matching .sig',
-                },
-                {
-                  label: 'AGI Cloud · macOS',
+                  label: 'AGI Desktop · macOS',
                   value: 'One notarized .dmg per architecture, Apple silicon and Intel',
                 },
                 {
@@ -208,7 +200,7 @@ export default function DownloadPage() {
                 },
                 {
                   label: 'Updates',
-                  value: `The desktop app asks ${UPDATER_ENDPOINT} and installs only a signed artifact`,
+                  value: `The desktop app asks ${UPDATER_ENDPOINT} and offers the signed installer; nothing installs on its own`,
                 },
                 {
                   label: 'Asset hosts',

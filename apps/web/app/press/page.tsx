@@ -38,12 +38,12 @@ const PRODUCT_FACTS: { label: string; value: string }[] = [
   },
   {
     label: 'Available now',
-    value: `AGI Web, in any browser · AGI Desktop, ${SURFACE_STATUS.desktop}, with installability verified per platform · AGI CLI, ${SURFACE_STATUS.cli.toLowerCase()}, macOS, Linux and Windows`,
+    value: `AGI Web, in any browser · AGI CLI, ${SURFACE_STATUS.cli.toLowerCase()}, macOS, Linux and Windows`,
   },
   {
     label: 'Built, not yet released',
     value:
-      'AGI Mobile (iOS, Android) · AGI for VS Code · AGI for Chrome. All three exist in the repository with release workflows, and none has a published release. They are not installable from any store today.',
+      'AGI Desktop for macOS · AGI Mobile (iOS, Android) · AGI for VS Code · AGI for Chrome. All four exist in the repository with release workflows, and none has a published release. They are not installable from any store today.',
   },
   {
     label: 'Where inference runs',

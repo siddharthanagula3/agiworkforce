@@ -12,17 +12,12 @@ import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'BYOK: bring your own keys to Desktop and the CLI',
-  description: `Bring your own provider API keys to AGI ${BYOK_SURFACES.label}. Desktop and the CLI have published releases. The VS Code extension is coming soon. Keys remain in the local runtime, traffic goes direct to your provider, and the route stays visible.`,
+  title: 'BYOK: bring your own keys to the CLI',
+  description: `Bring your own provider API keys to AGI ${BYOK_SURFACES.label}. The CLI has a published release. The VS Code extension is coming soon. Keys remain in the local runtime, traffic goes direct to your provider, and the route stays visible.`,
   path: '/byok',
 });
 
 const CUSTODY_ROWS = [
-  {
-    label: 'Desktop',
-    value:
-      'The key is encrypted before it reaches local application storage, and saving it activates a direct-provider route in the running app without a restart.',
-  },
   {
     label: 'CLI',
     value:
@@ -56,8 +51,8 @@ export default function ByokPage() {
                 Bring your own API keys to AGI {BYOK_SURFACES.label}. Each runtime keeps the key on
                 the machine you typed it into, encrypted at rest or in that platform&rsquo;s own
                 credential store, then calls the provider&rsquo;s endpoint directly, so the usage
-                lands on your provider account. Desktop and the CLI have published releases. The VS
-                Code extension is coming soon.
+                lands on your provider account. The CLI has a published release. The VS Code
+                extension is coming soon.
               </Prose>
               <ButtonRow>
                 <Button href="/docs/byok-env">Set up a provider key</Button>
@@ -97,7 +92,7 @@ export default function ByokPage() {
                 caption="BYOK scope"
                 rows={[
                   { label: 'Surfaces', value: BYOK_SURFACES.compact },
-                  { label: 'Released', value: 'Desktop and the CLI. VS Code is coming soon.' },
+                  { label: 'Released', value: 'The CLI. VS Code is coming soon.' },
                   { label: 'Providers', value: `${BYOK_PROVIDERS.length} provider env vars` },
                   { label: 'Routing', value: 'Direct to the provider endpoint' },
                 ]}
@@ -114,10 +109,10 @@ export default function ByokPage() {
                 The key stays on the machine you typed it into.
               </h2>
               <Prose>
-                There is no shared vault behind these surfaces. A key added on Desktop is unknown to
-                the CLI, and a key added to the CLI is unknown to VS Code, because each one writes
-                to its own store: Desktop encrypts the key into its local settings database, the CLI
-                uses the OS keyring, and the extension uses the editor&rsquo;s SecretStorage.
+                There is no shared vault behind these surfaces. A key added to the CLI is unknown to
+                VS Code, because each one writes to its own store: the CLI uses the OS keyring, and
+                the extension uses the editor&rsquo;s SecretStorage. Desktop runs on your AGI
+                account and takes no provider key.
               </Prose>
             </div>
             <Ledger caption="Key custody by surface" rows={CUSTODY_ROWS} />

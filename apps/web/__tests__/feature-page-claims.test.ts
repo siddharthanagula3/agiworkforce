@@ -63,18 +63,21 @@ describe('landing, the Chrome surface card', () => {
 
 describe('landing, the Desktop surface card', () => {
   /**
-   * AGI Work is a mode of the web chat composer, gated on the `agi_work` plan
-   * capability and rendered by
-   * apps/web/features/chat/components/Composer/ChatComposerNew.tsx. The desktop
-   * app has no such mode: apps/desktop/src/features/agi/AgentTaskPanel.tsx
-   * carries scheduled tasks and background agents instead.
+   * Since D-2026-09-15-04 the desktop is the Electron app for macOS
+   * (apps/desktop/electron): the hosted app in a shell, plus approved folders,
+   * local models already running on the Mac and computer use. The card must
+   * describe that app, not the Tauri build it replaced.
    */
-  it('does not sell AGI Work as a Desktop capability', () => {
-    expect(collapsed(LANDING)).not.toMatch(/scheduled work with agi work/iu);
+  it('describes the Electron app rather than the Tauri build', () => {
+    const source = collapsed(LANDING);
+    expect(source).toContain('The AGI app for macOS');
+    expect(source).not.toMatch(/built in Rust|AppImage|Linux x64/u);
   });
 
-  it('names the scheduling Desktop actually ships', () => {
-    expect(collapsed(LANDING)).toContain('Scheduled tasks and background agents');
+  it('names capabilities the macOS app actually ships', () => {
+    const source = collapsed(LANDING);
+    expect(source).toContain('Approved folders and programs');
+    expect(source).toContain('Computer use on macOS, step by step');
   });
 });
 
