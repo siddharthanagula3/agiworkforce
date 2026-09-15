@@ -83,7 +83,27 @@ describe('presentTurnFailure', () => {
     expect(limited.headline).toBe('DeepSeek is rate limiting this account.');
     expect(limited.category).toBe('rate-limit');
     expect(limited.retryable).toBe(true);
-    expect(limited.action).toBeUndefined();
+    expect(limited.action).toEqual({ kind: 'switch-model', label: 'Switch model' });
+  });
+
+  it('offers a model switch beside Retry when the provider cannot answer', () => {
+    const down = presentTurnFailure({
+      ...base,
+      code: 'provider_unavailable',
+      retryable: true,
+      action: 'retry',
+    });
+
+    expect(down.headline).toBe('DeepSeek could not answer.');
+    expect(down.action).toEqual({ kind: 'switch-model', label: 'Switch model' });
+
+    const offline = presentTurnFailure({
+      ...base,
+      code: 'network',
+      retryable: true,
+      action: 'retry',
+    });
+    expect(offline.action).toBeUndefined();
   });
 
   it('offers nothing at all for an interrupt', () => {
@@ -102,7 +122,7 @@ describe('presentTurnFailure', () => {
   it('names the provider by its catalog name, never by the id the CLI printed', () => {
     expect(
       presentTurnFailure({ ...base, code: 'provider_unavailable', action: 'none' }).headline,
-    ).toBe('DeepSeek could not be reached.');
+    ).toBe('DeepSeek could not answer.');
     expect(
       presentTurnFailure({
         code: 'provider_unavailable',
@@ -110,7 +130,7 @@ describe('presentTurnFailure', () => {
         retryable: true,
         action: 'retry',
       }).headline,
-    ).toBe('the provider could not be reached.');
+    ).toBe('the provider could not answer.');
   });
 
   it('sends an unnamed code to the same sentence as an unclassified string', () => {

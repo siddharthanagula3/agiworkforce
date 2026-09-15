@@ -32,6 +32,7 @@ import {
 import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 import { getTokenCounter } from '../data/tokenCounter';
 import * as api from '../utils/api';
+import * as accountAccess from '../features/surfaces/accountAccess';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -1738,6 +1739,36 @@ describe('ChatStateManager local turn lifecycle', () => {
     }
   });
 
+  it('records the tier the CLI reports, so pickers group by the plan after a CLI sign-in', async () => {
+    const authState = vi
+      .spyOn(api, 'getAccountAuthState')
+      .mockResolvedValue({ status: 'signed-out' });
+    const presence = vi.spyOn(accountAccess, 'resolveAccountPresence').mockResolvedValue({
+      signedIn: true,
+      source: 'cli',
+      cli: { signedIn: true, email: 'qa@example.test', tier: 'max' },
+    });
+    const harness = makeHarness();
+
+    try {
+      await harness.manager.pushAccountStatus();
+
+      expect(harness.context.globalState.get<string>('tierStatus.cachedTier')).toBe('max');
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'accountStatus',
+          payload: expect.objectContaining({
+            status: 'signed-in',
+            identity: expect.objectContaining({ tier: 'max' }),
+          }),
+        }),
+      );
+    } finally {
+      authState.mockRestore();
+      presence.mockRestore();
+    }
+  });
+
   it('opens a workspace-file picker without claiming folder support', async () => {
     const harness = makeHarness();
     vi.mocked(vscode.window.showOpenDialog).mockResolvedValueOnce(undefined);
@@ -2232,6 +2263,76 @@ describe('ChatStateManager local turn lifecycle', () => {
         threadId: 'thread-1',
         model: secondModel!.id,
       }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await second;
+  });
+
+  it('keeps the developer session when the model changes inside a managed session', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'max');
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto');
+    const firstModel = manualModels.find(
+      (option) => getModelProviderInfo(option.id).providerId !== null,
+    );
+    const secondModel = manualModels.find(
+      (option) =>
+        getModelProviderInfo(option.id).providerId !== null &&
+        getModelProviderInfo(option.id).providerId !==
+          getModelProviderInfo(firstModel?.id ?? '').providerId,
+    );
+    expect(firstModel).toBeDefined();
+    expect(secondModel).toBeDefined();
+    const thread = threadSummary({
+      id: 'thread-1',
+      model: firstModel!.id,
+      provider: 'managed_cloud',
+      trustMode: 'managed',
+    });
+    harness.runtime.startThread.mockResolvedValueOnce(thread);
+    harness.runtime.readThread.mockResolvedValueOnce({
+      thread,
+      messages: [],
+      transcriptTruncated: false,
+    });
+
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project', model: firstModel!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(1));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const second = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Continue on the plan', model: secondModel!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+
+    expect(harness.runtime.startThread).toHaveBeenCalledTimes(1);
+    expect(harness.runtime.startTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', model: secondModel!.id }),
+    );
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({ type: 'conversationBoundaryChanged' }),
     );
     harness.emit({
       type: 'turn_completed',

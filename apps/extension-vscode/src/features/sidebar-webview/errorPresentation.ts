@@ -28,7 +28,7 @@ export type ChatErrorCategory =
 
 /** What the error block should offer besides Retry, when the runtime named one. */
 export interface ChatErrorAction {
-  kind: 'sign-in-provider' | 'sign-in-account' | 'upgrade-plan' | 'open-settings';
+  kind: 'sign-in-provider' | 'sign-in-account' | 'upgrade-plan' | 'open-settings' | 'switch-model';
   label: string;
   provider?: string;
 }
@@ -254,7 +254,7 @@ function failureHeadline(failure: TurnFailureShape, provider: string): string {
     case 'provider_rate_limited':
       return `${provider} is rate limiting this account.`;
     case 'provider_unavailable':
-      return `${provider} could not be reached.`;
+      return `${provider} could not answer.`;
     case 'context_window_exceeded':
       return 'This conversation is longer than the model can read at once.';
     case 'network':
@@ -298,12 +298,18 @@ export function turnFailureOffer(failure: {
   return undefined;
 }
 
+function switchModelOffer(code: TurnFailureShape['code']): ChatErrorAction | undefined {
+  return code === 'provider_unavailable' || code === 'provider_rate_limited'
+    ? { kind: 'switch-model', label: 'Switch model' }
+    : undefined;
+}
+
 export function presentTurnFailure(failure: TurnFailureShape): ChatErrorPresentation {
   const provider =
     failure.provider === undefined ? 'the provider' : providerDisplayLabel(failure.provider);
   const headline = failureHeadline(failure, provider);
   const detail = failure.message.trim();
-  const action = turnFailureOffer(failure);
+  const action = turnFailureOffer(failure) ?? switchModelOffer(failure.code);
   return {
     category: FAILURE_CATEGORY[failure.code] ?? 'unknown',
     headline,
