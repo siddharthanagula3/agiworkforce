@@ -9,6 +9,7 @@ import type {
 } from '@agiworkforce/local-runtime-contract';
 import { ComposerFooter } from './ComposerFooter';
 import { useLocalModelSelection } from '@features/desktop-host';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
@@ -34,6 +35,7 @@ const listCalls = vi.fn();
 
 function installHost(): void {
   const host: HostBridge = {
+    ...hostBridgeStub(),
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     async invokeRuntime<T>(command: string) {

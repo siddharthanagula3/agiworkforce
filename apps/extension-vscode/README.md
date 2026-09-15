@@ -121,8 +121,6 @@ The most used ones:
 | `agiWorkforce.inlineCompletions.enabled`    | `false`                               | Ghost-text completions. Sends surrounding code to AGI Cloud; sensitive files are excluded.       |
 | `agiWorkforce.inlineCompletions.debounceMs` | `300`                                 | Delay before requesting a completion.                                                            |
 | `agiWorkforce.inlineCompletions.maxLength`  | `500`                                 | Maximum completion length in characters.                                                         |
-| `agiWorkforce.desktopBridge.enabled`        | `false`                               | Show authenticated AGI Desktop availability over the local health bridge.                        |
-| `agiWorkforce.desktopBridge.port`           | `8787`                                | Port for that local bridge.                                                                      |
 | `agiWorkforce.apiEndpoint`                  | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
 | `agiWorkforce.telemetryEnabled`             | `false`                               | Anonymous usage telemetry, also subject to VS Code's own telemetry setting.                      |
 

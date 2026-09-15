@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Palette,
   Minus,
@@ -90,13 +91,17 @@ export function StyleSelector() {
 
   const isActive = style !== DEFAULT_PRESET_STYLE || length !== 'brief';
 
+  const { t } = useTranslation('chat');
   const activeLabel = React.useMemo<string>(() => {
     if (style === 'custom') {
       const found = customStyles.find((s) => s.id === activeCustomStyleId);
-      return found?.name ?? 'Custom';
+      return found?.name ?? t('composer.styleCustom', { defaultValue: 'Custom' });
     }
-    return STYLES.find((s) => s.id === (style as PresetStyle))?.label ?? 'Style';
-  }, [style, activeCustomStyleId, customStyles]);
+    const preset = STYLES.find((s) => s.id === (style as PresetStyle));
+    return preset
+      ? t(`composer.styles.${preset.id}`, { defaultValue: preset.label })
+      : t('composer.style', { defaultValue: 'Style' });
+  }, [style, activeCustomStyleId, customStyles, t]);
 
   function handleSelectPreset(id: PresetStyle) {
     setStyle(id);
@@ -181,7 +186,9 @@ export function StyleSelector() {
       >
         <Palette className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">
-          {style === DEFAULT_PRESET_STYLE && length === 'brief' ? 'Style' : activeLabel}
+          {style === DEFAULT_PRESET_STYLE && length === 'brief'
+            ? t('composer.style', { defaultValue: 'Style' })
+            : activeLabel}
         </span>
       </button>
 
@@ -202,7 +209,7 @@ export function StyleSelector() {
         <div>
           {/* Preset styles */}
           <div className="mb-1.5 px-2 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
-            Response Style
+            {t('composer.responseStyle', { defaultValue: 'Response Style' })}
           </div>
           {STYLES.map((s) => {
             const Icon = s.icon;
@@ -218,8 +225,12 @@ export function StyleSelector() {
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <div className="flex-1 text-left">
-                  <div className="font-medium">{s.label}</div>
-                  <div className="text-xs text-muted-foreground">{s.desc}</div>
+                  <div className="font-medium">
+                    {t(`composer.styles.${s.id}`, { defaultValue: s.label })}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {t(`composer.styleDescs.${s.id}`, { defaultValue: s.desc })}
+                  </div>
                 </div>
                 {isSelected && <div className="h-2 w-2 rounded-full bg-primary" />}
               </button>

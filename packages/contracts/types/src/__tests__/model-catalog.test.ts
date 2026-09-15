@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modelRegistry } from '@agiworkforce/model-registry';
+import { PROVIDER_DISPLAY } from '../design-system/provider-display';
 import {
   applyInputTokenPricingTiers,
   applyLongContextPricing,
@@ -18,6 +19,15 @@ import {
   getModelCostRates,
   getModelContextLimits,
   getEconomyFallbackModels,
+  getExecutableModelIds,
+  getProviderDisplayLabel,
+  resolveProviderDisplayId,
+  getSurfaceManualModelOptions,
+  isManagedTrafficPermitted,
+  isModelLive,
+  listChatModels,
+  listManagedRoutesForModel,
+  CHAT_MODEL_TYPES,
   getModelIdsForProvider,
   getModelsForProvider,
   resolveMaxOutputTokens,
@@ -45,6 +55,148 @@ import {
   resolveEffectiveModelPricingForInputTokens,
   SLOT_REGISTRY,
 } from '../model-catalog';
+
+const MANAGED_CHAT_SURFACES = [
+  'web/cloud-chat',
+  'desktop/cloud-chat',
+  'mobile/cloud-chat',
+  'vscode/managed-chat',
+  'chrome/managed-chat',
+] as const;
+
+const ACCESS_TIERS = ['free', 'basic', 'pro', 'max'] as const;
+
+const CHAT_TYPE_OPTIONS = { modelTypes: [...CHAT_MODEL_TYPES] };
+
+type ManagedChatSurface = (typeof MANAGED_CHAT_SURFACES)[number];
+
+function routableModelKeys(runtimeProfileId: ManagedChatSurface): Set<string> {
+  const profile = modelRegistry.runtimeProfiles[runtimeProfileId];
+  const allowedHarnesses = new Set(profile.allowedHarnessIds);
+  return new Set(
+    Object.values(modelRegistry.routes)
+      .filter(
+        (route) =>
+          route.selectable &&
+          route.availability === 'live' &&
+          route.trustModes.includes(profile.trustMode) &&
+          allowedHarnesses.has(route.harnessId),
+      )
+      .map((route) => route.modelKey),
+  );
+}
+
+describe('the shared owner of what a surface may offer', () => {
+  it('admits every chat model a managed route can serve, not a named subset', () => {
+    const executable = getExecutableModelIds();
+    const routable = listChatModels()
+      .filter((model) => isModelLive(model) && listManagedRoutesForModel(model.id).length > 0)
+      .map((model) => model.id);
+
+    expect(executable.length).toBeGreaterThan(0);
+    expect([...executable].sort()).toEqual([...routable].sort());
+    expect(executable.every((modelId) => isManagedTrafficPermitted(modelId))).toBe(true);
+  });
+
+  it('is strictly wider than the union of the named tier tables', () => {
+    const named = new Set([
+      ...getAllowedModelsForTier('economy'),
+      ...getAllowedModelsForTier('pro_additions'),
+      ...getAllowedModelsForTier('flagship_additions'),
+    ]);
+    const executable = getExecutableModelIds();
+
+    expect(named.size).toBeGreaterThan(0);
+    expect([...named].every((modelId) => executable.includes(modelId))).toBe(true);
+    expect(executable.length).toBeGreaterThan(named.size);
+  });
+
+  it('offers exactly what the send path admits on every managed chat surface', () => {
+    for (const runtimeProfileId of MANAGED_CHAT_SURFACES) {
+      const admittedKeys = routableModelKeys(runtimeProfileId);
+      for (const tier of ACCESS_TIERS) {
+        const offered = getModelsForTierAndSurface(tier, runtimeProfileId, CHAT_TYPE_OPTIONS).map(
+          (model) => model.id,
+        );
+        const sendPathAdmits = listChatModels()
+          .filter(
+            (model) =>
+              isModelLive(model) &&
+              listManagedRoutesForModel(model.id).length > 0 &&
+              admittedKeys.has(model.id) &&
+              canAccessModelForSubscriptionTier(model.id, tier),
+          )
+          .map((model) => model.id);
+
+        expect(sendPathAdmits.length).toBeGreaterThan(0);
+        expect([...offered].sort()).toEqual([...sendPathAdmits].sort());
+        expect(offered.every((modelId) => canAccessModelForSubscriptionTier(modelId, tier))).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it('gives every managed chat surface the same universe before the plan narrows it', () => {
+    const perSurface = MANAGED_CHAT_SURFACES.map((runtimeProfileId) =>
+      getPickerModelsForRuntimeProfile(runtimeProfileId, CHAT_TYPE_OPTIONS)
+        .map((model) => model.id)
+        .sort(),
+    );
+
+    expect(perSurface[0]).toEqual([...getExecutableModelIds()].sort());
+    for (const surfaceIds of perSurface) expect(surfaceIds).toEqual(perSurface[0]);
+  });
+
+  it('names every provider a surface picker can group', () => {
+    for (const runtimeProfileId of MANAGED_CHAT_SURFACES) {
+      const providers = new Set(
+        getPickerModelsForRuntimeProfile(runtimeProfileId, CHAT_TYPE_OPTIONS).map(
+          (model) => model.provider,
+        ),
+      );
+
+      expect(providers.size).toBeGreaterThan(0);
+      for (const provider of providers) {
+        const displayId = resolveProviderDisplayId(provider);
+        expect(displayId, provider).not.toBeNull();
+        expect(getProviderDisplayLabel(provider), provider).toBe(
+          PROVIDER_DISPLAY[displayId!].label,
+        );
+        expect(getProviderDisplayLabel(provider), provider).not.toBe(provider);
+      }
+    }
+  });
+
+  it('resolves every spelling the registry declares for a display provider', () => {
+    for (const [providerId, providerConfig] of Object.entries(modelsCatalog.providers)) {
+      const resolved = resolveProviderDisplayId(providerId);
+      if (resolved === null) continue;
+      for (const alias of providerConfig.aliases ?? []) {
+        expect(resolveProviderDisplayId(alias), alias).toBe(resolved);
+      }
+    }
+    expect(resolveProviderDisplayId('fixture-unlisted-provider')).toBeNull();
+    expect(getProviderDisplayLabel('fixture-unlisted-provider')).toBe('fixture-unlisted-provider');
+  });
+
+  it('projects surface options from the owner rather than the whole registry', () => {
+    for (const runtimeProfileId of MANAGED_CHAT_SURFACES) {
+      const optionIds = getSurfaceManualModelOptions(runtimeProfileId).map((option) => option.id);
+      const surfaceIds = getPickerModelsForRuntimeProfile(runtimeProfileId, CHAT_TYPE_OPTIONS).map(
+        (model) => model.id,
+      );
+
+      expect(optionIds).toEqual(surfaceIds);
+      expect(
+        getSurfaceManualModelOptions(runtimeProfileId).every(
+          (option) => option.label !== '' && option.providerLabel !== '',
+        ),
+      ).toBe(true);
+    }
+    expect(getSurfaceManualModelOptions('not-a-runtime-profile')).toEqual([]);
+  });
+});
 
 describe('isExecutableImageModel', () => {
   it('requires the catalog MIME contract for every live Gemini image model', () => {

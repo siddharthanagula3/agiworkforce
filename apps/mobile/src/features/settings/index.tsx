@@ -392,6 +392,10 @@ export default function SettingsTabScreen() {
 
   const cloudAccessTag = !isClerkLoaded ? 'Checking' : isClerkSignedIn ? 'Cloud' : 'Sign in';
   const accountValue = !isClerkLoaded ? 'Checking…' : isClerkSignedIn ? undefined : 'Sign in';
+  // One account state, one style. Three of the five Account rows drew it as a
+  // yellow pill, which reads as a status badge beside the same words in plain
+  // text on the other two.
+  const accountStateValue = accountValue ?? 'Signed in';
 
   const sections = useMemo<SettingsSection[]>(
     () => [
@@ -411,8 +415,7 @@ export default function SettingsTabScreen() {
             key: 'account-security',
             label: 'Account Security',
             icon: Shield,
-            tag: cloudAccessTag,
-            tone: 'cloud',
+            value: accountStateValue,
             onPress: openCloudRoute('/(app)/settings/account-security'),
           },
           // Sole entry point to cloud-billing. A duplicate Cloud > Billing row
@@ -428,16 +431,14 @@ export default function SettingsTabScreen() {
             key: 'account-shared-links',
             label: 'Shared Links',
             icon: Share2,
-            tag: cloudAccessTag,
-            tone: 'cloud',
+            value: accountStateValue,
             onPress: openCloudRoute('/(app)/settings/shared-links'),
           },
           {
             key: 'workspace',
             label: 'Workspace',
             icon: Users,
-            tag: cloudAccessTag,
-            tone: 'cloud',
+            value: accountStateValue,
             onPress: openCloudRoute('/(app)/settings/workspace'),
           },
         ],
@@ -626,6 +627,7 @@ export default function SettingsTabScreen() {
     ],
     [
       accentColor,
+      accountStateValue,
       accountValue,
       appVersion,
       cloudAccessTag,

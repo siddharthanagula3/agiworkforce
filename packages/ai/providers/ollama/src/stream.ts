@@ -1,4 +1,3 @@
-
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type { OllamaChatStreamChunk } from './types';
@@ -71,6 +70,7 @@ export async function* translateOllamaStream(
 ): AsyncIterable<StreamChunk> {
   let toolUseCounter = 0;
   let stopEmitted = false;
+  let threw = false;
 
   try {
     for await (const chunk of chunks) {
@@ -115,8 +115,11 @@ export async function* translateOllamaStream(
         stopEmitted = true;
       }
     }
+  } catch (error) {
+    threw = true;
+    throw error;
   } finally {
-    if (!stopEmitted) {
+    if (!stopEmitted && !threw) {
       yield { type: 'stop', reason: 'end_turn' };
     }
   }

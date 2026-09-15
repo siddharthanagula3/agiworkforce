@@ -43,8 +43,8 @@ describe('MessageList tool-approval expired notice', () => {
         showProvenanceFooter={false}
       />,
     );
-    expect(screen.getByText('Approve')).toBeTruthy();
-    expect(screen.getByText('Reject')).toBeTruthy();
+    expect(screen.getByText('Allow')).toBeTruthy();
+    expect(screen.getByText('Deny')).toBeTruthy();
     expect(screen.queryByText(/this approval request expired/i)).toBeNull();
   });
 
@@ -59,8 +59,8 @@ describe('MessageList tool-approval expired notice', () => {
         showProvenanceFooter={false}
       />,
     );
-    expect(screen.queryByText('Approve')).toBeNull();
-    expect(screen.queryByText('Reject')).toBeNull();
+    expect(screen.queryByText('Allow')).toBeNull();
+    expect(screen.queryByText('Deny')).toBeNull();
     expect(screen.getByText(/this approval request expired/i)).toBeTruthy();
   });
 
@@ -106,7 +106,7 @@ describe('MessageList tool-approval expired notice', () => {
         showProvenanceFooter={false}
       />,
     );
-    expect(screen.getByText('Approve')).toBeTruthy();
+    expect(screen.getByText('Allow')).toBeTruthy();
     expect(screen.queryByText(/this approval request expired/i)).toBeNull();
   });
 });

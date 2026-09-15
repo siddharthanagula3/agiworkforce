@@ -340,6 +340,27 @@ describe('conversation-history', () => {
     expect((await getActiveConversation())?.messages[1]).toMatchObject(saved?.messages[1] ?? {});
   });
 
+  it('carries streaming:true through so a reload mid-stream can find the interrupted turn', async () => {
+    const messages: HistoryMessage[] = [
+      { role: 'user', content: 'Count to a hundred', timestamp: 1 },
+      { role: 'assistant', content: 'one, two, three', timestamp: 2, streaming: true },
+    ];
+
+    const saved = await saveActiveConversation(messages);
+    expect(saved?.messages[1]).toMatchObject({ streaming: true, content: 'one, two, three' });
+    expect((await getActiveConversation())?.messages[1]?.streaming).toBe(true);
+  });
+
+  it('does not mark a normally finished assistant turn as streaming', async () => {
+    const messages: HistoryMessage[] = [
+      { role: 'user', content: 'Say hi', timestamp: 1 },
+      { role: 'assistant', content: 'hi there', timestamp: 2 },
+    ];
+
+    const saved = await saveActiveConversation(messages);
+    expect(saved?.messages[1]?.streaming).toBeUndefined();
+  });
+
   it('drops malformed stored activity and foreign run paths without discarding answer text', async () => {
     _store[BROWSER_STORE_KEY] = {
       version: 2,

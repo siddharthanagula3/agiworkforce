@@ -189,19 +189,8 @@ pub fn discover_skills_all() -> Vec<Skill> {
 
 // AUDIT-FIX: H-9, consent gate for project skills. Returns true only if .consent matches the canonical dir.
 fn project_skills_consented(skills_dir: &Path) -> bool {
-    let consent_path = skills_dir.join(".consent");
-    let canonical = match skills_dir.canonicalize() {
-        Ok(p) => p,
-        Err(_) => skills_dir.to_path_buf(),
-    };
-    let canonical_str = canonical.to_string_lossy().to_string();
-
-    if let Ok(raw) = std::fs::read_to_string(&consent_path) {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
-            if v.get("consented_for_dir").and_then(|s| s.as_str()) == Some(&canonical_str) {
-                return true;
-            }
-        }
+    if project_skills_consent_recorded(skills_dir) {
+        return true;
     }
 
     use std::io::IsTerminal;
@@ -222,12 +211,157 @@ fn project_skills_consented(skills_dir: &Path) -> bool {
         return false;
     }
 
+    grant_project_skills_consent(skills_dir).is_ok()
+}
+
+/// Canonical path of the per-workspace project-skill consent record.
+pub fn project_skills_consent_path(skills_dir: &Path) -> PathBuf {
+    skills_dir.join(".consent")
+}
+
+/// Whether consent for this workspace's project skills is already recorded.
+///
+/// Reads only: a surface with no terminal (the app-server) must be able to
+/// report the gate without opening a prompt on a transport pipe.
+pub fn project_skills_consent_recorded(skills_dir: &Path) -> bool {
+    let canonical = skills_dir
+        .canonicalize()
+        .unwrap_or_else(|_| skills_dir.to_path_buf());
+    let canonical_str = canonical.to_string_lossy().to_string();
+    let Ok(raw) = std::fs::read_to_string(project_skills_consent_path(skills_dir)) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    value.get("consented_for_dir").and_then(|dir| dir.as_str()) == Some(&canonical_str)
+}
+
+/// Record consent so both surfaces auto-load this workspace's project skills.
+pub fn grant_project_skills_consent(skills_dir: &Path) -> std::io::Result<()> {
+    let canonical = skills_dir
+        .canonicalize()
+        .unwrap_or_else(|_| skills_dir.to_path_buf());
     let record = serde_json::json!({
-        "consented_for_dir": canonical_str,
+        "consented_for_dir": canonical.to_string_lossy(),
         "consented_at": chrono::Utc::now().to_rfc3339(),
     });
-    let _ = std::fs::write(&consent_path, record.to_string());
-    true
+    std::fs::create_dir_all(skills_dir)?;
+    std::fs::write(project_skills_consent_path(skills_dir), record.to_string())
+}
+
+/// Withdraw consent. The project skills stop loading on the next run of either
+/// surface.
+pub fn revoke_project_skills_consent(skills_dir: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(project_skills_consent_path(skills_dir)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+/// Where a discovered skill came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkillOrigin {
+    Project,
+    User,
+    Plugin,
+}
+
+/// A discovered skill with the state a settings surface needs to render it.
+#[derive(Debug, Clone)]
+pub struct SkillCatalogEntry {
+    pub skill: Skill,
+    pub origin: SkillOrigin,
+    pub enabled: bool,
+    pub consented: bool,
+}
+
+/// Every skill either surface can see, including the ones a user disabled and
+/// the project skills still waiting on consent.
+///
+/// Never prompts, so it is safe to call from a transport whose stdin is a
+/// JSON-RPC pipe or a terminal the user is not looking at.
+pub fn skill_catalog(project_root: &Path) -> Vec<SkillCatalogEntry> {
+    let disabled = load_disabled_skills();
+    let mut entries = Vec::new();
+
+    let project_dir = project_root.join(".agiworkforce").join("skills");
+    let project_consented = project_skills_consent_recorded(&project_dir);
+    if project_dir.exists() {
+        let mut project_skills = Vec::new();
+        load_skills_from_dir(&project_dir, &mut project_skills);
+        for skill in project_skills {
+            entries.push(SkillCatalogEntry {
+                enabled: project_consented && !disabled.contains(&skill.name),
+                consented: project_consented,
+                origin: SkillOrigin::Project,
+                skill,
+            });
+        }
+    }
+
+    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
+        let global_dir = config_dir.join("skills");
+        if global_dir.exists() {
+            let mut user_skills = Vec::new();
+            load_skills_from_dir(&global_dir, &mut user_skills);
+            for skill in user_skills {
+                entries.push(SkillCatalogEntry {
+                    enabled: !disabled.contains(&skill.name),
+                    consented: true,
+                    origin: SkillOrigin::User,
+                    skill,
+                });
+            }
+        }
+    }
+
+    let mut plugins_mgr = crate::plugins::PluginsManager::new();
+    if plugins_mgr.load_all(Some(project_root)).is_ok() {
+        for entry in plugins_mgr.skill_path_entries() {
+            let plugin_root = entry.plugin_root;
+            let skill_path = entry.path;
+            if !crate::plugins::plugin_path_stays_within_root(&plugin_root, &skill_path) {
+                continue;
+            }
+            let mut plugin_skills = Vec::new();
+            if skill_path.is_dir() {
+                load_skills_from_plugin_dir(&skill_path, &plugin_root, &mut plugin_skills);
+            } else if skill_path.is_file()
+                && skill_path.extension().and_then(|ext| ext.to_str()) == Some("md")
+            {
+                if let Ok(skill) = load_skill_in_package(&skill_path, None) {
+                    plugin_skills.push(skill);
+                }
+            }
+            for skill in plugin_skills {
+                entries.push(SkillCatalogEntry {
+                    enabled: !disabled.contains(&skill.name),
+                    consented: true,
+                    origin: SkillOrigin::Plugin,
+                    skill,
+                });
+            }
+        }
+    }
+
+    entries.sort_by(|left, right| left.skill.name.cmp(&right.skill.name));
+    entries
+}
+
+/// Turn a skill on or off for every surface.
+pub fn set_skill_enabled(name: &str, enabled: bool) -> std::io::Result<()> {
+    let mut disabled = load_disabled_skills();
+    let changed = if enabled {
+        disabled.remove(name)
+    } else {
+        disabled.insert(name.to_string())
+    };
+    if changed {
+        save_disabled_skills(&disabled)?;
+    }
+    Ok(())
 }
 
 fn file_name_is_readme(path: &Path) -> bool {

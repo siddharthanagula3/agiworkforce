@@ -55,8 +55,26 @@ import {
   type CodeApprovalPrompt,
   type CodeTurnRecord,
 } from './code-transcript';
+import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
+import {
+  localFolderChoice,
+  localFolderChoices,
+  localModelChoices,
+  localModelSetup,
+  localProviderSetups,
+  preferredLocalRootId,
+  startingModelId,
+} from './local-code';
+import { useLocalSessions } from './hooks/use-local-sessions';
+import { LocalSessionsSection } from './components/LocalSessionsSection';
+import { LocalSessionPanel } from './components/LocalSessionPanel';
 import { CodeRail } from './components/CodeRail';
-import { CodeComposer, EMPTY_CODE_DRAFT, type CodeDraft } from './components/CodeComposer';
+import {
+  CodeComposer,
+  EMPTY_CODE_DRAFT,
+  type CodeDraft,
+  type CodeLocalState,
+} from './components/CodeComposer';
 import { CodeTranscript } from './components/CodeTranscript';
 import { CodeChangesPanel } from './components/CodeChangesPanel';
 import { CodeSessionMenu } from './components/CodeSessionMenu';
@@ -153,6 +171,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const [railDrawerOpen, setRailDrawerOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const [localSession, setLocalSession] = useState<LocalDeveloperSession | null>(null);
+  const [localPrompt, setLocalPrompt] = useState('');
+  const local = useLocalSessions();
+  const environmentChosen = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const railTriggerRef = useRef<HTMLButtonElement>(null);
   const hiddenProbeRef = useRef(false);
@@ -256,6 +278,30 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     void loadSessions(statusFilter, controller.signal);
     return () => controller.abort();
   }, [loadSessions, statusFilter]);
+
+  useEffect(() => {
+    if (environmentChosen.current) return;
+    const rootId = preferredLocalRootId(local.groups);
+    if (rootId === null) return;
+    setDraft((current) => ({ ...current, environment: 'local', localRootId: rootId }));
+  }, [local.groups]);
+
+  const handleDraftChange = useCallback((patch: Partial<CodeDraft>) => {
+    if (patch.environment !== undefined) environmentChosen.current = true;
+    setDraft((current) => ({
+      ...current,
+      ...(patch.localRootId !== undefined && patch.localRootId !== current.localRootId
+        ? { localModelId: '' }
+        : {}),
+      ...patch,
+    }));
+  }, []);
+
+  const draftGroup = local.groups.find((group) => group.rootId === draft.localRootId) ?? null;
+  const draftRuntime = draft.localRootId === null ? null : local.modelsFor(draft.localRootId);
+  const localChoices = localModelChoices(draftRuntime, draftGroup?.sessions ?? []);
+  const localModelId =
+    draft.localModelId || startingModelId(draftRuntime, draftGroup?.sessions ?? []) || '';
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedId) ?? null,
@@ -483,7 +529,12 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         setSelectedId(body.session.id);
         setEntries(body.terminalEntries);
         setTurns([]);
-        setDraft(EMPTY_CODE_DRAFT);
+        setDraft((current) => ({
+          ...EMPTY_CODE_DRAFT,
+          environment: current.environment,
+          localRootId: current.localRootId,
+          localModelId: current.localModelId,
+        }));
         router.push(codeSessionPath(body.session.id));
         return body.session;
       } catch (createError) {
@@ -497,9 +548,34 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     [api, busy, canCreate, draft, replaceSession, router],
   );
 
+  const startLocalSession = useCallback(
+    async (rootId: string, text: string, model: string) => {
+      setBusy(true);
+      try {
+        const started = await local.startSession(rootId, model || undefined);
+        if (!started) return;
+        setTask('');
+        setLocalPrompt(text);
+        setLocalSession(started);
+        setRailDrawerOpen(false);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [local],
+  );
+
   const handleSubmit = useCallback(
     async (text: string) => {
-      if (!canCreate || busy) return;
+      if (busy) return;
+
+      if (draft.environment === 'local' && !selectedSession) {
+        if (draft.localRootId === null) return;
+        await startLocalSession(draft.localRootId, text, localModelId);
+        return;
+      }
+
+      if (!canCreate) return;
 
       if (selectedSession && selectedSession.state === 'ready') {
         setTask('');
@@ -515,7 +591,17 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
       setTask('');
       if (created.state === 'ready') await startTurn(created, text);
     },
-    [busy, canCreate, createSession, selectedSession, startTurn],
+    [
+      busy,
+      canCreate,
+      createSession,
+      draft.environment,
+      draft.localRootId,
+      localModelId,
+      selectedSession,
+      startLocalSession,
+      startTurn,
+    ],
   );
 
   const handleOpenEmptyEnvironment = useCallback(() => {
@@ -734,7 +820,51 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     onFiltersChange: (patch: Partial<CodeSessionFilters>) =>
       setFilters((current) => ({ ...current, ...patch })),
     onNewSession: openHome,
-    onSelectSession: openSession,
+    onSelectSession: (id: string) => {
+      setLocalSession(null);
+      openSession(id);
+    },
+    localSection: local.supported ? (
+      <LocalSessionsSection
+        groups={local.groups}
+        loading={local.loading}
+        adding={local.adding}
+        error={local.error}
+        unavailable={local.unavailable}
+        selectedId={localSession?.id ?? null}
+        onSelect={(session) => {
+          setRailDrawerOpen(false);
+          setLocalPrompt('');
+          setLocalSession(session);
+        }}
+        onNewSession={(rootId) => {
+          void local.startSession(rootId).then((session) => {
+            if (session) {
+              setRailDrawerOpen(false);
+              setLocalPrompt('');
+              setLocalSession(session);
+            }
+          });
+        }}
+        onAddFolder={() => void local.addFolder()}
+      />
+    ) : null,
+  };
+
+  const localGroup = local.groups.find((group) => group.rootId === localSession?.rootId) ?? null;
+  const draftFolder = localFolderChoice(local.groups, draft.localRootId);
+  const isLocalDraft = draft.environment === 'local';
+  const localDraftBlocked = isLocalDraft ? (draftFolder?.unavailable ?? null) : null;
+  const composerLocal: CodeLocalState = {
+    supported: local.supported,
+    folders: localFolderChoices(local.groups),
+    models: localChoices,
+    setups: localProviderSetups(draftRuntime),
+    modelId: localModelId,
+    modelUnreachable: localModelSetup(draftRuntime, localModelId) !== null,
+    adding: local.adding,
+    onAddFolder: () => void local.addFolder(),
+    onModelChange: (modelId) => handleDraftChange({ localModelId: modelId }),
   };
 
   const unavailableNotice = availability
@@ -755,10 +885,22 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
 
   const notices = (
     <>
-      {unavailableNotice && (
+      {unavailableNotice && (!isLocalDraft || selectedSession !== null) && (
         <div className={styles['notice']} role="status">
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{unavailableNotice}</span>
+        </div>
+      )}
+      {localDraftBlocked && !selectedSession && (
+        <div className={styles['notice']} role="status">
+          <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+          <span>{localDraftBlocked}</span>
+        </div>
+      )}
+      {isLocalDraft && !selectedSession && local.error !== null && (
+        <div className={`${styles['notice']} ${styles['noticeError']}`} role="alert">
+          <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+          <span>{local.error}</span>
         </div>
       )}
       {routeNotice && (
@@ -825,7 +967,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
       {confirmDialog}
       <div className={styles['surface']}>
         {!railCollapsed && (
-          <div className={`${styles['rail']} ${styles['railDocked']}`}>
+          <div className={`${styles['rail']} ${styles['railDocked']}`} data-sidebar-region="header">
             <CodeRail {...railProps} onCollapse={() => setRailCollapsed(true)} />
           </div>
         )}
@@ -841,7 +983,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
               }}
             >
               <SheetTitle className="sr-only">{CODE_COPY.surface}</SheetTitle>
-              <div className={`${styles['rail']} ${styles['railDrawer']}`}>
+              <div
+                className={`${styles['rail']} ${styles['railDrawer']}`}
+                data-sidebar-region="header"
+              >
                 <CodeRail {...railProps} />
               </div>
             </SheetContent>
@@ -849,222 +994,254 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         )}
 
         <div className={styles['main']}>
-          {(selectedSession || (railCollapsed && !narrow)) && (
-            <header className={styles['header']}>
-              {!narrow && railCollapsed && (
-                <button
-                  type="button"
-                  className={styles['headerButton']}
-                  aria-label={CODE_COPY.expandRail}
-                  onClick={() => setRailCollapsed(false)}
+          {localSession && localGroup ? (
+            <LocalSessionPanel
+              session={localSession}
+              group={localGroup}
+              runtimeModels={local.modelsFor(localGroup.rootId)}
+              verbose={verbose}
+              initialPrompt={localPrompt}
+              onPromptSent={() => setLocalPrompt('')}
+              onClose={() => setLocalSession(null)}
+            />
+          ) : (
+            <>
+              {(selectedSession || (railCollapsed && !narrow)) && (
+                <header
+                  className={styles['header']}
+                  data-window-edge={railCollapsed && !narrow ? 'left' : undefined}
                 >
-                  <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-                </button>
-              )}
-              {!selectedSession && railCollapsed && (
-                <h1 className={styles['headerTitle']}>{CODE_COPY.surface}</h1>
-              )}
-              {selectedSession && (
-                <>
-                  <span className={styles['headerGlyph']}>
-                    <TerminalSquare size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-                  </span>
-                  {renaming ? (
-                    <input
-                      className={`${styles['headerTitle']} ${styles['headerTitleInput']}`}
-                      ref={titleInputRef}
-                      value={titleDraft}
-                      aria-label={CODE_COPY.renameLabel}
-                      maxLength={CODE_LIMITS.title}
-                      onChange={(event) => setTitleDraft(event.target.value)}
-                      onBlur={() => void handleRename()}
-                      onKeyDown={(event) => {
-                        if (event.key === RENAME_COMMIT_KEY) {
-                          event.preventDefault();
-                          void handleRename();
-                        }
-                        if (event.key === RENAME_CANCEL_KEY) {
-                          event.preventDefault();
-                          setRenaming(false);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <h1 className={styles['headerTitle']}>{selectedSession.title}</h1>
-                  )}
-                  <span className={styles['headerChip']}>
-                    <span className={styles['headerChipText']}>
-                      {sessionContextChip(selectedSession)}
-                    </span>
-                  </span>
-                  <div className={styles['headerActions']}>
+                  {!narrow && railCollapsed && (
                     <button
                       type="button"
-                      className={`${styles['headerButton']} ${
-                        changesOpen ? styles['headerButtonActive'] : ''
-                      }`}
-                      aria-label={CODE_COPY.changes}
-                      aria-pressed={changesOpen}
-                      onClick={() => setChangesOpen((open) => !open)}
+                      className={styles['headerButton']}
+                      aria-label={CODE_COPY.expandRail}
+                      onClick={() => setRailCollapsed(false)}
                     >
-                      <PanelsTopLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                      <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
                     </button>
-                    <CodeSessionMenu
-                      verbose={verbose}
-                      closed={closed}
-                      archived={archived}
-                      deletable={closed || archived}
-                      onOpenTerminal={() => setChangesOpen(true)}
-                      onSetVerbose={setVerbose}
-                      onEditEnvironment={() => setChangesOpen(true)}
-                      onRename={() => {
-                        setTitleDraft(selectedSession.title);
-                        setRenaming(true);
-                      }}
-                      onSetArchived={(next) => void handleSetArchived(next)}
-                      onDeleteSession={requestDelete}
-                      onCloseSession={requestClose}
-                    />
-                  </div>
-                </>
-              )}
-            </header>
-          )}
-
-          <div className={styles['body']}>
-            <div className={styles['column']}>
-              {selectedSession ? (
-                <div className={styles['scroll']} data-testid="code-scroll">
-                  <div className={styles['center']}>
-                    {detailLoading && (
-                      <div className={styles['notice']} role="status">
-                        <Spinner size="sm" aria-label={CODE_COPY.openingSession} />
-                        <span>{CODE_COPY.openingSession}</span>
+                  )}
+                  {!selectedSession && railCollapsed && (
+                    <h1 className={styles['headerTitle']}>{CODE_COPY.surface}</h1>
+                  )}
+                  {selectedSession && (
+                    <>
+                      <span className={styles['headerGlyph']}>
+                        <TerminalSquare size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                      </span>
+                      {renaming ? (
+                        <input
+                          className={`${styles['headerTitle']} ${styles['headerTitleInput']}`}
+                          ref={titleInputRef}
+                          value={titleDraft}
+                          aria-label={CODE_COPY.renameLabel}
+                          maxLength={CODE_LIMITS.title}
+                          onChange={(event) => setTitleDraft(event.target.value)}
+                          onBlur={() => void handleRename()}
+                          onKeyDown={(event) => {
+                            if (event.key === RENAME_COMMIT_KEY) {
+                              event.preventDefault();
+                              void handleRename();
+                            }
+                            if (event.key === RENAME_CANCEL_KEY) {
+                              event.preventDefault();
+                              setRenaming(false);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <h1 className={styles['headerTitle']}>{selectedSession.title}</h1>
+                      )}
+                      <span className={styles['headerChip']}>
+                        <span className={styles['headerChipText']}>
+                          {sessionContextChip(selectedSession)}
+                        </span>
+                      </span>
+                      <div className={styles['headerActions']}>
+                        <button
+                          type="button"
+                          className={`${styles['headerButton']} ${
+                            changesOpen ? styles['headerButtonActive'] : ''
+                          }`}
+                          aria-label={CODE_COPY.changes}
+                          aria-pressed={changesOpen}
+                          onClick={() => setChangesOpen((open) => !open)}
+                        >
+                          <PanelsTopLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                        </button>
+                        <CodeSessionMenu
+                          verbose={verbose}
+                          closed={closed}
+                          archived={archived}
+                          deletable={closed || archived}
+                          onOpenTerminal={() => setChangesOpen(true)}
+                          onSetVerbose={setVerbose}
+                          onEditEnvironment={() => setChangesOpen(true)}
+                          onRename={() => {
+                            setTitleDraft(selectedSession.title);
+                            setRenaming(true);
+                          }}
+                          onSetArchived={(next) => void handleSetArchived(next)}
+                          onDeleteSession={requestDelete}
+                          onCloseSession={requestClose}
+                        />
                       </div>
-                    )}
+                    </>
+                  )}
+                </header>
+              )}
 
-                    {!detailLoading && (
-                      <CodeTranscript
-                        session={selectedSession}
-                        items={transcript}
-                        approvals={approvals}
-                        busy={busy}
-                        busySince={busySince}
-                        verbose={verbose}
-                        onDecideApproval={(approval, decision) =>
-                          void handleApproval(approval, decision)
-                        }
-                        onRetryTask={(goal) => void handleSubmit(goal)}
-                      />
-                    )}
+              <div className={styles['body']}>
+                <div className={styles['column']}>
+                  {selectedSession ? (
+                    <div className={styles['scroll']} data-testid="code-scroll">
+                      <div className={styles['center']}>
+                        {detailLoading && (
+                          <div className={styles['notice']} role="status">
+                            <Spinner size="sm" aria-label={CODE_COPY.openingSession} />
+                            <span>{CODE_COPY.openingSession}</span>
+                          </div>
+                        )}
 
-                    {isNotebookSession && (
-                      <NotebookPanel
-                        sessionId={selectedSession.id}
-                        sessionReady={selectedSession.state === 'ready'}
-                        onSession={replaceSession}
-                      />
-                    )}
+                        {!detailLoading && (
+                          <CodeTranscript
+                            session={selectedSession}
+                            items={transcript}
+                            approvals={approvals}
+                            busy={busy}
+                            busySince={busySince}
+                            verbose={verbose}
+                            onDecideApproval={(approval, decision) =>
+                              void handleApproval(approval, decision)
+                            }
+                            onRetryTask={(goal) => void handleSubmit(goal)}
+                          />
+                        )}
 
-                    <div ref={transcriptEndRef} />
-                  </div>
-                </div>
-              ) : (
-                <div className={styles['greetingArea']}>
-                  <div className={styles['center']}>
-                    <h1 className={styles['greeting']}>
-                      <AgiMark size={GREETING_MARK_SIZE} spinning={busy} />
-                      {/* The nameless variant waits for the account, so the name
+                        {isNotebookSession && (
+                          <NotebookPanel
+                            sessionId={selectedSession.id}
+                            sessionReady={selectedSession.state === 'ready'}
+                            onSession={replaceSession}
+                          />
+                        )}
+
+                        <div ref={transcriptEndRef} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles['greetingArea']}>
+                      <div className={styles['center']}>
+                        <h1 className={styles['greeting']}>
+                          <AgiMark size={GREETING_MARK_SIZE} spinning={busy} />
+                          {/* The nameless variant waits for the account, so the name
                           never pops in after the greeting has already rendered. */}
-                      {firstName
-                        ? CODE_COPY.greetingWithName.replace(GREETING_NAME_SLOT, firstName)
-                        : nameResolved
-                          ? CODE_COPY.greeting
-                          : null}
-                    </h1>
-                  </div>
-                </div>
-              )}
+                          {firstName
+                            ? CODE_COPY.greetingWithName.replace(GREETING_NAME_SLOT, firstName)
+                            : nameResolved
+                              ? CODE_COPY.greeting
+                              : null}
+                        </h1>
+                      </div>
+                    </div>
+                  )}
 
-              <div className={styles['noticeArea']} data-testid="code-notices">
-                <div className={styles['center']}>{notices}</div>
+                  <div className={styles['noticeArea']} data-testid="code-notices">
+                    <div className={styles['center']}>{notices}</div>
+                  </div>
+
+                  {archived ? (
+                    <div className={styles['composerArea']} data-testid="code-composer-area">
+                      <div className={styles['center']}>
+                        <div className={styles['closedBanner']} role="status">
+                          <span className={styles['closedBannerText']}>
+                            {CODE_COPY.archivedBanner}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles['primaryButton']}
+                            onClick={() => void handleSetArchived(false)}
+                          >
+                            {CODE_COPY.unarchiveSession}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : closed ? (
+                    <div className={styles['composerArea']} data-testid="code-composer-area">
+                      <div className={styles['center']}>
+                        <div className={styles['closedBanner']} role="status">
+                          <span className={styles['closedBannerText']}>
+                            {CODE_COPY.closedBanner}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles['primaryButton']}
+                            onClick={openHome}
+                          >
+                            {CODE_COPY.closedBannerAction}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <CodeComposer
+                      value={task}
+                      onChange={setTask}
+                      onSubmit={(text) => void handleSubmit(text)}
+                      disabled={
+                        isLocalDraft && !selectedSession
+                          ? draftFolder === null || localDraftBlocked !== null
+                          : !canCreate
+                      }
+                      busy={busy}
+                      showChips={!selectedSession}
+                      showHint={
+                        !selectedSession && !isLocalDraft && sessions.length === 0 && !hintDismissed
+                      }
+                      onDismissHint={() => setHintDismissed(true)}
+                      draft={draft}
+                      onDraftChange={handleDraftChange}
+                      onOpenEmptyEnvironment={handleOpenEmptyEnvironment}
+                      runtimes={runtimes}
+                      local={composerLocal}
+                      api={api}
+                      turnRunning={turnRunning}
+                      stopping={stopping}
+                      onStop={() => void handleStopTurn()}
+                      contextTokens={
+                        selectedSession
+                          ? selectedSession.contextInputTokens + selectedSession.contextOutputTokens
+                          : null
+                      }
+                      contextWindow={agentContextWindow}
+                    />
+                  )}
+                </div>
+
+                {selectedSession && changesOpen && !localSession && (
+                  <CodeChangesPanel
+                    session={selectedSession}
+                    entries={entries}
+                    canRun={canRun}
+                    committing={committing}
+                    commitNotice={commitNotice}
+                    running={running}
+                    wide={changesWide}
+                    changes={changes}
+                    changesLoading={changesLoading}
+                    pullRequestBusy={pullRequestBusy}
+                    onToggleWide={() => setChangesWide((open) => !open)}
+                    onCommit={(message) => void handleCommit(message)}
+                    onRunCommand={(command) => void handleRunCommand(command)}
+                    onRefreshChanges={() => void loadChanges(selectedSession.id)}
+                    onCreatePullRequest={() => void handleCreatePullRequest()}
+                    onClose={() => setChangesOpen(false)}
+                  />
+                )}
               </div>
-
-              {archived ? (
-                <div className={styles['composerArea']} data-testid="code-composer-area">
-                  <div className={styles['center']}>
-                    <div className={styles['closedBanner']} role="status">
-                      <span className={styles['closedBannerText']}>{CODE_COPY.archivedBanner}</span>
-                      <button
-                        type="button"
-                        className={styles['primaryButton']}
-                        onClick={() => void handleSetArchived(false)}
-                      >
-                        {CODE_COPY.unarchiveSession}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : closed ? (
-                <div className={styles['composerArea']} data-testid="code-composer-area">
-                  <div className={styles['center']}>
-                    <div className={styles['closedBanner']} role="status">
-                      <span className={styles['closedBannerText']}>{CODE_COPY.closedBanner}</span>
-                      <button type="button" className={styles['primaryButton']} onClick={openHome}>
-                        {CODE_COPY.closedBannerAction}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <CodeComposer
-                  value={task}
-                  onChange={setTask}
-                  onSubmit={(text) => void handleSubmit(text)}
-                  disabled={!canCreate}
-                  busy={busy}
-                  showChips={!selectedSession}
-                  showHint={!selectedSession && sessions.length === 0 && !hintDismissed}
-                  onDismissHint={() => setHintDismissed(true)}
-                  draft={draft}
-                  onDraftChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
-                  onOpenEmptyEnvironment={handleOpenEmptyEnvironment}
-                  runtimes={runtimes}
-                  api={api}
-                  turnRunning={turnRunning}
-                  stopping={stopping}
-                  onStop={() => void handleStopTurn()}
-                  contextTokens={
-                    selectedSession
-                      ? selectedSession.contextInputTokens + selectedSession.contextOutputTokens
-                      : null
-                  }
-                  contextWindow={agentContextWindow}
-                />
-              )}
-            </div>
-
-            {selectedSession && changesOpen && (
-              <CodeChangesPanel
-                session={selectedSession}
-                entries={entries}
-                canRun={canRun}
-                committing={committing}
-                commitNotice={commitNotice}
-                running={running}
-                wide={changesWide}
-                changes={changes}
-                changesLoading={changesLoading}
-                pullRequestBusy={pullRequestBusy}
-                onToggleWide={() => setChangesWide((open) => !open)}
-                onCommit={(message) => void handleCommit(message)}
-                onRunCommand={(command) => void handleRunCommand(command)}
-                onRefreshChanges={() => void loadChanges(selectedSession.id)}
-                onCreatePullRequest={() => void handleCreatePullRequest()}
-                onClose={() => setChangesOpen(false)}
-              />
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
     </WebAppShell>

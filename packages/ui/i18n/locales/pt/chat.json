@@ -170,7 +170,32 @@
     "voiceStopRecording": "Parar gravação",
     "voiceStopping": "Parando ação de voz",
     "voiceTranscribing": "Transcrevendo voz",
-    "voiceUnsupported": "Entrada de voz indisponível"
+    "voiceUnsupported": "Entrada de voz indisponível",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "Chat: perguntas rápidas e conversa",
+    "modeAgiWorkTitle": "AGI Work: tarefas em várias etapas com ferramentas, arquivos e entregas revisáveis",
+    "style": "Estilo",
+    "styleCustom": "Personalizado",
+    "responseStyle": "Estilo de resposta",
+    "styles": {
+      "default": "Padrão",
+      "concise": "Conciso",
+      "detailed": "Detalhado",
+      "technical": "Técnico",
+      "creative": "Criativo"
+    },
+    "styleDescs": {
+      "default": "Estilo de resposta padrão",
+      "concise": "Breve e direto",
+      "detailed": "Completo com exemplos",
+      "technical": "Preciso com exemplos de código",
+      "creative": "Expressivo e envolvente"
+    },
+    "addAttachmentsAndTools": "Adicionar anexos e ferramentas",
+    "addAttachmentsAndToolsActive": "Adicionar anexos e ferramentas: {{count}} ativos",
+    "voiceStart": "Iniciar entrada de voz",
+    "voiceUnsupportedBrowser": "Entrada de voz não suportada neste navegador",
+    "voiceUnsupportedHint": "A entrada de voz não é suportada neste navegador. Tente o Chrome ou o Edge."
   },
   "bubble": {
     "assistantThinking": "O assistente está pensando",
@@ -268,5 +293,13 @@
     "thinkingSimple": "Pensando na sua pergunta...",
     "workingOnGoal": "Trabalhando nisso... {{goal}}",
     "workingOnRequest": "Trabalhando na sua solicitação..."
+  },
+  "greeting": {
+    "morning": "Bom dia",
+    "afternoon": "Boa tarde",
+    "evening": "Boa noite",
+    "morningNamed": "Bom dia, {{name}}",
+    "afternoonNamed": "Boa tarde, {{name}}",
+    "eveningNamed": "Boa noite, {{name}}"
   }
 }

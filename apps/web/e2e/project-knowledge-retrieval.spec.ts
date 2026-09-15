@@ -23,7 +23,7 @@ const COMPOSER_LABEL = /message input/i;
 const SOURCES_FILE_INPUT = '[data-testid="sources-file-input"]';
 const SOURCES_TAB = 'Sources';
 const AGENT_ACTIVITY_LABEL = /Show agent activity/i;
-const REJECT_LABEL = 'Reject';
+const DENY_LABEL = 'Deny';
 const ASSISTANT_BUBBLE = '[data-role="assistant"]';
 const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const STOP_BUTTON_LABEL = /stop the current response/i;
@@ -158,7 +158,7 @@ async function removeKnowledgeFile(page: Page): Promise<void> {
  */
 async function rejectAgentToolRequests(page: Page): Promise<number> {
   let rejected = 0;
-  const reject = page.getByRole('button', { name: REJECT_LABEL, exact: true }).first();
+  const reject = page.getByRole('button', { name: DENY_LABEL, exact: true }).first();
   for (let round = 0; round < MAX_TOOL_REJECTIONS; round += 1) {
     let appeared = false;
     for (let poll = 0; poll < APPROVAL_POLLS; poll += 1) {

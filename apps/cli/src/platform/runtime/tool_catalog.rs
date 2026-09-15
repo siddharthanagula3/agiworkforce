@@ -77,6 +77,29 @@ impl ToolDefinitionCatalogExt for ToolDefinition {
     }
 }
 
+/// The line a surface shows for a tool call, or `None` when the tool has none.
+pub fn tool_status_line(
+    tool_name: &str,
+    argument: impl Fn(&str) -> Option<String>,
+) -> Option<String> {
+    let canonical = canonical_tool_name(tool_name);
+    let value = |key: &str| argument(key).filter(|found| !found.trim().is_empty());
+    match canonical {
+        "browser_read_page" => Some("Read the active tab".to_string()),
+        "browser_screenshot" => Some("Captured the active tab".to_string()),
+        "browser_click" => Some(format!("Click({})", value("selector").unwrap_or_default())),
+        "browser_type" => Some(format!("Type({})", value("selector").unwrap_or_default())),
+        "browser_navigate" => Some(format!("Open({})", value("url").unwrap_or_default())),
+        "run_command" | "powershell" => value("command"),
+        "read_file" | "write_file" | "edit_file" | "multiedit" | "list_directory"
+        | "notebook_edit" => value("path"),
+        "search_files" | "grep_files" | "glob" => value("pattern").or_else(|| value("query")),
+        "web_search" => value("query"),
+        "web_fetch" => value("url"),
+        _ => None,
+    }
+}
+
 /// Canonicalize reference-compatible and AGI compatibility aliases to executor names.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
     match tool_name {
@@ -217,6 +240,8 @@ fn tool_owner(name: &str) -> &'static str {
         }
         "advisor" => "cli-advisor",
         "apply_patch" => "cli-patch-tools",
+        "browser_read_page" | "browser_click" | "browser_type" | "browser_navigate"
+        | "browser_screenshot" => "cli-browser",
         _ => "cli-runtime",
     }
 }
@@ -727,6 +752,67 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
     ]
 }
 
+/// The user's own Chrome, driven through the desktop shell.
+///
+/// Offered only when a shell is running with a browser paired to it
+/// (`browser_bridge::browser_state`), because a tool the model can call and
+/// the machine cannot honour costs a turn and teaches the model nothing. The
+/// descriptions say whose browser this is: the model is not opening a private
+/// automation browser, it is acting in the window the user is looking at, and
+/// that changes what a careful model will do without being asked.
+pub fn browser_tool_definitions() -> Vec<ToolDefinition> {
+    vec![
+        def(
+            "browser_read_page",
+            "Read the page open in the user's own paired Chrome: its address, title and visible text. This is the real browser the user is looking at, signed in as they are, not a fresh automation browser.",
+            serde_json::json!({ "type": "object", "properties": {} }),
+        )
+        .read_only()
+        .with_size_cap(100_000),
+        def(
+            "browser_click",
+            "Click an element on the active tab of the user's own paired Chrome. The user is signed in there, so a click can submit a form, send a message or start a purchase. Read the page first and say what you are about to click.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "CSS selector of the element to click"}
+                },
+                "required": ["selector"]
+            }),
+        ),
+        def(
+            "browser_type",
+            "Type text into an element on the active tab of the user's own paired Chrome. The user is signed in there; never type a credential, and never type into a field you have not read first.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "CSS selector of the field to type into"},
+                    "text": {"type": "string", "description": "Text to type"},
+                    "clear": {"type": "boolean", "description": "Clear the field first"}
+                },
+                "required": ["selector", "text"]
+            }),
+        ),
+        def(
+            "browser_navigate",
+            "Open an address on the active tab of the user's own paired Chrome. The tab leaves whatever page it is on, so anything unsaved there is lost.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "http or https address to open"}
+                },
+                "required": ["url"]
+            }),
+        ),
+        def(
+            "browser_screenshot",
+            "Capture the visible part of the active tab of the user's own paired Chrome. The picture can contain whatever the user has on screen, including private content.",
+            serde_json::json!({ "type": "object", "properties": {} }),
+        )
+        .read_only(),
+    ]
+}
+
 /// Build team-specific tool definitions (only included when team mode is active).
 pub fn team_tool_definitions() -> Vec<ToolDefinition> {
     vec![
@@ -823,6 +909,28 @@ pub fn effective_tool_definitions(
     allowed_tools: Option<&[String]>,
     mcp_tool_definitions: Option<&[ToolDefinition]>,
 ) -> Vec<ToolDefinition> {
+    effective_tool_definitions_with_browser(
+        plan_mode,
+        team_mode,
+        false,
+        allowed_tools,
+        mcp_tool_definitions,
+    )
+}
+
+/// As above, plus the browser family when a paired browser is reachable.
+///
+/// `browser_available` is resolved once per session by the caller rather than
+/// probed here: this function is called to build every request's schema list,
+/// and an HTTP round trip to the shell on each one would put a stall in front
+/// of every turn.
+pub fn effective_tool_definitions_with_browser(
+    plan_mode: bool,
+    team_mode: bool,
+    browser_available: bool,
+    allowed_tools: Option<&[String]>,
+    mcp_tool_definitions: Option<&[ToolDefinition]>,
+) -> Vec<ToolDefinition> {
     let mut tool_definitions = if plan_mode {
         filter_read_only_builtin_tool_definitions()
     } else {
@@ -830,6 +938,16 @@ pub fn effective_tool_definitions(
         // The model calls tool_search to load deferred schemas on demand.
         always_loaded_tool_definitions()
     };
+
+    if browser_available {
+        // Plan mode sees only the reads, like every other family: a plan is
+        // written before anything is allowed to act.
+        tool_definitions.extend(
+            browser_tool_definitions()
+                .into_iter()
+                .filter(|definition| !plan_mode || definition.is_read_only),
+        );
+    }
 
     if team_mode {
         tool_definitions.extend(team_tool_definitions());
@@ -873,6 +991,118 @@ mod tests {
             .collect()
     }
 
+    #[test]
+    fn one_owner_gives_both_surfaces_the_same_sentence() {
+        let args: std::collections::HashMap<&str, &str> = [
+            ("selector", "#buy"),
+            ("url", "https://example.test/"),
+            ("command", "cargo test"),
+        ]
+        .into_iter()
+        .collect();
+        let read = |key: &str| args.get(key).map(|value| value.to_string());
+
+        assert_eq!(
+            tool_status_line("browser_read_page", read).as_deref(),
+            Some("Read the active tab")
+        );
+        assert_eq!(
+            tool_status_line("browser_click", read).as_deref(),
+            Some("Click(#buy)")
+        );
+        assert_eq!(
+            tool_status_line("browser_navigate", read).as_deref(),
+            Some("Open(https://example.test/)")
+        );
+        assert_eq!(
+            tool_status_line("run_command", read).as_deref(),
+            Some("cargo test")
+        );
+
+        assert_eq!(
+            tool_status_line("Bash", read),
+            tool_status_line("run_command", read)
+        );
+
+        assert_eq!(tool_status_line("some_new_tool", read), None);
+
+        let blank = |_: &str| Some(String::new());
+        assert_eq!(tool_status_line("run_command", blank), None);
+    }
+
+    /// A tool the model can call and this machine cannot honour costs a turn
+    /// and teaches the model nothing, so the family appears only when a
+    /// browser is actually paired.
+    #[test]
+    fn the_browser_family_is_offered_only_when_a_browser_is_paired() {
+        let without = effective_tool_definitions_with_browser(false, false, false, None, None);
+        assert!(
+            !tool_names(&without)
+                .iter()
+                .any(|name| name.starts_with("browser_")),
+            "an unpaired session must not advertise browser tools"
+        );
+
+        let with = effective_tool_definitions_with_browser(false, false, true, None, None);
+        for expected in [
+            "browser_read_page",
+            "browser_click",
+            "browser_type",
+            "browser_navigate",
+            "browser_screenshot",
+        ] {
+            assert!(
+                tool_names(&with).contains(&expected),
+                "{expected} must be offered to a paired session"
+            );
+        }
+
+        // The default entry point is unchanged for every caller that has not
+        // resolved availability.
+        assert_eq!(
+            tool_names(&effective_tool_definitions(false, false, None, None)),
+            tool_names(&without)
+        );
+    }
+
+    /// Plan mode sees the reads and nothing else, like every other family: a
+    /// plan is written before anything is allowed to act in the user's browser.
+    #[test]
+    fn plan_mode_offers_only_the_browser_reads() {
+        let planning = effective_tool_definitions_with_browser(true, false, true, None, None);
+        let names = tool_names(&planning);
+        assert!(names.contains(&"browser_read_page"));
+        assert!(names.contains(&"browser_screenshot"));
+        for mutating in ["browser_click", "browser_type", "browser_navigate"] {
+            assert!(
+                !names.contains(&mutating),
+                "{mutating} acts in the user's browser and must not be offered while planning"
+            );
+        }
+    }
+
+    /// Only the reads auto-approve under a safe-reads permission mode; a click
+    /// in a signed-in browser can send a message or start a purchase.
+    #[test]
+    fn only_the_browser_reads_are_classified_read_only() {
+        for definition in browser_tool_definitions() {
+            let expects_read = matches!(
+                definition.name.as_str(),
+                "browser_read_page" | "browser_screenshot"
+            );
+            assert_eq!(
+                definition.is_read_only, expects_read,
+                "{} read-only classification",
+                definition.name
+            );
+            assert!(
+                definition.description.contains("paired Chrome"),
+                "{} must say whose browser it acts in",
+                definition.name
+            );
+        }
+    }
+
     fn all_declared_tool_definitions() -> Vec<ToolDefinition> {
         let mut definitions = built_in_tool_definitions();
         definitions.extend(team_tool_definitions());
@@ -892,6 +1122,44 @@ mod tests {
             owner: "test".to_string(),
             permission_class: "mutating".to_string(),
             diagnostic_tags: vec!["test".to_string()],
+        }
+    }
+
+    /// Every provider rejects the whole request, not the one tool, when a name
+    /// breaks `^[a-zA-Z0-9_-]+$`. A built-in renamed with a dot, space or colon
+    /// would take down every route at once, so the catalog is checked whole,
+    /// aliases included, rather than tool by tool at each call site.
+    #[test]
+    fn every_catalog_tool_name_and_alias_is_provider_safe() {
+        let provider_safe = |name: &str| {
+            !name.is_empty()
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        };
+
+        let definitions = all_builtin_tool_definitions();
+        assert!(!definitions.is_empty());
+        for definition in &definitions {
+            assert!(
+                provider_safe(&definition.name),
+                "tool `{}` breaks the provider tool-name pattern",
+                definition.name
+            );
+            for alias in &definition.aliases {
+                assert!(
+                    provider_safe(alias),
+                    "alias `{alias}` of tool `{}` breaks the provider tool-name pattern",
+                    definition.name
+                );
+            }
+            for alias in tool_aliases(&definition.name) {
+                assert!(
+                    provider_safe(alias),
+                    "alias `{alias}` of tool `{}` breaks the provider tool-name pattern",
+                    definition.name
+                );
+            }
         }
     }
 

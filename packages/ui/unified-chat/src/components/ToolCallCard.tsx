@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { AlertCircle, Check, Copy, Play, X as XIcon } from 'lucide-react';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
 import { InlineToolCall, type InlineToolCallStatus, type InlineToolKind } from './InlineToolCall';
 import { HighlightedCode } from './markdown/HighlightedCode';
@@ -477,7 +478,7 @@ const ToolCallCardComponent = ({
                   className="flex items-center gap-1 h-6 px-2 text-xs font-medium rounded bg-green-700 hover:bg-green-800 text-white transition-colors"
                 >
                   <Play className="h-2.5 w-2.5" />
-                  Approve
+                  {TOOL_APPROVAL_ACTION_LABELS.allow}
                 </button>
               )}
               {onReject && (
@@ -486,7 +487,7 @@ const ToolCallCardComponent = ({
                   onClick={() => onReject(id)}
                   className="h-6 px-2 text-xs font-medium rounded border border-border bg-background hover:bg-muted transition-colors"
                 >
-                  Reject
+                  {TOOL_APPROVAL_ACTION_LABELS.deny}
                 </button>
               )}
             </div>

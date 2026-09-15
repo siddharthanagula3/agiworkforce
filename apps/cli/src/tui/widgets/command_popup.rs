@@ -1,7 +1,8 @@
 //! `CommandPopup`: fuzzy slash-command picker overlay.
 //!
 //! Char keys append to an inline filter; Backspace removes the last char;
-//! ↑↓ navigate the filtered set; Enter fills the canonical slash command name.
+//! ↑↓ navigate the filtered set; Enter runs the highlighted command and Tab
+//! fills the composer with it instead, for a command still owed arguments.
 //! A space separates the command name from its arguments, fuzzy matching runs
 //! on the name token only (text before the first space), and Enter carries any
 //! typed arguments through so `/privacy-mode local` fills as typed rather than
@@ -113,6 +114,29 @@ impl CommandPopup {
         let len = self.filtered().len();
         self.state.set_len(len);
     }
+
+    /// Hand the highlighted command to the host under `prefix`, carrying any
+    /// typed arguments (the text after the first space) through with it.
+    fn commit(&mut self, prefix: &str) -> ViewAction {
+        let Some(name) = self
+            .filtered()
+            .get(self.state.cursor())
+            .map(|cmd| cmd.name.clone())
+        else {
+            return ViewAction::Continue;
+        };
+        let args = self
+            .filter
+            .split_once(' ')
+            .map(|(_, rest)| rest.trim())
+            .filter(|a| !a.is_empty());
+        self.selected_command = Some(name.clone());
+        self.done = true;
+        ViewAction::SideAction(match args {
+            Some(a) => format!("{prefix}:{name} {a}"),
+            None => format!("{prefix}:{name}"),
+        })
+    }
 }
 
 impl InteractiveView for CommandPopup {
@@ -162,30 +186,8 @@ impl InteractiveView for CommandPopup {
                 self.sync_state_len();
                 ViewAction::Continue
             }
-            KeyAction::Enter => {
-                let name = self
-                    .filtered()
-                    .get(self.state.cursor())
-                    .map(|cmd| cmd.name.clone());
-                if let Some(name) = name {
-                    // Carry any typed arguments (text after the first space) through
-                    // so the input fills as `/name args`, not just `/name`.
-                    let args = self
-                        .filter
-                        .split_once(' ')
-                        .map(|(_, rest)| rest.trim())
-                        .filter(|a| !a.is_empty());
-                    self.selected_command = Some(name.clone());
-                    self.done = true;
-                    let payload = match args {
-                        Some(a) => format!("slash:{name} {a}"),
-                        None => format!("slash:{name}"),
-                    };
-                    ViewAction::SideAction(payload)
-                } else {
-                    ViewAction::Continue
-                }
-            }
+            KeyAction::Enter => self.commit("slash"),
+            KeyAction::Tab => self.commit("complete"),
             KeyAction::Esc => {
                 self.done = true;
                 ViewAction::Close
@@ -274,6 +276,21 @@ mod tests {
         assert!(popup.is_done());
     }
 
+    /// Tab is the completion key: it hands the name back under a different tag
+    /// so the host fills the composer rather than running the command.
+    #[test]
+    fn tab_completes_without_running() {
+        let mut popup = make_popup();
+        for c in "mem".chars() {
+            popup.handle_key(KeyAction::Char(c));
+        }
+        let action = popup.handle_key(KeyAction::Tab);
+        assert_eq!(
+            action,
+            ViewAction::SideAction("complete:memory".to_string())
+        );
+    }
+
     #[test]
     fn space_separates_name_from_args_and_still_matches() {
         // Regression: typing `/privacy-mode local` used to drop the space, making
@@ -339,6 +356,7 @@ mod tests {
         let action = popup.handle_key(KeyAction::Enter);
         assert_eq!(action, ViewAction::Continue);
         assert!(!popup.is_done());
+        assert_eq!(popup.handle_key(KeyAction::Tab), ViewAction::Continue);
     }
 
     #[test]

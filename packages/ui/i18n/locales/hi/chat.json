@@ -170,7 +170,32 @@
     "voiceStopRecording": "रिकॉर्डिंग रोकें",
     "voiceStopping": "वॉइस एक्शन रोका जा रहा है",
     "voiceTranscribing": "वॉइस ट्रांसक्राइब हो रही है",
-    "voiceUnsupported": "वॉइस इनपुट उपलब्ध नहीं है"
+    "voiceUnsupported": "वॉइस इनपुट उपलब्ध नहीं है",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "चैट: त्वरित प्रश्न और बातचीत",
+    "modeAgiWorkTitle": "AGI Work: टूल, फ़ाइलों और समीक्षा योग्य परिणामों वाले बहु-चरणीय कार्य",
+    "style": "शैली",
+    "styleCustom": "कस्टम",
+    "responseStyle": "उत्तर शैली",
+    "styles": {
+      "default": "डिफ़ॉल्ट",
+      "concise": "संक्षिप्त",
+      "detailed": "विस्तृत",
+      "technical": "तकनीकी",
+      "creative": "रचनात्मक"
+    },
+    "styleDescs": {
+      "default": "मानक उत्तर शैली",
+      "concise": "संक्षिप्त और सीधा",
+      "detailed": "उदाहरणों के साथ विस्तृत",
+      "technical": "कोड उदाहरणों के साथ सटीक",
+      "creative": "अभिव्यंजक और आकर्षक"
+    },
+    "addAttachmentsAndTools": "अटैचमेंट और टूल जोड़ें",
+    "addAttachmentsAndToolsActive": "अटैचमेंट और टूल जोड़ें: {{count}} सक्रिय",
+    "voiceStart": "वॉइस इनपुट शुरू करें",
+    "voiceUnsupportedBrowser": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता",
+    "voiceUnsupportedHint": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता। Chrome या Edge आज़माएं।"
   },
   "bubble": {
     "assistantThinking": "सहायक सोच रहा है",
@@ -268,5 +293,13 @@
     "thinkingSimple": "आपके सवाल के बारे में सोच रहा है...",
     "workingOnGoal": "इस पर काम किया जा रहा है... {{goal}}",
     "workingOnRequest": "आपके अनुरोध पर काम किया जा रहा है..."
+  },
+  "greeting": {
+    "morning": "सुप्रभात",
+    "afternoon": "नमस्कार",
+    "evening": "शुभ संध्या",
+    "morningNamed": "सुप्रभात, {{name}}",
+    "afternoonNamed": "नमस्कार, {{name}}",
+    "eveningNamed": "शुभ संध्या, {{name}}"
   }
 }

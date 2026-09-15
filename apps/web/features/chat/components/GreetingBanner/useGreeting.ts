@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -77,7 +78,17 @@ function getTimeBand(hour: number): TimeBand {
   return 'lateNight';
 }
 
+const GREETING_GROUPS: Record<TimeBand, 'morning' | 'afternoon' | 'evening'> = {
+  earlyMorning: 'morning',
+  morning: 'morning',
+  afternoon: 'afternoon',
+  evening: 'evening',
+  night: 'evening',
+  lateNight: 'evening',
+};
+
 export function useGreeting(): GreetingResult {
+  const { t, i18n } = useTranslation('chat');
   const { user: compatibilityUser, isLoading, initialized } = useAuthStore();
   const canonicalUser = useBillingStore((state) => state.user);
 
@@ -102,8 +113,18 @@ export function useGreeting(): GreetingResult {
   const cleanedName = rawName && rawName.length <= 50 ? rawName.replace(/\p{Cc}/gu, '') : undefined;
   const firstName = cleanedName ? normalizeDisplayName(cleanedName) : undefined;
 
+  const language = i18n?.language ?? 'en';
+  const localized = !language.toLowerCase().startsWith('en');
   let headline: string;
-  if (firstName) {
+  if (localized) {
+    const group = GREETING_GROUPS[band];
+    headline = firstName
+      ? t(`greeting.${group}Named`, {
+          name: firstName,
+          defaultValue: `${config.variants[0]}, {{name}}`,
+        })
+      : t(`greeting.${group}`, { defaultValue: config.variants[0] ?? 'Hello' });
+  } else if (firstName) {
     const template = config.variantsNamed[variantIndex] ?? config.variantsNamed[0];
     headline = (template ?? '{name}').replace('{name}', firstName);
   } else {

@@ -16,7 +16,9 @@ import {
   recordInstalledModel,
 } from '@/storage/installedModels';
 import type { InstalledModel } from '@/storage/types';
+import { isAutoMode, isCloudManagedModelId } from './service';
 import type { ModelDef } from './service';
+import { useModelStore } from './store';
 
 export type ModelInstallStatus =
   | 'ready'
@@ -147,6 +149,53 @@ function installedRecordFor(model: ModelDef): InstalledModel {
   };
 }
 
+// A local selection that is not on disk cannot answer anything, so the first
+// send fails on a model the user never downloaded. Prefer the built-in system
+// model, which needs no download, then anything already installed.
+export function pickReadyLocalModelId(
+  selectedModelId: string,
+  installedModelIds: readonly string[],
+  readySystemModelIds: readonly string[],
+  isDownloading = false,
+): string | null {
+  if (isCloudManagedModelId(selectedModelId) || isAutoMode(selectedModelId)) return null;
+  if (readySystemModelIds.includes(selectedModelId)) return null;
+  if (installedModelIds.includes(selectedModelId)) return null;
+  // A download in flight is a choice the user just made. Moving off it would
+  // undo that choice and leave the finished model unselected.
+  if (isDownloading) return null;
+  return readySystemModelIds[0] ?? installedModelIds[0] ?? null;
+}
+
+// Resolve the local model to run now: the given id when it is on disk, else a
+// ready one.
+export function readyLocalModelIdOr(fallbackModelId: string): string {
+  const { installedModelIds, readySystemModelIds, jobs } = useModelInstallStore.getState();
+  return (
+    pickReadyLocalModelId(
+      fallbackModelId,
+      installedModelIds,
+      readySystemModelIds,
+      jobs[fallbackModelId]?.status === 'downloading',
+    ) ?? fallbackModelId
+  );
+}
+
+function activateReadyLocalModel(
+  installedModelIds: readonly string[],
+  readySystemModelIds: readonly string[],
+  jobs: Record<string, ModelInstallJob>,
+): void {
+  const { selectedModel, setModel } = useModelStore.getState();
+  const replacement = pickReadyLocalModelId(
+    selectedModel,
+    installedModelIds,
+    readySystemModelIds,
+    jobs[selectedModel]?.status === 'downloading',
+  );
+  if (replacement) setModel(replacement);
+}
+
 export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
   installedModelIds: [],
   readySystemModelIds: [],
@@ -160,11 +209,13 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
     ]);
     const systemModel = getSystemModelForTier1Runtime(caps?.tier1Runtime ?? null);
     const readySystemModelIds = systemModel ? [systemModel.id] : [];
+    const installedModelIds = installed.map((model) => model.id);
     set({
-      installedModelIds: installed.map((model) => model.id),
+      installedModelIds,
       readySystemModelIds,
       totalRAMMB: caps?.totalRAMMB ?? null,
     });
+    activateReadyLocalModel(installedModelIds, readySystemModelIds, get().jobs);
   },
 
   prepareModel: async (model) => {

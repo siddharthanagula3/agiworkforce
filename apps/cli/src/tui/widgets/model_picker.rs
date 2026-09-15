@@ -3,7 +3,7 @@
 //! Triggered by `/model` (no arg). Layout:
 //!
 //! ```text
-//! ┌─ Models  Local · BYOK · Cloud ────────────────────────────────────────────┐
+//! ┌─ Models  Local · Your key · Managed ────────────────────────────────────────────┐
 //! │/ type to filter by name or provider...                                    │
 //! │───────────────────────────────────────────────────────────────────────────│
 //! │Bring your own key · your own provider keys                                │
@@ -352,8 +352,14 @@ pub fn render(
     // ── outer border ──────────────────────────────────────────────────────────
     // Keep the title short. Long control hints clipped in 80-column terminals.
     let hint_span = Span::styled(" Models ", Style::default().add_modifier(Modifier::BOLD));
+    let badge = format!(
+        " {} ",
+        [AccessMode::Local, AccessMode::Byok, AccessMode::Cloud]
+            .map(AccessMode::trust_word)
+            .join(" · ")
+    );
     let badge_span = Span::styled(
-        " Local · BYOK · Cloud ",
+        badge,
         Style::default().fg(ui_muted()).add_modifier(Modifier::DIM),
     );
     let title_line = Line::from(vec![hint_span, badge_span]);
@@ -491,10 +497,15 @@ fn render_list(
                 };
                 let ctx_k = model.context_window / 1000;
 
+                let label = if model.display_name.trim().is_empty() {
+                    &model.id
+                } else {
+                    &model.display_name
+                };
                 let text = format_model_row(
                     area.width,
                     bullet,
-                    sanitize_terminal_text(&model.id).as_ref(),
+                    sanitize_terminal_text(label).as_ref(),
                     tier_label,
                     ctx_k,
                 );
@@ -544,7 +555,7 @@ fn render_effort_bar(frame: &mut ratatui::Frame, area: Rect, state: &ModelPicker
 fn format_model_row(
     width: u16,
     bullet: &str,
-    model_id: &str,
+    label: &str,
     tier_label: &str,
     ctx_k: usize,
 ) -> String {
@@ -554,7 +565,7 @@ fn format_model_row(
         return format!(
             "{}{}",
             prefix,
-            truncate_cols(model_id, row_width.saturating_sub(display_width(&prefix)))
+            truncate_cols(label, row_width.saturating_sub(display_width(&prefix)))
         );
     }
 
@@ -569,7 +580,7 @@ fn format_model_row(
     let id_width = row_width
         .saturating_sub(display_width(&prefix) + display_width(&suffix))
         .min(34);
-    format!("{}{}{}", prefix, pad_to_cols(model_id, id_width), suffix)
+    format!("{}{}{}", prefix, pad_to_cols(label, id_width), suffix)
 }
 
 // ---------------------------------------------------------------------------
@@ -743,6 +754,29 @@ pub fn handle_key(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_row_names_the_model_and_keeps_its_id_for_the_filter() {
+        let mut named: Model = model("fixture-wire-id", "anthropic");
+        named.display_name = "Fixture Name".to_string();
+        let mut state = ModelPickerState::default();
+        state.open(&[named.clone()], "fixture-wire-id");
+        let row = state
+            .rows
+            .iter()
+            .find_map(|r| match r {
+                PickerRow::ModelRow { model, .. } => Some(model),
+                _ => None,
+            })
+            .expect("a model row");
+        assert_eq!(row.display_name, "Fixture Name");
+        state.search = "wire-id".to_string();
+        state.rebuild_rows(&[named]);
+        assert!(state
+            .rows
+            .iter()
+            .any(|r| matches!(r, PickerRow::ModelRow { .. })));
+    }
 
     #[test]
     fn model_rows_use_terminal_columns_for_cjk_ids() {

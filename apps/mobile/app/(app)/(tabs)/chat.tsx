@@ -66,7 +66,11 @@ import {
   pickImageAssetsFromLibrary,
 } from '@/src/features/media/photo-picker';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+import {
+  readyLocalModelIdOr,
+  useModelInstallStore,
+  pickReadyLocalModelId,
+} from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -161,6 +165,9 @@ export default function ChatTabScreen() {
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
+  const defaultLocalModelDownloading = useModelInstallStore(
+    (s) => s.jobs[DEFAULT_LOCAL_MODEL_ID]?.status === 'downloading',
+  );
   const activeMode = appMode;
   const selectedSkillName =
     activeMode === 'cloud' && clerkUserId && skillSelection?.ownerId === clerkUserId
@@ -197,8 +204,20 @@ export default function ChatTabScreen() {
     }
     return executionModeForSelection(selectedModel, activeMode) === 'local'
       ? selectedModel
-      : DEFAULT_LOCAL_MODEL_ID;
-  }, [activeMode, selectedModel, subscriptionTier]);
+      : (pickReadyLocalModelId(
+          DEFAULT_LOCAL_MODEL_ID,
+          installedModelIds,
+          readySystemModelIds,
+          defaultLocalModelDownloading,
+        ) ?? DEFAULT_LOCAL_MODEL_ID);
+  }, [
+    activeMode,
+    defaultLocalModelDownloading,
+    installedModelIds,
+    readySystemModelIds,
+    selectedModel,
+    subscriptionTier,
+  ]);
 
   const sendPreviewInput = useMemo<SendPreviewInput>(
     () => ({
@@ -522,7 +541,7 @@ export default function ChatTabScreen() {
 
   const handleTapLocalMode = useCallback(() => {
     setAppMode('local');
-    setModel(DEFAULT_LOCAL_MODEL_ID);
+    setModel(readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID));
   }, [setAppMode, setModel]);
 
   const handleTapCloudMode = useCallback(() => {

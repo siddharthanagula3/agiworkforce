@@ -74,5 +74,29 @@
     "searchLabel": "Einstellungen suchen",
     "searchPlaceholder": "Suchen",
     "title": "Einstellungen"
+  },
+  "nav": {
+    "general": "Allgemein",
+    "account": "Konto",
+    "team": "Team",
+    "privacy": "Datenschutz",
+    "billing": "Abrechnung",
+    "usage": "Nutzung",
+    "capabilities": "Funktionen",
+    "security": "Sicherheit",
+    "safety": "Schutz",
+    "notifications": "Benachrichtigungen",
+    "reflect": "Reflect",
+    "time-focus": "Zeit und Fokus",
+    "help": "Hilfe",
+    "skills": "Skills",
+    "connectors": "Konnektoren",
+    "plugins": "Plugins",
+    "memory": "Gedächtnis",
+    "voice": "Sprache",
+    "desktop": "Allgemein",
+    "groupSettings": "Einstellungen",
+    "groupCustomize": "Anpassen",
+    "groupDesktop": "Desktop-App"
   }
 }

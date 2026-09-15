@@ -51,6 +51,7 @@ vi.mock('electron', () => {
       { isSupported: () => false },
     ),
     Menu: { buildFromTemplate: vi.fn(() => ({})) },
+    nativeTheme: { shouldUseDarkColors: true, on: vi.fn(), off: vi.fn() },
     Tray: vi.fn(() => ({ setToolTip: vi.fn(), setContextMenu: vi.fn(), on: vi.fn() })),
     app: {
       name: 'AGI Cloud',

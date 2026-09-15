@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_PREFERENCES,
   DEFAULT_SHORTCUTS,
   acceleratorIdentity,
   centeredUpperPosition,
   duplicateShortcutKeys,
+  fillsWorkArea,
+  frameIsOnScreen,
+  isShortcutOff,
   isUsableAccelerator,
+  normalizePreferences,
   normalizeShortcuts,
+  normalizeWindowFrame,
   parseSettingsFile,
   pickSourceForDisplay,
   pickableCaptureSources,
@@ -64,11 +70,30 @@ describe('acceleratorIdentity', () => {
 
 describe('normalizeShortcuts', () => {
   it('rejects values that would make globalShortcut throw', () => {
-    for (const bad of ['', '   ', 'Alt + Space', 42, null, undefined, {}]) {
+    for (const bad of ['   ', 'Alt + Space', 42, null, undefined, {}]) {
       expect(normalizeShortcuts({ quickAskShortcut: bad }).quickAskShortcut).toBe(
         DEFAULT_SHORTCUTS.quickAskShortcut,
       );
     }
+  });
+
+  // An empty accelerator is the user picking "No shortcut" in the desktop
+  // settings panel. Springing it back to the default would turn a choice into
+  // a shortcut the user had just switched off.
+  it('keeps an empty accelerator, which is the user choosing no shortcut', () => {
+    expect(normalizeShortcuts({ quickAskShortcut: '' }).quickAskShortcut).toBe('');
+    expect(isShortcutOff('')).toBe(true);
+    expect(isShortcutOff(DEFAULT_SHORTCUTS.quickAskShortcut)).toBe(false);
+  });
+
+  it('never counts two switched-off shortcuts as a collision', () => {
+    const duplicates = duplicateShortcutKeys({
+      quickAskShortcut: '',
+      screenshotShortcut: '',
+      voiceShortcut: DEFAULT_SHORTCUTS.voiceShortcut,
+    });
+
+    expect(duplicates).toEqual([]);
   });
 
   it('accepts a well-formed accelerator', () => {
@@ -162,5 +187,105 @@ describe('pickableCaptureSources', () => {
 
   it('returns nothing when no source is offerable', () => {
     expect(pickableCaptureSources([{ id: 'window:1:0', name: '' }])).toEqual([]);
+  });
+});
+
+describe('normalizePreferences appearance', () => {
+  it('defaults to system so a fresh install follows macOS', () => {
+    expect(normalizePreferences({}).appearance).toBe('system');
+    expect(normalizePreferences({ appearance: 'sepia' }).appearance).toBe('system');
+    expect(normalizePreferences({ appearance: 3 }).appearance).toBe('system');
+  });
+
+  it('keeps the three values the renderer theme channel accepts', () => {
+    expect(normalizePreferences({ appearance: 'dark' }).appearance).toBe('dark');
+    expect(normalizePreferences({ appearance: 'light' }).appearance).toBe('light');
+    expect(normalizePreferences({ appearance: 'system' }).appearance).toBe('system');
+  });
+});
+
+describe('normalizeWindowFrame', () => {
+  it('answers null for anything that is not a complete frame', () => {
+    expect(normalizeWindowFrame(undefined)).toBeNull();
+    expect(normalizeWindowFrame(null)).toBeNull();
+    expect(normalizeWindowFrame('1280x800')).toBeNull();
+    expect(normalizeWindowFrame([0, 0, 1280, 800])).toBeNull();
+    expect(normalizeWindowFrame({ x: 0, y: 0, width: 1280 })).toBeNull();
+    expect(normalizeWindowFrame({ x: 0, y: 0, width: Number.NaN, height: 800 })).toBeNull();
+  });
+
+  it('rejects a frame smaller than the window can be, rather than restoring it', () => {
+    expect(normalizeWindowFrame({ x: 0, y: 0, width: 320, height: 800 })).toBeNull();
+    expect(normalizeWindowFrame({ x: 0, y: 0, width: 1280, height: 200 })).toBeNull();
+  });
+
+  it('rounds a fractional frame and defaults maximized to false', () => {
+    expect(normalizeWindowFrame({ x: 10.4, y: 20.6, width: 1280.2, height: 800.8 })).toEqual({
+      x: 10,
+      y: 21,
+      width: 1280,
+      height: 801,
+      maximized: false,
+    });
+  });
+
+  it('carries the maximized flag through', () => {
+    expect(
+      normalizeWindowFrame({ x: 0, y: 0, width: 1280, height: 800, maximized: true })?.maximized,
+    ).toBe(true);
+  });
+
+  it('is what the preference reader uses, so a corrupt frame cannot reach a window', () => {
+    expect(normalizePreferences({ windowFrame: { width: 10, height: 10 } }).windowFrame).toBeNull();
+    expect(DEFAULT_PREFERENCES.windowFrame).toBeNull();
+  });
+});
+
+describe('frameIsOnScreen', () => {
+  const laptop = { x: 0, y: 25, width: 1470, height: 895 };
+  const external = { x: 1470, y: 0, width: 2560, height: 1440 };
+
+  it('accepts a frame sitting on a display that is still attached', () => {
+    expect(
+      frameIsOnScreen({ x: 95, y: 33, width: 1280, height: 800, maximized: false }, [laptop]),
+    ).toBe(true);
+  });
+
+  it('rejects a frame left on a display that has been unplugged', () => {
+    expect(
+      frameIsOnScreen({ x: 1800, y: 400, width: 1280, height: 800, maximized: false }, [laptop]),
+    ).toBe(false);
+    expect(
+      frameIsOnScreen({ x: 1800, y: 400, width: 1280, height: 800, maximized: false }, [
+        laptop,
+        external,
+      ]),
+    ).toBe(true);
+  });
+
+  it('rejects a frame overlapping by less than a draggable strip', () => {
+    expect(
+      frameIsOnScreen({ x: 1430, y: 100, width: 1280, height: 800, maximized: false }, [laptop]),
+    ).toBe(false);
+  });
+});
+
+describe('fillsWorkArea', () => {
+  const workArea = { x: 0, y: 33, width: 1470, height: 836 };
+
+  it('recognises the frame a zoomed window occupies', () => {
+    expect(fillsWorkArea({ x: 0, y: 33, width: 1470, height: 836 }, workArea)).toBe(true);
+  });
+
+  it('tolerates the dozen pixels a zoom lands off by on a notched display', () => {
+    expect(fillsWorkArea({ x: 2, y: 34, width: 1468, height: 834 }, workArea)).toBe(true);
+    expect(fillsWorkArea({ x: 5, y: 35, width: 1457, height: 832 }, workArea)).toBe(true);
+  });
+
+  it('does not mistake a window the user sized for a zoomed one', () => {
+    expect(fillsWorkArea({ x: 95, y: 33, width: 1280, height: 800 }, workArea)).toBe(false);
+    expect(fillsWorkArea({ x: 0, y: 33, width: 1470, height: 700 }, workArea)).toBe(false);
+    expect(fillsWorkArea({ x: 29, y: 162, width: 1470, height: 836 }, workArea)).toBe(false);
+    expect(fillsWorkArea({ x: 140, y: 90, width: 1100, height: 720 }, workArea)).toBe(false);
   });
 });

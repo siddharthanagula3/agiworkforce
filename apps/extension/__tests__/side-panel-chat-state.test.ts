@@ -157,6 +157,24 @@ describe('side-panel chat state', () => {
     expect(hydrated.agentEvents).toEqual([event]);
   });
 
+  it('hydrates a message still streaming at its last save as interrupted, not live', () => {
+    const hydrated = hydrateStoredChatMessage(
+      { role: 'assistant', content: 'cut off mid-', timestamp: 2_000, streaming: true },
+      'history-message-2',
+    );
+    expect(hydrated.interrupted).toBe(true);
+    expect(hydrated.streaming).toBeUndefined();
+    expect(hydrated.content).toBe('cut off mid-');
+  });
+
+  it('does not mark a normally finished message as interrupted', () => {
+    const hydrated = hydrateStoredChatMessage(
+      { role: 'assistant', content: 'the finished answer', timestamp: 2_001 },
+      'history-message-3',
+    );
+    expect(hydrated.interrupted).toBeUndefined();
+  });
+
   it('creates a visible prompt for attachment-only turns', () => {
     expect(resolveComposerPrompt('', 1)).toBe('Please analyze the attached image.');
     expect(resolveComposerPrompt('   ', 2)).toBe('Please analyze the attached images.');
@@ -248,6 +266,10 @@ describe('side-panel chat state', () => {
     it('does not render a bubble for a completed message with no text (tool-activity-only)', () => {
       expect(shouldRenderTextBubble({ text: '', streaming: false })).toBe(false);
       expect(shouldRenderTextBubble({ text: '   \n ', streaming: false })).toBe(false);
+    });
+
+    it('renders a bubble for an interrupted message even with no captured text', () => {
+      expect(shouldRenderTextBubble({ text: '', streaming: false, interrupted: true })).toBe(true);
     });
   });
 });

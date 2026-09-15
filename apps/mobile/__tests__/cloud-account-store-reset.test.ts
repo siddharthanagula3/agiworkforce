@@ -73,7 +73,6 @@ describe('Cloud account store resets', () => {
       ],
       isSearching: true,
       chatStyle: 'detailed',
-      toolAccess: 'always',
     });
 
     useChatViewStore.getState().clearCloudSearchState();
@@ -83,7 +82,6 @@ describe('Cloud account store resets', () => {
       searchResults: [],
       isSearching: false,
       chatStyle: 'detailed',
-      toolAccess: 'always',
     });
   });
 
