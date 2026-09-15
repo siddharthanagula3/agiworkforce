@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { GATEWAY_URL_ALLOWLIST_EXACT } from '../src/background/policy';
+
 const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8')) as Record<
   string,
@@ -79,9 +81,45 @@ describe('Chrome manifest trust contract', () => {
     expect(listing).toContain('optional_host_permissions');
   });
 
+  it('justifies the all-sites content script, which is the install warning users see', () => {
+    const listing = readFileSync(join(APP_ROOT, 'docs/chrome-web-store-listing.md'), 'utf8');
+    const contentScripts = manifest['content_scripts'] as Array<{ matches?: string[] }>;
+    const matches = contentScripts[0]?.matches ?? [];
+
+    expect(matches).toEqual(['http://*/*', 'https://*/*']);
+    expect(listing, 'no store justification for the content_scripts match').toContain(
+      '`content_scripts` match',
+    );
+    for (const match of matches) {
+      expect(listing, `no store justification for "${match}"`).toContain(`\`${match}\``);
+    }
+    expect(listing).toContain('read and change all your data on all websites');
+  });
+
   it('describes Managed Cloud chat without claiming Desktop owns chat inference', () => {
     expect(String(manifest['description'])).toContain('Managed Cloud');
     expect(String(manifest['description'])).not.toMatch(/for AGI Desktop/i);
+  });
+
+  it('names every gateway origin exactly, with no agiworkforce.com wildcard', () => {
+    const contentSecurityPolicy = manifest['content_security_policy'] as
+      | { extension_pages?: unknown }
+      | undefined;
+    const connectSource = /connect-src ([^;]+)/.exec(
+      String(contentSecurityPolicy?.extension_pages ?? ''),
+    )?.[1];
+
+    expect(connectSource).toBeDefined();
+    expect(connectSource).not.toContain('https://*.agiworkforce.com');
+    for (const origin of GATEWAY_URL_ALLOWLIST_EXACT) {
+      expect(connectSource, `connect-src cannot reach allowlisted gateway ${origin}`).toContain(
+        origin,
+      );
+    }
+  });
+
+  it('declares no Chrome Apps keys, which MV3 ignores and review flags', () => {
+    expect(manifest['offline_enabled']).toBeUndefined();
   });
 
   it('allows Clerk runtime styles without weakening the extension script policy', () => {

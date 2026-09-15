@@ -114,7 +114,7 @@ describe('error reporting consent toggle on the options page', () => {
     });
     await section.loaded;
 
-    expect(section.element.textContent).toContain('Share crash and usage telemetry');
+    expect(section.element.textContent).toContain('Share crash reports');
     expect(section.errorReportingToggle.checked).toBe(false);
 
     section.errorReportingToggle.checked = true;

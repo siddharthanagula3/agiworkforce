@@ -1,3 +1,9 @@
+export const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
+
+export function isDomSmallEnoughToRead(): boolean {
+  return document.querySelectorAll('*').length <= MAX_DOM_ELEMENTS_FOR_EXTRACTION;
+}
+
 export function setText(el: Element, text: string): void {
   el.textContent = text;
 }

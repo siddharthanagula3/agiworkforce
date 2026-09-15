@@ -66,6 +66,13 @@
         "collected_when": "Only in AGI Cloud: the messages the user sends and any photos or files attached to them are uploaded to AGI Cloud and forwarded to the model provider serving the request. Local Mode uploads nothing."
       },
       {
+        "category": "User Content",
+        "data_types": ["Audio Data"],
+        "purpose": "App Functionality",
+        "optional": true,
+        "collected_when": "Only during live voice mode in an AGI Cloud chat: the microphone is streamed to AGI Cloud for the session and the transcript is saved to that chat. Dictation and the turn-based voice companion transcribe on the device and upload no audio."
+      },
+      {
         "category": "Identifiers",
         "data_types": ["User ID", "Device ID"],
         "purpose": "App Functionality",

@@ -69,8 +69,6 @@ describe('handlers with no content-script sender are extension-page-only', () =>
       'SYNC_PAGE_CONTEXT',
       'GET_CONNECTION_STATUS',
       'CAPTURE_SCREENSHOT',
-      'NLWEB_DETECTED',
-      'NLWEB_PROBE',
       'WEBMCP_TOOLS_CHANGED',
       'IN_PAGE_PROMPT',
       'OPEN_SIDE_PANEL',

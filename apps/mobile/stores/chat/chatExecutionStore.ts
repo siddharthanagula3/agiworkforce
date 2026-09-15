@@ -457,6 +457,8 @@ interface ParsedLocalThinking {
   hasReasoning: boolean;
 }
 
+const LOCAL_MODEL_UNAVAILABLE_ERROR =
+  'This Local Mode chat uses a model that is no longer available on this device. Open Models and pick a local model to continue.';
 const LOCAL_REASONING_TAG_RE = /<\s*(\/?)\s*(think|thinking|reasoning)\s*>/gi;
 const PARTIAL_LOCAL_REASONING_TAG_RE =
   /<\s*\/?\s*(?:t|th|thi|thin|think|thinki|thinkin|thinking|r|re|rea|reas|reaso|reason|reasoni|reasonin|reasoning)?$/i;
@@ -946,6 +948,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (executionMode === 'local' && isCloudModel) {
       set({
         error: 'This is a Local Mode chat. Start a separate AGI Cloud chat to use Cloud models.',
+        paywallError: null,
+        ...streamingFlags(),
+      });
+      return false;
+    }
+    if (executionMode === 'local' && !shouldUseLocalRuntime) {
+      set({
+        error: LOCAL_MODEL_UNAVAILABLE_ERROR,
         paywallError: null,
         ...streamingFlags(),
       });
