@@ -1940,6 +1940,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 crate::oauth::DeviceCodePoll::Authorized(entry) => {
                     account::save_device_grant(*entry)
                         .map_err(|error| DeveloperSessionHostError::internal(error.to_string()))?;
+                    *self.host_models.write().await = None;
                     return Ok(AccountLoginWaitResponse {
                         outcome: AccountLoginOutcome::Completed,
                         message: None,
@@ -1953,6 +1954,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     async fn account_logout(&self) -> Result<(), DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
         self.pending_logins.lock().await.clear();
+        *self.host_models.write().await = None;
         account::logout().map_err(|error| DeveloperSessionHostError::internal(error.to_string()))
     }
 
