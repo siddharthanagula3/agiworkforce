@@ -50,13 +50,13 @@ export default function HelpPage() {
                   meta: 'Install',
                   title: 'Get the apps',
                   href: '/download',
-                  body: 'Desktop installer routes for macOS, Windows, and Linux open as release assets become available. The CLI page carries the current agi install guide.',
+                  body: 'The Desktop installer for macOS opens once a signed release is published; Windows is not published. The CLI page carries the current agi install guide.',
                 },
                 {
                   meta: 'BYOK',
                   title: 'Add your API key',
                   href: '/byok',
-                  body: `Bring your own provider keys on ${BYOK_SURFACES.label}. Desktop and the CLI have published releases; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion} The key stays in the local runtime and requests go straight to your provider.`,
+                  body: `Bring your own provider keys on ${BYOK_SURFACES.label}. The CLI has a published release; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion} The key stays in the local runtime and requests go straight to your provider.`,
                 },
                 {
                   meta: 'Local',

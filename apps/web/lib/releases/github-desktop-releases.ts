@@ -14,7 +14,6 @@ export const DESKTOP_RELEASE_PLATFORMS = [
 export const DESKTOP_RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const;
 
 export type DesktopReleasePlatform = (typeof DESKTOP_RELEASE_PLATFORMS)[number];
-export type DesktopDownloadPlatform = 'mac' | 'windows' | 'linux';
 export type DesktopReleaseChannel = (typeof DESKTOP_RELEASE_CHANNELS)[number];
 
 const httpsUrlSchema = z
@@ -382,26 +381,4 @@ export async function fetchDesktopAssetSignature(
     logger.warn({ error, assetName: signatureAsset.name }, 'Desktop signature request failed');
     return null;
   }
-}
-
-export function selectDesktopInstallerAsset(
-  release: StableDesktopRelease,
-  platform: DesktopDownloadPlatform,
-): DesktopReleaseAsset | null {
-  const candidates: ReadonlyArray<(name: string) => boolean> =
-    platform === 'mac'
-      ? [(name) => name.endsWith('.dmg'), (name) => name.endsWith('.app.tar.gz')]
-      : platform === 'windows'
-        ? [
-            (name) => name.endsWith('.exe'),
-            (name) => name.endsWith('.msi'),
-            (name) => name.endsWith('.nsis.zip'),
-          ]
-        : [(name) => name.endsWith('.AppImage'), (name) => name.endsWith('.deb')];
-
-  for (const matches of candidates) {
-    const asset = release.assets.find((candidate) => matches(candidate.name));
-    if (asset) return asset;
-  }
-  return null;
 }

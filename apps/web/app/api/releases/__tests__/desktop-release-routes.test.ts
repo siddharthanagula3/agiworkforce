@@ -253,27 +253,41 @@ describe('desktop release routes', () => {
     expect(fetchMock).not.toHaveBeenCalledWith(untrustedSignatureUrl, expect.any(Object));
   });
 
-  it('streams a desktop installer from the newest stable desktop release', async () => {
+  it('streams the Apple silicon installer by default from the newest desktop release', async () => {
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === CLOUD_ARM64_DMG_URL) {
+        return new Response('arm64-dmg-bytes', {
+          status: 200,
+          headers: { 'content-length': '15', 'content-type': 'application/x-apple-diskimage' },
+        });
+      }
+      return Response.json([cloudDesktopRelease()]);
+    });
+
     const response = await downloadDesktop(
-      makeRequest('https://agi.example/api/download?platform=linux'),
+      makeRequest('https://agi.example/api/download?platform=mac'),
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-disposition')).toContain(
-      'filename="agiworkforce.AppImage"',
-    );
-    expect(await response.text()).toBe('appimage-bytes');
+    expect(response.headers.get('content-disposition')).toContain('filename="agiworkforce.dmg"');
+    expect(await response.text()).toBe('arm64-dmg-bytes');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/releases\?per_page=/),
       expect.any(Object),
     );
   });
 
-  it('reads the standard desktop installer from the shared release repository when no override is set', async () => {
+  it('reads the desktop installer from the shared release repository when no override is set', async () => {
     getOptionalEnvMock.mockReturnValue(undefined);
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === CLOUD_ARM64_DMG_URL) return new Response('arm64-dmg-bytes', { status: 200 });
+      return Response.json([cloudDesktopRelease()]);
+    });
 
     const response = await downloadDesktop(
-      makeRequest('https://agi.example/api/download?platform=linux'),
+      makeRequest('https://agi.example/api/download?platform=mac'),
     );
 
     expect(response.status).toBe(200);
@@ -286,7 +300,18 @@ describe('desktop release routes', () => {
     expect(String(releaseListCall?.[0])).not.toContain('agiworkforce-desktop-app');
   });
 
-  it('reports the exact AGI Cloud macOS architectures that are published', async () => {
+  it('answers unavailable for Linux and Windows, which have no published installer', async () => {
+    for (const platform of ['linux', 'windows']) {
+      const response = await downloadDesktop(
+        makeRequest(`https://agi.example/api/download?platform=${platform}`),
+      );
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'Installer unavailable', platform });
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports the exact macOS architectures that are published', async () => {
     fetchMock.mockResolvedValue(Response.json([cloudDesktopRelease()]));
 
     const response = await getLatestCloudRelease(
@@ -301,7 +326,7 @@ describe('desktop release routes', () => {
     });
   });
 
-  it('streams the requested AGI Cloud architecture without cross-architecture fallback', async () => {
+  it('streams the requested architecture without cross-architecture fallback', async () => {
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = String(input);
       if (url === CLOUD_X64_DMG_URL) {
@@ -323,7 +348,7 @@ describe('desktop release routes', () => {
     expect(fetchMock).not.toHaveBeenCalledWith(CLOUD_ARM64_DMG_URL, expect.any(Object));
   });
 
-  it('rejects an unknown AGI Cloud architecture before fetching a release', async () => {
+  it('rejects an unknown architecture before fetching a release', async () => {
     const response = await downloadDesktop(
       makeRequest('https://agi.example/api/download?platform=mac&app=cloud&arch=universal'),
     );
@@ -333,17 +358,17 @@ describe('desktop release routes', () => {
   });
 
   it('preserves the download route allowlist for selected release assets', async () => {
-    const untrustedUrl = `https://downloads.evil.example/${RAW_APPIMAGE}`;
+    const untrustedUrl = `https://downloads.evil.example/${CLOUD_ARM64_DMG}`;
     fetchMock.mockResolvedValueOnce(
       Response.json([
-        githubRelease(7, 'v-desktop-1.10.0', {
-          assets: [githubAsset(71, RAW_APPIMAGE, untrustedUrl)],
+        githubRelease(7, 'v-cloud-desktop-1.2.0', {
+          assets: [githubAsset(71, CLOUD_ARM64_DMG, untrustedUrl)],
         }),
       ]),
     );
 
     const response = await downloadDesktop(
-      makeRequest('https://agi.example/api/download?platform=linux'),
+      makeRequest('https://agi.example/api/download?platform=mac'),
     );
 
     expect(response.status).toBe(503);

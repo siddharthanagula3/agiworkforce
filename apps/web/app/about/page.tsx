@@ -183,9 +183,9 @@ export default function AboutPage() {
               Judge the bet on its merits.
             </h2>
             <Prose>
-              Try AGI Web in the browser, or run Desktop and the CLI on your own hardware with local
-              models and your own keys. Either way, you see where every request runs before it
-              leaves your device.
+              Try AGI Web in the browser, or run the CLI on your own hardware with local models and
+              your own keys. Either way, you see where every request runs before it leaves your
+              device.
             </Prose>
             <ButtonRow>
               <Button href="/login?redirectTo=%2F">Try AGI Web</Button>

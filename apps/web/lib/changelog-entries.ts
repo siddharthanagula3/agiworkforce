@@ -1,5 +1,3 @@
-import { DESKTOP_LOCAL_RUNTIMES } from './marketing-constants';
-
 export interface Release {
   date: string;
   headline: string;
@@ -7,6 +5,14 @@ export interface Release {
 }
 
 export const RELEASES: readonly Release[] = [
+  {
+    date: '2026-09-15',
+    headline: 'Desktop · one desktop app',
+    body: [
+      'The macOS app built on Electron is the AGI desktop application: your account in a window that stays open, approved folders, models already running on the Mac, computer use one step at a time, and the Chrome bridge. Its release workflow signs, notarizes and verifies one installer per architecture; no installer has been published yet.',
+      'The earlier Tauri build leaves the public download flows, and its Linux packages are no longer offered.',
+    ],
+  },
   {
     date: '2026-09-05',
     headline: 'Model catalogue, route health and the operator console · live',
@@ -29,7 +35,7 @@ export const RELEASES: readonly Release[] = [
     date: '2026-07-03',
     headline: 'Desktop local model providers · live',
     body: [
-      `Desktop now talks to ${DESKTOP_LOCAL_RUNTIMES.label} as local, self-hosted model providers, alongside the existing BYOK provider set.`,
+      `Desktop now talks to Ollama, LM Studio, llama.cpp and vLLM as local, self-hosted model providers, alongside the existing BYOK provider set.`,
     ],
   },
   {
