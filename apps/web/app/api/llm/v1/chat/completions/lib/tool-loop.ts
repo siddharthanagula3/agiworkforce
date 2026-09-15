@@ -3188,6 +3188,19 @@ export async function* runToolLoop(
       );
     }
     recordToolCapabilityObservation(reason);
+    if (observedUsage.providerCalls > 0) {
+      yield encoder.encode(
+        sseData({
+          choices: [],
+          usage: {
+            prompt_tokens: observedUsage.inputTokens,
+            completion_tokens: observedUsage.outputTokens,
+            total_tokens: observedUsage.inputTokens + observedUsage.outputTokens,
+          },
+          model: responseModel,
+        }),
+      );
+    }
     yield encoder.encode(eventStream.emit({ type: 'stop', reason }));
     yield encoder.encode(sseDone());
   }
