@@ -57,6 +57,30 @@ export class ApiHttpError extends Error {
   }
 }
 
+export const CLOUD_SIGN_IN_MESSAGE = 'Sign in to AGI Cloud to continue.';
+
+export function httpErrorFrom(status: number, body: string): ApiHttpError {
+  if (status === 401) return new ApiHttpError(CLOUD_SIGN_IN_MESSAGE, status, 'auth_required');
+  const parsed = parseJsonBody(body);
+  const candidate = parsed?.error ?? parsed?.message;
+  let message: string | null = null;
+  let code: string | null = null;
+  if (typeof candidate === 'string' && candidate.trim()) {
+    message = candidate;
+  } else if (candidate && typeof candidate === 'object') {
+    const nested = candidate as { code?: unknown; message?: unknown };
+    if (typeof nested.code === 'string') code = nested.code;
+    if (typeof nested.message === 'string' && nested.message.trim()) message = nested.message;
+  }
+  return new ApiHttpError(message ?? fallbackHttpMessage(status), status, code);
+}
+
+function fallbackHttpMessage(status: number): string {
+  if (status === 429) return 'Too many requests right now. Please wait a moment and try again.';
+  if (status >= 500) return 'The server hit a problem handling this request. Please try again.';
+  return `Request failed (HTTP ${status}). Please try again.`;
+}
+
 export function parseJsonBody(text: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(text);

@@ -3,7 +3,6 @@ import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
 const MODEL_ID = requireMobileCloudModel().id;
-const RETRY_AT = '2026-09-01T12:01:30.000Z';
 
 async function loadStreamingService() {
   jest.resetModules();
@@ -43,37 +42,29 @@ function loadApiErrors() {
   return require('../services/apiErrors') as typeof import('../services/apiErrors');
 }
 
-function makeCallbacks() {
-  return {
-    onDelta: jest.fn(),
-    onDone: jest.fn(),
-    onError: jest.fn(),
-  };
-}
-
-async function streamAndCatch(body: unknown, operationId: string) {
+async function streamAndCatch(status: number, body: string) {
   const { streamChat } = await loadStreamingService();
   guardedFetchMock.mockResolvedValue({
     ok: false,
-    status: 429,
-    text: async () => (typeof body === 'string' ? body : JSON.stringify(body)),
+    status,
+    text: async () => body,
   } as unknown as Response);
 
-  const callbacks = makeCallbacks();
+  const callbacks = { onDelta: jest.fn(), onDone: jest.fn(), onError: jest.fn() };
   await streamChat(
     {
       model: MODEL_ID,
       messages: [{ role: 'user', content: 'hi' }],
       stream: true,
-      operationId,
+      operationId: `0190a000-0000-7000-8000-0000000000${status}`,
     },
     callbacks,
   );
   expect(callbacks.onError).toHaveBeenCalledTimes(1);
-  return callbacks.onError.mock.calls[0][0];
+  return callbacks.onError.mock.calls[0][0] as Error;
 }
 
-describe('free-capacity 429 handling on the stream', () => {
+describe('a refused stream reaches the banner as a sentence', () => {
   afterEach(() => {
     jest.dontMock('@/lib/constants');
     jest.dontMock('@/lib/egressGuard');
@@ -83,50 +74,35 @@ describe('free-capacity 429 handling on the stream', () => {
     jest.dontMock('@/src/features/waitlist/store');
   });
 
-  it('reports a typed free-capacity error carrying retry_at', async () => {
+  it("carries the gateway's own sentence and code for a provider outage", async () => {
+    const message =
+      'This model is unavailable right now because of a problem on our side, not with your request. Choose another model, or try again shortly.';
     const error = await streamAndCatch(
-      {
-        error: {
-          message: 'No free capacity right now.',
-          type: 'insufficient_quota',
-          code: 'free_capacity_unavailable',
-          retry_at: RETRY_AT,
-          recovery: [{ action: 'byok', href: '/byok' }],
-        },
-      },
-      '0190a000-0000-7000-8000-000000000021',
+      503,
+      JSON.stringify({
+        error: { message, type: 'service_unavailable', code: 'provider_billing_exhausted' },
+      }),
     );
-    const { ApiFreeCapacityError } = loadApiErrors();
-
-    expect(error).toBeInstanceOf(ApiFreeCapacityError);
-    expect(error.retryAtMs).toBe(Date.parse(RETRY_AT));
-    expect(error.message).not.toContain('{');
+    expect(error.name).toBe('ApiHttpError');
+    expect(error.message).toBe(message);
+    expect((error as Error & { status: number; code: string | null }).status).toBe(503);
+    expect((error as Error & { status: number; code: string | null }).code).toBe(
+      'provider_billing_exhausted',
+    );
   });
 
-  it('still reports a paywall 429 as ApiPaywallError', async () => {
+  it('asks for a sign-in on 401 instead of echoing the wire body', async () => {
     const error = await streamAndCatch(
-      {
-        kind: 'paywall',
-        feature: 'token_cap',
-        requiredTier: 'basic',
-        reason: '2M tokens used this month',
-      },
-      '0190a000-0000-7000-8000-000000000022',
+      401,
+      JSON.stringify({ error: { message: 'Missing or invalid authorization header' } }),
     );
-    const { ApiFreeCapacityError, ApiPaywallError } = loadApiErrors();
-
-    expect(error).toBeInstanceOf(ApiPaywallError);
-    expect(error).not.toBeInstanceOf(ApiFreeCapacityError);
-    expect(error.feature).toBe('token_cap');
-    expect(error.requiredTier).toBe('basic');
+    const { CLOUD_SIGN_IN_MESSAGE } = loadApiErrors();
+    expect(error.message).toBe(CLOUD_SIGN_IN_MESSAGE);
   });
 
-  it('falls back to the generic http error for an unrecognised 429', async () => {
-    const error = await streamAndCatch('Too many requests', '0190a000-0000-7000-8000-000000000023');
-    const { ApiFreeCapacityError, ApiPaywallError } = loadApiErrors();
-
-    expect(error).not.toBeInstanceOf(ApiFreeCapacityError);
-    expect(error).not.toBeInstanceOf(ApiPaywallError);
-    expect(error.message).toBe('Too many requests right now. Please wait a moment and try again.');
+  it('never shows a status line with a raw body', async () => {
+    const error = await streamAndCatch(502, '<html>Bad Gateway</html>');
+    expect(error.message).toBe('The server hit a problem handling this request. Please try again.');
+    expect(error.message).not.toMatch(/HTTP|<html>|\{/);
   });
 });
