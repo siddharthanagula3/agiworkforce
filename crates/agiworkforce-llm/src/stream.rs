@@ -798,11 +798,6 @@ async fn stream_openai_compat(
     .await
 }
 
-/// A gateway that fails after the response has started reports it inside the
-/// stream, with the HTTP status already sent as 200; without this the turn read
-/// as an empty completed answer with no tokens and no word to the user.
-const STREAM_ERROR_STATUS: u16 = 502;
-
 /// Decode an OpenAI-compatible Chat Completions SSE byte stream.
 pub async fn run_openai_compat_stream<S>(
     mut stream: S,
@@ -857,6 +852,9 @@ where
                         continue;
                     }
                 };
+                // A gateway that fails after the response has opened reports
+                // it here with the HTTP status already sent as 200; without this
+                // the turn read as an empty completed answer with no tokens.
                 if let Some(stream_error) = event.pointer("/choices/0/delta/x_stream_error") {
                     let message = stream_error
                         .get("message")
@@ -864,10 +862,13 @@ where
                         .filter(|text| !text.trim().is_empty())
                         .unwrap_or("The provider stopped the stream with an error.")
                         .to_string();
-                    return Err(LlmError::Api {
+                    return Err(LlmError::StreamError {
                         provider: provider.to_string(),
-                        status: STREAM_ERROR_STATUS,
                         message,
+                        retryable: stream_error
+                            .get("retryable")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
                     });
                 }
                 {
@@ -2471,14 +2472,14 @@ mod openai_compat_stream_tests {
                 .await
                 .expect_err("the frame is an error");
         match error {
-            LlmError::Api {
+            LlmError::StreamError {
                 provider,
-                status,
                 message,
+                retryable,
             } => {
                 assert_eq!(provider, "managed_cloud");
-                assert_eq!(status, STREAM_ERROR_STATUS);
                 assert_eq!(message, "This model is unavailable right now.");
+                assert!(!retryable, "the gateway said not to retry");
             }
             other => panic!("unexpected error: {other}"),
         }
