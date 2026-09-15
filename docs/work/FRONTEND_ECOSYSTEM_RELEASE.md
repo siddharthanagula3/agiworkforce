@@ -121,6 +121,8 @@ extension state plus the desktop pairing record).
 | F53 | Web, found while settling the shell picker question: in the chat model picker's expanded list the filter chips (Favourites, Recent, the provider names, capability filters) are plain buttons with no pressed state or group label, so a driver walking the buttons and a screen reader user alike cannot tell a filter from a model row; a click on a provider filter reads as a selection that did nothing. The picker itself works (a row selects on the first click; the choice is per browser, not per account). | VERIFIED (defect, open) | scratchpad desktop-code-2 captures chat-07 to chat-10 |
 | F54 | Web: in the chat model picker some rows close the picker without selecting and without a word (two cheaper models outside the tier table, in a four-model A/B where two flagship-family models inside it select on the first click); the failing rows are indistinguishable in the markup and the click produces no request, no console message and no notice. Cause (web-picker-1, replacing the first reading): the composer's model store held a nineteen-model universe built from the shared allowlist union, while the catalogue and the server's send-time check admit the twenty-seven chat models a managed route can serve; a row outside the store fell through to a handler that closed the popover and then resolved the id to Auto without a word. Eight models sat in that gap. The tier gate in the footer was not at fault (it delegates to the same entitlement rule the server uses). Fixed in 0e3559126: the store's universe is the catalogue's own executability rule, one predicate governs a row's enabled state and its click, a row the store cannot hold is disabled with its reason and cannot close the picker, and the filter chips gained their labelled group (F53). Proven live: all four models select, and a real turn on a previously dead cheap model returns 200 and answers. | VERIFIED (fixed) | scratchpad desktop-code-2 chat-ab.mjs, chat-why.mjs, captures chat-11 to chat-15 |
 | F55 | Cross-surface follow-up from F54: the shared allowlist function in the contracts package (the union of the three named tier buckets, nineteen ids) feeds every surface's picker and the hosted models endpoint, while the catalogue and the server admit models entitled through the derived price floor as well (twenty-seven chat models with a managed route). The web store now follows the catalogue; desktop, mobile and the extension still build their pickers from the narrower union and miss the same eight routable, entitled models. Needs its own task with those surfaces' suites run. | SOURCE-CONFIRMED (open) | `packages/contracts/types/src/model-catalog.ts`; reports/web-picker-1.md |
+| F56 | A managed route answered 503 with provider billing exhausted for one Anthropic model on the dev server while route health still reported it admitted, so the catalogue kept offering a model that answered nothing (found by models-allowlist-1). The provider account is a founder item; engineering owes a route-health rule that withholds a route after a billing exhaustion until it answers again. | VERIFIED (defect, open) | reports/models-allowlist-1.md; founder item 9 |
+| F57 | Chrome: the last two provider group headings in the side panel's model menu render raw ids because the extension keeps its own provider display map instead of reading the shared PROVIDER_DISPLAY owner. Fix folded into models-allowlist-1. | VERIFIED (defect) | scratchpad models-allowlist-1 side-panel-model-menu-full.png |
 
 ## 4. Founder decisions needed
 
@@ -182,6 +184,11 @@ extension state plus the desktop pairing record).
    the accessibility grant is broken. Entry "[Desktop QA] One click on
    the shell's run-commands consent for the QA folder" in the founder file.
    NON-BLOCKING.
+9. A managed route's provider account is out of credit: one Anthropic model
+   answers 503 with provider billing exhausted on the dev server while the
+   catalogue still offers it. Entry "[Providers] A managed route answers with
+   exhausted provider billing" in the founder file. USER-VISIBLE while it
+   lasts.
 
 ## 5. Plan
 
