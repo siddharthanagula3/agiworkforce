@@ -201,11 +201,7 @@ export function getProviderComputePricing(providerId: string): ProviderComputePr
   return computePricingRecords[providerId] ?? null;
 }
 export type HarnessProtocol =
-  | 'openai_chat'
-  | 'openai_responses'
-  | 'anthropic_messages'
-  | 'gemini_native'
-  | 'provider_native';
+  'openai_chat' | 'openai_responses' | 'anthropic_messages' | 'gemini_native' | 'provider_native';
 
 export type HarnessHostPolicy = 'allowlist_only' | 'registry_declared';
 
