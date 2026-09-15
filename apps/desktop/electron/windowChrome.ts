@@ -21,6 +21,31 @@ declare const AGI_TITLE_STRIP_HEIGHT: number;
  */
 const MACOS_WINDOW_BUTTON_HEIGHT = 16;
 const MACOS_WINDOW_BUTTON_LEADING_INSET = 13;
+const MACOS_WINDOW_BUTTON_DIAMETER = 12;
+const MACOS_WINDOW_BUTTON_PITCH = 23;
+
+/**
+ * Where the window buttons stop, so a page can be told where it may start.
+ *
+ * Measured off a real window rather than taken from the AppKit documentation:
+ * `hiddenInset` spaces the group wider than a plain title bar does, and the
+ * documented 20px pitch put the trailing edge 7px left of where it actually is,
+ * which is how a brand mark ended up flush against the zoom button.
+ */
+export function windowButtonsTrailingEdge(): number {
+  return (
+    MACOS_WINDOW_BUTTON_LEADING_INSET + MACOS_WINDOW_BUTTON_PITCH * 2 + MACOS_WINDOW_BUTTON_DIAMETER
+  );
+}
+
+/**
+ * The gap the page must leave after the window buttons. A trailing gutter equal
+ * to the platform's own leading inset; Claude's desktop app measures 13.5px in
+ * the same place.
+ */
+export function windowButtonsTrailingGutter(): number {
+  return MACOS_WINDOW_BUTTON_LEADING_INSET;
+}
 
 export function titleStripHeight(): number {
   return AGI_TITLE_STRIP_HEIGHT;
