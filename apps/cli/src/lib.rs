@@ -3038,6 +3038,7 @@ pub async fn run_main() -> Result<()> {
                 // top-level --provider, then config. Without this, exec hardcoded
                 // None and a local/BYOK model (e.g. `exec --provider ollama`)
                 // silently fell back to the default provider (anthropic).
+                crate::tier_cache::ensure_plan_models_cached().await;
                 let exec_provider_override = models::plan_first_provider_override(
                     &models::AccountRoute::load(),
                     &m,
@@ -4824,6 +4825,7 @@ pub async fn run_oneshot(
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
 ) -> Result<()> {
+    crate::tier_cache::ensure_plan_models_cached().await;
     let resolved_provider_override = models::plan_first_provider_override(
         &models::AccountRoute::load(),
         model,
