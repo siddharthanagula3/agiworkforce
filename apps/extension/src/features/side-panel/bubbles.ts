@@ -543,6 +543,7 @@ function buildAgentActivityStep(
     (entry.kind === 'tool' && Boolean(entry.approval));
   const step = document.createElement(hasDetails ? 'details' : 'div');
   step.className = `sp-agent-step sp-agent-step--${status}`;
+  if (step instanceof HTMLDetailsElement && status === 'awaiting-approval') step.open = true;
   const row = document.createElement(hasDetails ? 'summary' : 'div');
   if (!hasDetails) row.className = 'sp-agent-step__row';
   const icon =
@@ -590,8 +591,12 @@ function buildAgentActivityEl(
     (activity.completedAtMs ?? activity.updatedAtMs) - activity.startedAtMs,
   );
   const elapsedLabel = formatElapsed(elapsed);
-  const statusLabel =
-    activity.status === 'completed'
+  const needsApproval =
+    activity.status === 'awaiting-approval' ||
+    activity.entries.some((entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval');
+  const statusLabel = needsApproval
+    ? `Needs your approval · ${elapsedLabel}`
+    : activity.status === 'completed'
       ? `Worked for ${elapsedLabel}`
       : activity.status === 'failed'
         ? `Failed after ${elapsedLabel}`
@@ -599,21 +604,20 @@ function buildAgentActivityEl(
           ? `Cancelled after ${elapsedLabel}`
           : activity.status === 'paused'
             ? `Paused after ${elapsedLabel}`
-            : activity.status === 'awaiting-approval'
-              ? `Needs approval · ${elapsedLabel}`
-              : `Working for ${elapsedLabel}`;
+            : `Working for ${elapsedLabel}`;
   summary.appendChild(
     renderIcon(
       activity.status === 'failed' || activity.status === 'cancelled'
         ? CircleX
         : activity.status === 'completed'
           ? CircleCheck
-          : activity.status === 'paused' || activity.status === 'awaiting-approval'
+          : needsApproval || activity.status === 'paused'
             ? Clock
             : Loader2,
       14,
     ),
   );
+  if (needsApproval) details.open = true;
   summary.appendChild(
     document.createTextNode(
       `${statusLabel}${activity.entries.length ? ` · ${activity.entries.length} steps` : ''}`,
