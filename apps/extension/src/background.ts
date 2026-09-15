@@ -5309,6 +5309,7 @@ async function handleChatMessage(
         text: '',
         done: true,
         error: visibleError,
+        errorCode: result.code,
         ...(result.routing ? { routing: result.routing } : {}),
       });
     }
@@ -5333,6 +5334,7 @@ async function handleChatMessage(
         text: '',
         done: true,
         error: messageText,
+        errorCode: result.code,
       });
     }
     logger.error('handleChatMessage error', error);
@@ -5449,6 +5451,7 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
         text: '',
         done: true,
         error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
+        errorCode: result.code,
         ...(routing ? { routing } : {}),
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
@@ -5569,6 +5572,7 @@ async function handleResolveChatApproval(
         text: '',
         done: true,
         error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
+        errorCode: result.code,
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
     }
