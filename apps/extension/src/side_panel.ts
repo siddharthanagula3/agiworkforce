@@ -21,11 +21,11 @@ import {
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
   normalizeModelId,
-  PROVIDER_DISPLAY,
+  getProviderDisplayLabel,
+  PROVIDERS_IN_ORDER,
   resolveModelEffort,
   type Effort,
   type InteractiveCard,
-  type ProviderId,
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
@@ -680,6 +680,11 @@ function managedTurnPersistencePayload(streamId: string): {
 // Provider display order in the grouped picker.
 const UNKNOWN_PROVIDER_KEY = 'unknown-provider';
 
+function modelGroupHeading(providerKey: string): string {
+  if (providerKey === UNKNOWN_PROVIDER_KEY) return t('spModelsOtherProvider');
+  return getProviderDisplayLabel(providerKey);
+}
+
 const CONNECTORS_URL = 'https://agiworkforce.com/connectors?from=chrome-extension';
 
 const RECENTS_SEARCH_THRESHOLD = 10;
@@ -689,22 +694,6 @@ const RELATIVE_TIME_STEPS: { ms: number; unit: Intl.RelativeTimeFormatUnit }[] =
   { ms: 86_400_000, unit: 'day' },
   { ms: 3_600_000, unit: 'hour' },
   { ms: 60_000, unit: 'minute' },
-];
-
-const PROVIDER_GROUP_ORDER: ProviderId[] = [
-  'anthropic',
-  'openai',
-  'google',
-  'deepseek',
-  'xai',
-  'perplexity',
-  'qwen',
-  'moonshot',
-  'zhipu',
-  'ollama',
-  'lmstudio',
-  'custom-openai-compatible',
-  'agi-cloud',
 ];
 
 function getModelBadgeLabel(modelId: string): string {
@@ -6176,27 +6165,19 @@ function buildUI(): void {
     }
 
     const rendered = new Set<string>();
-    for (const providerId of PROVIDER_GROUP_ORDER) {
-      const options = grouped.get(providerId);
+    for (const providerKey of PROVIDERS_IN_ORDER) {
+      const options = grouped.get(providerKey);
       if (!options || options.length === 0) continue;
-      rendered.add(providerId);
+      rendered.add(providerKey);
       modelDropdownEl.appendChild(
-        el(
-          'div',
-          { class: 'sp-model-group-header' },
-          PROVIDER_DISPLAY[providerId]?.label ?? providerId,
-        ),
+        el('div', { class: 'sp-model-group-header' }, modelGroupHeading(providerKey)),
       );
       appendModelRows(options);
     }
     for (const [providerKey, options] of grouped.entries()) {
       if (rendered.has(providerKey)) continue;
       modelDropdownEl.appendChild(
-        el(
-          'div',
-          { class: 'sp-model-group-header' },
-          providerKey === UNKNOWN_PROVIDER_KEY ? t('spModelsOtherProvider') : providerKey,
-        ),
+        el('div', { class: 'sp-model-group-header' }, modelGroupHeading(providerKey)),
       );
       appendModelRows(options);
     }

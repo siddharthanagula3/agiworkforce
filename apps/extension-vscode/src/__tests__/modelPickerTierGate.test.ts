@@ -2,8 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   canAccessModelForSubscriptionTier,
   getCoreManualModelOptions,
+  getProviderDisplayLabel,
   getSurfaceManualModelOptions,
   isModelSelectable,
+  PROVIDER_DISPLAY,
+  PROVIDERS_IN_ORDER,
+  resolveProviderDisplayId,
 } from '@agiworkforce/types';
 import {
   buildGroupedQuickPickItems,
@@ -203,8 +207,27 @@ describe('buildGroupedQuickPickItems, route grouping', () => {
     ).toBeUndefined();
   });
 
+  it('names a provider the registry spells differently instead of printing its id', () => {
+    const aliasedProvider = PROVIDERS_IN_ORDER.find(
+      (provider) => resolveProviderDisplayId(provider) !== null && !(provider in PROVIDER_DISPLAY),
+    );
+    expect(aliasedProvider).toBeDefined();
+
+    const lock = modelLockForRoute('fixture-model', aliasedProvider!, 'byok', {
+      trustMode: 'byok',
+      provider: 'deepseek',
+    });
+
+    expect(lock).toEqual({
+      kind: 'provider-key',
+      providerLabel: getProviderDisplayLabel(aliasedProvider!),
+      routeLabel: 'DeepSeek',
+    });
+    expect(lock === undefined ? '' : modelLockHeading(lock)).not.toContain(aliasedProvider!);
+  });
+
   it('never prints a raw provider id for one the catalog cannot name', () => {
-    const lock = modelLockForRoute('or-anything', 'open_router', 'byok', {
+    const lock = modelLockForRoute('fixture-model', 'fixture-unlisted-provider', 'byok', {
       trustMode: 'byok',
       provider: 'deepseek',
     });

@@ -20,6 +20,12 @@
 
 import modelsCatalogJson from './models.json';
 import {
+  PROVIDER_DISPLAY,
+  PROVIDER_DISPLAY_ALIASES,
+  type ProviderDisplay,
+  type ProviderId,
+} from './design-system/provider-display';
+import {
   lifecycleStageAtOrAfter,
   modelRegistry,
   type LifecycleStage,
@@ -1302,6 +1308,49 @@ export const providerLabels: Record<string, string> = {
 };
 
 export const PROVIDERS_IN_ORDER = [...modelsCatalog.providersInOrder];
+
+/**
+ * Every spelling of a provider that a surface can meet, mapped to the one
+ * display identity. A picker that looks a wire key up in the display map
+ * directly misses whenever the two spellings differ and then renders the raw
+ * id as a heading, so the mapping is derived here from the aliases the registry
+ * already declares rather than copied into each surface.
+ */
+const PROVIDER_DISPLAY_ID_BY_KEY: ReadonlyMap<string, ProviderId> = (() => {
+  const displayIds = new Set<string>(Object.keys(PROVIDER_DISPLAY));
+  const byKey = new Map<string, ProviderId>();
+  for (const displayId of displayIds) byKey.set(displayId, displayId as ProviderId);
+  for (const [providerId, providerConfig] of Object.entries(modelsCatalog.providers)) {
+    const spellings = [providerId, ...(providerConfig.aliases ?? [])];
+    const displayId =
+      spellings.find((spelling) => displayIds.has(spelling)) ??
+      spellings.map((spelling) => PROVIDER_DISPLAY_ALIASES[spelling]).find(Boolean);
+    if (!displayId) continue;
+    for (const spelling of spellings) byKey.set(spelling, displayId as ProviderId);
+  }
+  for (const [spelling, displayId] of Object.entries(PROVIDER_DISPLAY_ALIASES)) {
+    byKey.set(spelling, displayId);
+  }
+  return byKey;
+})();
+
+export function resolveProviderDisplayId(
+  provider: Provider | string | null | undefined,
+): ProviderId | null {
+  if (typeof provider !== 'string' || !provider) return null;
+  return PROVIDER_DISPLAY_ID_BY_KEY.get(provider) ?? null;
+}
+
+export function getProviderDisplay(
+  provider: Provider | string | null | undefined,
+): ProviderDisplay | null {
+  const displayId = resolveProviderDisplayId(provider);
+  return displayId ? PROVIDER_DISPLAY[displayId] : null;
+}
+
+export function getProviderDisplayLabel(provider: Provider | string): string {
+  return getProviderDisplay(provider)?.label ?? providerLabels[provider] ?? provider;
+}
 
 export const DEVELOPER_LABELS: Readonly<Record<string, string>> = Object.freeze(
   Object.fromEntries(

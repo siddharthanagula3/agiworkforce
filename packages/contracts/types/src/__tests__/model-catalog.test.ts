@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modelRegistry } from '@agiworkforce/model-registry';
+import { PROVIDER_DISPLAY } from '../design-system/provider-display';
 import {
   applyInputTokenPricingTiers,
   applyLongContextPricing,
@@ -19,6 +20,8 @@ import {
   getModelContextLimits,
   getEconomyFallbackModels,
   getExecutableModelIds,
+  getProviderDisplayLabel,
+  resolveProviderDisplayId,
   getSurfaceManualModelOptions,
   isManagedTrafficPermitted,
   isModelLive,
@@ -143,6 +146,38 @@ describe('the shared owner of what a surface may offer', () => {
 
     expect(perSurface[0]).toEqual([...getExecutableModelIds()].sort());
     for (const surfaceIds of perSurface) expect(surfaceIds).toEqual(perSurface[0]);
+  });
+
+  it('names every provider a surface picker can group', () => {
+    for (const runtimeProfileId of MANAGED_CHAT_SURFACES) {
+      const providers = new Set(
+        getPickerModelsForRuntimeProfile(runtimeProfileId, CHAT_TYPE_OPTIONS).map(
+          (model) => model.provider,
+        ),
+      );
+
+      expect(providers.size).toBeGreaterThan(0);
+      for (const provider of providers) {
+        const displayId = resolveProviderDisplayId(provider);
+        expect(displayId, provider).not.toBeNull();
+        expect(getProviderDisplayLabel(provider), provider).toBe(
+          PROVIDER_DISPLAY[displayId!].label,
+        );
+        expect(getProviderDisplayLabel(provider), provider).not.toBe(provider);
+      }
+    }
+  });
+
+  it('resolves every spelling the registry declares for a display provider', () => {
+    for (const [providerId, providerConfig] of Object.entries(modelsCatalog.providers)) {
+      const resolved = resolveProviderDisplayId(providerId);
+      if (resolved === null) continue;
+      for (const alias of providerConfig.aliases ?? []) {
+        expect(resolveProviderDisplayId(alias), alias).toBe(resolved);
+      }
+    }
+    expect(resolveProviderDisplayId('fixture-unlisted-provider')).toBeNull();
+    expect(getProviderDisplayLabel('fixture-unlisted-provider')).toBe('fixture-unlisted-provider');
   });
 
   it('projects surface options from the owner rather than the whole registry', () => {

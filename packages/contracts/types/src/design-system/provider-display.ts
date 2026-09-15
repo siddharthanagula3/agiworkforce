@@ -163,6 +163,17 @@ export const PROVIDER_DISPLAY: Readonly<Record<ProviderId, ProviderDisplay>> = O
   },
 });
 
+/**
+ * Display identities the registry cannot express. Every other wire provider key
+ * reaches its {@link ProviderId} through the aliases the registry already
+ * declares; these two name surfaces rather than suppliers, so nothing in
+ * `models.json` can carry them.
+ */
+export const PROVIDER_DISPLAY_ALIASES: Readonly<Record<string, ProviderId>> = Object.freeze({
+  managed_cloud: 'agi-cloud',
+  ollama_cloud: 'ollama',
+});
+
 export type CapabilityTier = 'fastest' | 'balanced' | 'most-capable';
 
 export const CAPABILITY_LABEL: Readonly<Record<CapabilityTier, string>> = Object.freeze({
