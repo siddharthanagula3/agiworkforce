@@ -332,7 +332,12 @@ Progress, 2026-09-15: item 1 landed in 50925e177, item 2 in 27cb8a08a, item 3
 in b288fffd0 (each still owes a live check on the running product), item 4 in
 2ceb62b4e (checked on the rebuilt binary). Item 6: the QA user now has a
 password sign-in for the native SDKs (web sign-in stays the Clerk ticket
-flow); its workspace and the credential handling are still open.
+flow); its workspace and the credential handling are still open. Item 5
+landed in 4806cbb16 (reviewed on the dev server at two widths); two follow-ups
+came out of it: the callerless Tauri latest-manifest route under
+`apps/web/app/api/releases/latest/` leaves with the Tauri build, and the
+Electron package still carries the name of the hosted trust mode, so the rename
+to the surface name (D-04, derived) waits for a packaged-build check.
 
 ## 4. P2, important
 
