@@ -190,7 +190,12 @@
       "detailed": "Thorough with examples",
       "technical": "Precise with code examples",
       "creative": "Expressive and engaging"
-    }
+    },
+    "addAttachmentsAndTools": "Add attachments and tools",
+    "addAttachmentsAndToolsActive": "Add attachments and tools: {{count}} active",
+    "voiceStart": "Start voice input",
+    "voiceUnsupportedBrowser": "Voice input not supported in this browser",
+    "voiceUnsupportedHint": "Voice input is not supported in this browser. Try Chrome or Edge."
   },
   "bubble": {
     "assistantThinking": "Assistant is thinking",

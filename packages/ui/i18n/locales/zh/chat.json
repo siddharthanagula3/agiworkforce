@@ -190,7 +190,12 @@
       "detailed": "详尽并附示例",
       "technical": "精确并附代码示例",
       "creative": "富有表现力且引人入胜"
-    }
+    },
+    "addAttachmentsAndTools": "添加附件和工具",
+    "addAttachmentsAndToolsActive": "添加附件和工具：{{count}} 个已启用",
+    "voiceStart": "开始语音输入",
+    "voiceUnsupportedBrowser": "此浏览器不支持语音输入",
+    "voiceUnsupportedHint": "此浏览器不支持语音输入。请尝试 Chrome 或 Edge。"
   },
   "bubble": {
     "assistantThinking": "助手正在思考",

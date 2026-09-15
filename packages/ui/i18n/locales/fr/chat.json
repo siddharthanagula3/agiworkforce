@@ -190,7 +190,12 @@
       "detailed": "Approfondi avec des exemples",
       "technical": "Précis avec des exemples de code",
       "creative": "Expressif et captivant"
-    }
+    },
+    "addAttachmentsAndTools": "Ajouter des pièces jointes et des outils",
+    "addAttachmentsAndToolsActive": "Ajouter des pièces jointes et des outils : {{count}} actifs",
+    "voiceStart": "Démarrer la saisie vocale",
+    "voiceUnsupportedBrowser": "La saisie vocale n’est pas prise en charge par ce navigateur",
+    "voiceUnsupportedHint": "La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome ou Edge."
   },
   "bubble": {
     "assistantThinking": "L'assistant réfléchit",

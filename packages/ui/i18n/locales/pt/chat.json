@@ -190,7 +190,12 @@
       "detailed": "Completo com exemplos",
       "technical": "Preciso com exemplos de código",
       "creative": "Expressivo e envolvente"
-    }
+    },
+    "addAttachmentsAndTools": "Adicionar anexos e ferramentas",
+    "addAttachmentsAndToolsActive": "Adicionar anexos e ferramentas: {{count}} ativos",
+    "voiceStart": "Iniciar entrada de voz",
+    "voiceUnsupportedBrowser": "Entrada de voz não suportada neste navegador",
+    "voiceUnsupportedHint": "A entrada de voz não é suportada neste navegador. Tente o Chrome ou o Edge."
   },
   "bubble": {
     "assistantThinking": "O assistente está pensando",

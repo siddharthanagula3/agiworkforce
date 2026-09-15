@@ -190,7 +190,12 @@
       "detailed": "예시를 곁들여 자세히",
       "technical": "코드 예시와 함께 정확하게",
       "creative": "표현력 있고 매력적"
-    }
+    },
+    "addAttachmentsAndTools": "첨부 파일과 도구 추가",
+    "addAttachmentsAndToolsActive": "첨부 파일과 도구 추가: {{count}}개 활성",
+    "voiceStart": "음성 입력 시작",
+    "voiceUnsupportedBrowser": "이 브라우저에서는 음성 입력을 지원하지 않습니다",
+    "voiceUnsupportedHint": "이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome 또는 Edge를 사용해 보세요."
   },
   "bubble": {
     "assistantThinking": "어시스턴트가 생각 중입니다",
