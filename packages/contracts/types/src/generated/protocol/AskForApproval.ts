@@ -6,8 +6,4 @@ import type { GranularApprovalConfig } from './GranularApprovalConfig';
  * running the command proposed by Agiworkforce.
  */
 export type AskForApproval =
-  | 'untrusted'
-  | 'on-failure'
-  | 'on-request'
-  | { granular: GranularApprovalConfig }
-  | 'never';
+  'untrusted' | 'on-failure' | 'on-request' | { granular: GranularApprovalConfig } | 'never';
