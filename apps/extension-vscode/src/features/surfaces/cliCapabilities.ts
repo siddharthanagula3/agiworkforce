@@ -15,6 +15,7 @@ export const CLI_CAPABILITY_METHODS = {
   writeSettings: 'writeSettings',
   accountStatus: 'accountStatus',
   accountLogin: 'startAccountLogin',
+  accountLoginWait: 'waitForAccountLogin',
   accountToken: 'accountToken',
 } as const;
 
@@ -38,8 +39,14 @@ export interface CliAccountStatus {
 }
 
 export interface CliLoginChallenge {
+  loginId: string;
   verificationUrl: string;
   userCode?: string;
+}
+
+export interface CliLoginGrant {
+  outcome: 'completed' | 'expired' | 'failed';
+  message?: string;
 }
 
 type CapabilityHost = Record<string, unknown>;
@@ -168,10 +175,32 @@ export class CliCapabilityAdapter {
     if (verificationUrl === undefined) {
       return { status: 'failed', reason: 'The AGI CLI did not return a sign-in URL.' };
     }
+    const loginId = readString(record, ['loginId', 'id']);
+    if (loginId === undefined) {
+      return { status: 'failed', reason: 'The AGI CLI did not return a login to wait on.' };
+    }
     const userCode = readString(record, ['userCode', 'code']);
     return {
       status: 'ok',
-      value: { verificationUrl, ...(userCode === undefined ? {} : { userCode }) },
+      value: { loginId, verificationUrl, ...(userCode === undefined ? {} : { userCode }) },
+    };
+  }
+
+  async loginWait(loginId: string): Promise<CliCapabilityResult<CliLoginGrant>> {
+    const result = await this.call<unknown>('accountLoginWait', loginId);
+    if (result.status !== 'ok') return result;
+    const record =
+      result.value !== null && typeof result.value === 'object'
+        ? (result.value as Record<string, unknown>)
+        : {};
+    const outcome = readString(record, ['outcome']);
+    const message = readString(record, ['message']);
+    return {
+      status: 'ok',
+      value: {
+        outcome: outcome === 'completed' || outcome === 'expired' ? outcome : 'failed',
+        ...(message === undefined ? {} : { message }),
+      },
     };
   }
 }
