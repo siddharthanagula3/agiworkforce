@@ -8,7 +8,7 @@ import type { ApiKeyRow } from '@/lib/server/neon-types';
 import argon2 from 'argon2';
 import { API_KEY_SCOPE_VALUES, type ApiKeyScope } from '@/lib/api-key-scopes';
 
-const ARGON2_OPTIONS: argon2.Options = {
+const ARGON2_OPTIONS: argon2.HashOptions = {
   type: argon2.argon2id,
   memoryCost: 65536, // 64 MB
   timeCost: 3,

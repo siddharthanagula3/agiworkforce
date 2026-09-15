@@ -18,7 +18,7 @@
     "@agiworkforce/provider-protocol": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*",
-    "@anthropic-ai/sdk": "^0.91.1"
+    "@anthropic-ai/sdk": "^0.125.0"
   },
   "devDependencies": {
     "vitest": "^4.1.11"
