@@ -117,6 +117,13 @@ const MAC_MODIFIER_SYMBOLS: Record<string, string> = {
   shift: '\u21e7',
 };
 
+/**
+ * Electron spells the `+` key as the word `Plus`, because the token is also its
+ * separator. A macOS menu shows the character, and there is no separator to
+ * confuse it with once the modifiers are symbols.
+ */
+const MAC_KEY_SYMBOLS: Record<string, string> = { plus: '+' };
+
 export function describeAccelerator(accelerator: string, platform: string): string {
   if (accelerator === NO_HOST_SHORTCUT) return NO_HOST_SHORTCUT;
   const parts = accelerator.split('+');
@@ -125,8 +132,42 @@ export function describeAccelerator(accelerator: string, platform: string): stri
       .map((part) => (/^(commandorcontrol|cmdorctrl)$/i.test(part) ? 'Ctrl' : part))
       .join('+');
   }
-  return parts.map((part) => MAC_MODIFIER_SYMBOLS[part.toLowerCase()] ?? part).join('');
+  return parts
+    .map(
+      (part) =>
+        MAC_MODIFIER_SYMBOLS[part.toLowerCase()] ?? MAC_KEY_SYMBOLS[part.toLowerCase()] ?? part,
+    )
+    .join('');
 }
+
+export interface HostMenuShortcut {
+  id: string;
+  description: string;
+  accelerator: string;
+}
+
+/**
+ * The chords the desktop shell adds on top of the ones the page binds itself.
+ *
+ * A native menu accelerator never reaches the page, so the page cannot discover
+ * these by listening; without a shared list the app's own shortcut sheet
+ * describes a browser tab while the user is looking at a desktop window. The
+ * shell builds its menu from these and the sheet renders them, so neither can
+ * claim a chord the other does not have.
+ *
+ * The page's own bindings are not repeated here, and neither are the two
+ * configurable global chords, which come from the user's preferences.
+ */
+export const HOST_MENU_SHORTCUTS: readonly HostMenuShortcut[] = [
+  { id: 'host-new-chat', description: 'New chat', accelerator: 'CommandOrControl+N' },
+  { id: 'host-settings', description: 'Settings', accelerator: 'CommandOrControl+,' },
+  { id: 'host-close-window', description: 'Close window', accelerator: 'CommandOrControl+W' },
+  { id: 'host-back', description: 'Back', accelerator: 'CommandOrControl+[' },
+  { id: 'host-forward', description: 'Forward', accelerator: 'CommandOrControl+]' },
+  { id: 'host-actual-size', description: 'Actual size', accelerator: 'CommandOrControl+0' },
+  { id: 'host-zoom-in', description: 'Zoom in', accelerator: 'CommandOrControl+Plus' },
+  { id: 'host-zoom-out', description: 'Zoom out', accelerator: 'CommandOrControl+-' },
+];
 
 /**
  * The platform a `HostBridge.platform` value names, as a person would say it.

@@ -36,6 +36,8 @@ describe('describeAccelerator', () => {
   it('writes a chord the way macOS does, with symbols and no separator', () => {
     expect(describeAccelerator('CommandOrControl+Shift+2', 'electron-darwin')).toBe('⌘⇧2');
     expect(describeAccelerator('Alt+Shift+Space', 'darwin')).toBe('⌥⇧Space');
+    expect(describeAccelerator('CommandOrControl+Plus', 'electron-darwin')).toBe('⌘+');
+    expect(describeAccelerator('CommandOrControl+-', 'electron-darwin')).toBe('⌘-');
   });
 
   it('spells the portable modifier as the key the platform actually presses', () => {
