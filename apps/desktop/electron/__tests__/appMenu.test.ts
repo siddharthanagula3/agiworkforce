@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MenuItemConstructorOptions } from 'electron';
-import { HOST_COMMANDS } from '@agiworkforce/local-runtime-contract';
+import { HOST_COMMANDS, HOST_MENU_SHORTCUTS } from '@agiworkforce/local-runtime-contract';
 
 vi.mock('electron', () => ({
   Menu: { buildFromTemplate: vi.fn((template: unknown) => template), setApplicationMenu: vi.fn() },
@@ -31,6 +31,12 @@ function actions() {
 }
 
 const ACCELERATORS = { quickAsk: 'Alt+Shift+Space', screenshot: 'CommandOrControl+Shift+2' };
+
+function contractAccelerator(id: string): string {
+  const shortcut = HOST_MENU_SHORTCUTS.find((candidate) => candidate.id === id);
+  if (!shortcut) throw new Error(`the contract has no ${id}`);
+  return shortcut.accelerator;
+}
 
 function template(overrides = actions()) {
   return { menu: appMenuTemplate(overrides, ACCELERATORS), actions: overrides };
@@ -116,8 +122,8 @@ describe('the application menu', () => {
   it('moves through history from the History menu', () => {
     const { menu, actions: spies } = template();
 
-    expect(item(menu, 'History', 'Back').accelerator).toBe('CmdOrCtrl+[');
-    expect(item(menu, 'History', 'Forward').accelerator).toBe('CmdOrCtrl+]');
+    expect(item(menu, 'History', 'Back').accelerator).toBe(contractAccelerator('host-back'));
+    expect(item(menu, 'History', 'Forward').accelerator).toBe(contractAccelerator('host-forward'));
 
     (item(menu, 'History', 'Back').click as () => void)();
     (item(menu, 'History', 'Forward').click as () => void)();
@@ -150,5 +156,31 @@ describe('the application menu', () => {
         expect(typeof child.click, `${entry.label} > ${child.label}`).toBe('function');
       }
     }
+  });
+
+  it('takes every chord it claims from the contract the shortcut sheet renders', () => {
+    const { menu } = template();
+    const claimed: Array<[string, string, string]> = [
+      ['File', 'New Chat', 'host-new-chat'],
+      ['File', 'Settings', 'host-settings'],
+      ['View', 'Actual Size', 'host-actual-size'],
+      ['View', 'Zoom In', 'host-zoom-in'],
+      ['View', 'Zoom Out', 'host-zoom-out'],
+      ['History', 'Back', 'host-back'],
+      ['History', 'Forward', 'host-forward'],
+    ];
+
+    for (const [menuLabel, itemLabel, id] of claimed) {
+      expect(item(menu, menuLabel, itemLabel).accelerator).toBe(contractAccelerator(id));
+    }
+  });
+
+  it('closes a window from the Window menu on every platform', () => {
+    const { menu } = template();
+    const windowItems = submenu(menu, 'Window');
+    const close = windowItems.find((entry) => entry.role === 'close');
+
+    expect(close).toBeDefined();
+    expect(close?.accelerator).toBe(contractAccelerator('host-close-window'));
   });
 });
