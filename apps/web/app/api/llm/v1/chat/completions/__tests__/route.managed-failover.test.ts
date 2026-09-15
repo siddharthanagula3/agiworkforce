@@ -280,7 +280,11 @@ beforeEach(() => {
   providerControl.openaiCalls = 0;
 
   tierMocks.canAccessModel.mockReturnValue(true);
-  mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+  mockGetClerkAuthUser.mockResolvedValue({
+    userId: 'user-1',
+    email: 'u@example.com',
+    boundSurface: 'web',
+  });
   mockGetSubscription.mockResolvedValue({
     id: 'sub_1',
     status: 'active',

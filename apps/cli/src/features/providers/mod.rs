@@ -1,6 +1,6 @@
 //! Provider adapters feature.
 //!
-//! Target home for: provider.rs, auth.rs, auth_oauth.rs, oauth.rs,
+//! Target home for: provider.rs, auth.rs, oauth.rs,
 //! models/ submodule (streaming + dispatch), routing/ submodule.
 //! Covers 11+ providers: 9 cloud first-party + ollama + LM Studio + Custom.
 //!

@@ -23,31 +23,16 @@ import DesktopPage from '../../desktop/page';
 import DownloadLoading from '../loading';
 import DownloadError from '../error';
 
-function signedLinuxManifest() {
-  return {
-    version: '1.10.0',
-    notes: 'Stable Linux release',
-    pub_date: '2026-07-15T00:00:00Z',
-    platforms: {
-      'linux-x86_64': {
-        url: 'https://github.com/siddharthanagula3/agiworkforce/releases/download/v-desktop-1.10.0/AGI.Workforce_1.10.0_amd64.AppImage',
-        signature: 'tauri-signature',
-      },
-    },
-  };
-}
+const DESKTOP_RELEASE_PATH = '/api/releases/desktop-cloud/latest';
 
-function cloudDesktopManifest() {
+function desktopManifest(architectures = { arm64: true, x64: true }) {
   return {
     version: '1.2.0',
     publishedAt: '2026-08-13T00:00:00.000Z',
     platforms: { mac: true },
-    architectures: { arm64: true, x64: true },
+    architectures,
   };
 }
-
-const CLOUD_RELEASE_PATH = 'desktop-cloud';
-const MAC_DESKTOP_RELEASE_PATH = 'darwin-universal';
 
 function releaseNotFound() {
   return Response.json(
@@ -61,15 +46,7 @@ function requestPath(input: RequestInfo | URL): string {
 }
 
 beforeEach(() => {
-  fetchMock.mockImplementation((input: RequestInfo | URL) => {
-    const url = requestPath(input);
-    if (url.includes(MAC_DESKTOP_RELEASE_PATH)) return Promise.resolve(releaseNotFound());
-    return Promise.resolve(
-      Response.json(
-        url.includes(CLOUD_RELEASE_PATH) ? cloudDesktopManifest() : signedLinuxManifest(),
-      ),
-    );
-  });
+  fetchMock.mockImplementation(() => Promise.resolve(Response.json(desktopManifest())));
 });
 
 describe('public Desktop download surfaces', () => {
@@ -90,64 +67,43 @@ describe('public Desktop download surfaces', () => {
     expect(accessibleName.length).toBeGreaterThan(0);
   });
 
-  it('offers only the verified Linux AppImage from the shared download API', async () => {
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = requestPath(input);
-      if (url.includes(CLOUD_RELEASE_PATH) || url.includes(MAC_DESKTOP_RELEASE_PATH)) {
-        return Promise.resolve(releaseNotFound());
-      }
-      return Promise.resolve(Response.json(signedLinuxManifest()));
-    });
-
+  it('asks the desktop release API once and offers one signed installer per architecture', async () => {
     render(<DownloadPage />);
 
     const region = await screen.findByRole('region', { name: 'Desktop installer availability' });
     expect(
-      within(region).getByRole('link', { name: 'Download Linux x64 AppImage' }),
-    ).toHaveAttribute('href', '/api/download?platform=linux');
-    expect(
-      await within(region).findByText(
-        'No signed AGI Desktop macOS installer is available right now.',
-      ),
-    ).toBeInTheDocument();
-    expect(
-      within(region).getByText('No signed AGI Cloud installer is available right now.'),
-    ).toBeInTheDocument();
+      await within(region).findByRole('link', { name: 'Download for Apple silicon' }),
+    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64');
+    expect(within(region).getByRole('link', { name: 'Download for Intel Mac' })).toHaveAttribute(
+      'href',
+      '/api/download?platform=mac&arch=x64',
+    );
     expect(within(region).getByText('Windows installer not published.')).toBeInTheDocument();
-    expect(within(region).queryByRole('link', { name: /macOS|Windows/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/July 12, 2026|July 12/i)).not.toBeInTheDocument();
+    expect(within(region).queryByRole('link', { name: /Linux|Windows/i })).not.toBeInTheDocument();
+    const desktopRequests = fetchMock.mock.calls
+      .map(([input]) => requestPath(input as RequestInfo))
+      .filter((url) => url.includes('/api/releases/desktop'));
+    expect(desktopRequests).toEqual([DESKTOP_RELEASE_PATH]);
   });
 
-  it('offers architecture-specific signed AGI Cloud installers', async () => {
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = requestPath(input);
-      if (url.includes(MAC_DESKTOP_RELEASE_PATH)) return Promise.resolve(releaseNotFound());
-      if (url.includes(CLOUD_RELEASE_PATH)) {
-        return Promise.resolve(Response.json(cloudDesktopManifest()));
-      }
-      return Promise.resolve(Response.json(signedLinuxManifest()));
-    });
-
-    render(<DownloadPage />);
-
-    expect(await screen.findByRole('link', { name: 'Download for Apple silicon' })).toHaveAttribute(
-      'href',
-      '/api/download?platform=mac&app=cloud&arch=arm64',
-    );
-    expect(screen.getByRole('link', { name: 'Download for Intel Mac' })).toHaveAttribute(
-      'href',
-      '/api/download?platform=mac&app=cloud&arch=x64',
-    );
-  });
-
-  it('shows an accessible empty state when no signed Linux release exists', async () => {
-    fetchMock.mockResolvedValueOnce(
-      Response.json({ error: { code: 'NOT_FOUND', message: 'No release found' } }, { status: 404 }),
+  it('offers only the architecture the release actually carries', async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(Response.json(desktopManifest({ arm64: true, x64: false }))),
     );
     render(<DownloadPage />);
 
-    const status = await screen.findByRole('status', { name: 'Desktop downloads unavailable' });
-    expect(status).toHaveTextContent('No signed Linux installer is available right now.');
+    expect(
+      await screen.findByRole('link', { name: 'Download for Apple silicon' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Download for Intel Mac' })).not.toBeInTheDocument();
+  });
+
+  it('shows an accessible empty state when no signed desktop release exists', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(releaseNotFound()));
+    render(<DownloadPage />);
+
+    const status = await screen.findByRole('status', { name: 'AGI Desktop downloads unavailable' });
+    expect(status).toHaveTextContent('No signed AGI Desktop installer is available right now.');
     expect(within(status).getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
       'href',
       '/login?redirectTo=%2F',
@@ -156,29 +112,25 @@ describe('public Desktop download surfaces', () => {
       'href',
       '/cli',
     );
+    expect(screen.queryByRole('link', { name: /Download for/i })).not.toBeInTheDocument();
   });
 
   it('shows an accessible error with a working retry action', async () => {
-    let linuxRequests = 0;
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = requestPath(input);
-      if (url.includes(MAC_DESKTOP_RELEASE_PATH)) return Promise.resolve(releaseNotFound());
-      if (url.includes(CLOUD_RELEASE_PATH)) {
-        return Promise.resolve(Response.json(cloudDesktopManifest()));
-      }
-      linuxRequests += 1;
-      return linuxRequests === 1
+    let requests = 0;
+    fetchMock.mockImplementation(() => {
+      requests += 1;
+      return requests === 1
         ? Promise.reject(new Error('network unavailable'))
-        : Promise.resolve(Response.json(signedLinuxManifest()));
+        : Promise.resolve(Response.json(desktopManifest()));
     });
     render(<DownloadPage />);
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('We could not verify the Linux installer.');
+    expect(alert).toHaveTextContent('We could not verify the AGI Desktop installer.');
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry release check' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'Download Linux x64 AppImage' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Download for Apple silicon' })).toBeInTheDocument();
     });
   });
 
@@ -186,7 +138,7 @@ describe('public Desktop download surfaces', () => {
     fetchMock.mockReturnValueOnce(new Promise(() => {}));
     render(<DownloadPage />);
 
-    const status = screen.getByRole('status', { name: 'Checking Desktop downloads' });
+    const status = screen.getByRole('status', { name: 'Checking AGI Desktop downloads' });
     expect(status).toHaveAttribute('aria-live', 'polite');
     expect(status.closest('.agi-ds-ledger')).not.toBeNull();
     expect(status).not.toHaveClass('bg-black', 'text-white');
@@ -195,10 +147,11 @@ describe('public Desktop download surfaces', () => {
   it('uses the same verified availability component on the Desktop product page', async () => {
     render(<DesktopPage />);
 
-    expect(
-      await screen.findByRole('link', { name: 'Download Linux x64 AppImage' }),
-    ).toHaveAttribute('href', '/api/download?platform=linux');
-    expect(screen.queryByText('macOS universal · Windows x64 · Linux x64')).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Download for Apple silicon' })).toHaveAttribute(
+      'href',
+      '/api/download?platform=mac&arch=arm64',
+    );
+    expect(screen.queryByText(/AppImage|Tauri|Linux x64/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Public launch ·/i)).not.toBeInTheDocument();
   });
 

@@ -26,8 +26,8 @@ const HERO_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
 const SURFACE_FACTS = [
   {
     meta: `Desktop · ${SURFACE_STATUS.desktop}`,
-    title: 'Runtime URLs live in settings',
-    body: `${DESKTOP_LOCAL_RUNTIMES.label} each take a server URL. Desktop checks that the URL answers, lists the models the runtime reports, and refreshes the model catalog from the reply.`,
+    title: 'Models already running on this Mac',
+    body: `Desktop finds ${DESKTOP_LOCAL_RUNTIMES.label} on loopback, lists the models each one reports, and answers a local thread on the device. A local turn carries no attachments and never moves to the cloud on its own.`,
   },
   {
     meta: `CLI · ${SURFACE_STATUS.cli}`,
@@ -203,8 +203,9 @@ export default function LocalPage() {
                 The machine you own <em className="agi-ds-accent">can run the model.</em>
               </h2>
               <Prose size="lg">
-                Desktop carries the widest set of local runtimes. BYOK is the reviewed way out on
-                the days a local model is not enough.
+                Desktop and the CLI both answer from {DESKTOP_LOCAL_RUNTIMES.label} on the machine
+                you own. BYOK on the CLI is the reviewed way out on the days a local model is not
+                enough.
               </Prose>
               <ButtonRow>
                 <Button href="/desktop" variant="secondary">

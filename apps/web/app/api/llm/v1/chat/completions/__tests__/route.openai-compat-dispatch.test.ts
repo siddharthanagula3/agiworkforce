@@ -363,7 +363,11 @@ describe.each(COMPAT_CASES)(
       `routes an explicit ${provider} model through its own adapter (needs a managed route in the registry)`,
       async () => {
         vi.clearAllMocks();
-        mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+        mockGetClerkAuthUser.mockResolvedValue({
+          userId: 'user-1',
+          email: 'u@example.com',
+          boundSurface: 'web',
+        });
         mockGetSubscription.mockResolvedValue(makeSubscription());
         rlsMocks.getUserScopedDb.mockResolvedValue({
           db: { query: vi.fn(async () => []) },
@@ -408,7 +412,11 @@ describe('Managed Web provider admission', () => {
     ['openrouter', 'fixture-unroutable-openrouter-model'],
   ])('rejects %s when it has no selectable Managed Web route', async (provider, model) => {
     vi.clearAllMocks();
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: 'user-1',
+      email: 'u@example.com',
+      boundSurface: 'web',
+    });
     mockGetSubscription.mockResolvedValue(makeSubscription());
     rlsMocks.getUserScopedDb.mockResolvedValue({
       db: { query: vi.fn(async () => []) },
@@ -429,7 +437,11 @@ describe('Managed Web provider admission', () => {
 describe('Managed Web conversation ownership', () => {
   it('rejects a foreign conversation before reserving credits or starting a provider', async () => {
     vi.clearAllMocks();
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'attacker-user', email: 'a@example.com' });
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: 'attacker-user',
+      email: 'a@example.com',
+      boundSurface: 'web',
+    });
     mockGetSubscription.mockResolvedValue(makeSubscription());
     const query = vi.fn().mockResolvedValue([]);
     rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'attacker-user' });
@@ -455,7 +467,11 @@ describe('Managed Web conversation ownership', () => {
 describe('Managed Web AGI Work dispatch', () => {
   function arrangePaidAgenticTurn(): void {
     vi.clearAllMocks();
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: 'user-1',
+      email: 'u@example.com',
+      boundSurface: 'web',
+    });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
     rlsMocks.getUserScopedDb.mockResolvedValue({
       db: { query: vi.fn(async () => []) },
@@ -760,7 +776,11 @@ describe('Managed Web conversation run concurrency guard', () => {
   it('rejects a new turn with 409 while a prior run for the conversation is still active', async () => {
     vi.clearAllMocks();
     const conversationId = '0190a000-0000-7000-8000-0000000000aa';
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: 'user-1',
+      email: 'u@example.com',
+      boundSurface: 'web',
+    });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
     const query = vi.fn(async (sql: string) =>
       /web_conversations/i.test(sql) ? [{ id: conversationId, user_id: 'user-1' }] : [],
@@ -825,7 +845,11 @@ describe('Managed Web conversation run concurrency guard', () => {
 describe('Per-model tools capability gate', () => {
   it('does not load MCP/connector tools for a catalog tools:false search model', async () => {
     vi.clearAllMocks();
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: 'user-1',
+      email: 'u@example.com',
+      boundSurface: 'web',
+    });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
     rlsMocks.getUserScopedDb.mockResolvedValue({
       db: { query: vi.fn(async () => []) },

@@ -12,6 +12,7 @@ import {
   canUseManagedCloudChatSurface,
   getCloudChatSurfaceCapability,
   type AuthenticatedSurfaceClass,
+  type BoundSurface,
 } from '@/lib/free-chat-surface-policy';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
@@ -55,6 +56,7 @@ export type AuthGateSuccess = {
   token: string;
   subscription: SubscriptionInfo;
   surfaceClass?: AuthenticatedSurfaceClass;
+  boundSurface?: BoundSurface;
 };
 
 type AuthGateFailure = {
@@ -77,7 +79,8 @@ function enforceManagedCloudSurface(
   const error =
     capability === null
       ? {
-          message: 'Managed Cloud requests must identify a supported client surface.',
+          message:
+            'This credential is not bound to an AGI client. Use the AGI web, desktop or mobile app, the browser extension, the CLI or the IDE extension, or an API key.',
           code: 'managed_cloud_surface_unknown',
         }
       : capability === 'developer_surfaces'
@@ -143,8 +146,9 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
 
   let userId: string;
   let surfaceClass: AuthenticatedSurfaceClass | undefined;
+  let boundSurface: BoundSurface | undefined;
   try {
-    ({ userId, surfaceClass } = await timePhase(CHAT_TURN_PHASE.identityVerify, () =>
+    ({ userId, surfaceClass, boundSurface } = await timePhase(CHAT_TURN_PHASE.identityVerify, () =>
       getClerkAuthUser(request, { apiKeyScope: 'inference:write' }),
     ));
   } catch (error) {
@@ -192,6 +196,11 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
+  const credential = {
+    ...(surfaceClass ? { surfaceClass } : {}),
+    ...(boundSurface ? { boundSurface } : {}),
+  };
+
   const subscriptionPromise = resolveEffectiveSubscription(
     createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null }),
     userId,
@@ -217,7 +226,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
       userId,
       token,
       subscription: buildFreeWebsiteSubscription(userId),
-      ...(surfaceClass ? { surfaceClass } : {}),
+      ...credential,
     });
   }
 
@@ -242,7 +251,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
           ...subscription,
           status: 'active',
         },
-        ...(surfaceClass ? { surfaceClass } : {}),
+        ...credential,
       });
     }
 
@@ -270,6 +279,6 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     userId,
     token,
     subscription,
-    ...(surfaceClass ? { surfaceClass } : {}),
+    ...credential,
   });
 }
