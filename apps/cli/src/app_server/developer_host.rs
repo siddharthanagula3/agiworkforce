@@ -1491,29 +1491,53 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut cumulative_input_tokens = 0u32;
             let mut cumulative_output_tokens = 0u32;
 
-            if let Ok(notification) = task_state_notification(
-                task_turn_id.clone(),
-                AgentTaskState::Running,
-                Some(AgentTaskState::Queued),
-                Some("Agent started working.".to_string()),
-            ) {
-                let _ = task_notifications.send(notification);
+            // A route that cannot start is refused before any work is announced,
+            // so a client shows the failure alone rather than an activity row
+            // that ended with an error.
+            let route_block = {
+                let agent = task_session.lock().await;
+                models::turn_can_start(&task_config, &agent.provider, &agent.model)
+                    .await
+                    .err()
+            };
+            let work_started = route_block.is_none();
+            if let Some(error) = route_block {
+                final_status = TurnStatus::Failed;
+                final_error = Some(format!("{error:#}"));
+                final_failure = Some(classify_turn_failure(&error));
+                next_input = None;
+                close_running_turn_claim(
+                    task_running.as_ref(),
+                    task_steering.as_ref(),
+                    &task_thread_id,
+                    &task_turn_id,
+                )
+                .await;
+            } else {
+                if let Ok(notification) = task_state_notification(
+                    task_turn_id.clone(),
+                    AgentTaskState::Running,
+                    Some(AgentTaskState::Queued),
+                    Some("Agent started working.".to_string()),
+                ) {
+                    let _ = task_notifications.send(notification);
+                }
+                emit_agent_event(
+                    &task_thread_id,
+                    &task_turn_id,
+                    &task_event_sequence,
+                    &task_notifications,
+                    AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
+                        progress_id: "turn-work".to_string(),
+                        summary: "Working on your request".to_string(),
+                        detail: Some(
+                            "Reviewing the available context and choosing the next safe action."
+                                .to_string(),
+                        ),
+                        status: AgentEventProgressStatus::Running,
+                    }),
+                );
             }
-            emit_agent_event(
-                &task_thread_id,
-                &task_turn_id,
-                &task_event_sequence,
-                &task_notifications,
-                AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
-                    progress_id: "turn-work".to_string(),
-                    summary: "Working on your request".to_string(),
-                    detail: Some(
-                        "Reviewing the available context and choosing the next safe action."
-                            .to_string(),
-                    ),
-                    status: AgentEventProgressStatus::Running,
-                }),
-            );
 
             while let Some(input) = next_input {
                 let mut agent = task_session.lock().await;
@@ -1625,22 +1649,28 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         AgentEventProgressStatus::Failed,
                     )
                 };
-            emit_agent_event(
-                &task_thread_id,
-                &task_turn_id,
-                &task_event_sequence,
-                &task_notifications,
-                AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
-                    progress_id: "turn-work".to_string(),
-                    summary: progress_summary.to_string(),
-                    detail: progress_detail,
-                    status: progress_status,
-                }),
-            );
+            if work_started {
+                emit_agent_event(
+                    &task_thread_id,
+                    &task_turn_id,
+                    &task_event_sequence,
+                    &task_notifications,
+                    AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
+                        progress_id: "turn-work".to_string(),
+                        summary: progress_summary.to_string(),
+                        detail: progress_detail,
+                        status: progress_status,
+                    }),
+                );
+            }
             if let Ok(notification) = task_state_notification(
                 task_turn_id.clone(),
                 state,
-                Some(AgentTaskState::Running),
+                Some(if work_started {
+                    AgentTaskState::Running
+                } else {
+                    AgentTaskState::Queued
+                }),
                 Some(summary.to_string()),
             ) {
                 let _ = task_notifications.send(notification);

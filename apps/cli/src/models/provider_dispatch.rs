@@ -420,6 +420,22 @@ pub fn decide_turn_route(
     }
 }
 
+/// Whether a turn on this session's route could start at all, judged the way
+/// the first provider call will judge it, so a surface can report a refusal
+/// before it announces any work.
+pub async fn turn_can_start(config: &CliConfig, provider: &Provider, model: &str) -> Result<()> {
+    if try_subscription_auth(provider).await.is_some() {
+        return Ok(());
+    }
+    match resolve_key(config, provider) {
+        Ok(_) => Ok(()),
+        Err(error) => match resolve_turn_route(config, &AccountRoute::load(), model, None) {
+            Ok(_) => Err(error),
+            Err(account) => Err(account),
+        },
+    }
+}
+
 /// The route a turn can actually run on, or why none can.
 pub fn resolve_turn_route(
     config: &CliConfig,
@@ -1019,6 +1035,23 @@ mod tests {
             plan_first_provider_override(&account, listed, "config-model", "anthropic", None)
                 .as_deref(),
             Some("managed_cloud")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_managed_turn_with_no_session_cannot_start_and_says_so() {
+        let model = plan_model();
+        let error = turn_can_start(&CliConfig::default(), &Provider::ManagedCloud, &model)
+            .await
+            .expect_err("no session on this machine in tests");
+        let failure = error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<crate::errors::CliError>())
+            .map(crate::errors::CliError::turn_failure)
+            .expect("a CLI error names the failure");
+        assert_eq!(
+            failure.code,
+            agiworkforce_protocol::developer_session::TurnFailureCode::AccountSignedOut
         );
     }
 
