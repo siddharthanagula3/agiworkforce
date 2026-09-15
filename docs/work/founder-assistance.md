@@ -92,7 +92,7 @@ managed route since the abroad-endpoint exclusion, and the Zhipu default has one
 
 **Why founder assistance is required**
 Settings offers twelve languages. The `v3` dictionary that names the sidebar, empty chat, response actions, thinking, artifacts, search, the account menu, customize, skills and connectors is translated for Spanish only; in the other ten languages 255 to 259 of its 330 values are still English (measured 2026-09-15), so a user who picks French, German, Japanese, Hindi, Arabic, Italian, Korean, Portuguese, Russian or Chinese sees most of the chat surface in English. ChatGPT and Claude ship every offered language fully. Producing 2,500 strings is a spend and a brand-voice call: a model-assisted pass reviewed by a native reader per language is the leaders' floor, a vendor is the ceiling.
-**Exact action** Say which of the two routes to take, or narrow the offered languages to the ones that will be reviewed; name a reviewer per kept language if there is one.
+**Exact action** Say which of the two routes to take, or narrow the offered languages to the ones that will be reviewed; name a reviewer per kept language if there is one. Say too whether the other clients should follow the account language: today mobile follows the device locale with almost no translated strings, the Chrome extension ships one locale and VS Code has none.
 **Where** `packages/ui/i18n/locales/<lang>/v3.json`; the language control in Settings → General.
 **Needed input** One product decision and, for the model-assisted route, permission to spend plan credits on the batch.
 **How to verify completion** The English-value count per language in `v3.json` drops to the product names only, and the settings pass under each language shows one language on the chat surface.
