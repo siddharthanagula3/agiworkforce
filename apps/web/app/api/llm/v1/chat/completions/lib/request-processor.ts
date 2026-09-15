@@ -679,6 +679,13 @@ export function applyMapSearchCardCapability(
   }
 }
 
+export function validationRefusalMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (issue === undefined) return 'The request did not match the chat completions schema.';
+  const path = issue.path.join('.');
+  return path === '' ? issue.message : `${path}: ${issue.message}`;
+}
+
 export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
   if (chatRequest.work_mode !== 'agiwork') return;
 
@@ -2036,7 +2043,7 @@ export async function processRequest(
       response: NextResponse.json(
         {
           error: {
-            message: validationResult.error.message,
+            message: validationRefusalMessage(validationResult.error),
             type: 'invalid_request_error',
             param: validationResult.error.issues[0]?.path.join('.'),
           },
