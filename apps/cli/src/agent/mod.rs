@@ -839,10 +839,10 @@ impl AgentSession {
             );
         }
         if !crate::models::gateway_models::cached_model_is_available(model) {
-            anyhow::bail!(
-                "model '{}' is not in the live managed gateway catalog; run `agi models list` and choose an available Cloud model",
-                model
-            );
+            return Err(crate::errors::CliError::ModelUnavailable {
+                model: model.to_string(),
+            }
+            .into());
         }
         self.model = model.to_string();
         self.provider = models::Provider::ManagedCloud;
