@@ -56,6 +56,7 @@ export async function* translateAnthropicStream(
   let cacheWriteTokens: number | undefined;
   let cacheWrite1hTokens: number | undefined;
   let stopEmitted = false;
+  let threw = false;
 
   try {
     for await (const event of stream) {
@@ -157,8 +158,11 @@ export async function* translateAnthropicStream(
           break;
       }
     }
+  } catch (error) {
+    threw = true;
+    throw error;
   } finally {
-    if (!stopEmitted) {
+    if (!stopEmitted && !threw) {
       yield { type: 'stop', reason: 'end_turn' };
     }
   }
