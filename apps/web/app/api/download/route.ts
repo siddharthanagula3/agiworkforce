@@ -9,33 +9,25 @@ import {
   DESKTOP_CLOUD_TAG_PREFIX,
   fetchLatestStableDesktopRelease,
   resolveDesktopCloudReleaseRepository,
-  resolveDesktopReleaseRepository,
-  selectDesktopInstallerAsset,
-  type DesktopDownloadPlatform,
   type StableDesktopRelease,
 } from '@/lib/releases/github-desktop-releases';
 import { isTrustedReleaseAssetUrl } from '@/lib/releases/trusted-release-asset-url';
 
-function selectCloudMacInstallerAsset(
-  release: StableDesktopRelease,
-  architecture: 'arm64' | 'x64' | null,
-) {
-  if (architecture === 'arm64') {
-    return (
-      release.assets.find((a) => a.name.endsWith('.dmg') && /arm64|aarch64/i.test(a.name)) ?? null
-    );
-  }
-  if (architecture === 'x64') {
-    return (
-      release.assets.find((a) => a.name.endsWith('.dmg') && /x64|x86_64/i.test(a.name)) ?? null
-    );
-  }
-  return (
-    release.assets.find((a) => a.name.endsWith('.dmg') && /arm64|aarch64/i.test(a.name)) ??
-    release.assets.find((a) => a.name.endsWith('.dmg') && /x64|x86_64/i.test(a.name)) ??
-    release.assets.find((a) => a.name.endsWith('.dmg')) ??
-    null
-  );
+type MacArchitecture = 'arm64' | 'x64';
+
+const DESKTOP_INSTALLER_FILENAME = 'agiworkforce.dmg';
+
+function macInstallerAsset(release: StableDesktopRelease, architecture: MacArchitecture | null) {
+  const installers = release.assets.filter((asset) => asset.name.endsWith('.dmg'));
+  const arm64 = installers.find((asset) => /arm64|aarch64/i.test(asset.name)) ?? null;
+  const x64 = installers.find((asset) => /x64|x86_64/i.test(asset.name)) ?? null;
+  if (architecture === 'arm64') return arm64;
+  if (architecture === 'x64') return x64;
+  return arm64 ?? x64 ?? installers[0] ?? null;
+}
+
+function unavailable(platform: string) {
+  return NextResponse.json({ error: 'Installer unavailable', platform }, { status: 503 });
 }
 
 async function handleDownload(request: NextRequest) {
@@ -58,7 +50,7 @@ async function handleDownload(request: NextRequest) {
   logger.info(
     {
       clientIp,
-      userAgent: userAgent.substring(0, 200), // Truncate to prevent log injection
+      userAgent: userAgent.substring(0, 200),
       platform,
       app,
       architecture,
@@ -73,100 +65,43 @@ async function handleDownload(request: NextRequest) {
   if (app !== null && app !== 'cloud') {
     throw createError.validation('Invalid app requested. Omit the parameter or use app=cloud.');
   }
-  if (app === 'cloud' && platform !== 'mac') {
-    throw createError.validation('The AGI Cloud desktop app is currently macOS only.');
-  }
-  if (architecture !== null && (app !== 'cloud' || !['arm64', 'x64'].includes(architecture))) {
+  if (architecture !== null && (platform !== 'mac' || !['arm64', 'x64'].includes(architecture))) {
     throw createError.validation(
-      'Invalid architecture requested. AGI Cloud supports arm64 or x64 installers.',
+      'Invalid architecture requested. macOS installers are arm64 or x64.',
     );
   }
+  if (platform !== 'mac') return unavailable(platform);
 
-  const release =
-    app === 'cloud'
-      ? await fetchLatestStableDesktopRelease({
-          ...resolveDesktopCloudReleaseRepository(),
-          tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
-          revalidateSeconds: 0,
-        })
-      : await fetchLatestStableDesktopRelease({
-          ...resolveDesktopReleaseRepository(),
-          revalidateSeconds: 0,
-        });
-  if (!release) return fallbackToStatic(platform, request, app);
+  const release = await fetchLatestStableDesktopRelease({
+    ...resolveDesktopCloudReleaseRepository(),
+    tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
+    revalidateSeconds: 0,
+  });
+  const asset = release ? macInstallerAsset(release, architecture as MacArchitecture | null) : null;
+  if (!asset) return unavailable(platform);
 
-  const asset =
-    app === 'cloud'
-      ? selectCloudMacInstallerAsset(release, architecture as 'arm64' | 'x64' | null)
-      : selectDesktopInstallerAsset(release, platform as DesktopDownloadPlatform);
-
-  if (asset) {
-    const cleanFilenames: Record<string, string> = {
-      mac: app === 'cloud' ? 'agiworkforce-cloud.dmg' : 'agiworkforce.dmg',
-      windows: 'agiworkforce-setup.exe',
-      linux: 'agiworkforce.AppImage',
-    };
-
-    const downloadUrl = asset.browserDownloadUrl;
-    if (!isTrustedReleaseAssetUrl(downloadUrl)) {
-      throw createError.serviceUnavailable('Release asset URL is not trusted');
-    }
-    const filename = cleanFilenames[platform] || asset.name;
-
-    const fileResponse = await fetch(downloadUrl, {
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (!fileResponse.ok) {
-      throw createError.serviceUnavailable('Failed to fetch installer from GitHub');
-    }
-
-    const safeAsciiFilename = Array.from(filename, (char) => {
-      const code = char.charCodeAt(0);
-      return code <= 31 || code === 127 || char === '"' || char === '\\' ? '_' : char;
-    }).join('');
-    const utf8Filename = encodeURIComponent(filename);
-    const contentDisposition = `attachment; filename="${safeAsciiFilename}"; filename*=UTF-8''${utf8Filename}`;
-
-    return new NextResponse(fileResponse.body, {
-      status: 200,
-      headers: {
-        'Content-Type': fileResponse.headers.get('Content-Type') || 'application/octet-stream',
-        'Content-Length': fileResponse.headers.get('Content-Length') || '',
-        'Content-Disposition': contentDisposition,
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-      },
-    });
+  const downloadUrl = asset.browserDownloadUrl;
+  if (!isTrustedReleaseAssetUrl(downloadUrl)) {
+    throw createError.serviceUnavailable('Release asset URL is not trusted');
   }
 
-  return fallbackToStatic(platform, request, app);
-}
+  const fileResponse = await fetch(downloadUrl, {
+    signal: AbortSignal.timeout(30_000),
+  });
 
-function fallbackToStatic(platform: string, request: Request, app: string | null = null) {
-  if (app === 'cloud') {
-    return NextResponse.json({ error: 'Installer unavailable', platform, app }, { status: 503 });
-  }
-  const downloadUrls: Record<string, string | undefined> = {
-    mac: process.env['NEXT_PUBLIC_DOWNLOAD_URL_MAC'] || undefined,
-    windows: process.env['NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS'] || undefined,
-    linux: process.env['NEXT_PUBLIC_DOWNLOAD_URL_LINUX'] || undefined,
-  };
-
-  const url = downloadUrls[platform];
-
-  if (!url) {
-    return NextResponse.json({ error: 'Installer unavailable', platform }, { status: 503 });
+  if (!fileResponse.ok) {
+    throw createError.serviceUnavailable('Failed to fetch installer from GitHub');
   }
 
-  if (!url.startsWith('/') && !isTrustedReleaseAssetUrl(url)) {
-    throw createError.validation(
-      'Download redirect target is not on the allowlist. Set NEXT_PUBLIC_DOWNLOAD_URL_* to an https URL on our download host or trusted GitHub release.',
-    );
-  }
-
-  const resolvedUrl = url.startsWith('/') ? `${new URL(request.url).origin}${url}` : url;
-
-  return NextResponse.redirect(resolvedUrl, { status: 307 });
+  return new NextResponse(fileResponse.body, {
+    status: 200,
+    headers: {
+      'Content-Type': fileResponse.headers.get('Content-Type') || 'application/octet-stream',
+      'Content-Length': fileResponse.headers.get('Content-Length') || '',
+      'Content-Disposition': `attachment; filename="${DESKTOP_INSTALLER_FILENAME}"`,
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 }
 
 export const GET = withErrorHandler(handleDownload);
