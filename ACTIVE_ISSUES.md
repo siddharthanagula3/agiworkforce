@@ -350,6 +350,10 @@ once the deployment built on 0189 is live (37e1ad16c).
 Item 7 landed in 78fd99ec0: the gate binds a Clerk token to the surface its signed
 claims prove and ignores the header for anything else; proved live against the
 dev server. The mobile JWT template is the one remaining founder dashboard step.
+From item 10: policy dates (D-25) in 5ecc126f1, event guardrails (D-26) in
+2a1f7bc77, MiniMax out of managed traffic (D-08) in ce7fea373; the TLS
+pinning contract (D-11) now reads the decision entry (58fb784c6) while the pins
+themselves stay placeholders until the report-only rollout.
 
 ## 4. P2, important
 

@@ -382,7 +382,9 @@ project, and the spend ceiling is a money decision.
    public event.
 3. Set `AGI_EVENT_STARTS_AT` and `AGI_EVENT_ENDS_AT` to ISO instants, so the
    promotion expires on its own if the flag is forgotten.
-4. Set `AGI_EVENT_ENABLED=1` last, and redeploy.
+4. Set `AGI_EVENT_ENABLED=1` last, and redeploy. The flag alone opens nothing:
+   the gateway keeps the promotion closed until the allowlist, the budget and
+   both instants are all present and the window is well-formed.
 
 **Where** Vercel Production for the web project.
 **Needed input** The model list, the budget number, and the two instants.
@@ -409,14 +411,16 @@ Creating a provider account and funding it is a payment and terms decision.
 **Exact action** Decided 2026-09-15 (D-2026-09-15-08): MiniMax stays out of managed production until its terms are reviewed and accepted; Groq stays a backend provider option. What stays with the founder: fund and hand over a Groq credential if Groq is wanted for cost, latency or resilience, and review MiniMax's commercial terms when there is time.
 **Where** Each provider's console, then Vercel Production.
 **Needed input** Two keep-or-drop decisions and, for each keep, one account.
-**How to verify completion** A live sweep on 2026-09-12 called every selectable
-managed chat route: 25 of 29 models answered. MiniMax answered through its
-marketplace route; the Groq-only models could not be called by anyone. After
-the keys are set, both answer on their direct routes.
-**What remains after founder action** Nothing blocking. The catalogue already
-withholds a model with no credentialed route, so neither provider is offered to
-a customer today and no user sees a broken model. If Groq is dropped instead,
-its three models should leave the registry rather than sit there unservable.
+**How to verify completion** MiniMax no longer answers through any managed
+route: its own route is customer-key only and its marketplace routes are blocked
+in the registry, so the catalogue withholds it and an explicit request for it
+on Managed Cloud is refused as unavailable. Once the terms are accepted, the
+two route statuses in `packages/ai/model-registry/catalog/model-routes.json`
+return to their managed values and MiniMax joins through the neutral layer.
+The Groq-only models remain unselectable and count for nothing.
+**What remains after founder action** Nothing blocking. If Groq is dropped
+instead, its three models should leave the registry rather than sit there
+unservable.
 **Impact** FEATURE-BLOCKING (those models only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
