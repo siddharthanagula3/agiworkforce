@@ -3,6 +3,7 @@ import {
   canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
   getCoreManualModelOptions,
+  getSurfaceManualModelOptions,
   getModelContextLimits,
   getModelCostRates,
   getModelMetadataById,
@@ -72,6 +73,25 @@ export function isAutoReachableForTier(autoId: string, tier: string | undefined)
       runtimeProfileId: 'vscode/managed-chat',
     }) !== null
   );
+}
+
+const MANAGED_RUNTIME_PROFILE = 'vscode/managed-chat';
+
+/**
+ * Which universe this picker may offer from, decided by the boundary the
+ * session is on. A managed session may only be offered what the shared owner
+ * says is executable and what the server's own entitlement check then admits;
+ * offering the whole registry there files hundreds of models under "Upgrade
+ * your AGI plan" that no plan will ever unlock. A BYOK session reaches its own
+ * provider directly, so its universe stays the registry.
+ */
+function manualModelOptions(
+  tier: string | undefined,
+  route: ModelRoute | undefined,
+): ReturnType<typeof getCoreManualModelOptions> {
+  return tier === undefined || tier === 'byok' || route?.trustMode === 'byok'
+    ? getCoreManualModelOptions()
+    : getSurfaceManualModelOptions(MANAGED_RUNTIME_PROFILE);
 }
 
 export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
@@ -194,7 +214,7 @@ export function buildGroupedQuickPickItems(
     locked.set(lockKey(autoLock), { lock: autoLock, items: [autoItem] });
   }
 
-  const manualOptions = getCoreManualModelOptions();
+  const manualOptions = manualModelOptions(tier, route);
 
   const providerOrder: string[] = [];
   const seenProviders = new Set<string>();

@@ -2423,18 +2423,20 @@ function formatCoreModelDetail(model: ModelMetadata): string {
   return bestFor ? `${tier} · ${bestFor}` : tier;
 }
 
+function toCoreModelOption(model: ModelMetadata): CoreModelOption {
+  const providerLabel = providerLabels[model.provider] ?? model.provider;
+  return {
+    id: model.id,
+    label: model.name,
+    provider: model.provider,
+    providerLabel,
+    description: `${providerLabel}, ${describeQualityBand(model)}`,
+    detail: formatCoreModelDetail(model),
+  };
+}
+
 export function getCoreManualModelOptions(): CoreModelOption[] {
-  return getManualOverrideModels().map((model) => {
-    const providerLabel = providerLabels[model.provider] ?? model.provider;
-    return {
-      id: model.id,
-      label: model.name,
-      provider: model.provider,
-      providerLabel,
-      description: `${providerLabel}, ${describeQualityBand(model)}`,
-      detail: formatCoreModelDetail(model),
-    };
-  });
+  return getManualOverrideModels().map(toCoreModelOption);
 }
 
 export const NON_US_PROVIDERS: ReadonlySet<string> = Object.freeze(
@@ -2516,12 +2518,18 @@ export function getPickerModelTier(modelId: string | null | undefined): PickerMo
   return 'economy';
 }
 
-function getUnifiedAllowedModelIds(): string[] {
-  return normalizeModelList([
-    ...getAllowedModelsForTier('economy'),
-    ...getAllowedModelsForTier('pro_additions'),
-    ...getAllowedModelsForTier('flagship_additions'),
-  ]);
+/**
+ * The one answer to which models a surface may offer, and the reason a surface
+ * must not keep its own. A narrower list silently refuses a model the send
+ * path would serve; the tier tables name a subset, so they cannot be it.
+ * Surface and plan narrow this downstream, never the other way round.
+ */
+export function getExecutableModelIds(): string[] {
+  return normalizeModelList(
+    listChatModels()
+      .filter((model) => isModelLive(model) && isManagedTrafficPermitted(model.id))
+      .map((model) => model.id),
+  );
 }
 
 export function getPickerModels(options: PickerModelOptions = {}): PickerModelView[] {
@@ -2545,7 +2553,7 @@ export function getPickerModels(options: PickerModelOptions = {}): PickerModelVi
     premium: 2,
   };
 
-  return getUnifiedAllowedModelIds()
+  return getExecutableModelIds()
     .map((modelId) => getModelMetadataById(modelId))
     .filter((model): model is ModelMetadata => Boolean(model))
     .filter((model) => includeDeprecated || model.status !== 'deprecated')
@@ -2629,6 +2637,15 @@ export function getModelsForTierAndSurface(
   return getPickerModelsForRuntimeProfile(runtimeProfileId, options).filter((model) =>
     canAccessModelForSubscriptionTier(model.id, subscriptionTier),
   );
+}
+
+export function getSurfaceManualModelOptions(runtimeProfileId: string): CoreModelOption[] {
+  return getPickerModelsForRuntimeProfile(runtimeProfileId, {
+    modelTypes: [...CHAT_MODEL_TYPES],
+  })
+    .map((model) => getModelMetadataById(model.id))
+    .filter((model): model is ModelMetadata => model !== null)
+    .map(toCoreModelOption);
 }
 
 export function getModelContextLimits(modelIds?: string[]): Record<string, number> {

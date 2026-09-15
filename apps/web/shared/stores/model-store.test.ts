@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CHAT_MODEL_TYPES,
   getAutoRoutingProfiles,
   getModelsForTierAndSurface,
   listChatModels,
@@ -46,15 +47,16 @@ describe('web model selection trust boundary', () => {
     expect([...actualIds].sort()).toEqual([...expectedIds].sort());
   });
 
-  it('leads the manual rows with the shared Max + web runtime intersection', () => {
+  it("holds exactly the shared owner's rows for this surface, in its order", () => {
     const surfaceIds = getModelsForTierAndSurface('max', 'web/cloud-chat', {
-      modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+      modelTypes: [...CHAT_MODEL_TYPES],
     }).map((model) => model.id);
     const actualIds = AVAILABLE_MODELS.filter(
       (model) => model.providerKey !== 'managed_cloud' && model.availability !== 'coming_soon',
     ).map((model) => model.id);
 
-    expect(actualIds.slice(0, surfaceIds.length)).toEqual(surfaceIds);
+    expect(surfaceIds.length).toBeGreaterThan(0);
+    expect(actualIds).toEqual(surfaceIds);
   });
 
   /**

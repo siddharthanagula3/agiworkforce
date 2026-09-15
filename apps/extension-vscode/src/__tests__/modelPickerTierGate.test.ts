@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { canAccessModelForSubscriptionTier, getCoreManualModelOptions } from '@agiworkforce/types';
+import {
+  canAccessModelForSubscriptionTier,
+  getCoreManualModelOptions,
+  getSurfaceManualModelOptions,
+  isModelSelectable,
+} from '@agiworkforce/types';
 import {
   buildGroupedQuickPickItems,
   getModelPickerOptionsForTier,
@@ -104,6 +109,57 @@ describe('buildGroupedQuickPickItems, tier gating', () => {
 
     expect(items[index]?.lock).toEqual({ kind: 'upgrade' });
     expect(headingAbove(items, index)).toBe('Upgrade your AGI plan');
+  });
+});
+
+describe('buildGroupedQuickPickItems, the owner decides the managed universe', () => {
+  const MANAGED_SURFACE = 'vscode/managed-chat';
+
+  function listedModelIds(tier?: string): string[] {
+    return buildGroupedQuickPickItems(tier)
+      .map((item) => item.modelId)
+      .filter((modelId): modelId is string => modelId !== undefined && modelId !== 'auto');
+  }
+
+  it('offers exactly what the shared owner admits on a managed plan', () => {
+    const owned = getSurfaceManualModelOptions(MANAGED_SURFACE).map((option) => option.id);
+
+    expect(owned.length).toBeGreaterThan(0);
+    expect([...listedModelIds('max')].sort()).toEqual([...owned].sort());
+  });
+
+  it('never locks a model the plan actually admits', () => {
+    const items = buildGroupedQuickPickItems('max');
+    const owned = getSurfaceManualModelOptions(MANAGED_SURFACE);
+    const missing = owned
+      .filter((option) => !items.some((item) => item.modelId === option.id))
+      .map((option) => option.id);
+    const wronglyLocked = owned
+      .filter((option) => canAccessModelForSubscriptionTier(option.id, 'max'))
+      .filter((option) => items.find((item) => item.modelId === option.id)?.lock !== undefined)
+      .map((option) => option.id);
+
+    expect(missing).toEqual([]);
+    expect(wronglyLocked).toEqual([]);
+  });
+
+  it('files nothing under an upgrade that no plan could ever unlock', () => {
+    const upgradeLocked = buildGroupedQuickPickItems('pro')
+      .filter((item) => item.lock?.kind === 'upgrade' && item.modelId !== undefined)
+      .map((item) => item.modelId!);
+
+    expect(
+      upgradeLocked.filter((modelId) => !canAccessModelForSubscriptionTier(modelId, 'max')),
+    ).toEqual([]);
+  });
+
+  it('keeps the registry universe where the owner does not decide the boundary', () => {
+    const registryLive = getCoreManualModelOptions()
+      .filter((option) => isModelSelectable(option.id))
+      .map((option) => option.id);
+
+    expect(listedModelIds('byok').length).toBeGreaterThan(listedModelIds('max').length);
+    expect([...listedModelIds('byok')].sort()).toEqual([...registryLive].sort());
   });
 });
 

@@ -1,7 +1,8 @@
-
 import {
+  CHAT_MODEL_TYPES,
   canAccessModelForSubscriptionTier,
   getAllowedModelsForTier,
+  getModelsForTierAndSurface,
   normalizeModelId,
 } from '@agiworkforce/types';
 import { getModelListForCloudAccess } from '../src/features/model-picker/service';
@@ -23,6 +24,23 @@ describe('cloud model picker × subscription tier matrix', () => {
       getModelListForCloudAccess(true, tier).filter((m) => m.surface === 'cloud_managed'),
     ]),
   );
+
+  it('lists exactly what the shared owner admits on this surface', () => {
+    const owned = getModelsForTierAndSurface('max', 'mobile/cloud-chat', {
+      modelTypes: [...CHAT_MODEL_TYPES],
+    })
+      .filter(
+        (model) =>
+          typeof model.contextWindow === 'number' &&
+          Number.isFinite(model.contextWindow) &&
+          model.contextWindow > 0,
+      )
+      .map((model) => model.id);
+    const listed = cloudModelsByTier.get('max')!.map((model) => model.id);
+
+    expect(owned.length).toBeGreaterThan(0);
+    expect([...listed].sort()).toEqual([...owned].sort());
+  });
 
   it('exposes a non-empty cloud model list to gate', () => {
     for (const tier of TIERS) {
