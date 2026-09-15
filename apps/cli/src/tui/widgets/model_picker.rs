@@ -3,7 +3,7 @@
 //! Triggered by `/model` (no arg). Layout:
 //!
 //! ```text
-//! ┌─ Models  Local · BYOK · Cloud ────────────────────────────────────────────┐
+//! ┌─ Models  Local · Your key · Managed ────────────────────────────────────────────┐
 //! │/ type to filter by name or provider...                                    │
 //! │───────────────────────────────────────────────────────────────────────────│
 //! │Bring your own key · your own provider keys                                │
@@ -352,8 +352,14 @@ pub fn render(
     // ── outer border ──────────────────────────────────────────────────────────
     // Keep the title short. Long control hints clipped in 80-column terminals.
     let hint_span = Span::styled(" Models ", Style::default().add_modifier(Modifier::BOLD));
+    let badge = format!(
+        " {} ",
+        [AccessMode::Local, AccessMode::Byok, AccessMode::Cloud]
+            .map(AccessMode::trust_word)
+            .join(" · ")
+    );
     let badge_span = Span::styled(
-        " Local · BYOK · Cloud ",
+        badge,
         Style::default().fg(ui_muted()).add_modifier(Modifier::DIM),
     );
     let title_line = Line::from(vec![hint_span, badge_span]);

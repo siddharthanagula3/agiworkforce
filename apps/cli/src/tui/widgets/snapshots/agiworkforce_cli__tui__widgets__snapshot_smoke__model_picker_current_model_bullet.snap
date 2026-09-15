@@ -12,7 +12,7 @@ expression: terminal.backend()
 "                                                                                "
 "                                                                                "
 "                                                                                "
-"  ┌ Models  Local · BYOK · Cloud ────────────────────────────────────────────┐  "
+"  ┌ Models  Local · Your key · Managed ──────────────────────────────────────┐  "
 "  │/ type to filter by name or provider...                                   │  "
 "  │──────────────────────────────────────────────────────────────────────────│  "
 "  │Bring your own key · your own provider keys                               │  "
