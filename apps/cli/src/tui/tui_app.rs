@@ -1248,6 +1248,7 @@ struct FrameCtx<'a> {
     stream_buffer: &'a str,
     spinner_char: &'a str,
     loading_verb: &'a str,
+    awaiting_approval: bool,
     scroll_offset: u16,
     access_mode: crate::design_system::AccessMode,
     /// Session privacy boundary (governs whether a send is allowed). Distinct
@@ -1280,6 +1281,7 @@ impl<'a> FrameCtx<'a> {
             stream_buffer: &app.stream_buffer,
             spinner_char: app.spinner_char(),
             loading_verb: app.loading_verb(),
+            awaiting_approval: false,
             scroll_offset: app.scroll_offset,
             access_mode: provider_access_mode(&app.session.provider),
             privacy_mode: app.session.privacy_mode,
@@ -1501,7 +1503,9 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         // After ~10s with no streamed output yet, add a gentle stall hint so a
         // slow first token (cold local model, network) doesn't look like a hang.
         let stalled = ctx.stream_buffer.is_empty() && elapsed.as_secs() >= 10;
-        let status = if stalled {
+        let status = if ctx.awaiting_approval {
+            "Waiting for your approval".to_string()
+        } else if stalled {
             format!("{verb}… {elapsed_str} · still working")
         } else {
             format!("{verb}… {elapsed_str}")
@@ -5041,6 +5045,7 @@ async fn send_message_with_prompt(
                             stream_buffer: &app.stream_buffer,
                             spinner_char: spinner_frame(app.spinner_tick),
                             loading_verb: loading_verb_for(turn_count),
+                            awaiting_approval: true,
                             scroll_offset: app.scroll_offset,
                             access_mode: turn_access_mode,
                             privacy_mode: turn_privacy_mode,
@@ -5118,6 +5123,7 @@ async fn send_message_with_prompt(
                         stream_buffer: &app.stream_buffer,
                         spinner_char: spinner_frame(app.spinner_tick),
                         loading_verb: loading_verb_for(turn_count),
+                        awaiting_approval: false,
                         scroll_offset: app.scroll_offset,
                         access_mode: turn_access_mode,
                         privacy_mode: turn_privacy_mode,
@@ -7017,6 +7023,7 @@ mod tests {
             stream_buffer: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
+            awaiting_approval: false,
             scroll_offset: 0,
             access_mode: crate::design_system::AccessMode::Local,
             privacy_mode: crate::agent::PrivacyMode::Local,
@@ -7095,6 +7102,7 @@ mod tests {
             stream_buffer: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
+            awaiting_approval: false,
             scroll_offset: 0,
             access_mode: crate::design_system::AccessMode::Byok,
             privacy_mode: crate::agent::PrivacyMode::Byok,
@@ -7427,6 +7435,7 @@ mod tests {
             stream_buffer: &stream_buffer,
             spinner_char: "⠋",
             loading_verb: "Reasoning",
+            awaiting_approval: false,
             scroll_offset: 0,
             access_mode: crate::design_system::AccessMode::Local,
             privacy_mode: crate::agent::PrivacyMode::Local,
@@ -7478,6 +7487,7 @@ mod tests {
             stream_buffer: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
+            awaiting_approval: false,
             scroll_offset: 0,
             access_mode: crate::design_system::AccessMode::Local,
             privacy_mode: crate::agent::PrivacyMode::Local,
@@ -7594,6 +7604,7 @@ mod tests {
             stream_buffer: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
+            awaiting_approval: false,
             scroll_offset: 0,
             access_mode: crate::design_system::AccessMode::Local,
             privacy_mode: crate::agent::PrivacyMode::Local,
