@@ -1,6 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
+import type { TurnFailureAction, TurnFailureCode } from '@agiworkforce/types/protocol';
 import type {
   AppServerCapabilities,
   AppServerNotification,
@@ -365,24 +366,46 @@ const outputDeltaEventSchema = z.object({
   turnId: z.string().min(1),
   delta: z.string(),
 });
+// Keyed by the protocol's own unions, so a code the CLI learns to send fails
+// the typecheck here instead of making the whole terminal event unparsable,
+// which left the sidebar running forever on a signed-out turn.
+const TURN_FAILURE_CODE_KNOWN: Record<TurnFailureCode, true> = {
+  provider_auth_missing: true,
+  account_signed_out: true,
+  plan_excludes_model: true,
+  provider_auth_invalid: true,
+  provider_rate_limited: true,
+  provider_unavailable: true,
+  context_window_exceeded: true,
+  network: true,
+  tool_denied: true,
+  interrupted: true,
+  timeout: true,
+  invalid_request: true,
+  unknown: true,
+};
+const TURN_FAILURE_ACTION_KNOWN: Record<TurnFailureAction, true> = {
+  sign_in_provider: true,
+  sign_in_account: true,
+  upgrade_plan: true,
+  open_settings: true,
+  retry: true,
+  none: true,
+};
+const TURN_FAILURE_CODES = Object.keys(TURN_FAILURE_CODE_KNOWN) as [
+  TurnFailureCode,
+  ...TurnFailureCode[],
+];
+const TURN_FAILURE_ACTIONS = Object.keys(TURN_FAILURE_ACTION_KNOWN) as [
+  TurnFailureAction,
+  ...TurnFailureAction[],
+];
 const turnFailureSchema = z.object({
-  code: z.enum([
-    'provider_auth_missing',
-    'provider_auth_invalid',
-    'provider_rate_limited',
-    'provider_unavailable',
-    'context_window_exceeded',
-    'network',
-    'tool_denied',
-    'interrupted',
-    'timeout',
-    'invalid_request',
-    'unknown',
-  ]),
+  code: z.enum(TURN_FAILURE_CODES).catch('unknown'),
   message: z.string().max(10_000),
   provider: z.string().min(1).max(200).optional(),
   retryable: z.boolean(),
-  action: z.enum(['sign_in_provider', 'open_settings', 'retry', 'none']),
+  action: z.enum(TURN_FAILURE_ACTIONS).catch('none'),
 });
 const turnTerminalEventSchema = z.object({
   threadId: z.string().min(1),
@@ -392,7 +415,7 @@ const turnTerminalEventSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   error: z.string().nullable().optional(),
-  failure: turnFailureSchema.nullable().optional(),
+  failure: turnFailureSchema.nullable().optional().catch(null),
 });
 const approvalRequestedEventSchema = z.object({
   threadId: z.string().min(1),
