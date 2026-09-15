@@ -354,6 +354,10 @@ From item 10: policy dates (D-25) in 5ecc126f1, event guardrails (D-26) in
 2a1f7bc77, MiniMax out of managed traffic (D-08) in ce7fea373; the TLS
 pinning contract (D-11) now reads the decision entry (58fb784c6) while the pins
 themselves stay placeholders until the report-only rollout.
+TLS pins (D-11) are now provisioned: the issuing intermediates and roots of
+the four AGI-controlled hosts sit in the mobile pin table, OpenAI and
+Anthropic are not pinned, and the rollout stays report-only until a shipped
+build has reported clean; the enforcement flip is its own change.
 
 ## 4. P2, important
 

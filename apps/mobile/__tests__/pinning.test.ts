@@ -100,8 +100,6 @@ describe('PINS_BY_HOST', () => {
     'signaling.agiworkforce.com',
     'api.agiworkforce.com',
     'clerk.agiworkforce.com',
-    'api.openai.com',
-    'api.anthropic.com',
   ])('declares entry for %s', (host) => {
     expect(Object.prototype.hasOwnProperty.call(PINS_BY_HOST, host)).toBe(true);
     const pins = PINS_BY_HOST[host as keyof typeof PINS_BY_HOST] as ReadonlyArray<string>;
@@ -160,8 +158,9 @@ describe('enforcement is derived from provisioning (CWE-295 F6)', () => {
     expect(src).toMatch(/export const PINNING_ENFORCED = PINNING_STAGE === 'enforced';/);
   });
 
-  it('is therefore off in this build, because the shipped table is placeholders', () => {
-    expect(hasPlaceholderPins()).toBe(true);
+  it('is therefore report-only in this build: the table is provisioned, the flip is a later change', () => {
+    expect(hasPlaceholderPins()).toBe(false);
+    expect(PINNING_ROLLOUT).toBe('report-only');
     expect(PINNING_ENFORCED).toBe(false);
   });
 });
@@ -238,13 +237,18 @@ describe('runtime classification fails closed', () => {
 });
 
 describe('startup pinning guard (release builds must LAUNCH, not crash)', () => {
-  it('detects placeholder pins so the startup guard can warn', () => {
-    expect(hasPlaceholderPins()).toBe(true);
+  it('ships no placeholder pins, so the startup guard has nothing to warn about', () => {
+    expect(hasPlaceholderPins()).toBe(false);
   });
 
   it('reports a release build with placeholder pins as "unprovisioned", not "disabled"', () => {
-    expect(() => pinningStartupState({ isDev: false, isTest: false })).not.toThrow();
-    expect(pinningStartupState({ isDev: false, isTest: false })).toBe('unprovisioned');
+    const pins = { 'agiworkforce.com': [PLACEHOLDER_PIN, PLACEHOLDER_PIN] };
+    expect(() => pinningStartupState({ isDev: false, isTest: false, pins })).not.toThrow();
+    expect(pinningStartupState({ isDev: false, isTest: false, pins })).toBe('unprovisioned');
+  });
+
+  it('reports the shipped release build as "staged": provisioned, not yet enforced', () => {
+    expect(pinningStartupState({ isDev: false, isTest: false })).toBe('staged');
   });
 
   it('dev and test builds skip the guard (state "dev-or-test")', () => {
@@ -321,12 +325,9 @@ describe('requiresPin', () => {
     expect(requiresPin('agiworkforce.com')).toBe(true);
   });
 
-  it('returns true for api.anthropic.com', () => {
-    expect(requiresPin('api.anthropic.com')).toBe(true);
-  });
-
-  it('returns true for api.openai.com', () => {
-    expect(requiresPin('api.openai.com')).toBe(true);
+  it('never pins Anthropic or OpenAI infrastructure (D-2026-09-15-11)', () => {
+    expect(requiresPin('api.anthropic.com')).toBe(false);
+    expect(requiresPin('api.openai.com')).toBe(false);
   });
 
   it('is case-insensitive', () => {
@@ -547,7 +548,7 @@ describe('the shipped secureFetch refuses a half-pinned release (CWE-295 F6)', (
     expect(entry).toContain('CLAUDE-SECURITY-20260821-170634 F6');
     expect(entry).toContain('accepted unverified transport');
     expect(entry).toContain('./native/withAGITlsPinning.cjs');
-    expect(hasPlaceholderPins()).toBe(true);
+    expect(hasPlaceholderPins()).toBe(false);
 
     await inReleaseRuntime('production', async () => {
       expect(

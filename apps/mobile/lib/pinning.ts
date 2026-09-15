@@ -5,41 +5,46 @@ export const REQUIRED_PINNED_HOSTS = [
   'signaling.agiworkforce.com',
   'api.agiworkforce.com',
   'clerk.agiworkforce.com',
-  'api.openai.com',
-  'api.anthropic.com',
 ] as const;
 
 export type PinTable = Readonly<Record<string, ReadonlyArray<string>>>;
 
+/**
+ * SPKI pins of the certificate chains above the leaf, captured on 2026-09-15
+ * with scripts/compute-spki-pins.mjs (D-2026-09-15-11): the issuing
+ * intermediates and the root, never a leaf, so a routine leaf renewal keeps
+ * matching. The AGI hosts are issued by Let's Encrypt (YR1 or YR2 under Root YR
+ * and ISRG Root X1); the Clerk FAPI host is issued by Google Trust Services.
+ * OpenAI and Anthropic infrastructure is deliberately not pinned.
+ */
 export const PINS_BY_HOST: PinTable = Object.freeze({
   'agiworkforce.com': [
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_agiworkforce_ca=',
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_agiworkforce_backup_ca=',
+    'sha256/LoMHBotttiDko50Gi13uXW71eIy7LAttI+rYT8wXF4w=',
+    'sha256/nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=',
+    'sha256/fk6IOKit1ild5647BH06ujSIq5XbCgqlbYl6ANhhi88=',
+    'sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=',
   ],
   'signaling.agiworkforce.com': [
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_signaling_ca=',
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_signaling_backup_ca=',
+    'sha256/LoMHBotttiDko50Gi13uXW71eIy7LAttI+rYT8wXF4w=',
+    'sha256/nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=',
+    'sha256/fk6IOKit1ild5647BH06ujSIq5XbCgqlbYl6ANhhi88=',
+    'sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=',
   ],
   'api.agiworkforce.com': [
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_api_ca=',
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_api_backup_ca=',
+    'sha256/LoMHBotttiDko50Gi13uXW71eIy7LAttI+rYT8wXF4w=',
+    'sha256/nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=',
+    'sha256/fk6IOKit1ild5647BH06ujSIq5XbCgqlbYl6ANhhi88=',
+    'sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=',
   ],
   // Clerk FAPI. The Clerk SDK does its own networking and never reaches
   // secureFetch, so only the native pin config can cover the auth handshake --
   // the exact exchange that hands the app the bearer token every other request
-  // carries. It is required here so no build can report itself pinned while the
-  // credential-issuing host rides on bare platform TLS.
+  // carries. It is required here so no build can report itself pinned while
+  // the credential-issuing host rides on bare platform TLS.
   'clerk.agiworkforce.com': [
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_clerk_ca=',
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_clerk_backup_ca=',
-  ],
-  'api.openai.com': [
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_openai_ca=',
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_openai_backup_ca=',
-  ],
-  'api.anthropic.com': [
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_anthropic_ca=',
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_anthropic_backup_ca=',
+    'sha256/H7AMYAvicN2+UcFPBz3kJXCDmGrTItZh4ujUBK8hoWg=',
+    'sha256/YSoUL4CBzo5aJ/ES9gSZTsavsgtHsiLLnTG+BKUdork=',
+    'sha256/K87oWBWM9UZfyddvDfoxL+8lpNyoUB2ptGtn0fv6G2Q=',
   ],
 });
 
