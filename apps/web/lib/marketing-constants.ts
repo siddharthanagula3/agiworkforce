@@ -18,7 +18,7 @@ export const AVAILABLE_NOW_LABEL = 'Available now';
 
 export const SURFACE_STATUS = {
   web: AVAILABLE_NOW_LABEL,
-  desktop: 'Linux assets · v1.2.0',
+  desktop: COMING_SOON_LABEL,
   cli: AVAILABLE_NOW_LABEL,
   mobile: COMING_SOON_LABEL,
   vscode: COMING_SOON_LABEL,
@@ -39,13 +39,13 @@ export const POSITIONING = {
 } as const;
 
 export const BYOK_SURFACES = {
-  label: 'Desktop, CLI, and VS Code',
-  compact: 'Desktop · CLI · VS Code',
+  label: 'CLI and VS Code',
+  compact: 'CLI · VS Code',
   exclusion:
-    'Web, Mobile, Chrome, and the managed-only Electron shell do not accept provider keys.',
+    'Web, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI account.',
 } as const;
 
-const DESKTOP_LOCAL_RUNTIME_IDS = ['ollama', 'lmstudio', 'llamacpp', 'vllm'] as const;
+const DESKTOP_LOCAL_RUNTIME_IDS = ['ollama', 'lmstudio'] as const;
 const desktopLocalRuntimeNames = Object.freeze(
   DESKTOP_LOCAL_RUNTIME_IDS.map((id) =>
     modelsCatalogJson.providers[id].label.replace(/\s+\(Local\)$/, ''),
@@ -54,7 +54,7 @@ const desktopLocalRuntimeNames = Object.freeze(
 
 export const DESKTOP_LOCAL_RUNTIMES = {
   names: desktopLocalRuntimeNames,
-  label: `${desktopLocalRuntimeNames.slice(0, -1).join(', ')}, and ${desktopLocalRuntimeNames[desktopLocalRuntimeNames.length - 1]}`,
+  label: desktopLocalRuntimeNames.join(' and '),
   compact: desktopLocalRuntimeNames.join(' · '),
 } as const;
 

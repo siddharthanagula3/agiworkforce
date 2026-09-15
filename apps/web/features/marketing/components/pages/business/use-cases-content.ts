@@ -92,7 +92,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     ],
     closeTitle: 'Start free, route deliberately.',
     closeBody:
-      'Run Local and BYOK from day one at no platform cost (Desktop and the CLI are released) and turn on managed cloud whenever you want hosted compute.',
+      'Run Local and BYOK from day one at no platform cost (the CLI is released) and turn on managed cloud whenever you want hosted compute.',
     closeCtas: [
       { href: '/download', label: "See what's live" },
       { href: '/cli', label: 'Install the CLI', variant: 'secondary' },

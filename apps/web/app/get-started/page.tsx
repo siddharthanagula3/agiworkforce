@@ -44,7 +44,7 @@ export default function GetStartedPage() {
           eyebrow="Get started"
           title="Get started."
           em="started."
-          lede={`Five minutes from zero to a working chat. Managed cloud is open by default with a small free cap, and Local and BYOK run on Desktop and the CLI today, with the VS Code extension ${SURFACE_STATUS.vscode.toLowerCase()}.`}
+          lede={`Five minutes from zero to a working chat. Managed cloud is open by default with a small free cap, Local runs on Desktop and the CLI today, BYOK on the CLI, with the VS Code extension ${SURFACE_STATUS.vscode.toLowerCase()}.`}
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'CLI reference', variant: 'secondary' },
@@ -86,7 +86,7 @@ export default function GetStartedPage() {
               <SurfaceStatus
                 state="pending"
                 name="Desktop"
-                blockedOn="Linux x64 assets are what the current release carries, and each download opens only once the release API verifies that platform's signature. The macOS build is signed and notarized by the release job but has not been published yet, and Windows installers have not been published. The download page resolves what is live for your platform."
+                blockedOn="The macOS app is signed and notarized by the release job but has not been published yet, and each download opens only once the release API verifies that platform's signature. Windows installers have not been published. The download page resolves what is live for your platform."
               />
               <SurfaceStatus
                 state="absent"
