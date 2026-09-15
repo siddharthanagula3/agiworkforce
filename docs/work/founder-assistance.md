@@ -1036,9 +1036,12 @@ account reaches you before it runs dry again.
 **Needed input** The top-up, and a yes that the alert is set.
 **How to verify completion** A turn on that route returns 200 on the dev
 server and in production.
-**What remains after founder action** Engineering: the catalogue should stop
-offering a route whose last answer was a billing exhaustion until it answers
-again (recorded as F56 in the release doc).
+**What remains after founder action** Nothing on the engineering side: F56
+landed in ff92e2e0d (the picker, the dispatcher and the hosted model list read
+one unfunded-credential fact, and a turn is steered to another transport of
+the same model for the cooldown window; the marks clear on their own once the
+route answers again). The first explicit turn after a quiet window still
+reaches the unfunded route once per window (F58 in the release doc).
 **Impact** USER-VISIBLE while it lasts (one provider family unusable on the
 plan), NON-BLOCKING for the release.
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
