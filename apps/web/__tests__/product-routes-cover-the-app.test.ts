@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -60,10 +60,16 @@ describe('the route contract and the proxy patterns classify the same app', () =
     }
   });
 
-  it('gives every auth prefix that owns a directory a real page', () => {
+  it('gives every auth prefix a real page or a redirect to one', () => {
     const onDisk = new Set(segments.map((segment) => `/${segment}`));
+    const config = readFileSync(join(process.cwd(), 'next.config.ts'), 'utf8');
+    const redirected = new Set(
+      [...config.matchAll(/source: '([^']+)', destination: '([^']+)'/gu)]
+        .filter(([, , destination]) => isAuthPath(destination))
+        .map(([, source]) => source),
+    );
     const missing = AUTH_ROUTE_PREFIXES.filter(
-      (prefix) => prefix !== '/__clerk' && !onDisk.has(prefix),
+      (prefix) => prefix !== '/__clerk' && !onDisk.has(prefix) && !redirected.has(prefix),
     );
 
     expect(missing, `auth prefixes with no route behind them: ${missing.join(', ')}`).toEqual([]);

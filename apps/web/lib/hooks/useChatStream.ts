@@ -112,6 +112,7 @@ import {
 } from '@/lib/chat-project-sources';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
+import { longestTrailingTagPrefix } from '@/lib/streaming/trailing-tag-prefix';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import type {
   AgentEvent,
@@ -1980,8 +1981,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (reasoningFallbackTimer !== undefined) clearTimeout(reasoningFallbackTimer);
   };
 
-  const HOLD_BACK = 11;
-
   const seamSeed = ctx.seedContent ?? '';
   let seamPending = seamSeed.length > 0;
   let seamBuffer = '';
@@ -2040,14 +2039,20 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
           contentBuffer = '';
         }
-      } else if (contentBuffer.length > HOLD_BACK) {
-        const safe = contentBuffer.slice(0, contentBuffer.length - HOLD_BACK);
-        if (inThinkingBlock) {
-          appendThinkingText(safe);
-        } else {
-          emitPublicText(safe, false);
+      } else {
+        const retained = longestTrailingTagPrefix(
+          contentBuffer,
+          inThinkingBlock ? '</thinking>' : '<thinking>',
+        );
+        const safe = contentBuffer.slice(0, contentBuffer.length - retained);
+        if (safe) {
+          if (inThinkingBlock) {
+            appendThinkingText(safe);
+          } else {
+            emitPublicText(safe, false);
+          }
+          contentBuffer = contentBuffer.slice(safe.length);
         }
-        contentBuffer = contentBuffer.slice(contentBuffer.length - HOLD_BACK);
       }
       if (isFinal && seamPending && seamBuffer) emitPublicText('', true);
       break;
@@ -2282,13 +2287,19 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                       : 'stop';
             }
             applySourceListEvent(agentEnvelope.event);
+            const previousAgentActivity = currentAgentActivity;
             currentAgentActivity = collapseDuplicateAgentActivityErrors(
               applyAgentActivityEvent(
                 currentAgentActivity,
                 humanizeAgentEventEnvelope(agentEnvelope),
               ),
             );
-            patchMessageMeta({ agentActivity: currentAgentActivity });
+            if (
+              currentAgentActivity.entries !== previousAgentActivity?.entries ||
+              currentAgentActivity.status !== previousAgentActivity?.status
+            ) {
+              patchMessageMeta({ agentActivity: currentAgentActivity });
+            }
             reconcileNativeWebSearchEntry();
             publishCloudRunReference({ lastSequence: agentEnvelope.sequence });
           }

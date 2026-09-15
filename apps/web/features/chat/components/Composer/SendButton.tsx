@@ -56,7 +56,7 @@ function SendControl({
           'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 transition-all duration-200',
           disabled
             ? 'bg-muted text-muted-foreground cursor-not-allowed'
-            : 'bg-terra-cotta-500 text-white hover:bg-terra-cotta-600 shadow-md',
+            : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80',
           className,
         )}
         title="Queue message · will send after current response finishes"
@@ -77,7 +77,7 @@ function SendControl({
       className={cn(
         'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 transition-all duration-200',
         canSend
-          ? 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
+          ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80'
           : 'bg-muted text-muted-foreground cursor-not-allowed',
         className,
       )}

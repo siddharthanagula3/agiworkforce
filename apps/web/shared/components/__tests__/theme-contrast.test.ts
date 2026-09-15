@@ -962,3 +962,21 @@ describe('foundation layer', () => {
     }
   });
 });
+
+describe('the chat focus ring is a visible control boundary (>= 3:1) in both themes', () => {
+  const RING_SOURCE = 'var(--chat-accent-primary-text)';
+
+  it('light', () => {
+    expect(token(web.light, '--chat-focus-ring')).toBe(RING_SOURCE);
+    expect(
+      contrastRatio(colorToken(web.light, '--chat-accent-primary-text'), CHAT_BG_LIGHT),
+    ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+  });
+
+  it('dark', () => {
+    expect(token(web.dark, '--chat-focus-ring')).toBe(RING_SOURCE);
+    expect(
+      contrastRatio(colorToken(web.dark, '--chat-accent-primary-text'), CHAT_BG_DARK),
+    ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+  });
+});

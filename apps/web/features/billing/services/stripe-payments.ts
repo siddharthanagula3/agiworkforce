@@ -1,6 +1,6 @@
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { loadStripe } from '@stripe/stripe-js';
+import { loadStripe } from '@stripe/stripe-js/pure';
 import {
   isPerSeatBillingPlan,
   MIN_PURCHASABLE_SEATS,
@@ -104,10 +104,7 @@ export async function fetchSavedPaymentMethods(): Promise<SavedPaymentMethod[]> 
   });
 }
 
-export async function openBillingPortal(
-  returnPath?: string,
-  flow?: 'cancel',
-): Promise<void> {
+export async function openBillingPortal(returnPath?: string, flow?: 'cancel'): Promise<void> {
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to access billing.');

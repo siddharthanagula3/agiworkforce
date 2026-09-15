@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 
 export default function BillingError({
   error,
@@ -19,12 +20,26 @@ export default function BillingError({
         We encountered an error loading your billing information. Please try again or contact
         support if the issue persists.
       </p>
-      <button
-        onClick={reset}
-        className="rounded-lg bg-primary px-6 py-2 text-primary-foreground hover:opacity-90"
-      >
-        Try again
-      </button>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <button
+          onClick={reset}
+          className="rounded-lg bg-primary px-6 py-2 text-primary-foreground hover:opacity-90"
+        >
+          Try again
+        </button>
+        <Link
+          href="/chat"
+          className="rounded-lg border border-border px-6 py-2 text-foreground hover:bg-muted"
+        >
+          Go to chat
+        </Link>
+        <Link
+          href="/contact"
+          className="px-2 py-2 text-sm text-muted-foreground underline-offset-2 hover:underline"
+        >
+          Contact support
+        </Link>
+      </div>
     </div>
   );
 }

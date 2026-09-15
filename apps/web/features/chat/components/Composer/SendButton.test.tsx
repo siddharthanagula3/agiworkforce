@@ -41,10 +41,10 @@ describe('SendButton · send mode', () => {
     expect(btn).toHaveAttribute('aria-label', 'Sending message…');
   });
 
-  it('applies terra-cotta bg class when has content and not disabled', () => {
+  it('paints the accent fill and on-fill glyph when it has content and is enabled', () => {
     const { container } = renderButton({ mode: 'send', hasContent: true, onClick: vi.fn() });
     const btn = container.querySelector('button');
-    expect(btn?.className).toContain('bg-terra-cotta-500');
+    expect(btn?.className).toContain('bg-[var(--chat-accent-primary)]');
   });
 
   it('applies muted bg class when no content', () => {
@@ -128,7 +128,7 @@ describe('SendButton · queue mode', () => {
   it('uses the same brand fill as Send, not a second primary colour', () => {
     const { container } = renderButton({ mode: 'queue', onClick: vi.fn() });
     const btn = container.querySelector('button');
-    expect(btn?.className).toContain('bg-terra-cotta-500');
+    expect(btn?.className).toContain('bg-[var(--chat-accent-primary)]');
     expect(btn?.className).not.toContain('bg-amber');
   });
 
