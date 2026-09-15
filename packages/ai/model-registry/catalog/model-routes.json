@@ -1084,13 +1084,16 @@
       ]
     },
     "minimax-m3": {
+      "defaultRoute": {
+        "commercialStatus": "customer_byok"
+      },
       "additionalRoutes": [
         {
           "provider": "open_router",
           "harnessId": "open-router/chat-completions-managed",
           "upstreamModelId": "minimax/minimax-m3",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
+          "commercialStatus": "blocked",
           "pricing": {
             "inputPerMillion": 0.3,
             "outputPerMillion": 1.2,
@@ -1103,7 +1106,7 @@
           "harnessId": "vercel_gateway/chat-completions",
           "upstreamModelId": "minimax/minimax-m3",
           "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
+          "commercialStatus": "blocked",
           "pricing": {
             "inputPerMillion": 0.3,
             "outputPerMillion": 1.2,
@@ -1439,6 +1442,11 @@
           "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
         }
       ]
+    },
+    "minimax-m2.7": {
+      "defaultRoute": {
+        "commercialStatus": "customer_byok"
+      }
     }
   }
 }

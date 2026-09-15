@@ -14692,7 +14692,7 @@
       "selectable": true,
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
+      "commercialStatus": "customer_byok",
       "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
@@ -14721,7 +14721,7 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
+      "commercialStatus": "blocked",
       "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
@@ -14742,7 +14742,7 @@
       "selectable": true,
       "isDefault": false,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
+      "commercialStatus": "blocked",
       "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
@@ -14826,7 +14826,7 @@
       "selectable": false,
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
+      "commercialStatus": "customer_byok",
       "dataRetention": "unknown",
       "pricing": {
         "currency": "USD",
@@ -38969,8 +38969,7 @@
         "deepseek-v4-pro",
         "qwen-3.7-plus",
         "glm-5.3",
-        "kimi-k3",
-        "minimax-m3"
+        "kimi-k3"
       ],
       "flagship_additions": [
         "gpt-5.6-sol",
