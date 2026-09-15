@@ -6,6 +6,8 @@ import {
   normalizeModelId,
 } from '@agiworkforce/types';
 
+import { readEventBudgetMicrousd } from '@/lib/server/event-budget';
+
 /**
  * Temporary event access, as an overlay on permanent entitlement.
  *
@@ -105,15 +107,21 @@ function readProviderIds(name: string): Set<string> {
   return ids;
 }
 
+/**
+ * The flag alone activates nothing (D-2026-09-15-26). An event runs only with
+ * an explicit model allowlist, a hard global budget, a start instant and an
+ * end instant, so a half-configured event is a closed one rather than an open
+ * one, and an operator who forgets to unset the flag still sees it expire.
+ */
 export function readEventPromotion(now: number = Date.now()): EventPromotion {
   if (!readFlag(EVENT_ENABLED_ENV)) return INACTIVE;
 
   const startsAt = readInstant(EVENT_STARTS_AT_ENV);
   const endsAt = readInstant(EVENT_ENDS_AT_ENV);
-  // Server-side window. An operator who forgets to unset the flag still sees
-  // the promotion expire on its own.
-  if (startsAt !== null && now < startsAt) return INACTIVE;
-  if (endsAt !== null && now >= endsAt) return INACTIVE;
+  if (startsAt === null || endsAt === null || endsAt <= startsAt) return INACTIVE;
+  const budget = readEventBudgetMicrousd();
+  if (budget === null || budget <= 0) return INACTIVE;
+  if (now < startsAt || now >= endsAt) return INACTIVE;
 
   const disabled = readModelIds(EVENT_DISABLED_MODELS_ENV);
   const allowed = readModelIds(EVENT_MODELS_ENV);
