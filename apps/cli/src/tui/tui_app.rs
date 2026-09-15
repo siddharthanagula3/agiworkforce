@@ -4130,12 +4130,14 @@ pub async fn run(
     agent_name: Option<String>,
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
-    let effective_provider_override = crate::models::selection_provider_override(
+    let effective_provider_override = crate::models::plan_first_provider_override(
+        &crate::models::AccountRoute::load(),
         model,
         &config.default.model,
         &config.default.provider,
         provider_override.as_deref(),
     );
+    let effective_provider_override = effective_provider_override.as_deref();
     let mut session = AgentSession::new_checked(
         model,
         sys_context,
