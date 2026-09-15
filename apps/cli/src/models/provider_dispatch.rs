@@ -116,7 +116,7 @@ pub fn resolve_selected_provider(model: &str, provider_override: Option<&str>) -
 
         if let Some(catalog_model) = crate::model_catalog::find(model) {
             if provider == Provider::ManagedCloud {
-                if !catalog_model.cloud_eligible {
+                if !catalog_model.cloud_eligible && !crate::tier_cache::plan_lists_model(model) {
                     return Err(CliError::config(format!(
                         "Model '{}' is not eligible for AGI Workforce managed cloud.",
                         model
@@ -242,19 +242,32 @@ pub fn plan_first_provider_override(
 pub struct AccountRoute {
     signed_in: bool,
     tier: Option<crate::tier_cache::UserTier>,
+    plan_models: Option<std::collections::HashSet<String>>,
 }
 
 impl AccountRoute {
     /// A route whose account facts are given rather than read from this
     /// machine, so a caller can decide for a state it is not in.
     pub fn with(signed_in: bool, tier: Option<crate::tier_cache::UserTier>) -> Self {
-        Self { signed_in, tier }
+        Self {
+            signed_in,
+            tier,
+            plan_models: None,
+        }
+    }
+
+    /// The same, with the hosted list's answer for what the plan runs.
+    pub fn with_plan_models(mut self, models: &[&str]) -> Self {
+        self.plan_models = Some(models.iter().map(|id| id.to_lowercase()).collect());
+        self
     }
 
     pub fn load() -> Self {
         Self {
             signed_in: crate::tier_cache::load_jwt().is_some(),
             tier: crate::tier_cache::read_tier_cache().map(|cached| cached.tier),
+            plan_models: crate::tier_cache::read_plan_models_cache()
+                .map(|models| models.into_iter().collect()),
         }
     }
 
@@ -275,6 +288,11 @@ impl AccountRoute {
         if !self.signed_in {
             return false;
         }
+        if let Some(plan_models) = &self.plan_models {
+            return plan_models.contains(&model.to_lowercase())
+                || plan_models
+                    .contains(&crate::model_catalog::canonical_model_id(model).to_lowercase());
+        }
         let Some(entry) = crate::model_catalog::find(model) else {
             return false;
         };
@@ -289,6 +307,7 @@ impl AccountRoute {
 
     fn cloud_eligible(model: &str) -> bool {
         crate::model_catalog::find(model).is_some_and(|entry| entry.cloud_eligible)
+            || crate::tier_cache::plan_lists_model(model)
     }
 }
 
@@ -973,6 +992,33 @@ mod tests {
         assert_eq!(
             plan_first_provider_override(&account, &model, "other-model", "anthropic", None),
             None
+        );
+    }
+
+    #[test]
+    fn the_hosted_list_decides_what_the_plan_runs_once_it_is_known() {
+        let listed = "some-model-the-bundled-table-never-named";
+        let account = AccountRoute::with(true, Some(crate::tier_cache::UserTier::Max))
+            .with_plan_models(&[listed, "Another-Listed-Model"]);
+        assert!(account.runs_managed(listed));
+        assert!(account.runs_managed("another-listed-model"));
+        assert!(!account.runs_managed(&plan_model()));
+        let dated = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| crate::model_catalog::canonical_model_id(&model.id) != model.id)
+            .map(|model| model.id.clone())
+            .expect("some bundled model carries a vendor wire id");
+        let canonical = crate::model_catalog::canonical_model_id(&dated);
+        let by_canonical = AccountRoute::with(true, None).with_plan_models(&[canonical.as_str()]);
+        assert!(
+            by_canonical.runs_managed(&dated),
+            "the wire id runs when the list names the id"
+        );
+        assert_eq!(
+            plan_first_provider_override(&account, listed, "config-model", "anthropic", None)
+                .as_deref(),
+            Some("managed_cloud")
         );
     }
 

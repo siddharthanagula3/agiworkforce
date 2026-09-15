@@ -210,6 +210,69 @@ pub fn write_tier_cache(tier: &UserTier) {
 /// Drop the cached tier so the next resolve re-reads it from the server.
 pub fn invalidate_tier_cache() {
     let _ = std::fs::remove_file(tier_cache_path());
+    let _ = std::fs::remove_file(plan_models_cache_path());
+}
+
+fn plan_models_cache_path() -> PathBuf {
+    tier_cache_path().with_file_name("plan-models.toml")
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PlanModelsEnvelope {
+    models: Vec<String>,
+    cached_at: u64,
+}
+
+/// The models the hosted list said this account can run, written beside the
+/// tier and kept until the account changes: the bundled tier table names only
+/// the models a plan lists by hand, while the list also admits every model the
+/// plan reaches through its price floor.
+pub fn read_plan_models_cache() -> Option<Vec<String>> {
+    let content = std::fs::read_to_string(plan_models_cache_path()).ok()?;
+    let envelope: PlanModelsEnvelope = toml::from_str(&content).ok()?;
+    Some(envelope.models)
+}
+
+/// Whether the hosted list named this model for the signed-in account.
+pub fn plan_lists_model(model: &str) -> bool {
+    read_plan_models_cache().is_some_and(|models| {
+        plan_lists(&models, model)
+            || plan_lists(&models, &crate::model_catalog::canonical_model_id(model))
+    })
+}
+
+pub fn plan_lists(models: &[String], model: &str) -> bool {
+    let wanted = model.to_lowercase();
+    models
+        .iter()
+        .any(|listed| listed.eq_ignore_ascii_case(&wanted))
+}
+
+pub fn write_plan_models_cache(models: &[String]) {
+    let path = plan_models_cache_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let envelope = PlanModelsEnvelope {
+        models: models.iter().map(|id| id.to_lowercase()).collect(),
+        cached_at: now_secs(),
+    };
+    if let Ok(content) = toml::to_string(&envelope) {
+        let tmp = path.with_extension("tmp");
+        if std::fs::write(&tmp, &content).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+async fn refresh_plan_models_cache() {
+    match crate::models::gateway_models::discover_gateway_models().await {
+        Ok(catalog) => {
+            let ids: Vec<String> = catalog.models.into_iter().map(|model| model.id).collect();
+            write_plan_models_cache(&ids);
+        }
+        Err(error) => tracing::debug!("[tier_cache] plan model list fetch failed: {error:#}"),
+    }
 }
 
 /// Adopt the plan the authoritative usage summary reports. `/api/usage` reads
@@ -485,6 +548,7 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
             };
 
             write_tier_cache(&resolved);
+            refresh_plan_models_cache().await;
             TierResolution {
                 cached: Some(CachedTier { tier: resolved }),
                 needs_reauth: false,
@@ -934,6 +998,18 @@ mod tests {
     #[test]
     fn tier_cache_ttl_is_five_minutes() {
         assert_eq!(TIER_CACHE_TTL.as_secs(), 300);
+    }
+
+    #[test]
+    fn a_plan_list_matches_ids_regardless_of_case() {
+        let listed = vec![
+            "claude-haiku-4-5".to_string(),
+            "Deepseek-V4-Flash".to_string(),
+        ];
+        assert!(plan_lists(&listed, "Claude-Haiku-4-5"));
+        assert!(plan_lists(&listed, "deepseek-v4-flash"));
+        assert!(!plan_lists(&listed, "gpt-6-astra"));
+        assert!(!plan_lists(&[], "claude-haiku-4-5"));
     }
 
     #[test]
