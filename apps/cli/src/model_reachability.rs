@@ -74,6 +74,7 @@ async fn running_local_models(config: &CliConfig) -> Vec<(String, String)> {
 /// Every model this host knows about, each with its verdict.
 pub async fn host_models(config: &CliConfig) -> Vec<HostModelSummary> {
     let local = running_local_models(config).await;
+    crate::tier_cache::ensure_plan_models_cached().await;
     let account = crate::models::AccountRoute::load();
     let mut summaries: Vec<HostModelSummary> = Vec::new();
     let mut seen: HashMap<String, ()> = HashMap::new();
