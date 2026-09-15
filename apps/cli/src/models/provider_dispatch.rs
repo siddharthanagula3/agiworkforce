@@ -463,12 +463,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
         Provider::ManagedCloud => {
             let token = crate::tier_cache::load_jwt();
             if token.is_none() {
-                return Err(CliError::auth_missing(
-                    name,
-                    "No AGI Workforce session found. Run `agi login` to use managed cloud."
-                        .to_string(),
-                )
-                .into());
+                return Err(CliError::auth_missing(name, "No AGI Workforce session found.").into());
             }
             Ok(token)
         }
@@ -476,12 +471,9 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
         Provider::Ollama(OllamaMode::Cloud) => {
             let key = resolve_config_env_auth_key(config, name, "OLLAMA_API_KEY");
             if key.is_none() {
-                return Err(CliError::auth_missing(
-                    name,
-                    "No API key found. Run `agi login ollama-cloud` or set OLLAMA_API_KEY."
-                        .to_string(),
-                )
-                .into());
+                return Err(
+                    CliError::auth_missing(name, auth_missing_message("OLLAMA_API_KEY")).into(),
+                );
             }
             Ok(key)
         }
@@ -496,14 +488,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             };
             let key = resolve_config_env_auth_key(config, pname, env_var);
             if key.is_none() {
-                return Err(CliError::auth_missing(
-                    *pname,
-                    format!(
-                        "No API key found. Run `agi login {}` or set {}.",
-                        pname, env_var
-                    ),
-                )
-                .into());
+                return Err(CliError::auth_missing(*pname, auth_missing_message(env_var)).into());
             }
             Ok(key)
         }
@@ -521,11 +506,9 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
                 .or_else(|| env_api_key(env_var))
                 .or_else(|| auth_store_api_key(pname));
             if key.is_none() {
-                return Err(CliError::auth_missing(
-                    pname.clone(),
-                    auth_missing_message(pname, env_var),
-                )
-                .into());
+                return Err(
+                    CliError::auth_missing(pname.clone(), auth_missing_message(env_var)).into(),
+                );
             }
             Ok(key)
         }
@@ -541,27 +524,15 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
                 .or_else(|| env_api_key(env_var))
                 .or_else(|| auth_store_api_key(name));
             if key.is_none() {
-                return Err(
-                    CliError::auth_missing(name, auth_missing_message(name, env_var)).into(),
-                );
+                return Err(CliError::auth_missing(name, auth_missing_message(env_var)).into());
             }
             Ok(key)
         }
     }
 }
 
-fn auth_missing_message(provider: &str, env_var: &str) -> String {
-    if crate::errors::login_opens_vendor_subscription(provider) {
-        format!(
-            "No API key found. Run `agi login` to use your AGI Workforce plan, or set {env_var} \
-             to use your own key."
-        )
-    } else {
-        format!(
-            "No API key found. Run `agi login` to use your AGI Workforce plan, or run \
-             `agi login {provider}` or set {env_var} to use your own key."
-        )
-    }
+fn auth_missing_message(env_var: &str) -> String {
+    format!("No API key found in the auth store or {env_var}.")
 }
 
 fn env_api_key(env_var: &str) -> Option<String> {
