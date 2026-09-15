@@ -54,6 +54,7 @@ pub async fn run_repl(
     agent_name: Option<String>,
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
+    crate::tier_cache::ensure_plan_models_cached().await;
     let provider_override = crate::models::plan_first_provider_override(
         &crate::models::AccountRoute::load(),
         model,
