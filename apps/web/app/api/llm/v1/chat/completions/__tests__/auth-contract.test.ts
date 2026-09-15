@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -149,7 +148,11 @@ describe('POST /api/llm/v1/chat/completions · auth contract', () => {
   });
 
   it('rejects an authenticated managed request without an Idempotency-Key', async () => {
-    mockGetClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1', email: 'user@example.com' });
+    mockGetClerkAuthUser.mockResolvedValueOnce({
+      userId: 'user-1',
+      email: 'user@example.com',
+      boundSurface: 'web',
+    });
     mockGetSubscription.mockResolvedValueOnce({
       id: 'subscription-1',
       status: 'active',
