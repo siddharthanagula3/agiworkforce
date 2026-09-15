@@ -206,6 +206,13 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+      # The Expo SDK owns these versions; they move together with `npx expo
+      # install --fix` when the SDK moves, never one at a time.
+      - dependency-name: 'expo'
+      - dependency-name: 'react-native'
+      - dependency-name: 'react-native-reanimated'
+      - dependency-name: 'react-native-worklets'
+      - dependency-name: '@types/react'
 
   # ─── npm / pnpm, apps/extension ────────────────────────────────────────────
   - package-ecosystem: 'npm'
