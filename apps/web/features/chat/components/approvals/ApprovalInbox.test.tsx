@@ -163,6 +163,8 @@ describe('ApprovalInbox', () => {
     fireEvent.change(await screen.findByLabelText('Guidance for Read file'), {
       target: { value: '  Read the changelog instead.  ' },
     });
+    expect(screen.getByRole('button', { name: 'Deny Read file' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Reject/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Approve Read file' }));
 
     await waitFor(() => {
@@ -198,6 +200,6 @@ describe('ApprovalInbox', () => {
 
     expect(await screen.findByText(/this request expired/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Approve Read file' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Reject Read file' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Deny Read file' })).not.toBeInTheDocument();
   });
 });

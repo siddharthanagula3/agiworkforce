@@ -566,7 +566,7 @@ mod tests {
             .await
             .expect_err("a local session must never reach managed image generation");
         assert!(matches!(error, CloudError::NotManaged(PrivacyMode::Local)));
-        assert!(error.to_string().contains("local"), "{error}");
+        assert!(error.to_string().starts_with("Local:"), "{error}");
         assert!(error.is_boundary());
     }
 

@@ -9,16 +9,33 @@
 //!    only tools that are actually callable from this context. Until agent exec
 //!    is wired for stdio MCP, the tool list is intentionally empty.
 
+mod account;
 mod developer_host;
+mod surfaces;
 
 pub use developer_host::CliDeveloperSessionHost;
 
-pub use agiworkforce_app_server::{
-    run_developer_session_stdio, run_developer_session_websocket, WebSocketSecurity,
-};
+pub use agiworkforce_app_server::{run_developer_session_websocket, WebSocketSecurity};
 
-use agiworkforce_app_server::JsonRpcResponse;
+use agiworkforce_app_server::{DeveloperSessionHost, JsonRpcResponse};
+use agiworkforce_protocol::developer_session::AppServerCapabilities;
 use anyhow::Result;
+use std::sync::Arc;
+
+/// Serve a developer session over stdio.
+///
+/// Stdout becomes the protocol channel here and stays one for the life of the
+/// process: one JSON value per line, nothing else. The claim is what keeps a
+/// human-facing write, a streamed continuation chunk, a tool banner, off it,
+/// because the client's reader treats the first non-JSON line as a fatal
+/// framing error and drops the session.
+pub async fn run_developer_session_stdio(
+    host: Arc<dyn DeveloperSessionHost>,
+    capabilities: AppServerCapabilities,
+) -> Result<()> {
+    crate::output::claim_stdout_for_protocol();
+    agiworkforce_app_server::run_developer_session_stdio(host, capabilities).await
+}
 
 // ---------------------------------------------------------------------------
 // MCP-server entry point (CLI-local)
@@ -30,6 +47,7 @@ use anyhow::Result;
 /// requires a configured provider/model session, approval plumbing, and event
 /// streaming; advertising that tool before it is callable would be fake wiring.
 pub async fn run_mcp_server() -> Result<()> {
+    crate::output::claim_stdout_for_protocol();
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     let mut reader = BufReader::new(tokio::io::stdin());
     let mut stdout = tokio::io::stdout();

@@ -1,10 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { canAccessModelForSubscriptionTier, getCoreManualModelOptions } from '@agiworkforce/types';
 import {
-  MODEL_LOCKED_HINT,
+  canAccessModelForSubscriptionTier,
+  getCoreManualModelOptions,
+  getProviderDisplayLabel,
+  getSurfaceManualModelOptions,
+  isModelSelectable,
+  PROVIDER_DISPLAY,
+  PROVIDERS_IN_ORDER,
+  resolveProviderDisplayId,
+} from '@agiworkforce/types';
+import {
   buildGroupedQuickPickItems,
   getModelPickerOptionsForTier,
   isModelReachableForTier,
+  modelLockForRoute,
+  modelLockHeading,
+  modelLockReason,
 } from '../features/model-picker/modelConstants';
 
 const catalogModels = getCoreManualModelOptions();
@@ -44,44 +55,203 @@ describe('isModelReachableForTier', () => {
   });
 });
 
+function headingAbove(
+  items: ReturnType<typeof buildGroupedQuickPickItems>,
+  index: number,
+): string | undefined {
+  for (let cursor = index - 1; cursor >= 0; cursor--) {
+    const item = items[cursor];
+    if (item?.kind !== undefined) return item.label;
+  }
+  return undefined;
+}
+
 describe('buildGroupedQuickPickItems, tier gating', () => {
   it('never returns an empty roster on the lowest tier', () => {
     const items = buildGroupedQuickPickItems('local').filter((i) => i.modelId !== undefined);
     expect(items.length).toBeGreaterThan(0);
   });
 
-  it('marks unreachable models with the locked hint on the local tier', () => {
+  it('files an unreachable model under what would unlock it, not among the usable ones', () => {
     const items = buildGroupedQuickPickItems('local');
-    const cloudRow = items.find((i) => i.modelId === CLOUD_MODEL);
+    const index = items.findIndex((i) => i.modelId === CLOUD_MODEL);
+    const cloudRow = items[index];
 
     expect(cloudRow).toBeDefined();
-    expect(cloudRow?.description).toContain(MODEL_LOCKED_HINT);
     expect(cloudRow?.disabled).toBe(true);
+    expect(cloudRow?.lock).toEqual({ kind: 'sign-in' });
+    expect(headingAbove(items, index)).toBe('Sign in to AGI Cloud');
   });
 
-  it('does not mark reachable models on max', () => {
+  it('does not lock reachable models on max', () => {
     const items = buildGroupedQuickPickItems('max');
     const cloudRow = items.find((i) => i.modelId === CLOUD_MODEL);
 
     expect(cloudRow).toBeDefined();
-    expect(cloudRow?.description).not.toContain(MODEL_LOCKED_HINT);
-    expect(cloudRow?.disabled).toBe(false);
+    expect(cloudRow?.lock).toBeUndefined();
+    expect(cloudRow?.disabled).toBeUndefined();
   });
 
   it('gates the shared self-routing Auto option too', () => {
     const items = buildGroupedQuickPickItems('local');
-    const auto = items.find((i) => i.modelId === 'auto');
+    const index = items.findIndex((i) => i.modelId === 'auto');
 
-    expect(auto).toBeDefined();
-    expect(auto?.description).toContain(MODEL_LOCKED_HINT);
-    expect(auto?.disabled).toBe(true);
+    expect(items[index]).toBeDefined();
+    expect(items[index]?.disabled).toBe(true);
+    expect(headingAbove(items, index)).toBe('Sign in to AGI Cloud');
   });
 
-  it('leaves every row unmarked when no tier is supplied', () => {
+  it('leaves every row unlocked when no tier is supplied', () => {
     const items = buildGroupedQuickPickItems();
-    const marked = items.filter((i) => i.description?.includes(MODEL_LOCKED_HINT));
 
-    expect(marked).toHaveLength(0);
+    expect(items.filter((i) => i.lock !== undefined)).toHaveLength(0);
+  });
+
+  it('names an upgrade rather than a sign-in when the plan is the thing missing', () => {
+    const items = buildGroupedQuickPickItems('basic');
+    const index = items.findIndex((i) => i.modelId === BASIC_MODEL);
+
+    expect(items[index]?.lock).toEqual({ kind: 'upgrade' });
+    expect(headingAbove(items, index)).toBe('Upgrade your AGI plan');
+  });
+});
+
+describe('buildGroupedQuickPickItems, the owner decides the managed universe', () => {
+  const MANAGED_SURFACE = 'vscode/managed-chat';
+
+  function listedModelIds(tier?: string): string[] {
+    return buildGroupedQuickPickItems(tier)
+      .map((item) => item.modelId)
+      .filter((modelId): modelId is string => modelId !== undefined && modelId !== 'auto');
+  }
+
+  it('offers exactly what the shared owner admits on a managed plan', () => {
+    const owned = getSurfaceManualModelOptions(MANAGED_SURFACE).map((option) => option.id);
+
+    expect(owned.length).toBeGreaterThan(0);
+    expect([...listedModelIds('max')].sort()).toEqual([...owned].sort());
+  });
+
+  it('never locks a model the plan actually admits', () => {
+    const items = buildGroupedQuickPickItems('max');
+    const owned = getSurfaceManualModelOptions(MANAGED_SURFACE);
+    const missing = owned
+      .filter((option) => !items.some((item) => item.modelId === option.id))
+      .map((option) => option.id);
+    const wronglyLocked = owned
+      .filter((option) => canAccessModelForSubscriptionTier(option.id, 'max'))
+      .filter((option) => items.find((item) => item.modelId === option.id)?.lock !== undefined)
+      .map((option) => option.id);
+
+    expect(missing).toEqual([]);
+    expect(wronglyLocked).toEqual([]);
+  });
+
+  it('files nothing under an upgrade that no plan could ever unlock', () => {
+    const upgradeLocked = buildGroupedQuickPickItems('pro')
+      .filter((item) => item.lock?.kind === 'upgrade' && item.modelId !== undefined)
+      .map((item) => item.modelId!);
+
+    expect(
+      upgradeLocked.filter((modelId) => !canAccessModelForSubscriptionTier(modelId, 'max')),
+    ).toEqual([]);
+  });
+
+  it('keeps the registry universe where the owner does not decide the boundary', () => {
+    const registryLive = getCoreManualModelOptions()
+      .filter((option) => isModelSelectable(option.id))
+      .map((option) => option.id);
+
+    expect(listedModelIds('byok').length).toBeGreaterThan(listedModelIds('max').length);
+    expect([...listedModelIds('byok')].sort()).toEqual([...registryLive].sort());
+  });
+});
+
+describe('buildGroupedQuickPickItems, route grouping', () => {
+  const DEEPSEEK_MODEL = catalogModels.find((model) => String(model.provider) === 'deepseek')?.id;
+  const OTHER_MODEL = catalogModels.find((model) => String(model.provider) === 'openai')?.id;
+
+  it('keeps what this route can run above what it cannot', () => {
+    expect(DEEPSEEK_MODEL).toBeDefined();
+    expect(OTHER_MODEL).toBeDefined();
+
+    const items = buildGroupedQuickPickItems('byok', {
+      trustMode: 'byok',
+      provider: 'deepseek',
+    });
+    const usableIndex = items.findIndex((i) => i.modelId === DEEPSEEK_MODEL);
+    const lockedIndex = items.findIndex((i) => i.modelId === OTHER_MODEL);
+
+    expect(items[usableIndex]?.lock).toBeUndefined();
+    expect(items[lockedIndex]?.lock).toEqual({
+      kind: 'provider-key',
+      providerLabel: 'OpenAI',
+      routeLabel: 'DeepSeek',
+    });
+    expect(usableIndex).toBeLessThan(lockedIndex);
+    expect(headingAbove(items, lockedIndex)).toBe('Add your OpenAI key');
+  });
+
+  it('leaves the catalog alone when no session has told it the route yet', () => {
+    const items = buildGroupedQuickPickItems('byok');
+
+    expect(items.filter((i) => i.lock !== undefined)).toHaveLength(0);
+  });
+
+  it('does not lock another provider on a managed-cloud route', () => {
+    expect(
+      modelLockForRoute(CLOUD_MODEL, 'openai', 'max', {
+        trustMode: 'managed_cloud',
+        provider: 'anthropic',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('names a provider the registry spells differently instead of printing its id', () => {
+    const aliasedProvider = PROVIDERS_IN_ORDER.find(
+      (provider) => resolveProviderDisplayId(provider) !== null && !(provider in PROVIDER_DISPLAY),
+    );
+    expect(aliasedProvider).toBeDefined();
+
+    const lock = modelLockForRoute('fixture-model', aliasedProvider!, 'byok', {
+      trustMode: 'byok',
+      provider: 'deepseek',
+    });
+
+    expect(lock).toEqual({
+      kind: 'provider-key',
+      providerLabel: getProviderDisplayLabel(aliasedProvider!),
+      routeLabel: 'DeepSeek',
+    });
+    expect(lock === undefined ? '' : modelLockHeading(lock)).not.toContain(aliasedProvider!);
+  });
+
+  it('never prints a raw provider id for one the catalog cannot name', () => {
+    const lock = modelLockForRoute('fixture-model', 'fixture-unlisted-provider', 'byok', {
+      trustMode: 'byok',
+      provider: 'deepseek',
+    });
+
+    expect(lock).toEqual({ kind: 'provider-key', routeLabel: 'DeepSeek' });
+    expect(lock === undefined ? '' : modelLockHeading(lock)).toBe('Add another provider key');
+    expect(lock === undefined ? '' : modelLockReason('Fixture Catalog Model', lock)).toBe(
+      "Fixture Catalog Model cannot run on this session's route, which uses DeepSeek. Add another provider key to use it.",
+    );
+  });
+
+  it('says which provider the model runs on and which one the session is using', () => {
+    const lock = modelLockForRoute(CLOUD_MODEL, 'openai', 'byok', {
+      trustMode: 'byok',
+      provider: 'deepseek',
+    });
+
+    expect(lock).toBeDefined();
+    expect(modelLockReason('Fixture Premium Model', lock!)).toBe(
+      "Fixture Premium Model cannot run on this session's route, which uses DeepSeek. Add your OpenAI key to use it.",
+    );
+    expect(modelLockReason('Fixture Premium Model', { kind: 'sign-in' })).toBe(
+      'Fixture Premium Model is not available on this session. Sign in to AGI Cloud to use it.',
+    );
   });
 });
 

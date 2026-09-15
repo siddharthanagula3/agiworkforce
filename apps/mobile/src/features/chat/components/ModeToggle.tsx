@@ -82,6 +82,7 @@ export function ModeToggle({
         testID="chat.mode-toggle.local"
         onPress={onTapLocal}
         disabled={!onTapLocal}
+        hitSlop={8}
         style={segmentStyle(mode === 'local')}
         accessibilityRole={onTapLocal ? 'button' : 'tab'}
         accessibilityState={{ selected: mode === 'local' }}

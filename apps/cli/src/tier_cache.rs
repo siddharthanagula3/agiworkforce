@@ -210,6 +210,79 @@ pub fn write_tier_cache(tier: &UserTier) {
 /// Drop the cached tier so the next resolve re-reads it from the server.
 pub fn invalidate_tier_cache() {
     let _ = std::fs::remove_file(tier_cache_path());
+    let _ = std::fs::remove_file(plan_models_cache_path());
+}
+
+fn plan_models_cache_path() -> PathBuf {
+    tier_cache_path().with_file_name("plan-models.toml")
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PlanModelsEnvelope {
+    models: Vec<String>,
+    cached_at: u64,
+}
+
+/// The models the hosted list said this account can run, written beside the
+/// tier and kept until the account changes: the bundled tier table names only
+/// the models a plan lists by hand, while the list also admits every model the
+/// plan reaches through its price floor.
+pub fn read_plan_models_cache() -> Option<Vec<String>> {
+    let content = std::fs::read_to_string(plan_models_cache_path()).ok()?;
+    let envelope: PlanModelsEnvelope = toml::from_str(&content).ok()?;
+    Some(envelope.models)
+}
+
+/// Whether the hosted list named this model for the signed-in account.
+pub fn plan_lists_model(model: &str) -> bool {
+    read_plan_models_cache().is_some_and(|models| {
+        plan_lists(&models, model)
+            || plan_lists(&models, &crate::model_catalog::canonical_model_id(model))
+    })
+}
+
+pub fn plan_lists(models: &[String], model: &str) -> bool {
+    let wanted = model.to_lowercase();
+    models
+        .iter()
+        .any(|listed| listed.eq_ignore_ascii_case(&wanted))
+}
+
+pub fn write_plan_models_cache(models: &[String]) {
+    let path = plan_models_cache_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let envelope = PlanModelsEnvelope {
+        models: models.iter().map(|id| id.to_lowercase()).collect(),
+        cached_at: now_secs(),
+    };
+    if let Ok(content) = toml::to_string(&envelope) {
+        let tmp = path.with_extension("tmp");
+        if std::fs::write(&tmp, &content).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+/// A signed-in account whose plan list is not cached yet fetches it before any
+/// route is judged, so the first verdict a client asks for reads the plan
+/// rather than the bundled vendor rule.
+pub async fn ensure_plan_models_cached() {
+    if read_plan_models_cache().is_some() || load_jwt().is_none() {
+        return;
+    }
+    refresh_plan_models_cache().await;
+}
+
+async fn refresh_plan_models_cache() {
+    match crate::models::gateway_models::discover_gateway_models().await {
+        Ok(catalog) => {
+            let ids: Vec<String> = catalog.models.into_iter().map(|model| model.id).collect();
+            write_plan_models_cache(&ids);
+        }
+        Err(error) => tracing::debug!("[tier_cache] plan model list fetch failed: {error:#}"),
+    }
 }
 
 /// Adopt the plan the authoritative usage summary reports. `/api/usage` reads
@@ -413,6 +486,9 @@ pub fn reconcile_fetched_tier(fetched: &UserTier, cached: &UserTier) -> UserTier
 pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
     // Fast path: return fresh cache without touching the network.
     if let Some(cached) = read_tier_cache() {
+        if read_plan_models_cache().is_none() && jwt.is_some_and(|j| !j.is_empty()) {
+            refresh_plan_models_cache().await;
+        }
         return TierResolution {
             cached: Some(cached),
             needs_reauth: false,
@@ -485,6 +561,7 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
             };
 
             write_tier_cache(&resolved);
+            refresh_plan_models_cache().await;
             TierResolution {
                 cached: Some(CachedTier { tier: resolved }),
                 needs_reauth: false,
@@ -587,6 +664,11 @@ fn parse_tier_str(s: &str) -> Option<UserTier> {
         "byok" | "local" => Some(UserTier::Byok),
         _ => None,
     }
+}
+
+/// Canonical wire slug for a tier, the same string the server uses.
+pub fn tier_slug(tier: &UserTier) -> String {
+    tier_to_str(tier)
 }
 
 fn tier_to_str(t: &UserTier) -> String {
@@ -929,6 +1011,18 @@ mod tests {
     #[test]
     fn tier_cache_ttl_is_five_minutes() {
         assert_eq!(TIER_CACHE_TTL.as_secs(), 300);
+    }
+
+    #[test]
+    fn a_plan_list_matches_ids_regardless_of_case() {
+        let listed = vec![
+            "listed-model-one".to_string(),
+            "Listed-Model-Two".to_string(),
+        ];
+        assert!(plan_lists(&listed, "Listed-Model-One"));
+        assert!(plan_lists(&listed, "listed-model-two"));
+        assert!(!plan_lists(&listed, "unlisted-model"));
+        assert!(!plan_lists(&[], "listed-model-one"));
     }
 
     #[test]

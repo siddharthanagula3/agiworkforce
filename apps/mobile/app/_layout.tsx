@@ -14,8 +14,6 @@ import {
   BackHandler,
   Platform,
   ToastAndroid,
-  Pressable,
-  Text,
   AppState,
   LogBox,
   type AppStateStatus,
@@ -23,7 +21,6 @@ import {
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { Fingerprint } from 'lucide-react-native';
 import { useFonts } from 'expo-font';
 import { Newsreader_500Medium, Newsreader_600SemiBold } from '@expo-google-fonts/newsreader';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -41,6 +38,8 @@ import {
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { clearBiometricFlag, hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
+import { AppLockOverlay } from '@/src/features/auth/components/AppLockOverlay';
+import { SecureStorageUnavailable } from '@/src/features/auth/components/SecureStorageUnavailable';
 import { ThemeVars, useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
@@ -81,6 +80,7 @@ import { CLOUD_SIGN_IN_RETURN_PATH } from './(public)/age-gate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
+import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
 import '../global.css';
 
 holdLaunchSplash();
@@ -100,12 +100,31 @@ function queueBackgroundFetchLifecycle(operation: () => Promise<void>): Promise<
   return transition;
 }
 
+// Clerk never reports `isLoaded` when its environment call fails (an offline
+// launch, a disabled instance). Everything keyed off it then reads "Checking…"
+// for the life of the process and the rows it gates do nothing when tapped.
+// Signed-out is the fail-closed answer for Cloud and it is the truthful one for
+// a Local-only session, so settle on it rather than waiting forever.
+const CLERK_LOAD_SETTLE_MS = 8_000;
+
 function ClerkTokenBridge() {
   const { getToken, userId, isSignedIn, isLoaded } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
   const setClerkUserId = useAuthStore((s) => s.setClerkUserId);
   const setClerkLoaded = useAuthStore((s) => s.setClerkLoaded);
   const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
+
+  useEffect(() => {
+    if (isLoaded) return;
+    const settle = setTimeout(() => {
+      console.warn('[RootLayout] Clerk did not load, settling on signed out');
+      setClerkUserId(null);
+      setClerkSignedIn(false);
+      setCloudAccess(false);
+      setClerkLoaded(true);
+    }, CLERK_LOAD_SETTLE_MS);
+    return () => clearTimeout(settle);
+  }, [isLoaded, setClerkLoaded, setClerkSignedIn, setClerkUserId, setCloudAccess]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -173,9 +192,12 @@ export default function RootLayout() {
     Newsreader_500Medium,
     Newsreader_600SemiBold,
   });
-  const [isMmkvReady, setIsMmkvReady] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<'pending' | 'ready' | 'unavailable'>(
+    'pending',
+  );
+  const isMmkvReady = storageStatus === 'ready';
 
-  useLaunchSplashRelease(isMmkvReady && (fontsLoaded || fontError !== null));
+  useLaunchSplashRelease(storageStatus !== 'pending' && (fontsLoaded || fontError !== null));
   const isLoading = useAuthStore((s) => s.isLoading);
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const initialize = useAuthStore((s) => s.initialize);
@@ -200,7 +222,7 @@ export default function RootLayout() {
       themeMode === 'dark' ? 'dark' : themeMode === 'light' ? 'light' : 'unspecified',
     );
   }, [themeMode]);
-  const { isUnlocked, isReady: isBiometricReady, authenticate } = useBiometricGate();
+  const { isUnlocked, isCovered, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
   const resetAppLock = useCallback(() => {
     Alert.alert(
@@ -224,27 +246,34 @@ export default function RootLayout() {
     );
   }, []);
 
-  useEffect(() => {
+  const openSecureStorage = useCallback(() => {
+    setStorageStatus('pending');
     initMmkvEncryption()
       .then(async () => {
         const language = await restoreStoredLanguage();
         if (language.directionChanged) {
           void reloadAppAsync('Apply stored app language direction').catch((err) => {
             console.warn('[RootLayout] app-language direction reload failed:', err);
-            setIsMmkvReady(true);
+            setStorageStatus('ready');
           });
           return;
         }
-        setIsMmkvReady(true);
+        setStorageStatus('ready');
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
+        // The reason is a native exception string. It belongs in the log, not
+        // on a screen a user reads.
         console.warn('[RootLayout] MMKV encryption init failed:', err);
-        setIsMmkvReady(true);
+        setStorageStatus('unavailable');
       });
+  }, []);
+
+  useEffect(() => {
+    openSecureStorage();
     hydrateBiometricFlag().catch((err) => {
       console.warn('[RootLayout] biometric flag hydrate failed:', err);
     });
-  }, []);
+  }, [openSecureStorage]);
 
   useEffect(() => {
     if (!isUnlocked) return;
@@ -665,6 +694,17 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, [router]);
 
+  if (storageStatus === 'unavailable') {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <StatusBar style={statusBarStyle} />
+          <SecureStorageUnavailable onRetry={openSecureStorage} />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
+
   if (!isMmkvReady || !isInitialized || isLoading || !isBiometricReady) {
     return (
       <View
@@ -680,65 +720,6 @@ export default function RootLayout() {
     );
   }
 
-  if (!isUnlocked) {
-    return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <StatusBar style={statusBarStyle} />
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: themeColors.background,
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 16,
-            }}
-          >
-            <Fingerprint size={48} color={themeColors.teal} />
-            <Text style={{ color: themeColors.textPrimary, fontSize: 18, fontWeight: '600' }}>
-              Locked
-            </Text>
-            <Text style={{ color: themeColors.textMuted, fontSize: 14 }}>
-              Authenticate to continue
-            </Text>
-            <Pressable
-              onPress={authenticate}
-              accessibilityRole="button"
-              accessibilityLabel="Unlock"
-              style={{
-                marginTop: 8,
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                minHeight: 44,
-                justifyContent: 'center',
-                backgroundColor: themeColors.teal,
-                borderRadius: 12,
-              }}
-            >
-              <Text style={{ color: themeColors.accentText, fontWeight: '600' }}>Unlock</Text>
-            </Pressable>
-            <Pressable
-              onPress={resetAppLock}
-              accessibilityRole="button"
-              accessibilityLabel="Reset app lock and sign out"
-              style={{
-                marginTop: 24,
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                minHeight: 44,
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ color: themeColors.textMuted, fontSize: 14 }}>
-                Can&apos;t unlock? Reset app lock and sign out
-              </Text>
-            </Pressable>
-          </View>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
-    );
-  }
-
   return (
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
       <ClerkTokenBridge />
@@ -750,10 +731,21 @@ export default function RootLayout() {
                 screens follow the theme instead of the dark constants Tailwind
                 compiled in. Must wrap Slot, not sit beside it. */}
             <ThemeVars>
-              <Slot />
+              <TextScaleBoundary>
+                <Slot />
+              </TextScaleBoundary>
             </ThemeVars>
             {/* Global offline banner, renders above all content when NetInfo is offline */}
             <OfflineBanner />
+            {/* The lock covers the app, it does not replace it: unmounting the
+                navigator on every resume discarded the open conversation. */}
+            {isUnlocked && !isCovered ? null : (
+              <AppLockOverlay
+                onUnlock={authenticate}
+                onReset={resetAppLock}
+                variant={isUnlocked ? 'cover' : 'locked'}
+              />
+            )}
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </CapabilityProvider>

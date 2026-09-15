@@ -287,7 +287,9 @@ describe('GeneralSection read-aloud disclosure', () => {
   it('states how far display-language translation actually reaches', () => {
     render(<GeneralSection />);
 
-    expect(screen.getByText(/chat interface is still English/i)).toBeVisible();
+    expect(
+      screen.getByText(/Settings field labels and your conversations are unaffected/i),
+    ).toBeVisible();
   });
 
   it('explains the absence rather than hiding the row when no voices exist', () => {

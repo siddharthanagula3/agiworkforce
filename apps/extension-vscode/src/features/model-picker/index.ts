@@ -12,6 +12,7 @@ export {
   normalizeSelectableConfiguredModelId,
   buildGroupedQuickPickItems,
   getModelProviderInfo,
+  providerDisplayLabel,
   type ModelPickerOption,
   type GroupedQuickPickItem,
   type ModelProviderInfo,

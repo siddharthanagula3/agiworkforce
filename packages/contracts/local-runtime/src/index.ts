@@ -44,6 +44,32 @@ export type {
   DesktopRuntimeResponse,
 } from './protocol';
 
+export {
+  DEVELOPER_SESSION_COMMANDS,
+  DEVELOPER_SESSION_ORIGIN_LABELS,
+  DEVELOPER_SESSION_TRUST_LABELS,
+  DEVELOPER_TURN_OUTCOMES,
+  isDeveloperSessionCommand,
+} from './developer-sessions';
+export type {
+  DeveloperApprovalAnswer,
+  DeveloperHostModel,
+  DeveloperModelOption,
+  DeveloperModelUnreachable,
+  DeveloperRuntimeModels,
+  DeveloperRuntimeStatus,
+  DeveloperRuntimeUnavailable,
+  LocalDeveloperSession,
+  DeveloperSessionCommand,
+  DeveloperSessionEvent,
+  DeveloperSessionGroup,
+  DeveloperSessionList,
+  DeveloperSessionTranscript,
+  DeveloperTurnFailure,
+  DeveloperTurnOutcome,
+  DeveloperTurnRequest,
+} from './developer-sessions';
+
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {
   BrowserPairRequestPrompt,
@@ -148,15 +174,32 @@ export type {
 export {
   DESKTOP_DEEP_LINK_SCHEME,
   DESKTOP_DEEP_LINK_TARGETS,
+  HOST_COMMANDS,
+  HOST_MENU_SHORTCUTS,
+  HOST_SHORTCUT_CHOICES,
+  HOST_SHORTCUT_KEYS,
+  HOST_SHORTCUT_PREFERENCE_KEYS,
+  HOST_SHORTCUT_STATUSES,
+  NO_HOST_SHORTCUT,
+  defaultHostShortcut,
+  describeAccelerator,
+  describeHostPlatform,
   desktopDeepLink,
   getHostBridge,
+  isHostCommand,
   parseDesktopDeepLink,
 } from './host-bridge';
 export type {
   DesktopDeepLink,
   DesktopDeepLinkTarget,
   HostBridge,
+  HostCommand,
+  HostMenuShortcut,
   HostNotifyRequest,
+  HostPreferences,
+  HostPreferencesState,
+  HostShortcutKey,
+  HostShortcutStatus,
   HostUpdateAvailability,
 } from './host-bridge';
 

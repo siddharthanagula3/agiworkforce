@@ -16,7 +16,6 @@ import {
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
 import {
   APPROVE_CLOUD_TASK_COMMAND,
-  CLOUD_TASKS_VIEW_ID,
   CloudTasksTreeProvider,
   REJECT_CLOUD_TASK_COMMAND,
   decideCloudRunApprovalInteractively,
@@ -36,7 +35,6 @@ import {
   REFRESH_SCHEDULES_COMMAND,
   RESUME_SCHEDULE_COMMAND,
   RUN_SCHEDULE_NOW_COMMAND,
-  SCHEDULES_VIEW_ID,
   SHOW_SCHEDULE_RUNS_COMMAND,
   SchedulesTreeProvider,
   readScheduleCommandArgument,
@@ -51,7 +49,6 @@ import {
   DELETE_PROJECT_COMMAND,
   CLEAR_ACTIVE_PROJECT_COMMAND,
   OPEN_PROJECT_COMMAND,
-  PROJECTS_VIEW_ID,
   ProjectsTreeProvider,
   REFRESH_PROJECTS_COMMAND,
   USE_PROJECT_IN_CHAT_COMMAND,
@@ -67,7 +64,6 @@ import {
   type ProjectsWorkspace,
 } from '../features/projects';
 import {
-  ARTIFACTS_VIEW_ID,
   ArtifactContentProvider,
   ArtifactsTreeProvider,
   OPEN_ARTIFACT_COMMAND,
@@ -84,7 +80,6 @@ import {
   type ArtifactsWorkspace,
 } from '../features/artifacts';
 import {
-  CONNECTORS_VIEW_ID,
   ConnectorsTreeProvider,
   MANAGE_CONNECTORS_COMMAND,
   REFRESH_CONNECTORS_COMMAND,
@@ -93,9 +88,23 @@ import {
 import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
+import {
+  CliCapabilityAdapter,
+  openArtifactsSurface,
+  openCapabilitySurface,
+  openCloudTasksSurface,
+  openConnectorsSurface,
+  openContextSurface,
+  openMemorySurface,
+  openProjectsSurface,
+  openSchedulesSurface,
+  openWorkSurface,
+} from '../features/surfaces';
+import { signIn as signInPreferringCli } from '../features/surfaces/accountAccess';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
+import { buildExplainSelectionPrompt, runEditorUtility } from '../features/editor-utilities';
 import { openPathReference, OPEN_PATH_REFERENCE_COMMAND } from '../features/path-links';
 import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
 import {
@@ -104,7 +113,10 @@ import {
   resolveTier,
 } from '../integrations/tierResolver';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
-import { getActiveWorkspaceFolder } from '../platform/workspaceFolders';
+import {
+  getActiveWorkspaceFolder,
+  getActiveWorkspaceFolderSync,
+} from '../platform/workspaceFolders';
 import {
   getApiKey,
   getAccountToken,
@@ -114,7 +126,7 @@ import {
   fetchAccountIdentity,
   getCloudWebOrigin,
 } from '../utils/api';
-import { signInToAgiCloud, signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
+import { signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
 import {
   buildAccountIdentityItems,
   buildTrustReviewItems,
@@ -126,7 +138,10 @@ import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
-  type GroupedQuickPickItem,
+  modelDisplayLabel,
+  modelLockHeading,
+  modelLockReason,
+  type ModelLock,
 } from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
 import { recordFailure } from './subsystemHealth';
@@ -135,9 +150,17 @@ import {
   setAgentModeWithConsent,
 } from '../features/permissions/agentModeConsent';
 import { SettingsPanel } from '../features/settings';
+import {
+  buildReachabilityQuickPickItems,
+  type HostModel,
+  type HostModelUnreachable,
+  type ReachableQuickPickItem,
+} from '../features/model-picker/reachability';
 import { openAgentConfig } from '../features/config/agentConfig';
 
 const execFileAsync = promisify(execFile);
+
+const UPGRADE_URL = 'https://agiworkforce.com/pricing';
 
 function requireWorkspaceMemoryScope(): boolean {
   if ((vscode.workspace.workspaceFolders?.length ?? 0) > 0) return true;
@@ -358,6 +381,44 @@ function sessionHistoryRelativeTime(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString();
 }
 
+async function readHostModels(
+  localRuntimes: LocalRuntimePool,
+  refresh: boolean,
+): Promise<HostModel[] | undefined> {
+  const folder = getActiveWorkspaceFolderSync();
+  if (folder === undefined) return undefined;
+  try {
+    const runtime = localRuntimes.forWorkspace(folder.uri.fsPath);
+    const response = await runtime.listLocalModels(refresh ? { refresh: true } : {});
+    const hostModels = response.hostModels;
+    return hostModels === undefined || hostModels.length === 0 ? undefined : [...hostModels];
+  } catch {
+    return undefined;
+  }
+}
+
+async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<void> {
+  if (unreachable.action === 'sign_in_account') {
+    await vscode.commands.executeCommand('agi-workforce.signIn');
+    await vscode.commands.executeCommand('agi-workforce.selectModel', { refresh: true });
+    return;
+  }
+  if (unreachable.action === 'upgrade_plan') {
+    await vscode.commands.executeCommand('agi-workforce.openUpgrade');
+    return;
+  }
+  if (unreachable.action === 'sign_in_provider' && unreachable.provider !== undefined) {
+    await vscode.commands.executeCommand('agi-workforce.signInProvider', unreachable.provider);
+    await vscode.commands.executeCommand('agi-workforce.selectModel', { refresh: true });
+    return;
+  }
+  if (unreachable.action === 'open_settings') {
+    await vscode.commands.executeCommand('agi-workforce.openSettings');
+    return;
+  }
+  vscode.window.showWarningMessage('AGI Workforce: that model is not set up on this machine yet.');
+}
+
 export interface CommandDeps {
   sidebarProvider: SidebarProvider;
   conversationTreeProvider: ConversationTreeProvider;
@@ -392,6 +453,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     diagnosticsProvider,
     nativeChatAvailable,
   } = deps;
+
+  const cliCapabilities = new CliCapabilityAdapter(localRuntimes);
 
   type CommandHandler = Parameters<typeof vscode.commands.registerCommand>[1];
   const failedCommandIds: string[] = [];
@@ -493,6 +556,29 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       sidebarProvider.reveal();
     }
   };
+  /**
+   * A locked row leads to the thing that would unlock it, never to a turn that
+   * fails: the picker already said what is missing, this does it.
+   */
+  const offerModelUnlock = async (modelLabel: string, lock: ModelLock): Promise<void> => {
+    const action = modelLockHeading(lock);
+    const choice = await vscode.window.showInformationMessage(
+      modelLockReason(modelLabel, lock),
+      action,
+      'Cancel',
+    );
+    if (choice !== action) return;
+    if (lock.kind === 'sign-in') {
+      await vscode.commands.executeCommand('agi-workforce.signIn');
+      return;
+    }
+    if (lock.kind === 'upgrade') {
+      await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
+      return;
+    }
+    await vscode.commands.executeCommand('agi-workforce.openAgentConfig');
+  };
+
   const prefillFirstPartyReference = async (target: vscode.Uri): Promise<void> => {
     const validated = await validateWorkspaceContextFile(target);
     if (!validated.ok) {
@@ -721,7 +807,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.explain', async (targetRange?: vscode.Range) => {
-      await runInlineCommand(context, 'explain', targetRange);
+      await runEditorUtility(buildExplainSelectionPrompt(targetRange));
     }),
 
     register('agi-workforce.fix', async (targetRange?: vscode.Range) => {
@@ -747,13 +833,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return;
       }
 
-      await vscode.window.withProgress(
+      const failure = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: 'AGI Workforce: Running Code Review…',
           cancellable: true,
         },
-        async (_progress, progressToken) => {
+        async (_progress, progressToken): Promise<unknown> => {
           const cancelSource = new vscode.CancellationTokenSource();
           progressToken.onCancellationRequested(() => cancelSource.cancel());
 
@@ -774,25 +860,33 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
                 `AGI Workforce: Found ${result.diagnosticCount} issue(s). Check the Problems panel.`,
               );
             }
+            return undefined;
           } catch (err) {
             cancelSource.dispose();
-            if (err instanceof Error && err.message.includes('CANCELLED')) return;
-            await showCloudUtilityErrorActions(err, {
-              title: 'AGI Workforce: Code review failed',
-              retry: () => vscode.commands.executeCommand('agi-workforce.codeReview'),
-            });
+            return err;
           }
         },
       );
+
+      if (failure === undefined) return;
+      if (failure instanceof Error && failure.message.includes('CANCELLED')) return;
+      await showCloudUtilityErrorActions(failure, {
+        title: 'AGI Workforce: Code review failed',
+        retry: () => vscode.commands.executeCommand('agi-workforce.codeReview'),
+      });
     }),
 
     register('agi-workforce.signIn', async () => {
-      const ok = await signInToAgiCloud(context.secrets);
+      const ok = await signInPreferringCli(context.secrets, cliCapabilities);
       if (ok) {
         await refreshAccountTierCache(context);
         sidebarProvider.refreshAccountPresentation();
         ChatEditorPanel.refreshAccountPresentation();
       }
+    }),
+
+    register('agi-workforce.openUpgrade', async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
     }),
 
     register('agi-workforce.signOut', async () => {
@@ -844,36 +938,48 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    register('agi-workforce.selectModel', async () => {
+    register('agi-workforce.selectModel', async (options?: unknown) => {
       const currentModel = normalizeConfiguredModelId(Config.model());
 
       const pickerTier = await resolveTier(context);
-      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems(pickerTier).map(
-        (item: GroupedQuickPickItem) => ({
-          ...item,
-          picked: item.modelId !== undefined && item.modelId === currentModel,
-        }),
-      );
+      const route = sidebarProvider.activeRoute();
+      const refresh =
+        typeof options === 'object' &&
+        options !== null &&
+        (options as { refresh?: unknown }).refresh === true;
+      const hostModels = await readHostModels(localRuntimes, refresh);
+      const allItems: ReachableQuickPickItem[] = buildReachabilityQuickPickItems({
+        items: buildGroupedQuickPickItems(pickerTier, route),
+        ...(hostModels === undefined ? {} : { hostModels }),
+        ...(route?.trustMode === undefined ? {} : { privacyMode: route.trustMode }),
+      }).map((item) => ({
+        ...item,
+        picked: item.modelId !== undefined && item.modelId === currentModel,
+      }));
 
       const picked = await vscode.window.showQuickPick(allItems, {
         title: 'AGI Workforce, Select Model',
-        placeHolder: `Current: ${currentModel}`,
+        placeHolder: `Current: ${modelDisplayLabel(currentModel)}`,
         matchOnDescription: true,
         matchOnDetail: true,
       });
 
       if (picked === undefined || picked.modelId === undefined) return;
 
-      const tier = await resolveTier(context);
-      if (picked.disabled === true) {
-        const choice = await vscode.window.showInformationMessage(
-          'This model is not available for your current plan or provider setup.',
-          'View plans',
-          'Cancel',
+      if (picked.unreachable !== undefined) {
+        await runUnreachableOffer(picked.unreachable);
+        return;
+      }
+      if (picked.refusedBoundary !== undefined) {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: this chat keeps its work inside one trust boundary, so it cannot switch to that model. Start a new chat to change where the work goes.',
         );
-        if (choice === 'View plans') {
-          await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
-        }
+        return;
+      }
+
+      const tier = await resolveTier(context);
+      if (picked.lock !== undefined) {
+        await offerModelUnlock(modelDisplayLabel(picked.modelId), picked.lock);
         return;
       }
       const guardResult = guardProviderSwitch(currentModel, picked.modelId, tier);
@@ -884,7 +990,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           'Cancel',
         );
         if (choice === 'Upgrade') {
-          await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
+          await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
         }
         return;
       }
@@ -1177,7 +1283,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         { label: 'Model', kind: vscode.QuickPickItemKind.Separator },
         {
           label: '$(symbol-color) Switch model…',
-          description: `Current: ${currentModel}`,
+          description: `Current: ${modelDisplayLabel(currentModel)}`,
           action: 'switch-model',
         },
         {
@@ -1454,46 +1560,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
 
       if (action.detail === 'list') {
-        const store = getAccountMemoryStore();
-        if (store === undefined) {
-          vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
-          return;
-        }
-        const state = await store.refresh();
-        if (state.status === 'signed-out') {
-          vscode.window.showInformationMessage(
-            state.detail ?? 'Sign in to AGI Cloud to see your memory.',
-          );
-          return;
-        }
-        if (state.status === 'unreachable') {
-          vscode.window.showWarningMessage(
-            `AGI Workforce: showing the memory this device already had. ${state.detail ?? ''}`.trim(),
-          );
-        }
-        const facts = state.facts;
-        if (facts.length === 0) {
-          vscode.window.showInformationMessage('No memory facts yet. Add one to get started.');
-          return;
-        }
-        const pick = await vscode.window.showQuickPick(
-          facts.map((f) => ({
-            label: f.text,
-            description: `Added ${new Date(f.createdAt).toLocaleDateString()}`,
-            detail: f.id,
-          })),
-          {
-            title: 'AGI Workforce, Memory facts',
-            placeHolder: 'Select a fact to remove (Esc to keep all)',
-          },
-        );
-        if (!pick || pick.detail === undefined) return;
-        const removal = await store.remove(pick.detail);
-        vscode.window.showInformationMessage(
-          removal.applied
-            ? 'Fact removed from your account, on every client.'
-            : `Fact not removed. ${removal.refusals.join(' ')}`,
-        );
+        await memoryTreeProvider.refresh();
+        await openMemorySurface(memoryTreeProvider);
         return;
       }
 
@@ -1741,6 +1809,22 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             description: `Plan: ${tier}`,
           },
         );
+      } else {
+        const { resolveUsageMeter, formatUsageMeterFallbackLabel } =
+          await import('../data/usageMeter');
+        const meter = await resolveUsageMeter(context.secrets, 0);
+        if (meter.source !== 'managed-plan') {
+          items.push(
+            { label: 'Cloud quota', kind: vscode.QuickPickItemKind.Separator },
+            {
+              label: `$(pulse) ${formatUsageMeterFallbackLabel(meter.source)}`,
+              description:
+                meter.source === 'user-api-key'
+                  ? 'Your provider bills these requests; no AGI plan limit applies'
+                  : 'Requests never leave this machine; no AGI plan limit applies',
+            },
+          );
+        }
       }
 
       if (tierInfo?.accountPlanTier && subscriptionNeedsAttention) {
@@ -1862,11 +1946,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       sidebarProvider.reveal();
       sidebarProvider.showOnboarding();
     }),
-    register('agi-workforce.showCloudTasks', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${CLOUD_TASKS_VIEW_ID}.focus`);
-      cloudTasksTreeProvider.refresh();
-    }),
+    register('agi-workforce.showCloudTasks', () => openCloudTasksSurface(cloudTasksTreeProvider)),
+    register('agi-workforce.showWork', () =>
+      openWorkSurface(cloudTasksTreeProvider, schedulesTreeProvider),
+    ),
     register('agi-workforce.refreshCloudTasks', () => {
       cloudTasksTreeProvider.refresh();
     }),
@@ -1877,11 +1960,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
     register(APPROVE_CLOUD_TASK_COMMAND, (item: unknown) => decideOnCloudTask(item, 'approved')),
     register(REJECT_CLOUD_TASK_COMMAND, (item: unknown) => decideOnCloudTask(item, 'rejected')),
-    register('agi-workforce.showSchedules', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${SCHEDULES_VIEW_ID}.focus`);
-      schedulesTreeProvider.refresh();
-    }),
+    register('agi-workforce.showSchedules', () => openSchedulesSurface(schedulesTreeProvider)),
     register(REFRESH_SCHEDULES_COMMAND, () => {
       schedulesTreeProvider.refresh();
     }),
@@ -1911,11 +1990,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         showScheduleRuns(client, task, scheduleActionHost),
       ),
     ),
-    register('agi-workforce.showProjects', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${PROJECTS_VIEW_ID}.focus`);
-      projectsTreeProvider.refresh();
-    }),
+    register('agi-workforce.showProjects', () => openProjectsSurface(projectsTreeProvider)),
     register(REFRESH_PROJECTS_COMMAND, () => {
       projectsTreeProvider.refresh();
     }),
@@ -1960,11 +2035,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       projectsTreeProvider.refresh();
       sidebarProvider.pushActiveProject();
     }),
-    register('agi-workforce.showArtifacts', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${ARTIFACTS_VIEW_ID}.focus`);
-      artifactsTreeProvider.refresh();
-    }),
+    register('agi-workforce.showArtifacts', () => openArtifactsSurface(artifactsTreeProvider)),
     register(REFRESH_ARTIFACTS_COMMAND, () => {
       artifactsTreeProvider.refresh();
     }),
@@ -1986,10 +2057,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (published === null || typeof published !== 'object') return;
       await openPublishedArtifact(published as Parameters<typeof openPublishedArtifact>[0]);
     }),
-    register('agi-workforce.showConnectors', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-      await vscode.commands.executeCommand(`${CONNECTORS_VIEW_ID}.focus`);
-      connectorsTreeProvider.refresh();
+    register('agi-workforce.showConnectors', () => openConnectorsSurface(connectorsTreeProvider)),
+    register('agi-workforce.showContextFiles', () => openContextSurface(contextPanelProvider)),
+    register('agi-workforce.showSkills', () => openCapabilitySurface(cliCapabilities, 'skills')),
+    register('agi-workforce.showPlugins', () => openCapabilitySurface(cliCapabilities, 'plugins')),
+    register('agi-workforce.showMcpServers', () =>
+      openCapabilitySurface(cliCapabilities, 'mcpServers'),
+    ),
+    register('agi-workforce.showHooks', () => openCapabilitySurface(cliCapabilities, 'hooks')),
+    register('agi-workforce.showInstructions', () =>
+      openCapabilitySurface(cliCapabilities, 'instructions'),
+    ),
+    register('agi-workforce.runCliCommand', async (commandName: unknown) => {
+      const name = typeof commandName === 'string' ? commandName.trim() : '';
+      if (name === '') return;
+      const result = await cliCapabilities.call('runCommand', name);
+      if (result.status === 'ok') return;
+      vscode.window.showWarningMessage(`AGI Workforce: ${result.reason}`);
     }),
     register(REFRESH_CONNECTORS_COMMAND, () => {
       connectorsTreeProvider.refresh();

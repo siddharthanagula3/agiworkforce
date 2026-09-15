@@ -215,7 +215,6 @@ function resetStore() {
     error: null,
     chatMode: 'chat',
     chatStyle: 'normal',
-    toolAccess: 'auto',
     workMode: 'chat',
     features: {
       webSearch: true,

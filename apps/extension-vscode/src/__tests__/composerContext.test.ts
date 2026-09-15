@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { buildContextAttachment, resolveContextMenuState } from '../data/composerContext';
+import {
+  buildContextAttachment,
+  resolveContextMenuState,
+  resolveEditorContext,
+} from '../data/composerContext';
 import { getContextBuilder } from '../data/contextBuilder';
 
 vi.mock('../data/contextBuilder', () => ({
@@ -181,5 +185,80 @@ describe('menu ordering', () => {
       'problems',
       'git-diff',
     ]);
+  });
+});
+
+describe('editor context chips', () => {
+  function activeFile(selectedText = ''): void {
+    builder.getActiveFileContext.mockReturnValue({
+      filePath: '/workspace/src/app.ts',
+      relativePath: 'src/app.ts',
+      languageId: 'typescript',
+      selectedText,
+    });
+  }
+
+  it('is empty while no editor is active', () => {
+    expect(resolveEditorContext(new Set())).toEqual({ chips: [], contextFiles: [], texts: [] });
+  });
+
+  it('attaches the active file on its own when nothing is selected and nothing is wrong', () => {
+    activeFile();
+    const snapshot = resolveEditorContext(new Set());
+
+    expect(snapshot.chips).toEqual([
+      { id: 'active-file:src/app.ts', kind: 'active-file', label: 'app.ts' },
+    ]);
+    expect(snapshot.contextFiles).toEqual(['/workspace/src/app.ts']);
+    expect(snapshot.texts).toEqual([]);
+  });
+
+  it('names the selection with its line range and carries the selected text', () => {
+    setActiveEditor({ empty: false, from: 1, to: 3 });
+    activeFile('export function add(a, b) {\n  return a + b;\n}');
+
+    const snapshot = resolveEditorContext(new Set());
+
+    expect(snapshot.chips.map((chip) => chip.label)).toEqual(['app.ts', 'app.ts:1-3 selection']);
+    expect(snapshot.texts).toEqual([
+      'Selected from src/app.ts (typescript), lines 1-3:\nexport function add(a, b) {\n  return a + b;\n}',
+    ]);
+  });
+
+  it('counts the problems reported for the active file', () => {
+    setActiveEditor({ empty: true, from: 1, to: 1 });
+    activeFile();
+    builder.getDiagnosticsContext.mockReturnValue([
+      { severity: 'error', message: 'b is not defined', line: 2, column: 10, source: 'ts' },
+      { severity: 'warning', message: 'unused import', line: 1, column: 1, source: '' },
+    ]);
+
+    const snapshot = resolveEditorContext(new Set());
+
+    expect(snapshot.chips.map((chip) => chip.label)).toEqual(['app.ts', '2 problems']);
+    expect(snapshot.texts[0]).toContain('- error at src/app.ts:2:10 (ts): b is not defined');
+  });
+
+  it('drops a dismissed chip and everything it would have sent', () => {
+    setActiveEditor({ empty: false, from: 1, to: 3 });
+    activeFile('const a = 1;');
+
+    const snapshot = resolveEditorContext(new Set(['active-file:src/app.ts']));
+
+    expect(snapshot.chips.map((chip) => chip.kind)).toEqual(['selection']);
+    expect(snapshot.contextFiles).toEqual([]);
+    expect(snapshot.texts).toHaveLength(1);
+  });
+
+  it('sends nothing when the workspace turns automatic attachment off', () => {
+    activeFile('const a = 1;');
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValueOnce({
+      get: vi.fn(() => false),
+      update: vi.fn(),
+      has: vi.fn(),
+      inspect: vi.fn(),
+    } as never);
+
+    expect(resolveEditorContext(new Set())).toEqual({ chips: [], contextFiles: [], texts: [] });
   });
 });

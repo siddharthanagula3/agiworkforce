@@ -97,9 +97,9 @@ export function renderMarkdown(text: string): string {
 
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
 
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  html = html.replace(/^ {0,3}### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^ {0,3}## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^ {0,3}# (.+)$/gm, '<h1>$1</h1>');
 
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
 

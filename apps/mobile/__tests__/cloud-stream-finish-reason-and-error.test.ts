@@ -62,6 +62,7 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import { streamChat, type StreamCallbacks } from '../services/streaming';
+import { ApiHttpError } from '../services/apiErrors';
 import { clearCloudExecutionState, useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
@@ -358,6 +359,24 @@ describe('cloud send: canonical agent activity', () => {
     expect(activity).toMatchObject({ status: 'failed', stopReason: 'error' });
     expect(JSON.stringify(activity)).toContain('Something went wrong. Please try again.');
     expect(JSON.stringify(activity)).not.toContain('provider-secret-diagnostic');
+  });
+
+  it('keeps the gateway sentence and code when the request is refused before the stream opens', async () => {
+    const sentence =
+      'This model is unavailable right now because of a problem on our side, not with your request. Choose another model, or try again shortly.';
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onError(new ApiHttpError(sentence, 503, 'provider_billing_exhausted'));
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hello', CLOUD_MODEL);
+
+    const state = useChatExecutionStore.getState();
+    expect(state.error).toBe(sentence);
+    expect(state.failureCode).toEqual({ message: sentence, code: 'provider_billing_exhausted' });
+    expect(lastAssistantMessage()?.content).toBe(sentence);
+
+    state.clearError();
+    expect(useChatExecutionStore.getState().failureCode).toBeNull();
   });
 
   it('settles and persists the current Cloud activity when the user taps Stop', async () => {

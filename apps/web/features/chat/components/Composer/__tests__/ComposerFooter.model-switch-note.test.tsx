@@ -15,6 +15,24 @@ const NOTE_MS = 3000;
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
+const FIXTURE_AVAILABLE_MODELS = vi.hoisted(
+  () =>
+    [
+      {
+        id: 'fixture-primary-model',
+        name: 'Primary Model',
+        provider: 'OpenAI',
+        providerKey: 'openai',
+      },
+      {
+        id: 'fixture-secondary-model',
+        name: 'Secondary Model',
+        provider: 'Anthropic',
+        providerKey: 'anthropic',
+      },
+    ] as Record<string, unknown>[],
+);
+
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (
     selector: (s: {
@@ -32,20 +50,10 @@ vi.mock('@shared/stores/model-store', () => ({
         provider: 'OpenAI',
       }),
     }),
-  AVAILABLE_MODELS: [
-    {
-      id: 'fixture-primary-model',
-      name: 'Primary Model',
-      provider: 'OpenAI',
-      providerKey: 'openai',
-    },
-    {
-      id: 'fixture-secondary-model',
-      name: 'Secondary Model',
-      provider: 'Anthropic',
-      providerKey: 'anthropic',
-    },
-  ],
+  AVAILABLE_MODELS: FIXTURE_AVAILABLE_MODELS,
+  findSelectableModel: (id: string) =>
+    FIXTURE_AVAILABLE_MODELS.find((model) => model['id'] === id) ?? null,
+  isSelectableModelId: (id: string) => FIXTURE_AVAILABLE_MODELS.some((model) => model['id'] === id),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({

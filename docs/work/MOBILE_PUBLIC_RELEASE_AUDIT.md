@@ -421,14 +421,14 @@ Verification: `pnpm release:verify-privacy-declarations`, `ios-store-submission-
 
 ### MOBILE-007 The biometric lock screen has no escape hatch
 
-Severity: P1 | Platform: Both | Area: Auth | Route: root lock | `app/_layout.tsx:656-700`, `src/features/auth/hooks/useBiometricGate.ts:43-77`
-Evidence: the lock screen renders one action, Unlock, before `ClerkProvider` and `Slot`; every failure path stays locked; the only switch that disables the lock is behind the gate.
+Severity: P1 | Platform: Both | Area: Auth | Route: root lock | `src/features/auth/components/AppLockOverlay.tsx`, `src/features/auth/hooks/useBiometricGate.ts:43-77`
+Evidence: the lock renders one action, Unlock; every failure path stays locked; the only switch that disables the lock is behind the gate. Main has since moved the lock from a tree-replacing screen to an overlay above the mounted app (`ce34b7d9`), which fixes resume discarding the open conversation but not the lock-out.
 Reproduction: enable App Lock, remove enrolment and passcode, relaunch.
 Expected: a way to sign out and reset the lock without reinstalling.
 Actual: Unlock fails forever; reinstalling deletes all local conversations.
 Root Cause: Verified; fail-closed was deliberate (`biometric-gate.test.tsx`), the escape was never added.
-Recommended Correction: a second destructive action, "Reset app lock and sign out", confirmed with the consequence named, calling `clearAuthSession()` and `useBiometricFlag.setEnabled(false)`.
-Verification: component test on the lock branch; device pass with enrolment removed. **Fixed in this branch.**
+Recommended Correction: a second destructive action, "Reset app lock and sign out", confirmed with the consequence named, calling `clearAuthSession()` and `clearBiometricFlag()`.
+Verification: component test on the overlay; device pass with enrolment removed. **Fixed in this branch**, as an optional `onReset` on `AppLockOverlay` that the cover variant never shows.
 
 ### MOBILE-008 Android deletes a conversation from the chat screen with no confirmation
 
@@ -745,8 +745,8 @@ Recommended Correction: keep the mode guard on registration only.
 ### MOBILE-054 Touch targets under 44pt on the most-used controls
 
 Severity: P3 | Platform: Both | Area: Accessibility
-Evidence: send and stop button 32pt (`SendButton.tsx:76-93`), message action row 40pt (`MessageBubble.tsx:138-146`), composer mic 32pt (`VoiceInputButton.tsx:350-369`), scroll-to-bottom 36pt, drawer rows 34pt (`DrawerContent.tsx:431,470`), and 18 settings controls from 28pt (`settings/voice/index.tsx:184`) to 40pt without `hitSlop`.
-Recommended Correction: `hitSlop` matching `common.tsx:48`; drawer rows to 44. **Send, mic and message action targets fixed in this branch.**
+Evidence: send and stop button 32pt (`SendButton.tsx:76-93`), message action row 40pt (`MessageBubble.tsx:138-146`), composer mic 32pt (`VoiceInputButton.tsx:350-369`), scroll-to-bottom 36pt, drawer rows 34pt (`DrawerContent.tsx:182,440,488`), and 18 settings controls from 28pt (`settings/voice/index.tsx:184`) to 40pt without `hitSlop`.
+Recommended Correction: `hitSlop` matching `common.tsx:48`; drawer rows to 44. **Send, mic and message action targets fixed in this branch**; main separately fixed the chat header controls (`b613c6e0`) and the notifications entry point (`c05183c9`). The drawer rows and the settings controls remain.
 
 ### MOBILE-055 Feedback and haptics gaps
 
@@ -791,8 +791,9 @@ Recommended Correction: `hooks/useConfirmAction.ts` with a required consequence 
 
 ### MOBILE-063 Three contradictory colour palettes; `teal` and `terraCotta` both resolve to neutral ink
 
-Severity: P3 | Platform: Both | `src/ui/theme/tokens.ts`, `tailwind.config.js:7-51`
-Recommended Correction: rename to role tokens, delete the dead ramps, derive Tailwind values from `tokens.ts`.
+Severity: P3 | Platform: Both | `src/ui/theme/tokens.ts`
+Evidence: main has since made `tailwind.config.js` read `agiBrandScale` from `@agiworkforce/design-tokens` and `tokens.ts` read `agiRadii` from it (`c03074d0`, `5749f51e`), so the third palette and the radius ladder now have one owner. What remains is the naming: `teal` and `terraCotta` still resolve to the same neutral ink in every theme (`tokens.ts:5-6,73-74,151-152`), so two tokens named for hues are neither that hue nor distinguishable from each other.
+Recommended Correction: rename both to role tokens (`accentFill`, `accentFillSecondary`) or delete the unused one, and add the missing `*Text` role.
 
 ### MOBILE-064 Six header implementations, two sheet stacks, a vestigial tab layer, 34pt drawer rows
 
@@ -801,7 +802,8 @@ Recommended Correction: promote the settings shell header to a shared `ScreenHea
 
 ### MOBILE-065 Fixed-height headers and single-line labels clip at large Dynamic Type
 
-Severity: P3 | Platform: Both | eight screens at `height: 58` or `48`, `SettingsRow` `numberOfLines={1}`
+Severity: P3 | Platform: Both | six screens still at `height: 58` (`permissions/detail.tsx:195,230`, `settings/workspace.tsx:226`, `shared-links.tsx:116`, `reflect.tsx:97`, `archived-chats.tsx:214`), `about.tsx` at 48, `SettingsRow` `numberOfLines={1}`
+Evidence: main added `TextScaleBoundary` (`cf5d2036`), which remounts the tree when the reader changes their text size so iOS re-measures instead of painting large text into boxes measured small. That fixes the live-change case; a fixed `height` still cannot grow, so the clipping at large sizes stands.
 Recommended Correction: `minHeight`, allow two lines.
 
 ### MOBILE-066 Thirteen modals lack `accessibilityViewIsModal`; 24 single-choice rows announce as buttons
@@ -847,10 +849,11 @@ Severity: P3 | Platform: Both | `app/(app)/settings/storage.tsx:236-266`, `model
 Severity: P3 (informational) | Platform: Both
 Evidence: deliberate and disclosed in four places; a post-launch crash produces no signal. Adding it later must update the privacy manifest, data-safety file, web legal page and reviewer notes together.
 
-### MOBILE-075 No screenshot or app-switcher protection when App Lock is on
+### MOBILE-075 No screenshot protection on Android when App Lock is on
 
-Severity: P3 | Platform: Both
-Recommended Correction: `FLAG_SECURE` on Android and a blurred snapshot on iOS, hung on the existing `AppState` subscription in `useBiometricGate`.
+Severity: P3 | Platform: Android
+Evidence: main added the app-switcher cover (`d33269f6`): `useBiometricGate` now reports `isCovered` and `AppLockOverlay` paints over the app before iOS takes its snapshot. Android still has no `FLAG_SECURE`, so its recents thumbnail and screenshots of connector secrets and chat content are unprotected.
+Recommended Correction: `FLAG_SECURE` on Android while App Lock is on.
 
 ### MOBILE-076 Background fetch registers regardless of mode; its notification has no Android channel
 

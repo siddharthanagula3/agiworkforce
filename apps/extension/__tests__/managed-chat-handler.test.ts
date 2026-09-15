@@ -94,9 +94,25 @@ describe('executeChromeManagedChat', () => {
     expect(options.model).toBeTruthy();
     expect(options.model).not.toMatch(/^auto/);
     expect(options.extendedThinking).toBe(true);
-    expect(options.workMode).toBe('agiwork');
+    expect(options.workMode).toBe('chat');
     expect(options.idempotencyKey).toMatch(/^agi\.chrome\.send\.[a-f0-9]{64}$/);
     expect(deps.onText).toHaveBeenCalledWith('hello');
+  });
+
+  // `agiwork` makes the server force web_search, web_fetch and code_execution on
+  // and prepend "always call a tool before responding", so a trivial prompt
+  // planned steps and paused on approvals. The panel offers a chat, not a run.
+  it('sends a side-panel turn as a plain chat, the way the web composer does', async () => {
+    const deps = dependencies();
+
+    await executeChromeManagedChat(
+      { id: 'stream-plain', text: 'Reply with exactly: ok', modelSelection: 'auto' },
+      deps,
+    );
+
+    const [, , options] = vi.mocked(deps.streamChat).mock.calls[0]!;
+    expect(options.workMode).toBe('chat');
+    expect(options.workMode).not.toBe('agiwork');
   });
 
   it('preserves a scheduler-owned idempotency key across dispatch', async () => {

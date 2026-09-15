@@ -1,6 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
+import type { TurnFailureAction, TurnFailureCode } from '@agiworkforce/types/protocol';
 import type {
   AppServerCapabilities,
   AppServerNotification,
@@ -17,13 +18,37 @@ import type {
   TurnStartParams,
   TurnSummary,
 } from '@agiworkforce/types';
+import type {
+  AccountLoginResponse,
+  AccountLoginWaitResponse,
+  AccountStatusResponse,
+  AccountTokenResponse,
+  ContextInstructionsResponse,
+  HookListResponse,
+  McpLoginResponse,
+  McpServerListResponse,
+  PluginListResponse,
+  SettingsReadResponse,
+  SettingsWriteParams,
+  SkillConsentResponse,
+  SkillListResponse,
+  SlashCommandListResponse,
+  SlashCommandRunResponse,
+} from '@agiworkforce/types/protocol';
+import { redactSecrets } from '../core/telemetry';
+import { trackRuntimeChild } from './runtimeProcessRegistry';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
+const MAX_REJECTED_LINE_CHARS = 400;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SHUTDOWN_ACK_TIMEOUT_MS = 7_000;
+// A device grant runs at the user's pace in a browser, and an MCP sign-in
+// opens one too, so neither fits the default request timeout.
+const ACCOUNT_LOGIN_WAIT_TIMEOUT_MS = 15 * 60_000;
+const MCP_LOGIN_TIMEOUT_MS = 5 * 60_000;
 const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
 const HARD_KILL_TIMEOUT_MS = 2_000;
-const SUPPORTED_PROTOCOL_VERSION = 7;
+const SUPPORTED_PROTOCOL_VERSION = 8;
 const MINIMUM_SUPPORTED_CLI_VERSION = [1, 7, 1] as const;
 const MINIMUM_SUPPORTED_CLI_VERSION_LABEL = MINIMUM_SUPPORTED_CLI_VERSION.join('.');
 const AGENT_EVENT_SCHEMA_VERSION = 4;
@@ -96,6 +121,13 @@ const capabilitiesSchema = z.object({
   checkpoints: z.boolean(),
   worktrees: z.boolean(),
   models: z.boolean(),
+  account: z.boolean().optional(),
+  instructions: z.boolean().optional(),
+  skills: z.boolean().optional(),
+  plugins: z.boolean().optional(),
+  hooks: z.boolean().optional(),
+  settings: z.boolean().optional(),
+  commands: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -136,8 +168,11 @@ const threadSummarySchema = z.object({
   trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
   createdAt: z.string(),
   updatedAt: z.string(),
-  createdBy: z.enum(['cli', 'vscode']),
+  createdBy: z.enum(['cli', 'vscode', 'desktop']),
   status: z.enum(['idle', 'running', 'awaiting_approval', 'archived', 'failed']),
+  gitBranch: z.string().min(1).max(512).optional(),
+  worktreeRoot: z.string().min(1).max(16_384).optional(),
+  client: z.string().min(1).max(200).optional(),
 });
 
 const threadStartResponseSchema = z.object({ thread: threadSummarySchema });
@@ -157,6 +192,27 @@ const threadReadResponseSchema = z.object({
     .max(10_000),
   transcriptTruncated: z.boolean(),
 });
+const hostModelSummarySchema = z.object({
+  id: z.string().min(1),
+  provider: z.string().min(1),
+  reachable: z.boolean(),
+  unreachable: z
+    .object({
+      code: z.string().min(1),
+      action: z.enum([
+        'sign_in_provider',
+        'sign_in_account',
+        'upgrade_plan',
+        'open_settings',
+        'retry',
+        'none',
+      ]),
+      provider: z.string().optional(),
+    })
+    .optional(),
+  trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
+});
+
 const localModelListResponseSchema = z.object({
   models: z.array(
     z.object({
@@ -164,6 +220,7 @@ const localModelListResponseSchema = z.object({
       provider: z.enum(['ollama', 'lmstudio']),
     }),
   ),
+  hostModels: z.array(hostModelSummarySchema).optional(),
 });
 const turnSummarySchema = z.object({
   id: z.string().min(1),
@@ -172,10 +229,183 @@ const turnSummarySchema = z.object({
 });
 const turnStartResponseSchema = z.object({ turn: turnSummarySchema });
 
+const accountStatusResponseSchema = z.object({
+  signedIn: z.boolean(),
+  email: z.string().max(320).optional(),
+  tier: z.string().max(64).optional(),
+  balanceCredits: z.number().optional(),
+  purchasedCredits: z.number().optional(),
+  cached: z.boolean(),
+  source: z.literal('cli'),
+});
+const accountLoginResponseSchema = z.object({
+  loginId: z.string().min(1).max(200),
+  verificationUrl: z.string().url(),
+  userCode: z.string().min(1).max(64).optional(),
+  expiresAt: z.string().min(1).max(64).optional(),
+});
+const accountLoginWaitResponseSchema = z.object({
+  outcome: z.enum(['completed', 'expired', 'failed']),
+  message: z.string().max(2_000).optional(),
+  account: accountStatusResponseSchema,
+});
+const accountTokenResponseSchema = z.object({
+  token: z.string().min(1),
+  expiresAt: z.string().min(1).max(64).optional(),
+});
+const contextInstructionsResponseSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(16_384),
+        kind: z.enum(['AGENTS.md', 'CLAUDE.md', 'instructions.md']),
+        bytes: z.number().int().nonnegative(),
+        root: z.string().min(1).max(16_384),
+      }),
+    )
+    .max(500),
+  projectRoot: z.string().min(1).max(16_384).optional(),
+  truncated: z.boolean(),
+});
+const skillListResponseSchema = z.object({
+  skills: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        description: z.string().max(4_000),
+        scope: z.enum(['project', 'user', 'plugin']),
+        path: z.string().min(1).max(16_384),
+        enabled: z.boolean(),
+        consented: z.boolean(),
+      }),
+    )
+    .max(2_000),
+});
+const skillConsentResponseSchema = z.object({
+  consented: z.boolean(),
+  path: z.string().min(1).max(16_384),
+});
+const pluginListResponseSchema = z.object({
+  plugins: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(200),
+        name: z.string().min(1).max(200),
+        version: z.string().max(200).optional(),
+        enabled: z.boolean(),
+        source: z.enum(['user', 'project']),
+        path: z.string().min(1).max(16_384),
+        format: z.string().max(64).optional(),
+      }),
+    )
+    .max(2_000),
+});
+const mcpServerStatusSchema = z.enum(['configured', 'authorized', 'needs_auth']);
+const mcpServerListResponseSchema = z.object({
+  servers: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        transport: z.string().min(1).max(32),
+        scope: z.enum(['project', 'user', 'plugin']),
+        status: mcpServerStatusSchema,
+        url: z.string().max(16_384).optional(),
+      }),
+    )
+    .max(1_000),
+});
+const mcpLoginResponseSchema = z.object({
+  name: z.string().min(1).max(200),
+  status: mcpServerStatusSchema,
+});
+const hookListResponseSchema = z.object({
+  hooks: z
+    .array(
+      z.object({
+        event: z.string().min(1).max(120),
+        command: z.string().max(8_192),
+        scope: z.enum(['user', 'plugin']),
+        trusted: z.boolean(),
+        source: z.string().max(16_384).optional(),
+      }),
+    )
+    .max(2_000),
+});
+const settingsReadResponseSchema = z.object({
+  defaultModel: z.string().max(200).optional(),
+  defaultEffort: z.enum(['low', 'medium', 'high', 'max']).optional(),
+  permissionMode: z.enum(['ask', 'auto', 'plan', 'bypass']).optional(),
+  userInstructions: z.string().max(1_000_000).optional(),
+  projectInstructions: z.string().max(1_000_000).optional(),
+  userInstructionsPath: z.string().min(1).max(16_384),
+  projectInstructionsPath: z.string().min(1).max(16_384),
+  configPath: z.string().min(1).max(16_384),
+});
+const slashCommandListResponseSchema = z.object({
+  commands: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        description: z.string().max(4_000),
+        argsHint: z.string().max(500).optional(),
+        source: z.enum(['builtin', 'skill', 'prompt', 'plugin', 'mcp']),
+        aliases: z.array(z.string().max(200)).max(50),
+        runnable: z.boolean(),
+      }),
+    )
+    .max(5_000),
+});
+const slashCommandRunResponseSchema = z.object({
+  kind: z.enum(['text', 'skills', 'plugins', 'mcp', 'hooks', 'settings']),
+  text: z.string().max(1_000_000),
+  payload: z.unknown().optional(),
+});
+
 const outputDeltaEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
   delta: z.string(),
+});
+// Keyed by the protocol's own unions, so a code the CLI learns to send fails
+// the typecheck here instead of making the whole terminal event unparsable,
+// which left the sidebar running forever on a signed-out turn.
+const TURN_FAILURE_CODE_KNOWN: Record<TurnFailureCode, true> = {
+  provider_auth_missing: true,
+  account_signed_out: true,
+  plan_excludes_model: true,
+  provider_auth_invalid: true,
+  provider_rate_limited: true,
+  provider_unavailable: true,
+  context_window_exceeded: true,
+  network: true,
+  tool_denied: true,
+  interrupted: true,
+  timeout: true,
+  invalid_request: true,
+  unknown: true,
+};
+const TURN_FAILURE_ACTION_KNOWN: Record<TurnFailureAction, true> = {
+  sign_in_provider: true,
+  sign_in_account: true,
+  upgrade_plan: true,
+  open_settings: true,
+  retry: true,
+  none: true,
+};
+const TURN_FAILURE_CODES = Object.keys(TURN_FAILURE_CODE_KNOWN) as [
+  TurnFailureCode,
+  ...TurnFailureCode[],
+];
+const TURN_FAILURE_ACTIONS = Object.keys(TURN_FAILURE_ACTION_KNOWN) as [
+  TurnFailureAction,
+  ...TurnFailureAction[],
+];
+const turnFailureSchema = z.object({
+  code: z.enum(TURN_FAILURE_CODES).catch('unknown'),
+  message: z.string().max(10_000),
+  provider: z.string().min(1).max(200).optional(),
+  retryable: z.boolean(),
+  action: z.enum(TURN_FAILURE_ACTIONS).catch('none'),
 });
 const turnTerminalEventSchema = z.object({
   threadId: z.string().min(1),
@@ -185,6 +415,7 @@ const turnTerminalEventSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   error: z.string().nullable().optional(),
+  failure: turnFailureSchema.nullable().optional().catch(null),
 });
 const approvalRequestedEventSchema = z.object({
   threadId: z.string().min(1),
@@ -474,7 +705,13 @@ class JsonlConnection {
     try {
       parsed = JSON.parse(line);
     } catch {
-      this.close(new Error('AGI local runtime emitted malformed JSON'));
+      this.close(
+        new Error(
+          `AGI local runtime emitted malformed JSON on its protocol stream: ${JSON.stringify(
+            redactSecrets(line.slice(0, MAX_REJECTED_LINE_CHARS)),
+          )}`,
+        ),
+      );
       return;
     }
 
@@ -584,10 +821,10 @@ export class LocalRuntimeClient {
     ) as ThreadListResponse;
   }
 
-  async listLocalModels(): Promise<LocalModelListResponse> {
+  async listLocalModels(options: { refresh?: boolean } = {}): Promise<LocalModelListResponse> {
     const connection = await this.readyConnection();
     return localModelListResponseSchema.parse(
-      await connection.request('model/list', {}),
+      await connection.request('model/list', options.refresh === true ? { refresh: true } : {}),
     ) as LocalModelListResponse;
   }
 
@@ -629,6 +866,135 @@ export class LocalRuntimeClient {
   async respondToApproval(params: ApprovalResponseParams): Promise<void> {
     const connection = await this.readyConnection();
     await connection.request('approval/respond', params);
+  }
+
+  async accountStatus(refresh = false): Promise<AccountStatusResponse> {
+    const connection = await this.readyConnection();
+    return accountStatusResponseSchema.parse(
+      await connection.request('account/status', { refresh }),
+    ) as AccountStatusResponse;
+  }
+
+  async startAccountLogin(): Promise<AccountLoginResponse> {
+    const connection = await this.readyConnection();
+    return accountLoginResponseSchema.parse(
+      await connection.request('account/login', {}),
+    ) as AccountLoginResponse;
+  }
+
+  /// Blocks until the device grant resolves, so it carries its own timeout
+  /// rather than the default request timeout.
+  async waitForAccountLogin(
+    loginId: string,
+    timeoutMs = ACCOUNT_LOGIN_WAIT_TIMEOUT_MS,
+  ): Promise<AccountLoginWaitResponse> {
+    const connection = await this.readyConnection();
+    return accountLoginWaitResponseSchema.parse(
+      await connection.request('account/login/wait', { loginId }, timeoutMs),
+    ) as AccountLoginWaitResponse;
+  }
+
+  async accountLogout(): Promise<void> {
+    const connection = await this.readyConnection();
+    await connection.request('account/logout', {});
+  }
+
+  async accountToken(): Promise<AccountTokenResponse> {
+    const connection = await this.readyConnection();
+    return accountTokenResponseSchema.parse(
+      await connection.request('account/token', {}),
+    ) as AccountTokenResponse;
+  }
+
+  async contextInstructions(cwd?: string): Promise<ContextInstructionsResponse> {
+    const connection = await this.readyConnection();
+    return contextInstructionsResponseSchema.parse(
+      await connection.request('context/instructions', cwd === undefined ? {} : { cwd }),
+    ) as ContextInstructionsResponse;
+  }
+
+  async listSkills(): Promise<SkillListResponse> {
+    const connection = await this.readyConnection();
+    return skillListResponseSchema.parse(
+      await connection.request('skills/list', {}),
+    ) as SkillListResponse;
+  }
+
+  async setSkillEnabled(name: string, enabled: boolean): Promise<SkillListResponse> {
+    const connection = await this.readyConnection();
+    return skillListResponseSchema.parse(
+      await connection.request('skills/setEnabled', { name, enabled }),
+    ) as SkillListResponse;
+  }
+
+  async setProjectSkillConsent(granted: boolean): Promise<SkillConsentResponse> {
+    const connection = await this.readyConnection();
+    return skillConsentResponseSchema.parse(
+      await connection.request('skills/consent', { granted }),
+    ) as SkillConsentResponse;
+  }
+
+  async listPlugins(): Promise<PluginListResponse> {
+    const connection = await this.readyConnection();
+    return pluginListResponseSchema.parse(
+      await connection.request('plugins/list', {}),
+    ) as PluginListResponse;
+  }
+
+  async setPluginEnabled(id: string, enabled: boolean): Promise<PluginListResponse> {
+    const connection = await this.readyConnection();
+    return pluginListResponseSchema.parse(
+      await connection.request('plugins/setEnabled', { id, enabled }),
+    ) as PluginListResponse;
+  }
+
+  async listMcpServers(): Promise<McpServerListResponse> {
+    const connection = await this.readyConnection();
+    return mcpServerListResponseSchema.parse(
+      await connection.request('mcp/list', {}),
+    ) as McpServerListResponse;
+  }
+
+  async loginMcpServer(name: string, timeoutMs = MCP_LOGIN_TIMEOUT_MS): Promise<McpLoginResponse> {
+    const connection = await this.readyConnection();
+    return mcpLoginResponseSchema.parse(
+      await connection.request('mcp/login', { name }, timeoutMs),
+    ) as McpLoginResponse;
+  }
+
+  async listHooks(): Promise<HookListResponse> {
+    const connection = await this.readyConnection();
+    return hookListResponseSchema.parse(
+      await connection.request('hooks/list', {}),
+    ) as HookListResponse;
+  }
+
+  async readSettings(): Promise<SettingsReadResponse> {
+    const connection = await this.readyConnection();
+    return settingsReadResponseSchema.parse(
+      await connection.request('settings/read', {}),
+    ) as SettingsReadResponse;
+  }
+
+  async writeSettings(params: SettingsWriteParams): Promise<SettingsReadResponse> {
+    const connection = await this.readyConnection();
+    return settingsReadResponseSchema.parse(
+      await connection.request('settings/write', params),
+    ) as SettingsReadResponse;
+  }
+
+  async listCommands(): Promise<SlashCommandListResponse> {
+    const connection = await this.readyConnection();
+    return slashCommandListResponseSchema.parse(
+      await connection.request('commands/list', {}),
+    ) as SlashCommandListResponse;
+  }
+
+  async runCommand(name: string, args?: string): Promise<SlashCommandRunResponse> {
+    const connection = await this.readyConnection();
+    return slashCommandRunResponseSchema.parse(
+      await connection.request('commands/run', args === undefined ? { name } : { name, args }),
+    ) as SlashCommandRunResponse;
   }
 
   onNotification(listener: (value: AppServerNotification) => void): { dispose(): void } {
@@ -731,6 +1097,7 @@ export class LocalRuntimeClient {
         title: 'AGI for VS Code',
         version: this.options.clientVersion,
       },
+      protocolVersion: SUPPORTED_PROTOCOL_VERSION,
     });
     const parsedResult = initializeResponseSchema.safeParse(rawResult);
     if (!parsedResult.success) {
@@ -800,6 +1167,7 @@ export class LocalRuntimeClient {
     }
     this.stderrTail = '';
     this.child = child;
+    const releaseTracking = trackRuntimeChild(child);
     let resolveChildExit!: () => void;
     const childExitPromise = new Promise<void>((resolve) => {
       resolveChildExit = resolve;
@@ -821,12 +1189,16 @@ export class LocalRuntimeClient {
       this.stderrTail = `${this.stderrTail}${chunk}`.slice(-64 * 1024);
     });
     child.once('error', (error) => {
-      if (child.pid === undefined) resolveChildExit();
+      if (child.pid === undefined) {
+        releaseTracking();
+        resolveChildExit();
+      }
       if (this.child === child && this.connection === connection) {
         this.resetProcess(describeSpawnFailure(cliPath, error));
       }
     });
     child.once('exit', (code, signal) => {
+      releaseTracking();
       resolveChildExit();
       const detail = this.stderrTail.trim();
       const suffix = detail === '' ? '' : `: ${detail}`;
@@ -922,5 +1294,7 @@ async function terminateLocalRuntimeProcessTree(
     killer.once('exit', () => resolve());
   });
 }
+
+export type TurnFailureEvent = z.infer<typeof turnFailureSchema>;
 
 export type { AppServerCapabilities };

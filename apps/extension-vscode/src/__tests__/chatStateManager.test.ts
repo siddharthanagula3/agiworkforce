@@ -5,6 +5,7 @@ import {
   ChatStateManager,
   type ExtToWebviewMessage,
 } from '../features/sidebar-webview/ChatStateManager';
+import { presentChatError } from '../features/sidebar-webview/errorPresentation';
 import {
   MODEL_CONTEXT_LIMITS,
   MODEL_PICKER_OPTIONS,
@@ -31,6 +32,7 @@ import {
 import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 import { getTokenCounter } from '../data/tokenCounter';
 import * as api from '../utils/api';
+import * as accountAccess from '../features/surfaces/accountAccess';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -192,7 +194,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: 'Trust this workspace before starting a developer session.' },
+      payload: presentChatError('Trust this workspace before starting a developer session.'),
     });
   });
 
@@ -219,7 +221,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startTurn).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining(error) },
+      payload: expect.objectContaining({ headline: expect.stringContaining(error) }),
     });
   });
 
@@ -262,7 +264,9 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('when local was requested') },
+      payload: expect.objectContaining({
+        headline: expect.stringContaining('when local was requested'),
+      }),
     });
   });
 
@@ -334,15 +338,6 @@ describe('ChatStateManager local turn lifecycle', () => {
       'https://agiworkforce.com/docs?topic=permissions&from=vscode-extension',
       'https://agiworkforce.com/settings/privacy?from=vscode-extension',
     ]);
-  });
-
-  it('routes the background-task handoff to the in-IDE cloud task list', async () => {
-    const harness = makeHarness();
-
-    await harness.manager.handleMessage({ type: 'openCloudTasks' });
-
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.showCloudTasks');
-    expect(vscode.env.openExternal).not.toHaveBeenCalled();
   });
 
   it('does not mislabel unresolved Auto routing as AGI Cloud', async () => {
@@ -512,7 +507,9 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('no verified Local, BYOK, or Managed boundary') },
+      payload: expect.objectContaining({
+        headline: expect.stringContaining('no verified Local, BYOK, or Managed boundary'),
+      }),
     });
   });
 
@@ -699,7 +696,9 @@ describe('ChatStateManager local turn lifecycle', () => {
     await expect(harness.manager.resumeConversation('wrong-cwd-1')).resolves.toBe(false);
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('workspace does not match') },
+      payload: expect.objectContaining({
+        headline: expect.stringContaining('workspace does not match'),
+      }),
     });
     expect(harness.posted).not.toContainEqual(
       expect.objectContaining({ type: 'conversationLoaded' }),
@@ -719,7 +718,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startTurn).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('not available') },
+      payload: expect.objectContaining({ headline: expect.stringContaining('not available') }),
     });
   });
 
@@ -1740,6 +1739,36 @@ describe('ChatStateManager local turn lifecycle', () => {
     }
   });
 
+  it('records the tier the CLI reports, so pickers group by the plan after a CLI sign-in', async () => {
+    const authState = vi
+      .spyOn(api, 'getAccountAuthState')
+      .mockResolvedValue({ status: 'signed-out' });
+    const presence = vi.spyOn(accountAccess, 'resolveAccountPresence').mockResolvedValue({
+      signedIn: true,
+      source: 'cli',
+      cli: { signedIn: true, email: 'qa@example.test', tier: 'max' },
+    });
+    const harness = makeHarness();
+
+    try {
+      await harness.manager.pushAccountStatus();
+
+      expect(harness.context.globalState.get<string>('tierStatus.cachedTier')).toBe('max');
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'accountStatus',
+          payload: expect.objectContaining({
+            status: 'signed-in',
+            identity: expect.objectContaining({ tier: 'max' }),
+          }),
+        }),
+      );
+    } finally {
+      authState.mockRestore();
+      presence.mockRestore();
+    }
+  });
+
   it('opens a workspace-file picker without claiming folder support', async () => {
     const harness = makeHarness();
     vi.mocked(vscode.window.showOpenDialog).mockResolvedValueOnce(undefined);
@@ -1846,6 +1875,189 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
+  });
+
+  it('sends the active editor file, its selection and its problems with the turn', async () => {
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      configurable: true,
+      writable: true,
+      value: {
+        selection: {
+          isEmpty: false,
+          start: { line: 0, character: 0 },
+          end: { line: 2, character: 1 },
+          active: { line: 2, character: 1 },
+        },
+        document: {
+          uri: vscode.Uri.file('/workspace/src/app.ts'),
+          languageId: 'typescript',
+          lineCount: 3,
+          getText: () => 'export const add = (a, b) => a + b;',
+        },
+      },
+    });
+    vi.mocked(vscode.languages.getDiagnostics).mockReturnValue([
+      { severity: 0, message: 'b is not defined', range: { start: { line: 1, character: 9 } } },
+    ] as never);
+    vi.mocked(vscode.workspace.asRelativePath).mockImplementation((value: unknown) =>
+      String((value as { fsPath?: string }).fsPath ?? value).replace('/workspace/', ''),
+    );
+
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'What is this?' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const params = harness.runtime.startTurn.mock.calls[0]?.[0] as {
+      contextFiles: string[];
+      input: Array<{ type: string; text?: string }>;
+    };
+    expect(params.contextFiles).toContain('/workspace/src/app.ts');
+    const texts = params.input
+      .filter((part) => part.type === 'text')
+      .map((part) => part.text ?? '');
+    expect(
+      texts.some((text) => text.startsWith('Selected from src/app.ts (typescript), lines 1-3:')),
+    ).toBe(true);
+    expect(texts.some((text) => text.includes('b is not defined'))).toBe(true);
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('stops sending an editor chip the user removed, until the next turn', async () => {
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      configurable: true,
+      writable: true,
+      value: {
+        selection: {
+          isEmpty: true,
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          active: { line: 0, character: 0 },
+        },
+        document: {
+          uri: vscode.Uri.file('/workspace/src/app.ts'),
+          languageId: 'typescript',
+          lineCount: 3,
+          getText: () => '',
+        },
+      },
+    });
+    vi.mocked(vscode.languages.getDiagnostics).mockReturnValue([] as never);
+
+    const harness = makeHarness();
+    await harness.manager.handleMessage({
+      type: 'dismissEditorContext',
+      payload: { id: 'active-file:src/app.ts' },
+    });
+    expect(harness.posted.at(-1)).toEqual({ type: 'editorContext', payload: { chips: [] } });
+
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hello' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(
+      (harness.runtime.startTurn.mock.calls[0]?.[0] as { contextFiles?: string[] }).contextFiles,
+    ).not.toContain('/workspace/src/app.ts');
+
+    expect(harness.posted).toContainEqual({
+      type: 'editorContext',
+      payload: { chips: [{ id: 'active-file:src/app.ts', kind: 'active-file', label: 'app.ts' }] },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('presents a typed turn failure and ignores the legacy string when both arrive', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'turn_failed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'failed',
+      response: '',
+      inputTokens: 0,
+      outputTokens: 0,
+      error: '[deepseek] Authentication failed: No API key found. Run `agi login deepseek`.',
+      failure: {
+        code: 'provider_auth_missing',
+        message: '[deepseek] Authentication failed: No API key found. Run `agi login deepseek`.',
+        provider: 'deepseek',
+        retryable: false,
+        action: 'sign_in_provider',
+      },
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: expect.objectContaining({
+        headline: 'AGI has no DeepSeek key to run this with.',
+        action: { kind: 'sign-in-provider', label: 'Sign in to DeepSeek', provider: 'deepseek' },
+      }),
+    });
+  });
+
+  it('still reads the legacy string from a runtime that sends no typed failure', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'turn_failed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'failed',
+      response: '',
+      inputTokens: 0,
+      outputTokens: 0,
+      error: '[deepseek] API error (HTTP 429): slow down',
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: presentChatError('[deepseek] API error (HTTP 429): slow down'),
+    });
+  });
+
+  it('runs the provider sign-in the failure asked for', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({
+      type: 'resolveTurnFailure',
+      payload: { kind: 'sign-in-provider', provider: 'deepseek' },
+    });
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'agi-workforce.signInProvider',
+      'deepseek',
+    );
   });
 
   it('keeps a spoofed or cancelled sidebar bypass request on Auto', async () => {
@@ -2051,6 +2263,76 @@ describe('ChatStateManager local turn lifecycle', () => {
         threadId: 'thread-1',
         model: secondModel!.id,
       }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await second;
+  });
+
+  it('keeps the developer session when the model changes inside a managed session', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'max');
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto');
+    const firstModel = manualModels.find(
+      (option) => getModelProviderInfo(option.id).providerId !== null,
+    );
+    const secondModel = manualModels.find(
+      (option) =>
+        getModelProviderInfo(option.id).providerId !== null &&
+        getModelProviderInfo(option.id).providerId !==
+          getModelProviderInfo(firstModel?.id ?? '').providerId,
+    );
+    expect(firstModel).toBeDefined();
+    expect(secondModel).toBeDefined();
+    const thread = threadSummary({
+      id: 'thread-1',
+      model: firstModel!.id,
+      provider: 'managed_cloud',
+      trustMode: 'managed',
+    });
+    harness.runtime.startThread.mockResolvedValueOnce(thread);
+    harness.runtime.readThread.mockResolvedValueOnce({
+      thread,
+      messages: [],
+      transcriptTruncated: false,
+    });
+
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project', model: firstModel!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(1));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const second = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Continue on the plan', model: secondModel!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+
+    expect(harness.runtime.startThread).toHaveBeenCalledTimes(1);
+    expect(harness.runtime.startTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', model: secondModel!.id }),
+    );
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({ type: 'conversationBoundaryChanged' }),
     );
     harness.emit({
       type: 'turn_completed',
@@ -2292,9 +2574,9 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: {
-        message: 'This model is not available for your current plan or provider setup.',
-      },
+      payload: presentChatError(
+        'This model is not available for your current plan or provider setup.',
+      ),
     });
     expect(harness.posted).not.toContainEqual({
       type: 'model',
@@ -2318,9 +2600,9 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: {
-        message: 'This model is not available for your current plan or provider setup.',
-      },
+      payload: presentChatError(
+        'This model is not available for your current plan or provider setup.',
+      ),
     });
   });
 
@@ -2628,7 +2910,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: expect.stringContaining('too many events') },
+      payload: expect.objectContaining({ headline: expect.stringContaining('too many events') }),
     });
     await send;
   });
@@ -2694,7 +2976,6 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('interrupts and settles the turn when an approval response is rejected', async () => {
     const harness = makeHarness({ approvalFailure: new Error('approval channel closed') });
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Approve once');
     let settled = false;
     const send = harness.manager
       .handleMessage({ type: 'sendMessage', payload: { text: 'Run tests' } })
@@ -2708,9 +2989,13 @@ describe('ChatStateManager local turn lifecycle', () => {
       threadId: 'thread-1',
       turnId: 'turn-1',
       requestId: 'approval-1',
-      kind: 'shell',
-      summary: 'Run tests',
+      kind: 'Exec { command: "pnpm test" }',
+      summary: 'Allow this command?',
       detail: 'pnpm test',
+    });
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'once' },
     });
 
     await vi.waitFor(() => expect(settled).toBe(true));
@@ -2720,14 +3005,13 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: 'approval channel closed' },
+      payload: presentChatError('approval channel closed'),
     });
     await send;
   });
 
-  it('interrupts the turn directly when approval UI selects Abort turn', async () => {
+  it('asks in the transcript rather than in a native dialog', async () => {
     const harness = makeHarness();
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Abort turn');
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
       payload: { text: 'Run tests' },
@@ -2739,9 +3023,131 @@ describe('ChatStateManager local turn lifecycle', () => {
       threadId: 'thread-1',
       turnId: 'turn-1',
       requestId: 'approval-1',
-      kind: 'shell',
-      summary: 'Run tests',
+      kind: 'Exec { command: "pnpm test" }',
+      summary: 'Allow this command?',
       detail: 'pnpm test',
+    });
+
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual({
+        type: 'approvalRequested',
+        payload: {
+          requestId: 'approval-1',
+          toolLabel: 'shell commands',
+          summary: 'Allow this command?',
+          detail: 'pnpm test',
+          sessionApproved: false,
+        },
+      }),
+    );
+    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'once' },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('stops asking for the same tool after Approve for session, whatever the argument', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'approval_requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'approval-1',
+      kind: 'Exec { command: "node -e m.add(2,3)" }',
+      summary: 'Allow this command?',
+      detail: 'node -e',
+    });
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'session' },
+    });
+
+    for (const command of ['ls -la', '/usr/bin/env node -e "x"']) {
+      harness.emit({
+        type: 'approval_requested',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        requestId: `approval-${command}`,
+        kind: `Exec { command: ${JSON.stringify(command)} }`,
+        summary: 'Allow this command?',
+        detail: command,
+      });
+    }
+
+    await vi.waitFor(() => expect(harness.runtime.respondToApproval).toHaveBeenCalledTimes(3));
+    expect(harness.posted.filter((message) => message.type === 'approvalRequested')).toHaveLength(
+      1,
+    );
+
+    harness.emit({
+      type: 'approval_requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'approval-write',
+      kind: 'FileWrite { path: "/workspace/a.ts" }',
+      summary: 'Allow this write?',
+      detail: '/workspace/a.ts',
+    });
+    await vi.waitFor(() =>
+      expect(harness.posted.filter((message) => message.type === 'approvalRequested')).toHaveLength(
+        2,
+      ),
+    );
+
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-write', decision: 'deny' },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('interrupts the turn directly when the approval card chooses Abort turn', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'approval_requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'approval-1',
+      kind: 'Exec { command: "pnpm test" }',
+      summary: 'Allow this command?',
+      detail: 'pnpm test',
+    });
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'abort' },
     });
     await send;
 
@@ -2752,11 +3158,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
   });
 
-  it('does not approve a stale sidebar modal after New Chat retires its turn', async () => {
-    let resolveApproval!: (choice: string | undefined) => void;
-    vi.mocked(vscode.window.showWarningMessage).mockImplementationOnce(
-      () => new Promise((resolve) => (resolveApproval = resolve)),
-    );
+  it('does not approve a stale card after New Chat retires its turn', async () => {
     const harness = makeHarness();
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
@@ -2768,16 +3170,20 @@ describe('ChatStateManager local turn lifecycle', () => {
       threadId: 'thread-1',
       turnId: 'turn-1',
       requestId: 'approval-1',
-      kind: 'shell',
-      summary: 'Run tests',
+      kind: 'Exec { command: "pnpm test" }',
+      summary: 'Allow this command?',
       detail: 'pnpm test',
     });
-    await vi.waitFor(() => expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(harness.posted.some((message) => message.type === 'approvalRequested')).toBe(true),
+    );
 
     await harness.manager.handleMessage({ type: 'newChat' });
     await send;
-    resolveApproval('Approve once');
-    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'approval-1', decision: 'once' },
+    });
 
     expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
     expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'error' }));
@@ -2992,7 +3398,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     await vi.waitFor(() => expect(settled).toBe(true));
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: 'AGI local runtime exited' },
+      payload: presentChatError('AGI local runtime exited'),
     });
     await send;
   });

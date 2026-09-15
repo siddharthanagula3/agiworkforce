@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
+  CHAT_MODEL_TYPES,
   getModelEffortOptions,
+  getModelsForTierAndSurface,
   getPickerModels,
+  getProviderDisplayLabel,
   getRoutingSlotModel,
   resolveModelEffort,
+  resolveProviderDisplayId,
 } from '@agiworkforce/types';
 import {
   formatManagedTierLabel,
@@ -31,6 +37,48 @@ describe('managed model picker', () => {
 
     expect(options.map((option) => option.value)).toEqual(['auto', admittedModel]);
     expect(options[1]).toMatchObject({ provider: expect.any(String), label: expect.any(String) });
+  });
+
+  it('keeps every model the shared owner admits for this surface and plan', () => {
+    const subscriptionTier = 'max';
+    const modelIds = getModelsForTierAndSurface(subscriptionTier, 'chrome/managed-chat', {
+      modelTypes: [...CHAT_MODEL_TYPES],
+    }).map((model) => model.id);
+    const options = getManagedModelPickerOptions({
+      subscriptionTier,
+      modelIds,
+      allowedAutoModes: [],
+    });
+
+    expect(modelIds.length).toBeGreaterThan(0);
+    expect(options.map((option) => option.value).slice(1)).toEqual(modelIds);
+    for (const modelId of modelIds) {
+      expect(
+        reconcileManagedModelSelection(modelId, {
+          subscriptionTier,
+          modelIds,
+          allowedAutoModes: [],
+        }),
+      ).toBe(modelId);
+    }
+  });
+
+  it('labels every provider the menu can group, and keeps no display map of its own', () => {
+    const providers = new Set(
+      getModelsForTierAndSurface('max', 'chrome/managed-chat', {
+        modelTypes: [...CHAT_MODEL_TYPES],
+      }).map((model) => model.provider),
+    );
+
+    expect(providers.size).toBeGreaterThan(0);
+    for (const provider of providers) {
+      expect(resolveProviderDisplayId(provider), provider).not.toBeNull();
+      expect(getProviderDisplayLabel(provider), provider).not.toBe(provider);
+    }
+
+    const sidePanelSource = readFileSync(join(__dirname, '..', 'src', 'side_panel.ts'), 'utf8');
+    expect(sidePanelSource).not.toContain('PROVIDER_GROUP_ORDER');
+    expect(sidePanelSource).not.toContain('PROVIDER_DISPLAY[');
   });
 
   it('resets stale manual and named Auto selections while preserving admitted choices', () => {

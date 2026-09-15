@@ -1,6 +1,7 @@
 use indicatif::{ProgressBar, ProgressStyle};
 use std::borrow::Cow;
 use std::env;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::markdown::MarkdownRenderer;
@@ -74,6 +75,19 @@ pub fn format_tokens(count: u32) -> String {
         format!("{:.1}K", count as f64 / THOUSAND)
     } else {
         count.to_string()
+    }
+}
+
+/// Compact dollar figure for a single-line status chip: full cents above a
+/// dollar, four decimals below so a sub-cent session total does not just
+/// read `$0.00`.
+///
+/// Examples: `0.0421` → `"$0.0421"`, `1.2345` → `"$1.23"`.
+pub fn format_cost_compact(total_usd: f64) -> String {
+    if total_usd >= 1.0 {
+        format!("${total_usd:.2}")
+    } else {
+        format!("${total_usd:.4}")
     }
 }
 
@@ -216,10 +230,84 @@ pub fn print_user_prompt() {
     eprint!("{}", ts::prompt("> "));
 }
 
+/// The response is the only thing on stdout; every message below goes to
+/// stderr. While the response's last line is still open, a stderr write lands
+/// glued to it in the terminal (`cross-resume okinfo: ...`), so both streams
+/// track whether that line needs closing first.
+static ASSISTANT_LINE_OPEN: AtomicBool = AtomicBool::new(false);
+
+/// Whether stdout carries a machine protocol rather than a transcript.
+///
+/// `agi app-server --listen stdio` and `agi mcp-server` speak JSON-RPC on
+/// stdout: one JSON value per line and nothing else. A single line of human
+/// text there is not cosmetic, the client's reader fails to parse it and drops
+/// the connection ("malformed JSON"), killing the turn. Every would-be stdout
+/// write in this module consults this and falls back to stderr, which no
+/// protocol reader consumes.
+static STDOUT_IS_PROTOCOL: AtomicBool = AtomicBool::new(false);
+
+/// Claim stdout for a machine protocol, for the remaining life of the process.
+pub fn claim_stdout_for_protocol() {
+    STDOUT_IS_PROTOCOL.store(true, Ordering::SeqCst);
+}
+
+/// Whether stdout has been claimed by [`claim_stdout_for_protocol`].
+pub fn stdout_is_protocol() -> bool {
+    STDOUT_IS_PROTOCOL.load(Ordering::SeqCst)
+}
+
+/// A reverting, serialised hold of the claim above.
+///
+/// The production claim is one-way, and every unit test in this crate shares
+/// one process, so a test that sets it would decide the answer for every test
+/// that ran after it.
+#[cfg(test)]
+pub(crate) struct ProtocolStdoutTestClaim(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+
+#[cfg(test)]
+impl ProtocolStdoutTestClaim {
+    pub(crate) fn hold() -> Self {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        let guard = LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        claim_stdout_for_protocol();
+        Self(guard)
+    }
+}
+
+#[cfg(test)]
+impl Drop for ProtocolStdoutTestClaim {
+    fn drop(&mut self) {
+        STDOUT_IS_PROTOCOL.store(false, Ordering::SeqCst);
+    }
+}
+
+fn record_assistant_output(text: &str) {
+    if let Some(last) = text.chars().next_back() {
+        ASSISTANT_LINE_OPEN.store(last != '\n', Ordering::Relaxed);
+    }
+}
+
+/// The one gate between assistant text and a file descriptor.
+fn write_response_text(text: &str) {
+    use std::io::Write;
+    if stdout_is_protocol() {
+        let mut stderr = std::io::stderr();
+        let _ = stderr.write_all(text.as_bytes());
+        let _ = stderr.flush();
+        return;
+    }
+    print!("{text}");
+    flush_stdout();
+}
+
 /// Print assistant text chunk. Called incrementally during streaming (raw mode).
 pub fn print_assistant_chunk(text: &str) {
-    print!("{}", sanitize_terminal_text(text));
-    flush_stdout();
+    let text = sanitize_terminal_text(text);
+    write_response_text(&text);
+    record_assistant_output(&text);
 }
 
 /// Push buffered stdout out now.
@@ -237,31 +325,55 @@ fn flush_stdout() {
     let _ = std::io::stdout().flush();
 }
 
-/// Print a newline after assistant response completes.
+/// End the assistant response on exactly one newline. Idempotent, and silent
+/// when the response already ended on one, so nothing that follows it, a cost
+/// line, a boundary notice, the next prompt, opens with a blank line.
 pub fn print_assistant_end() {
-    println!();
+    if ASSISTANT_LINE_OPEN.swap(false, Ordering::Relaxed) {
+        write_response_text("\n");
+    }
+}
+
+/// One owner for every terminal notice. A direct stderr write while the
+/// full-screen TUI holds the terminal lands outside ratatui's buffer, so its
+/// diff renderer never repaints those cells and the frame stays corrupt until
+/// something forces a full redraw. While a TUI is running the notice goes to
+/// its own notice area instead.
+fn emit_notice(label: impl std::fmt::Display, message: &str) {
+    let message = sanitize_terminal_text(message);
+    if crate::tui::tui_active() {
+        crate::tui::push_tui_notice(message.into_owned());
+        return;
+    }
+    print_assistant_end();
+    eprintln!("{label} {message}");
 }
 
 /// Print a system/info message.
 pub fn print_info(message: &str) {
-    eprintln!("{} {}", ts::info_label(), sanitize_terminal_text(message));
+    emit_notice(ts::info_label(), message);
 }
 
 /// Print a warning message.
 pub fn print_warn(message: &str) {
-    eprintln!("{} {}", ts::warn_label(), sanitize_terminal_text(message));
+    emit_notice(ts::warn_label(), message);
 }
 
 /// Print an error message.
 pub fn print_error(message: &str) {
-    eprintln!("{} {}", ts::error_label(), sanitize_terminal_text(message));
+    emit_notice(ts::error_label(), message);
 }
 
 /// Print an already-rendered block (a table, a listing, a raw payload) whose
 /// text came from outside this process, the model, a tool, an MCP server, or
 /// files in the checkout, with terminal escapes stripped.
 pub fn print_block(text: &str) {
-    eprintln!("{}", sanitize_terminal_text(text));
+    let text = sanitize_terminal_text(text);
+    if crate::tui::tui_active() {
+        crate::tui::push_tui_notice(text.into_owned());
+        return;
+    }
+    eprintln!("{text}");
 }
 
 // ---------------------------------------------------------------------------
@@ -627,8 +739,8 @@ pub fn print_tier_status() {
 pub fn print_assistant_chunk_formatted(renderer: &mut MarkdownRenderer, chunk: &str) {
     let formatted = renderer.process_chunk(chunk);
     if !formatted.is_empty() {
-        print!("{}", formatted);
-        flush_stdout();
+        write_response_text(&formatted);
+        record_assistant_output(&formatted);
     }
 }
 
@@ -637,8 +749,8 @@ pub fn print_assistant_chunk_formatted(renderer: &mut MarkdownRenderer, chunk: &
 pub fn flush_markdown(renderer: &mut MarkdownRenderer) {
     let remaining = renderer.flush();
     if !remaining.is_empty() {
-        print!("{}", remaining);
-        flush_stdout();
+        write_response_text(&remaining);
+        record_assistant_output(&remaining);
     }
 }
 
@@ -707,6 +819,119 @@ mod tests {
              reorder against stderr progress output): {offenders:?}. Call \
              `output::print_assistant_chunk` instead."
         );
+    }
+
+    /// The agent engine, its tools and the app-server host all run under
+    /// `agi app-server --listen stdio` and `agi mcp-server`, where stdout is
+    /// the JSON-RPC channel. One line of human text there is a framing error
+    /// the client cannot recover from, it drops the session. Those subtrees
+    /// therefore own no stdout writer of their own: everything goes through
+    /// this module, which redirects once stdout is claimed.
+    #[test]
+    fn no_protocol_reachable_module_writes_to_stdout_directly() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut offenders = Vec::new();
+        let mut stack = vec![
+            src.join("agent"),
+            src.join("app_server"),
+            src.join("models"),
+        ];
+        for dir in &stack {
+            assert!(
+                dir.is_dir(),
+                "{} no longer exists, so this guard now covers less than it \
+                 claims; point it at the module that replaced it",
+                dir.display()
+            );
+        }
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("read source dir").flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("read source");
+                for (i, line) in text.lines().enumerate() {
+                    let line = line.trim();
+                    if line.starts_with("//") || line.starts_with("///") {
+                        continue;
+                    }
+                    let writes_stdout = line.contains("print!(")
+                        || line.contains("println!(")
+                        || line.contains("io::stdout()");
+                    if writes_stdout && !line.contains("eprint") {
+                        offenders.push(format!(
+                            "{}:{}",
+                            path.strip_prefix(&src).unwrap_or(&path).display(),
+                            i + 1
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "stdout written from a module that runs under the stdio protocol \
+             transports: {offenders:?}. Route it through `output`, which sends \
+             it to stderr once `claim_stdout_for_protocol` has been called."
+        );
+    }
+
+    /// `agi exec` printed `cross-resume okinfo: byok privacy mode ...`: the
+    /// response left its last line open on stdout and the boundary notice from
+    /// `cloud::report_boundary_once` was appended to it on stderr. The response
+    /// must close on exactly one newline first, and gain no blank line when it
+    /// already ended on one.
+    #[test]
+    fn a_notice_never_lands_on_the_response_line() {
+        let _guard = print_state_test_lock();
+
+        ASSISTANT_LINE_OPEN.store(false, Ordering::Relaxed);
+        record_assistant_output("cross-resume ok");
+        assert!(ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+
+        print_info("byok privacy mode keeps this conversation on this device");
+        assert!(
+            !ASSISTANT_LINE_OPEN.load(Ordering::Relaxed),
+            "the notice must close the response line before writing"
+        );
+
+        // Idempotent: a response already terminated gains no blank line, from
+        // a second notice or from the one-shot terminator that follows it.
+        print_assistant_end();
+        print_warn("this turn is saved on this device");
+        assert!(!ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+
+        // A response whose own last chunk ended on a newline needs nothing.
+        record_assistant_output("gemini tools ok\n");
+        assert!(!ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+
+        // The formatted path shares the state, and its flush already ends the
+        // response on a newline, so the one-shot terminator must add nothing.
+        let mut renderer = MarkdownRenderer::new();
+        print_assistant_chunk_formatted(&mut renderer, "plain answer");
+        flush_markdown(&mut renderer);
+        assert!(
+            !ASSISTANT_LINE_OPEN.load(Ordering::Relaxed),
+            "flush_markdown terminates the response, so nothing may follow it with a blank line"
+        );
+
+        // An error reported over an open response line closes it the same way.
+        record_assistant_output("partial answer");
+        print_error("stream failed");
+        assert!(!ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+    }
+
+    fn print_state_test_lock() -> MutexGuard<'static, ()> {
+        static PRINT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        PRINT_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("print state test lock")
     }
 
     fn env_test_lock() -> MutexGuard<'static, ()> {
@@ -1154,6 +1379,20 @@ mod tests {
         assert_eq!(format_tokens(1_000_000), "1.0M");
         assert_eq!(format_tokens(2_400_000), "2.4M");
         assert_eq!(format_tokens(128_000_000), "128.0M");
+    }
+
+    // -- format_cost_compact tests -------------------------------------------
+
+    #[test]
+    fn test_format_cost_compact_sub_dollar_keeps_four_decimals() {
+        assert_eq!(format_cost_compact(0.0), "$0.0000");
+        assert_eq!(format_cost_compact(0.0421), "$0.0421");
+    }
+
+    #[test]
+    fn test_format_cost_compact_dollar_and_above_uses_two_decimals() {
+        assert_eq!(format_cost_compact(1.0), "$1.00");
+        assert_eq!(format_cost_compact(12.345), "$12.35");
     }
 
     // -- format_duration_ms tests ------------------------------------------

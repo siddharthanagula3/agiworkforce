@@ -1,6 +1,5 @@
 ---
 source: apps/cli/src/tui/widgets/snapshot_smoke.rs
-assertion_line: 163
 expression: terminal.backend()
 ---
 "                                                                                "
@@ -11,15 +10,15 @@ expression: terminal.backend()
 "                                                                                "
 "                                                                                "
 "                                                                                "
-"  ┌ Models  Local · BYOK · Cloud ────────────────────────────────────────────┐  "
+"  ┌ Models  Local · Your key · Managed ──────────────────────────────────────┐  "
 "  │/ type to filter by name or provider...                                   │  "
 "  │──────────────────────────────────────────────────────────────────────────│  "
 "  │Bring your own key · your own provider keys                               │  "
 "  │  Anthropic                                                               │  "
-"  │  ● fixture-flagship                    Balanced      200K ctx            │  "
-"  │    fixture-balanced                    Balanced      200K ctx            │  "
+"  │  ● Fixture Flagship                    Balanced      200K ctx            │  "
+"  │    Fixture Balanced                    Balanced      200K ctx            │  "
 "  │  OpenAI                                                                  │  "
-"  │    fixture-fast                        Balanced      128K ctx            │  "
+"  │    Fixture Fast                        Balanced      128K ctx            │  "
 "  │ Thinking: on · Effort: ◀ Medium ▶   Tab/←→                               │  "
 "  └──────────────────────────────────────────────────────────────────────────┘  "
 "                                                                                "

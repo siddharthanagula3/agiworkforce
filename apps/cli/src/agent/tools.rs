@@ -199,7 +199,7 @@ mod tests {
 
         let result = execute_mcp_tool(
             &mut manager,
-            "mcp_docs_search",
+            &mcp::mcp_tool_name("docs", "search"),
             serde_json::json!({"query": "private source"}),
             crate::agent::PrivacyMode::Local,
             true,

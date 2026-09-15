@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Check, ChevronRight, Loader2, ShieldCheck, X } from 'lucide-react';
 import { Button, Popover, PopoverContent, PopoverTrigger, Textarea } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import type { Message } from '@shared/stores/web-chat-store';
 import { isApprovalTurnLive, type ToolApprovalDecision } from '@/lib/hooks/useChatStream';
 import { humanizeToolName } from '../messages/ToolTimeline';
@@ -240,14 +241,14 @@ export function ApprovalInbox({
                           className="h-8 gap-1.5"
                           disabled={resolving}
                           onClick={() => void resolve(item, 'rejected')}
-                          aria-label={`Reject ${item.label}`}
+                          aria-label={`${TOOL_APPROVAL_ACTION_LABELS.deny} ${item.label}`}
                         >
                           {resolving ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                           ) : (
                             <X className="h-3.5 w-3.5" aria-hidden="true" />
                           )}
-                          Reject
+                          {TOOL_APPROVAL_ACTION_LABELS.deny}
                         </Button>
                         <Button
                           type="button"
@@ -255,14 +256,14 @@ export function ApprovalInbox({
                           className="h-8 gap-1.5"
                           disabled={resolving}
                           onClick={() => void resolve(item, 'approved')}
-                          aria-label={`Approve ${item.label}`}
+                          aria-label={`${TOOL_APPROVAL_ACTION_LABELS.approve} ${item.label}`}
                         >
                           {resolving ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                           ) : (
                             <Check className="h-3.5 w-3.5" aria-hidden="true" />
                           )}
-                          Approve
+                          {TOOL_APPROVAL_ACTION_LABELS.approve}
                         </Button>
                       </div>
                     </>

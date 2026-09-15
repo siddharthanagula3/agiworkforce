@@ -17,6 +17,7 @@ export function TemporaryChatToggle() {
   return (
     <Pressable
       onPress={handlePress}
+      hitSlop={8}
       style={{
         flexDirection: 'row',
         alignItems: 'center',

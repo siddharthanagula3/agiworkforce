@@ -47,6 +47,39 @@ describe('failed stream presentation', () => {
     expect(assistant.errorText).toBe('upstream connection reset');
   });
 
+  it('offers a model switch beside Retry when the route, not the request, failed', () => {
+    const messages: SidePanelChatMessage[] = [];
+    applyStreamFailure(
+      messages,
+      'stream-2',
+      'The model failed to produce a response.',
+      3,
+      'switch-model',
+    );
+    expect(messages.at(-1)?.errorAction).toBe('switch-model');
+
+    const onSwitchModel = vi.fn();
+    const node = buildBubbleWithTools(messages.at(-1)!, { onRetry: vi.fn(), onSwitchModel });
+    const buttons = Array.from(node.querySelectorAll('.sp-bubble-error-footer button')).map(
+      (button) => button.textContent,
+    );
+    expect(buttons).toEqual(['Retry', 'Switch model']);
+    (node.querySelectorAll('.sp-bubble-error-footer button')[1] as HTMLButtonElement).click();
+    expect(onSwitchModel).toHaveBeenCalledOnce();
+
+    const outsideClick = vi.fn();
+    document.body.appendChild(node);
+    document.addEventListener('click', outsideClick);
+    (node.querySelectorAll('.sp-bubble-error-footer button')[1] as HTMLButtonElement).click();
+    document.removeEventListener('click', outsideClick);
+    node.remove();
+    expect(outsideClick).not.toHaveBeenCalled();
+    expect(onSwitchModel).toHaveBeenCalledTimes(2);
+
+    const plain = buildBubbleWithTools(failedMessage(), { onRetry: vi.fn(), onSwitchModel });
+    expect(plain.querySelectorAll('.sp-bubble-error-footer button')).toHaveLength(1);
+  });
+
   it('renders the failure with a retry control', () => {
     const onRetry = vi.fn();
     const node = buildBubbleWithTools(failedMessage(), { onRetry });

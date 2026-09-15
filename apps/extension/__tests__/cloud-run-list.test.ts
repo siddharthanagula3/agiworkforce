@@ -7,6 +7,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { agentTaskStateLabel } from '@agiworkforce/types';
 import {
   listChromeManagedRuns,
   readChromeManagedRunJournal,
@@ -17,6 +18,14 @@ import {
   buildCloudRunsPanel,
   summarizeRunJournal,
 } from '../src/features/side-panel/cloudRunsPanel';
+
+// The panel's schedules section reads its copy from the extension catalogue,
+// which only `chrome.i18n` can serve. Without this the panel cannot be built
+// here at all, and every case below would fail on a missing global rather than
+// on the behaviour it is asserting.
+(globalThis as unknown as Record<string, unknown>).chrome = {
+  i18n: { getMessage: (key: string) => key },
+};
 
 const RUN_ID = '22222222-2222-4222-8222-222222222222';
 const OTHER_RUN_ID = '33333333-3333-4333-8333-333333333333';
@@ -320,6 +329,31 @@ describe('side-panel cloud run list', () => {
     await vi.waitFor(() => {
       expect(signIn).toHaveBeenCalledTimes(1);
     });
+    panel.dispose();
+  });
+
+  // The panel used to carry its own copy of the run-state words, which agreed
+  // with the shared vocabulary on every state but this one and called it "Needs
+  // approval" while every other surface said "Waiting for input".
+  it('names a run awaiting input with the shared vocabulary, on the card and the row', async () => {
+    const deps = panelDependencies({
+      listRuns: vi.fn().mockResolvedValue({
+        status: 'success',
+        page: { runs: [awaitingApprovalRun()], nextCursor: null },
+      }),
+    });
+    const panel = buildCloudRunsPanel(deps);
+    document.body.appendChild(panel.panelEl);
+    panel.setActive(true);
+
+    await vi.waitFor(() => {
+      expect(panel.panelEl.querySelector('.sp-run-approval-title')).not.toBeNull();
+    });
+    const title = panel.panelEl.querySelector('.sp-run-approval-title')!.textContent;
+    expect(title).toBe(`${agentTaskStateLabel('awaiting_input')}, model-1`);
+    expect(title).toContain('Waiting for input');
+    expect(panel.panelEl.textContent).not.toContain('Waiting on you');
+    expect(panel.panelEl.textContent).not.toContain('Needs approval');
     panel.dispose();
   });
 

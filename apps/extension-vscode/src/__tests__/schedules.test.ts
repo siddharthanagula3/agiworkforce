@@ -85,6 +85,8 @@ function makeRun(overrides: Partial<ManagedCloudScheduleRun> = {}): ManagedCloud
   };
 }
 
+import { SCHEDULE_ROW_ACTIONS, SCHEDULE_TITLE_ACTIONS } from '../features/surfaces';
+
 describe('schedule presentation', () => {
   it('names the status, the cadence, the next run and the last run', () => {
     expect(scheduleDescription(makeSchedule(), NOW)).toBe(
@@ -301,25 +303,18 @@ describe('schedules manifest', () => {
     contributes: {
       commands: { command: string; icon?: string }[];
       views: { 'agi-workforce-sidebar': { id: string; name: string }[] };
-      viewsWelcome: { view: string; contents: string }[];
-      menus: {
-        'view/item/context': { command: string; when: string; group?: string }[];
-        'view/title': { command: string; when: string; group?: string }[];
-      };
     };
   };
 
-  it('contributes the schedules view with a welcome that does not promise editing here', () => {
-    const view = manifest.contributes.views['agi-workforce-sidebar'].find(
-      (entry) => entry.id === SCHEDULES_VIEW_ID,
-    );
-    expect(view?.name).toBe('Schedules');
+  it('no longer contributes a schedules tree beside the chat', () => {
     expect(
-      manifest.contributes.viewsWelcome.find((entry) => entry.view === SCHEDULES_VIEW_ID)?.contents,
-    ).toContain('agi-workforce.openSchedulesOnWeb');
+      manifest.contributes.views['agi-workforce-sidebar'].find(
+        (entry) => entry.id === SCHEDULES_VIEW_ID,
+      ),
+    ).toBeUndefined();
   });
 
-  it('declares every schedule command the view invokes, each with an icon', () => {
+  it('declares every schedule command the surface invokes, each with an icon', () => {
     const declared = manifest.contributes.commands;
     for (const command of [
       'agi-workforce.showSchedules',
@@ -335,24 +330,19 @@ describe('schedules manifest', () => {
   });
 
   it('shows pause only on an active row and resume only on a paused one', () => {
-    const inline = manifest.contributes.menus['view/item/context'].filter((entry) =>
-      entry.when.startsWith(`view == ${SCHEDULES_VIEW_ID}`),
-    );
-    const whenOf = (command: string): string | undefined =>
-      inline.find((entry) => entry.command === command)?.when;
+    const matcher = (command: string) =>
+      SCHEDULE_ROW_ACTIONS.find((action) => action.command === command);
 
-    expect(whenOf(PAUSE_SCHEDULE_COMMAND)).toContain('viewItem == scheduleActive');
-    expect(whenOf(RESUME_SCHEDULE_COMMAND)).toContain('viewItem == schedulePaused');
+    expect(matcher(PAUSE_SCHEDULE_COMMAND)?.matches('scheduleActive')).toBe(true);
+    expect(matcher(PAUSE_SCHEDULE_COMMAND)?.matches('schedulePaused')).toBe(false);
+    expect(matcher(RESUME_SCHEDULE_COMMAND)?.matches('schedulePaused')).toBe(true);
     for (const command of [RUN_SCHEDULE_NOW_COMMAND, SHOW_SCHEDULE_RUNS_COMMAND]) {
-      expect(inline.find((entry) => entry.command === command)?.group).toMatch(/^inline/);
+      expect(matcher(command)?.matches('scheduleActive')).toBe(true);
     }
   });
 
-  it('keeps refresh and open-on-web in the view title', () => {
-    const title = manifest.contributes.menus['view/title'].filter(
-      (entry) => entry.when === `view == ${SCHEDULES_VIEW_ID}`,
-    );
-    expect(title.map((entry) => entry.command)).toEqual([
+  it('keeps refresh and open-on-web on the schedules surface', () => {
+    expect(SCHEDULE_TITLE_ACTIONS.map((action) => action.command)).toEqual([
       'agi-workforce.refreshSchedules',
       'agi-workforce.openSchedulesOnWeb',
     ]);

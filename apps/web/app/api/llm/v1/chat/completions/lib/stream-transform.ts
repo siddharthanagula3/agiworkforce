@@ -20,6 +20,12 @@ import {
 import { getRoutePricing } from '@agiworkforce/model-registry';
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler, toolStatusPhrase } from '@agiworkforce/provider-protocol';
+import {
+  classifyError,
+  isErrorCategory,
+  type ClassifiedError,
+} from '@agiworkforce/provider-runtime';
+import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import type { ProcessedRequest } from './request-processor';
 import {
   canPersistAssistantTurn,
@@ -784,6 +790,40 @@ export async function buildStreamResponse(
   return new NextResponse(withSseHeartbeat(reconciledStream), { headers: streamHeaders });
 }
 
+type StreamErrorChunk = Extract<StreamChunk, { type: 'error' }>;
+
+function presentStreamError(
+  chunk: StreamErrorChunk,
+  processed: ProcessedRequest,
+): StreamErrorChunk {
+  const classification = chunk.classification;
+  const classified: ClassifiedError =
+    classification !== undefined && isErrorCategory(classification.category)
+      ? { ...classification, category: classification.category, message: chunk.message }
+      : classifyError(
+          Object.assign(
+            new Error(chunk.message),
+            /^\d{3}$/.test(chunk.code ?? '') ? { status: Number(chunk.code) } : {},
+          ),
+        );
+  const mapped = mapClassifiedUpstreamError(classified, processed.provider, {
+    requestedModel: processed.requestedModel,
+  });
+  logger.warn(
+    {
+      event: 'llm_stream_error_presented',
+      requestId: processed.requestId,
+      provider: processed.provider,
+      model: processed.chatRequest.model,
+      category: classified.category,
+      code: mapped.code,
+      upstreamMessage: chunk.message.slice(0, 2000),
+    },
+    'Provider stream error presented as gateway copy',
+  );
+  return { ...chunk, message: mapped.message, code: mapped.code, retryable: classified.retryable };
+}
+
 export async function buildAdapterStreamResponse(
   request: NextRequest,
   chunks: AsyncIterable<StreamChunk>,
@@ -842,7 +882,9 @@ export async function buildAdapterStreamResponse(
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of chunks) {
+        for await (const received of chunks) {
+          const chunk =
+            received.type === 'error' ? presentStreamError(received, processed) : received;
           ingestUsageChunk(usage, chunk);
           if (chunk.type === 'response-meta' && typeof chunk.provider === 'string') {
             upstreamProvider = chunk.provider;

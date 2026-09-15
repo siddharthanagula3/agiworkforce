@@ -159,6 +159,16 @@
     "message": "Add",
     "description": "Button that adds the active origin to the automation allowlist"
   },
+  "spAllowlistHostPermissionRefused": {
+    "message": "Chrome did not grant access to $ORIGIN$, so it was not approved.",
+    "description": "Shown when the user declines Chrome's host-permission prompt for a site being added to the allowlist",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
   "spMemoryDeleteConfirm": {
     "message": "Confirm?",
     "description": "Memory row delete button waiting for the second click"
@@ -228,6 +238,10 @@
   "spCloudFreeTier": {
     "message": "Free tier",
     "description": "Account tier row before entitlements are read"
+  },
+  "spCloudSignOutSyncFailed": {
+    "message": "Signed out here. The web session could not be ended.",
+    "description": "Shown next to Sign out when the sync host session revoke call fails"
   },
   "spCloudAvatarFallback": {
     "message": "A",
@@ -378,12 +392,8 @@
     "description": "Composer chat gate when a gate button's navigation threw without a message"
   },
   "spComposerPlaceholder": {
-    "message": "Ask anything... (/ for commands)",
+    "message": "How can I help you today?",
     "description": "Composer input placeholder while chat is usable"
-  },
-  "spComposerPlaceholderNoPageContext": {
-    "message": "Ask anything (page context unavailable)",
-    "description": "Composer input placeholder while chat is usable but the tab cannot be read"
   },
   "spComposerPlaceholderSignedOut": {
     "message": "Sign in to chat",
@@ -448,10 +458,6 @@
   "spGroupTabRemoved": {
     "message": "Removed current tab from the AGI Workforce group.",
     "description": "Success notice after the active tab leaves AGI's tab group"
-  },
-  "spContextChipFallback": {
-    "message": "page",
-    "description": "Composer page-context chip before a hostname is known"
   },
   "spContextChipCapturing": {
     "message": "capturing…",
@@ -547,43 +553,9 @@
     "message": "Dismiss onboarding",
     "description": "First-run onboarding primary button accessible name on the final step"
   },
-  "spEffortButton": {
-    "message": "$EFFORT$",
-    "description": "Composer reasoning-effort button",
-    "placeholders": {
-      "effort": {
-        "content": "$1",
-        "example": "High"
-      }
-    }
-  },
   "spEffortAuto": {
     "message": "Auto",
     "description": "Composer reasoning-effort value while the route has not been chosen yet"
-  },
-  "spEffortUnavailable": {
-    "message": "N/A",
-    "description": "Composer reasoning-effort value while the selected model exposes none"
-  },
-  "spEffortAriaReady": {
-    "message": "Reasoning effort: $VALUE$",
-    "description": "Composer reasoning-effort button accessible name while an effort is selected",
-    "placeholders": {
-      "value": {
-        "content": "$1",
-        "example": "High"
-      }
-    }
-  },
-  "spEffortAriaUnavailable": {
-    "message": "Reasoning effort unavailable. $REASON$",
-    "description": "Composer reasoning-effort button accessible name while no effort can be chosen",
-    "placeholders": {
-      "reason": {
-        "content": "$1",
-        "example": "This model has a fixed reasoning budget."
-      }
-    }
   },
   "spHistoryDeleteFailed": {
     "message": "Could not delete this chat. Try again.",
@@ -876,5 +848,381 @@
   "spQuickMode": {
     "message": "Quick",
     "description": "Composer toggle that trades reasoning depth for latency"
+  },
+  "spProjectsTitle": {
+    "message": "Projects",
+    "description": "Drawer section heading for account projects"
+  },
+  "spProjectsHelp": {
+    "message": "Projects on your AGI account. Pick one and this chat, and everything it produces, is filed under it on every device.",
+    "description": "Drawer projects section explanation"
+  },
+  "spProjectsNew": {
+    "message": "New project",
+    "description": "Button that opens the project create form"
+  },
+  "spProjectsNamePlaceholder": {
+    "message": "Project name",
+    "description": "Placeholder for the project name field"
+  },
+  "spProjectsInstructionsPlaceholder": {
+    "message": "Instructions for every chat in this project (optional)",
+    "description": "Placeholder for the project instructions field"
+  },
+  "spProjectsCreate": {
+    "message": "Create",
+    "description": "Submit button on the project create form"
+  },
+  "spProjectsCreating": {
+    "message": "Creating…",
+    "description": "Project create button while the request is in flight"
+  },
+  "spProjectsCancel": {
+    "message": "Cancel",
+    "description": "Cancel button on the project create form"
+  },
+  "spProjectsEmpty": {
+    "message": "No projects on this account yet.",
+    "description": "Empty state for the projects list"
+  },
+  "spProjectsLoading": {
+    "message": "Loading projects…",
+    "description": "Status while the projects list is being read"
+  },
+  "spProjectsRetry": {
+    "message": "Try again",
+    "description": "Retry button for a failed projects read"
+  },
+  "spProjectsSignIn": {
+    "message": "Sign in",
+    "description": "Action that opens the AGI sign-in page from the projects section"
+  },
+  "spProjectsSigningIn": {
+    "message": "Opening…",
+    "description": "Projects sign-in action while the sign-in page is opening"
+  },
+  "spProjectsUse": {
+    "message": "Use in this chat",
+    "description": "Button that files the current chat under a project"
+  },
+  "spProjectsInUse": {
+    "message": "Used in this chat",
+    "description": "Marker on the project the current chat is filed under"
+  },
+  "spProjectsStopUse": {
+    "message": "Stop using",
+    "description": "Button that unfiles the current chat from its project"
+  },
+  "spProjectsDelete": {
+    "message": "Delete",
+    "description": "Project delete button at rest"
+  },
+  "spProjectsDeleteConfirm": {
+    "message": "Confirm delete",
+    "description": "Project delete button waiting for the second click"
+  },
+  "spProjectsDeleting": {
+    "message": "Deleting project…",
+    "description": "Status while a project delete is in flight"
+  },
+  "spProjectsDeleted": {
+    "message": "Project deleted.",
+    "description": "Status after a project was deleted"
+  },
+  "spProjectsNoInstructions": {
+    "message": "No instructions yet.",
+    "description": "Shown when an opened project has no instructions"
+  },
+  "spProjectsConversations": {
+    "message": "Recent chats",
+    "description": "Heading above a project’s recent conversations"
+  },
+  "spProjectsNoConversations": {
+    "message": "No chats in this project yet.",
+    "description": "Empty state for a project’s conversation list"
+  },
+  "spProjectsConversationsFailed": {
+    "message": "Recent chats could not be read.",
+    "description": "Shown when a project’s conversation list failed to load"
+  },
+  "spProjectsChipStopUse": {
+    "message": "Stop using this project",
+    "description": "Accessible label for the header chip that unfiles the chat"
+  },
+  "spProjectsDeleteWarning": {
+    "message": "Deleting $NAME$ removes its instructions and knowledge files on every device. Its chats stay on your account with no project. This cannot be undone.",
+    "description": "Consequence stated before a project delete is confirmed",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Launch plan"
+      }
+    }
+  },
+  "spProjectsCount": {
+    "message": "$COUNT$ chats",
+    "description": "Conversation count on a project row",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "4"
+      }
+    }
+  },
+  "spProjectsUsedNotice": {
+    "message": "New messages in this chat are filed under $NAME$.",
+    "description": "Status after a project is selected for the chat",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Launch plan"
+      }
+    }
+  },
+  "spProjectsChip": {
+    "message": "Project · $NAME$",
+    "description": "Header chip naming the project the chat is filed under",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Launch plan"
+      }
+    }
+  },
+  "spProjectsCleared": {
+    "message": "This chat is no longer filed under a project.",
+    "description": "Status after the chat project is cleared"
+  },
+  "spArtifactsTitle": {
+    "message": "Artifacts",
+    "description": "Drawer section heading for account artifacts"
+  },
+  "spArtifactsHelp": {
+    "message": "Code, documents and diagrams your chats produced, from every device on your account.",
+    "description": "Drawer artifacts section explanation"
+  },
+  "spArtifactsEmpty": {
+    "message": "No artifacts on this account yet.",
+    "description": "Empty state for the artifacts list"
+  },
+  "spArtifactsLoading": {
+    "message": "Loading artifacts…",
+    "description": "Status while the artifact index is being read"
+  },
+  "spArtifactsRetry": {
+    "message": "Try again",
+    "description": "Retry button for a failed artifacts read"
+  },
+  "spArtifactsSignIn": {
+    "message": "Sign in",
+    "description": "Action that opens the AGI sign-in page from the artifacts section"
+  },
+  "spArtifactsSigningIn": {
+    "message": "Opening…",
+    "description": "Artifacts sign-in action while the sign-in page is opening"
+  },
+  "spArtifactsOpen": {
+    "message": "Open",
+    "description": "Button that opens the chat an artifact came from in a new tab"
+  },
+  "spArtifactsCopy": {
+    "message": "Copy source",
+    "description": "Button that copies the message an artifact was derived from"
+  },
+  "spArtifactsCopying": {
+    "message": "Copying…",
+    "description": "Artifact copy button while the source message is being read"
+  },
+  "spArtifactsCopied": {
+    "message": "Copied the message this artifact was derived from.",
+    "description": "Status after an artifact source was copied"
+  },
+  "spArtifactsCopyFailed": {
+    "message": "That artifact could not be copied.",
+    "description": "Status after an artifact source copy failed"
+  },
+  "spArtifactsUntitled": {
+    "message": "Untitled artifact",
+    "description": "Row label for an artifact the index has no title for"
+  },
+  "spSchedulesTitle": {
+    "message": "Schedules",
+    "description": "Heading above the schedules list in the work runs panel"
+  },
+  "spSchedulesEmpty": {
+    "message": "No schedules on this account.",
+    "description": "Empty state for the schedules list"
+  },
+  "spSchedulesLoading": {
+    "message": "Loading schedules…",
+    "description": "Status while schedules are being read"
+  },
+  "spSchedulesPause": {
+    "message": "Pause",
+    "description": "Button that pauses a schedule"
+  },
+  "spSchedulesResume": {
+    "message": "Resume",
+    "description": "Button that resumes a paused schedule"
+  },
+  "spSchedulesRunNow": {
+    "message": "Run now",
+    "description": "Button that starts a schedule immediately"
+  },
+  "spSchedulesPaused": {
+    "message": "Schedule paused.",
+    "description": "Status after a schedule was paused"
+  },
+  "spSchedulesResumed": {
+    "message": "Schedule resumed.",
+    "description": "Status after a schedule was resumed"
+  },
+  "spSchedulesStarted": {
+    "message": "Run started.",
+    "description": "Status after a schedule was run immediately"
+  },
+  "spSchedulesReplayed": {
+    "message": "That run was already queued.",
+    "description": "Status when a manual run matched one already queued"
+  },
+  "spSchedulesNeverRun": {
+    "message": "Not run yet",
+    "description": "Shown on a schedule that has never executed"
+  },
+  "spSchedulesNext": {
+    "message": "Next $TIME$",
+    "description": "Next execution time on a schedule row",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "in 2 hours"
+      }
+    }
+  },
+  "spSchedulesLast": {
+    "message": "Last $TIME$",
+    "description": "Most recent execution time on a schedule row",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "in 2 hours"
+      }
+    }
+  },
+  "spEffortHeading": {
+    "message": "Effort",
+    "description": "Heading above the reasoning-effort rows in the model menu"
+  },
+  "spEffortDefaultBadge": {
+    "message": "Default",
+    "description": "Badge on the effort level a model uses when none is chosen"
+  },
+  "spMoreModels": {
+    "message": "More models",
+    "description": "Heading above the models that are not one of the three headline choices"
+  },
+  "spModelsSignedOut": {
+    "message": "Sign in for models",
+    "description": "Shown in the model menu when no account is signed in"
+  },
+  "spModelsOtherProvider": {
+    "message": "Other",
+    "description": "Group heading for models whose provider is unknown"
+  },
+  "spModelMenuAria": {
+    "message": "Model $MODEL$, effort $EFFORT$",
+    "description": "Accessible name of the composer button that opens the model menu",
+    "placeholders": {
+      "model": {
+        "content": "$1"
+      },
+      "effort": {
+        "content": "$2"
+      }
+    }
+  },
+  "spQuickModeDescription": {
+    "message": "Answer faster on a cheaper route",
+    "description": "One-line description of the Quick mode toggle"
+  },
+  "spThinking": {
+    "message": "Extended thinking",
+    "description": "Label of the extended-thinking toggle in the model menu"
+  },
+  "spThinkingDescription": {
+    "message": "Let the model reason before it answers",
+    "description": "One-line description of the extended-thinking toggle"
+  },
+  "spContextItem": {
+    "message": "Add the browser page",
+    "description": "Plus-menu item that attaches the current page to the next message"
+  },
+  "spContextItemAttached": {
+    "message": "Browser page added",
+    "description": "Plus-menu item once the current page is attached"
+  },
+  "spConnectors": {
+    "message": "Connectors",
+    "description": "Plus-menu item that opens the connector directory on the web"
+  },
+  "spAutonomyAskFirstDescription": {
+    "message": "Confirm every browser action before it runs",
+    "description": "One-line description of the ask-first permission mode"
+  },
+  "spAutonomyFullAccessDescription": {
+    "message": "Act on approved sites without asking",
+    "description": "One-line description of the full-access permission mode"
+  },
+  "spMenuTitle": {
+    "message": "Menu",
+    "description": "Title of the side panel menu drawer"
+  },
+  "spMenuBack": {
+    "message": "Back to the menu",
+    "description": "Accessible label of the drawer back button"
+  },
+  "spMenuClose": {
+    "message": "Close the menu",
+    "description": "Accessible label of the drawer close button"
+  },
+  "spMenuChat": {
+    "message": "Chat",
+    "description": "Menu row for chat actions"
+  },
+  "spMenuAutomate": {
+    "message": "Automate",
+    "description": "Menu row for workflows and cloud runs"
+  },
+  "spMenuProjects": {
+    "message": "Projects",
+    "description": "Menu row for account projects"
+  },
+  "spMenuArtifacts": {
+    "message": "Artifacts",
+    "description": "Menu row for account artifacts"
+  },
+  "spMenuTools": {
+    "message": "Tools",
+    "description": "Menu row for browser tools"
+  },
+  "spMenuPairing": {
+    "message": "Desktop pairing",
+    "description": "Menu row for pairing with the desktop app"
+  },
+  "spMenuSettings": {
+    "message": "Settings",
+    "description": "Menu row for the remaining extension settings"
+  },
+  "spRecentsTitle": {
+    "message": "Recent chats",
+    "description": "Title of the recent-chats sheet"
+  },
+  "spRecentsClose": {
+    "message": "Close recent chats",
+    "description": "Accessible label of the recent-chats close button"
+  },
+  "spModelAutoDescription": {
+    "message": "Route each turn to the model that fits it",
+    "description": "One-line description of the automatic model choice"
   }
 }

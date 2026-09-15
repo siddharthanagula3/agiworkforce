@@ -109,19 +109,19 @@ export function AccountMenuItems({
       <DropdownMenuItem asChild>
         <Link href={CANONICAL_POLICY_ROUTES.dataUse} target="_blank" rel="noopener noreferrer">
           <ShieldCheck className="mr-2 h-4 w-4" />
-          How we use your data
+          {t('common:navDataUse')}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <Link href={CANONICAL_POLICY_ROUTES.dataRights} target="_blank" rel="noopener noreferrer">
           <FileText className="mr-2 h-4 w-4" />
-          Privacy &amp; your data rights
+          {t('common:navDataRights')}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <Link href={CANONICAL_POLICY_ROUTES.legalIndex} target="_blank" rel="noopener noreferrer">
           <Scale className="mr-2 h-4 w-4" />
-          Terms &amp; policies
+          {t('common:navTermsPolicies')}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuSeparator />

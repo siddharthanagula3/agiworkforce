@@ -26,6 +26,7 @@ export type ProviderId =
   | 'moonshot'
   | 'minimax'
   | 'zhipu'
+  | 'openrouter'
   | 'ollama'
   | 'lmstudio'
   | 'custom-openai-compatible'
@@ -34,7 +35,7 @@ export type ProviderId =
 export interface ProviderDisplay {
   id: ProviderId;
   label: string;
-  icon: string;
+  icon?: string;
   brandColor: string;
   isLocal: boolean;
   supportsEffort: boolean;
@@ -121,6 +122,13 @@ export const PROVIDER_DISPLAY: Readonly<Record<ProviderId, ProviderDisplay>> = O
     isLocal: false,
     supportsEffort: false,
   },
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    brandColor: '#6467F2',
+    isLocal: false,
+    supportsEffort: false,
+  },
   ollama: {
     id: 'ollama',
     label: 'Ollama',
@@ -153,6 +161,17 @@ export const PROVIDER_DISPLAY: Readonly<Record<ProviderId, ProviderDisplay>> = O
     isLocal: false,
     supportsEffort: true,
   },
+});
+
+/**
+ * Display identities the registry cannot express. Every other wire provider key
+ * reaches its {@link ProviderId} through the aliases the registry already
+ * declares; these two name surfaces rather than suppliers, so nothing in
+ * `models.json` can carry them.
+ */
+export const PROVIDER_DISPLAY_ALIASES: Readonly<Record<string, ProviderId>> = Object.freeze({
+  managed_cloud: 'agi-cloud',
+  ollama_cloud: 'ollama',
 });
 
 export type CapabilityTier = 'fastest' | 'balanced' | 'most-capable';
