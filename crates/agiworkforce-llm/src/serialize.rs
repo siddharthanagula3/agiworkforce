@@ -402,6 +402,25 @@ pub fn normalize_array_items_in_schema(schema: &Value) -> Value {
     normalized
 }
 
+/// OpenAI and every gateway that speaks its dialect reject the whole request
+/// when one function description passes 1024 UTF-16 units, and MCP servers
+/// publish descriptions of any length, so the wire form is clamped here.
+const OPENAI_TOOL_DESCRIPTION_MAX_UTF16: usize = 1024;
+
+fn openai_tool_description(description: &str) -> String {
+    let mut units = 0usize;
+    let mut clamped =
+        String::with_capacity(description.len().min(OPENAI_TOOL_DESCRIPTION_MAX_UTF16));
+    for ch in description.chars() {
+        units += ch.len_utf16();
+        if units > OPENAI_TOOL_DESCRIPTION_MAX_UTF16 {
+            break;
+        }
+        clamped.push(ch);
+    }
+    clamped
+}
+
 /// OpenAI-compatible `tools` array (`{"type":"function","function":{...}}`).
 pub fn openai_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
     tool_defs
@@ -411,7 +430,7 @@ pub fn openai_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
                 "type": "function",
                 "function": {
                     "name": tool.name,
-                    "description": tool.description,
+                    "description": openai_tool_description(&tool.description),
                     "parameters": normalize_array_items_in_schema(&tool.input_schema),
                 }
             })
@@ -428,7 +447,7 @@ pub fn openai_responses_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec
             serde_json::json!({
                 "type": "function",
                 "name": tool.name,
-                "description": tool.description,
+                "description": openai_tool_description(&tool.description),
                 "parameters": normalize_array_items_in_schema(&tool.input_schema),
             })
         })
@@ -828,6 +847,32 @@ mod tests {
             permission_class: "read_only".to_string(),
             diagnostic_tags: vec!["test".to_string()],
         }
+    }
+
+    #[test]
+    fn openai_dialects_clamp_a_tool_description_to_the_wire_limit() {
+        let mut tool = test_tool("browser_run");
+        tool.description = format!("{}🙂", "x".repeat(1030));
+        let tools = [tool];
+
+        for description in [
+            &openai_function_tools_json(&tools)[0]["function"]["description"],
+            &openai_responses_function_tools_json(&tools)[0]["description"],
+        ] {
+            let text = description.as_str().expect("description stays a string");
+            assert_eq!(
+                text.encode_utf16().count(),
+                OPENAI_TOOL_DESCRIPTION_MAX_UTF16
+            );
+            assert!(text.chars().all(|ch| ch == 'x'));
+        }
+        assert_eq!(
+            anthropic_tools_json(&tools)[0]["description"]
+                .as_str()
+                .map(str::len),
+            Some(tools[0].description.len()),
+            "Anthropic takes the full description"
+        );
     }
 
     fn assert_provider_tool_payload_omits_local_metadata(value: &Value) {
