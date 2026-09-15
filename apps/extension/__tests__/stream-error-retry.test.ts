@@ -67,6 +67,15 @@ describe('failed stream presentation', () => {
     (node.querySelectorAll('.sp-bubble-error-footer button')[1] as HTMLButtonElement).click();
     expect(onSwitchModel).toHaveBeenCalledOnce();
 
+    const outsideClick = vi.fn();
+    document.body.appendChild(node);
+    document.addEventListener('click', outsideClick);
+    (node.querySelectorAll('.sp-bubble-error-footer button')[1] as HTMLButtonElement).click();
+    document.removeEventListener('click', outsideClick);
+    node.remove();
+    expect(outsideClick).not.toHaveBeenCalled();
+    expect(onSwitchModel).toHaveBeenCalledTimes(2);
+
     const plain = buildBubbleWithTools(failedMessage(), { onRetry: vi.fn(), onSwitchModel });
     expect(plain.querySelectorAll('.sp-bubble-error-footer button')).toHaveLength(1);
   });

@@ -878,21 +878,19 @@ export async function* streamFreeChat(
     }
 
     if (!response.ok) {
-      if (approvalResume) {
-        const body = await readBoundedErrorBody(response);
-        try {
-          const parsed = ToolApprovalResumeErrorResponseSchema.safeParse(JSON.parse(body));
-          if (parsed.success) {
-            yield {
-              type: 'error',
-              message: parsed.data.error.message,
-              code: 'server_error',
-            };
-            return;
-          }
-        } catch {
-          // Fall through to the bounded generic status message.
+      const body = await readBoundedErrorBody(response);
+      try {
+        const parsed = ToolApprovalResumeErrorResponseSchema.safeParse(JSON.parse(body));
+        if (parsed.success) {
+          yield {
+            type: 'error',
+            message: parsed.data.error.message,
+            code: 'server_error',
+          };
+          return;
         }
+      } catch {
+        // Fall through to the bounded generic status message.
       }
       yield {
         type: 'error',

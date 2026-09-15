@@ -172,7 +172,10 @@ function buildErrorFooter(
       { class: 'sp-bubble-retry-btn', type: 'button' },
       'Switch model',
     ) as HTMLButtonElement;
-    switchBtn.addEventListener('click', () => onSwitchModel());
+    switchBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onSwitchModel();
+    });
     footer.appendChild(switchBtn);
   }
 
