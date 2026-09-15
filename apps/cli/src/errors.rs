@@ -358,7 +358,7 @@ impl CliError {
                 "Stream disconnected. Retrying automatically; if it persists, check provider \
                  status."
             } else {
-                "Stream disconnected with a non-retryable signal. Re-run the command."
+                "Pick another model with `agi models list`, or try again later."
             }
             .to_string(),
             CliError::AccountSignedOut { .. } => {
