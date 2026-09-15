@@ -65,8 +65,8 @@ describe('the route contract and the proxy patterns classify the same app', () =
     const config = readFileSync(join(process.cwd(), 'next.config.ts'), 'utf8');
     const redirected = new Set(
       [...config.matchAll(/source: '([^']+)', destination: '([^']+)'/gu)]
-        .filter(([, , destination]) => isAuthPath(destination))
-        .map(([, source]) => source),
+        .filter(([, , destination]) => isAuthPath(destination ?? ''))
+        .map(([, source]) => source ?? ''),
     );
     const missing = AUTH_ROUTE_PREFIXES.filter(
       (prefix) => prefix !== '/__clerk' && !onDisk.has(prefix) && !redirected.has(prefix),
