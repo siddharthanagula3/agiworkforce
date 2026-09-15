@@ -477,8 +477,8 @@ model answers instead of returning 400 "Your credit balance is too
 low to access the Anthropic API". A smoke probe on 2026-09-12 04:00 UTC got
 that 400 for every Anthropic model while OpenAI, Google, DeepSeek, Qwen, Moonshot and xAI all
 answered normally.
-**What remains after founder action** Nothing in code. Until it is done every
-Anthropic model is unservable for everyone, not only for event visitors:
+**What remains after founder action** Nothing in code. Since 2026-09-15 the plan parks the unfunded route and serves the same models through the proxy route, so they answer, but the first token arrives after about 4.1 seconds on the cheapest Claude model (dev log 15:37 UTC: the provider span took 4109 ms of a 4306 ms turn, the gateway's own work under 200 ms) where the direct route answered in about a second; beside ChatGPT or Claude that reads as a slow product. Until it is done every
+Anthropic model is served slowly for everyone, not only for event visitors:
 every Anthropic model in the catalogue sits on this one account, so a paying Pro
 or Max subscriber who selects any of them gets a provider error, and they are
 held out of the event allowlist for the same reason.
