@@ -1002,11 +1002,14 @@ clicked by automation either. The composer's Local mode is proven up to that
 sheet: it names the host command and the right folder, and the managed API is
 never called.
 **Exact action**
-With the dev shell running on the dev origin, open AGI Code, keep Local ·
-qa-project selected, send "Reply with only: ok" on the cheap model the chip
-names, and click "Allow this session" on the sheet. One minute.
+With the dev shell running on the dev origin, open AGI Code, choose "Add a
+folder" in the environment menu and approve the scratch folder on the native
+"Choose a project folder" sheet, then keep Local · qa-project selected, send
+"Reply with only: ok" on the cheap model the chip names, and click "Allow this
+session" on the consent sheet. Two clicks; after them both the folder path
+and the turn can be driven by automation again. One minute.
 **Where** The Electron shell on the founder's machine.
-**Needed input** One click, then a yes or no on the reply.
+**Needed input** Two clicks, then a yes or no on the reply.
 **How to verify completion** The transcript shows the reply and the session
 appears under On this device with the Desktop source.
 **What remains after founder action** Record the turn in the release doc's

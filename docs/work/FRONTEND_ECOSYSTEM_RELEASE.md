@@ -172,10 +172,11 @@ extension state plus the desktop pairing record).
    "[Product] The CLI's OpenAI sign-in runs a ChatGPT-subscription OAuth
    flow" in the founder file. NON-BLOCKING for the product, a terms exposure
    while it ships.
-8. One click on the shell's run-commands consent for the QA folder: the
-   coding surface's Local mode is proven up to the shell's own high-impact
-   consent sheet, which an agent must not answer and automation cannot click
-   while the accessibility grant is broken. Entry "[Desktop QA] One click on
+8. Two clicks on the shell's native sheets for the QA folder, approving the
+   folder once and allowing the session once: the coding surface's Local mode
+   is proven up to the shell's own high-impact consent sheet, which an agent
+   must not answer, and no native sheet can be clicked by automation while
+   the accessibility grant is broken. Entry "[Desktop QA] One click on
    the shell's run-commands consent for the QA folder" in the founder file.
    NON-BLOCKING.
 
@@ -377,12 +378,14 @@ zero-price router on paid plans; a native sign-in path for the QA account; the
 Clerk development instance's Native API; one click on Chrome's host-permission
 prompt; the Accessibility grant for the process that runs the agents. Not
 founder-gated but open: on-device generation on the simulator
-(needs one run on a real device); in the shell, the model picker's selection
-could not be moved off Auto by the pass's harness, which cannot deliver real
-pointer presses to this Electron build, so whether the picker is broken in
-the shell is unresolved until a driver with a working pointer looks; and the
-shell's local coding sessions, settings through their real controls and the
-chords pressed for real wait on founder items 6 and 8.
+(needs one run on a real device); and the shell's local coding sessions,
+settings through their real controls and the chords pressed for real wait on
+founder items 6 and 8. The desktop pass's report of a picker that would not
+leave Auto and of pointer presses never reaching the shell was an artifact:
+its clicks were swallowed by an unanswerable native sheet left open, and the
+control it could not move was the approval mode, not the model chip;
+desktop-code-2 drove the chip, menu rows and Send through ordinary clicks
+over CDP on a shell with no sheet pending.
 
 ### Screen Studio flows
 
