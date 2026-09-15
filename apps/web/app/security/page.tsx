@@ -55,7 +55,7 @@ const BOUNDARIES = [
   {
     meta: 'BYOK',
     title: 'Your key, your provider, direct.',
-    body: `On ${BYOK_SURFACES.label}, requests made with your own provider key travel from the local runtime to that provider. The key stays in that runtime, never on our servers. We are not in the request path, so we hold neither the prompt nor the completion, but the provider you chose does, under their terms.`,
+    body: `On ${BYOK_SURFACES.label}, requests made with your own provider key travel from the local runtime to that provider. ${BYOK_SURFACES.availability} The key stays in that runtime, never on our servers. We are not in the request path, so we hold neither the prompt nor the completion, but the provider you chose does, under their terms.`,
   },
   {
     meta: 'Managed Cloud',

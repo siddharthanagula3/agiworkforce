@@ -288,7 +288,7 @@ export default function ProjectDetailPage() {
   if (projectStatus === 'loading' || projectStatus === 'idle') {
     return (
       <WebAppShell>
-        <main
+        <section
           data-design="agi"
           style={{
             minHeight: '100%',
@@ -301,7 +301,7 @@ export default function ProjectDetailPage() {
           }}
         >
           Loading project...
-        </main>
+        </section>
       </WebAppShell>
     );
   }
@@ -309,7 +309,7 @@ export default function ProjectDetailPage() {
   if (projectStatus === 'error') {
     return (
       <WebAppShell>
-        <main
+        <section
           data-design="agi"
           style={{
             minHeight: '100%',
@@ -339,7 +339,7 @@ export default function ProjectDetailPage() {
           >
             Retry
           </button>
-        </main>
+        </section>
       </WebAppShell>
     );
   }
@@ -347,7 +347,7 @@ export default function ProjectDetailPage() {
   if (!project || !headerPresentation) {
     return (
       <WebAppShell>
-        <main
+        <section
           data-design="agi"
           style={{
             minHeight: '100%',
@@ -389,14 +389,14 @@ export default function ProjectDetailPage() {
                 : 'This cloud project does not exist, is unavailable to this account, or was deleted.'}
             </p>
           </div>
-        </main>
+        </section>
       </WebAppShell>
     );
   }
 
   return (
     <WebAppShell>
-      <main
+      <section
         data-design="agi"
         style={{
           minHeight: '100%',
@@ -1134,7 +1134,7 @@ export default function ProjectDetailPage() {
             onDelete={handleDeleteProject}
           />
         )}
-      </main>
+      </section>
     </WebAppShell>
   );
 }

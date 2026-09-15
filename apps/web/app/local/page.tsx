@@ -7,6 +7,8 @@ import {
   Ledger,
   MarketingFooter,
   Prose,
+  Transcript,
+  type TranscriptLine,
 } from '@/features/marketing/components/system';
 import { DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
 
@@ -16,7 +18,7 @@ export const metadata = buildMetadata({
   path: '/local',
 });
 
-const HERO_TRANSCRIPT: { kind: 'cmd' | 'out' | 'dim'; text: string }[] = [
+const HERO_TRANSCRIPT: TranscriptLine[] = [
   { kind: 'cmd', text: 'ollama pull <model>' },
   { kind: 'cmd', text: 'agi models scan' },
   { kind: 'out', text: 'ollama · http://localhost:11434 · 1 model' },
@@ -66,13 +68,7 @@ export default function LocalPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <pre className="agi-lp-terminal" aria-label="Pointing AGI at a local model server">
-                {HERO_TRANSCRIPT.map((line, index) => (
-                  <span className="agi-lp-terminal-line" data-kind={line.kind} key={index}>
-                    {line.text}
-                  </span>
-                ))}
-              </pre>
+              <Transcript label="Pointing AGI at a local model server" lines={HERO_TRANSCRIPT} />
             </div>
           </div>
         </section>

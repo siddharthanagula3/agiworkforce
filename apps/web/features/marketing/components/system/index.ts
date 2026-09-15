@@ -27,4 +27,5 @@ export { Stack } from './Stack';
 export { StickyLedger } from './StickyLedger';
 export { SurfaceStatus, type SurfaceStatusProps } from './SurfaceStatus';
 export { ThemeToggle } from './ThemeToggle';
-export { HEADER_LINKS, FOOTER_COLUMNS, FOOTER_LEGAL, WEB_ENTRY_HREF } from './nav';
+export { Transcript, type TranscriptLine } from './Transcript';
+export { FOOTER_COLUMNS, FOOTER_LEGAL, WEB_ENTRY_HREF } from './nav';

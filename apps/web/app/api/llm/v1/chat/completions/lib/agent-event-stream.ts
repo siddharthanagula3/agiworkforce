@@ -3,6 +3,7 @@ import {
   AGENT_EVENT_SCHEMA_VERSION,
   AgentEventEnvelopeSchema,
 } from '@agiworkforce/cloud-contracts';
+import { longestTrailingTagPrefix } from '@/lib/streaming/trailing-tag-prefix';
 
 type AgentEventJson = Extract<AgentEvent, { type: 'tool-execution-start' }>['input'];
 
@@ -27,14 +28,6 @@ export interface PublicTextDeltaProjector {
 
 const THINKING_OPEN_TAG = '<thinking>';
 const THINKING_CLOSE_TAG = '</thinking>';
-
-function longestTrailingTagPrefix(value: string, tag: string): number {
-  const maxLength = Math.min(value.length, tag.length - 1);
-  for (let length = maxLength; length > 0; length -= 1) {
-    if (value.endsWith(tag.slice(0, length))) return length;
-  }
-  return 0;
-}
 
 function createTaggedTextDeltaProjector(collectThinkingSide: boolean): PublicTextDeltaProjector {
   let buffer = '';

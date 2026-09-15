@@ -1,4 +1,12 @@
 import { BILLING_PLAN_PRICING, modelsCatalogJson } from '@agiworkforce/types';
+import { COMING_SOON_LABEL, SURFACE_STATUS } from './surface-status';
+
+export {
+  AVAILABLE_NOW_LABEL,
+  COMING_SOON_LABEL,
+  NOTIFY_CTA,
+  SURFACE_STATUS,
+} from './surface-status';
 
 export const MARKETING_MODEL_PILLS = [
   'OpenAI',
@@ -13,23 +21,6 @@ export const LAUNCH = {
   ctaLabel: 'Get launch access',
 } as const;
 
-export const COMING_SOON_LABEL = 'Coming soon';
-export const AVAILABLE_NOW_LABEL = 'Available now';
-
-export const SURFACE_STATUS = {
-  web: AVAILABLE_NOW_LABEL,
-  desktop: COMING_SOON_LABEL,
-  cli: AVAILABLE_NOW_LABEL,
-  mobile: COMING_SOON_LABEL,
-  vscode: COMING_SOON_LABEL,
-  chrome: COMING_SOON_LABEL,
-} as const;
-
-export const NOTIFY_CTA = {
-  label: 'Get notified',
-  href: '/download',
-} as const;
-
 export const POSITIONING = {
   wedge: 'Try AGI on the web. Local and BYOK for serious work. Managed cloud, open by default.',
   trustBoundary:
@@ -38,9 +29,37 @@ export const POSITIONING = {
     'Managed cloud is open by default; higher capacity is a paid subscription, not an invite.',
 } as const;
 
+const BYOK_SURFACE_IDS = ['cli', 'vscode'] as const;
+const BYOK_SURFACE_NAMES = { cli: 'the CLI', vscode: 'VS Code' } as const;
+
+function joinSurfaceNames(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+function sentence(names: readonly string[], one: string, many: string): string {
+  if (names.length === 0) return '';
+  const joined = joinSurfaceNames(names);
+  return `${joined.charAt(0).toUpperCase()}${joined.slice(1)} ${names.length > 1 ? many : one}.`;
+}
+
+const shippedByokSurfaces = BYOK_SURFACE_IDS.filter(
+  (surface) => SURFACE_STATUS[surface] !== COMING_SOON_LABEL,
+).map((surface) => BYOK_SURFACE_NAMES[surface]);
+const pendingByokSurfaces = BYOK_SURFACE_IDS.filter(
+  (surface) => SURFACE_STATUS[surface] === COMING_SOON_LABEL,
+).map((surface) => BYOK_SURFACE_NAMES[surface]);
+
 export const BYOK_SURFACES = {
   label: 'CLI and VS Code',
   compact: 'CLI · VS Code',
+  shipped: joinSurfaceNames(shippedByokSurfaces),
+  availability: [
+    sentence(shippedByokSurfaces, 'has a published release', 'have published releases'),
+    sentence(pendingByokSurfaces, 'is coming soon', 'are coming soon'),
+  ]
+    .filter(Boolean)
+    .join(' '),
   exclusion:
     'Web, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI account.',
 } as const;
@@ -179,5 +198,5 @@ export const MARKETING = {
 export function approximateCount(count: number): string {
   if (count >= HUNDRED) return `${Math.floor(count / HUNDRED) * HUNDRED}+`;
   if (count >= TEN) return `${Math.floor(count / TEN) * TEN}+`;
-  return `${Math.max(count - 1, 1)}+`;
+  return String(count);
 }

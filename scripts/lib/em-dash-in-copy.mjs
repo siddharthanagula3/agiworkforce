@@ -1,4 +1,4 @@
-const ANY_EM_DASH = /\u2014|\\u2014|\\x\{2014\}|&mdash;|&#8212;|&#x2014;/gi;
+const ANY_EM_DASH = /\u2014|\\u2014|\\x\{2014\}|\\2014(?![0-9a-f])|&mdash;|&#8212;|&#x2014;/gi;
 
 const ALLOW_MARKER = 'em-dash-allow:';
 

@@ -44,9 +44,10 @@ const COVERAGE_FLOOR: Record<string, number> = {
 
 describe('shared i18n bundles', () => {
   it('falls back to English, so a missing key never renders as a raw key', () => {
-    const source = readFileSync(resolve(localesDir, '../src/index.ts'), 'utf8');
-    expect(source).toMatch(/fallbackLng:\s*DEFAULT_LANGUAGE/);
-    expect(source).toMatch(/DEFAULT_LANGUAGE\s*=\s*'en'/);
+    const init = readFileSync(resolve(localesDir, '../src/index.ts'), 'utf8');
+    const languages = readFileSync(resolve(localesDir, '../src/languages.ts'), 'utf8');
+    expect(init).toMatch(/fallbackLng:\s*DEFAULT_LANGUAGE/);
+    expect(languages).toMatch(/DEFAULT_LANGUAGE\s*=\s*'en'/);
   });
 
   it('covers every locale in the ratchet, so a new language cannot skip the guard', () => {

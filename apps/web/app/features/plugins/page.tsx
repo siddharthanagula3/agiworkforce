@@ -9,6 +9,8 @@ import {
   Prose,
   Section,
   Stack,
+  Transcript,
+  type TranscriptLine,
 } from '@/features/marketing/components/system';
 import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
 import { pluginAvailabilityClaim } from '@/features/plugins/availability';
@@ -30,7 +32,7 @@ const IDS = {
   close: 'agi-features-plugins-close-title',
 } as const;
 
-const INSTALL_TRANSCRIPT = [
+const INSTALL_TRANSCRIPT: TranscriptLine[] = [
   { kind: 'cmd', text: 'agi plugin install github-automation --integrity <sha256>' },
   { kind: 'out', text: 'Cloning plugin tree...' },
   { kind: 'out', text: 'Hashing tree with SHA-256... matches --integrity' },
@@ -88,13 +90,7 @@ export default async function FeaturesPluginsPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <pre className="agi-lp-terminal" aria-label="A plugin install in the AGI CLI">
-                {INSTALL_TRANSCRIPT.map((line) => (
-                  <span className="agi-lp-terminal-line" data-kind={line.kind} key={line.text}>
-                    {line.text}
-                  </span>
-                ))}
-              </pre>
+              <Transcript label="A plugin install in the AGI CLI" lines={INSTALL_TRANSCRIPT} />
             </div>
           </div>
         </section>
