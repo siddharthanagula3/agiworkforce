@@ -288,5 +288,13 @@
     "thinkingSimple": "Обдумываю Ваш вопрос...",
     "workingOnGoal": "Работаю над этим... {{goal}}",
     "workingOnRequest": "Обрабатываю Ваш запрос..."
+  },
+  "greeting": {
+    "morning": "Доброе утро",
+    "afternoon": "Добрый день",
+    "evening": "Добрый вечер",
+    "morningNamed": "Доброе утро, {{name}}",
+    "afternoonNamed": "Добрый день, {{name}}",
+    "eveningNamed": "Добрый вечер, {{name}}"
   }
 }
