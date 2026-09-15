@@ -172,6 +172,12 @@ extension state plus the desktop pairing record).
    "[Product] The CLI's OpenAI sign-in runs a ChatGPT-subscription OAuth
    flow" in the founder file. NON-BLOCKING for the product, a terms exposure
    while it ships.
+8. One click on the shell's run-commands consent for the QA folder: the
+   coding surface's Local mode is proven up to the shell's own high-impact
+   consent sheet, which an agent must not answer and automation cannot click
+   while the accessibility grant is broken. Entry "[Desktop QA] One click on
+   the shell's run-commands consent for the QA folder" in the founder file.
+   NON-BLOCKING.
 
 ## 5. Plan
 

@@ -988,3 +988,28 @@ key, or a dated note records the authorization to keep the flow.
 on keeping it, a release note stating the flow's basis.
 **Impact** NON-BLOCKING for the product; a terms exposure while it ships.
 **Status** BLOCKED, FOUNDER DECISION REQUIRED
+
+## [Desktop QA] One click on the shell's run-commands consent for the QA folder
+
+**Why founder assistance is required**
+Starting a coding session in a folder from the desktop shell raises the
+shell's own consent sheet ("Allow AGI Workforce to run commands in
+.../scratchpad/qa-project? ... This is a high-impact permission."). Every
+grant on this machine was cleared during an earlier cleanup, and an agent
+must not answer a high-impact consent on a person's behalf; the machine's
+accessibility grant is also broken (the item above), so the sheet cannot be
+clicked by automation either. The composer's Local mode is proven up to that
+sheet: it names the host command and the right folder, and the managed API is
+never called.
+**Exact action**
+With the dev shell running on the dev origin, open AGI Code, keep Local ·
+qa-project selected, send "Reply with only: ok" on the cheap model the chip
+names, and click "Allow this session" on the sheet. One minute.
+**Where** The Electron shell on the founder's machine.
+**Needed input** One click, then a yes or no on the reply.
+**How to verify completion** The transcript shows the reply and the session
+appears under On this device with the Desktop source.
+**What remains after founder action** Record the turn in the release doc's
+verification matrix for the coding surface's Local mode.
+**Impact** VERIFICATION-BLOCKING (the last leg of the Local composer proof)
+**Status** NON-BLOCKING, FOUNDER ACTION REQUESTED
