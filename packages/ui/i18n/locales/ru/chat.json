@@ -190,7 +190,12 @@
       "detailed": "Подробно, с примерами",
       "technical": "Точно, с примерами кода",
       "creative": "Выразительно и увлекательно"
-    }
+    },
+    "addAttachmentsAndTools": "Добавить вложения и инструменты",
+    "addAttachmentsAndToolsActive": "Добавить вложения и инструменты: активно {{count}}",
+    "voiceStart": "Начать голосовой ввод",
+    "voiceUnsupportedBrowser": "Голосовой ввод не поддерживается в этом браузере",
+    "voiceUnsupportedHint": "Голосовой ввод не поддерживается в этом браузере. Попробуйте Chrome или Edge."
   },
   "bubble": {
     "assistantThinking": "Ассистент думает",

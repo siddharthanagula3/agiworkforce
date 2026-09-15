@@ -190,7 +190,12 @@
       "detailed": "شامل مع أمثلة",
       "technical": "دقيق مع أمثلة برمجية",
       "creative": "معبّر وجذاب"
-    }
+    },
+    "addAttachmentsAndTools": "إضافة مرفقات وأدوات",
+    "addAttachmentsAndToolsActive": "إضافة مرفقات وأدوات: {{count}} نشطة",
+    "voiceStart": "بدء الإدخال الصوتي",
+    "voiceUnsupportedBrowser": "الإدخال الصوتي غير مدعوم في هذا المتصفح",
+    "voiceUnsupportedHint": "الإدخال الصوتي غير مدعوم في هذا المتصفح. جرّب Chrome أو Edge."
   },
   "bubble": {
     "assistantThinking": "المساعد يفكر",

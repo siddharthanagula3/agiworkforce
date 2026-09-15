@@ -190,7 +190,12 @@
       "detailed": "उदाहरणों के साथ विस्तृत",
       "technical": "कोड उदाहरणों के साथ सटीक",
       "creative": "अभिव्यंजक और आकर्षक"
-    }
+    },
+    "addAttachmentsAndTools": "अटैचमेंट और टूल जोड़ें",
+    "addAttachmentsAndToolsActive": "अटैचमेंट और टूल जोड़ें: {{count}} सक्रिय",
+    "voiceStart": "वॉइस इनपुट शुरू करें",
+    "voiceUnsupportedBrowser": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता",
+    "voiceUnsupportedHint": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता। Chrome या Edge आज़माएं।"
   },
   "bubble": {
     "assistantThinking": "सहायक सोच रहा है",

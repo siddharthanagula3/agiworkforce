@@ -190,7 +190,12 @@
       "detailed": "Approfondito con esempi",
       "technical": "Preciso con esempi di codice",
       "creative": "Espressivo e coinvolgente"
-    }
+    },
+    "addAttachmentsAndTools": "Aggiungi allegati e strumenti",
+    "addAttachmentsAndToolsActive": "Aggiungi allegati e strumenti: {{count}} attivi",
+    "voiceStart": "Avvia input vocale",
+    "voiceUnsupportedBrowser": "Input vocale non supportato in questo browser",
+    "voiceUnsupportedHint": "L’input vocale non è supportato in questo browser. Prova Chrome o Edge."
   },
   "bubble": {
     "assistantThinking": "L'assistente sta pensando",

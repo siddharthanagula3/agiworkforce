@@ -190,7 +190,12 @@
       "detailed": "Gründlich mit Beispielen",
       "technical": "Präzise mit Codebeispielen",
       "creative": "Ausdrucksstark und fesselnd"
-    }
+    },
+    "addAttachmentsAndTools": "Anhänge und Tools hinzufügen",
+    "addAttachmentsAndToolsActive": "Anhänge und Tools hinzufügen: {{count}} aktiv",
+    "voiceStart": "Spracheingabe starten",
+    "voiceUnsupportedBrowser": "Spracheingabe wird in diesem Browser nicht unterstützt",
+    "voiceUnsupportedHint": "Spracheingabe wird in diesem Browser nicht unterstützt. Versuchen Sie Chrome oder Edge."
   },
   "bubble": {
     "assistantThinking": "Assistent denkt nach",
