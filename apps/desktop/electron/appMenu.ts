@@ -1,5 +1,5 @@
 import { Menu, app, type MenuItemConstructorOptions } from 'electron';
-import type { HostCommand } from '@agiworkforce/local-runtime-contract';
+import { HOST_MENU_SHORTCUTS, type HostCommand } from '@agiworkforce/local-runtime-contract';
 import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
 
 /**
@@ -46,6 +46,17 @@ export interface AppMenuAccelerators {
 const PAGE_TOGGLE_SIDEBAR_ACCELERATOR = 'CommandOrControl+B';
 const PAGE_KEYBOARD_SHORTCUTS_ACCELERATOR = 'CommandOrControl+/';
 
+/**
+ * The chords this menu claims come from the contract, which is also what the
+ * page's shortcut sheet renders. A literal here would let the menu and the
+ * sheet describe different keys for the same command.
+ */
+function hostAccelerator(id: string): string {
+  const shortcut = HOST_MENU_SHORTCUTS.find((candidate) => candidate.id === id);
+  if (!shortcut) throw new Error(`no host menu shortcut named ${id}`);
+  return shortcut.accelerator;
+}
+
 const isMac = process.platform === 'darwin';
 
 function appleMenu(): MenuItemConstructorOptions[] {
@@ -80,7 +91,7 @@ function fileMenu(
   accelerators: AppMenuAccelerators,
 ): MenuItemConstructorOptions {
   const items: MenuItemConstructorOptions[] = [
-    { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: actions.newChat },
+    { label: 'New Chat', accelerator: hostAccelerator('host-new-chat'), click: actions.newChat },
     {
       label: 'Quick Ask',
       accelerator: accelerators.quickAsk,
@@ -95,7 +106,11 @@ function fileMenu(
       click: actions.captureScreenshot,
     },
     { type: 'separator' },
-    { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: actions.openSettings },
+    {
+      label: 'Settings',
+      accelerator: hostAccelerator('host-settings'),
+      click: actions.openSettings,
+    },
   ];
 
   if (!isMac) {
@@ -140,9 +155,21 @@ function viewMenu(actions: AppMenuActions): MenuItemConstructorOptions {
       click: () => actions.sendHostCommand('toggle-sidebar'),
     },
     { type: 'separator' },
-    { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => actions.setZoomLevel(0) },
-    { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: () => actions.stepZoomLevel(1) },
-    { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => actions.stepZoomLevel(-1) },
+    {
+      label: 'Actual Size',
+      accelerator: hostAccelerator('host-actual-size'),
+      click: () => actions.setZoomLevel(0),
+    },
+    {
+      label: 'Zoom In',
+      accelerator: hostAccelerator('host-zoom-in'),
+      click: () => actions.stepZoomLevel(1),
+    },
+    {
+      label: 'Zoom Out',
+      accelerator: hostAccelerator('host-zoom-out'),
+      click: () => actions.stepZoomLevel(-1),
+    },
     { type: 'separator' },
     { role: 'togglefullscreen' },
   ];
@@ -156,18 +183,23 @@ function historyMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return {
     label: 'History',
     submenu: [
-      { label: 'Back', accelerator: 'CmdOrCtrl+[', click: actions.goBack },
-      { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: actions.goForward },
+      { label: 'Back', accelerator: hostAccelerator('host-back'), click: actions.goBack },
+      { label: 'Forward', accelerator: hostAccelerator('host-forward'), click: actions.goForward },
     ],
   };
 }
 
 function windowMenu(): MenuItemConstructorOptions {
-  const items: MenuItemConstructorOptions[] = [{ role: 'minimize' }, { role: 'zoom' }];
+  // Close is on every platform: macOS reads a window with no Cmd+W as broken,
+  // and the app survives losing its last window because `activate`, a second
+  // launch and a deep link all bring one back.
+  const items: MenuItemConstructorOptions[] = [
+    { role: 'minimize' },
+    { role: 'zoom' },
+    { role: 'close', accelerator: hostAccelerator('host-close-window') },
+  ];
   if (isMac) {
     items.push({ type: 'separator' }, { role: 'front' });
-  } else {
-    items.push({ role: 'close' });
   }
   return { label: 'Window', submenu: items };
 }

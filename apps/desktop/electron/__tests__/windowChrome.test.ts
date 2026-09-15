@@ -2,7 +2,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseShellTokens, readShellTokens } from '../shellTokens.mjs';
-import { trafficLightPosition } from '../windowChrome';
+import {
+  trafficLightPosition,
+  windowButtonsTrailingEdge,
+  windowButtonsTrailingGutter,
+} from '../windowChrome';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 
@@ -18,7 +22,11 @@ describe('shell tokens', () => {
 
   it('resolves a dark background held as hsl channels on a foundation token', () => {
     const chat = `@layer base {
-      :root { --chat-bg: #FAF9F7; --chat-window-title-strip: 48px; }
+      :root {
+        --chat-bg: #FAF9F7;
+        --chat-window-title-strip: 48px;
+        --chat-window-title-strip-inset: 84px;
+      }
       .dark { --chat-bg: hsl(var(--neutral-0)); }
     }`;
     const foundation = `@layer base {
@@ -29,6 +37,7 @@ describe('shell tokens', () => {
       pageBackgroundLight: '#faf9f7',
       pageBackgroundDark: '#336699',
       titleStripHeight: 48,
+      titleStripInset: 84,
     });
   });
 
@@ -42,6 +51,14 @@ describe('shell tokens', () => {
     const chat = '@layer base { :root { --chat-bg: #ffffff; } .dark { --chat-bg: #000000; } }';
 
     expect(() => parseShellTokens(chat, ':root {}')).toThrow(/--chat-window-title-strip/u);
+  });
+
+  it('reserves an inset that clears the window buttons instead of reaching them', () => {
+    const tokens = readShellTokens(repoRoot);
+
+    expect(tokens.titleStripInset).toBeGreaterThanOrEqual(
+      windowButtonsTrailingEdge() + windowButtonsTrailingGutter(),
+    );
   });
 });
 

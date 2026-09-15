@@ -7,6 +7,7 @@ import {
   ipcMain,
   nativeTheme,
   protocol,
+  screen,
   session,
   shell,
 } from 'electron';
@@ -41,6 +42,7 @@ import {
   configureDeveloperSessions,
   stopAllDeveloperRuntimes,
 } from './runtime/developerSessionService';
+import { approveDeviceCode, readShellIdentity } from './shellIdentity';
 import { stopComputerUseHelper } from './runtime/computerUseService';
 import { installAppMenu } from './appMenu';
 import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
@@ -55,11 +57,17 @@ import {
   RENDERER_SCHEME,
 } from './config';
 import {
+  MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
   SHORTCUT_KEYS,
   ZOOM_LEVEL_STEP,
   clampZoomLevel,
+  fillsWorkArea,
+  frameIsOnScreen,
   hostShortcutKeyFor,
+  isAppearance,
   pickableCaptureSources,
+  type WindowFrame,
 } from './garnishCore';
 import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
 import { captureToChat } from './screenshot';
@@ -425,8 +433,9 @@ function registerIpcHandlers(): void {
    */
   ipcMain.handle(ELECTRON_IPC_CHANNELS.rendererTheme, async (event, theme) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    if (theme !== 'dark' && theme !== 'light' && theme !== 'system') return;
+    if (!isAppearance(theme)) return;
     nativeTheme.themeSource = theme;
+    if (getPreferences().appearance !== theme) saveSettings({ appearance: theme });
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.relaunch, async (event) => {
@@ -483,7 +492,7 @@ function deliverDeepLink(url: string): void {
         `"${RENDERER_MODE}" loads ${CLOUD_APP_ORIGIN} top-level with no preload, so no IPC ` +
         'receiver is attached. Unset AGI_CLOUD_RENDERER to restore native deep links.',
     );
-    focusMainWindow();
+    showMainWindow();
     return;
   }
 
@@ -492,6 +501,7 @@ function deliverDeepLink(url: string): void {
     mainWindow.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, url);
   } else {
     pendingDeepLink = url;
+    showMainWindow();
   }
 }
 
@@ -571,14 +581,77 @@ function offlineScreenUrl(targetUrl: string, detail: string): string {
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
+function rememberedFrame(): WindowFrame | null {
+  const frame = getPreferences().windowFrame;
+  if (!frame) return null;
+  const workAreas = screen.getAllDisplays().map((display) => display.workArea);
+  return frameIsOnScreen(frame, workAreas) ? frame : null;
+}
+
+/**
+ * Follows the window's frame so a launch can put it back where it was.
+ *
+ * The restore size is only ever taken from a frame the user chose: a zoomed
+ * window reports its own bounds as normal on macOS while it settles, and
+ * writing that down is what makes a remembered window creep outwards a little
+ * on every launch until it fills the screen.
+ */
+function followWindowFrame(win: BrowserWindow, restored: WindowFrame | null): () => void {
+  let bounds = restored
+    ? { x: restored.x, y: restored.y, width: restored.width, height: restored.height }
+    : win.getBounds();
+  let maximized = restored?.maximized ?? false;
+  let pending: ReturnType<typeof setTimeout> | null = null;
+
+  const persist = () => {
+    saveSettings({ windowFrame: { ...bounds, maximized } });
+  };
+
+  const readSettled = () => {
+    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return;
+    const current = win.getBounds();
+    if (win.isMaximized() || fillsWorkArea(current, screen.getDisplayMatching(current).workArea)) {
+      maximized = true;
+      return;
+    }
+    bounds = current;
+    maximized = false;
+  };
+
+  const schedule = () => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => {
+      pending = null;
+      readSettled();
+      persist();
+    }, 400);
+    pending.unref?.();
+  };
+
+  win.on('resize', schedule);
+  win.on('move', schedule);
+  win.on('maximize', schedule);
+  win.on('unmaximize', schedule);
+
+  // Closing never reads the window. A zoom is still animating when the frame is
+  // torn down, and the size it reports mid-animation is the one that would be
+  // written down as the size to restore to.
+  return () => {
+    if (pending) clearTimeout(pending);
+    persist();
+  };
+}
+
 function createMainWindow(): void {
   const isRemote = RENDERER_MODE === 'remote';
+  const frame = rememberedFrame();
 
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    width: frame?.width ?? 1280,
+    height: frame?.height ?? 800,
+    ...(frame ? { x: frame.x, y: frame.y } : {}),
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     backgroundColor: pageBackgroundColor(nativeTheme.shouldUseDarkColors),
     ...titleBarChrome(process.platform),
@@ -604,9 +677,14 @@ function createMainWindow(): void {
 
   applyRemoteWindowPolicy(mainWindow);
 
+  if (frame?.maximized) mainWindow.maximize();
+
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
+
+  const flushWindowFrame = followWindowFrame(mainWindow, frame);
+  mainWindow.on('close', flushWindowFrame);
 
   mainWindow.webContents.once('did-finish-load', () => {
     if (pendingDeepLink) {
@@ -859,7 +937,7 @@ if (!hasSingleInstanceLock) {
   app.on('second-instance', (_event, argv) => {
     const link = argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
     if (link) deliverDeepLink(link);
-    focusMainWindow();
+    showMainWindow();
   });
 
   app.on('open-url', (event, url) => {
@@ -873,6 +951,7 @@ if (!hasSingleInstanceLock) {
     // the other end of it. `isTrustedSender` is what decides who may call, not
     // which mode we booted in.
     registerIpcHandlers();
+    nativeTheme.themeSource = getPreferences().appearance;
     if (RENDERER_MODE === 'bundled') {
       protocol.handle(RENDERER_SCHEME, serveRenderer);
       configureSession(session.defaultSession);
@@ -909,6 +988,7 @@ if (!hasSingleInstanceLock) {
     configureDeveloperSessions({
       emit: (rootId, event) => sendRuntimeEvent({ kind: 'developer-session', rootId, event }),
       resolveBinary: () => getPreferences().cliPath,
+      accountBridge: { readShellIdentity, approveDeviceCode },
     });
 
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();

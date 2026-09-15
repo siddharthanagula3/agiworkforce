@@ -79,8 +79,9 @@ function requirePixels(chatCss, token) {
 
 /**
  * What the shell needs from the design tokens before it can open a window: the
- * colour it paints behind a page that has not drawn yet, and the height of the
- * band it hands back to that page when it hides the native title bar.
+ * colour it paints behind a page that has not drawn yet, the height of the band
+ * it hands back to that page when it hides the native title bar, and how far
+ * into that band the window buttons reach.
  */
 export function parseShellTokens(chatCss, foundationCss) {
   const light = declaredValue(chatCss, LIGHT_SELECTOR, '--chat-bg');
@@ -97,6 +98,7 @@ export function parseShellTokens(chatCss, foundationCss) {
     pageBackgroundLight,
     pageBackgroundDark,
     titleStripHeight: requirePixels(chatCss, '--chat-window-title-strip'),
+    titleStripInset: requirePixels(chatCss, '--chat-window-title-strip-inset'),
   };
 }
 

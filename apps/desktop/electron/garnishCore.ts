@@ -208,6 +208,83 @@ export function centeredUpperPosition(
   return { x, y: Math.min(preferredY, maxY) };
 }
 
+export const APPEARANCE_CHOICES = ['system', 'light', 'dark'] as const;
+
+export type Appearance = (typeof APPEARANCE_CHOICES)[number];
+
+export function isAppearance(value: unknown): value is Appearance {
+  return APPEARANCE_CHOICES.includes(value as Appearance);
+}
+
+export interface WindowFrame {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  maximized: boolean;
+}
+
+export const MIN_WINDOW_WIDTH = 800;
+export const MIN_WINDOW_HEIGHT = 600;
+
+export function normalizeWindowFrame(raw: unknown): WindowFrame | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const numbers = (['x', 'y', 'width', 'height'] as const).map((key) => source[key]);
+  if (!numbers.every((value) => typeof value === 'number' && Number.isFinite(value))) return null;
+  const [x, y, width, height] = numbers as [number, number, number, number];
+  if (width < MIN_WINDOW_WIDTH || height < MIN_WINDOW_HEIGHT) return null;
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.round(width),
+    height: Math.round(height),
+    maximized: source['maximized'] === true,
+  };
+}
+
+/**
+ * Whether a frame is the one a zoomed window occupies.
+ *
+ * macOS zoom is not the maximize other platforms have: the window reports
+ * itself unmaximized while it is settling, and a size read in that moment gets
+ * written down as the size to restore to, so the remembered window grows to
+ * fill the screen and never shrinks back. Comparing against the work area is
+ * what tells a zoomed frame from a frame the user chose.
+ *
+ * The tolerance is generous because the zoom lands a dozen pixels short of the
+ * work area on a notched display, and because a window a user drags to within
+ * a couple of dozen pixels of full is restored identically either way.
+ */
+export function fillsWorkArea(bounds: RectLike, workArea: RectLike): boolean {
+  const tolerance = 24;
+  return (
+    Math.abs(bounds.x - workArea.x) <= tolerance &&
+    Math.abs(bounds.y - workArea.y) <= tolerance &&
+    Math.abs(bounds.width - workArea.width) <= tolerance &&
+    Math.abs(bounds.height - workArea.height) <= tolerance
+  );
+}
+
+/**
+ * Keeps a remembered frame on a display that still exists.
+ *
+ * A window restored onto a monitor that has since been unplugged is off-screen
+ * with no way back, so the frame is only honoured where it overlaps a work area
+ * by enough of its title strip to be draggable; otherwise the caller centres a
+ * default window instead.
+ */
+export function frameIsOnScreen(frame: WindowFrame, workAreas: readonly RectLike[]): boolean {
+  const minimumVisible = 80;
+  return workAreas.some((area) => {
+    const overlapX =
+      Math.min(frame.x + frame.width, area.x + area.width) - Math.max(frame.x, area.x);
+    const overlapY =
+      Math.min(frame.y + frame.height, area.y + area.height) - Math.max(frame.y, area.y);
+    return overlapX >= minimumVisible && overlapY >= minimumVisible;
+  });
+}
+
 export interface GarnishPreferences {
   launchAtLogin: boolean;
   showInMenuBar: boolean;
@@ -218,6 +295,20 @@ export interface GarnishPreferences {
    * chose instead of resetting every launch.
    */
   zoomLevel: number;
+  /**
+   * The appearance the page last asked this process to draw its own dialogs in.
+   *
+   * The window's background colour is chosen before any page has loaded, so
+   * without a remembered value the first frame is painted from the operating
+   * system's appearance and flips once the page tells the process what the user
+   * actually chose. "system" is the value that hands the choice back to macOS.
+   */
+  appearance: Appearance;
+  /**
+   * Where the window was when it was last closed. A desktop app that forgets
+   * its own frame makes every launch the first one.
+   */
+  windowFrame: WindowFrame | null;
 }
 
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
@@ -225,6 +316,8 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   showInMenuBar: true,
   cliPath: '',
   zoomLevel: 0,
+  appearance: 'system',
+  windowFrame: null,
 };
 
 export const ZOOM_LEVEL_STEP = 1;
@@ -256,6 +349,10 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       typeof source['zoomLevel'] === 'number'
         ? clampZoomLevel(source['zoomLevel'])
         : DEFAULT_PREFERENCES.zoomLevel,
+    appearance: isAppearance(source['appearance'])
+      ? source['appearance']
+      : DEFAULT_PREFERENCES.appearance,
+    windowFrame: normalizeWindowFrame(source['windowFrame']),
   };
 }
 
