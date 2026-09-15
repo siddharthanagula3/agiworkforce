@@ -16,12 +16,14 @@ import {
   startLocalCommand,
   writeLocalCommandPolicy,
 } from '../lib/runtime-client';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 type Invoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
 function installHost(invoke: Invoke) {
   const listeners = new Set<(event: DesktopRuntimeEvent) => void>();
   const host = {
+    ...hostBridgeStub(),
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     invokeRuntime: invoke as HostBridge['invokeRuntime'],

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
@@ -12,7 +11,6 @@ import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 
 describe('commandLabel', () => {
   it('names every inline command the way the plan-mode prompt shows it', () => {
-    expect(commandLabel('explain')).toBe('Explain Code');
     expect(commandLabel('fix')).toBe('Fix Issues');
     expect(commandLabel('refactor')).toBe('Refactor');
     expect(commandLabel('tests')).toBe('Generate Tests');
@@ -26,7 +24,15 @@ describe('commandLabel', () => {
 
 describe('buildStatusBarText', () => {
   it('shows model only when no features enabled', () => {
-    expect(buildExtensionStatusBarText('auto', 'auto')).toBe('$(hubot) AGI: auto');
+    expect(buildExtensionStatusBarText('auto', 'auto')).toBe('$(hubot) AGI: Auto');
+  });
+
+  it('names a catalog model the way the composer names it, never by its raw id', () => {
+    const catalogModel = MODEL_PICKER_OPTIONS.find((option) => option.id !== 'auto');
+    expect(catalogModel).toBeDefined();
+    const text = buildExtensionStatusBarText(catalogModel!.id, 'auto');
+    expect(text).toBe(`$(hubot) AGI: ${catalogModel!.label}`);
+    expect(text).not.toContain(catalogModel!.id);
   });
 
   it('shows plan mode chip', () => {
@@ -35,7 +41,7 @@ describe('buildStatusBarText', () => {
     expect(text).toContain('current-model');
   });
 
-  it('keeps optional desktop connectivity out of the primary model status', () => {
+  it('keeps a local model, which has no catalog name, under its own id', () => {
     const fixtureModelId = 'fixture-status-model';
     const text = buildExtensionStatusBarText(fixtureModelId, 'plan');
     expect(text).toContain('plan');

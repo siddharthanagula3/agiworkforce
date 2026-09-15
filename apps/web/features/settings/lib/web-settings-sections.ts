@@ -48,13 +48,48 @@ export const WEB_SETTINGS_BUILT_IN_SECTIONS = [
   'plugins',
 ] as const satisfies readonly SettingsNavKey[];
 
+/**
+ * Sections that exist only when the page is running inside the desktop shell.
+ *
+ * They are typed apart from `WEB_SETTINGS_CONTENT_SECTIONS` so the modal's
+ * `sectionContent` map stays exhaustive over the sections a browser can reach,
+ * and so a `?settings=desktop` deep link opened in a browser falls back to
+ * general rather than rendering a panel with no shell behind it.
+ */
+export const WEB_SETTINGS_HOSTED_SECTIONS = [
+  'desktop',
+] as const satisfies readonly SettingsNavKey[];
+
+export type WebSettingsHostedSection = (typeof WEB_SETTINGS_HOSTED_SECTIONS)[number];
+
 const WEB_SETTINGS_SECTION_SET: ReadonlySet<string> = new Set<string>([
   ...WEB_SETTINGS_CONTENT_SECTIONS,
   ...WEB_SETTINGS_BUILT_IN_SECTIONS,
 ]);
 
-export function isWebSettingsSection(value: string): boolean {
-  return WEB_SETTINGS_SECTION_SET.has(value);
+const WEB_SETTINGS_HOSTED_SECTION_SET: ReadonlySet<string> = new Set<string>(
+  WEB_SETTINGS_HOSTED_SECTIONS,
+);
+
+export function isWebSettingsSection(value: string, hosted = false): boolean {
+  if (WEB_SETTINGS_SECTION_SET.has(value)) return true;
+  return hosted && WEB_SETTINGS_HOSTED_SECTION_SET.has(value);
+}
+
+export const WEB_SETTINGS_FALLBACK_SECTION = 'general';
+
+/**
+ * Which section a requested one actually opens.
+ *
+ * A link to a desktop-only section still means "open settings" in a browser,
+ * so it lands on the first section rather than doing nothing at all, which is
+ * what a link that silently no-ops looks like to whoever sent it. A name that
+ * is no section anywhere answers null and opens nothing.
+ */
+export function resolveWebSettingsSection(value: string, hosted = false): string | null {
+  if (WEB_SETTINGS_SECTION_SET.has(value)) return value;
+  if (!WEB_SETTINGS_HOSTED_SECTION_SET.has(value)) return null;
+  return hosted ? value : WEB_SETTINGS_FALLBACK_SECTION;
 }
 
 export const SETTINGS_DEEP_LINK_QUERY_KEY = 'settings';

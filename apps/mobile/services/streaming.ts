@@ -12,7 +12,7 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError } from './api';
-import { parseJsonBody, rateLimitErrorFrom } from './apiErrors';
+import { httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -267,7 +267,7 @@ async function attemptStream(
       }
     }
 
-    callbacks.onError(new Error(`HTTP ${response.status}: ${text}`));
+    callbacks.onError(httpErrorFrom(response.status, text));
     return false;
   }
 

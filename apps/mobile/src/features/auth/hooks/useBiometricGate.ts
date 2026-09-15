@@ -7,6 +7,8 @@ interface BiometricGateResult {
   isUnlocked: boolean;
   isReady: boolean;
   isLocked: boolean;
+  /** True while the app is not frontmost, so the switcher snapshot is covered. */
+  isCovered: boolean;
   authenticate: () => Promise<boolean>;
 }
 
@@ -16,6 +18,7 @@ export function useBiometricGate(): BiometricGateResult {
   const biometricLockEnabled = useBiometricFlag((s) => s.enabled);
   const hydrated = useBiometricFlag((s) => s.hydrated);
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isCovered, setIsCovered] = useState(false);
   const previousStateRef = useRef<AppStateStatus>(AppState.currentState);
   const authenticationPromiseRef = useRef<Promise<boolean> | null>(null);
 
@@ -111,6 +114,13 @@ export function useBiometricGate(): BiometricGateResult {
       const prev = previousStateRef.current;
       previousStateRef.current = nextState;
 
+      // iOS snapshots the app as it leaves the foreground, and that snapshot is
+      // what the app switcher shows. Locking only on the way back meant the
+      // switcher carried the user's conversation the whole time the app was
+      // away. Cover first, without prompting: the prompt still belongs to the
+      // return trip.
+      setIsCovered(nextState !== 'active');
+
       if (prev === 'background' && nextState === 'active') {
         setIsUnlocked(false);
         void authenticate();
@@ -133,6 +143,7 @@ export function useBiometricGate(): BiometricGateResult {
       isUnlocked: false,
       isReady: false,
       isLocked: true,
+      isCovered: false,
       authenticate,
     };
   }
@@ -141,6 +152,7 @@ export function useBiometricGate(): BiometricGateResult {
     isUnlocked: visualQaBiometricBypassEnabled ? true : isUnlocked,
     isReady: true,
     isLocked: visualQaBiometricBypassEnabled ? false : !isUnlocked,
+    isCovered: visualQaBiometricBypassEnabled ? false : isCovered,
     authenticate,
   };
 }

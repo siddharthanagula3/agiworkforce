@@ -80,6 +80,8 @@ export function HelpSection() {
           <li key={href}>
             <SettingsPageLink
               href={href}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex items-start gap-3 rounded-[var(--radius-lg)] border border-[var(--settings-border)] bg-[var(--bg-elev)] p-3 transition-colors hover:border-[var(--text-3)]"
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-3)]" aria-hidden="true" />

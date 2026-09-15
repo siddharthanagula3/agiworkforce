@@ -117,41 +117,55 @@ jest.mock('../storage/installedModels', () => ({
   recordInstalledModel: jest.fn().mockResolvedValue(undefined),
 }));
 
-const mockDefaultLocalModel = {
-  id: DEFAULT_LOCAL_MODEL_ID,
-  displayName: 'Fixture Standard',
-  family: 'fixture-family',
-  paramCountB: 1.5,
-  fileSizeBytes: 1_073_741_824,
-  supportedRuntimes: ['gguf'],
-  contextWindow: 32768,
-  capabilities: {
-    text: true,
-    visionIn: false,
-    audioIn: false,
-    toolCalls: true,
-    structuredOutput: true,
-  },
-  license: 'Apache-2.0',
-  role: 'default',
-  shipsInV1: true,
-};
-const mockLiteLocalModel = {
-  ...mockDefaultLocalModel,
-  id: LITE_LOCAL_MODEL_ID,
-  displayName: 'AGI Lite',
-  family: 'fixture-lite-family',
-  paramCountB: 1,
-  fileSizeBytes: 600_000_000,
-  role: 'lite-mode',
-};
+// Declared as a hoisted function so the `@agiworkforce/local-llm` factory can
+// build them: the model store is now imported at onboarding module scope and
+// reads the catalogue during that import, before any `const` has run.
+function mockMakeLocalModelFixtures() {
+  const base = {
+    id: DEFAULT_LOCAL_MODEL_ID,
+    displayName: 'Fixture Standard',
+    family: 'fixture-family',
+    paramCountB: 1.5,
+    fileSizeBytes: 1_073_741_824,
+    supportedRuntimes: ['gguf'],
+    contextWindow: 32768,
+    capabilities: {
+      text: true,
+      visionIn: false,
+      audioIn: false,
+      toolCalls: true,
+      structuredOutput: true,
+    },
+    license: 'Apache-2.0',
+    role: 'default',
+    shipsInV1: true,
+  };
+  return [
+    base,
+    {
+      ...base,
+      id: LITE_LOCAL_MODEL_ID,
+      displayName: 'AGI Lite',
+      family: 'fixture-lite-family',
+      paramCountB: 1,
+      fileSizeBytes: 600_000_000,
+      role: 'lite-mode',
+    },
+  ];
+}
+
+const [mockDefaultLocalModel, mockLiteLocalModel] = mockMakeLocalModelFixtures();
+
 jest.mock('@agiworkforce/local-llm', () => ({
   detectCapabilities: (...args: unknown[]) => mockDetectCapabilities(...args),
-  getDefaultModel: jest.fn(() => mockDefaultLocalModel),
+  getDefaultModel: jest.fn(() => mockMakeLocalModelFixtures()[0]),
   getModelById: jest.fn((id: string) =>
-    [mockDefaultLocalModel, mockLiteLocalModel].find((model) => model.id === id),
+    mockMakeLocalModelFixtures().find((model) => model.id === id),
   ),
-  getShippableModels: jest.fn(() => [mockDefaultLocalModel, mockLiteLocalModel]),
+  getShippableModels: jest.fn(() => mockMakeLocalModelFixtures()),
+  getSystemModelForTier1Runtime: jest.fn(() => undefined),
+  hasRunnableGgufArtifacts: jest.fn(() => true),
+  tier2LoadModel: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('expo-constants', () => ({

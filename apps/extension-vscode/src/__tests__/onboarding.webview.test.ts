@@ -84,18 +84,29 @@ describe('VS Code first-run onboarding', () => {
     expect(document.querySelector('[data-onboarding-step="1"]')?.hasAttribute('hidden')).toBe(true);
   });
 
-  it('explains task availability honestly and opens the in-IDE cloud task list', () => {
-    const { postMessage } = executeOnboarding();
+  it('gives every step one title and one sentence, with no card or disclosure list', () => {
+    executeOnboarding();
+
+    for (let step = 0; step < 4; step += 1) {
+      const article = document.querySelector(`[data-onboarding-step="${step}"]`);
+      expect(article?.querySelectorAll('h2')).toHaveLength(1);
+      expect(article?.querySelectorAll('p.onboarding-lede')).toHaveLength(1);
+      expect(article?.querySelector('.onboarding-card')).toBeNull();
+      expect(article?.querySelector('.onboarding-disclosures')).toBeNull();
+      if (step < 3) click('onboardingNext');
+    }
+  });
+
+  it('names task handoff on step two without a second entry point to Cloud Tasks', () => {
+    executeOnboarding();
     click('onboardingNext');
 
     expect(document.getElementById('onboardingProgress')?.textContent).toBe('Step 2 of 4');
-    expect(document.body.textContent).toContain('Cloud AGI Work runs started on any');
     expect(document.body.textContent).toContain('appear in the Cloud Tasks view');
-    click('onboardingTasks');
-    expect(postMessage).toHaveBeenCalledWith({ type: 'openCloudTasks' });
+    expect(document.getElementById('onboardingTasks')).toBeNull();
   });
 
-  it('places autonomy, fallibility, active boundary, and privacy links before completion', () => {
+  it('places autonomy and the privacy links before completion', () => {
     const { postMessage } = executeOnboarding();
     click('onboardingNext');
     click('onboardingNext');
@@ -103,14 +114,7 @@ describe('VS Code first-run onboarding', () => {
 
     expect(document.getElementById('onboardingProgress')?.textContent).toBe('Step 4 of 4');
     expect(document.body.textContent).toContain('Ask, Auto, Plan, or Bypass');
-    expect(document.body.textContent).toContain('AGI can make mistakes');
-    expect(document.body.textContent).toContain('Review generated code and every command');
-    expect(document.getElementById('onboardingBoundary')?.textContent).toContain(
-      'Runtime route pending',
-    );
-    expect(document.getElementById('onboardingBoundary')?.textContent).toContain(
-      'the AGI CLI will confirm Local, BYOK, or Managed Cloud before the first turn starts',
-    );
+    expect(document.getElementById('onboardingBoundary')).toBeNull();
 
     click('onboardingPermissionDocs');
     click('onboardingPrivacySettings');

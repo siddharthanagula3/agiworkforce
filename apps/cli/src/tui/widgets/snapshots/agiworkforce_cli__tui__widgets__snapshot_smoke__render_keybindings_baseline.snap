@@ -8,7 +8,7 @@ expression: rendered
     Global
       Ctrl+C       Cancel current turn / interrupt
       Ctrl+D       Exit AGI
-      Ctrl+L       Clear screen (preserve session)
+      Ctrl+L       Redraw the screen (preserve session)
       Tab          Toggle plan mode
       Shift+Tab    Cycle plan / accept / reject
 
@@ -16,6 +16,7 @@ expression: rendered
       /            Open palette
       ↑/↓          Navigate commands
       Enter        Run selected command
+      Tab          Fill the composer without running
       Esc          Close palette
       type         Filter commands
 
@@ -28,7 +29,8 @@ expression: rendered
     Editor
       Ctrl+E       Open external editor for current input
       Enter        Send message
-      Shift+Enter  Insert newline (multiline)
-      Alt+Enter    Insert newline (multiline, alternate)
+      Ctrl+J       Insert newline (multiline)
+      Shift+Enter  Insert newline, where the terminal sends it
+      Ctrl+U       Delete to line start
 
   Esc to close

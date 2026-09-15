@@ -15,7 +15,7 @@ import {
   Search,
   FileText,
 } from 'lucide-react';
-import { formatCredits, type ResearchStep } from '@agiworkforce/types';
+import { formatCredits, runStatusLabel, type ResearchStep } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
@@ -36,12 +36,14 @@ const PHASE_FALLBACK_LABELS: Record<MessageResearchState['phase'], string> = {
   interrupted: 'Research stopped',
 };
 
+const DROPPED_STEP_LABEL = 'Not run';
+
 const STEP_STATUS_LABELS: Record<ResearchStep['status'], string> = {
-  pending: 'Queued',
-  running: 'In progress',
-  completed: 'Done',
-  failed: 'Failed',
-  dropped: 'Not run',
+  pending: runStatusLabel('queued'),
+  running: runStatusLabel('running'),
+  completed: runStatusLabel('completed'),
+  failed: runStatusLabel('failed'),
+  dropped: DROPPED_STEP_LABEL,
 };
 
 function PlanStepRow({ step }: { step: ResearchStep }) {

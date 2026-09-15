@@ -4,6 +4,7 @@ import {
   type CloudAgentRun,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { agentTaskStateLabel } from '@agiworkforce/types';
 import {
   ALL_MANAGED_RUN_STATES,
   cancelChromeManagedRun,
@@ -12,9 +13,15 @@ import {
   resolveChromeManagedRunApproval,
 } from '../cloud-bridge/managedRunControl';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
+import {
+  buildSchedulesSection,
+  SCHEDULES_SECTION_CSS,
+  type SchedulesSectionDependencies,
+} from './schedulesSection';
 import { el } from './dom';
 
-export const CLOUD_RUNS_PANEL_CSS = `
+export const CLOUD_RUNS_PANEL_CSS =
+  `
   #sp-runs-panel {
     display: none;
     flex-direction: column;
@@ -329,23 +336,11 @@ export const CLOUD_RUNS_PANEL_CSS = `
     white-space: pre-wrap;
     word-break: break-word;
   }
-`;
+` + SCHEDULES_SECTION_CSS;
 
 type RunFilter = 'active' | 'all';
 type RunStateTone = 'active' | 'attention' | 'success' | 'danger' | 'muted';
 type StatusOrigin = 'progress' | 'load' | 'action';
-
-const RUN_STATE_LABELS: Record<CloudAgentRun['state'], string> = {
-  queued: 'Queued',
-  running: 'Running',
-  awaiting_input: 'Needs approval',
-  ready_for_review: 'Ready for review',
-  completed: 'Completed',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-  paused: 'Paused',
-  archived: 'Archived',
-};
 
 const RUN_STATE_TONES: Record<CloudAgentRun['state'], RunStateTone> = {
   queued: 'active',
@@ -406,6 +401,7 @@ export interface CloudRunsPanelDependencies {
   signIn: typeof openClerkSignIn;
   refreshIntervalMs: number;
   now: () => number;
+  schedules: Partial<SchedulesSectionDependencies>;
 }
 
 export interface CloudRunsPanelAPI {
@@ -424,6 +420,7 @@ const DEFAULT_DEPENDENCIES: CloudRunsPanelDependencies = {
   signIn: openClerkSignIn,
   refreshIntervalMs: RUN_REFRESH_INTERVAL_MS,
   now: () => Date.now(),
+  schedules: {},
 };
 
 function formatRelativeTime(iso: string, now: number): string {
@@ -475,7 +472,7 @@ function describeEnvelope(envelope: AgentEventEnvelope): JournalEntry | null {
     case 'artifact-produced':
       return { kind: 'tool', title: `Artifact: ${event.name}` };
     case 'task-state-changed':
-      return { kind: 'state', title: RUN_STATE_LABELS[event.state] };
+      return { kind: 'state', title: agentTaskStateLabel(event.state) };
     case 'error':
       return { kind: 'error', title: event.message };
     default:
@@ -544,6 +541,9 @@ export function buildCloudRunsPanel(
   detailEl.hidden = true;
   panelEl.appendChild(listEl);
   panelEl.appendChild(detailEl);
+
+  const schedules = buildSchedulesSection(deps.schedules);
+  panelEl.appendChild(schedules.sectionEl);
 
   let filter: RunFilter = 'active';
   let runs: CloudAgentRun[] = [];
@@ -642,7 +642,13 @@ export function buildCloudRunsPanel(
     if (!pending) return null;
 
     const card = el('div', { class: 'sp-run-approval', role: 'group' });
-    card.appendChild(el('div', { class: 'sp-run-approval-title' }, `Waiting on you, ${run.model}`));
+    card.appendChild(
+      el(
+        'div',
+        { class: 'sp-run-approval-title' },
+        `${agentTaskStateLabel('awaiting_input')}, ${run.model}`,
+      ),
+    );
     for (const call of pending.toolCalls) {
       card.appendChild(
         el('div', { class: 'sp-run-approval-call' }, `${call.name}\n${call.argsPreview}`),
@@ -747,7 +753,7 @@ export function buildCloudRunsPanel(
       type: 'button',
       class: 'sp-run-row',
       'data-run-id': run.id,
-      'aria-label': `Open ${WORK_MODE_LABELS[run.workMode]} run, ${RUN_STATE_LABELS[run.state]}`,
+      'aria-label': `Open ${WORK_MODE_LABELS[run.workMode]} run, ${agentTaskStateLabel(run.state)}`,
     });
 
     const head = el('div', { class: 'sp-run-row-head' });
@@ -755,7 +761,7 @@ export function buildCloudRunsPanel(
       el(
         'span',
         { class: 'sp-run-badge', 'data-tone': RUN_STATE_TONES[run.state] },
-        RUN_STATE_LABELS[run.state],
+        agentTaskStateLabel(run.state),
       ),
     );
     head.appendChild(el('span', { class: 'sp-run-time' }, formatRelativeTime(run.updatedAt, now)));
@@ -815,7 +821,7 @@ export function buildCloudRunsPanel(
         el(
           'span',
           { class: 'sp-run-badge', 'data-tone': RUN_STATE_TONES[run.state] },
-          RUN_STATE_LABELS[run.state],
+          agentTaskStateLabel(run.state),
         ),
       );
       head.appendChild(
@@ -858,6 +864,7 @@ export function buildCloudRunsPanel(
     const detailOpen = openRunId !== null;
     listEl.hidden = detailOpen;
     detailEl.hidden = !detailOpen;
+    schedules.sectionEl.hidden = detailOpen;
     activeFilterBtn.setAttribute('aria-pressed', String(filter === 'active'));
     allFilterBtn.setAttribute('aria-pressed', String(filter === 'all'));
     if (detailOpen) renderDetail();
@@ -1000,6 +1007,7 @@ export function buildCloudRunsPanel(
   function setActive(next: boolean): void {
     if (active === next) return;
     active = next;
+    schedules.setActive(next);
     if (active) void load();
     else clearRenderedRuns();
   }
@@ -1008,6 +1016,7 @@ export function buildCloudRunsPanel(
     if (disposed) return;
     disposed = true;
     active = false;
+    schedules.setActive(false);
     clearRenderedRuns();
     panelEl.ownerDocument.removeEventListener('visibilitychange', onVisibilityChange);
     panelEl.ownerDocument.defaultView?.removeEventListener('pagehide', onPageHide);

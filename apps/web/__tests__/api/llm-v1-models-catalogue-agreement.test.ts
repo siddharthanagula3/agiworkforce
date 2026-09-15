@@ -42,10 +42,11 @@ const { GET: getCatalogue } = await import('@/app/api/models/catalogue/route');
 
 interface OpenAiModelList {
   data: Array<{ id: string }>;
+  x_agi_workforce: { temporarily_unavailable: string[] };
 }
 
 interface CatalogueBody {
-  models: Array<{ id: string; admitted: boolean }>;
+  models: Array<{ id: string; admitted: boolean; temporarilyUnavailable: boolean }>;
 }
 
 const SURFACE_MODEL_IDS = new Set(
@@ -119,5 +120,36 @@ describe('free-now agreement between the OpenAI-compatible list and the catalogu
 
     expect(await freeModelIdsFromOpenAiRoute()).not.toContain(withdrawn);
     expect(await admittedFreeModelIdsFromCatalogue()).not.toContain(withdrawn);
+  });
+
+  it('withholds from the OpenAI list what the catalogue marks temporarily unavailable, and names it', async () => {
+    mockConfiguredProviders.mockReturnValue(everyRoutedProvider());
+    const withheld = (await freeModelIdsFromOpenAiRoute()).find((modelId) => {
+      const routes = listManagedRoutesForModel(modelId);
+      return routes.length > 0 && routes.every((route) => route.provider === routes[0]?.provider);
+    });
+    expect(withheld).toBeDefined();
+    const soleProvider = listManagedRoutesForModel(withheld as string)[0]?.provider as string;
+    mockAvailability.mockResolvedValue({
+      [soleProvider]: {
+        state: 'degraded',
+        reason: 'This provider is temporarily unavailable.',
+        until: new Date(Date.now() + 60_000).toISOString(),
+      },
+    });
+
+    const list = (await (
+      await listOpenAiModels(new NextRequest('https://agiworkforce.com/api/llm/v1/models'))
+    ).json()) as OpenAiModelList;
+    const catalogue = (await (
+      await getCatalogue(new NextRequest('https://agiworkforce.com/api/models/catalogue'))
+    ).json()) as CatalogueBody;
+
+    expect(list.data.map((model) => model.id)).not.toContain(withheld);
+    expect(list.x_agi_workforce.temporarily_unavailable).toContain(withheld);
+    expect(catalogue.models.find((model) => model.id === withheld)).toMatchObject({
+      admitted: true,
+      temporarilyUnavailable: true,
+    });
   });
 });

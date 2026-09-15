@@ -52,13 +52,11 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "API endpoint, CLI path, model boundary, Desktop bridge, auto-apply, telemetry endpoint, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
+      "description": "API endpoint, CLI path, model boundary, auto-apply, telemetry endpoint, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
       "restrictedConfigurations": [
         "agiWorkforce.apiEndpoint",
         "agiWorkforce.cliPath",
         "agiWorkforce.model",
-        "agiWorkforce.desktopBridge.enabled",
-        "agiWorkforce.desktopBridge.port",
         "agiWorkforce.autoApplyFixes",
         "agiWorkforce.memory.enabled",
         "agiWorkforce.telemetryEnabled",
@@ -129,6 +127,11 @@
         "command": "agi-workforce.signOut",
         "title": "AGI: Sign out of AGI Cloud",
         "icon": "$(sign-out)"
+      },
+      {
+        "command": "agi-workforce.openUpgrade",
+        "title": "AGI: Upgrade your plan",
+        "icon": "$(rocket)"
       },
       {
         "command": "agi-workforce.setApiKey",
@@ -209,6 +212,11 @@
         "command": "agi-workforce.runCommand",
         "title": "AGI Workforce: Run Terminal Command",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "agi-workforce.signInProvider",
+        "title": "AGI Workforce: Sign In to a Provider",
+        "icon": "$(key)"
       },
       {
         "command": "agi-workforce.explainTerminal",
@@ -309,11 +317,6 @@
         "command": "agi-workforce.showPatchLogs",
         "title": "AGI Workforce: Show Patch Logs",
         "icon": "$(output)"
-      },
-      {
-        "command": "agi-workforce.bridgeReconnect",
-        "title": "AGI Workforce: Reconnect Desktop Bridge",
-        "icon": "$(debug-restart)"
       },
       {
         "command": "agi-workforce.addToContext",
@@ -574,6 +577,46 @@
         "command": "agi-workforce.manageConnectors",
         "title": "AGI Workforce: Manage Connectors",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "agi-workforce.showWork",
+        "title": "AGI Workforce: Show Work",
+        "icon": "$(cloud)"
+      },
+      {
+        "command": "agi-workforce.showContextFiles",
+        "title": "AGI Workforce: Show Context Files",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "agi-workforce.showSkills",
+        "title": "AGI Workforce: Show Skills",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "agi-workforce.showPlugins",
+        "title": "AGI Workforce: Show Plugins",
+        "icon": "$(extensions)"
+      },
+      {
+        "command": "agi-workforce.showMcpServers",
+        "title": "AGI Workforce: Show MCP Servers",
+        "icon": "$(server)"
+      },
+      {
+        "command": "agi-workforce.showHooks",
+        "title": "AGI Workforce: Show Hooks",
+        "icon": "$(symbol-event)"
+      },
+      {
+        "command": "agi-workforce.showInstructions",
+        "title": "AGI Workforce: Show Instructions",
+        "icon": "$(law)"
+      },
+      {
+        "command": "agi-workforce.runCliCommand",
+        "title": "AGI Workforce: Run CLI Command",
+        "icon": "$(terminal)"
       }
     ],
     "walkthroughs": [
@@ -707,266 +750,15 @@
           "id": "agi-workforce.sidebar",
           "name": "AGI Workforce",
           "contextualTitle": "AGI Workforce"
-        },
-        {
-          "type": "tree",
-          "id": "agi-workforce.conversations",
-          "name": "History",
-          "contextualTitle": "Conversation History"
-        },
-        {
-          "type": "tree",
-          "id": "agi-workforce.cloudTasks",
-          "name": "Cloud Tasks",
-          "contextualTitle": "Cloud Tasks"
-        },
-        {
-          "type": "tree",
-          "id": "agi-workforce.schedules",
-          "name": "Schedules",
-          "contextualTitle": "Scheduled Tasks"
-        },
-        {
-          "type": "tree",
-          "id": "agi-workforce.projects",
-          "name": "Projects",
-          "contextualTitle": "Projects"
-        },
-        {
-          "type": "tree",
-          "id": "agi-workforce.artifacts",
-          "name": "Artifacts",
-          "contextualTitle": "Artifacts",
-          "visibility": "collapsed"
-        },
-        {
-          "type": "tree",
-          "id": "agi-workforce.connectors",
-          "name": "Connectors",
-          "contextualTitle": "Connectors",
-          "visibility": "collapsed"
-        },
-        {
-          "type": "tree",
-          "id": "agi-workforce.contextPanel",
-          "name": "Context",
-          "contextualTitle": "AI Context",
-          "visibility": "collapsed"
-        },
-        {
-          "type": "tree",
-          "id": "agi-workforce.memory",
-          "name": "Memory",
-          "contextualTitle": "AI Memory",
-          "visibility": "collapsed"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "agi-workforce.conversations",
-        "contents": "Developer sessions stay scoped to this workspace.\n[Start a new session](command:agi-workforce.chat)"
-      },
-      {
-        "view": "agi-workforce.contextPanel",
-        "contents": "Pin workspace files to keep them in context. Automatic context appears as you work.\n[Add the active file](command:agi-workforce.addToContext)"
-      },
-      {
-        "view": "agi-workforce.memory",
-        "contents": "Memory facts apply only to this workspace and are never added to consumer chat history.\n[Add a workspace memory](command:agi-workforce.memory.create)"
-      },
-      {
-        "view": "agi-workforce.cloudTasks",
-        "contents": "Background AGI Work runs started on any device appear here.\n[Open the task list on web](command:agi-workforce.openCloudTasksOnWeb)"
-      },
-      {
-        "view": "agi-workforce.schedules",
-        "contents": "Recurring and one-off tasks your account runs in AGI Cloud appear here.\n[Create one on web](command:agi-workforce.openSchedulesOnWeb)"
-      }
-    ],
     "menus": {
-      "view/item/context": [
-        {
-          "command": "agi-workforce.openConversation",
-          "when": "view == agi-workforce.conversations && viewItem == conversation",
-          "group": "inline@1"
-        },
-        {
-          "command": "agi-workforce.deleteConversation",
-          "when": "view == agi-workforce.conversations && viewItem == conversation",
-          "group": "inline@2"
-        },
-        {
-          "command": "agi-workforce.removeFromContext",
-          "when": "view == agi-workforce.contextPanel && viewItem == pinnedFile",
-          "group": "inline"
-        },
-        {
-          "command": "agi-workforce.mentionFileInChat",
-          "when": "view == agi-workforce.contextPanel && viewItem == pinnedFile",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.mentionFileInChat",
-          "when": "view == agi-workforce.contextPanel && viewItem == autoFile",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.memory.edit",
-          "when": "view == agi-workforce.memory && viewItem == memoryFact",
-          "group": "inline@1"
-        },
-        {
-          "command": "agi-workforce.memory.delete",
-          "when": "view == agi-workforce.memory && viewItem == memoryFact",
-          "group": "inline@2"
-        },
-        {
-          "command": "agi-workforce.approveCloudTask",
-          "when": "view == agi-workforce.cloudTasks && viewItem == cloudRunPendingApproval",
-          "group": "inline@1"
-        },
-        {
-          "command": "agi-workforce.rejectCloudTask",
-          "when": "view == agi-workforce.cloudTasks && viewItem == cloudRunPendingApproval",
-          "group": "inline@2"
-        },
-        {
-          "command": "agi-workforce.runScheduleNow",
-          "when": "view == agi-workforce.schedules && viewItem =~ /^schedule(Active|Paused)$/",
-          "group": "inline@1"
-        },
-        {
-          "command": "agi-workforce.pauseSchedule",
-          "when": "view == agi-workforce.schedules && viewItem == scheduleActive",
-          "group": "inline@2"
-        },
-        {
-          "command": "agi-workforce.resumeSchedule",
-          "when": "view == agi-workforce.schedules && viewItem == schedulePaused",
-          "group": "inline@2"
-        },
-        {
-          "command": "agi-workforce.showScheduleRuns",
-          "when": "view == agi-workforce.schedules && viewItem =~ /^schedule(Active|Paused)$/",
-          "group": "inline@3"
-        },
-        {
-          "command": "agi-workforce.useProjectInChat",
-          "when": "view == agi-workforce.projects && viewItem =~ /^project(Archived)?$/",
-          "group": "inline@1"
-        },
-        {
-          "command": "agi-workforce.deleteProject",
-          "when": "view == agi-workforce.projects && viewItem =~ /^project(Archived)?$/",
-          "group": "inline@2"
-        },
-        {
-          "command": "agi-workforce.saveArtifactToWorkspace",
-          "when": "view == agi-workforce.artifacts && viewItem =~ /^artifact(Published)?$/",
-          "group": "inline@1"
-        },
-        {
-          "command": "agi-workforce.openArtifactOnWeb",
-          "when": "view == agi-workforce.artifacts && viewItem == artifactPublished",
-          "group": "inline@2"
-        },
-        {
-          "command": "agi-workforce.manageConnectors",
-          "when": "view == agi-workforce.connectors && viewItem =~ /^connector(NeedsReauthorization)?$/",
-          "group": "inline@1"
-        }
-      ],
       "view/title": [
         {
           "command": "agi-workforce.openSettings",
           "when": "view == agi-workforce.sidebar",
           "group": "navigation@99"
-        },
-        {
-          "command": "agi-workforce.refreshConversations",
-          "when": "view == agi-workforce.conversations",
-          "group": "navigation"
-        },
-        {
-          "command": "agi-workforce.refreshContext",
-          "when": "view == agi-workforce.contextPanel",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.clearContext",
-          "when": "view == agi-workforce.contextPanel",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agi-workforce.memory.toggle",
-          "when": "view == agi-workforce.memory",
-          "group": "navigation@0"
-        },
-        {
-          "command": "agi-workforce.memory.refresh",
-          "when": "view == agi-workforce.memory",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.memory.create",
-          "when": "view == agi-workforce.memory",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agi-workforce.refreshCloudTasks",
-          "when": "view == agi-workforce.cloudTasks",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.openCloudTasksOnWeb",
-          "when": "view == agi-workforce.cloudTasks",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agi-workforce.refreshSchedules",
-          "when": "view == agi-workforce.schedules",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.openSchedulesOnWeb",
-          "when": "view == agi-workforce.schedules",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agi-workforce.refreshProjects",
-          "when": "view == agi-workforce.projects",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.createProject",
-          "when": "view == agi-workforce.projects",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agi-workforce.openProjectsOnWeb",
-          "when": "view == agi-workforce.projects",
-          "group": "navigation@3"
-        },
-        {
-          "command": "agi-workforce.refreshArtifacts",
-          "when": "view == agi-workforce.artifacts",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.openArtifactsOnWeb",
-          "when": "view == agi-workforce.artifacts",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agi-workforce.refreshConnectors",
-          "when": "view == agi-workforce.connectors",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agi-workforce.manageConnectors",
-          "when": "view == agi-workforce.connectors",
-          "group": "navigation@2"
         }
       ],
       "editor/context": [
@@ -1175,6 +967,12 @@
           "maximum": 500,
           "description": "Number of surrounding lines to include as context"
         },
+        "agiWorkforce.editorContext.autoAttach": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send."
+        },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
           "default": false,
@@ -1260,18 +1058,6 @@
           "type": "boolean",
           "default": false,
           "description": "Enable extended thinking for cloud-backed editor utilities such as Explain, Fix, diagnostics, and inline completion. This setting does not affect local @agi, sidebar, or editor developer sessions, whose reasoning effort is controlled by the Effort setting."
-        },
-        "agiWorkforce.desktopBridge.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show authenticated AGI Desktop availability over the local health bridge"
-        },
-        "agiWorkforce.desktopBridge.port": {
-          "type": "number",
-          "default": 8787,
-          "minimum": 1024,
-          "maximum": 65535,
-          "description": "Local port for AGI Workforce desktop bridge connection"
         },
         "agiWorkforce.telemetryEndpoint": {
           "type": "string",

@@ -335,7 +335,12 @@ export function UpgradeOrderPanel({
           {checkoutRequired ? 'the payment method you provide at checkout' : 'your payment method'}{' '}
           in the amount above now and on a recurring {intervalWord}ly basis until you cancel in
           accordance with our{' '}
-          <Link href="/terms" className="underline underline-offset-2">
+          <Link
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
             terms
           </Link>
           . You can cancel at any time in your account settings.

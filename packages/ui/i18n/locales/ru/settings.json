@@ -74,5 +74,29 @@
     "searchLabel": "Поиск по настройкам",
     "searchPlaceholder": "Поиск",
     "title": "Настройки"
+  },
+  "nav": {
+    "general": "Общие",
+    "account": "Аккаунт",
+    "team": "Команда",
+    "privacy": "Конфиденциальность",
+    "billing": "Оплата",
+    "usage": "Использование",
+    "capabilities": "Возможности",
+    "security": "Безопасность",
+    "safety": "Защита",
+    "notifications": "Уведомления",
+    "reflect": "Reflect",
+    "time-focus": "Время и фокус",
+    "help": "Справка",
+    "skills": "Навыки",
+    "connectors": "Коннекторы",
+    "plugins": "Плагины",
+    "memory": "Память",
+    "voice": "Голос",
+    "desktop": "Общие",
+    "groupSettings": "Настройки",
+    "groupCustomize": "Настроить",
+    "groupDesktop": "Настольное приложение"
   }
 }

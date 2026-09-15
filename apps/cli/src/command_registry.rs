@@ -219,9 +219,15 @@ fn append_tui_shortcuts(help: &mut String) {
         "Shift+Tab"
     );
     let _ = writeln!(help, "  {:<14} Open command palette", "/");
-    let _ = writeln!(help, "  {:<14} Quit", "Esc");
+    let _ = writeln!(
+        help,
+        "  {:<14} Close the open panel, then clear the composer, then quit (twice)",
+        "Esc"
+    );
     let _ = writeln!(help, "  {:<14} Scroll chat history", "Up/Down");
-    let _ = writeln!(help, "  {:<14} Clear screen", "Ctrl-L");
+    let _ = writeln!(help, "  {:<14} Insert a newline", "Ctrl-J");
+    let _ = writeln!(help, "  {:<14} Delete to line start", "Ctrl-U");
+    let _ = writeln!(help, "  {:<14} Redraw the screen", "Ctrl-L");
     let _ = writeln!(help, "  {:<14} Clear input", "Ctrl-C");
     let _ = writeln!(help, "  Customize global actions with [ui.keybindings]");
 

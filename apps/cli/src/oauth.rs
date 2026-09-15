@@ -366,16 +366,27 @@ struct DeviceTokenResponse {
     refresh_token: Option<String>,
 }
 
-/// Run the device code login flow for AGI Workforce.
-/// 1. Request device code from server
-/// 2. Show code to user + verification URL
-/// 3. Poll for token until approved or timeout
-pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry> {
+/// Device-grant state a caller needs to show the user and to keep polling.
+#[derive(Debug, Clone)]
+pub struct DeviceCodeStart {
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_url: String,
+    pub interval_secs: u64,
+    pub expires_in_secs: u64,
+}
+
+/// Result of one poll against the device-token endpoint.
+pub enum DeviceCodePoll {
+    Authorized(Box<crate::auth::AuthEntry>),
+    Pending,
+    Expired,
+}
+
+/// Request a device code. The caller decides how to present the user code and
+/// verification URL; nothing is printed here.
+pub async fn start_device_code_login(api_base: &str) -> Result<DeviceCodeStart> {
     let client = reqwest::Client::new();
-
-    // Step 1: Request device code
-    eprintln!("\n  {} Connecting to AGI...\n", ts::prompt("→"),);
-
     let resp = client
         .post(format!("{api_base}/auth/device/code"))
         .header("Content-Type", "application/json")
@@ -399,15 +410,81 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         .await
         .context("Failed to parse device code response")?;
 
-    let verification_url = device
-        .verification_uri
-        .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string());
+    Ok(DeviceCodeStart {
+        device_code: device.device_code,
+        user_code: device.user_code,
+        verification_url: device
+            .verification_uri
+            .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string()),
+        interval_secs: device.interval.max(3),
+        expires_in_secs: device.expires_in,
+    })
+}
 
-    // Step 2: Show instructions
+/// Poll the device-token endpoint once.
+///
+/// A transport failure and any status the endpoint does not define are both
+/// reported as `Pending`: the grant is still live, and the caller's own
+/// deadline is what ends the wait.
+pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<DeviceCodePoll> {
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{api_base}/auth/device/token"))
+        .header("Content-Type", "application/json")
+        .header(
+            "User-Agent",
+            format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .json(&serde_json::json!({ "device_code": device_code }))
+        .send()
+        .await;
+
+    let Ok(response) = response else {
+        return Ok(DeviceCodePoll::Pending);
+    };
+
+    let status = response.status();
+    if status == reqwest::StatusCode::FORBIDDEN {
+        return Ok(DeviceCodePoll::Pending);
+    }
+    if status == reqwest::StatusCode::BAD_REQUEST {
+        return Ok(DeviceCodePoll::Expired);
+    }
+    if !status.is_success() {
+        return Ok(DeviceCodePoll::Pending);
+    }
+
+    let tokens: DeviceTokenResponse = response
+        .json()
+        .await
+        .context("Failed to parse token response")?;
+    let expires = tokens
+        .expires_in
+        .map(|seconds| chrono::Utc::now().timestamp_millis() + (seconds as i64 * 1000))
+        .unwrap_or(0);
+
+    Ok(DeviceCodePoll::Authorized(Box::new(
+        crate::auth::AuthEntry::OAuth {
+            refresh: tokens.refresh_token.unwrap_or_default(),
+            access: tokens.access_token,
+            expires,
+            account_id: None,
+        },
+    )))
+}
+
+/// Run the device code login flow for AGI Workforce in a terminal.
+/// 1. Request device code
+/// 2. Show code to user + verification URL
+/// 3. Poll for token until approved or timeout
+pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry> {
+    eprintln!("\n  {} Connecting to AGI...\n", ts::prompt("→"),);
+    let device = start_device_code_login(api_base).await?;
+
     eprintln!("  {}", ts::muted("━".repeat(50)));
     eprintln!();
     eprintln!("  1. Open this link in your browser:");
-    eprintln!("     {}", ts::link(&verification_url));
+    eprintln!("     {}", ts::link(&device.verification_url));
     eprintln!();
     eprintln!("  2. Enter this code:");
     eprintln!("     {}", ts::success_header(&device.user_code));
@@ -417,74 +494,40 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
     eprintln!("  {} Waiting for authorization...", ts::muted("⏳"));
 
     // Try to open browser (explicit user-initiated device-code flow).
-    let _ = open_external_url(&verification_url, UserActionContext::user_initiated());
+    let _ = open_external_url(
+        &device.verification_url,
+        UserActionContext::user_initiated(),
+    );
 
-    // Step 3: Poll for token
-    let max_attempts = (device.expires_in / device.interval).max(1);
-    let interval = std::time::Duration::from_secs(device.interval.max(3));
+    let max_attempts = (device.expires_in_secs / device.interval_secs).max(1);
+    let interval = std::time::Duration::from_secs(device.interval_secs);
 
     for attempt in 1..=max_attempts {
         tokio::time::sleep(interval).await;
 
-        let poll_resp = client
-            .post(format!("{api_base}/auth/device/token"))
-            .header("Content-Type", "application/json")
-            .header(
-                "User-Agent",
-                format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
-            )
-            .json(&serde_json::json!({ "device_code": device.device_code }))
-            .send()
-            .await;
-
-        let poll_resp = match poll_resp {
-            Ok(r) => r,
-            Err(_) => continue, // network error, retry
-        };
-
-        let status = poll_resp.status();
-
-        if status == reqwest::StatusCode::FORBIDDEN {
-            // Authorization pending, keep polling
-            if attempt % 6 == 0 {
-                eprintln!(
-                    "  {} Still waiting... ({}s elapsed)",
-                    ts::muted("⏳"),
-                    attempt * device.interval
-                );
+        match poll_device_code(api_base, &device.device_code).await? {
+            DeviceCodePoll::Authorized(entry) => {
+                eprintln!("\n  {} Authenticated with AGI!", ts::success_header("✓"));
+                return Ok(*entry);
             }
-            continue;
-        }
-
-        if status == reqwest::StatusCode::BAD_REQUEST {
-            anyhow::bail!("Device code expired. Please run /login again.");
-        }
-
-        if status.is_success() {
-            let tokens: DeviceTokenResponse = poll_resp
-                .json()
-                .await
-                .context("Failed to parse token response")?;
-
-            let expires = tokens
-                .expires_in
-                .map(|s| chrono::Utc::now().timestamp_millis() + (s as i64 * 1000))
-                .unwrap_or(0);
-
-            eprintln!("\n  {} Authenticated with AGI!", ts::success_header("✓"));
-
-            return Ok(crate::auth::AuthEntry::OAuth {
-                refresh: tokens.refresh_token.unwrap_or_default(),
-                access: tokens.access_token,
-                expires,
-                account_id: None,
-            });
+            DeviceCodePoll::Expired => {
+                anyhow::bail!("Device code expired. Please run /login again.")
+            }
+            DeviceCodePoll::Pending => {
+                if attempt % 6 == 0 {
+                    eprintln!(
+                        "  {} Still waiting... ({}s elapsed)",
+                        ts::muted("⏳"),
+                        attempt * device.interval_secs
+                    );
+                }
+            }
         }
     }
 
     anyhow::bail!(
         "Authorization timed out after {}s. Please try again.",
-        device.expires_in
+        device.expires_in_secs
     )
 }
 

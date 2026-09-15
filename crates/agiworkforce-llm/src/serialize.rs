@@ -402,6 +402,25 @@ pub fn normalize_array_items_in_schema(schema: &Value) -> Value {
     normalized
 }
 
+/// OpenAI and every gateway that speaks its dialect reject the whole request
+/// when one function description passes 1024 UTF-16 units, and MCP servers
+/// publish descriptions of any length, so the wire form is clamped here.
+const OPENAI_TOOL_DESCRIPTION_MAX_UTF16: usize = 1024;
+
+fn openai_tool_description(description: &str) -> String {
+    let mut units = 0usize;
+    let mut clamped =
+        String::with_capacity(description.len().min(OPENAI_TOOL_DESCRIPTION_MAX_UTF16));
+    for ch in description.chars() {
+        units += ch.len_utf16();
+        if units > OPENAI_TOOL_DESCRIPTION_MAX_UTF16 {
+            break;
+        }
+        clamped.push(ch);
+    }
+    clamped
+}
+
 /// OpenAI-compatible `tools` array (`{"type":"function","function":{...}}`).
 pub fn openai_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
     tool_defs
@@ -411,7 +430,7 @@ pub fn openai_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
                 "type": "function",
                 "function": {
                     "name": tool.name,
-                    "description": tool.description,
+                    "description": openai_tool_description(&tool.description),
                     "parameters": normalize_array_items_in_schema(&tool.input_schema),
                 }
             })
@@ -428,11 +447,62 @@ pub fn openai_responses_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec
             serde_json::json!({
                 "type": "function",
                 "name": tool.name,
-                "description": tool.description,
+                "description": openai_tool_description(&tool.description),
                 "parameters": normalize_array_items_in_schema(&tool.input_schema),
             })
         })
         .collect()
+}
+
+/// Gemini's function-declaration schema is an OpenAPI 3.0 subset, not JSON
+/// Schema: an unknown keyword anywhere in `parameters` is rejected outright
+/// with `Invalid JSON payload received. Unknown name "<keyword>"`, which fails
+/// the whole request, every tool with it. Built-in and MCP tool schemas are
+/// authored as JSON Schema, so they must be stripped down at every schema
+/// position before they go on the wire.
+pub fn sanitize_gemini_schema(schema: &Value) -> Value {
+    const UNSUPPORTED_KEYS: &[&str] = &[
+        "default",
+        "$schema",
+        "$id",
+        "$ref",
+        "$defs",
+        "definitions",
+        "additionalProperties",
+        "patternProperties",
+        "examples",
+        "const",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "not",
+    ];
+    const SUBSCHEMA_KEYS: &[&str] = &["items", "additionalItems", "contains"];
+    const SUBSCHEMA_LIST_KEYS: &[&str] = &["anyOf", "oneOf", "allOf", "prefixItems"];
+
+    let mut cleaned = schema.clone();
+    if let Some(obj) = cleaned.as_object_mut() {
+        for key in UNSUPPORTED_KEYS {
+            obj.remove(*key);
+        }
+        if let Some(props) = obj.get_mut("properties").and_then(Value::as_object_mut) {
+            for value in props.values_mut() {
+                *value = sanitize_gemini_schema(value);
+            }
+        }
+        for key in SUBSCHEMA_KEYS {
+            if let Some(value) = obj.get_mut(*key) {
+                *value = sanitize_gemini_schema(value);
+            }
+        }
+        for key in SUBSCHEMA_LIST_KEYS {
+            if let Some(list) = obj.get_mut(*key).and_then(Value::as_array_mut) {
+                for value in list.iter_mut() {
+                    *value = sanitize_gemini_schema(value);
+                }
+            }
+        }
+    }
+    cleaned
 }
 
 /// Gemini `functionDeclarations` array.
@@ -443,7 +513,7 @@ pub fn gemini_function_declarations_json(tool_defs: &[ToolDefinition]) -> Vec<Va
             serde_json::json!({
                 "name": tool.name,
                 "description": tool.description,
-                "parameters": tool.input_schema,
+                "parameters": sanitize_gemini_schema(&tool.input_schema),
             })
         })
         .collect()
@@ -777,6 +847,32 @@ mod tests {
             permission_class: "read_only".to_string(),
             diagnostic_tags: vec!["test".to_string()],
         }
+    }
+
+    #[test]
+    fn openai_dialects_clamp_a_tool_description_to_the_wire_limit() {
+        let mut tool = test_tool("browser_run");
+        tool.description = format!("{}🙂", "x".repeat(1030));
+        let tools = [tool];
+
+        for description in [
+            &openai_function_tools_json(&tools)[0]["function"]["description"],
+            &openai_responses_function_tools_json(&tools)[0]["description"],
+        ] {
+            let text = description.as_str().expect("description stays a string");
+            assert_eq!(
+                text.encode_utf16().count(),
+                OPENAI_TOOL_DESCRIPTION_MAX_UTF16
+            );
+            assert!(text.chars().all(|ch| ch == 'x'));
+        }
+        assert_eq!(
+            anthropic_tools_json(&tools)[0]["description"]
+                .as_str()
+                .map(str::len),
+            Some(tools[0].description.len()),
+            "Anthropic takes the full description"
+        );
     }
 
     fn assert_provider_tool_payload_omits_local_metadata(value: &Value) {

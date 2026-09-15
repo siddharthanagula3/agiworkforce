@@ -206,6 +206,51 @@ class ThemeIcon {
   constructor(public readonly id: string) {}
 }
 
+export class MockQuickPick<T> {
+  title = '';
+  placeholder = '';
+  busy = false;
+  matchOnDescription = false;
+  matchOnDetail = false;
+  items: T[] = [];
+  selectedItems: T[] = [];
+  buttons: unknown[] = [];
+  shown = false;
+  disposed = false;
+  private readonly handlers = new Map<string, (value: never) => void>();
+
+  onDidHide = (handler: () => void): { dispose(): void } => this.on('hide', handler);
+  onDidAccept = (handler: () => void): { dispose(): void } => this.on('accept', handler);
+  onDidTriggerButton = (handler: (button: unknown) => void): { dispose(): void } =>
+    this.on('button', handler);
+  onDidTriggerItemButton = (handler: (event: unknown) => void): { dispose(): void } =>
+    this.on('itemButton', handler);
+
+  private on(name: string, handler: (value: never) => void): { dispose(): void } {
+    this.handlers.set(name, handler);
+    return { dispose: () => this.handlers.delete(name) };
+  }
+
+  fire(name: 'hide' | 'accept' | 'button' | 'itemButton', value?: unknown): void {
+    this.handlers.get(name)?.(value as never);
+  }
+
+  show(): void {
+    this.shown = true;
+  }
+
+  hide(): void {
+    this.shown = false;
+    this.fire('hide');
+  }
+
+  dispose(): void {
+    this.disposed = true;
+  }
+}
+
+export const createdQuickPicks: MockQuickPick<unknown>[] = [];
+
 class ThemeColor {
   constructor(public readonly id: string) {}
 }
@@ -422,6 +467,11 @@ export const window = {
   showErrorMessage: vi.fn().mockResolvedValue(undefined),
   showInputBox: vi.fn().mockResolvedValue(undefined),
   showQuickPick: vi.fn().mockResolvedValue(undefined),
+  createQuickPick: vi.fn(() => {
+    const pick = new MockQuickPick<unknown>();
+    createdQuickPicks.push(pick);
+    return pick;
+  }),
   showOpenDialog: vi.fn().mockResolvedValue(undefined),
   showTextDocument: vi.fn().mockResolvedValue(undefined),
   createStatusBarItem: vi.fn(() => new MockStatusBarItem()),
@@ -470,6 +520,7 @@ export const window = {
     dispose: vi.fn(),
   })),
   onDidChangeActiveTextEditor: vi.fn(() => new Disposable()),
+  onDidChangeTextEditorSelection: vi.fn(() => new Disposable()),
   onDidChangeVisibleTextEditors: vi.fn(() => new Disposable()),
   tabGroups: {
     onDidChangeTabs: vi.fn(() => new Disposable()),
@@ -518,6 +569,8 @@ export const workspace = {
 };
 
 export const languages = {
+  onDidChangeDiagnostics: vi.fn(() => new Disposable()),
+  getDiagnostics: vi.fn(() => [] as unknown[]),
   registerCodeActionsProvider: vi.fn(() => new Disposable()),
   registerHoverProvider: vi.fn(() => new Disposable()),
   registerDocumentLinkProvider: vi.fn(() => new Disposable()),

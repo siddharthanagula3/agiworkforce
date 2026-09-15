@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from 'next-themes';
 import { type Theme, THEME_STORAGE_KEY, DEFAULT_THEME } from './ThemeConstants';
 import { ThemeContext } from './ThemeContext';
@@ -18,12 +18,11 @@ function ThemeContextBridge({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute('data-theme', actualTheme);
   }, [actualTheme]);
 
-  const setTheme = useCallback(
-    (newTheme: Theme) => {
-      setNextTheme(newTheme);
-    },
-    [setNextTheme],
-  );
+  const applyTheme = useRef(setNextTheme);
+  applyTheme.current = setNextTheme;
+  const setTheme = useCallback((newTheme: Theme) => {
+    applyTheme.current(newTheme);
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, actualTheme }}>

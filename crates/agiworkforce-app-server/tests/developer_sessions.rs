@@ -1,17 +1,30 @@
 use agiworkforce_app_server::{
-    DeveloperSessionHost, DeveloperSessionHostError, DeveloperSessionProcessor,
+    DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError,
+    DeveloperSessionProcessor,
 };
 use agiworkforce_protocol::developer_session::{
-    method, AcknowledgedResponse, AppServerCapabilities, AppServerClientInfo,
-    AppServerNotification, AppServerRequest, ApprovalResponseParams, DeveloperSessionSource,
-    DeveloperSessionTrustMode, InitializeParams, InitializeResponse, LocalModelListResponse,
-    LocalModelProvider, LocalModelSummary, ThreadForkParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadStatus,
-    ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus,
-    TurnSteerParams, TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
+    method, AccountLoginOutcome, AccountLoginResponse, AccountLoginWaitParams,
+    AccountLoginWaitResponse, AccountSource, AccountStatusParams, AccountStatusResponse,
+    AccountTokenResponse, AcknowledgedResponse, AppServerCapabilities, AppServerClientInfo,
+    AppServerNotification, AppServerRequest, ApprovalResponseParams, CommandSourceKind,
+    ContextInstructionsParams, ContextInstructionsResponse, DeveloperAgentMode,
+    DeveloperReasoningEffort, DeveloperSessionSource, DeveloperSessionTrustMode, HookConfigScope,
+    HookListResponse, HookSummary, InitializeParams, InitializeResponse, InstructionFile,
+    InstructionFileKind, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
+    McpServerScope, McpServerSummary, ModelListParams, PluginListResponse, PluginScope,
+    PluginSetEnabledParams, PluginSummary, SettingsReadResponse, SettingsWriteParams,
+    SkillCatalogScope, SkillConsentParams, SkillConsentResponse, SkillListResponse,
+    SkillSetEnabledParams, SkillSummary, SlashCommandListResponse, SlashCommandResultKind,
+    SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary, ThreadForkParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams,
+    TurnStartResponse, TurnStatus, TurnSteerParams, TurnSummary,
+    DEVELOPER_SESSION_PROTOCOL_VERSION, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
+use serde_json::Value;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{broadcast, oneshot, Mutex};
@@ -59,6 +72,9 @@ fn thread(id: &str) -> ThreadSummary {
         cwd: Some("/workspace".to_string()),
         provider: Some("ollama".to_string()),
         trust_mode: DeveloperSessionTrustMode::Local,
+        git_branch: None,
+        worktree_root: None,
+        client: None,
         created_at: "2026-07-14T12:00:00Z".to_string(),
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
@@ -96,12 +112,16 @@ impl DeveloperSessionHost for FakeHost {
         })
     }
 
-    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+    async fn list_local_models(
+        &self,
+        _params: ModelListParams,
+    ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
         Ok(LocalModelListResponse {
             models: vec![LocalModelSummary {
                 id: "fixture-local-model".to_string(),
                 provider: LocalModelProvider::Ollama,
             }],
+            host_models: Vec::new(),
         })
     }
 
@@ -192,6 +212,10 @@ fn request(id: i64, method: &str, params: impl serde::Serialize) -> AppServerReq
 }
 
 fn initialize() -> AppServerRequest {
+    initialize_at(Some(DEVELOPER_SESSION_PROTOCOL_VERSION))
+}
+
+fn initialize_at(protocol_version: Option<u32>) -> AppServerRequest {
     request(
         1,
         method::INITIALIZE,
@@ -202,6 +226,7 @@ fn initialize() -> AppServerRequest {
                 version: "0.3.0".to_string(),
             },
             experimental_api: false,
+            protocol_version,
         },
     )
 }
@@ -217,6 +242,13 @@ fn capabilities() -> AppServerCapabilities {
         checkpoints: false,
         worktrees: false,
         models: true,
+        account: false,
+        instructions: false,
+        skills: false,
+        plugins: false,
+        hooks: false,
+        settings: false,
+        commands: false,
     }
 }
 
@@ -664,4 +696,630 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
 
     websocket.close(None).await.expect("close websocket");
     server_task.abort();
+}
+
+// ---------------------------------------------------------------------------
+// v8 surfaces
+// ---------------------------------------------------------------------------
+
+struct SurfaceHost {
+    notifications: broadcast::Sender<AppServerNotification>,
+}
+
+impl SurfaceHost {
+    fn new() -> Self {
+        let (notifications, _) = broadcast::channel(4);
+        Self { notifications }
+    }
+}
+
+#[async_trait]
+impl DeveloperSessionHost for SurfaceHost {
+    async fn start_thread(
+        &self,
+        _params: ThreadStartParams,
+        _client: AppServerClientInfo,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        Ok(thread("thread-1"))
+    }
+
+    async fn list_threads(
+        &self,
+        _params: ThreadListParams,
+    ) -> Result<ThreadListResponse, DeveloperSessionHostError> {
+        Ok(ThreadListResponse {
+            threads: Vec::new(),
+            next_cursor: None,
+        })
+    }
+
+    async fn list_local_models(
+        &self,
+        _params: ModelListParams,
+    ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+        Ok(LocalModelListResponse {
+            models: Vec::new(),
+            host_models: Vec::new(),
+        })
+    }
+
+    async fn resume_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        Ok(thread("thread-1"))
+    }
+
+    async fn read_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
+        Ok(ThreadReadResponse {
+            thread: thread("thread-1"),
+            messages: Vec::new(),
+            transcript_truncated: false,
+        })
+    }
+
+    async fn fork_thread(
+        &self,
+        _params: ThreadForkParams,
+        _client: AppServerClientInfo,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        Ok(thread("thread-1"))
+    }
+
+    async fn archive_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+
+    async fn start_turn(
+        &self,
+        _params: TurnStartParams,
+    ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        Ok(turn())
+    }
+
+    async fn steer_turn(
+        &self,
+        _params: TurnSteerParams,
+    ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        Ok(turn())
+    }
+
+    async fn interrupt_turn(
+        &self,
+        _params: TurnInterruptParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+
+    async fn respond_to_approval(
+        &self,
+        _params: ApprovalResponseParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+
+    async fn account_status(
+        &self,
+        params: AccountStatusParams,
+    ) -> Result<AccountStatusResponse, DeveloperSessionHostError> {
+        Ok(AccountStatusResponse {
+            signed_in: true,
+            email: Some("developer@example.com".to_string()),
+            tier: Some("max".to_string()),
+            balance_credits: Some(120.5),
+            purchased_credits: None,
+            cached: !params.refresh,
+            source: AccountSource::Cli,
+        })
+    }
+
+    async fn account_login(&self) -> Result<AccountLoginResponse, DeveloperSessionHostError> {
+        Ok(AccountLoginResponse {
+            login_id: "login-1".to_string(),
+            verification_url: "https://agiworkforce.com/auth/device".to_string(),
+            user_code: Some("ABCD-EFGH".to_string()),
+            expires_at: Some("2026-09-14T12:15:00Z".to_string()),
+        })
+    }
+
+    async fn account_login_wait(
+        &self,
+        _params: AccountLoginWaitParams,
+    ) -> Result<AccountLoginWaitResponse, DeveloperSessionHostError> {
+        Ok(AccountLoginWaitResponse {
+            outcome: AccountLoginOutcome::Completed,
+            message: None,
+            account: self.account_status(AccountStatusParams::default()).await?,
+        })
+    }
+
+    async fn account_logout(&self) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+
+    async fn account_token(&self) -> Result<AccountTokenResponse, DeveloperSessionHostError> {
+        Ok(AccountTokenResponse {
+            token: "fixture-token".to_string(),
+            expires_at: Some("2026-09-14T13:00:00Z".to_string()),
+        })
+    }
+
+    async fn context_instructions(
+        &self,
+        _params: ContextInstructionsParams,
+    ) -> Result<ContextInstructionsResponse, DeveloperSessionHostError> {
+        Ok(ContextInstructionsResponse {
+            files: vec![InstructionFile {
+                path: "/workspace/AGENTS.md".to_string(),
+                kind: InstructionFileKind::Agents,
+                bytes: 42,
+                root: "/workspace".to_string(),
+            }],
+            project_root: Some("/workspace".to_string()),
+            truncated: false,
+        })
+    }
+
+    async fn list_skills(&self) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        Ok(SkillListResponse {
+            skills: vec![SkillSummary {
+                name: "release-notes".to_string(),
+                description: "Draft release notes".to_string(),
+                scope: SkillCatalogScope::User,
+                path: "/home/dev/.agiworkforce/skills/release-notes/SKILL.md".to_string(),
+                enabled: true,
+                consented: true,
+            }],
+        })
+    }
+
+    async fn set_skill_enabled(
+        &self,
+        _params: SkillSetEnabledParams,
+    ) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        self.list_skills().await
+    }
+
+    async fn set_skill_consent(
+        &self,
+        params: SkillConsentParams,
+    ) -> Result<SkillConsentResponse, DeveloperSessionHostError> {
+        Ok(SkillConsentResponse {
+            consented: params.granted,
+            path: "/workspace/.agiworkforce/skills/.consent".to_string(),
+        })
+    }
+
+    async fn list_plugins(&self) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        Ok(PluginListResponse {
+            plugins: vec![PluginSummary {
+                id: "reviewer".to_string(),
+                name: "Reviewer".to_string(),
+                version: Some("1.2.0".to_string()),
+                enabled: true,
+                source: PluginScope::User,
+                path: "/home/dev/.agiworkforce/plugins/reviewer".to_string(),
+                format: Some("agi".to_string()),
+            }],
+        })
+    }
+
+    async fn set_plugin_enabled(
+        &self,
+        _params: PluginSetEnabledParams,
+    ) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        self.list_plugins().await
+    }
+
+    async fn list_mcp_servers(&self) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        Ok(McpServerListResponse {
+            servers: vec![McpServerSummary {
+                name: "github".to_string(),
+                transport: "http".to_string(),
+                scope: McpServerScope::User,
+                status: McpServerConfiguredStatus::NeedsAuth,
+                url: Some("https://api.githubcopilot.com/mcp".to_string()),
+            }],
+        })
+    }
+
+    async fn login_mcp_server(
+        &self,
+        params: McpLoginParams,
+    ) -> Result<McpLoginResponse, DeveloperSessionHostError> {
+        Ok(McpLoginResponse {
+            name: params.name,
+            status: McpServerConfiguredStatus::Authorized,
+        })
+    }
+
+    async fn list_hooks(&self) -> Result<HookListResponse, DeveloperSessionHostError> {
+        Ok(HookListResponse {
+            hooks: vec![HookSummary {
+                event: "PreToolUse".to_string(),
+                command: "./scripts/audit.sh".to_string(),
+                scope: HookConfigScope::User,
+                trusted: true,
+                source: Some("/home/dev/.agiworkforce/hooks.json".to_string()),
+            }],
+        })
+    }
+
+    async fn read_settings(&self) -> Result<SettingsReadResponse, DeveloperSessionHostError> {
+        Ok(SettingsReadResponse {
+            default_model: Some("fixture-model".to_string()),
+            default_effort: Some(DeveloperReasoningEffort::High),
+            permission_mode: Some(DeveloperAgentMode::Ask),
+            user_instructions: Some("Be brief".to_string()),
+            project_instructions: None,
+            user_instructions_path: "/home/dev/.agiworkforce/instructions.md".to_string(),
+            project_instructions_path: "/workspace/.agiworkforce/instructions.md".to_string(),
+            config_path: "/home/dev/.agiworkforce/config.toml".to_string(),
+        })
+    }
+
+    async fn write_settings(
+        &self,
+        _params: SettingsWriteParams,
+    ) -> Result<SettingsReadResponse, DeveloperSessionHostError> {
+        self.read_settings().await
+    }
+
+    async fn list_commands(&self) -> Result<SlashCommandListResponse, DeveloperSessionHostError> {
+        Ok(SlashCommandListResponse {
+            commands: vec![SlashCommandSummary {
+                name: "skills".to_string(),
+                description: "List skills".to_string(),
+                args_hint: None,
+                source: CommandSourceKind::Builtin,
+                aliases: Vec::new(),
+                runnable: true,
+            }],
+        })
+    }
+
+    async fn run_command(
+        &self,
+        _params: SlashCommandRunParams,
+    ) -> Result<SlashCommandRunResponse, DeveloperSessionHostError> {
+        Ok(SlashCommandRunResponse {
+            kind: SlashCommandResultKind::Skills,
+            text: "release-notes".to_string(),
+            payload: Some(serde_json::json!({ "skills": [] })),
+        })
+    }
+
+    async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+
+    fn subscribe(&self) -> broadcast::Receiver<AppServerNotification> {
+        self.notifications.subscribe()
+    }
+}
+
+async fn surface_processor() -> DeveloperSessionProcessor {
+    let mut processor =
+        DeveloperSessionProcessor::new(Arc::new(SurfaceHost::new()), capabilities());
+    processor.process(initialize()).await;
+    processor
+}
+
+fn result_of(response: agiworkforce_protocol::developer_session::AppServerResponse) -> Value {
+    response
+        .result
+        .unwrap_or_else(|| panic!("method must succeed, got {:?}", response.error))
+}
+
+#[tokio::test]
+async fn every_v8_method_dispatches_and_returns_its_typed_shape() {
+    let mut processor = surface_processor().await;
+
+    let account = result_of(
+        processor
+            .process(request(
+                2,
+                method::ACCOUNT_STATUS,
+                serde_json::json!({ "refresh": true }),
+            ))
+            .await,
+    );
+    assert_eq!(account["signedIn"], serde_json::json!(true));
+    assert_eq!(account["source"], serde_json::json!("cli"));
+    assert_eq!(account["cached"], serde_json::json!(false));
+    serde_json::from_value::<AccountStatusResponse>(account).expect("typed account status");
+
+    let login = result_of(
+        processor
+            .process(request(3, method::ACCOUNT_LOGIN, serde_json::json!({})))
+            .await,
+    );
+    assert_eq!(login["userCode"], serde_json::json!("ABCD-EFGH"));
+    let login: AccountLoginResponse = serde_json::from_value(login).expect("typed login");
+
+    let waited = result_of(
+        processor
+            .process(request(
+                4,
+                method::ACCOUNT_LOGIN_WAIT,
+                serde_json::json!({ "loginId": login.login_id }),
+            ))
+            .await,
+    );
+    assert_eq!(waited["outcome"], serde_json::json!("completed"));
+    serde_json::from_value::<AccountLoginWaitResponse>(waited).expect("typed login wait");
+
+    let token = result_of(
+        processor
+            .process(request(5, method::ACCOUNT_TOKEN, serde_json::json!({})))
+            .await,
+    );
+    serde_json::from_value::<AccountTokenResponse>(token).expect("typed token");
+
+    let instructions = result_of(
+        processor
+            .process(request(
+                6,
+                method::CONTEXT_INSTRUCTIONS,
+                serde_json::json!({ "cwd": "/workspace/apps/web" }),
+            ))
+            .await,
+    );
+    assert_eq!(
+        instructions["files"][0]["kind"],
+        serde_json::json!("AGENTS.md")
+    );
+    serde_json::from_value::<ContextInstructionsResponse>(instructions)
+        .expect("typed instructions");
+
+    let skills = result_of(
+        processor
+            .process(request(7, method::SKILLS_LIST, serde_json::json!({})))
+            .await,
+    );
+    assert_eq!(skills["skills"][0]["scope"], serde_json::json!("user"));
+    serde_json::from_value::<SkillListResponse>(skills).expect("typed skills");
+
+    let toggled = result_of(
+        processor
+            .process(request(
+                8,
+                method::SKILLS_SET_ENABLED,
+                serde_json::json!({ "name": "release-notes", "enabled": false }),
+            ))
+            .await,
+    );
+    serde_json::from_value::<SkillListResponse>(toggled).expect("typed skill toggle");
+
+    let consent = result_of(
+        processor
+            .process(request(
+                9,
+                method::SKILLS_CONSENT,
+                serde_json::json!({ "granted": true }),
+            ))
+            .await,
+    );
+    assert_eq!(consent["consented"], serde_json::json!(true));
+    serde_json::from_value::<SkillConsentResponse>(consent).expect("typed consent");
+
+    let plugins = result_of(
+        processor
+            .process(request(10, method::PLUGINS_LIST, serde_json::json!({})))
+            .await,
+    );
+    assert_eq!(plugins["plugins"][0]["source"], serde_json::json!("user"));
+    serde_json::from_value::<PluginListResponse>(plugins).expect("typed plugins");
+
+    let plugin_toggled = result_of(
+        processor
+            .process(request(
+                11,
+                method::PLUGINS_SET_ENABLED,
+                serde_json::json!({ "id": "reviewer", "enabled": false }),
+            ))
+            .await,
+    );
+    serde_json::from_value::<PluginListResponse>(plugin_toggled).expect("typed plugin toggle");
+
+    let servers = result_of(
+        processor
+            .process(request(12, method::MCP_LIST, serde_json::json!({})))
+            .await,
+    );
+    assert_eq!(
+        servers["servers"][0]["status"],
+        serde_json::json!("needs_auth")
+    );
+    serde_json::from_value::<McpServerListResponse>(servers).expect("typed mcp list");
+
+    let logged_in = result_of(
+        processor
+            .process(request(
+                13,
+                method::MCP_LOGIN,
+                serde_json::json!({ "name": "github" }),
+            ))
+            .await,
+    );
+    assert_eq!(logged_in["status"], serde_json::json!("authorized"));
+    serde_json::from_value::<McpLoginResponse>(logged_in).expect("typed mcp login");
+
+    let hooks = result_of(
+        processor
+            .process(request(14, method::HOOKS_LIST, serde_json::json!({})))
+            .await,
+    );
+    assert_eq!(hooks["hooks"][0]["scope"], serde_json::json!("user"));
+    serde_json::from_value::<HookListResponse>(hooks).expect("typed hooks");
+
+    let settings = result_of(
+        processor
+            .process(request(15, method::SETTINGS_READ, serde_json::json!({})))
+            .await,
+    );
+    assert_eq!(settings["permissionMode"], serde_json::json!("ask"));
+    serde_json::from_value::<SettingsReadResponse>(settings).expect("typed settings");
+
+    let written = result_of(
+        processor
+            .process(request(
+                16,
+                method::SETTINGS_WRITE,
+                serde_json::json!({ "defaultEffort": "high" }),
+            ))
+            .await,
+    );
+    serde_json::from_value::<SettingsReadResponse>(written).expect("typed settings write");
+
+    let commands = result_of(
+        processor
+            .process(request(17, method::COMMANDS_LIST, serde_json::json!({})))
+            .await,
+    );
+    assert_eq!(commands["commands"][0]["runnable"], serde_json::json!(true));
+    serde_json::from_value::<SlashCommandListResponse>(commands).expect("typed commands");
+
+    let ran = result_of(
+        processor
+            .process(request(
+                18,
+                method::COMMANDS_RUN,
+                serde_json::json!({ "name": "skills" }),
+            ))
+            .await,
+    );
+    assert_eq!(ran["kind"], serde_json::json!("skills"));
+    serde_json::from_value::<SlashCommandRunResponse>(ran).expect("typed command run");
+
+    let logged_out = result_of(
+        processor
+            .process(request(19, method::ACCOUNT_LOGOUT, serde_json::json!({})))
+            .await,
+    );
+    serde_json::from_value::<AcknowledgedResponse>(logged_out).expect("typed logout");
+}
+
+#[tokio::test]
+async fn account_token_is_refused_on_a_connection_that_did_not_prove_header_auth() {
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        Arc::new(SurfaceHost::new()),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+
+    let refused = processor
+        .process(request(2, method::ACCOUNT_TOKEN, serde_json::json!({})))
+        .await;
+    let error = refused.error.expect("account/token must be refused");
+    assert_eq!(error.code, -32006);
+    assert!(refused.result.is_none(), "no credential may be returned");
+
+    // The same connection still reads everything that is not a credential.
+    let status = processor
+        .process(request(3, method::ACCOUNT_STATUS, serde_json::json!({})))
+        .await;
+    assert!(status.error.is_none(), "only credential minting is refused");
+}
+
+#[tokio::test]
+async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
+    let host = Arc::new(SurfaceHost::new());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind loopback listener");
+    let addr = listener.local_addr().expect("listener address");
+    let server = tokio::spawn(agiworkforce_app_server::serve_developer_session_websocket(
+        listener,
+        agiworkforce_app_server::WebSocketSecurity {
+            auth_token: Some("secret-token".to_string()),
+            allowed_origins: Vec::new(),
+            allow_query_token: false,
+        },
+        host,
+        capabilities(),
+    ));
+
+    let unauthenticated = tokio_tungstenite::connect_async(format!("ws://{addr}/ws")).await;
+    assert!(
+        unauthenticated.is_err(),
+        "an upgrade without the app-server token must be rejected before any frame"
+    );
+
+    let mut authenticated_request = format!("ws://{addr}/ws")
+        .into_client_request()
+        .expect("client request");
+    authenticated_request.headers_mut().insert(
+        "x-agi-app-server-token",
+        HeaderValue::from_static("secret-token"),
+    );
+    let (mut socket, _) = tokio_tungstenite::connect_async(authenticated_request)
+        .await
+        .expect("token-carrying upgrade is accepted");
+    socket
+        .send(Message::Text(
+            serde_json::to_string(&initialize()).expect("initialize frame"),
+        ))
+        .await
+        .expect("send initialize");
+    let _ = socket.next().await.expect("handshake response");
+    socket
+        .send(Message::Text(
+            serde_json::to_string(&request(2, method::ACCOUNT_TOKEN, serde_json::json!({})))
+                .expect("token frame"),
+        ))
+        .await
+        .expect("send account/token");
+    let raw = socket.next().await.expect("token response").expect("frame");
+    let response: serde_json::Value =
+        serde_json::from_str(raw.to_text().expect("text frame")).expect("json response");
+    assert_eq!(
+        response["result"]["token"],
+        serde_json::json!("fixture-token")
+    );
+
+    server.abort();
+}
+
+#[tokio::test]
+async fn a_client_that_states_no_version_is_answered_with_the_legacy_one() {
+    let mut processor =
+        DeveloperSessionProcessor::new(Arc::new(SurfaceHost::new()), capabilities());
+    let legacy: InitializeResponse =
+        serde_json::from_value(result_of(processor.process(initialize_at(None)).await))
+            .expect("typed handshake");
+    assert_eq!(
+        legacy.protocol_version,
+        LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION
+    );
+
+    // A v7 client still reaches the methods it knows.
+    let threads = processor
+        .process(request(2, method::THREAD_LIST, ThreadListParams::default()))
+        .await;
+    assert!(threads.error.is_none());
+
+    let mut current = DeveloperSessionProcessor::new(Arc::new(SurfaceHost::new()), capabilities());
+    let negotiated: InitializeResponse = serde_json::from_value(result_of(
+        current
+            .process(initialize_at(Some(DEVELOPER_SESSION_PROTOCOL_VERSION)))
+            .await,
+    ))
+    .expect("typed handshake");
+    assert_eq!(
+        negotiated.protocol_version,
+        DEVELOPER_SESSION_PROTOCOL_VERSION
+    );
+
+    let mut unsupported =
+        DeveloperSessionProcessor::new(Arc::new(SurfaceHost::new()), capabilities());
+    let refused = unsupported.process(initialize_at(Some(99))).await;
+    assert_eq!(refused.error.expect("unsupported version").code, -32005);
 }

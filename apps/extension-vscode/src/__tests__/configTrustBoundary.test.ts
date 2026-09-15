@@ -56,38 +56,15 @@ describe('user-owned execution-boundary configuration', () => {
     expect(Config.model()).toBe('fixture-user-boundary');
   });
 
-  it('ignores workspace and workspace-folder Desktop bridge destinations', () => {
+  it('ignores a workspace telemetry destination and keeps the user one', () => {
     stubConfiguration({
-      'desktopBridge.enabled': {
-        defaultValue: false,
-        workspaceValue: true,
-      },
-      'desktopBridge.port': {
-        defaultValue: 8787,
-        workspaceValue: 4444,
-        workspaceFolderValue: 5555,
+      telemetryEndpoint: {
+        defaultValue: 'https://telemetry.agiworkforce.com/v1/events',
+        globalValue: 'https://telemetry.example.com/v1/events',
+        workspaceValue: 'https://repository-controlled.example.com/v1/events',
       },
     });
 
-    expect(Config.desktopBridgeEnabled()).toBe(false);
-    expect(Config.desktopBridgePort()).toBe(8787);
-  });
-
-  it('honors the user Desktop bridge opt-in and port over repository values', () => {
-    stubConfiguration({
-      'desktopBridge.enabled': {
-        defaultValue: false,
-        globalValue: true,
-        workspaceValue: false,
-      },
-      'desktopBridge.port': {
-        defaultValue: 8787,
-        globalValue: 9876,
-        workspaceFolderValue: 4444,
-      },
-    });
-
-    expect(Config.desktopBridgeEnabled()).toBe(true);
-    expect(Config.desktopBridgePort()).toBe(9876);
+    expect(Config.telemetryEndpoint()).toBe('https://telemetry.example.com/v1/events');
   });
 });

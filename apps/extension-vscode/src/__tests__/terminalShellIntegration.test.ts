@@ -1,9 +1,9 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { TerminalProvider } from '../providers/terminalProvider';
+import { buildExplainTerminalPrompt } from '../features/editor-utilities';
 import { chatCompletion } from '../utils/api';
 
 vi.mock('../utils/api', async (importOriginal) => {
@@ -60,16 +60,6 @@ async function flush(): Promise<void> {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 }
 
-function token(): vscode.CancellationToken {
-  return { isCancellationRequested: false, onCancellationRequested: vi.fn() } as never;
-}
-
-function lastPrompt(): string {
-  const calls = vi.mocked(chatCompletion).mock.calls;
-  const messages = calls[calls.length - 1]?.[1] ?? [];
-  return messages.map((message) => message.content).join('\n');
-}
-
 describe('terminal shell-integration capture (SIX-15)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -102,14 +92,13 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     await flush();
     end({ terminal, execution, exitCode: 1 });
 
-    const explanation = await provider.captureAndExplain(token());
+    const captured = await provider.captureOutput();
 
-    expect(explanation).toBe('explanation');
     expect(vscode.window.showInputBox).not.toHaveBeenCalled();
-    expect(lastPrompt()).toContain('3 passing');
-    expect(lastPrompt()).toContain('1 failing');
-    expect(lastPrompt()).toContain('$ pnpm test');
-    expect(lastPrompt()).toContain('[exit code 1]');
+    expect(captured).toContain('3 passing');
+    expect(captured).toContain('1 failing');
+    expect(captured).toContain('$ pnpm test');
+    expect(captured).toContain('[exit code 1]');
   });
 
   it('strips terminal control sequences before the output reaches the model', async () => {
@@ -126,13 +115,12 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     await flush();
     end({ terminal, execution, exitCode: 0 });
 
-    await provider.captureAndExplain(token());
+    const captured = await provider.captureOutput();
 
-    const prompt = lastPrompt();
-    expect(prompt).toContain('modified: src/app.ts');
-    expect(prompt).toContain('done');
-    expect(prompt).not.toContain('\u001B');
-    expect(prompt).not.toContain('title');
+    expect(captured).toContain('modified: src/app.ts');
+    expect(captured).toContain('done');
+    expect(captured).not.toContain('\u001B');
+    expect(captured).not.toContain('title');
   });
 
   it('marks output as truncated rather than sending an unbounded transcript', async () => {
@@ -146,11 +134,10 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     await flush();
     end({ terminal, execution, exitCode: 0 });
 
-    await provider.captureAndExplain(token());
+    const captured = await provider.captureOutput();
 
-    const prompt = lastPrompt();
-    expect(prompt).toContain('... [output truncated]');
-    expect(prompt.length).toBeLessThan(10_000);
+    expect(captured).toContain('... [output truncated]');
+    expect(captured.length).toBeLessThan(10_000);
   });
 
   it('omits a low-confidence command line rather than asserting a command that may be wrong', async () => {
@@ -168,10 +155,10 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     await flush();
     end({ terminal, execution, exitCode: 0 });
 
-    await provider.captureAndExplain(token());
+    const captured = await provider.captureOutput();
 
-    expect(lastPrompt()).toContain('some output');
-    expect(lastPrompt()).not.toContain('probably-not-what-ran');
+    expect(captured).toContain('some output');
+    expect(captured).not.toContain('probably-not-what-ran');
   });
 
   it('reports output while the command is still running', async () => {
@@ -184,10 +171,10 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     start({ terminal, execution });
     await flush();
 
-    await provider.captureAndExplain(token());
+    const captured = await provider.captureOutput();
 
-    expect(lastPrompt()).toContain('compiling…');
-    expect(lastPrompt()).toContain('[command is still running]');
+    expect(captured).toContain('compiling…');
+    expect(captured).toContain('[command is still running]');
   });
 
   it('says shell integration is inactive only when it really is', async () => {
@@ -195,11 +182,11 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     vscode.window.activeTerminal = makeTerminal(false);
     vi.mocked(vscode.window.showInputBox).mockResolvedValue('pasted output');
 
-    await provider.captureAndExplain(token());
+    const captured = await provider.captureOutput();
 
     const prompt = vi.mocked(vscode.window.showInputBox).mock.calls[0]?.[0]?.prompt ?? '';
     expect(prompt).toContain('Shell integration is not active in this terminal.');
-    expect(lastPrompt()).toContain('pasted output');
+    expect(captured).toContain('pasted output');
   });
 
   it('distinguishes "no command captured yet" from "no shell integration"', async () => {
@@ -207,7 +194,7 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     vscode.window.activeTerminal = makeTerminal(true);
     vi.mocked(vscode.window.showInputBox).mockResolvedValue('pasted output');
 
-    await provider.captureAndExplain(token());
+    await provider.captureOutput();
 
     const prompt = vi.mocked(vscode.window.showInputBox).mock.calls[0]?.[0]?.prompt ?? '';
     expect(prompt).toContain('No command output has been captured in this terminal yet.');
@@ -227,7 +214,7 @@ describe('terminal shell-integration capture (SIX-15)', () => {
 
     vscode.window.activeTerminal = other;
     vi.mocked(vscode.window.showInputBox).mockResolvedValue('pasted output');
-    await provider.captureAndExplain(token());
+    await provider.captureOutput();
     expect(vscode.window.showInputBox).toHaveBeenCalledTimes(1);
 
     const onClose = vi.mocked(vscode.window.onDidCloseTerminal).mock.calls[0]?.[0] as unknown as (
@@ -235,20 +222,20 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     ) => void;
     onClose(terminal);
     vscode.window.activeTerminal = terminal;
-    await provider.captureAndExplain(token());
+    await provider.captureOutput();
     expect(vscode.window.showInputBox).toHaveBeenCalledTimes(2);
   });
 
-  it('warns instead of calling the model when there is nothing to explain', async () => {
+  it('refuses the turn instead of sending an empty transcript', async () => {
     const provider = new TerminalProvider({} as vscode.SecretStorage);
     vscode.window.activeTerminal = makeTerminal(true);
     vi.mocked(vscode.window.showInputBox).mockResolvedValue(undefined);
 
-    await expect(provider.captureAndExplain(token())).resolves.toBe('');
-
+    await expect(provider.captureOutput()).resolves.toBe('');
     expect(chatCompletion).not.toHaveBeenCalled();
-    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: No terminal output to explain.',
-    );
+    expect(buildExplainTerminalPrompt('')).toEqual({
+      ok: false,
+      message: 'No terminal output to explain.',
+    });
   });
 });

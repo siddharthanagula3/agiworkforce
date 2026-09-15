@@ -74,5 +74,29 @@
     "searchLabel": "بحث في الإعدادات",
     "searchPlaceholder": "بحث",
     "title": "الإعدادات"
+  },
+  "nav": {
+    "general": "عام",
+    "account": "الحساب",
+    "team": "الفريق",
+    "privacy": "الخصوصية",
+    "billing": "الفوترة",
+    "usage": "الاستخدام",
+    "capabilities": "الإمكانات",
+    "security": "الأمان",
+    "safety": "السلامة",
+    "notifications": "الإشعارات",
+    "reflect": "Reflect",
+    "time-focus": "الوقت والتركيز",
+    "help": "المساعدة",
+    "skills": "المهارات",
+    "connectors": "الموصلات",
+    "plugins": "الإضافات",
+    "memory": "الذاكرة",
+    "voice": "الصوت",
+    "desktop": "عام",
+    "groupSettings": "الإعدادات",
+    "groupCustomize": "تخصيص",
+    "groupDesktop": "تطبيق سطح المكتب"
   }
 }

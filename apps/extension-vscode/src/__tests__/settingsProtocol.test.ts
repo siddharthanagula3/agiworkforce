@@ -22,8 +22,6 @@ const validValues: MutableConfigValues = {
   'agent.mode': 'auto',
   'agent.effort': 'medium',
   'agent.thinking': false,
-  'desktopBridge.enabled': false,
-  'desktopBridge.port': 8787,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
 };
 
@@ -92,8 +90,8 @@ describe('settings webview protocol', () => {
     expect(
       parseSettingsWebviewMessage({
         type: 'settings.update',
-        key: 'desktopBridge.port',
-        value: 22,
+        key: 'contextLines',
+        value: 5000,
       }),
     ).toBeUndefined();
     expect(

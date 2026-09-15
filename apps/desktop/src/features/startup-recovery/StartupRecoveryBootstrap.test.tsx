@@ -73,8 +73,10 @@ describe('StartupRecoveryBootstrap', () => {
     expect(
       await screen.findByRole('heading', { name: 'AGI could not unlock local data' }),
     ).toBeInTheDocument();
-    expect(document.documentElement.style.backgroundColor).toBe('rgb(8, 11, 16)');
-    expect(document.body.style.backgroundColor).toBe('rgb(8, 11, 16)');
+    await waitFor(() => {
+      expect(document.documentElement.style.backgroundColor).toBe('rgb(8, 11, 16)');
+      expect(document.body.style.backgroundColor).toBe('rgb(8, 11, 16)');
+    });
 
     unmount();
     expect(document.documentElement.style.backgroundColor).toBe(originalHtmlBackground);

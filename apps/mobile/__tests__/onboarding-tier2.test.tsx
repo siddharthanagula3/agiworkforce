@@ -360,11 +360,11 @@ describe('Model picker, system-runtime-only models capability-gated', () => {
     ).toBe(true);
   });
 
-  it('LOCAL_MODEL_LIST includes the Android system model fixture', () => {
+  it('LOCAL_MODEL_LIST leaves out the Android system model on iOS', () => {
     const { LOCAL_MODEL_LIST } = require('../src/features/model-picker/service');
     expect(
       (LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === ANDROID_SYSTEM_MODEL_ID),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('LOCAL_MODEL_LIST includes the default model fixture', () => {

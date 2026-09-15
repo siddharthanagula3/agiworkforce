@@ -82,17 +82,16 @@ moves a local developer session across a trust boundary.
 - Workspace-file attachments are validated against traversal, symlinks, folders, and sensitive filenames.
 - User-curated memory is bounded and injected as untrusted context for future turns.
 - Visible Local host and resolved provider/Auto-routing labels, including in narrow sidebars.
-- Inline completions, CodeLens, hover, diagnostics, terminal helpers, memory UI, and an optional authenticated Desktop availability bridge.
+- Inline completions, CodeLens, hover, diagnostics, terminal helpers and memory UI.
 
 ## Configuration highlights
 
-| Setting                                  | Default | Purpose                                                                                     |
-| ---------------------------------------- | ------- | ------------------------------------------------------------------------------------------- |
-| `agiWorkforce.cliPath`                   | `agi`   | Local CLI binary used to launch `app-server`.                                               |
-| `agiWorkforce.model`                     | `auto`  | Routes each turn using the task and the models available to the resolved plan.              |
-| `agiWorkforce.inlineCompletions.enabled` | `false` | Explicit opt-in for sending surrounding code to the cloud completion utility.               |
-| `agiWorkforce.desktopBridge.enabled`     | `false` | Shows authenticated Desktop availability; IDE sessions and actions remain app-server owned. |
-| `agiWorkforce.telemetryEnabled`          | `false` | Extension telemetry opt-in, also subject to VS Code telemetry settings.                     |
+| Setting                                  | Default | Purpose                                                                        |
+| ---------------------------------------- | ------- | ------------------------------------------------------------------------------ |
+| `agiWorkforce.cliPath`                   | `agi`   | Local CLI binary used to launch `app-server`.                                  |
+| `agiWorkforce.model`                     | `auto`  | Routes each turn using the task and the models available to the resolved plan. |
+| `agiWorkforce.inlineCompletions.enabled` | `false` | Explicit opt-in for sending surrounding code to the cloud completion utility.  |
+| `agiWorkforce.telemetryEnabled`          | `false` | Extension telemetry opt-in, also subject to VS Code telemetry settings.        |
 
 The user-facing settings table lives in `README.md`. Keep both truthful against
 `contributes.configuration` when a key is added, renamed, or re-defaulted.

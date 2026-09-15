@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { contextWindowLabel, formatTokenCount } from './code-surface';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import {
+  CODE_COPY,
+  DEFAULT_CODE_ENVIRONMENT,
+  contextWindowLabel,
+  environmentChipLabel,
+  formatTokenCount,
+} from './code-surface';
 
 describe('formatTokenCount', () => {
   it('reads a small count exactly and a large one in place value', () => {
@@ -24,5 +31,30 @@ describe('contextWindowLabel', () => {
 
   it('stops at a full window rather than reporting more', () => {
     expect(contextWindowLabel(300000, 200000)).toBe('300k / 200k (100%)');
+  });
+});
+
+describe('code surface approval copy', () => {
+  it('refuses an action with the shared verb, never a second spelling', () => {
+    expect(CODE_COPY.reject).toBe(TOOL_APPROVAL_ACTION_LABELS.deny);
+    expect(CODE_COPY.reject).not.toBe('Reject');
+    expect(CODE_COPY.approve).toContain(TOOL_APPROVAL_ACTION_LABELS.approve);
+  });
+});
+
+describe('environmentChipLabel', () => {
+  it('names the environment, and the network level only under Cloud', () => {
+    expect(environmentChipLabel('cloud', 'none', null)).toBe('Cloud · Isolated');
+    expect(environmentChipLabel('cloud', 'trusted', 'qa-project')).toBe('Cloud · Trusted hosts');
+    expect(environmentChipLabel('cloud', 'full', null)).toBe('Cloud · Full internet');
+  });
+
+  it('names the folder under Local, and stands alone before one is chosen', () => {
+    expect(environmentChipLabel('local', 'none', 'qa-project')).toBe('Local · qa-project');
+    expect(environmentChipLabel('local', 'full', null)).toBe('Local');
+  });
+
+  it('starts on Cloud, so a browser never claims a local environment', () => {
+    expect(DEFAULT_CODE_ENVIRONMENT).toBe('cloud');
   });
 });

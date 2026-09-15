@@ -62,8 +62,6 @@ const openAccount = z.object({ type: z.literal('openAccount') });
 const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
 const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
 const openPrivacySettings = z.object({ type: z.literal('openPrivacySettings') });
-const openCloudTasks = z.object({ type: z.literal('openCloudTasks') });
-const revealConversationHistory = z.object({ type: z.literal('revealConversationHistory') });
 const openRecentConversation = z.object({
   type: z.literal('openRecentConversation'),
   payload: z.object({ threadId: z.string().min(1) }),
@@ -153,6 +151,72 @@ const proposeDiff = z.object({
 
 const clearActiveProject = z.object({ type: z.literal('clearActiveProject') });
 
+const openSurface = z.object({
+  type: z.literal('openSurface'),
+  payload: z.object({ surfaceId: z.string().min(1).max(64) }),
+});
+
+const requestSessions = z.object({
+  type: z.literal('requestSessions'),
+  payload: z.object({ source: z.enum(['local', 'cloud']) }),
+});
+
+const openSessionRow = z.object({
+  type: z.literal('openSessionRow'),
+  payload: z.object({
+    id: z.string().min(1).max(200),
+    source: z.enum(['local', 'cloud']),
+  }),
+});
+
+const requestSlashCommands = z.object({ type: z.literal('requestSlashCommands') });
+
+const runSlashCommand = z.object({
+  type: z.literal('runSlashCommand'),
+  payload: z.object({ name: z.string().min(1).max(120) }),
+});
+
+export const APPROVAL_DECISIONS = ['once', 'session', 'deny', 'abort'] as const;
+export const ApprovalDecisionSchema = z.enum(APPROVAL_DECISIONS);
+export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
+
+const respondToApproval = z.object({
+  type: z.literal('respondToApproval'),
+  payload: z.object({
+    requestId: z.string().min(1).max(200),
+    decision: ApprovalDecisionSchema,
+  }),
+});
+
+const resolveTurnFailure = z.object({
+  type: z.literal('resolveTurnFailure'),
+  payload: z.object({
+    kind: z.enum([
+      'sign-in-provider',
+      'sign-in-account',
+      'upgrade-plan',
+      'open-settings',
+      'switch-model',
+    ]),
+    provider: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[A-Za-z0-9_-]+$/u)
+      .optional(),
+  }),
+});
+
+const openToolDiff = z.object({
+  type: z.literal('openToolDiff'),
+  payload: z.object({ path: z.string().min(1).max(4096) }),
+});
+
+const dismissEditorContext = z.object({
+  type: z.literal('dismissEditorContext'),
+  payload: z.object({ id: z.string().min(1).max(2048) }),
+});
+
 const removePendingAttachment = z.object({
   type: z.literal('removePendingAttachment'),
   payload: z.object({ id: z.string().min(1).max(200) }),
@@ -189,15 +253,22 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   completeOnboarding,
   openPermissionDocs,
   openPrivacySettings,
-  openCloudTasks,
-  revealConversationHistory,
   openRecentConversation,
   openPathReference,
   requestContextMenuState,
   attachContext,
+  dismissEditorContext,
+  openToolDiff,
+  resolveTurnFailure,
+  respondToApproval,
   attachFiles,
   removePendingAttachment,
   clearActiveProject,
+  openSurface,
+  requestSessions,
+  openSessionRow,
+  requestSlashCommands,
+  runSlashCommand,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;

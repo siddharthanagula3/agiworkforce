@@ -37,8 +37,6 @@ describe('SettingsPanel', () => {
       'agent.mode': 'auto',
       'agent.effort': 'medium',
       'agent.thinking': false,
-      'desktopBridge.enabled': false,
-      'desktopBridge.port': 8787,
       telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
       currentTier: 'unknown',
     };
@@ -194,8 +192,8 @@ describe('SettingsPanel', () => {
 
     await webviewMessageHandler!({
       type: 'settings.update',
-      key: 'desktopBridge.port',
-      value: 22,
+      key: 'contextLines',
+      value: 5000,
     });
 
     expect(configurationUpdate).not.toHaveBeenCalled();

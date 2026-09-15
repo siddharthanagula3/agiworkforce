@@ -43,6 +43,12 @@ pub struct ManagedSessionSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree_root: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<ManagedSessionForkMetadata>,
@@ -192,6 +198,9 @@ impl ManagedSessionSummary {
             model: session.model.clone(),
             workspace_root: session.workspace_root.clone(),
             created_by: session.created_by.clone(),
+            client: session.client.clone(),
+            git_branch: session.git_branch.clone(),
+            worktree_root: session.worktree_root.clone(),
             archived_at: session.archived_at,
             fork: session.fork.clone(),
             routing_authority: session
@@ -687,6 +696,9 @@ mod tests {
             model: None,
             workspace_root: None,
             created_by: None,
+            client: None,
+            git_branch: None,
+            worktree_root: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -712,6 +724,9 @@ mod tests {
             model: Some("registry/model-key".to_string()),
             workspace_root: Some(base.to_path_buf()),
             created_by: Some("vscode".to_string()),
+            client: None,
+            git_branch: None,
+            worktree_root: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,

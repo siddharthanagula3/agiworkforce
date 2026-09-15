@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSession } from '@/lib/identity/client';
+import { getCsrfToken } from '@/lib/client/csrf';
 import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useAppTheme } from '@shared/hooks/useAppTheme';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
@@ -54,6 +55,7 @@ export function CloudSettingsSync() {
   const acknowledgedLocale = useRef<string | null>(null);
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingAppearanceWrite = useRef<Record<string, unknown> | null>(null);
 
   const i18nRef = useRef(i18n);
   i18nRef.current = i18n;
@@ -67,7 +69,7 @@ export function CloudSettingsSync() {
     (namespace, patch) => {
       writeQueue.current = writeQueue.current.then(async () => {
         try {
-          await savePreferenceNamespace(namespace, patch, { merge: true });
+          await savePreferenceNamespace(namespace, patch, { merge: true, keepalive: true });
           if (namespace === APPEARANCE_NAMESPACE) {
             acknowledged.current = { ...(acknowledged.current ?? {}), ...patch };
           } else {
@@ -95,6 +97,7 @@ export function CloudSettingsSync() {
     }
 
     let cancelled = false;
+    void getCsrfToken().catch(() => {});
     void Promise.all([
       fetchStoredPreferenceNamespace<AppearanceNamespace>(APPEARANCE_NAMESPACE),
       fetchStoredPreferenceNamespace<{ locale?: string }>(LANGUAGE_NAMESPACE),
@@ -147,9 +150,11 @@ export function CloudSettingsSync() {
     const delta = appearanceDelta(acknowledged.current, next);
     if (!delta) return;
 
+    pendingAppearanceWrite.current = delta as Record<string, unknown>;
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
       debounce.current = null;
+      pendingAppearanceWrite.current = null;
       write(APPEARANCE_NAMESPACE, delta as Record<string, unknown>);
     }, SAVE_DEBOUNCE_MS);
 
@@ -178,6 +183,21 @@ export function CloudSettingsSync() {
     if (acknowledgedLocale.current === currentLocale) return;
     write(LANGUAGE_NAMESPACE, { locale: currentLocale });
   }, [currentLocale, hydratedAt, isSignedIn, write]);
+
+  useEffect(() => {
+    const flush = () => {
+      const patch = pendingAppearanceWrite.current;
+      if (!patch) return;
+      pendingAppearanceWrite.current = null;
+      if (debounce.current) {
+        clearTimeout(debounce.current);
+        debounce.current = null;
+      }
+      void savePreferenceNamespace(APPEARANCE_NAMESPACE, patch, { merge: true, keepalive: true });
+    };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, []);
 
   return null;
 }

@@ -350,6 +350,8 @@ export function PrivacySection() {
           <span style={{ fontSize: 14, color: 'var(--text-1)' }}>Privacy Policy</span>
           <SettingsPageLink
             href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
               fontSize: 13,
               color: 'var(--text-2)',

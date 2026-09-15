@@ -72,31 +72,42 @@ function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
   };
 }
 
-async function getVisibleModelsForTier(userTier: string): Promise<OpenAiCompatibleModel[]> {
+interface VisibleModels {
+  available: OpenAiCompatibleModel[];
+  temporarilyUnavailable: string[];
+}
+
+async function getVisibleModelsForTier(userTier: string): Promise<VisibleModels> {
   const surfaceModelIds = new Set(
     getPickerModelsForRuntimeProfile(SURFACE_RUNTIME_PROFILE, {
       modelTypes: [...MODEL_TYPES],
     }).map((model) => model.id),
   );
   const entries = await buildCatalogueEntries(userTier);
-
-  return entries
-    .filter((entry) => entry.admitted && surfaceModelIds.has(entry.id))
-    .map(toModelRecord)
-    .filter((model): model is OpenAiCompatibleModel => Boolean(model));
+  const available: OpenAiCompatibleModel[] = [];
+  const temporarilyUnavailable: string[] = [];
+  for (const entry of entries) {
+    if (!entry.admitted || !surfaceModelIds.has(entry.id)) continue;
+    const record = toModelRecord(entry);
+    if (!record) continue;
+    if (entry.temporarilyUnavailable) temporarilyUnavailable.push(record.id);
+    else available.push(record);
+  }
+  return { available, temporarilyUnavailable };
 }
 
 async function listModelsForRequest(request: NextRequest, userTier: string) {
-  const visibleModels = await getVisibleModelsForTier(userTier);
+  const { available, temporarilyUnavailable } = await getVisibleModelsForTier(userTier);
 
   return NextResponse.json(
     {
       object: 'list',
-      data: visibleModels,
+      data: available,
       x_agi_workforce: {
         user_tier: normalizeSubscriptionAccessTier(userTier),
-        total_available: visibleModels.length,
+        total_available: available.length,
         allowed_auto_modes: getAllowedAutoModesForTier(userTier),
+        temporarily_unavailable: temporarilyUnavailable,
       },
     },
     {

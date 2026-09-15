@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { translateChatRequest } from '@agiworkforce/providers-google';
 import { translateChatRequest as translateAnthropicChatRequest } from '@agiworkforce/providers-anthropic';
-import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
+import {
+  getModelRegistryFacts,
+  listCanonicalModels,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 import { getRoutePricingForModel } from '@agiworkforce/model-registry';
 import {
   toCanonicalChatRequest,
@@ -42,6 +46,12 @@ const GOOGLE_THINKING_LEVEL_MODEL = requireCatalogModel(
   (model) =>
     model.provider === 'google' &&
     model.reasoning?.request?.effortPath === 'thinkingConfig.thinkingLevel',
+);
+const OPENROUTER_ROUTER_MODEL = requireCatalogModel(
+  (model) => model.provider === 'open_router' && getModelRegistryFacts(model.id)?.isRouter === true,
+);
+const OPENROUTER_NON_ROUTER_MODEL = requireCatalogModel(
+  (model) => model.provider === 'open_router' && getModelRegistryFacts(model.id)?.isRouter !== true,
 );
 const GOOGLE_MINIMAL_THINKING_MODEL = requireCatalogModel(
   (model) =>
@@ -279,6 +289,39 @@ describe('toCanonicalChatRequest', () => {
 
       expect(chatRequest.zeroDataRetentionOnly).toBe(true);
       expect(chatRequest.metadata).toBeUndefined();
+    });
+
+    it('forces the requirement for an OpenRouter router even when the workspace does not ask for it', () => {
+      const processed = makeProcessed(
+        { model: OPENROUTER_ROUTER_MODEL.id, messages: [{ role: 'user', content: 'hi' }] },
+        'open_router',
+      );
+
+      const chatRequest = toCanonicalChatRequest(processed);
+
+      expect(chatRequest.zeroDataRetentionOnly).toBe(true);
+    });
+
+    it('leaves a non-router OpenRouter model on the workspace policy', () => {
+      const processed = makeProcessed(
+        { model: OPENROUTER_NON_ROUTER_MODEL.id, messages: [{ role: 'user', content: 'hi' }] },
+        'open_router',
+      );
+
+      const chatRequest = toCanonicalChatRequest(processed);
+
+      expect(chatRequest.zeroDataRetentionOnly).toBeUndefined();
+    });
+
+    it('does not force the requirement for a router model dispatched through a different provider', () => {
+      const processed = makeProcessed(
+        { model: OPENROUTER_ROUTER_MODEL.id, messages: [{ role: 'user', content: 'hi' }] },
+        'anthropic',
+      );
+
+      const chatRequest = toCanonicalChatRequest(processed);
+
+      expect(chatRequest.zeroDataRetentionOnly).toBeUndefined();
     });
   });
 });

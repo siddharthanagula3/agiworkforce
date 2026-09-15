@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
-import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
+import { normalizeConfiguredModelId, type ModelRoute } from '../model-picker/modelConstants';
 import { Config } from '../../platform/config';
 import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
 import { shouldShowOnboarding } from '../onboarding/onboardingState';
@@ -114,6 +114,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     void this._deliverComposerDraft();
   }
 
+  public askInChat(text: string): void {
+    this._pendingComposerDraft = {
+      type: 'composerDraft',
+      payload: { text, references: [], submit: true },
+    };
+    void this._deliverComposerDraft();
+  }
+
   private async _deliverComposerDraft(): Promise<void> {
     const draft = this._pendingComposerDraft;
     const view = this._view;
@@ -151,6 +159,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   public pushFollowUpBehavior(): void {
     this._stateManager.pushFollowUpBehavior();
+  }
+
+  public pushEditorContext(): void {
+    this._stateManager.pushEditorContext();
+  }
+
+  public activeRoute(): ModelRoute | undefined {
+    return this._stateManager.activeRoute();
   }
 
   public refreshRuntimeStatus(): void {

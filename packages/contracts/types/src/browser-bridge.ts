@@ -19,10 +19,141 @@ export const BROWSER_BRIDGE_ROUTES = {
   pairRequest: '/pair/request',
   pairConfirm: '/pair/confirm',
   nativeMessage: '/native/message',
+  clientState: '/client/state',
+  clientCommand: '/client/command',
 } as const;
 
 export const NATIVE_HOST_TOKEN_HEADER = 'x-native-host-token';
 export const BRIDGE_TOKEN_HEADER = 'x-bridge-token';
+
+/**
+ * The other local program on this machine, the CLI, asking the shell to drive
+ * the paired browser.
+ *
+ * Its own token and header rather than the extension's: the extension proves
+ * it is the paired extension, a local client proves it can read a file only
+ * this user can read. Neither grant is the other's, and a leaked bridge token
+ * must not let a client issue page commands.
+ */
+export const LOCAL_CLIENT_TOKEN_HEADER = 'x-local-client-token';
+
+/**
+ * Where the shell advertises the bridge to local clients: this file, mode
+ * 0600, in the CLI's config root (the directory `AGIWORKFORCE_HOME` names,
+ * else `~/.agiworkforce/`). Written when the bridge starts, removed when it
+ * stops.
+ *
+ * A client treats the file as absent when the process it names is gone or
+ * `clientState` refuses it, because a shell killed with SIGKILL leaves the
+ * file behind and a port can be reused by something else.
+ */
+export const LOCAL_CLIENT_BRIDGE_FILE = 'desktop-bridge.json';
+
+export const LOCAL_CLIENT_PROTOCOL_VERSION = 1;
+
+export interface LocalClientBridgeFile {
+  version: typeof LOCAL_CLIENT_PROTOCOL_VERSION;
+  port: number;
+  token: string;
+  pid: number;
+  startedAtMs: number;
+}
+
+export function isLocalClientBridgeFile(value: unknown): value is LocalClientBridgeFile {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<LocalClientBridgeFile>;
+  return (
+    candidate.version === LOCAL_CLIENT_PROTOCOL_VERSION &&
+    typeof candidate.port === 'number' &&
+    Number.isInteger(candidate.port) &&
+    candidate.port > 0 &&
+    candidate.port < 65_536 &&
+    typeof candidate.token === 'string' &&
+    candidate.token.length > 0 &&
+    typeof candidate.pid === 'number' &&
+    Number.isInteger(candidate.pid) &&
+    typeof candidate.startedAtMs === 'number'
+  );
+}
+
+/** Who is asking, named in the shell's capability prompt and activity log. */
+export interface LocalClientIdentity {
+  name: string;
+  cwd?: string;
+  threadId?: string;
+}
+
+export interface LocalClientCommandRequest {
+  version: typeof LOCAL_CLIENT_PROTOCOL_VERSION;
+  command: BrowserCommand;
+  args: Record<string, unknown>;
+  client: LocalClientIdentity;
+}
+
+/**
+ * Why a local client's command did not run.
+ *
+ * A client shows the user a different thing for each: pair the browser, grant
+ * the capability, nothing (they refused), the page never answered, or the
+ * token is stale and the file should be re-read.
+ */
+export const LOCAL_CLIENT_FAILURE_CODES = [
+  'not-paired',
+  'permission-denied',
+  'cancelled',
+  'timeout',
+  'unauthorized',
+] as const;
+
+export type LocalClientFailureCode = (typeof LOCAL_CLIENT_FAILURE_CODES)[number];
+
+export function isLocalClientFailureCode(value: unknown): value is LocalClientFailureCode {
+  return (
+    typeof value === 'string' && (LOCAL_CLIENT_FAILURE_CODES as readonly string[]).includes(value)
+  );
+}
+
+export interface LocalClientCommandResponse extends Omit<BrowserCommandResult, 'id'> {
+  id?: string;
+  code?: LocalClientFailureCode;
+}
+
+/** What `clientState` answers: whether a command can run at all, and why not. */
+export interface LocalClientStateResponse {
+  version: typeof LOCAL_CLIENT_PROTOCOL_VERSION;
+  /** A pairing record exists on this Mac. */
+  paired: boolean;
+  /**
+   * The paired browser has answered recently.
+   *
+   * Separate from `paired` because they fail differently and a client has to
+   * tell them apart: a pairing whose browser is closed, or has forgotten this
+   * Mac, still reads as paired here while no command it sends can ever be
+   * carried out. A client offers browser tools on this, not on `paired`.
+   */
+  answering?: boolean;
+  extensionId?: string;
+  appVersion?: string;
+}
+
+export function isLocalClientCommandRequest(value: unknown): value is LocalClientCommandRequest {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<LocalClientCommandRequest>;
+  const client = candidate.client as Partial<LocalClientIdentity> | undefined;
+  return (
+    candidate.version === LOCAL_CLIENT_PROTOCOL_VERSION &&
+    isBrowserCommand(candidate.command) &&
+    !!candidate.args &&
+    typeof candidate.args === 'object' &&
+    !Array.isArray(candidate.args) &&
+    !!client &&
+    typeof client === 'object' &&
+    typeof client.name === 'string' &&
+    client.name.trim().length > 0 &&
+    (client.cwd === undefined || typeof client.cwd === 'string') &&
+    (client.threadId === undefined || typeof client.threadId === 'string')
+  );
+}
 
 export const PAIR_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const PAIR_CODE_LENGTH = 8;
@@ -77,6 +208,15 @@ export function extensionIdFromLaunchOrigin(origin: string | undefined): string 
  */
 export const NATIVE_BROWSER_POLL_MESSAGE = 'desktop_browser_poll';
 export const NATIVE_BROWSER_RESULT_MESSAGE = 'desktop_browser_result';
+
+/**
+ * The browser telling the shell it is no longer paired.
+ *
+ * Without it the two sides disagree: the extension forgets the pairing and the
+ * shell keeps its record, so a client asks for a browser that will never
+ * answer and the user is offered tools that cannot work.
+ */
+export const NATIVE_BROWSER_UNPAIR_MESSAGE = 'desktop_browser_unpair';
 export const BROWSER_COMMAND_PROTOCOL_VERSION = 1;
 export const BROWSER_COMMAND_POLL_WINDOW_MS = 20_000;
 export const BROWSER_COMMAND_TIMEOUT_MS = 45_000;

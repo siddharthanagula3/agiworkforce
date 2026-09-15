@@ -443,7 +443,7 @@ export function Sidebar(props: SidebarProps) {
           className="flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out"
           style={{ width: COLLAPSED_RAIL_WIDTH }}
         >
-          <div className="flex flex-col items-center gap-0 py-2">
+          <div data-sidebar-region="rail" className="flex flex-col items-center gap-0 py-2">
             <RailButton label={toggleLabel} icon={PanelLeft} onClick={onToggleCollapse} />
             <RailButton
               label={t('sidebar.newChatAction', 'New chat')}
@@ -490,12 +490,22 @@ export function Sidebar(props: SidebarProps) {
         style={{ width }}
       >
         {/* Header: brand wordmark (optional) + collapse + compose + search */}
-        <div className="border-b border-[hsl(var(--border))] p-4">
+        <div
+          data-sidebar-region="header"
+          className="border-b border-[hsl(var(--border))] p-[var(--chat-sidebar-header-padding)]"
+        >
           {/* Brand row, only rendered when a surface supplies a headerSlot
               (e.g. the web app-shell wordmark). Surfaces that pass no headerSlot
               stay byte-identical to the previous layout. */}
-          {headerSlot && <div className="mb-3 flex items-center">{headerSlot}</div>}
-          <div className="mb-3 flex items-center justify-between">
+          {headerSlot && (
+            <div data-sidebar-region="header-first-row" className="mb-3 flex items-center">
+              {headerSlot}
+            </div>
+          )}
+          <div
+            data-sidebar-region={headerSlot ? undefined : 'header-first-row'}
+            className="mb-3 flex items-center justify-between"
+          >
             <button
               type="button"
               onClick={onToggleCollapse}

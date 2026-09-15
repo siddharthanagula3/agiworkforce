@@ -460,6 +460,29 @@ export function requiredArity(parameterText) {
   return count;
 }
 
+function resolveNamedHandler(source, name) {
+  const escaped = name.replace(/\$/g, '\\$');
+  const declaration = source.match(
+    new RegExp(
+      `(?:^|\\n)[ \\t]*(?:export\\s+)?(?:async\\s+)?function\\s*\\*?\\s*${escaped}\\s*\\(`,
+    ),
+  );
+  if (declaration) {
+    const inner = readBalancedParens(source, declaration.index + declaration[0].length - 1);
+    return { arity: inner === null ? null : requiredArity(inner), shape: 'named-function' };
+  }
+  const arrow = source.match(
+    new RegExp(
+      `(?:^|\\n)[ \\t]*(?:export\\s+)?(?:const|let)\\s+${escaped}\\s*(?::[^=\\n]*)?=\\s*(?:async\\s*)?\\(`,
+    ),
+  );
+  if (arrow) {
+    const inner = readBalancedParens(source, arrow.index + arrow[0].length - 1);
+    return { arity: inner === null ? null : requiredArity(inner), shape: 'named-arrow' };
+  }
+  return null;
+}
+
 export function collectCommandArities(sources) {
   const arities = new Map();
 
@@ -488,6 +511,9 @@ export function collectCommandArities(sources) {
           shape: 'function',
           file: relative,
         };
+      } else if ((head = rest.match(/^([A-Za-z_$][\w$]*)\s*[,)]/))) {
+        const resolved = resolveNamedHandler(source, head[1]);
+        if (resolved) entry = { ...resolved, file: relative };
       }
 
       arities.set(id, entry);

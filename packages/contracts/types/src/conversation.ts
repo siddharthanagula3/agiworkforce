@@ -1,4 +1,4 @@
-
+import { RUN_STATUS_LABELS } from './cross-device';
 
 declare const __brand: unique symbol;
 
@@ -96,6 +96,21 @@ export interface ApprovalRequestBase {
 }
 
 export type ToolCallStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export const TOOL_CALL_STATUS_LABELS = Object.freeze({
+  pending: RUN_STATUS_LABELS.queued,
+  running: RUN_STATUS_LABELS.running,
+  awaiting_approval: 'Waiting for approval',
+  completed: RUN_STATUS_LABELS.completed,
+  failed: RUN_STATUS_LABELS.failed,
+  cancelled: RUN_STATUS_LABELS.cancelled,
+});
+
+export type ToolCallDisplayStatus = keyof typeof TOOL_CALL_STATUS_LABELS;
+
+export function toolCallStatusLabel(status: ToolCallDisplayStatus): string {
+  return TOOL_CALL_STATUS_LABELS[status];
+}
 
 export interface RuntimeActivityStep {
   id: string;

@@ -74,5 +74,29 @@
     "searchLabel": "設定を検索",
     "searchPlaceholder": "検索",
     "title": "設定"
+  },
+  "nav": {
+    "general": "一般",
+    "account": "アカウント",
+    "team": "チーム",
+    "privacy": "プライバシー",
+    "billing": "請求",
+    "usage": "使用状況",
+    "capabilities": "機能",
+    "security": "セキュリティ",
+    "safety": "安全性",
+    "notifications": "通知",
+    "reflect": "Reflect",
+    "time-focus": "時間と集中",
+    "help": "ヘルプ",
+    "skills": "スキル",
+    "connectors": "コネクタ",
+    "plugins": "プラグイン",
+    "memory": "メモリ",
+    "voice": "音声",
+    "desktop": "一般",
+    "groupSettings": "設定",
+    "groupCustomize": "カスタマイズ",
+    "groupDesktop": "デスクトップアプリ"
   }
 }

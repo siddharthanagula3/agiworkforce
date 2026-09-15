@@ -4,9 +4,11 @@ import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import { useDesktopHost } from '../lib/host';
 import { deepLinkDestination, conversationDeepLink } from '../lib/deep-links';
 import { notifyJobComplete } from '../lib/notify';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 function installHost(overrides: Partial<HostBridge> = {}): HostBridge {
   const host: HostBridge = {
+    ...hostBridgeStub(),
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     invokeRuntime: async () => ({

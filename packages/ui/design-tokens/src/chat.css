@@ -122,6 +122,23 @@
     --chat-radius-xl: var(--corner-panel);
     --chat-radius-2xl: var(--corner-overlay);
     --chat-user-bubble-radius: var(--corner-panel);
+    /* The band a desktop shell hands back to the page when it hides the native
+       title bar: how tall it is, and how far the page must stay clear of the
+       window controls the platform floats inside it. The shell reads the strip
+       height out of this file at build time, so the window it opens and the page
+       it loads cannot disagree about where the band ends. The sidebar header's
+       own padding is a token for the same reason: the inset above is measured
+       from the window edge, so the first row's padding is the difference between
+       the two and cannot be written as a literal in either place.
+
+       The inset clears the buttons, it does not merely reach them: the group
+       ends at 71px and a page that starts there puts a glyph against the zoom
+       button, which is what the Code rail did. The trailing gutter matches the
+       platform's own leading inset, and `windowChrome.ts` fails the build if
+       the two drift. */
+    --chat-window-title-strip: 48px;
+    --chat-window-title-strip-inset: 84px;
+    --chat-sidebar-header-padding: 1rem;
   }
 
   .dark {

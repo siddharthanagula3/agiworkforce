@@ -170,7 +170,32 @@
     "voiceStopRecording": "Arrêter l'enregistrement",
     "voiceStopping": "Arrêt de l'action vocale",
     "voiceTranscribing": "Transcription de la voix",
-    "voiceUnsupported": "Entrée vocale indisponible"
+    "voiceUnsupported": "Entrée vocale indisponible",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "Chat : questions rapides et conversation",
+    "modeAgiWorkTitle": "AGI Work : tâches en plusieurs étapes avec outils, fichiers et livrables vérifiables",
+    "style": "Style",
+    "styleCustom": "Personnalisé",
+    "responseStyle": "Style de réponse",
+    "styles": {
+      "default": "Par défaut",
+      "concise": "Concis",
+      "detailed": "Détaillé",
+      "technical": "Technique",
+      "creative": "Créatif"
+    },
+    "styleDescs": {
+      "default": "Style de réponse standard",
+      "concise": "Bref et direct",
+      "detailed": "Approfondi avec des exemples",
+      "technical": "Précis avec des exemples de code",
+      "creative": "Expressif et captivant"
+    },
+    "addAttachmentsAndTools": "Ajouter des pièces jointes et des outils",
+    "addAttachmentsAndToolsActive": "Ajouter des pièces jointes et des outils : {{count}} actifs",
+    "voiceStart": "Démarrer la saisie vocale",
+    "voiceUnsupportedBrowser": "La saisie vocale n’est pas prise en charge par ce navigateur",
+    "voiceUnsupportedHint": "La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome ou Edge."
   },
   "bubble": {
     "assistantThinking": "L'assistant réfléchit",
@@ -268,5 +293,13 @@
     "thinkingSimple": "Réflexion sur votre question en cours...",
     "workingOnGoal": "J'y travaille... {{goal}}",
     "workingOnRequest": "Traitement de votre demande en cours..."
+  },
+  "greeting": {
+    "morning": "Bonjour",
+    "afternoon": "Bon après-midi",
+    "evening": "Bonsoir",
+    "morningNamed": "Bonjour, {{name}}",
+    "afternoonNamed": "Bon après-midi, {{name}}",
+    "eveningNamed": "Bonsoir, {{name}}"
   }
 }

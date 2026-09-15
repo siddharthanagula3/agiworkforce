@@ -3,8 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => null }));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
+const routeHealthMocks = vi.hoisted(() => ({
+  getCredentialCooldownSnapshot: vi.fn(
+    async (): Promise<Readonly<Record<string, RouteHealthSnapshot>>> => ({}),
+  ),
+}));
+vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  getCredentialCooldownSnapshot: routeHealthMocks.getCredentialCooldownSnapshot,
+}));
+
+import { healthyRouteHealthSnapshot, type RouteHealthSnapshot } from '@agiworkforce/routing';
 import {
   getProviderAvailability,
+  getProviderAvailabilityMap,
   markProviderDegraded,
 } from '@/lib/services/provider-availability-service';
 
@@ -49,5 +60,43 @@ describe('provider availability · billing exhausted', () => {
     markProviderDegraded('anthropic-billing-d', 'billing_exhausted', now);
 
     expect(await getProviderAvailability('openai', now + 1_000)).toBeNull();
+  });
+});
+
+/**
+ * The mark above lasts five minutes; the dispatcher refuses every route on an
+ * unfunded credential for its own, longer cooldown window. Between the two the
+ * picker offered a model whose next turn was refused before any provider call.
+ * The map reads the dispatcher's fact so both surfaces answer the same way.
+ */
+describe('provider availability · the credential the dispatcher recorded as unfunded', () => {
+  const now = 10 * 60 * 60 * 1000;
+
+  it('withholds the provider for as long as the dispatcher would', async () => {
+    routeHealthMocks.getCredentialCooldownSnapshot.mockResolvedValueOnce({
+      'anthropic-unfunded-a': { ...healthyRouteHealthSnapshot(), unfunded: true },
+      openai: healthyRouteHealthSnapshot(),
+    });
+
+    const map = await getProviderAvailabilityMap(['anthropic-unfunded-a', 'openai'], now);
+
+    expect(map['anthropic-unfunded-a']).toMatchObject({
+      state: 'degraded',
+      reason: 'This provider is temporarily unavailable.',
+    });
+    expect(Date.parse(map['anthropic-unfunded-a']?.until ?? '')).toBeGreaterThan(now);
+    expect(map['openai']).toBeUndefined();
+    expect(routeHealthMocks.getCredentialCooldownSnapshot).toHaveBeenCalledWith(
+      ['anthropic-unfunded-a', 'openai'],
+      now,
+    );
+  });
+
+  it('offers the provider again once the dispatcher would try it again', async () => {
+    routeHealthMocks.getCredentialCooldownSnapshot.mockResolvedValueOnce({
+      'anthropic-unfunded-b': healthyRouteHealthSnapshot(),
+    });
+
+    expect(await getProviderAvailabilityMap(['anthropic-unfunded-b'], now)).toEqual({});
   });
 });

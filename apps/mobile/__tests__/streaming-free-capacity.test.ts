@@ -127,6 +127,6 @@ describe('free-capacity 429 handling on the stream', () => {
 
     expect(error).not.toBeInstanceOf(ApiFreeCapacityError);
     expect(error).not.toBeInstanceOf(ApiPaywallError);
-    expect(error.message).toBe('HTTP 429: Too many requests');
+    expect(error.message).toBe('Too many requests right now. Please wait a moment and try again.');
   });
 });

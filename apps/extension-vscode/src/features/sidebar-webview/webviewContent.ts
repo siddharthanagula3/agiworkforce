@@ -1,8 +1,16 @@
 import * as vscode from 'vscode';
 import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker/modelConstants';
-import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
+import {
+  AGENT_MODE_LABEL,
+  EFFORT_LABEL,
+  TOOL_APPROVAL_ACTION_LABELS,
+  toolCallStatusLabel,
+  type AgentMode,
+  type Effort,
+} from '@agiworkforce/types';
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { ComposerFollowUpBehavior } from '../../platform/config';
+import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
 
 export function escapeHtml(value: string): string {
   return value
@@ -126,6 +134,7 @@ export function getWebviewContent(
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      position: relative;
     }
 
     /* ── Header ── */
@@ -306,9 +315,7 @@ export function getWebviewContent(
       min-height: 0;
       padding: clamp(14px, 4vw, 24px);
       overflow: auto;
-      background:
-        radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--accent-teal) 12%, transparent), transparent 42%),
-        var(--bg-base);
+      background: var(--vscode-sideBar-background, var(--bg-base));
     }
     .onboarding-shell {
       display: flex;
@@ -348,7 +355,10 @@ export function getWebviewContent(
       background: var(--accent-teal);
     }
     .onboarding-step {
+      display: flex;
       flex: 1;
+      flex-direction: column;
+      justify-content: flex-end;
       animation: onboarding-enter 180ms var(--transition);
     }
     .onboarding-step[hidden] {
@@ -358,33 +368,19 @@ export function getWebviewContent(
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .onboarding-icon {
-      display: grid;
-      width: 42px;
-      height: 42px;
-      margin-bottom: 18px;
-      place-items: center;
-      border: 1px solid color-mix(in srgb, var(--accent-teal) 42%, var(--border));
-      border-radius: 13px;
-      background: var(--bg-elevated);
-      color: var(--accent-teal);
-      font-size: 20px;
-    }
-    .onboarding-eyebrow {
-      margin-bottom: 7px;
-      color: var(--text-secondary);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
     .onboarding h2 {
       max-width: 430px;
       color: var(--text-primary);
-      font-size: clamp(22px, 7vw, 34px);
+      font-size: clamp(19px, 6vw, 28px);
       font-weight: 650;
       letter-spacing: -0.035em;
-      line-height: 1.05;
+      line-height: 1.1;
+    }
+    /* The step heading takes focus only so a screen reader announces the new
+       step; it is not tabbable, so a ring on it reads as a defect. */
+    .onboarding h2:focus,
+    .onboarding h2:focus-visible {
+      outline: none;
     }
     .onboarding-lede {
       max-width: 490px;
@@ -392,60 +388,6 @@ export function getWebviewContent(
       color: var(--text-secondary);
       font-size: 13px;
       line-height: 1.65;
-    }
-    .onboarding-card {
-      display: grid;
-      gap: 9px;
-      margin-top: 20px;
-      padding: 14px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: var(--bg-elevated);
-    }
-    .onboarding-card strong {
-      color: var(--text-primary);
-      font-size: 12px;
-    }
-    .onboarding-card span,
-    .onboarding-card p {
-      color: var(--text-secondary);
-      font-size: 11px;
-      line-height: 1.5;
-    }
-    .onboarding-disclosures {
-      display: grid;
-      gap: 9px;
-      margin-top: 18px;
-      list-style: none;
-    }
-    .onboarding-disclosures li {
-      display: grid;
-      grid-template-columns: 22px minmax(0, 1fr);
-      gap: 9px;
-      align-items: start;
-      padding: 11px 12px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: var(--bg-elevated);
-    }
-    .onboarding-disclosures .codicon {
-      padding-top: 1px;
-      color: var(--accent-teal);
-      font-size: 15px;
-    }
-    .onboarding-disclosures strong,
-    .onboarding-disclosures span {
-      display: block;
-    }
-    .onboarding-disclosures strong {
-      margin-bottom: 2px;
-      color: var(--text-primary);
-      font-size: 11px;
-    }
-    .onboarding-disclosures span {
-      color: var(--text-secondary);
-      font-size: 10.5px;
-      line-height: 1.45;
     }
     .onboarding-inline-actions {
       display: flex;
@@ -507,15 +449,6 @@ export function getWebviewContent(
       cursor: pointer;
       font: inherit;
       font-size: 10.5px;
-    }
-    .onboarding-boundary {
-      margin-top: 12px;
-      padding: 8px 10px;
-      border-left: 2px solid var(--accent-teal);
-      background: var(--bg-elevated);
-      color: var(--text-secondary);
-      font-size: 10.5px;
-      line-height: 1.45;
     }
 
     button:focus-visible,
@@ -584,11 +517,143 @@ export function getWebviewContent(
       padding-inline: 2px;
     }
 
+    /* A failed turn is a notice in the transcript, not an input-validation
+       box. The error border and the Activity row carry the signal; a saturated
+       fill behind a paragraph of prose does not. */
     .message.error {
-      background: var(--error-bg);
+      background: var(--bg-elevated);
       border: 1px solid var(--error-border);
-      color: var(--error);
+      color: var(--text-primary);
       align-self: stretch;
+      display: grid;
+      gap: 8px;
+    }
+    .error-headline {
+      color: var(--text-primary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .error-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .error-retry {
+      height: 24px;
+      padding: 0 10px;
+      border: 1px solid var(--error-border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+    }
+    .error-retry:hover { background: var(--hover); }
+    .error-details {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    .error-details-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      min-height: 28px;
+      padding: 0 4px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      text-align: left;
+    }
+    .error-details-toggle:hover { background: var(--hover); color: var(--text-primary); }
+    .error-details-toggle__chevron { font-size: 9px; }
+    .error-detail-text {
+      margin-top: 6px;
+      max-height: 180px;
+      overflow: auto;
+      color: var(--text-secondary);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* One approval card, one layout. A native modal renders its buttons stacked
+       or in a row depending on how long the message is, so the same prompt did
+       not look the same twice. */
+    .approval-card {
+      border: 1px solid var(--warning-border);
+      border-radius: 12px;
+      background: var(--bg-elevated);
+      padding: 12px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+    .approval-card__head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .approval-card__head .codicon { font-size: 14px; }
+    .approval-card__summary {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .approval-card__detail {
+      margin: 8px 0 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      line-height: 1.5;
+      max-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .approval-card__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .approval-card__action {
+      min-height: 28px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+    }
+    .approval-card__action:hover { background: var(--hover); }
+    .approval-card__action--primary {
+      border-color: transparent;
+      background: var(--accent-teal);
+      color: var(--agi-vscode-button-text);
+    }
+    .approval-card__action--danger { color: var(--error); border-color: var(--error-border); }
+    .approval-card__outcome {
+      margin-top: 10px;
+      color: var(--text-secondary);
+      font-size: 11px;
     }
 
     .message.system {
@@ -636,6 +701,7 @@ export function getWebviewContent(
       background: var(--vscode-input-background, var(--bg-elevated));
       border: 1px solid var(--vscode-input-border, var(--border));
       border-radius: 14px;
+      position: relative;
       display: flex;
       flex-direction: column;
       min-height: 84px;
@@ -713,23 +779,33 @@ export function getWebviewContent(
     }
     .plus-btn:hover { background: var(--hover); color: var(--text-primary); }
 
-    /* Model picker pill */
+    /* Model picker pill. The model name is the one word a user cannot infer
+       from anywhere else in the composer, so it holds its width and the effort
+       suffix and the mode chip give theirs up first. */
     .model-pill {
+      display: inline-flex;
+      align-items: center;
       background: none;
       border: none;
       border-radius: 999px;
       color: var(--text-secondary);
       cursor: pointer;
+      flex-shrink: 1;
       font-size: 12px;
       font-weight: 500;
       height: 28px;
-      padding: 0 8px;
+      padding: 0 6px;
       white-space: nowrap;
-      max-width: 140px;
+      min-width: 72px;
+      max-width: 160px;
       overflow: hidden;
-      text-overflow: ellipsis;
       transition: background 0.12s var(--transition), color 0.12s var(--transition);
     }
+    .model-pill-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .model-pill-effort { flex-shrink: 0; }
     .model-pill:hover { background: var(--hover); color: var(--text-primary); }
 
     #sendBtn {
@@ -1026,7 +1102,12 @@ export function getWebviewContent(
       color: var(--text-primary);
       background: var(--hover);
     }
-    .controls-summary { max-width: 120px; }
+    .controls-summary {
+      flex-shrink: 4;
+      min-width: 36px;
+      max-width: 120px;
+      padding: 0 6px;
+    }
 
     .chip-separator {
       flex: 1;
@@ -1227,10 +1308,6 @@ export function getWebviewContent(
     }
     .meter-dismiss-btn:hover, .meter-restore-btn:hover { color: var(--text-primary); }
 
-    .byok-icon, .local-icon {
-      font-size: 12px;
-      flex-shrink: 0;
-    }
 
     /* ── @mention dropdown ── */
     .input-wrapper { position: relative; flex: 1; }
@@ -1270,6 +1347,9 @@ export function getWebviewContent(
       border-radius: 12px;
       background: var(--bg-elevated);
       margin-bottom: 4px;
+      /* #messages is a column flex container, so a tall child is squeezed and
+         this one's overflow:hidden then clips the expanded tool body. */
+      flex-shrink: 0;
     }
     .activity-group__summary {
       display: grid;
@@ -1431,6 +1511,50 @@ export function getWebviewContent(
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .tool-call__code {
+      margin: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-overlay);
+      color: var(--text-primary);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      line-height: 1.5;
+      max-height: 240px;
+      overflow: auto;
+      white-space: pre;
+    }
+    .tool-call__exit {
+      margin-top: 6px;
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
+    .tool-call__exit[data-failed='1'] { color: var(--error); }
+    .tool-call__path {
+      color: var(--text-primary);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      word-break: break-all;
+    }
+    .tool-call__diffstat {
+      margin-top: 4px;
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
+    .tool-call__open-diff {
+      margin-top: 8px;
+      min-height: 28px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+    }
+    .tool-call__open-diff:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -1550,7 +1674,8 @@ export function getWebviewContent(
 
     .recent-chats-title {
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: 12px;
+      text-transform: uppercase;
       font-weight: 600;
       letter-spacing: 0.02em;
       padding: 0 6px 4px;
@@ -1585,7 +1710,7 @@ export function getWebviewContent(
     .recent-chat-age {
       color: var(--text-secondary);
       flex: 0 0 auto;
-      font-size: 11px;
+      font-size: 12px;
     }
 
     .recent-chats-all {
@@ -1596,22 +1721,275 @@ export function getWebviewContent(
       color: var(--text-secondary);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
-      height: 24px;
+      font-size: 12px;
+      min-height: 24px;
       padding: 0 6px;
     }
     .recent-chats-all:hover { color: var(--text-primary); background: var(--hover); }
+
+    /* ── Overflow menu ── */
+    .header-menu-anchor { position: relative; display: inline-flex; }
+
+    .actions-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 40;
+      display: none;
+      flex-direction: column;
+      min-width: 208px;
+      max-height: min(72vh, 460px);
+      overflow-y: auto;
+      padding: 4px;
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: 0 6px 20px var(--vscode-widget-shadow);
+    }
+    .actions-menu.open { display: flex; }
+
+    .actions-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 28px;
+      padding: 0 8px;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+    }
+    .actions-menu-item:hover,
+    .actions-menu-item:focus-visible { background: var(--hover); outline: none; }
+    .actions-menu-item .codicon { color: var(--text-secondary); }
+
+    .actions-menu-separator {
+      height: 1px;
+      margin: 4px 6px;
+      background: var(--border);
+    }
+
+    .actions-menu-account {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 8px 2px;
+    }
+    .actions-menu-account-name {
+      color: var(--text-primary);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .actions-menu-account-plan { color: var(--text-secondary); font-size: 12px; }
+
+    /* ── Sessions sheet ── */
+    .sessions-sheet {
+      position: absolute;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-base);
+    }
+    .sessions-sheet[hidden] { display: none; }
+
+    .sessions-sheet-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 44px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .sessions-sheet-title { font-size: 13px; font-weight: 600; }
+
+    .sessions-sheet-toggle {
+      display: flex;
+      gap: 2px;
+      margin: 8px 10px 0;
+      padding: 2px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .sessions-sheet-toggle button {
+      flex: 1;
+      min-height: 26px;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+    }
+    .sessions-sheet-toggle button[aria-selected='true'] {
+      background: var(--hover);
+      color: var(--text-primary);
+    }
+
+    .sessions-sheet-search {
+      margin: 8px 10px 0;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--radius-md);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: 12px;
+    }
+    .sessions-sheet-search[hidden] { display: none; }
+
+    .sessions-sheet-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 6px 12px;
+    }
+
+    .sessions-sheet-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 32px;
+      padding: 0 8px;
+      background: none;
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+    }
+    .sessions-sheet-row:hover { background: var(--hover); }
+    .sessions-sheet-row-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sessions-sheet-row-age { color: var(--text-secondary); font-size: 12px; }
+    .sessions-sheet-row-branch {
+      font-family: var(--vscode-editor-font-family, monospace);
+      max-width: 40%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sessions-sheet-row-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      opacity: 0.6;
+    }
+    .sessions-sheet-empty {
+      padding: 16px 10px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    /* ── Slash commands ── */
+    .slash-menu {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      z-index: 30;
+      display: none;
+      flex-direction: column;
+      width: min(320px, 100%);
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 4px;
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: 0 6px 20px var(--vscode-widget-shadow);
+    }
+    .slash-menu.open { display: flex; }
+
+    .slash-menu-item {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      width: 100%;
+      min-height: 28px;
+      padding: 0 8px;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+    }
+    .slash-menu-item:hover,
+    .slash-menu-item.highlighted,
+    .slash-menu-item:focus-visible { background: var(--hover); outline: none; }
+    .slash-menu-item-name { font-weight: 600; }
+    .slash-menu-item-description {
+      color: var(--text-secondary);
+      flex: 1;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .slash-menu-empty { padding: 8px; color: var(--text-secondary); font-size: 12px; }
+
+    /* ── Composer status line ── */
+    .composer-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 4px 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .composer-status-route {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .composer-status-signin {
+      margin-left: auto;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--vscode-textLink-foreground, var(--accent-teal));
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+    }
+    .composer-status-signin[hidden] { display: none; }
+    .composer-status-signin:hover { text-decoration: underline; }
     .plus-btn:disabled,
     .model-pill:disabled,
-    .controls-summary:disabled,
-    .prompt-chip:disabled {
+    .controls-summary:disabled {
       opacity: 0.42;
       cursor: not-allowed;
     }
     .plus-btn:disabled:hover,
     .model-pill:disabled:hover,
-    .controls-summary:disabled:hover,
-    .prompt-chip:disabled:hover {
+    .controls-summary:disabled:hover {
       color: var(--text-secondary);
       background: var(--bg-elevated);
     }
@@ -1621,11 +1999,12 @@ export function getWebviewContent(
      * keeps mode and effort visible without pushing Send outside the composer.
      */
     @media (max-width: 480px) {
-      .model-pill {
-        min-width: 72px;
-        max-width: min(132px, calc(100vw - 176px));
-      }
-      .controls-summary { max-width: 86px; }
+      .controls-summary { max-width: 70px; }
+    }
+
+    @media (max-width: 400px) {
+      /* Effort is one click away in the same popover; the model name is not. */
+      .model-pill-effort { display: none; }
     }
 
     @media (max-width: 340px) {
@@ -1635,8 +2014,7 @@ export function getWebviewContent(
       .header-actions { gap: 0; }
       .header-title { display: none; }
       .session-identity { max-width: calc(100vw - 108px); }
-      .model-pill { max-width: 78px; min-width: 58px; }
-      .controls-summary { max-width: 72px; }
+      .controls-summary { max-width: 54px; }
       .empty-state-copy { max-width: 230px; }
     }
 
@@ -1648,8 +2026,9 @@ export function getWebviewContent(
     }
 
     @media (max-width: 280px) {
-      .model-pill { min-width: 0; max-width: 64px; }
-      .controls-summary { min-width: 0; max-width: 64px; }
+      /* Both chips stay reachable: min-width keeps each clickable and the mode
+         chip gives up its width four times faster than the model name. */
+      .controls-summary { max-width: 46px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1793,11 +2172,73 @@ export function getWebviewContent(
       <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
         <span class="codicon codicon-add" aria-hidden="true"></span>
       </button>
-      <button class="icon-btn" id="actionsBtn" title="More" aria-label="More actions">
-        <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
+      <button class="icon-btn" id="sessionsBtn" title="Sessions" aria-label="Sessions">
+        <span class="codicon codicon-history" aria-hidden="true"></span>
       </button>
+      <span class="header-menu-anchor">
+        <button
+          class="icon-btn"
+          id="actionsBtn"
+          title="More"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-expanded="false"
+        >
+          <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
+        </button>
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Workforce surfaces">
+          ${SURFACE_MENU_ITEMS.filter((item) => item.id !== 'account')
+            .map(
+              (item) => `<button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="${item.id}"
+          >
+            <span class="codicon codicon-${item.icon}" aria-hidden="true"></span>
+            <span>${escapeHtml(item.label)}</span>
+          </button>`,
+            )
+            .join('')}
+          <div class="actions-menu-separator" role="separator"></div>
+          <div class="actions-menu-account">
+            <span class="actions-menu-account-name" id="menuAccountName">Not signed in</span>
+            <span class="actions-menu-account-plan" id="menuAccountPlan">AGI Cloud account</span>
+          </div>
+          <button type="button" class="actions-menu-item" role="menuitem" id="menuAccountAction">
+            <span class="codicon codicon-sign-in" aria-hidden="true"></span>
+            <span id="menuAccountActionLabel">Sign in</span>
+          </button>
+          <button type="button" class="actions-menu-item" role="menuitem" data-surface="account">
+            <span class="codicon codicon-account" aria-hidden="true"></span>
+            <span>Account &amp; usage</span>
+          </button>
+        </div>
+      </span>
     </div>
   </div>
+
+  <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
+    <div class="sessions-sheet-head">
+      <span class="sessions-sheet-title">Sessions</span>
+      <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
+        <span class="codicon codicon-close" aria-hidden="true"></span>
+      </button>
+    </div>
+    <div class="sessions-sheet-toggle" role="tablist" aria-label="Session source">
+      <button type="button" role="tab" id="sessionsTabLocal" aria-selected="true">Local</button>
+      <button type="button" role="tab" id="sessionsTabCloud" aria-selected="false">Cloud</button>
+    </div>
+    <input
+      class="sessions-sheet-search"
+      id="sessionsSearch"
+      type="search"
+      placeholder="Search sessions"
+      aria-label="Search sessions"
+      hidden
+    />
+    <div class="sessions-sheet-list" id="sessionsSheetList" role="list"></div>
+  </section>
 
   <section
     class="onboarding"
@@ -1819,78 +2260,33 @@ export function getWebviewContent(
       </div>
 
       <article class="onboarding-step" data-onboarding-step="0">
-        <div class="onboarding-icon"><span class="codicon codicon-repo" aria-hidden="true"></span></div>
-        <p class="onboarding-eyebrow">Developer session</p>
         <h2 id="onboardingTitle" tabindex="-1">Build with AGI in this repository.</h2>
         <p class="onboarding-lede" id="onboardingWorkspaceLede">
-          Ask about code, attach workspace files, edit through reviewable diffs, run approved commands,
-          and test the open project.
+          Ask about code, edit through reviewable diffs, and run approved commands, all scoped to this workspace.
         </p>
-        <div class="onboarding-card">
-          <strong id="onboardingWorkspaceCardTitle">Workspace-scoped by default</strong>
-          <span id="onboardingWorkspaceCardCopy">The sidebar, editor chat, and @agi stay scoped to this workspace. The header identifies whether inference uses Local, BYOK, or Managed Cloud. Developer sessions do not silently merge into consumer Web, Mobile, or Desktop chat history.</span>
+        <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingWorkspaceAction" hidden>Open folder</button>
         </div>
       </article>
 
       <article class="onboarding-step" data-onboarding-step="1" hidden>
-        <div class="onboarding-icon"><span class="codicon codicon-server-process" aria-hidden="true"></span></div>
-        <p class="onboarding-eyebrow">Task handoff</p>
         <h2 tabindex="-1">Foreground here. Background work follows you.</h2>
         <p class="onboarding-lede">
-          VS Code developer sessions run while the editor is open. Cloud AGI Work runs started on any
-          device appear in the Cloud Tasks view, where you can follow, approve, or stop them.
+          Cloud runs started on any device appear in the Cloud Tasks view, where you can follow, approve, or stop them.
         </p>
-        <div class="onboarding-card">
-          <strong>No pretend cloud handoff</strong>
-          <span>Starting a background run stays explicit. A local prompt is never relabeled as one.</span>
-          <button type="button" class="onboarding-link" id="onboardingTasks">Show Cloud Tasks</button>
-        </div>
       </article>
 
       <article class="onboarding-step" data-onboarding-step="2" hidden>
-        <div class="onboarding-icon"><span class="codicon codicon-diff" aria-hidden="true"></span></div>
-        <p class="onboarding-eyebrow">TODO to review</p>
         <h2 tabindex="-1">Describe the intent. Inspect the change.</h2>
         <p class="onboarding-lede">
-          Attach the relevant files or share diagnostics, then ask AGI to implement the TODO.
-          Proposed code opens in VS Code's native diff view before you accept it.
+          Proposed code opens in VS Code's own diff view before you accept it.
         </p>
-        <div class="onboarding-card">
-          <strong>A useful first prompt</strong>
-          <p>“Implement the TODO in the active file, explain the tradeoffs, and add focused tests. Do not change unrelated files.”</p>
-        </div>
       </article>
 
       <article class="onboarding-step" data-onboarding-step="3" hidden>
-        <div class="onboarding-icon"><span class="codicon codicon-shield" aria-hidden="true"></span></div>
-        <p class="onboarding-eyebrow">Autonomy and trust</p>
         <h2 tabindex="-1">You choose authority. You verify the result.</h2>
-        <ul class="onboarding-disclosures">
-          <li>
-            <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
-            <div>
-              <strong>Choose the autonomy level</strong>
-              <span>Ask, Auto, Plan, or Bypass controls how much authority a session receives. Higher-risk combinations require explicit consent.</span>
-            </div>
-          </li>
-          <li>
-            <span class="codicon codicon-warning" aria-hidden="true"></span>
-            <div>
-              <strong>AGI can make mistakes</strong>
-              <span>Review generated code and every command before accepting or running it.</span>
-            </div>
-          </li>
-          <li>
-            <span class="codicon codicon-lock" aria-hidden="true"></span>
-            <div>
-              <strong>Verify the active trust boundary</strong>
-              <span>The header names Local, BYOK, or Managed Cloud. Managed Cloud also names the signed-in plan owner; BYOK provider billing stays separate.</span>
-            </div>
-          </li>
-        </ul>
-        <p class="onboarding-boundary" id="onboardingBoundary" role="status">
-          Resolving the active developer-session boundary…
+        <p class="onboarding-lede">
+          Ask, Auto, Plan, or Bypass sets how much a session may do on its own, and the header names the active trust boundary.
         </p>
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
@@ -1917,8 +2313,6 @@ export function getWebviewContent(
 
   <!-- ── Usage meter banner ── -->
   <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
-    <span class="byok-icon codicon codicon-key" id="meterByokIcon" style="display:none" aria-hidden="true"></span>
-    <span class="local-icon codicon codicon-vm" id="meterLocalIcon" style="display:none" aria-hidden="true"></span>
     <span class="codicon codicon-cloud" id="meterCloudIcon" style="display:none" aria-hidden="true"></span>
     <div class="usage-meter-bar-wrap" id="meterBarWrap" style="display:none">
       <div
@@ -2063,6 +2457,8 @@ export function getWebviewContent(
           >&#215;</button>
         </span>
       </div>
+      <!-- Editor context chips, pushed by the host from the active editor -->
+      <div class="attachment-strip" id="editorContextStrip" role="list" aria-label="Editor context attached to the next message"></div>
       <!-- Attachment chips strip, populated by drag-drop / paste / +menu -->
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
@@ -2082,6 +2478,7 @@ export function getWebviewContent(
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="menu" aria-expanded="false">+</button>
+        <button class="plus-btn" id="slashBtn" title="Commands" aria-label="Commands" aria-haspopup="menu" aria-expanded="false">/</button>
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
         <span class="context-usage" id="contextUsage"></span>
@@ -2089,6 +2486,15 @@ export function getWebviewContent(
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
       </div>
+      <div class="slash-menu" id="slashMenu" role="menu" aria-label="Commands"></div>
+    </div>
+    <div class="composer-status">
+      <span class="composer-status-route" id="composerStatus" role="status" aria-live="polite">
+        <span id="composerStatusBoundary"></span>
+        <span id="composerStatusSeparator" aria-hidden="true" hidden>·</span>
+        <span id="composerStatusMode">${modeLabel}</span>
+      </span>
+      <button type="button" class="composer-status-signin" id="composerStatusSignIn" hidden>Sign in</button>
     </div>
   </div>
 
@@ -2119,7 +2525,25 @@ export function getWebviewContent(
     const projectContextRemove = document.getElementById('projectContextRemove');
     const browseContextRemove = document.getElementById('browseContextRemove');
     const actionsBtn = document.getElementById('actionsBtn');
+    const actionsMenu = document.getElementById('actionsMenu');
+    const menuAccountName = document.getElementById('menuAccountName');
+    const menuAccountPlan = document.getElementById('menuAccountPlan');
+    const menuAccountAction = document.getElementById('menuAccountAction');
+    const menuAccountActionLabel = document.getElementById('menuAccountActionLabel');
     const newChatBtn = document.getElementById('newChatBtn');
+    const sessionsBtn = document.getElementById('sessionsBtn');
+    const sessionsSheet = document.getElementById('sessionsSheet');
+    const sessionsSheetClose = document.getElementById('sessionsSheetClose');
+    const sessionsSheetList = document.getElementById('sessionsSheetList');
+    const sessionsSearch = document.getElementById('sessionsSearch');
+    const sessionsTabLocal = document.getElementById('sessionsTabLocal');
+    const sessionsTabCloud = document.getElementById('sessionsTabCloud');
+    const slashBtn = document.getElementById('slashBtn');
+    const slashMenu = document.getElementById('slashMenu');
+    const composerStatusBoundary = document.getElementById('composerStatusBoundary');
+    const composerStatusSeparator = document.getElementById('composerStatusSeparator');
+    const composerStatusSignIn = document.getElementById('composerStatusSignIn');
+    const composerStatusMode = document.getElementById('composerStatusMode');
     const mentionDropdown = document.getElementById('mentionDropdown');
     const sessionIdentity = document.getElementById('sessionIdentity');
     const sessionBoundaryLabel = document.getElementById('sessionBoundaryLabel');
@@ -2136,16 +2560,12 @@ export function getWebviewContent(
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
     const onboardingProgress = document.getElementById('onboardingProgress');
-    const onboardingBoundary = document.getElementById('onboardingBoundary');
     const onboardingBack = document.getElementById('onboardingBack');
     const onboardingNext = document.getElementById('onboardingNext');
     const onboardingSkip = document.getElementById('onboardingSkip');
-    const onboardingTasks = document.getElementById('onboardingTasks');
     const onboardingPermissionDocs = document.getElementById('onboardingPermissionDocs');
     const onboardingPrivacySettings = document.getElementById('onboardingPrivacySettings');
     const onboardingWorkspaceLede = document.getElementById('onboardingWorkspaceLede');
-    const onboardingWorkspaceCardTitle = document.getElementById('onboardingWorkspaceCardTitle');
-    const onboardingWorkspaceCardCopy = document.getElementById('onboardingWorkspaceCardCopy');
     const onboardingWorkspaceAction = document.getElementById('onboardingWorkspaceAction');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
@@ -2160,8 +2580,6 @@ export function getWebviewContent(
     const meterBarWrap = document.getElementById('meterBarWrap');
     const meterProgress = document.getElementById('meterProgress');
     const meterCollapsedLabel = document.getElementById('meterCollapsedLabel');
-    const meterByokIcon = document.getElementById('meterByokIcon');
-    const meterLocalIcon = document.getElementById('meterLocalIcon');
     const meterCloudIcon = document.getElementById('meterCloudIcon');
     const meterBuckets = document.getElementById('meterBuckets');
 
@@ -2247,76 +2665,32 @@ export function getWebviewContent(
       vscode.postMessage({ type: 'completeOnboarding' });
     }
 
-    function updateOnboardingBoundary() {
-      if (!onboardingBoundary) return;
-      if (!sessionBoundaryAuthoritative) {
-        onboardingBoundary.textContent =
-          'Runtime route pending: the AGI CLI will confirm Local, BYOK, or Managed Cloud before the first turn starts.';
-        return;
-      }
-      if (activeRuntimeSource === 'user-api-key') {
-        var byokText = 'Active boundary: BYOK · requests go directly to your provider.';
-        if (activeAccountIdentity) {
-          byokText += ' AGI Cloud sign-in: ' + activeAccountIdentity.displayName +
-            ' (not used for provider billing).';
-        }
-        onboardingBoundary.textContent = byokText;
-      } else if (activeRuntimeSource === 'managed-plan') {
-        var cloudText = 'Active boundary: Managed Cloud · prompts are sent to AGI infrastructure.';
-        if (activeAccountIdentity) {
-          cloudText += ' Plan owner: ' + activeAccountIdentity.displayName;
-          if (activeAccountIdentity.email) cloudText += ' (' + activeAccountIdentity.email + ')';
-          cloudText += ' · ' + activeAccountIdentity.planName + ' plan.';
-        }
-        onboardingBoundary.textContent = cloudText;
-      } else if (activeRuntimeSource === 'managed-unavailable') {
-        onboardingBoundary.textContent =
-          'Managed Cloud developer access is not included in the current AGI plan. Local and provider BYOK remain available as separate boundaries.';
-      } else {
-        onboardingBoundary.textContent =
-          'Active developer-session boundary: Local · workspace-scoped runtime; no AGI Cloud account is required.';
-      }
-    }
-
     function renderOnboardingWorkspaceState(status) {
       if (onboardingSteps.length === 0) return;
       var heading = onboardingSteps[0].querySelector('h2');
-      if (!heading || !onboardingWorkspaceLede || !onboardingWorkspaceCardTitle ||
-          !onboardingWorkspaceCardCopy || !onboardingWorkspaceAction) return;
+      if (!heading || !onboardingWorkspaceLede || !onboardingWorkspaceAction) return;
       if (status === 'workspace-required') {
         heading.textContent = 'Open a workspace to begin.';
         onboardingWorkspaceLede.textContent =
-          'Choose a folder or workspace before AGI can read project context, attach files, or propose reviewable changes.';
-        onboardingWorkspaceCardTitle.textContent = 'No project is open';
-        onboardingWorkspaceCardCopy.textContent =
-          'Opening a workspace establishes the developer-session scope. You will choose Local, BYOK, or Managed Cloud separately.';
+          'Choose a folder before AGI can read project context, attach files, or propose reviewable changes.';
         onboardingWorkspaceAction.textContent = 'Open folder';
         onboardingWorkspaceAction.hidden = false;
       } else if (status === 'workspace-untrusted') {
         heading.textContent = 'Review this workspace first.';
         onboardingWorkspaceLede.textContent =
           'AGI keeps project files and tools disabled while VS Code is in Restricted Mode.';
-        onboardingWorkspaceCardTitle.textContent = 'Workspace Trust is required';
-        onboardingWorkspaceCardCopy.textContent =
-          'Review the folder contents, then use VS Code Workspace Trust before starting a developer session.';
         onboardingWorkspaceAction.textContent = 'Manage trust';
         onboardingWorkspaceAction.hidden = false;
       } else if (status === 'unavailable') {
         heading.textContent = 'Connect the developer runtime.';
         onboardingWorkspaceLede.textContent =
           'This workspace is open, but the local AGI runtime is not ready yet.';
-        onboardingWorkspaceCardTitle.textContent = 'Finish setup before sending';
-        onboardingWorkspaceCardCopy.textContent =
-          'Open Runtime settings to install or configure the AGI CLI. No prompt will be sent while setup is incomplete.';
         onboardingWorkspaceAction.textContent = 'Open runtime setup';
         onboardingWorkspaceAction.hidden = false;
       } else {
         heading.textContent = 'Build with AGI in this repository.';
         onboardingWorkspaceLede.textContent =
-          'Ask about code, attach workspace files, edit through reviewable diffs, run approved commands, and test the open project.';
-        onboardingWorkspaceCardTitle.textContent = 'Workspace-scoped by default';
-        onboardingWorkspaceCardCopy.textContent =
-          'The sidebar, editor chat, and @agi stay scoped to this workspace. The header identifies whether inference uses Local, BYOK, or Managed Cloud. Developer sessions do not silently merge into consumer Web, Mobile, or Desktop chat history.';
+          'Ask about code, edit through reviewable diffs, and run approved commands, all scoped to this workspace.';
         onboardingWorkspaceAction.hidden = true;
       }
     }
@@ -2339,11 +2713,6 @@ export function getWebviewContent(
       });
     }
     if (onboardingSkip) onboardingSkip.addEventListener('click', completeOnboarding);
-    if (onboardingTasks) {
-      onboardingTasks.addEventListener('click', function() {
-        vscode.postMessage({ type: 'openCloudTasks' });
-      });
-    }
     if (onboardingPermissionDocs) {
       onboardingPermissionDocs.addEventListener('click', function() {
         vscode.postMessage({ type: 'openPermissionDocs' });
@@ -2409,11 +2778,11 @@ export function getWebviewContent(
     // Managed Cloud is the only route that leaves the machine, so it is the only
     // one styled as a warning.
     var SESSION_IDENTITY_BY_SOURCE = {
-      'unbounded': { label: 'Local', boundary: 'local', title: 'Workspace-local runtime - nothing leaves this machine' },
-      'user-api-key': { label: 'BYOK', boundary: 'byok', title: 'Your own API key - requests go straight to the provider' },
-      'managed-plan': { label: 'Managed Cloud', boundary: 'cloud', title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
-      'managed-unavailable': { label: 'Cloud unavailable', boundary: 'none', title: 'The signed-in AGI plan does not currently include Managed Cloud developer access' },
-      'runtime-unavailable': { label: 'Runtime unavailable', boundary: 'none', title: 'Connect the workspace-scoped AGI CLI before selecting a Local, BYOK, or Managed Cloud boundary' },
+      'unbounded': { label: 'Local', boundary: 'local', showProvider: false, title: 'Workspace-local runtime - nothing leaves this machine' },
+      'user-api-key': { label: 'Your key', boundary: 'byok', showProvider: true, title: 'Your own API key - requests go straight to the provider' },
+      'managed-plan': { label: 'Managed', boundary: 'cloud', showProvider: false, title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
+      'managed-unavailable': { label: 'Cloud unavailable', boundary: 'none', showProvider: false, title: 'The signed-in AGI plan does not currently include Managed Cloud developer access' },
+      'runtime-unavailable': { label: 'Runtime unavailable', boundary: 'none', showProvider: false, title: 'Connect the workspace-scoped AGI CLI before selecting a Local, your-key, or Managed Cloud boundary' },
     };
 
     function renderSessionIdentity() {
@@ -2428,27 +2797,29 @@ export function getWebviewContent(
         return;
       }
       if (!sessionBoundaryAuthoritative) {
-        sessionBoundaryLabel.textContent = 'Route pending';
+        // Naming a route the CLI has not confirmed would be a claim about where
+        // the prompt goes. Say nothing until the session summary arrives.
+        sessionBoundaryLabel.textContent = '';
         sessionProviderLabel.textContent = '';
         sessionIdentitySeparator.hidden = true;
         sessionIdentity.setAttribute('data-boundary', 'none');
-        sessionIdentity.title =
-          'The AGI CLI will confirm Local, BYOK, or Managed Cloud before the first turn starts.';
-        sessionIdentity.setAttribute('aria-label', 'Runtime route pending. ' + sessionIdentity.title);
-        sessionIdentity.style.display = 'inline-flex';
-        updateOnboardingBoundary();
+        sessionIdentity.removeAttribute('title');
+        sessionIdentity.removeAttribute('aria-label');
+        sessionIdentity.style.display = 'none';
         return;
       }
       // An unrecognised source falls back to the cloud label on purpose: never
       // claim "Local" for a boundary this webview cannot identify.
       var spec = SESSION_IDENTITY_BY_SOURCE[activeRuntimeSource] || SESSION_IDENTITY_BY_SOURCE['managed-plan'];
-      var showProviderIdentity = activeRuntimeSource !== 'runtime-unavailable';
+      var showProviderIdentity = spec.showProvider;
       sessionBoundaryLabel.textContent = spec.label;
       sessionProviderLabel.textContent = showProviderIdentity ? activeProviderIdentity : '';
       sessionIdentitySeparator.hidden = !showProviderIdentity || !activeProviderIdentity;
       sessionIdentity.setAttribute('data-boundary', spec.boundary);
       var title = spec.title;
-      if (showProviderIdentity && activeProviderIdentity) title += ' · Provider: ' + activeProviderIdentity;
+      if (activeProviderIdentity && activeRuntimeSource !== 'runtime-unavailable') {
+        title += ' · Provider: ' + activeProviderIdentity;
+      }
       if (activeAccountIdentity &&
           (activeRuntimeSource === 'managed-plan' || activeRuntimeSource === 'managed-unavailable')) {
         title += ' · Account: ' + activeAccountIdentity.displayName;
@@ -2462,7 +2833,7 @@ export function getWebviewContent(
       sessionIdentity.setAttribute('aria-label', spec.label +
         (showProviderIdentity && activeProviderIdentity ? ' using ' + activeProviderIdentity : '') + '. ' + title);
       sessionIdentity.style.display = 'inline-flex';
-      updateOnboardingBoundary();
+      renderComposerStatus(spec.label);
     }
 
     function renderNoWorkspaceIdentity() {
@@ -2601,13 +2972,11 @@ export function getWebviewContent(
       }
 
       if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
-          !meterBarWrap || !meterByokIcon || !meterLocalIcon || !meterCloudIcon) return;
+          !meterBarWrap || !meterCloudIcon) return;
 
       var bucketsPayload = null;
 
       // Reset all conditional elements
-      meterByokIcon.style.display = 'none';
-      meterLocalIcon.style.display = 'none';
       meterCloudIcon.style.display = 'none';
       meterBarWrap.style.display = 'none';
       upgradeBtn.style.display = 'none';
@@ -2639,14 +3008,14 @@ export function getWebviewContent(
         if (meterCollapsedLabel) meterCollapsedLabel.textContent = paidPlanNeedsAttention
           ? 'Billing needs attention'
           : 'Upgrade for Cloud';
-      } else if (payload.source === 'unbounded') {
-        meterLocalIcon.style.display = 'inline';
-        meterText.textContent = payload.usageLabel || 'Local model - no quota tracking';
-        meterReset.textContent = '';
-      } else if (payload.source === 'user-api-key') {
-        meterByokIcon.style.display = 'inline';
-        meterText.textContent = payload.usageLabel || 'BYOK mode - no AGI-managed quota is active';
-        meterReset.textContent = '';
+      } else if (payload.source === 'unbounded' || payload.source === 'user-api-key') {
+        // Neither route has an AGI quota, so the meter has nothing to meter.
+        // The route itself is named in the header chip and the composer status
+        // line, and the billing consequence lives in Account & usage.
+        usageMeterBanner.style.display = 'none';
+        usageMeterCollapsed.style.display = 'none';
+        renderUsageBuckets(null);
+        return;
       } else {
         // managed-plan
         bucketsPayload = payload;
@@ -2745,6 +3114,9 @@ export function getWebviewContent(
     let followUpBehavior = '${followUpBehaviorLiteral}';
     let followUpStatusTimer = null;
     let clientMessageSeq = 0;
+    // The turn a Retry resends. Cleared by a new conversation so a retry can
+    // never revive a prompt from a session the user has left.
+    let lastSendPayload = null;
     let activeQueuedClientMessageId = null;
 
     function syncComposerAvailability() {
@@ -2754,9 +3126,6 @@ export function getWebviewContent(
       if (modelPill) modelPill.disabled = blocked;
       if (controlsSummary) controlsSummary.disabled = blocked;
       sendBtn.disabled = blocked;
-      document.querySelectorAll('.prompt-chip').forEach(function(chip) {
-        chip.disabled = blocked;
-      });
       if (blocked) {
         closeModelPopover();
         if (plusMenu) plusMenu.classList.remove('open');
@@ -2851,8 +3220,18 @@ export function getWebviewContent(
       if (!modelPill) return;
       var effort = capitalizeControl(activeEffort);
       var effortShort = effort === 'Medium' ? 'Med' : effort;
-      modelPill.textContent = activeSupportsEffort && effortShort
-        ? currentModelLabel + ' · ' + effortShort
+      var nameEl = document.createElement('span');
+      nameEl.className = 'model-pill-name';
+      nameEl.textContent = currentModelLabel;
+      modelPill.replaceChildren(nameEl);
+      if (activeSupportsEffort && effortShort) {
+        var effortEl = document.createElement('span');
+        effortEl.className = 'model-pill-effort';
+        effortEl.textContent = ' · ' + effortShort;
+        modelPill.appendChild(effortEl);
+      }
+      modelPill.title = activeSupportsEffort && effortShort
+        ? currentModelLabel + ' · ' + effortShort + ' effort'
         : currentModelLabel;
     }
 
@@ -2866,6 +3245,7 @@ export function getWebviewContent(
         (activeSupportsEffort ? ', ' + effort + ' effort' : ', effort unavailable for this model');
       controlsSummary.title = fullLabel;
       controlsSummary.setAttribute('aria-label', fullLabel);
+      renderComposerStatus(null);
     }
 
     function formatContextTokens(count) {
@@ -2901,6 +3281,117 @@ export function getWebviewContent(
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
         ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+    }
+
+    function addErrorMessage(presentation) {
+      var block = document.createElement('div');
+      block.className = 'message error';
+      block.setAttribute('data-error-category', presentation.category || 'unknown');
+      var headline = document.createElement('div');
+      headline.className = 'error-headline';
+      headline.textContent = presentation.headline;
+      block.appendChild(headline);
+
+      var canRetry = presentation.retryable === true && lastSendPayload !== null;
+      if (canRetry || presentation.detail || presentation.action) {
+        var actions = document.createElement('div');
+        actions.className = 'error-actions';
+        if (canRetry) {
+          var retry = document.createElement('button');
+          retry.type = 'button';
+          retry.className = 'error-retry';
+          retry.textContent = 'Retry';
+          retry.addEventListener('click', function() {
+            if (retry.disabled) return;
+            retry.disabled = true;
+            resendLastTurn(block);
+          });
+          actions.appendChild(retry);
+        }
+        if (presentation.action) {
+          var unlock = document.createElement('button');
+          unlock.type = 'button';
+          unlock.className = 'error-retry';
+          unlock.dataset.action = presentation.action.kind;
+          unlock.textContent = presentation.action.label;
+          unlock.addEventListener('click', function () {
+            vscode.postMessage({
+              type: 'resolveTurnFailure',
+              payload: presentation.action.provider
+                ? { kind: presentation.action.kind, provider: presentation.action.provider }
+                : { kind: presentation.action.kind },
+            });
+          });
+          actions.appendChild(unlock);
+        }
+        if (presentation.detail) {
+          // A native <details> put the whole hit target on 11px of inline text.
+          // The toggle is a full-width row so a click anywhere on it opens.
+          var details = document.createElement('div');
+          details.className = 'error-details';
+          var toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'error-details-toggle';
+          toggle.setAttribute('aria-expanded', 'false');
+          var chevron = document.createElement('span');
+          chevron.className = 'error-details-toggle__chevron';
+          chevron.textContent = '▸';
+          chevron.setAttribute('aria-hidden', 'true');
+          var toggleLabel = document.createElement('span');
+          toggleLabel.textContent = 'Details';
+          toggle.appendChild(chevron);
+          toggle.appendChild(toggleLabel);
+          var body = document.createElement('div');
+          body.className = 'error-detail-text';
+          body.textContent = presentation.detail;
+          body.hidden = true;
+          toggle.addEventListener('click', function () {
+            var open = body.hidden;
+            body.hidden = !open;
+            chevron.textContent = open ? '▾' : '▸';
+            toggle.setAttribute('aria-expanded', String(open));
+          });
+          details.appendChild(toggle);
+          details.appendChild(body);
+          actions.appendChild(details);
+        }
+        block.appendChild(actions);
+      }
+
+      messagesEl.appendChild(block);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return block;
+    }
+
+    function resendLastTurn(errorBlock) {
+      if (lastSendPayload === null || runtimeBlock !== null) return;
+      if (errorBlock && errorBlock.parentNode) errorBlock.parentNode.removeChild(errorBlock);
+      var retryPayload = {};
+      for (var key in lastSendPayload) {
+        if (Object.prototype.hasOwnProperty.call(lastSendPayload, key)) {
+          retryPayload[key] = lastSendPayload[key];
+        }
+      }
+      delete retryPayload.followUpBehavior;
+      retryPayload.clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
+      lastSendPayload = retryPayload;
+      showTyping();
+      setStreaming(true);
+      currentAssistantEl = null;
+      accumulatedContent = '';
+      activePlanCard = null;
+      vscode.postMessage({ type: 'sendMessage', payload: retryPayload });
+    }
+
+    function mountEmptyState() {
+      var mounted = document.createElement('div');
+      mounted.className = 'empty-state';
+      mounted.id = 'emptyState';
+      mounted.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
+        '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
+        '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
+      messagesEl.appendChild(mounted);
+      emptyStateEl = mounted;
     }
 
     function addMessage(role, text) {
@@ -3271,6 +3762,7 @@ export function getWebviewContent(
       if (!text) return;
 
       hideEmptyState();
+      closeSlashMenu();
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
@@ -3301,6 +3793,7 @@ export function getWebviewContent(
             ? oneTurnBehavior
             : followUpBehavior;
       }
+      lastSendPayload = sendPayload;
       vscode.postMessage({ type: 'sendMessage', payload: sendPayload });
       pendingFileReferences = [];
       setBrowseWebEnabled(false);
@@ -3315,6 +3808,31 @@ export function getWebviewContent(
     }
 
     userInput.addEventListener('keydown', (e) => {
+      // The slash popup owns Enter while it is open: the highlighted command
+      // runs instead of the literal "/name" being sent as a chat message.
+      if (slashMenuIsOpen()) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          highlightSlashItem(slashHighlight + 1);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          highlightSlashItem(slashHighlight - 1);
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeSlashMenu();
+          return;
+        }
+        if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+          e.preventDefault();
+          if (runHighlightedSlashCommand()) return;
+          closeSlashMenu();
+          return;
+        }
+      }
       // @mention dropdown navigation
       if (mentionDropdown.classList.contains('visible')) {
         var items = mentionDropdown.querySelectorAll('.mention-item');
@@ -3355,9 +3873,44 @@ export function getWebviewContent(
 
     userInput.addEventListener('input', function() { autoResize(); detectMention(); });
 
-    actionsBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openActionSheet' });
-    });
+    function closeActionsMenu() {
+      if (!actionsMenu) return;
+      actionsMenu.classList.remove('open');
+      actionsBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    if (actionsMenu) {
+      actionsBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var isOpen = actionsMenu.classList.contains('open');
+        actionsMenu.classList.toggle('open', !isOpen);
+        actionsBtn.setAttribute('aria-expanded', String(!isOpen));
+        if (!isOpen) focusMenuItem(actionsMenu, 0);
+      });
+      wireMenuKeyboard(actionsMenu, actionsBtn, closeActionsMenu);
+      document.addEventListener('click', closeActionsMenu);
+      actionsMenu.addEventListener('click', function (event) {
+        event.stopPropagation();
+      });
+      var surfaceItems = actionsMenu.querySelectorAll('[data-surface]');
+      for (var si = 0; si < surfaceItems.length; si++) {
+        surfaceItems[si].addEventListener('click', function (event) {
+          var surfaceId = event.currentTarget.dataset.surface;
+          closeActionsMenu();
+          if (surfaceId === 'sessions') {
+            openSessionsSheet();
+            return;
+          }
+          vscode.postMessage({ type: 'openSurface', payload: { surfaceId: surfaceId } });
+        });
+      }
+      if (menuAccountAction) {
+        menuAccountAction.addEventListener('click', function () {
+          closeActionsMenu();
+          vscode.postMessage({ type: 'openSurface', payload: { surfaceId: accountSignedIn ? 'signOut' : 'signIn' } });
+        });
+      }
+    }
 
     if (newChatBtn) {
       newChatBtn.addEventListener('click', () => {
@@ -3429,6 +3982,301 @@ export function getWebviewContent(
           e.preventDefault();
           focusMenuItem(container, items.length - 1);
         }
+      });
+    }
+
+    // ── Sessions sheet ────────────────────────────────────────────────────────
+    var sessionsSource = 'local';
+    var sessionsRows = [];
+    var sessionsUnavailable = null;
+    var accountSignedIn = false;
+
+    function renderSessionsRows() {
+      if (!sessionsSheetList) return;
+      sessionsSheetList.replaceChildren();
+      var query = (sessionsSearch && !sessionsSearch.hidden ? sessionsSearch.value : '')
+        .trim()
+        .toLowerCase();
+      var visible = query === ''
+        ? sessionsRows
+        : sessionsRows.filter(function (row) {
+            return row.title.toLowerCase().indexOf(query) !== -1;
+          });
+      if (sessionsUnavailable) {
+        var notice = document.createElement('div');
+        notice.className = 'sessions-sheet-empty';
+        notice.textContent = sessionsUnavailable;
+        sessionsSheetList.appendChild(notice);
+        return;
+      }
+      if (visible.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'sessions-sheet-empty';
+        empty.textContent = sessionsSource === 'local'
+          ? 'No developer sessions in this workspace yet'
+          : 'No cloud chats yet';
+        sessionsSheetList.appendChild(empty);
+        return;
+      }
+      for (var i = 0; i < visible.length; i++) {
+        (function (row) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'sessions-sheet-row';
+          button.setAttribute('role', 'listitem');
+          button.title = row.title;
+          var title = document.createElement('span');
+          title.className = 'sessions-sheet-row-title';
+          title.textContent = row.title;
+          var age = document.createElement('span');
+          age.className = 'sessions-sheet-row-age';
+          age.textContent = row.age;
+          var dot = document.createElement('span');
+          dot.className = 'sessions-sheet-row-dot';
+          dot.setAttribute('aria-hidden', 'true');
+          var source = document.createElement('span');
+          source.className = 'sessions-sheet-row-age';
+          source.textContent = row.sourceLabel;
+          button.appendChild(title);
+          button.appendChild(age);
+          button.appendChild(dot);
+          button.appendChild(source);
+          if (row.branch) {
+            var branchDot = document.createElement('span');
+            branchDot.className = 'sessions-sheet-row-dot';
+            branchDot.setAttribute('aria-hidden', 'true');
+            var branch = document.createElement('span');
+            branch.className = 'sessions-sheet-row-age sessions-sheet-row-branch';
+            branch.textContent = row.branch;
+            button.appendChild(branchDot);
+            button.appendChild(branch);
+            button.title = row.title + ' · ' + row.branch;
+          }
+          button.addEventListener('click', function () {
+            closeSessionsSheet();
+            vscode.postMessage({
+              type: 'openSessionRow',
+              payload: { id: row.id, source: row.source },
+            });
+          });
+          sessionsSheetList.appendChild(button);
+        })(visible[i]);
+      }
+    }
+
+    function requestSessions(source) {
+      sessionsSource = source;
+      sessionsRows = [];
+      sessionsUnavailable = null;
+      if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
+      if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
+      renderSessionsRows();
+      vscode.postMessage({ type: 'requestSessions', payload: { source: source } });
+    }
+
+    function openSessionsSheet() {
+      if (!sessionsSheet) return;
+      sessionsSheet.hidden = false;
+      requestSessions(sessionsSource);
+      if (sessionsSheetClose) sessionsSheetClose.focus();
+    }
+
+    function closeSessionsSheet() {
+      if (!sessionsSheet) return;
+      sessionsSheet.hidden = true;
+      if (sessionsSearch) sessionsSearch.value = '';
+      if (sessionsBtn) sessionsBtn.focus();
+    }
+
+    if (sessionsBtn) sessionsBtn.addEventListener('click', openSessionsSheet);
+    if (sessionsSheetClose) sessionsSheetClose.addEventListener('click', closeSessionsSheet);
+    if (sessionsTabLocal) {
+      sessionsTabLocal.addEventListener('click', function () { requestSessions('local'); });
+    }
+    if (sessionsTabCloud) {
+      sessionsTabCloud.addEventListener('click', function () { requestSessions('cloud'); });
+    }
+    if (sessionsSearch) sessionsSearch.addEventListener('input', renderSessionsRows);
+    if (sessionsSheet) {
+      sessionsSheet.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeSessionsSheet();
+        }
+      });
+    }
+
+    // ── Slash commands ────────────────────────────────────────────────────────
+    var slashCommands = [];
+    var slashRequested = false;
+    var slashHighlight = -1;
+
+    function closeSlashMenu() {
+      if (!slashMenu) return;
+      slashMenu.classList.remove('open');
+      slashHighlight = -1;
+      userInput.removeAttribute('aria-activedescendant');
+      if (slashBtn) slashBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function slashMenuIsOpen() {
+      return slashMenu !== null && slashMenu.classList.contains('open');
+    }
+
+    function slashMenuItems() {
+      return slashMenu ? slashMenu.querySelectorAll('.slash-menu-item') : [];
+    }
+
+    function highlightSlashItem(index) {
+      var items = slashMenuItems();
+      if (items.length === 0) {
+        slashHighlight = -1;
+        userInput.removeAttribute('aria-activedescendant');
+        return;
+      }
+      slashHighlight = ((index % items.length) + items.length) % items.length;
+      for (var i = 0; i < items.length; i++) {
+        items[i].classList.toggle('highlighted', i === slashHighlight);
+      }
+      var active = items[slashHighlight];
+      userInput.setAttribute('aria-activedescendant', active.id);
+      if (active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+    }
+
+    function runHighlightedSlashCommand() {
+      var items = slashMenuItems();
+      var target = items[slashHighlight];
+      if (!target) return false;
+      target.click();
+      return true;
+    }
+
+    function renderSlashMenu(filter) {
+      if (!slashMenu) return;
+      slashMenu.replaceChildren();
+      var needle = (filter || '').toLowerCase();
+      var visible = slashCommands.filter(function (entry) {
+        return needle === '' || entry.name.toLowerCase().indexOf(needle) === 0;
+      });
+      if (visible.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'slash-menu-empty';
+        empty.textContent = slashCommands.length === 0 ? 'Loading commands…' : 'No matching command';
+        slashMenu.appendChild(empty);
+        highlightSlashItem(0);
+        return;
+      }
+      for (var i = 0; i < visible.length; i++) {
+        (function (entry) {
+          var item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'slash-menu-item';
+          item.setAttribute('role', 'menuitem');
+          var name = document.createElement('span');
+          name.className = 'slash-menu-item-name';
+          name.textContent = entry.name;
+          item.appendChild(name);
+          if (entry.description) {
+            var description = document.createElement('span');
+            description.className = 'slash-menu-item-description';
+            description.textContent = entry.description;
+            item.appendChild(description);
+          }
+          item.addEventListener('click', function () {
+            closeSlashMenu();
+            if (userInput.value.trim().indexOf('/') === 0) {
+              userInput.value = '';
+              autoResize();
+            }
+            vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
+          });
+          slashMenu.appendChild(item);
+        })(visible[i]);
+      }
+      var rendered = slashMenuItems();
+      for (var idIndex = 0; idIndex < rendered.length; idIndex++) {
+        rendered[idIndex].id = 'slashItem' + idIndex;
+      }
+      highlightSlashItem(0);
+    }
+
+    function openSlashMenu(filter) {
+      if (!slashMenu) return;
+      slashMenu.classList.add('open');
+      if (slashBtn) slashBtn.setAttribute('aria-expanded', 'true');
+      renderSlashMenu(filter);
+      if (!slashRequested) {
+        slashRequested = true;
+        vscode.postMessage({ type: 'requestSlashCommands' });
+      }
+    }
+
+    if (slashBtn && slashMenu) {
+      slashBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (slashMenu.classList.contains('open')) {
+          closeSlashMenu();
+          return;
+        }
+        openSlashMenu('');
+        focusMenuItem(slashMenu, 0);
+      });
+      wireMenuKeyboard(slashMenu, slashBtn, closeSlashMenu);
+      slashMenu.addEventListener('click', function (event) { event.stopPropagation(); });
+      document.addEventListener('click', closeSlashMenu);
+      userInput.addEventListener('input', function () {
+        var value = userInput.value;
+        if (value.indexOf('/') === 0 && value.indexOf(' ') === -1) {
+          openSlashMenu(value);
+          return;
+        }
+        closeSlashMenu();
+      });
+      userInput.addEventListener('blur', function (event) {
+        // Clicking an item blurs the textarea first; that click must still land.
+        if (event.relatedTarget && slashMenu.contains(event.relatedTarget)) return;
+        closeSlashMenu();
+      });
+    }
+
+    function renderMenuAccount() {
+      accountSignedIn = activeAccountStatus === 'signed-in';
+      if (menuAccountName) {
+        menuAccountName.textContent = accountSignedIn
+          ? (activeAccountIdentity && (activeAccountIdentity.email || activeAccountIdentity.displayName)) || 'Signed in'
+          : activeAccountStatus === 'expired'
+            ? 'Session expired'
+            : 'Not signed in';
+      }
+      if (menuAccountPlan) {
+        menuAccountPlan.textContent = accountSignedIn && activeAccountIdentity
+          ? activeAccountIdentity.planName + ' plan'
+          : 'AGI Cloud account';
+      }
+      if (menuAccountActionLabel) {
+        menuAccountActionLabel.textContent = accountSignedIn ? 'Sign out' : 'Sign in';
+      }
+      if (menuAccountAction) {
+        var icon = menuAccountAction.querySelector('.codicon');
+        if (icon) icon.className = 'codicon codicon-' + (accountSignedIn ? 'sign-out' : 'sign-in');
+      }
+      if (composerStatusSignIn) composerStatusSignIn.hidden = accountSignedIn;
+    }
+
+    // ── Composer status line ──────────────────────────────────────────────────
+    function renderComposerStatus(boundaryLabel) {
+      if (composerStatusBoundary && boundaryLabel) {
+        composerStatusBoundary.textContent = boundaryLabel;
+      }
+      if (composerStatusSeparator && composerStatusBoundary) {
+        composerStatusSeparator.hidden = composerStatusBoundary.textContent === '';
+      }
+      if (composerStatusMode) composerStatusMode.textContent = capitalizeControl(activeMode);
+    }
+
+    if (composerStatusSignIn) {
+      composerStatusSignIn.addEventListener('click', function () {
+        vscode.postMessage({ type: 'openSurface', payload: { surfaceId: 'signIn' } });
       });
     }
 
@@ -3555,6 +4403,156 @@ export function getWebviewContent(
       controlsSummary.addEventListener('click', () => {
         vscode.postMessage({ type: 'openActionSheet', payload: { scope: 'composer' } });
       });
+    }
+
+    // ── Approval card ─────────────────────────────────────────────────────────
+    var approvalCards = {};
+    // The verbs are the shared vocabulary's, composed here into the phrases the
+    // card needs. "Abort turn" is a turn control, not an approval verb.
+    var APPROVE_VERB = ${JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.approve)};
+    var DENY_VERB = ${JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.deny)};
+    var APPROVED_STATE = ${JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.allowed)};
+    var DENIED_STATE = ${JSON.stringify(TOOL_APPROVAL_ACTION_LABELS.denied)};
+    var APPROVAL_ACTIONS = [
+      { decision: 'once', label: APPROVE_VERB + ' once', variant: 'primary' },
+      { decision: 'session', label: APPROVE_VERB + ' for session', variant: '' },
+      { decision: 'deny', label: DENY_VERB, variant: 'danger' },
+      { decision: 'abort', label: 'Abort turn', variant: 'danger' },
+    ];
+    var APPROVAL_OUTCOMES = {
+      once: APPROVED_STATE + ' once.',
+      session: APPROVED_STATE + ' for the rest of this session.',
+      deny: DENIED_STATE + '.',
+      abort: 'Turn aborted.',
+      expired: 'The turn ended before this was answered.',
+    };
+
+    function renderApprovalCard(payload) {
+      hideEmptyState();
+      var card = document.createElement('section');
+      card.className = 'approval-card';
+      card.dataset.requestId = payload.requestId;
+      card.setAttribute('role', 'group');
+
+      var head = document.createElement('div');
+      head.className = 'approval-card__head';
+      var icon = document.createElement('span');
+      icon.className = 'codicon codicon-shield';
+      icon.setAttribute('aria-hidden', 'true');
+      var headText = document.createElement('span');
+      headText.textContent = 'Approval needed';
+      head.appendChild(icon);
+      head.appendChild(headText);
+      card.appendChild(head);
+      card.setAttribute('aria-label', 'Approval needed, ' + payload.summary);
+
+      var summary = document.createElement('div');
+      summary.className = 'approval-card__summary';
+      summary.textContent = payload.summary;
+      card.appendChild(summary);
+
+      if (payload.detail) {
+        var detail = document.createElement('pre');
+        detail.className = 'approval-card__detail';
+        detail.textContent = payload.detail;
+        card.appendChild(detail);
+      }
+
+      var actions = document.createElement('div');
+      actions.className = 'approval-card__actions';
+      for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
+        (function (action) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className =
+            'approval-card__action' +
+            (action.variant ? ' approval-card__action--' + action.variant : '');
+          button.dataset.decision = action.decision;
+          button.textContent =
+            action.decision === 'session'
+              ? APPROVE_VERB + ' ' + payload.toolLabel + ' for session'
+              : action.label;
+          button.addEventListener('click', function () {
+            vscode.postMessage({
+              type: 'respondToApproval',
+              payload: { requestId: payload.requestId, decision: action.decision },
+            });
+          });
+          actions.appendChild(button);
+        })(APPROVAL_ACTIONS[i]);
+      }
+      card.appendChild(actions);
+
+      approvalCards[payload.requestId] = { el: card, actions: actions };
+      messagesEl.appendChild(card);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      var first = actions.querySelector('.approval-card__action');
+      if (first) first.focus();
+      return card;
+    }
+
+    function restartPendingToolClocks() {
+      var now = Date.now();
+      var ids = Object.keys(toolCallMap);
+      for (var i = 0; i < ids.length; i++) {
+        var row = toolCallMap[ids[i]];
+        if (row && row.el && row.el.classList.contains('tool-call--pending')) row.startedAt = now;
+      }
+    }
+
+    function resolveApprovalCard(requestId, outcome) {
+      if (outcome === 'once' || outcome === 'session') restartPendingToolClocks();
+      var entry = approvalCards[requestId];
+      if (!entry) return;
+      delete approvalCards[requestId];
+      entry.actions.remove();
+      var outcomeEl = document.createElement('div');
+      outcomeEl.className = 'approval-card__outcome';
+      outcomeEl.textContent = APPROVAL_OUTCOMES[outcome] || APPROVAL_OUTCOMES.expired;
+      entry.el.appendChild(outcomeEl);
+    }
+
+    // ── Editor context chips ──────────────────────────────────────────────────
+    var editorContextStrip = document.getElementById('editorContextStrip');
+    var EDITOR_CONTEXT_ICONS = {
+      'active-file': 'codicon-file',
+      selection: 'codicon-selection',
+      problems: 'codicon-warning',
+    };
+
+    function renderEditorContext(chips) {
+      if (!editorContextStrip) return;
+      editorContextStrip.replaceChildren();
+      for (var i = 0; i < chips.length; i++) {
+        (function (entry) {
+          var chip = document.createElement('span');
+          chip.className = 'attachment-chip';
+          chip.setAttribute('role', 'listitem');
+
+          var icon = document.createElement('span');
+          icon.className = 'codicon ' + (EDITOR_CONTEXT_ICONS[entry.kind] || 'codicon-file');
+          icon.setAttribute('aria-hidden', 'true');
+          chip.appendChild(icon);
+
+          var label = document.createElement('span');
+          label.className = 'attachment-chip__name';
+          label.textContent = entry.label;
+          chip.appendChild(label);
+
+          var remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'attachment-chip__remove';
+          remove.setAttribute('aria-label', 'Do not send ' + entry.label);
+          remove.textContent = '\u00d7';
+          remove.addEventListener('click', function () {
+            vscode.postMessage({ type: 'dismissEditorContext', payload: { id: entry.id } });
+          });
+          chip.appendChild(remove);
+
+          editorContextStrip.appendChild(chip);
+        })(chips[i]);
+      }
+      editorContextStrip.classList.toggle('visible', chips.length > 0);
     }
 
     // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
@@ -3882,10 +4880,14 @@ export function getWebviewContent(
           tcEnd.el.classList.remove('tool-call--pending');
           tcEnd.el.classList.add(msg.payload.isError ? 'tool-call--error' : 'tool-call--done');
           if (msg.payload.isError) toolCallStackHasError = true;
-          tcEnd.responseEl.textContent = formatToolPayload(msg.payload.output);
+          renderToolResponse(tcEnd, msg.payload.output, msg.payload.isError);
           tcEnd.responseSection.style.display = '';
-          if (typeof msg.payload.elapsedMs === 'number') {
-            tcEnd.summaryEl.textContent += ' · ' + formatElapsedMs(msg.payload.elapsedMs);
+          var elapsedMs =
+            typeof tcEnd.startedAt === 'number'
+              ? Math.max(0, Date.now() - tcEnd.startedAt)
+              : msg.payload.elapsedMs;
+          if (typeof elapsedMs === 'number') {
+            tcEnd.summaryEl.textContent += ' · ' + formatElapsedMs(elapsedMs);
           }
           updateActivitySummary(tcEnd.summaryEl.textContent, false);
         }
@@ -3897,7 +4899,7 @@ export function getWebviewContent(
           toolCallStackHasError = true;
           finalizeToolCallStack();
         }
-        addMessage('error', msg.payload.message);
+        addErrorMessage(msg.payload);
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -3991,9 +4993,25 @@ export function getWebviewContent(
       else if (msg.type === 'accountStatus') {
         activeAccountStatus = msg.payload.status || 'signed-out';
         activeAccountIdentity = msg.payload.identity || null;
+        renderMenuAccount();
         if (lastUsageMeterPayload) renderUsageMeter(lastUsageMeterPayload);
         if (activeRuntimeSource) updateRuntimePill(activeRuntimeSource);
-        else updateOnboardingBoundary();
+      }
+
+      else if (msg.type === 'sessionsList') {
+        if (msg.payload.source === sessionsSource) {
+          sessionsRows = msg.payload.rows || [];
+          sessionsUnavailable = msg.payload.unavailable || null;
+          if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length <= 10;
+          renderSessionsRows();
+        }
+      }
+
+      else if (msg.type === 'slashCommands') {
+        slashCommands = msg.payload.items || [];
+        if (slashMenu && slashMenu.classList.contains('open')) {
+          renderSlashMenu(userInput.value.indexOf('/') === 0 ? userInput.value : '');
+        }
       }
 
       else if (msg.type === 'showOnboarding') {
@@ -4020,12 +5038,15 @@ export function getWebviewContent(
         });
         autoResize();
         userInput.focus();
+        if (msg.payload.submit) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {
+        lastSendPayload = null;
         clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
         invalidateAttachmentBatches();
+        approvalCards = {};
         messagesEl.innerHTML = '';
         activePlanCard = null;
         toolCallStack = null;
@@ -4044,16 +5065,6 @@ export function getWebviewContent(
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
-        var boundaryLabel = msg.payload.trustMode === 'local'
-          ? 'Local'
-          : msg.payload.trustMode === 'byok'
-            ? 'BYOK'
-            : 'Managed Cloud';
-        addMessage(
-          'system',
-          'Resumed developer session · ' + boundaryLabel +
-            (msg.payload.provider ? ' · ' + msg.payload.provider : '')
-        );
         for (var historyIndex = 0; historyIndex < msg.payload.messages.length; historyIndex++) {
           var historyMessage = msg.payload.messages[historyIndex];
           if (!historyMessage) continue;
@@ -4065,7 +5076,14 @@ export function getWebviewContent(
             addMessage('user', historyMessage.text || '');
           }
         }
-        emptyStateEl = null;
+        if (messagesEl.childElementCount === 0) {
+          // A session the CLI created can resume with nothing to replay. An
+          // empty panel says nothing; the empty state at least names the view.
+          mountEmptyState();
+          syncRecentChats();
+        } else {
+          emptyStateEl = null;
+        }
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
@@ -4079,26 +5097,14 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationCleared') {
+        lastSendPayload = null;
         clearContextUsage();
         resetAuthoritativeSessionBoundary();
         invalidateAttachmentBatches();
+        approvalCards = {};
         messagesEl.innerHTML = '';
         activePlanCard = null;
-        var freshEmpty = document.createElement('div');
-        freshEmpty.className = 'empty-state';
-        freshEmpty.id = 'emptyState';
-        freshEmpty.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
-          '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
-          '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>' +
-          '</div>';
-        freshEmpty.querySelectorAll('.prompt-chip').forEach(function(chip) {
-          chip.addEventListener('click', function() {
-            var p = chip.dataset.prompt || '';
-            if (p) { userInput.value = p; userInput.focus(); autoResize(); freshEmpty.style.display = 'none'; }
-          });
-        });
-        messagesEl.appendChild(freshEmpty);
-        emptyStateEl = freshEmpty;
+        mountEmptyState();
         syncRecentChats();
         streaming = false;
         currentAssistantEl = null;
@@ -4159,6 +5165,23 @@ export function getWebviewContent(
           var description = button.querySelector('.plus-menu-description');
           if (description) description.textContent = state.detail || '';
         }
+      }
+
+      else if (msg.type === 'approvalRequested') {
+        removeTyping();
+        renderApprovalCard(msg.payload);
+        // Anything the model says after this belongs below the card, not back
+        // in the bubble it was writing before it asked.
+        currentAssistantEl = null;
+        accumulatedContent = '';
+      }
+
+      else if (msg.type === 'approvalResolved') {
+        resolveApprovalCard(msg.payload.requestId, msg.payload.outcome);
+      }
+
+      else if (msg.type === 'editorContext') {
+        renderEditorContext((msg.payload && msg.payload.chips) || []);
       }
 
       else if (msg.type === 'contextAttached') {
@@ -4424,16 +5447,162 @@ export function getWebviewContent(
       return name.replace(/_/g, ' ').replace(/\\b[a-z]/g, function(c) { return c.toUpperCase(); });
     }
 
+    // A JSON dump escapes every newline inside a string value, which is what
+    // turned a shell transcript into one \\n-ridden line. Values render as text.
     function formatToolPayload(value) {
+      if (value === null || value === undefined) return '';
       if (typeof value === 'string') return value;
-      try { return JSON.stringify(value, null, 2); }
-      catch (_) { return String(value); }
+      if (typeof value !== 'object') return String(value);
+      if (Array.isArray(value)) {
+        try { return JSON.stringify(value, null, 2); }
+        catch (_) { return String(value); }
+      }
+      var lines = [];
+      var keys = Object.keys(value);
+      for (var i = 0; i < keys.length; i++) {
+        var entry = value[keys[i]];
+        if (typeof entry === 'string') {
+          lines.push(keys[i] + ':' + (entry.indexOf('\\n') === -1 ? ' ' + entry : '\\n' + entry));
+          continue;
+        }
+        try { lines.push(keys[i] + ': ' + JSON.stringify(entry, null, 2)); }
+        catch (_) { lines.push(keys[i] + ': ' + String(entry)); }
+      }
+      return lines.join('\\n');
+    }
+
+    var TOOL_COMMAND_NAMES = { run_command: 1, powershell: 1, bash: 1, shell: 1, terminal: 1 };
+    var TOOL_READ_NAMES = { read_file: 1, read: 1, file_read: 1, view_file: 1 };
+    var TOOL_WRITE_NAMES = {
+      write_file: 1, write: 1, create_file: 1,
+      edit_file: 1, edit: 1, apply_patch: 1, notebook_edit: 1,
+    };
+    var TOOL_SNIPPET_LINES = 40;
+
+    function toolKind(name, category) {
+      var key = String(name || '').toLowerCase().replace(/[- ]/g, '_');
+      if (TOOL_COMMAND_NAMES[key] || category === 'shell' || category === 'code-execution') {
+        return 'command';
+      }
+      if (TOOL_READ_NAMES[key]) return 'read';
+      if (TOOL_WRITE_NAMES[key]) return 'write';
+      return 'other';
+    }
+
+    function toolArgument(input, keys) {
+      if (!input || typeof input !== 'object') return '';
+      for (var i = 0; i < keys.length; i++) {
+        var candidate = input[keys[i]];
+        if (typeof candidate === 'string' && candidate !== '') return candidate;
+      }
+      return '';
+    }
+
+    function toolOutputText(output) {
+      if (typeof output === 'string') return output;
+      if (output && typeof output === 'object' && typeof output.text === 'string') return output.text;
+      return formatToolPayload(output);
+    }
+
+    function splitExitCode(text) {
+      var match = /^Exit code:\\s*(-?\\d+)\\r?\\n?/.exec(text || '');
+      if (!match) return { code: null, body: text || '' };
+      return { code: Number(match[1]), body: (text || '').slice(match[0].length) };
+    }
+
+    function snippetOf(text, limit) {
+      var lines = String(text || '').split('\\n');
+      if (lines.length <= limit) return { text: lines.join('\\n'), hidden: 0 };
+      return { text: lines.slice(0, limit).join('\\n'), hidden: lines.length - limit };
+    }
+
+    function countPatchLines(patch) {
+      var lines = String(patch || '').split('\\n');
+      var added = 0;
+      var removed = 0;
+      for (var i = 0; i < lines.length; i++) {
+        if (/^\\+\\+\\+|^---/.test(lines[i])) continue;
+        if (lines[i].charAt(0) === '+') added++;
+        else if (lines[i].charAt(0) === '-') removed++;
+      }
+      return { added: added, removed: removed };
+    }
+
+    function writeDiffStat(name, input) {
+      var key = String(name || '').toLowerCase().replace(/[- ]/g, '_');
+      var oldText = toolArgument(input, ['old_string', 'old_text', 'old']);
+      var newText = toolArgument(input, ['new_string', 'new_text', 'new']);
+      if (oldText !== '' || newText !== '') {
+        var removed = oldText === '' ? 0 : oldText.split('\\n').length;
+        var added = newText === '' ? 0 : newText.split('\\n').length;
+        return '+' + added + ' −' + removed + ' lines';
+      }
+      if (key === 'apply_patch') {
+        var patch = toolArgument(input, ['patch', 'diff', 'content']);
+        if (patch !== '') {
+          var counted = countPatchLines(patch);
+          return '+' + counted.added + ' −' + counted.removed + ' lines';
+        }
+      }
+      var content = toolArgument(input, ['content', 'contents', 'text']);
+      if (content !== '') {
+        var written = content.split('\\n').length;
+        return written + (written === 1 ? ' line written' : ' lines written');
+      }
+      return '';
+    }
+
+    function codeBlock(text) {
+      var pre = document.createElement('pre');
+      pre.className = 'tool-call__code';
+      pre.textContent = text;
+      return pre;
+    }
+
+    function renderToolResponse(row, output, isError) {
+      var section = row.responseSection;
+      var existingExit = section.querySelector('.tool-call__exit');
+      if (existingExit) existingExit.remove();
+
+      if (row.kind === 'command') {
+        var split = splitExitCode(toolOutputText(output));
+        row.responseEl.textContent = split.body;
+        var exitEl = document.createElement('div');
+        exitEl.className = 'tool-call__exit';
+        var failed = split.code === null ? isError === true : split.code !== 0;
+        exitEl.dataset.failed = failed ? '1' : '0';
+        exitEl.textContent =
+          split.code === null
+            ? failed ? 'Command failed' : 'Command finished'
+            : 'Exit status ' + split.code;
+        section.appendChild(exitEl);
+        return;
+      }
+
+      if (row.kind === 'read') {
+        var snippet = snippetOf(toolOutputText(output), TOOL_SNIPPET_LINES);
+        row.responseEl.textContent = snippet.text;
+        if (snippet.hidden > 0) {
+          var moreEl = document.createElement('div');
+          moreEl.className = 'tool-call__exit';
+          moreEl.dataset.failed = '0';
+          moreEl.textContent = snippet.hidden + ' more lines not shown';
+          section.appendChild(moreEl);
+        }
+        return;
+      }
+
+      row.responseEl.textContent =
+        row.kind === 'write' ? toolOutputText(output) : formatToolPayload(output);
     }
 
     function formatElapsedMs(value) {
       if (value < 1000) return value + ' ms';
       return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
+
+    var COMPLETED_LABEL = ${JSON.stringify(toolCallStatusLabel('completed'))};
+    var RUNNING_LABEL = ${JSON.stringify(toolCallStatusLabel('running'))};
 
     function updateActivitySummary(latestSummary, terminal) {
       if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
@@ -4447,12 +5616,12 @@ export function getWebviewContent(
           errors > 0
             ? errors + (errors === 1 ? ' error' : ' errors')
             : toolCallStackHasError
-              ? 'Completed with errors'
-              : 'Done'
+              ? COMPLETED_LABEL + ' with errors'
+              : COMPLETED_LABEL
         );
       } else {
-        if (running > 0) parts.push(running + ' running');
-        if (completed > 0) parts.push(completed + ' done');
+        if (running > 0) parts.push(running + ' ' + RUNNING_LABEL.toLowerCase());
+        if (completed > 0) parts.push(completed + ' ' + COMPLETED_LABEL.toLowerCase());
         if (errors > 0) parts.push(errors + (errors === 1 ? ' error' : ' errors'));
       }
       if (latestSummary) parts.push(latestSummary);
@@ -4553,6 +5722,9 @@ export function getWebviewContent(
       bar.appendChild(summaryEl);
       bar.appendChild(chevron);
 
+      var kind = toolKind(name, category);
+      var filePath = toolArgument(input, ['path', 'file_path', 'filename']);
+
       var bodyEl = document.createElement('div');
       bodyEl.className = 'tool-call__body';
 
@@ -4560,21 +5732,54 @@ export function getWebviewContent(
       requestSection.className = 'tool-call__section';
       var requestLabel = document.createElement('div');
       requestLabel.className = 'tool-call__section-label';
-      requestLabel.textContent = 'Request';
-      var requestEl = document.createElement('pre');
-      requestEl.className = 'tool-call__payload';
-      requestEl.textContent = formatToolPayload(input);
       requestSection.appendChild(requestLabel);
+
+      var requestEl;
+      if (kind === 'command') {
+        requestLabel.textContent = 'Command';
+        requestEl = codeBlock('$ ' + toolArgument(input, ['command', 'script']));
+      } else if (kind === 'read' || kind === 'write') {
+        requestLabel.textContent = kind === 'read' ? 'File' : 'Wrote';
+        requestEl = document.createElement('div');
+        requestEl.className = 'tool-call__path';
+        requestEl.textContent = filePath || formatToolPayload(input);
+      } else {
+        requestLabel.textContent = 'Request';
+        requestEl = document.createElement('pre');
+        requestEl.className = 'tool-call__payload';
+        requestEl.textContent = formatToolPayload(input);
+      }
       requestSection.appendChild(requestEl);
+
+      if (kind === 'write') {
+        var stat = writeDiffStat(name, input);
+        if (stat) {
+          var statEl = document.createElement('div');
+          statEl.className = 'tool-call__diffstat';
+          statEl.textContent = stat;
+          requestSection.appendChild(statEl);
+        }
+        if (filePath) {
+          var openDiff = document.createElement('button');
+          openDiff.type = 'button';
+          openDiff.className = 'tool-call__open-diff';
+          openDiff.textContent = 'Open diff';
+          openDiff.addEventListener('click', function (event) {
+            event.stopPropagation();
+            vscode.postMessage({ type: 'openToolDiff', payload: { path: filePath } });
+          });
+          requestSection.appendChild(openDiff);
+        }
+      }
 
       var responseSection = document.createElement('div');
       responseSection.className = 'tool-call__section';
       responseSection.style.display = 'none';
       var responseLabel = document.createElement('div');
       responseLabel.className = 'tool-call__section-label';
-      responseLabel.textContent = 'Response';
+      responseLabel.textContent = kind === 'command' ? 'Output' : kind === 'read' ? 'Snippet' : 'Response';
       var responseEl = document.createElement('pre');
-      responseEl.className = 'tool-call__payload';
+      responseEl.className = kind === 'other' ? 'tool-call__payload' : 'tool-call__code';
       responseSection.appendChild(responseLabel);
       responseSection.appendChild(responseEl);
 
@@ -4600,7 +5805,12 @@ export function getWebviewContent(
         summaryEl: summaryEl,
         requestEl: requestEl,
         responseEl: responseEl,
-        responseSection: responseSection
+        responseSection: responseSection,
+        kind: kind,
+        // The runtime's own elapsed time starts before the approval card is
+        // answered, so a one-millisecond command reads as the minutes a person
+        // took to say yes. This clock starts when the tool can actually run.
+        startedAt: Date.now()
       };
       return toolCallMap[toolUseId];
     }
@@ -4692,7 +5902,6 @@ export function getWebviewContent(
       toolCallStackHasError = false;
     }
 
-    // ── Empty-state prompt chips (design-spec §8) ────────────────────────────
     var emptyStateEl = document.getElementById('emptyState');
     function hideEmptyState() {
       if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
@@ -4735,7 +5944,7 @@ export function getWebviewContent(
       block.className = 'recent-chats';
       var heading = document.createElement('div');
       heading.className = 'recent-chats-title';
-      heading.textContent = 'Chats';
+      heading.textContent = 'Sessions';
       block.appendChild(heading);
       for (var i = 0; i < recentChats.conversations.length; i++) {
         block.appendChild(buildRecentChatRow(recentChats.conversations[i]));
@@ -4743,30 +5952,19 @@ export function getWebviewContent(
       var viewAll = document.createElement('button');
       viewAll.type = 'button';
       viewAll.className = 'recent-chats-all';
-      viewAll.textContent = 'View all (' + recentChats.total + ')';
+      viewAll.textContent = 'View all';
+      viewAll.setAttribute('aria-label', 'View all ' + recentChats.total + ' sessions');
       viewAll.addEventListener('click', function() {
-        vscode.postMessage({ type: 'revealConversationHistory' });
+        openSessionsSheet();
       });
       block.appendChild(viewAll);
       emptyStateEl.insertBefore(block, emptyStateEl.firstChild);
     }
-    document.querySelectorAll('.prompt-chip').forEach(function(chip) {
-      chip.addEventListener('click', function() {
-        var prompt = chip.dataset.prompt || '';
-        if (!prompt) return;
-        userInput.value = prompt;
-        userInput.focus();
-        autoResize();
-        hideEmptyState();
-      });
-    });
-
     if (onboardingEl && onboardingEl.style.display !== 'none') {
       setOnboardingVisible(true);
     } else if (onboardingEl) {
       setOnboardingVisible(false);
     }
-    updateOnboardingBoundary();
 
     // ── Signal ready ──────────────────────────────────────────────────────────
     vscode.postMessage({ type: 'ready' });

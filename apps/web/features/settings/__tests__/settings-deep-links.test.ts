@@ -9,6 +9,8 @@ import {
   WEB_SETTINGS_BUILT_IN_SECTIONS,
   WEB_SETTINGS_CONTENT_SECTIONS,
   isWebSettingsSection,
+  resolveWebSettingsSection,
+  WEB_SETTINGS_FALLBACK_SECTION,
 } from '../lib/web-settings-sections';
 
 const DESKTOP_ONLY_SECTIONS = [
@@ -92,5 +94,25 @@ describe('every settings section can be deep-linked', () => {
     expect(invalid, `settings link(s) pointing at no such section: ${invalid.join(', ')}`).toEqual(
       [],
     );
+  });
+});
+
+describe('a desktop-only section', () => {
+  // The group exists only inside the shell, so a browser has nothing behind it
+  // to render. The link still means "open settings" though, and a link that
+  // silently does nothing is worse than one that lands a section early.
+  it('is routable in the shell and not in a browser', () => {
+    expect(isWebSettingsSection('desktop', true)).toBe(true);
+    expect(isWebSettingsSection('desktop')).toBe(false);
+  });
+
+  it('falls back to the first section in a browser', () => {
+    expect(resolveWebSettingsSection('desktop', true)).toBe('desktop');
+    expect(resolveWebSettingsSection('desktop')).toBe(WEB_SETTINGS_FALLBACK_SECTION);
+  });
+
+  it('still opens nothing for a name that is no section anywhere', () => {
+    expect(resolveWebSettingsSection('not-a-section', true)).toBeNull();
+    expect(resolveWebSettingsSection('not-a-section')).toBeNull();
   });
 });

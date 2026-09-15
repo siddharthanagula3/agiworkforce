@@ -170,7 +170,32 @@
     "voiceStopRecording": "停止录音",
     "voiceStopping": "正在停止语音操作",
     "voiceTranscribing": "正在转录语音",
-    "voiceUnsupported": "语音输入不可用"
+    "voiceUnsupported": "语音输入不可用",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "聊天：快速提问与对话",
+    "modeAgiWorkTitle": "AGI Work：使用工具、文件和可审阅成果的多步骤任务",
+    "style": "风格",
+    "styleCustom": "自定义",
+    "responseStyle": "回复风格",
+    "styles": {
+      "default": "默认",
+      "concise": "简洁",
+      "detailed": "详细",
+      "technical": "技术",
+      "creative": "创意"
+    },
+    "styleDescs": {
+      "default": "标准回复风格",
+      "concise": "简短直接",
+      "detailed": "详尽并附示例",
+      "technical": "精确并附代码示例",
+      "creative": "富有表现力且引人入胜"
+    },
+    "addAttachmentsAndTools": "添加附件和工具",
+    "addAttachmentsAndToolsActive": "添加附件和工具：{{count}} 个已启用",
+    "voiceStart": "开始语音输入",
+    "voiceUnsupportedBrowser": "此浏览器不支持语音输入",
+    "voiceUnsupportedHint": "此浏览器不支持语音输入。请尝试 Chrome 或 Edge。"
   },
   "bubble": {
     "assistantThinking": "助手正在思考",
@@ -268,5 +293,13 @@
     "thinkingSimple": "正在思考你的问题...",
     "workingOnGoal": "正在处理...{{goal}}",
     "workingOnRequest": "正在处理你的请求..."
+  },
+  "greeting": {
+    "morning": "早上好",
+    "afternoon": "下午好",
+    "evening": "晚上好",
+    "morningNamed": "{{name}}，早上好",
+    "afternoonNamed": "{{name}}，下午好",
+    "eveningNamed": "{{name}}，晚上好"
   }
 }

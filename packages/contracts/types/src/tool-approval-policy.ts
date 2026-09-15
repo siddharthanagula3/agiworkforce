@@ -14,6 +14,18 @@ export const DEFAULT_TOOL_APPROVAL_PREFERENCES: ToolApprovalPreferences = {
   defaultPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
 };
 
+export const TOOL_APPROVAL_ACTION_LABELS = Object.freeze({
+  allow: 'Allow',
+  alwaysAllow: 'Always allow',
+  ask: 'Ask',
+  deny: 'Deny',
+  approve: 'Approve',
+  allowed: 'Allowed',
+  denied: 'Denied',
+});
+
+export type ToolApprovalActionVerb = keyof typeof TOOL_APPROVAL_ACTION_LABELS;
+
 export interface ToolApprovalPolicyOption {
   policy: ToolApprovalPolicy;
   /** One word for a composer-sized control. */

@@ -191,7 +191,26 @@ describe('getWebviewContent, structural smoke', () => {
     expect(doc.querySelector('#accountStatusDot')).toBeNull();
     expect(doc.querySelector('#historyBtn')).toBeNull();
     expect(doc.querySelector('#actionsBtn')?.getAttribute('title')).toBe('More');
-    expect(scriptBody).toContain("vscode.postMessage({ type: 'openActionSheet' })");
+    expect(doc.querySelector('#actionsMenu')?.getAttribute('role')).toBe('menu');
+    expect(
+      Array.from(doc.querySelectorAll('#actionsMenu [data-surface]')).map(
+        (item) => (item as HTMLElement).dataset.surface,
+      ),
+    ).toEqual([
+      'sessions',
+      'projects',
+      'artifacts',
+      'work',
+      'connectors',
+      'memory',
+      'skills',
+      'plugins',
+      'mcp',
+      'hooks',
+      'instructions',
+      'settings',
+      'account',
+    ]);
     expect(scriptBody).toContain("msg.type === 'accountStatus'");
     expect(scriptBody).toContain('activeAccountIdentity.displayName');
     expect(scriptBody).toContain('activeAccountIdentity.email');
@@ -267,10 +286,15 @@ describe('getWebviewContent, structural smoke', () => {
     expect(styles).toContain('@media (max-width: 480px)');
     expect(styles).toContain('@media (max-width: 380px)');
     expect(styles).toContain('.composer-card.is-streaming .controls-summary { display: none; }');
+    // Narrow widths shrink the chips; they never remove one of the controls.
     expect(styles).not.toMatch(/(?:^|\n)\s*\.controls-summary \{ display: none; \}/);
-    expect(styles).toContain('.controls-summary { max-width: 86px; }');
-    expect(styles).toContain('.controls-summary { max-width: 72px; }');
+    expect(styles).toMatch(/\.model-pill \{[^}]*min-width: 72px;/);
+    expect(styles).toMatch(/\.controls-summary \{\n\s*flex-shrink: 4;\n\s*min-width: 36px;/);
+    expect(styles).toContain('.controls-summary { max-width: 70px; }');
+    expect(styles).toContain('.controls-summary { max-width: 54px; }');
     expect(styles).toContain('.composer-card.is-streaming .controls-summary { display: none; }');
+    // The model name is the chip a user cannot reconstruct from anywhere else.
+    expect(styles).toContain('.model-pill-effort { display: none; }');
     expect(doc.querySelector('#controlsSummary')).not.toBeNull();
     expect(doc.querySelector('#plusMenuActions')).toBeNull();
   });
@@ -306,9 +330,10 @@ describe('getWebviewContent, structural smoke', () => {
       .join('\n');
 
     expect(scriptBody).toContain("requestLabel.textContent = 'Request'");
-    expect(scriptBody).toContain("responseLabel.textContent = 'Response'");
     expect(scriptBody).toContain('requestEl.textContent = formatToolPayload(input)');
-    expect(scriptBody).toContain('responseEl.textContent = formatToolPayload(msg.payload.output)');
+    expect(scriptBody).toContain(
+      'renderToolResponse(tcEnd, msg.payload.output, msg.payload.isError)',
+    );
     expect(scriptBody).toContain(
       "tcEnd.el.classList.add(msg.payload.isError ? 'tool-call--error' : 'tool-call--done')",
     );

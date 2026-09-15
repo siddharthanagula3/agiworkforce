@@ -1,5 +1,5 @@
-import { useCallback, forwardRef, useEffect, useMemo } from 'react';
-import { View, Pressable, ScrollView } from 'react-native';
+import { useCallback, forwardRef, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, View, Pressable, ScrollView } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import {
@@ -225,18 +225,26 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [closeSheet, haptic, onAttachFromLibrary],
   );
 
+  // Handing off to another sheet keeps this one on screen while it animates
+  // out, so without this the tapped row sat inert for the whole handoff and
+  // read as a dead control.
+  const [handoff, setHandoff] = useState<'style' | 'model' | 'project' | null>(null);
+
   const handleOpenStyleSelector = useCallback(() => {
     haptic();
+    setHandoff('style');
     onOpenStyleSelector();
   }, [haptic, onOpenStyleSelector]);
 
   const handleOpenModelPicker = useCallback(() => {
     haptic();
+    setHandoff('model');
     onOpenModelPicker();
   }, [haptic, onOpenModelPicker]);
 
   const handleOpenProjectPicker = useCallback(() => {
     haptic();
+    setHandoff('project');
     onOpenProjectPicker();
   }, [haptic, onOpenProjectPicker]);
 
@@ -290,6 +298,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       ref={ref}
       index={-1}
       accessible={false}
+      onChange={(index) => {
+        if (index < 0) setHandoff(null);
+      }}
       snapPoints={SNAP_POINTS}
       enablePanDownToClose
       enableDynamicSizing={false}
@@ -465,6 +476,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 value={getShortDisplayName(selectedModel, tier)}
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
+                pending={handoff === 'model'}
                 onPress={handleOpenModelPicker}
               />
             </View>
@@ -742,6 +754,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             value={activeProject?.name ?? 'Choose'}
             textColor={themeColors.textPrimary}
             mutedColor={themeColors.textMuted}
+            pending={handoff === 'project'}
             onPress={handleOpenProjectPicker}
           />
           <ConfigLink
@@ -750,6 +763,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             value={chatStyle.charAt(0).toUpperCase() + chatStyle.slice(1)}
             textColor={themeColors.textPrimary}
             mutedColor={themeColors.textMuted}
+            pending={handoff === 'style'}
             onPress={handleOpenStyleSelector}
           />
           {appMode === 'cloud' && FEATURES.connectors && canUseConnectors ? (
@@ -1048,6 +1062,7 @@ function ConfigLink({
   statusTone = 'neutral',
   textColor,
   mutedColor,
+  pending = false,
   onPress,
 }: {
   icon: React.ReactNode;
@@ -1056,6 +1071,7 @@ function ConfigLink({
   statusTone?: 'waitlist' | 'desktop' | 'neutral';
   textColor: string;
   mutedColor: string;
+  pending?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -1071,19 +1087,30 @@ function ConfigLink({
       }}
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={{ busy: pending }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {icon}
         <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        {value &&
-          (statusTone === 'neutral' ? (
-            <Text style={{ fontSize: 13, color: mutedColor }}>{value}</Text>
-          ) : (
-            <StatusPill label={value} tone={statusTone} />
-          ))}
-        <ChevronRight size={16} color={mutedColor} />
+        {pending ? (
+          <ActivityIndicator
+            testID={`config-link-pending-${label}`}
+            size="small"
+            color={mutedColor}
+          />
+        ) : (
+          <>
+            {value &&
+              (statusTone === 'neutral' ? (
+                <Text style={{ fontSize: 13, color: mutedColor }}>{value}</Text>
+              ) : (
+                <StatusPill label={value} tone={statusTone} />
+              ))}
+            <ChevronRight size={16} color={mutedColor} />
+          </>
+        )}
       </View>
     </Pressable>
   );

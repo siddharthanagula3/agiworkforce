@@ -1,4 +1,5 @@
-import { Menu, app, shell, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+import { Menu, app, type MenuItemConstructorOptions } from 'electron';
+import { HOST_MENU_SHORTCUTS, type HostCommand } from '@agiworkforce/local-runtime-contract';
 import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
 
 /**
@@ -8,6 +9,13 @@ import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
  * working Developer Tools item and a Reload that discards renderer state. This
  * builds the standard editing and window roles deliberately and leaves the
  * developer items to development builds.
+ *
+ * Two kinds of accelerator appear below. Most are registered with the system in
+ * the usual way. The rest carry `registerAccelerator: false`: their chord is
+ * already claimed, by a global shortcut the shell registered or by a key
+ * binding the page handles itself, and registering it twice would either fire
+ * the action twice or steal it from whoever had it. Those items show the chord
+ * and stay clickable, which is what a menu is for.
  */
 
 export interface AppMenuActions {
@@ -16,6 +24,37 @@ export interface AppMenuActions {
   captureScreenshot: () => void;
   openSettings: () => void;
   openLogs: () => void;
+  openSupport: () => void;
+  checkForUpdates: () => void;
+  sendHostCommand: (command: HostCommand) => void;
+  goBack: () => void;
+  goForward: () => void;
+  setZoomLevel: (level: number) => void;
+  stepZoomLevel: (delta: number) => void;
+}
+
+export interface AppMenuAccelerators {
+  quickAsk: string;
+  screenshot: string;
+}
+
+/**
+ * What the page binds for the two actions the View and Help menus hand back to
+ * it. `apps/web/features/chat/hooks/use-keyboard-shortcuts.ts` is where those
+ * bindings live; the menu shows them rather than claiming them.
+ */
+const PAGE_TOGGLE_SIDEBAR_ACCELERATOR = 'CommandOrControl+B';
+const PAGE_KEYBOARD_SHORTCUTS_ACCELERATOR = 'CommandOrControl+/';
+
+/**
+ * The chords this menu claims come from the contract, which is also what the
+ * page's shortcut sheet renders. A literal here would let the menu and the
+ * sheet describe different keys for the same command.
+ */
+function hostAccelerator(id: string): string {
+  const shortcut = HOST_MENU_SHORTCUTS.find((candidate) => candidate.id === id);
+  if (!shortcut) throw new Error(`no host menu shortcut named ${id}`);
+  return shortcut.accelerator;
 }
 
 const isMac = process.platform === 'darwin';
@@ -47,18 +86,31 @@ function appleMenu(): MenuItemConstructorOptions[] {
   ];
 }
 
-function fileMenu(actions: AppMenuActions): MenuItemConstructorOptions {
+function fileMenu(
+  actions: AppMenuActions,
+  accelerators: AppMenuAccelerators,
+): MenuItemConstructorOptions {
   const items: MenuItemConstructorOptions[] = [
-    { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: actions.newChat },
-    { label: 'Quick Ask', accelerator: 'CmdOrCtrl+Shift+A', click: actions.toggleQuickAsk },
+    { label: 'New Chat', accelerator: hostAccelerator('host-new-chat'), click: actions.newChat },
+    {
+      label: 'Quick Ask',
+      accelerator: accelerators.quickAsk,
+      registerAccelerator: false,
+      click: actions.toggleQuickAsk,
+    },
     { type: 'separator' },
     {
       label: 'Screenshot to Chat',
-      accelerator: 'CmdOrCtrl+Shift+2',
+      accelerator: accelerators.screenshot,
+      registerAccelerator: false,
       click: actions.captureScreenshot,
     },
     { type: 'separator' },
-    { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: actions.openSettings },
+    {
+      label: 'Settings',
+      accelerator: hostAccelerator('host-settings'),
+      click: actions.openSettings,
+    },
   ];
 
   if (!isMac) {
@@ -94,26 +146,60 @@ function editMenu(): MenuItemConstructorOptions {
   return { label: 'Edit', submenu: items };
 }
 
-function viewMenu(): MenuItemConstructorOptions {
+function viewMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   const items: MenuItemConstructorOptions[] = [
-    { role: 'resetZoom' },
-    { role: 'zoomIn' },
-    { role: 'zoomOut' },
+    {
+      label: 'Toggle Sidebar',
+      accelerator: PAGE_TOGGLE_SIDEBAR_ACCELERATOR,
+      registerAccelerator: false,
+      click: () => actions.sendHostCommand('toggle-sidebar'),
+    },
+    { type: 'separator' },
+    {
+      label: 'Actual Size',
+      accelerator: hostAccelerator('host-actual-size'),
+      click: () => actions.setZoomLevel(0),
+    },
+    {
+      label: 'Zoom In',
+      accelerator: hostAccelerator('host-zoom-in'),
+      click: () => actions.stepZoomLevel(1),
+    },
+    {
+      label: 'Zoom Out',
+      accelerator: hostAccelerator('host-zoom-out'),
+      click: () => actions.stepZoomLevel(-1),
+    },
     { type: 'separator' },
     { role: 'togglefullscreen' },
   ];
   if (!app.isPackaged) {
-    items.unshift({ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' });
+    items.push({ type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' });
   }
   return { label: 'View', submenu: items };
 }
 
+function historyMenu(actions: AppMenuActions): MenuItemConstructorOptions {
+  return {
+    label: 'History',
+    submenu: [
+      { label: 'Back', accelerator: hostAccelerator('host-back'), click: actions.goBack },
+      { label: 'Forward', accelerator: hostAccelerator('host-forward'), click: actions.goForward },
+    ],
+  };
+}
+
 function windowMenu(): MenuItemConstructorOptions {
-  const items: MenuItemConstructorOptions[] = [{ role: 'minimize' }, { role: 'zoom' }];
+  // Close is on every platform: macOS reads a window with no Cmd+W as broken,
+  // and the app survives losing its last window because `activate`, a second
+  // launch and a deep link all bring one back.
+  const items: MenuItemConstructorOptions[] = [
+    { role: 'minimize' },
+    { role: 'zoom' },
+    { role: 'close', accelerator: hostAccelerator('host-close-window') },
+  ];
   if (isMac) {
     items.push({ type: 'separator' }, { role: 'front' });
-  } else {
-    items.push({ role: 'close' });
   }
   return { label: 'Window', submenu: items };
 }
@@ -122,33 +208,39 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return {
     role: 'help',
     submenu: [
+      { label: 'AGI Workforce Support', click: actions.openSupport },
       {
-        label: 'AGI Workforce Support',
-        click: () => {
-          void shell.openExternal('https://agiworkforce.com/support');
-        },
+        label: 'Keyboard Shortcuts',
+        accelerator: PAGE_KEYBOARD_SHORTCUTS_ACCELERATOR,
+        registerAccelerator: false,
+        click: () => actions.sendHostCommand('show-keyboard-shortcuts'),
       },
+      { type: 'separator' },
       { label: 'Open Logs', click: actions.openLogs },
+      { label: 'Check for Updates', click: actions.checkForUpdates },
     ],
   };
 }
 
-export function buildAppMenu(actions: AppMenuActions): Menu {
-  return Menu.buildFromTemplate([
+export function appMenuTemplate(
+  actions: AppMenuActions,
+  accelerators: AppMenuAccelerators,
+): MenuItemConstructorOptions[] {
+  return [
     ...appleMenu(),
-    fileMenu(actions),
+    fileMenu(actions, accelerators),
     editMenu(),
-    viewMenu(),
+    viewMenu(actions),
+    historyMenu(actions),
     windowMenu(),
     helpMenu(actions),
-  ]);
+  ];
 }
 
-export function installAppMenu(actions: AppMenuActions): void {
-  Menu.setApplicationMenu(buildAppMenu(actions));
+export function buildAppMenu(actions: AppMenuActions, accelerators: AppMenuAccelerators): Menu {
+  return Menu.buildFromTemplate(appMenuTemplate(actions, accelerators));
 }
 
-export function refreshAppMenu(actions: AppMenuActions, window: BrowserWindow | null): void {
-  void window;
-  installAppMenu(actions);
+export function installAppMenu(actions: AppMenuActions, accelerators: AppMenuAccelerators): void {
+  Menu.setApplicationMenu(buildAppMenu(actions, accelerators));
 }

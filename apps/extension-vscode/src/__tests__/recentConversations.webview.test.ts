@@ -91,7 +91,11 @@ describe('VS Code sidebar recent-chats block', () => {
       '2h ago',
       '3d ago',
     ]);
-    expect(document.querySelector('.recent-chats-all')?.textContent).toBe('View all (9)');
+    expect(document.querySelector('.recent-chats-title')?.textContent).toBe('Sessions');
+    expect(document.querySelector('.recent-chats-all')?.textContent).toBe('View all');
+    expect(document.querySelector('.recent-chats-all')?.getAttribute('aria-label')).toBe(
+      'View all 9 sessions',
+    );
   });
 
   it('renders a conversation title as text rather than markup', () => {
@@ -115,13 +119,17 @@ describe('VS Code sidebar recent-chats block', () => {
     });
   });
 
-  it('asks the host to reveal the history tree from View all', () => {
+  it('opens the sessions sheet from the More row', () => {
     const postMessage = boot();
     deliverRecents(THREE_RECENTS, 12);
 
     (document.querySelector('.recent-chats-all') as HTMLButtonElement).click();
 
-    expect(postMessage).toHaveBeenCalledWith({ type: 'revealConversationHistory' });
+    expect(document.getElementById('sessionsSheet')?.hidden).toBe(false);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'requestSessions',
+      payload: { source: 'local' },
+    });
   });
 
   it('removes the block when the host reports no conversations', () => {

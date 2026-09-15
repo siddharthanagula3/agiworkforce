@@ -6,6 +6,7 @@ import {
 } from '@agiworkforce/client-runtime';
 import { isAllowedMapSearchProviderUrl } from '@agiworkforce/cloud-contracts';
 import {
+  agentTaskStateLabel,
   resolveInteractiveCardRenderer,
   type InteractiveCard,
   type InteractiveCardRegistry,
@@ -41,6 +42,7 @@ export interface BubbleInteractionOptions {
   approvalError?: string;
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
   onRetry?: (messageId: string) => void;
+  onSwitchModel?: () => void;
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -145,11 +147,51 @@ function appendInteractiveCards(parent: HTMLElement, message: ChatMessage): void
 function buildErrorFooter(
   msg: ChatMessage,
   onRetry?: (messageId: string) => void,
+  onSwitchModel?: () => void,
 ): HTMLElement | null {
   if (!msg.error || !msg.errorText) return null;
 
   const footer = el('div', { class: 'sp-bubble-error-footer', role: 'alert' });
   footer.appendChild(el('div', { class: 'sp-bubble-error-text' }, msg.errorText));
+
+  if (onRetry) {
+    const retryBtn = el(
+      'button',
+      { class: 'sp-bubble-retry-btn', type: 'button' },
+      'Retry',
+    ) as HTMLButtonElement;
+    retryBtn.addEventListener('click', () => {
+      retryBtn.disabled = true;
+      onRetry(msg.id);
+    });
+    footer.appendChild(retryBtn);
+  }
+  if (msg.errorAction === 'switch-model' && onSwitchModel) {
+    const switchBtn = el(
+      'button',
+      { class: 'sp-bubble-retry-btn', type: 'button' },
+      'Switch model',
+    ) as HTMLButtonElement;
+    switchBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onSwitchModel();
+    });
+    footer.appendChild(switchBtn);
+  }
+
+  return footer;
+}
+
+function buildInterruptedFooter(
+  msg: ChatMessage,
+  onRetry?: (messageId: string) => void,
+): HTMLElement | null {
+  if (!msg.interrupted) return null;
+
+  const footer = el('div', { class: 'sp-bubble-interrupted-footer', role: 'status' });
+  footer.appendChild(
+    el('div', { class: 'sp-bubble-interrupted-text' }, agentTaskStateLabel('cancelled')),
+  );
 
   if (onRetry) {
     const retryBtn = el(
@@ -197,8 +239,10 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
 
   wrapper.appendChild(bubble);
 
-  const errorFooter = buildErrorFooter(msg, options.onRetry);
+  const errorFooter = buildErrorFooter(msg, options.onRetry, options.onSwitchModel);
   if (errorFooter) bubble.appendChild(errorFooter);
+  const interruptedFooter = buildInterruptedFooter(msg, options.onRetry);
+  if (interruptedFooter) bubble.appendChild(interruptedFooter);
 
   appendInteractiveCards(wrapper, msg);
 
@@ -513,6 +557,7 @@ function buildAgentActivityStep(
     (entry.kind === 'tool' && Boolean(entry.approval));
   const step = document.createElement(hasDetails ? 'details' : 'div');
   step.className = `sp-agent-step sp-agent-step--${status}`;
+  if (step instanceof HTMLDetailsElement && status === 'awaiting-approval') step.open = true;
   const row = document.createElement(hasDetails ? 'summary' : 'div');
   if (!hasDetails) row.className = 'sp-agent-step__row';
   const icon =
@@ -560,8 +605,12 @@ function buildAgentActivityEl(
     (activity.completedAtMs ?? activity.updatedAtMs) - activity.startedAtMs,
   );
   const elapsedLabel = formatElapsed(elapsed);
-  const statusLabel =
-    activity.status === 'completed'
+  const needsApproval =
+    activity.status === 'awaiting-approval' ||
+    activity.entries.some((entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval');
+  const statusLabel = needsApproval
+    ? `Needs your approval · ${elapsedLabel}`
+    : activity.status === 'completed'
       ? `Worked for ${elapsedLabel}`
       : activity.status === 'failed'
         ? `Failed after ${elapsedLabel}`
@@ -569,21 +618,20 @@ function buildAgentActivityEl(
           ? `Cancelled after ${elapsedLabel}`
           : activity.status === 'paused'
             ? `Paused after ${elapsedLabel}`
-            : activity.status === 'awaiting-approval'
-              ? `Needs approval · ${elapsedLabel}`
-              : `Working for ${elapsedLabel}`;
+            : `Working for ${elapsedLabel}`;
   summary.appendChild(
     renderIcon(
       activity.status === 'failed' || activity.status === 'cancelled'
         ? CircleX
         : activity.status === 'completed'
           ? CircleCheck
-          : activity.status === 'paused' || activity.status === 'awaiting-approval'
+          : needsApproval || activity.status === 'paused'
             ? Clock
             : Loader2,
       14,
     ),
   );
+  if (needsApproval) details.open = true;
   summary.appendChild(
     document.createTextNode(
       `${statusLabel}${activity.entries.length ? ` · ${activity.entries.length} steps` : ''}`,
@@ -626,7 +674,13 @@ export function buildBubbleWithTools(
 
   if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, options));
 
-  if (shouldRenderTextBubble({ text: textParts.join(''), streaming: Boolean(msg.streaming) })) {
+  if (
+    shouldRenderTextBubble({
+      text: textParts.join(''),
+      streaming: Boolean(msg.streaming),
+      interrupted: Boolean(msg.interrupted),
+    })
+  ) {
     const bubble = document.createElement('div');
     bubble.className = `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`;
     bubble.id = `sp-bubble-${msg.id}`;
@@ -651,6 +705,8 @@ export function buildBubbleWithTools(
 
   const toolsErrorFooter = buildErrorFooter(msg, options.onRetry);
   if (toolsErrorFooter) wrapper.appendChild(toolsErrorFooter);
+  const toolsInterruptedFooter = buildInterruptedFooter(msg, options.onRetry);
+  if (toolsInterruptedFooter) wrapper.appendChild(toolsInterruptedFooter);
 
   const actionRow = document.createElement('div');
   actionRow.className = 'sp-bubble-actions';

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getContextBuilder } from './contextBuilder';
 import { CONTEXT_ATTACHMENT_KINDS, type ContextAttachmentKind } from '../protocol/webviewMessages';
+import { Config } from '../platform/config';
 
 export interface ContextMenuItemState {
   kind: ContextAttachmentKind;
@@ -131,4 +132,70 @@ export async function buildContextAttachment(
     case 'git-diff':
       return gitChanges();
   }
+}
+
+export type EditorContextChipKind = 'active-file' | 'selection' | 'problems';
+
+export interface EditorContextChip {
+  id: string;
+  kind: EditorContextChipKind;
+  label: string;
+}
+
+export interface EditorContextSnapshot {
+  chips: EditorContextChip[];
+  contextFiles: string[];
+  texts: string[];
+}
+
+const EMPTY_EDITOR_CONTEXT: EditorContextSnapshot = { chips: [], contextFiles: [], texts: [] };
+
+export function editorContextChipId(kind: EditorContextChipKind, relativePath: string): string {
+  return `${kind}:${relativePath}`;
+}
+
+function basename(relativePath: string): string {
+  const separator = Math.max(relativePath.lastIndexOf('/'), relativePath.lastIndexOf('\\'));
+  return separator === -1 ? relativePath : relativePath.slice(separator + 1);
+}
+
+export function resolveEditorContext(dismissed: ReadonlySet<string>): EditorContextSnapshot {
+  if (!Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
+  const context = getContextBuilder().getActiveFileContext();
+  if (context === undefined) return EMPTY_EDITOR_CONTEXT;
+
+  const snapshot: EditorContextSnapshot = { chips: [], contextFiles: [], texts: [] };
+  const fileId = editorContextChipId('active-file', context.relativePath);
+  if (!dismissed.has(fileId)) {
+    snapshot.chips.push({
+      id: fileId,
+      kind: 'active-file',
+      label: basename(context.relativePath),
+    });
+    snapshot.contextFiles.push(context.filePath);
+  }
+
+  const selection = activeSelection();
+  const selectionId = editorContextChipId('selection', context.relativePath);
+  if (selection !== undefined && !dismissed.has(selectionId)) {
+    snapshot.chips.push({
+      id: selectionId,
+      kind: 'selection',
+      label: `${basename(selection.name)} selection`,
+    });
+    snapshot.texts.push(selection.text);
+  }
+
+  const reported = problems();
+  const problemsId = editorContextChipId('problems', context.relativePath);
+  if (reported.count > 0 && !dismissed.has(problemsId)) {
+    snapshot.chips.push({
+      id: problemsId,
+      kind: 'problems',
+      label: `${reported.count} problem${reported.count === 1 ? '' : 's'}`,
+    });
+    snapshot.texts.push(reported.text);
+  }
+
+  return snapshot;
 }

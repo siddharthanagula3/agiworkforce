@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { TerminalProvider, validateSuggestedCommand } from '../providers/terminalProvider';
+import {
+  TerminalProvider,
+  activateTerminal,
+  validateSuggestedCommand,
+} from '../providers/terminalProvider';
 import { chatCompletion } from '../utils/api';
 
 vi.mock('../utils/api', async (importOriginal) => {
@@ -305,4 +309,59 @@ describe('F19, the gate is wired to terminal.sendText, not just exported', () =>
     expect(await provider.suggestCommand('context', token())).toBeUndefined();
     expect(terminal.sendText).not.toHaveBeenCalled();
   });
+});
+
+describe('provider sign-in', () => {
+  function registerAndRun(argument: unknown): { sendText: ReturnType<typeof vi.fn> } {
+    const terminal = spyTerminal();
+    vscode.workspace.isTrusted = true;
+    const context = new vscode.ExtensionContext();
+    const registered = new Map<string, (...args: unknown[]) => unknown>();
+    vi.mocked(vscode.commands.registerCommand).mockImplementation(((
+      id: string,
+      handler: (...args: unknown[]) => unknown,
+    ) => {
+      registered.set(id, handler);
+      return { dispose: vi.fn() };
+    }) as never);
+
+    activateTerminal(context, context.secrets);
+    registered.get('agi-workforce.signInProvider')?.(argument);
+    return terminal;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('runs the CLI login for the provider the failure named, unquoted on a bare PATH name', () => {
+    const terminal = registerAndRun('deepseek');
+
+    expect(terminal.sendText).toHaveBeenCalledWith('agi login deepseek');
+  });
+
+  it('quotes a CLI path that needs it, and only then', () => {
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: vi.fn((key: string) => (key === 'cliPath' ? '/Applications/My Tools/agi' : undefined)),
+      update: vi.fn(),
+      has: vi.fn(),
+      inspect: vi.fn(() => ({ globalValue: '/Applications/My Tools/agi' })),
+    } as never);
+
+    const terminal = registerAndRun('deepseek');
+
+    expect(terminal.sendText).toHaveBeenCalledWith("'/Applications/My Tools/agi' login deepseek");
+  });
+
+  it.each(['deep seek; rm -rf /', '$(whoami)', '', 42])(
+    'refuses %p rather than letting it reach a shell',
+    (argument) => {
+      const terminal = registerAndRun(argument);
+
+      expect(terminal.sendText).not.toHaveBeenCalled();
+      expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+        'AGI Workforce: no provider was named, so there is nothing to sign in to.',
+      );
+    },
+  );
 });

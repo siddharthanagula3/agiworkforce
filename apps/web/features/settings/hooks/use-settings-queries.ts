@@ -7,7 +7,8 @@
 
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSignOut } from '@/lib/identity/client';
+import { signedOutRedirectUrl, useSignOut } from '@/lib/identity/client';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import {
   useQuery,
   useMutation,
@@ -420,6 +421,8 @@ function readDeleteAccountError(data: unknown, fallback: string): string {
  * run automatically on mutation success, because the UI shows a confirmation
  * dialog with a "Continue" button first, the caller decides when to sign out.
  */
+const SITE_HOME_PATH = '/';
+
 export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error, void> & {
   signOutAfterDeletion: () => Promise<void>;
 } {
@@ -453,18 +456,22 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
   });
 
   const signOutAfterDeletion = useCallback(async (): Promise<void> => {
+    // `signedOutRedirectUrl` is what decides where this lands: the marketing
+    // home in a browser, the sign-in route inside the desktop shell, which does
+    // not host the marketing site and would open it in a browser instead.
+    const destination = signedOutRedirectUrl(SITE_HOME_PATH, isDesktopHost());
     try {
       await logout();
-      await identitySignOut({ redirectUrl: '/' });
+      await identitySignOut({ redirectUrl: destination });
     } catch (err) {
       // The account is already deleted server-side by the time this runs
       // (it only fires after the mutation above succeeded), if
       // logout()/identitySignOut() fail here (e.g. a network blip), fall back
       // to a hard navigation instead of leaving the user stuck on a dead
-      // settings screen with no feedback and no way to reach '/'.
+      // settings screen with no feedback and no way out.
       console.warn('[useDeleteAccount] Post-deletion sign-out failed, forcing navigation:', err);
     } finally {
-      router.replace('/');
+      router.replace(destination ?? SITE_HOME_PATH);
     }
   }, [logout, identitySignOut, router]);
 

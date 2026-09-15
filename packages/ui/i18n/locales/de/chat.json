@@ -170,7 +170,32 @@
     "voiceStopRecording": "Aufnahme stoppen",
     "voiceStopping": "Sprachaktion wird gestoppt",
     "voiceTranscribing": "Sprache wird transkribiert",
-    "voiceUnsupported": "Spracheingabe nicht verfügbar"
+    "voiceUnsupported": "Spracheingabe nicht verfügbar",
+    "modeAgiWork": "AGI Work",
+    "modeChatTitle": "Chat: schnelle Fragen und Unterhaltung",
+    "modeAgiWorkTitle": "AGI Work: mehrstufige Aufgaben mit Tools, Dateien und prüfbaren Ergebnissen",
+    "style": "Stil",
+    "styleCustom": "Benutzerdefiniert",
+    "responseStyle": "Antwortstil",
+    "styles": {
+      "default": "Standard",
+      "concise": "Knapp",
+      "detailed": "Ausführlich",
+      "technical": "Technisch",
+      "creative": "Kreativ"
+    },
+    "styleDescs": {
+      "default": "Standard-Antwortstil",
+      "concise": "Kurz und direkt",
+      "detailed": "Gründlich mit Beispielen",
+      "technical": "Präzise mit Codebeispielen",
+      "creative": "Ausdrucksstark und fesselnd"
+    },
+    "addAttachmentsAndTools": "Anhänge und Tools hinzufügen",
+    "addAttachmentsAndToolsActive": "Anhänge und Tools hinzufügen: {{count}} aktiv",
+    "voiceStart": "Spracheingabe starten",
+    "voiceUnsupportedBrowser": "Spracheingabe wird in diesem Browser nicht unterstützt",
+    "voiceUnsupportedHint": "Spracheingabe wird in diesem Browser nicht unterstützt. Versuchen Sie Chrome oder Edge."
   },
   "bubble": {
     "assistantThinking": "Assistent denkt nach",
@@ -268,5 +293,13 @@
     "thinkingSimple": "Denke über Ihre Frage nach...",
     "workingOnGoal": "Ich arbeite daran... {{goal}}",
     "workingOnRequest": "Bearbeite Ihre Anfrage..."
+  },
+  "greeting": {
+    "morning": "Guten Morgen",
+    "afternoon": "Guten Tag",
+    "evening": "Guten Abend",
+    "morningNamed": "Guten Morgen, {{name}}",
+    "afternoonNamed": "Guten Tag, {{name}}",
+    "eveningNamed": "Guten Abend, {{name}}"
   }
 }

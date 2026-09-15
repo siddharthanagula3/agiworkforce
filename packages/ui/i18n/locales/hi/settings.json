@@ -74,5 +74,29 @@
     "searchLabel": "सेटिंग खोजें",
     "searchPlaceholder": "खोजें",
     "title": "सेटिंग"
+  },
+  "nav": {
+    "general": "सामान्य",
+    "account": "खाता",
+    "team": "टीम",
+    "privacy": "गोपनीयता",
+    "billing": "बिलिंग",
+    "usage": "उपयोग",
+    "capabilities": "क्षमताएं",
+    "security": "सुरक्षा",
+    "safety": "संरक्षा",
+    "notifications": "सूचनाएं",
+    "reflect": "Reflect",
+    "time-focus": "समय और फ़ोकस",
+    "help": "सहायता",
+    "skills": "स्किल",
+    "connectors": "कनेक्टर",
+    "plugins": "प्लगइन",
+    "memory": "मेमोरी",
+    "voice": "आवाज़",
+    "desktop": "सामान्य",
+    "groupSettings": "सेटिंग्स",
+    "groupCustomize": "कस्टमाइज़",
+    "groupDesktop": "डेस्कटॉप ऐप"
   }
 }

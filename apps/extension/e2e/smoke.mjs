@@ -26,6 +26,17 @@ if (screenshotDirectory) {
   console.log(`screenshot capture enabled: ${screenshotDirectory}`);
 }
 
+async function openDrawerGroup(page, label) {
+  await page.evaluate((rowLabel) => {
+    const row = [...document.querySelectorAll('.sp-drawer-row')].find(
+      (candidate) => candidate.querySelector('.sp-drawer-row-label')?.textContent === rowLabel,
+    );
+    if (!row) throw new Error(`drawer row ${rowLabel} was never built`);
+    row.click();
+  }, label);
+  await page.waitForTimeout(100);
+}
+
 async function captureScreenshot(page, filename, options = {}) {
   if (!screenshotDirectory) return;
   const outputPath = join(screenshotDirectory, filename);
@@ -304,7 +315,7 @@ try {
     await page.waitForTimeout(800);
 
     await page.click('#sp-history-btn');
-    await page.waitForSelector('#sp-drawer-history-search:not([hidden])');
+    await page.waitForSelector('#sp-recents:not([hidden])');
     await page.waitForTimeout(200);
     const ownerBoundary = await page.evaluate(async () => {
       const stored = await chrome.storage.local.get('agi_browser_conversations_v2');
@@ -618,7 +629,18 @@ try {
       () => new Promise((res) => chrome.storage.local.set({ agi_onboarding_completed: true }, res)),
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1000);
+    const bootPlaceholder = await page.getAttribute('#sp-input', 'placeholder');
+    if (bootPlaceholder === 'Type / for commands') {
+      fail('chat surface: composer placeholder showed the stale literal on boot');
+    }
+    await page
+      .waitForFunction(
+        () =>
+          document.getElementById('sp-cloud-gate-message')?.textContent !==
+          'Checking your AGI Cloud account…',
+        { timeout: 15000 },
+      )
+      .catch(() => fail('chat surface: account gate never left the checking state'));
 
     const visibleSecondaryChrome = await page.evaluate(() =>
       ['sp-auth-bar', 'sp-toolbar', 'sp-prompt-chips'].filter((id) => {
@@ -634,14 +656,18 @@ try {
       );
     }
     const emptyStateVisible = await page.evaluate(() =>
-      ['sp-empty-icon', 'sp-empty-headline', 'sp-empty-subtext'].every((id) => {
+      ['sp-empty-icon'].every((id) => {
         const element = document.getElementById(id);
         if (!element) return false;
         const style = getComputedStyle(element);
         return style.display !== 'none' && style.visibility !== 'hidden';
       }),
     );
-    if (!emptyStateVisible) fail('chat surface: branded empty-state orientation is not visible');
+    if (!emptyStateVisible) fail('chat surface: the empty-state glyph is not visible');
+    const composerPlaceholder = await page.getAttribute('#sp-input', 'placeholder');
+    if (composerPlaceholder !== 'Sign in to chat') {
+      fail(`chat surface: signed-out composer placeholder was "${composerPlaceholder}"`);
+    }
 
     const signedOutGate = await page.evaluate(() => {
       const gate = document.getElementById('sp-cloud-gate');
@@ -812,22 +838,39 @@ try {
 
     await page.click('#sp-history-btn');
     await page.waitForTimeout(300);
-    const historyDrawer = await page.evaluate(() => ({
-      drawerOpen: document.getElementById('sp-drawer')?.classList.contains('open') === true,
+    const recentsSheet = await page.evaluate(() => ({
+      sheetOpen: document.getElementById('sp-recents')?.hidden === false,
       historyOpen: !document.getElementById('sp-drawer-history-list')?.hasAttribute('hidden'),
-      title: document.getElementById('sp-drawer-title')?.textContent,
+      title: document.getElementById('sp-recents-title')?.textContent,
+      searchHidden: document.getElementById('sp-drawer-history-search')?.hidden === true,
       unfinishedActions: [
         document.getElementById('sp-drawer-console-btn'),
         document.getElementById('sp-drawer-open-desktop-btn'),
       ].filter(Boolean).length,
     }));
     if (
-      !historyDrawer.drawerOpen ||
-      !historyDrawer.historyOpen ||
-      historyDrawer.title !== 'AGI in Chrome' ||
-      historyDrawer.unfinishedActions !== 0
+      !recentsSheet.sheetOpen ||
+      !recentsSheet.historyOpen ||
+      recentsSheet.title !== 'Recent chats' ||
+      !recentsSheet.searchHidden ||
+      recentsSheet.unfinishedActions !== 0
     ) {
-      fail(`history drawer: unexpected public surface ${JSON.stringify(historyDrawer)}`);
+      fail(`recent chats: unexpected public surface ${JSON.stringify(recentsSheet)}`);
+    }
+    await page.click('#sp-recents-close');
+    await page.waitForTimeout(200);
+
+    await page.click('#sp-menu-btn');
+    const drawerMenuRows = await page.evaluate(() => ({
+      title: document.getElementById('sp-drawer-title')?.textContent,
+      rows: [...document.querySelectorAll('.sp-drawer-row-label')].map((row) => row.textContent),
+    }));
+    if (
+      drawerMenuRows.title !== 'Menu' ||
+      drawerMenuRows.rows.join('|') !==
+        'Chat|Automate|Projects|Artifacts|Tools|Desktop pairing|Settings'
+    ) {
+      fail(`drawer menu: unexpected rows ${JSON.stringify(drawerMenuRows)}`);
     }
     await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
     await page.waitForTimeout(200);
@@ -847,22 +890,32 @@ try {
     });
     if (!modelOpen) fail('model picker: selector button did not open the model dropdown');
     const signedOutModelLabel = await page
-      .locator('#sp-model-dropdown .provider-count-badge')
+      .locator('#sp-model-dropdown .sp-menu-note')
       .textContent();
     if (signedOutModelLabel !== 'Sign in for models') {
       fail(`model picker: expected an honest signed-out label, got "${signedOutModelLabel}"`);
     }
     await page.click('#sp-model-selector-btn');
 
-    const composerModes = await page.evaluate(() => ({
-      inertAutonomyControlPresent: Boolean(document.getElementById('sp-action-mode-toggle')),
-      quickModePresent: Boolean(document.getElementById('sp-quick-mode-toggle')),
-    }));
+    const composerModes = await page.evaluate(() => {
+      const input = document.getElementById('sp-input');
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return {
+        inertAutonomyControlPresent: Boolean(document.getElementById('sp-action-mode-toggle')),
+        quickModePresent: Boolean(document.getElementById('sp-quick-mode-toggle')),
+        sendHiddenWhenEmpty: document.getElementById('sp-send-btn')?.hidden === true,
+      };
+    });
+    if (!composerModes.sendHiddenWhenEmpty) {
+      fail('composer modes: the send button should stay hidden until there is something to send');
+    }
     if (composerModes.inertAutonomyControlPresent || !composerModes.quickModePresent) {
       fail(`composer modes: unexpected controls ${JSON.stringify(composerModes)}`);
     }
 
     await page.click('#sp-menu-btn');
+    await openDrawerGroup(page, 'Automate');
     await page.click('#sp-drawer-wf-btn');
     await page.locator('#sp-tab-workflows').focus();
     await page.keyboard.press('ArrowRight');
