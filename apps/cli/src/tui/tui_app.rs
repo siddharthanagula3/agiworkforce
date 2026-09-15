@@ -3339,7 +3339,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             let msg = format!(
                 "Version: {}\nModel: {}\nProvider: {}\nMode: {}\nSandbox: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
                 env!("CARGO_PKG_VERSION"),
-                app.session.model,
+                crate::model_catalog::display_name(&app.session.model),
                 app.provider_name,
                 app.mode.label(),
                 crate::sandbox::status_word(app.sandbox_type),
@@ -3855,7 +3855,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 cache_write_tokens: app.session.total_cache_creation_tokens,
                 estimated_cost_usd: app.session.cost_ledger.total_usd,
                 turn_count: app.session.turn_count,
-                model: app.session.model.clone(),
+                model: crate::model_catalog::display_name(&app.session.model),
                 account_lines: crate::usage_summary::account_lines_blocking(),
             };
             SlashResult::SystemMessage(render_usage(&usage))
