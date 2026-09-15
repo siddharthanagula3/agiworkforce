@@ -57,7 +57,8 @@ fn fallback_provider_for(
     model: &str,
 ) -> Option<crate::models::Provider> {
     if *current == crate::models::Provider::ManagedCloud
-        && crate::models::gateway_models::cached_model_is_available(model)
+        && (crate::models::gateway_models::cached_model_is_available(model)
+            || crate::tier_cache::plan_lists_model(model))
     {
         return Some(crate::models::Provider::ManagedCloud);
     }
