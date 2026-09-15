@@ -4780,8 +4780,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         navigate: (href) => router.push(href),
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
+        translate: (key, fallback) => t(`common:${key}`, { defaultValue: fallback }),
       }),
-    [hiddenNavIds, isWorkspaceAdmin, pathname, router],
+    [hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   const handleLogout = useCallback(async () => {
