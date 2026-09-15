@@ -253,12 +253,47 @@ export function localModelSetup(
   return localProviderSetups(runtime).find((setup) => setup.provider === provider) ?? null;
 }
 
-/** The model a session started here begins on: the first one it can run. */
+const TOP_QUALITY_TIER = 'best';
+
+function offeredCost(modelId: string): number {
+  const metadata = getModelMetadata(modelId);
+  if (!metadata) return 0;
+  return metadata.inputCost + metadata.outputCost;
+}
+
+function isTopTier(modelId: string): boolean {
+  return getModelMetadata(modelId)?.qualityTier === TOP_QUALITY_TIER;
+}
+
+/**
+ * The model a session started here begins on. A top-tier route is never the
+ * silent choice, so the folder's own history comes first, then the host's
+ * default while it is not top tier, then the cheapest route on offer. A model
+ * the catalog does not price is one this machine runs itself, and costs nothing
+ * to call.
+ */
 export function startingModelId(
   runtime: DeveloperRuntimeModels | null,
   sessions: readonly LocalDeveloperSession[],
 ): string | undefined {
-  return localModelChoices(runtime, sessions)[0]?.id;
+  const choices = localModelChoices(runtime, sessions);
+  if (choices.length === 0) return undefined;
+  const offered = new Set(choices.map((choice) => choice.id));
+
+  const lastUsed = [...sessions]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .find((session) => session.model !== null && offered.has(session.model))?.model;
+  if (lastUsed) return lastUsed;
+
+  const configured = runtime?.defaultModelId;
+  const vouchedFor = choices.some(
+    (choice) => choice.id === configured && choice.evidence !== 'configured',
+  );
+  if (configured && vouchedFor && !isTopTier(configured)) return configured;
+
+  return choices.reduce((cheapest, choice) =>
+    offeredCost(choice.id) < offeredCost(cheapest.id) ? choice : cheapest,
+  ).id;
 }
 
 export function newSessionLabel(folderName: string): string {
@@ -405,6 +440,50 @@ export function localApprovalPrompts(
 
 export function localGroupsHaveSessions(groups: readonly DeveloperSessionGroup[]): boolean {
   return groups.some((group) => group.sessions.length > 0);
+}
+
+export interface LocalFolderChoice {
+  rootId: string;
+  name: string;
+  branch: string | null;
+  unavailable: string | null;
+}
+
+export function localFolderChoices(groups: readonly DeveloperSessionGroup[]): LocalFolderChoice[] {
+  return groups.map((group) => ({
+    rootId: group.rootId,
+    name: group.name,
+    branch: group.branch,
+    unavailable: group.unavailable
+      ? `${group.unavailable.message} ${group.unavailable.hint}`
+      : null,
+  }));
+}
+
+export function localFolderChoice(
+  groups: readonly DeveloperSessionGroup[],
+  rootId: string | null,
+): LocalFolderChoice | null {
+  if (!rootId) return null;
+  return localFolderChoices(groups).find((choice) => choice.rootId === rootId) ?? null;
+}
+
+/**
+ * The folder a new session starts in: the one whose sessions were touched most
+ * recently, ignoring folders whose runtime cannot start one at all.
+ */
+export function preferredLocalRootId(groups: readonly DeveloperSessionGroup[]): string | null {
+  const ranked = groups
+    .filter((group) => group.unavailable === undefined)
+    .map((group) => ({
+      rootId: group.rootId,
+      at: group.sessions.reduce(
+        (latest, session) => (session.updatedAt > latest ? session.updatedAt : latest),
+        '',
+      ),
+    }))
+    .sort((a, b) => b.at.localeCompare(a.at));
+  return ranked[0]?.rootId ?? null;
 }
 
 /**

@@ -26,7 +26,7 @@ export interface LocalSessionsState {
   unavailable: string | null;
   refresh: () => void;
   addFolder: () => Promise<void>;
-  startSession: (rootId: string) => Promise<LocalDeveloperSession | null>;
+  startSession: (rootId: string, model?: string) => Promise<LocalDeveloperSession | null>;
   modelsFor: (rootId: string) => DeveloperRuntimeModels | null;
 }
 
@@ -126,12 +126,12 @@ export function useLocalSessions(): LocalSessionsState {
   }, [refresh]);
 
   const startSession = useCallback(
-    async (rootId: string) => {
+    async (rootId: string, model?: string) => {
       setError(null);
       const group = groups.find((candidate) => candidate.rootId === rootId);
-      const model = startingModelId(models[rootId] ?? null, group?.sessions ?? []);
+      const chosen = model ?? startingModelId(models[rootId] ?? null, group?.sessions ?? []);
       try {
-        const session = await startDeveloperSession(rootId, model);
+        const session = await startDeveloperSession(rootId, chosen);
         refresh();
         return session;
       } catch (cause: unknown) {
