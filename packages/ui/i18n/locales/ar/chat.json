@@ -288,5 +288,13 @@
     "thinkingSimple": "أفكر في سؤالك...",
     "workingOnGoal": "جارٍ العمل عليه... {{goal}}",
     "workingOnRequest": "جارٍ العمل على طلبك..."
+  },
+  "greeting": {
+    "morning": "صباح الخير",
+    "afternoon": "طاب يومك",
+    "evening": "مساء الخير",
+    "morningNamed": "صباح الخير يا {{name}}",
+    "afternoonNamed": "طاب يومك يا {{name}}",
+    "eveningNamed": "مساء الخير يا {{name}}"
   }
 }

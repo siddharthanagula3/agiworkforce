@@ -288,5 +288,13 @@
     "thinkingSimple": "正在思考你的问题...",
     "workingOnGoal": "正在处理...{{goal}}",
     "workingOnRequest": "正在处理你的请求..."
+  },
+  "greeting": {
+    "morning": "早上好",
+    "afternoon": "下午好",
+    "evening": "晚上好",
+    "morningNamed": "{{name}}，早上好",
+    "afternoonNamed": "{{name}}，下午好",
+    "eveningNamed": "{{name}}，晚上好"
   }
 }

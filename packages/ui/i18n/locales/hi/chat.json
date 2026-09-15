@@ -288,5 +288,13 @@
     "thinkingSimple": "आपके सवाल के बारे में सोच रहा है...",
     "workingOnGoal": "इस पर काम किया जा रहा है... {{goal}}",
     "workingOnRequest": "आपके अनुरोध पर काम किया जा रहा है..."
+  },
+  "greeting": {
+    "morning": "सुप्रभात",
+    "afternoon": "नमस्कार",
+    "evening": "शुभ संध्या",
+    "morningNamed": "सुप्रभात, {{name}}",
+    "afternoonNamed": "नमस्कार, {{name}}",
+    "eveningNamed": "शुभ संध्या, {{name}}"
   }
 }
