@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { setText, clearChildren, createElementWith, setChild } from '../src/dom-helpers';
+import {
+  setText,
+  clearChildren,
+  createElementWith,
+  setChild,
+  isDomSmallEnoughToRead,
+  MAX_DOM_ELEMENTS_FOR_EXTRACTION,
+} from '../src/dom-helpers';
 
 describe('dom-helpers', () => {
   let div: HTMLElement;
@@ -88,5 +95,25 @@ describe('dom-helpers', () => {
       expect(el.getAttribute('data-x')).toBe('1');
       expect(el.getAttribute('title')).toBe('hello');
     });
+  });
+});
+
+describe('isDomSmallEnoughToRead', () => {
+  it('accepts an ordinary document', () => {
+    document.body.replaceChildren();
+    expect(isDomSmallEnoughToRead()).toBe(true);
+  });
+
+  it('rejects a document past the element cap', () => {
+    const querySelectorAll = document.querySelectorAll.bind(document);
+    document.querySelectorAll = ((selector: string) =>
+      selector === '*'
+        ? ({ length: MAX_DOM_ELEMENTS_FOR_EXTRACTION + 1 } as unknown as NodeListOf<Element>)
+        : querySelectorAll(selector)) as typeof document.querySelectorAll;
+    try {
+      expect(isDomSmallEnoughToRead()).toBe(false);
+    } finally {
+      document.querySelectorAll = querySelectorAll;
+    }
   });
 });

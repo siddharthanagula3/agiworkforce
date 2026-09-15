@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { getChromeSurfaceAvailability } from '../src/features/side-panel/surface-policy';
+import {
+  getChromeSurfaceAvailability,
+  isRestrictedPageUrl,
+} from '../src/features/side-panel/surface-policy';
 
 const sidePanelSource = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),
@@ -45,7 +48,7 @@ describe('Chrome side-panel surface ownership', () => {
 
     expect(blockedStateSource).toContain("if (blocked) {\n    blockedEl.classList.add('visible')");
     expect(sidePanelSource).toContain("role: 'status'");
-    expect(sidePanelSource).toContain('AGI cannot read or automate browser-internal pages.');
+    expect(sidePanelSource).toContain('Chrome does not let extensions read or automate this page.');
   });
 
   it('cancels active cloud work before owner, new-chat, and current-delete transitions', () => {
@@ -59,5 +62,37 @@ describe('Chrome side-panel surface ownership', () => {
       sidePanelSource.indexOf('const streamId = beginManagedStream(_ctx.quickMode)', branchStart),
     ).toBeLessThan(sidePanelSource.indexOf('capturePageContext()', branchStart));
     expect(sidePanelSource).not.toContain('stream-${Date.now()}');
+  });
+});
+
+describe('isRestrictedPageUrl', () => {
+  it('flags every page Chrome refuses to let extensions read', () => {
+    for (const url of [
+      'chrome://version',
+      'chrome://newtab/',
+      'chrome-extension://abc/src/side_panel.html',
+      'chrome-untrusted://new-tab-page/',
+      'devtools://devtools/bundled/inspector.html',
+      'edge://settings',
+      'about:blank',
+      'view-source:https://example.com/',
+      'file:///Users/me/report.html',
+      'data:text/html,hi',
+      'https://chromewebstore.google.com/detail/agi/abcdefghijklmnop',
+      'https://chrome.google.com/webstore/detail/agi/abcdefghijklmnop',
+    ]) {
+      expect(isRestrictedPageUrl(url), url).toBe(true);
+    }
+  });
+
+  it('leaves ordinary sites, an empty url and the web app alone', () => {
+    for (const url of [
+      '',
+      'https://example.com/article',
+      'http://localhost:3000/',
+      'https://agiworkforce.com/chat',
+    ]) {
+      expect(isRestrictedPageUrl(url), url).toBe(false);
+    }
   });
 });

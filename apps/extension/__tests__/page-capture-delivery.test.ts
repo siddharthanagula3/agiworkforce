@@ -68,7 +68,7 @@ describe('capture_page only counts a capture the desktop actually received', () 
     const background = readFileSync(resolve(here, '..', 'src/background.ts'), 'utf8');
     const captureFn = background.slice(
       background.indexOf('async function captureCurrentPage('),
-      background.indexOf('const MAX_PROBE_RESPONSE_BYTES'),
+      background.indexOf('async function handleChatMessage('),
     );
 
     expect(captureFn).toContain('deliverPageCapture(');
@@ -94,11 +94,35 @@ describe('page context is never silently missing', () => {
     expect(capture).toContain('describePageContextFailure(scriptFailure)');
   });
 
-  it('names a denied executeScript as a site-approval problem the user can fix', () => {
+  it('names a denied executeScript as a page Chrome blocks, not as a site-approval problem', () => {
     expect(sidePanel).toMatch(
       /function describePageContextFailure[\s\S]*cannot access[\s\S]*host permission[\s\S]*PAGE_CONTEXT_DENIED_REASON/,
     );
     expect(sidePanel).toContain('Approve this site under Settings, Site');
+    expect(sidePanel).not.toContain('Add this site under Approved sites');
+  });
+
+  it('sends a page Chrome blocks outright to different copy than a page awaiting site approval', () => {
+    expect(sidePanel).toContain('PAGE_CONTEXT_BLOCKED_REASON');
+    expect(sidePanel).toContain('does not let extensions read this page at all');
+    const routing = sidePanel.slice(
+      sidePanel.indexOf('function describePageContextFailure'),
+      sidePanel.indexOf('}', sidePanel.indexOf('return `The page could not be read')),
+    );
+    expect(routing.indexOf('PAGE_CONTEXT_BLOCKED_REASON')).toBeLessThan(
+      routing.indexOf('PAGE_CONTEXT_DENIED_REASON'),
+    );
+  });
+
+  it('refuses a page-scoped command whose capture came from a different page than the one it was issued on', () => {
+    const start = sidePanel.indexOf('if (slashCmd?.captureContext)');
+    const end = sidePanel.indexOf('const history = selectModelHistory', start);
+    const slashSend = sidePanel.slice(start, end);
+    expect(slashSend).toContain('const pageAtAdmission = activePageSource');
+    expect(slashSend).toMatch(
+      /pageContextStillDescribes\(pageAtAdmission, capture\.source\.tabId, capture\.source\.url\)/,
+    );
+    expect(slashSend).toContain('PAGE_CONTEXT_CHANGED_REASON');
   });
 
   it('refuses a context-requiring slash command rather than answering about nothing', () => {

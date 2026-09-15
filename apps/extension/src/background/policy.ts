@@ -62,11 +62,6 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   WEBMCP_DISCOVER_TOOLS: { senderClass: 'extension-page-only', allowsCrossTab: true },
   WEBMCP_CALL_TOOL: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_CLOUD_AUTH_TOKEN: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  GET_ALL_TABS: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  CREATE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  CLOSE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  SWITCH_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
-  SET_COOKIE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   SYNC_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -92,8 +87,6 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   GET_ACCESSIBILITY_TREE: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   OPEN_SIDE_PANEL: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   IN_PAGE_PROMPT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
-  NLWEB_PROBE: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
-  NLWEB_DETECTED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   WEBMCP_TOOLS_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   START_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
@@ -180,7 +173,6 @@ export const MAX_CONTEXT_HTML_CHARS = 100_000;
 
 export const MAX_JSON_LD_BYTES = 256 * 1024;
 export const MAX_WEBMCP_SCHEMA_BYTES = 64 * 1024;
-export const MAX_NLWEB_PROBE_BYTES = 256 * 1024;
 export const MAX_WEBMCP_TOOLS = 64;
 const MAX_WEBMCP_TOOL_NAME_CHARS = 64;
 const MAX_WEBMCP_TOOL_DESCRIPTION_CHARS = 500;
@@ -377,10 +369,12 @@ export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): 
   return true;
 }
 
+// Every origin here must also appear in the manifest's `connect-src`, which is
+// fixed at package time: an origin this accepts but the CSP blocks fails as an
+// unexplained network error inside a run.
 export const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>([
   'https://api.agiworkforce.com',
   'https://gateway.agiworkforce.com',
-  'https://staging-api.agiworkforce.com',
   'https://agiworkforce.com',
 ]);
 
