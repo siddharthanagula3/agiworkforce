@@ -485,21 +485,11 @@ fn load_skill_in_package(path: &Path, package_dir: Option<&Path>) -> Result<Skil
 /// Identifier for the hashing scheme recorded in `skills-lock.json`.
 pub const SKILL_HASH_ALGORITHM: &str = "agiskill-sha256-v1";
 
-fn to_hex(bytes: &[u8]) -> String {
-    use std::fmt::Write;
-    bytes
-        .iter()
-        .fold(String::with_capacity(64), |mut acc, byte| {
-            let _ = write!(acc, "{byte:02x}");
-            acc
-        })
-}
-
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    to_hex(&hasher.finalize())
+    crate::hex::encode(&hasher.finalize())
 }
 
 /// `sha256:<hex>` over raw SKILL.md bytes.
@@ -550,7 +540,10 @@ pub fn compute_skill_tree_hash(package_dir: &Path) -> Result<String> {
         digest.update(sha256_hex(&bytes).as_bytes());
         digest.update(b"\n");
     }
-    Ok(format!("sha256-tree-v1:{}", to_hex(&digest.finalize())))
+    Ok(format!(
+        "sha256-tree-v1:{}",
+        crate::hex::encode(&digest.finalize())
+    ))
 }
 
 // ---------------------------------------------------------------------------

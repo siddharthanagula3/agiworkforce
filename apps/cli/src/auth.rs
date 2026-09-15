@@ -204,7 +204,7 @@ pub fn credential_storage_label() -> &'static str {
 
 fn auth_keyring_account(provider: &str) -> String {
     let digest = Sha256::digest(provider.as_bytes());
-    format!("provider:{digest:x}")
+    format!("provider:{}", crate::hex::encode(&digest))
 }
 
 fn auth_keyring_entry(provider: &str) -> Result<keyring::Entry> {
@@ -260,7 +260,7 @@ fn save_keyring_auth(path: &Path, store: &AuthStore) -> Result<()> {
     }
 
     for provider in previous_providers.difference(&current_providers) {
-        match auth_keyring_entry(provider)?.delete_password() {
+        match auth_keyring_entry(provider)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => {}
             Err(error) => {
                 return Err(error)

@@ -33,6 +33,6 @@ tempfile = "3.23.0"
 dirs = "6"
 path-absolutize = "4.0.1"
 dunce = "1.0.4"
-schemars = "1.2.0"
-ts-rs = { version = "12", features = ["uuid-impl"] }
+schemars = "0.8.22"
+ts-rs = { version = "11", features = ["uuid-impl"] }
 regex-lite = "0.1.8"

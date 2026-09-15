@@ -428,7 +428,7 @@ impl CliConfig {
         h.update(name.as_bytes());
         h.update(b"|");
         h.update(base_url.as_bytes());
-        format!("{:x}", h.finalize())
+        crate::hex::encode(&h.finalize())
     }
 
     fn record_trusted_provider_fingerprint(fp: &str) {

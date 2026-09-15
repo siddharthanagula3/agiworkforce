@@ -27,6 +27,7 @@ pub mod daemon;
 pub mod design_system;
 pub mod doctor;
 pub mod errors;
+pub mod hex;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
 // using `crate::hooks::*` continue to resolve unchanged.
 pub use features::hooks::hooks;

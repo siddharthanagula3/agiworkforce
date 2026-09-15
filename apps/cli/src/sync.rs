@@ -169,7 +169,7 @@ impl ConfigSync {
     fn sha256_hex(data: &[u8]) -> String {
         let mut hasher = Sha256::new();
         hasher.update(data);
-        format!("{:x}", hasher.finalize())
+        crate::hex::encode(&hasher.finalize())
     }
 
     // ----- Public API -----
