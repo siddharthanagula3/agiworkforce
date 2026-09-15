@@ -148,9 +148,13 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
 /// full output, capped to one line of <=80 chars.
 fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
     let raw = crate::runtime::tool_catalog::tool_status_line(name, |key| {
-        args.get(key)
-            .and_then(|value| value.as_str())
-            .map(str::to_string)
+        args.get(key).and_then(|value| value.as_str()).map(|value| {
+            if key == "path" {
+                crate::path_security::display_path(std::path::Path::new(value))
+            } else {
+                value.to_string()
+            }
+        })
     })
     .unwrap_or_default();
     let one_line = raw.replace('\n', " ");

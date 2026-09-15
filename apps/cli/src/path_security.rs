@@ -671,3 +671,15 @@ mod agent_instruction_denylist_tests {
         );
     }
 }
+
+/// The path as the user reads it: relative to the working directory when the
+/// file is inside it, so an approval card or an activity row does not spend
+/// its width on the workspace's own prefix.
+pub fn display_path(path: &Path) -> String {
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| path.strip_prefix(&cwd).ok())
+        .filter(|relative| !relative.as_os_str().is_empty())
+        .map(|relative| relative.display().to_string())
+        .unwrap_or_else(|| path.display().to_string())
+}
