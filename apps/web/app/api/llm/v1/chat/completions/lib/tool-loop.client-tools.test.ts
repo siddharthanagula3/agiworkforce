@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
@@ -135,8 +136,12 @@ describe('tool loop · tools the caller declared', () => {
       toolCallStream('write_file', { path: 'hello.txt', content: 'hello' }),
     );
 
+    const usage = createObservedProviderUsage();
+    usage.providerCalls = 1;
+    usage.inputTokens = 598;
+    usage.outputTokens = 23;
     const output = await collect(
-      runToolLoop(makeProcessed([CALLER_WRITE_FILE]), { approvalMode: 'manual' }),
+      runToolLoop(makeProcessed([CALLER_WRITE_FILE]), { approvalMode: 'manual', usage }),
     );
 
     const chunk = handoffChunk(output);
@@ -153,6 +158,9 @@ describe('tool loop · tools the caller declared', () => {
     expect(output).not.toContain('x_tool_approval_request');
     expect(output).toContain('"reason":"tool-use"');
     expect(output.trim().endsWith('data: [DONE]')).toBe(true);
+    expect(output).toContain(
+      '"usage":{"prompt_tokens":598,"completion_tokens":23,"total_tokens":621}',
+    );
     expect(provider.stream).toHaveBeenCalledTimes(1);
     expect(e2b.getE2BExecutor).not.toHaveBeenCalled();
   });

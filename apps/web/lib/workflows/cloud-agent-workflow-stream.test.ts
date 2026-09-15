@@ -147,6 +147,20 @@ describe('cloud agent workflow stream projection', () => {
     expect(projected[1]?.envelope).toEqual(envelope);
   });
 
+  it('forwards the usage frame, which carries no choice', () => {
+    const line = `data: ${JSON.stringify({
+      choices: [],
+      usage: { prompt_tokens: 598, completion_tokens: 23, total_tokens: 621 },
+      model: 'fixture-model',
+    })}`;
+
+    const projected = projectCloudAgentWorkflowChunk(new TextEncoder().encode(`${line}\n\n`));
+
+    expect(projected).toHaveLength(1);
+    expect(projected[0]?.sse).toBe(`${line}\n\n`);
+    expect(projected[0]?.envelope).toBeUndefined();
+  });
+
   it('drops a content delta that carries no other forwardable key', () => {
     const chunk = new TextEncoder().encode(
       `data: ${JSON.stringify({ choices: [{ delta: { content: 'partial token' } }] })}\n\n`,
