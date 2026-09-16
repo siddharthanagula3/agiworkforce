@@ -196,10 +196,13 @@ export const useChatStore = create<ChatState>()(
 
       addMessage: (conversationId, message) =>
         set((state) => {
-          if (!state.messagesByConversation[conversationId]) {
-            state.messagesByConversation[conversationId] = [];
+          const msgs = (state.messagesByConversation[conversationId] ??= []);
+          const idx = msgs.findIndex((m) => m.id === message.id);
+          if (idx === -1) {
+            msgs.push(message);
+            return;
           }
-          state.messagesByConversation[conversationId]!.push(message);
+          msgs[idx] = { ...message, createdAt: msgs[idx]!.createdAt };
         }),
 
       updateMessage: (conversationId, messageId, updates) =>
