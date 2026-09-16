@@ -210,7 +210,7 @@ export type {
   ModelAccessDecision,
   ModelAccessPolicy,
 } from './model-policy';
-export { assessModelSwitchCache } from './model-switch-cache';
+export { assessModelSwitchCache, priorTurnsHoldCache } from './model-switch-cache';
 export type { ModelSwitchCacheAssessment, ModelSwitchCacheInput } from './model-switch-cache';
 export {
   classifyTaskFamily,

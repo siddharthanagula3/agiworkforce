@@ -1,4 +1,3 @@
-
 export interface ModelSwitchCacheInput {
   priorModelId: string | null | undefined;
   nextModelId: string;
@@ -21,11 +20,18 @@ const NO_WARN = (reason: ModelSwitchCacheAssessment['reason']): ModelSwitchCache
   message: '',
 });
 
+export function priorTurnsHoldCache(
+  priorTurnCount: number,
+  priorModelId: ModelSwitchCacheInput['priorModelId'],
+): boolean {
+  return priorTurnCount > 0 && Boolean(priorModelId);
+}
+
 export function assessModelSwitchCache(input: ModelSwitchCacheInput): ModelSwitchCacheAssessment {
   const { priorModelId, nextModelId, priorTurnCount } = input;
 
   if (priorTurnCount <= 0) return NO_WARN('no-prior-turns');
-  if (!priorModelId) return NO_WARN('no-prior-model');
+  if (!priorTurnsHoldCache(priorTurnCount, priorModelId)) return NO_WARN('no-prior-model');
   if (priorModelId === nextModelId) return NO_WARN('same-model');
 
   const from = input.priorModelLabel || priorModelId;
