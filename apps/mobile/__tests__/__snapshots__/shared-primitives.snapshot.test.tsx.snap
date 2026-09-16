@@ -207,14 +207,14 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       }
     >
       <View
-        color="rgba(244, 244, 244, 0.48)"
+        color="rgba(244, 244, 244, 0.56)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -234,7 +234,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -542,14 +542,14 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       }
     >
       <View
-        color="rgba(244, 244, 244, 0.48)"
+        color="rgba(244, 244, 244, 0.56)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -569,7 +569,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -877,14 +877,14 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       }
     >
       <View
-        color="rgba(244, 244, 244, 0.48)"
+        color="rgba(244, 244, 244, 0.56)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -904,7 +904,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -924,7 +924,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -944,7 +944,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
