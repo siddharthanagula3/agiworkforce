@@ -2,19 +2,15 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getLocales } from 'expo-localization';
 import { I18nManager } from 'react-native';
-import { mmkvStorage } from '@/lib/mmkv';
 import {
   DEFAULT_LANGUAGE,
   SUPPORTED_LANGUAGES,
   baseInitOptions,
   isSelectableLanguage,
-  isSupportedLanguage,
   languageFor,
 } from '@agiworkforce/i18n';
 
 export { SUPPORTED_LANGUAGES };
-export const LANGUAGE_STORAGE_KEY = 'agiworkforce-language';
-export const DEVICE_LANGUAGE_PREFERENCE = 'device';
 
 export interface LanguageChangeResult {
   language: string;
@@ -39,43 +35,10 @@ void i18n.use(initReactI18next).init({
   react: { useSuspense: false },
 });
 
-export async function restoreStoredLanguage(): Promise<LanguageChangeResult> {
-  const preference = await readStoredLanguagePreference();
-  const language = preference === DEVICE_LANGUAGE_PREFERENCE ? getDeviceLanguage() : preference;
+export async function syncDeviceLanguage(): Promise<LanguageChangeResult> {
+  const language = getDeviceLanguage();
   if (language !== i18n.language) await i18n.changeLanguage(language);
-  return {
-    language,
-    directionChanged: applyLayoutDirection(language),
-  };
-}
-
-export async function readStoredLanguagePreference(): Promise<string> {
-  try {
-    const stored = await mmkvStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (stored === DEVICE_LANGUAGE_PREFERENCE || isSupportedLanguage(stored)) return stored;
-  } catch {
-    // A failed preference read falls back to the device without blocking UI.
-  }
-  return DEVICE_LANGUAGE_PREFERENCE;
-}
-
-export async function setLanguage(code: string): Promise<LanguageChangeResult | null> {
-  const language =
-    code === DEVICE_LANGUAGE_PREFERENCE
-      ? getDeviceLanguage()
-      : isSupportedLanguage(code)
-        ? code
-        : undefined;
-  if (!language) return null;
-
-  await i18n.changeLanguage(language);
-  const directionChanged = applyLayoutDirection(language);
-  try {
-    await mmkvStorage.setItem(LANGUAGE_STORAGE_KEY, code);
-  } catch {
-    // The language still changed for this session; only persistence failed.
-  }
-  return { language, directionChanged };
+  return { language, directionChanged: applyLayoutDirection(language) };
 }
 
 export function isRtl(code: string = i18n.language): boolean {

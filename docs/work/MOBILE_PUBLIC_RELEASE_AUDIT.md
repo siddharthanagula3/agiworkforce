@@ -219,7 +219,7 @@ T = Jest, CI = Detox smoke on the simulator.
 | `notifications/index`, `profile`    | ✓   | ✓       | drawer                         | arrow+fb                   | n/a     | ✓       | n/a     | n/a               | ✓                          | R                |
 | `settings/*` (32 screens)           | ✓   | ✓       | settings root                  | shell                      | mostly  | partial | mostly  | local ✓ / cloud ✗ | 24 radios as buttons       | R,T (snapshots)  |
 | `settings/permissions/[permission]` | ✓   | ✓       | permissions                    | shell                      | ✗       | n/a     | ✓       | n/a               | **state is fiction** (011) | R,T              |
-| `settings/app-language`             | ✓   | ✓       | general                        | shell                      | saving  | ✓       | ✗       | ✓                 | ✓ radio                    | R,T (picker)     |
+| `settings/app-language` (removed)   | -   | -       | -                              | -                          | -       | -       | -       | -                 | picker removed 2026-09-15  | - (picker)       |
 | `settings/performance`              | ✓   | ✓       | settings                       | shell                      | ✓       | ✗       | ✓       | ✓                 | fixed 48pt                 | R (dead toggles) |
 | `models`, `compare`                 | ✓   | ✓       | chat, drawer                   | arrow                      | ✓       | ✗       | ✓       | ✗                 | raw hex on compare         | R,T              |
 | `voice` (companion)                 | ✓   | ✓       | long-press mic, intent         | arrow, 54pt                | ✓       | n/a     | silent  | ✗                 | ✓                          | R,T              |
@@ -500,16 +500,14 @@ Root Cause: Verified.
 Recommended Correction: remove the implicit trigger; expose `downloadSystemModel()` as its own method called from `prepareModel` behind the shared network gate, emitting progress.
 Verification: device only; unit-assert the trigger is gone from `getCapabilities`.
 
-### MOBILE-015 The language picker offers 12 languages and localises six strings
+### MOBILE-015 Mobile strings do not go through the shared catalogue
 
-Severity: P1 | Platform: Both | Area: i18n | Route: `settings/app-language`, every screen | `src/i18n/index.ts:33-40`, `src/features/settings/app-language/index.tsx:56-134`
-Evidence: i18next is initialised with 12 locales and RTL support, and a direction change reloads the app; `useTranslation` or `t(` appears in three files (settings general, app-language, root layout). Every chat, settings, alert and error string is an English literal, and chat layouts use physical `paddingLeft` rather than logical edges.
-Expected: a localised app, or no picker.
-Actual: selecting Arabic mirrors the layout and reloads; everything stays English.
-Root Cause: Verified.
-Update, main `50925e17` (2026-09-15): the shared catalogue now exports a selectable set of English and Spanish only, the web control lists that set, and mobile's `getDeviceLanguage` falls back to English outside it. The mobile picker was not moved: `settings/app-language/index.tsx:37-38` still builds its list from `SUPPORTED_LANGUAGES`, so the screen keeps offering all twelve including RTL Arabic while every other surface offers two. That narrows the finding to one inconsistency with an obvious fix.
-Recommended Correction: have the mobile picker read the selectable set the shared catalogue already exports, matching web; then migrate strings through the shared shells before widening it again. Add a guard counting `t(` adoption against offered locales.
-Verification: `app-language-settings.test.tsx` extended.
+Severity: P2 | Platform: Both | Area: i18n | Route: every screen | `src/i18n/index.ts`, `src/features/settings/general/index.tsx`
+Evidence: `useTranslation` or `t(` appears in two files (settings general, root layout). Every chat, settings, alert and error string is an English literal, so a Spanish device gets Spanish for those two files and English everywhere else.
+Expected: a localised app, or no way to be told it is one.
+Update, main (2026-09-15): the in-app language picker is removed. The app follows the device language within the selectable set the shared catalogue exports (English and Spanish, D-2026-09-15-03), falls back to English outside it, and no longer stores a language preference; a layout an earlier build forced right-to-left is returned to left-to-right once on launch. This is the state ChatGPT and Claude ship on mobile, where the app language is the device language. What remains is the catalogue gap itself.
+Recommended Correction: migrate strings through the shared shells and add a guard counting `t(` adoption per screen; reintroduce a picker only when a second language is complete on mobile.
+Verification: `mobile-i18n.test.ts` covers the device-language rule and the direction reset.
 
 ### MOBILE-016 No store screenshots exist
 
@@ -810,7 +808,7 @@ Recommended Correction: `minHeight`, allow two lines.
 ### MOBILE-066 Thirteen modals lack `accessibilityViewIsModal`; 24 single-choice rows announce as buttons
 
 Severity: P3 | Platform: Both
-Recommended Correction: follow `AddMemorySheet.tsx:105` and `app-language/index.tsx:164-166`.
+Recommended Correction: follow `AddMemorySheet.tsx:105`, and give each single-choice row `accessibilityRole="radio"` with `accessibilityState={{ checked }}`.
 
 ### MOBILE-067 `AddMemorySheet` actions sit in the home-indicator area
 
