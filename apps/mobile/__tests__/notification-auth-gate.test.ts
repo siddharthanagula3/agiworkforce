@@ -100,7 +100,7 @@ function fireNotification(
 }
 
 describe('handleNotificationResponse, auth gate', () => {
-  it('routes to /(auth)/login when no session is set', () => {
+  it('opens Local Mode, not the sign-in wall, when no session is set', () => {
     setCurrentSession(null);
     fireNotification({ type: 'task_completed', route: '/(app)/companion' });
     jest.useFakeTimers();
@@ -108,10 +108,10 @@ describe('handleNotificationResponse, auth gate', () => {
     jest.useRealTimers();
     expect(mockRouterPush).toHaveBeenCalled();
     const lastCall = mockRouterPush.mock.calls[mockRouterPush.mock.calls.length - 1];
-    expect(lastCall![0]).toEqual({ pathname: '/(auth)/login' });
+    expect(lastCall![0]).toEqual({ pathname: '/(app)' });
   });
 
-  it('routes to /(auth)/login when session is explicitly cleared after sign-out', () => {
+  it('opens Local Mode when the session is explicitly cleared after sign-out', () => {
     setCurrentSession({
       access_token: 't',
       refresh_token: 'r',
@@ -124,7 +124,8 @@ describe('handleNotificationResponse, auth gate', () => {
     } as any);
     setCurrentSession(null);
     fireNotification({ type: 'agent_failed', agentId: 'agent-1' });
-    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(auth)/login' });
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)' });
+    expect(mockRouterPush).not.toHaveBeenCalledWith({ pathname: '/(auth)/login' });
   });
 
   it('routes to /(app)/* when a session is present', () => {

@@ -1,13 +1,7 @@
-import {
-  View,
-  Pressable,
-  useWindowDimensions,
-  Alert,
-  ActionSheetIOS,
-  Platform,
-} from 'react-native';
+import { View, Pressable, useWindowDimensions, Alert, Modal, Platform } from 'react-native';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
   Clock,
@@ -82,6 +76,105 @@ import {
 } from '@/src/features/chat/utils/generatedFileArtifacts';
 
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
+
+interface MessageAction {
+  key: string;
+  label: string;
+  destructive?: boolean;
+  run: () => void;
+}
+
+function MessageActionSheet({
+  visible,
+  actions,
+  onSelect,
+  onClose,
+  onDismissed,
+}: {
+  visible: boolean;
+  actions: MessageAction[];
+  onSelect: (action: MessageAction) => void;
+  onClose: () => void;
+  onDismissed: () => void;
+}) {
+  const colors = useThemeColors();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      onDismiss={onDismissed}
+      accessibilityViewIsModal
+    >
+      <Pressable
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
+        onPress={onClose}
+        accessibilityLabel="Dismiss message actions"
+        accessibilityRole="button"
+        accessible={false}
+      >
+        <SafeAreaView edges={['bottom']} style={{ width: '100%' }}>
+          <Pressable
+            style={{
+              backgroundColor: colors.surfaceElevated,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingTop: 8,
+              paddingBottom: 8,
+            }}
+            onPress={() => undefined}
+            accessible={false}
+          >
+            {actions.map((action, index) => (
+              <Pressable
+                key={action.key}
+                testID={`message-action-${action.key}`}
+                onPress={() => onSelect(action)}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                style={{
+                  minHeight: 52,
+                  justifyContent: 'center',
+                  paddingHorizontal: 20,
+                  borderBottomWidth: index < actions.length - 1 ? 1 : 0,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: action.destructive ? colors.agentError : colors.textPrimary,
+                  }}
+                >
+                  {action.label}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable
+              testID="message-action-cancel"
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+              style={{
+                minHeight: 52,
+                justifyContent: 'center',
+                paddingHorizontal: 20,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textSecondary }}>
+                Cancel
+              </Text>
+            </Pressable>
+          </Pressable>
+        </SafeAreaView>
+      </Pressable>
+    </Modal>
+  );
+}
 
 const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
 
@@ -226,6 +319,14 @@ export const MessageBubble = memo(function MessageBubble({
   const themeColors = useThemeColors();
 
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const handleStopImageGeneration = useCallback(() => {
+    useChatMessageStore.getState().stopImageGeneration(message.conversationId, message.id);
+  }, [message.conversationId, message.id]);
+
+  const handleRetryGeneration = useCallback(() => {
+    onRetryMessage?.(message.id);
+  }, [onRetryMessage, message.id]);
+
   const handleStopVideoGeneration = useCallback(() => {
     void useChatMessageStore.getState().stopVideoGeneration(message.conversationId, message.id);
   }, [message.conversationId, message.id]);
@@ -315,6 +416,9 @@ export const MessageBubble = memo(function MessageBubble({
     setFullScreenImageUrl(null);
   }, [setFullScreenImageUrl]);
 
+  const [actionsVisible, setActionsVisible] = useRecyclingState(false, [message.id]);
+  const pendingActionRef = useRef<(() => void) | null>(null);
+
   const [isSpeaking, setIsSpeaking] = useRecyclingState(false, [message.id]);
 
   const handleToggleReadAloud = useCallback(() => {
@@ -393,90 +497,86 @@ export const MessageBubble = memo(function MessageBubble({
     setEditModalVisible(false);
   }, [editText, message.id, onEditMessage, setEditModalVisible]);
 
-  const handleLongPress = useCallback(() => {
-    const exportOption = isAssistant && message.content.trim() ? ['Export Message...'] : [];
-    const deleteOption = onDeleteMessage ? ['Delete Message'] : [];
-
-    let options: string[];
-    let cancelIndex: number;
-    let destructiveIndex: number;
-
-    if (isUser) {
-      const editOption = onEditMessage ? ['Edit Message'] : [];
-      options = [...editOption, 'Copy Message', ...deleteOption, 'Cancel'];
-      cancelIndex = options.length - 1;
-      destructiveIndex = onDeleteMessage ? options.indexOf('Delete Message') : -1;
-    } else {
-      const retryOption = onRetryMessage ? ['Retry'] : [];
-      options = [...retryOption, 'Copy Message', ...exportOption, ...deleteOption, 'Cancel'];
-      cancelIndex = options.length - 1;
-      destructiveIndex = onDeleteMessage ? options.indexOf('Delete Message') : -1;
-    }
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
+  const confirmDeleteMessage = useCallback(() => {
+    if (!onDeleteMessage) return;
+    Alert.alert(
+      'Delete message?',
+      'This message is removed from this conversation. It cannot be recovered.',
+      [
+        { text: 'Cancel', style: 'cancel' },
         {
-          options,
-          cancelButtonIndex: cancelIndex,
-          destructiveButtonIndex: destructiveIndex >= 0 ? destructiveIndex : undefined,
-        },
-        (buttonIndex) => {
-          const action = options[buttonIndex];
-          if (action === 'Copy Message') {
-            copyToClipboard(message.content);
-          } else if (action === 'Export Message...') {
-            handleShowExport();
-          } else if (action === 'Delete Message') {
-            onDeleteMessage?.(message.id);
-          } else if (action === 'Retry') {
-            onRetryMessage?.(message.id);
-          } else if (action === 'Edit Message') {
-            handleOpenEditModal();
-          }
-        },
-      );
-    } else {
-      const androidActions: Array<{
-        text: string;
-        style?: 'destructive' | 'cancel';
-        onPress?: () => void;
-      }> = [];
-
-      if (isUser && onEditMessage) {
-        androidActions.push({ text: 'Edit Message', onPress: handleOpenEditModal });
-      }
-      if (!isUser && onRetryMessage) {
-        androidActions.push({ text: 'Retry', onPress: () => onRetryMessage(message.id) });
-      }
-      androidActions.push({
-        text: 'Copy Message',
-        onPress: () => copyToClipboard(message.content),
-      });
-      if (isAssistant && message.content.trim()) {
-        androidActions.push({ text: 'Export Message...', onPress: handleShowExport });
-      }
-      if (onDeleteMessage) {
-        androidActions.push({
-          text: 'Delete Message',
-          style: 'destructive' as const,
+          text: 'Delete',
+          style: 'destructive',
           onPress: () => onDeleteMessage(message.id),
-        });
-      }
-      androidActions.push({ text: 'Cancel', style: 'cancel' as const });
+        },
+      ],
+    );
+  }, [onDeleteMessage, message.id]);
 
-      Alert.alert('Message Actions', undefined, androidActions);
+  const messageActions = useMemo<MessageAction[]>(() => {
+    const actions: MessageAction[] = [];
+    if (isUser && onEditMessage) {
+      actions.push({ key: 'edit', label: 'Edit Message', run: handleOpenEditModal });
     }
+    if (!isUser && onRetryMessage) {
+      actions.push({ key: 'retry', label: 'Retry', run: () => onRetryMessage(message.id) });
+    }
+    actions.push({
+      key: 'copy',
+      label: 'Copy Message',
+      run: () => void copyToClipboard(message.content),
+    });
+    if (isAssistant && message.content.trim()) {
+      actions.push({ key: 'export', label: 'Export Message\u2026', run: handleShowExport });
+    }
+    if (onDeleteMessage) {
+      actions.push({
+        key: 'delete',
+        label: 'Delete Message',
+        destructive: true,
+        run: confirmDeleteMessage,
+      });
+    }
+    return actions;
   }, [
-    message.id,
-    message.content,
     isUser,
     isAssistant,
-    onDeleteMessage,
-    onRetryMessage,
+    message.id,
+    message.content,
     onEditMessage,
-    handleShowExport,
+    onRetryMessage,
+    onDeleteMessage,
     handleOpenEditModal,
+    handleShowExport,
+    confirmDeleteMessage,
   ]);
+
+  const handleLongPress = useCallback(() => {
+    if (messageActions.length === 0) return;
+    setActionsVisible(true);
+  }, [messageActions.length, setActionsVisible]);
+
+  const handleCloseActions = useCallback(() => {
+    setActionsVisible(false);
+  }, [setActionsVisible]);
+
+  const handleSelectAction = useCallback(
+    (action: MessageAction) => {
+      setActionsVisible(false);
+      if (Platform.OS === 'ios') {
+        pendingActionRef.current = action.run;
+        return;
+      }
+      setTimeout(action.run, 0);
+    },
+    [setActionsVisible],
+  );
+
+  const handleActionsDismissed = useCallback(() => {
+    const pending = pendingActionRef.current;
+    pendingActionRef.current = null;
+    pending?.();
+  }, []);
 
   const accessibilityActionsList = useMemo<AccessibilityActionInfo[]>(() => {
     const actions: AccessibilityActionInfo[] = [];
@@ -529,7 +629,7 @@ export const MessageBubble = memo(function MessageBubble({
           handleOpenEditModal();
           break;
         case 'delete':
-          onDeleteMessage?.(message.id);
+          confirmDeleteMessage();
           break;
         case 'export':
           handleShowExport();
@@ -544,7 +644,7 @@ export const MessageBubble = memo(function MessageBubble({
       message.toolCalls,
       setAccessibilityTool,
       onRetryMessage,
-      onDeleteMessage,
+      confirmDeleteMessage,
       handleOpenEditModal,
       handleShowExport,
     ],
@@ -759,13 +859,15 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {/* Image generation progress indicator */}
-            {isAssistant && message.isGeneratingImage && (
+            {isAssistant && (message.isGeneratingImage || message.imageGenStatus === 'failed') && (
               <ImageGenProgress
                 prompt={message.imageGenPrompt ?? message.content ?? 'Generating image…'}
                 progress={message.imageGenProgress}
                 status={message.imageGenStatus ?? 'generating'}
                 estimatedTime={message.imageGenEstimatedTime}
                 errorMessage={message.imageGenError}
+                onRetry={onRetryMessage ? handleRetryGeneration : undefined}
+                onStop={message.isGeneratingImage ? handleStopImageGeneration : undefined}
               />
             )}
 
@@ -781,17 +883,45 @@ export const MessageBubble = memo(function MessageBubble({
             )}
 
             {/* Video generation progress */}
-            {isAssistant && message.isGeneratingVideo && (
-              <VideoGenProgress
-                prompt={message.videoGenPrompt ?? message.content ?? 'Generating video…'}
-                progress={message.videoGenProgress}
-                status={message.videoGenStatus ?? 'processing'}
-                errorMessage={message.videoGenError}
-                onStop={message.videoTaskId ? handleStopVideoGeneration : undefined}
-                stopping={message.videoGenCancelRequested === true}
-                stopError={message.videoGenCancelError}
-              />
-            )}
+            {isAssistant &&
+              (message.isGeneratingVideo ||
+                message.videoGenStatus === 'failed' ||
+                message.videoGenStatus === 'timeout') && (
+                <VideoGenProgress
+                  prompt={message.videoGenPrompt ?? message.content ?? 'Generating video…'}
+                  progress={message.videoGenProgress}
+                  status={message.videoGenStatus ?? 'processing'}
+                  errorMessage={message.videoGenError}
+                  onStop={message.videoTaskId ? handleStopVideoGeneration : undefined}
+                  stopping={message.videoGenCancelRequested === true}
+                  stopError={message.videoGenCancelError}
+                />
+              )}
+
+            {isAssistant &&
+            onRetryMessage &&
+            !message.isGeneratingVideo &&
+            (message.videoGenStatus === 'failed' || message.videoGenStatus === 'timeout') ? (
+              <Pressable
+                onPress={handleRetryGeneration}
+                accessibilityRole="button"
+                accessibilityLabel="Retry video generation"
+                style={{
+                  alignSelf: 'flex-start',
+                  marginTop: 8,
+                  minHeight: 32,
+                  justifyContent: 'center',
+                  paddingHorizontal: 12,
+                  borderRadius: radii.full,
+                  borderWidth: 1,
+                  borderColor: themeColors.border,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '600', color: themeColors.textSecondary }}>
+                  Retry
+                </Text>
+              </Pressable>
+            ) : null}
 
             {/* Generated video */}
             {isAssistant && (message.type === 'video' || message.videoUrl) && message.videoUrl && (
@@ -1095,10 +1225,19 @@ export const MessageBubble = memo(function MessageBubble({
         />
       )}
 
+      <MessageActionSheet
+        visible={actionsVisible}
+        actions={messageActions}
+        onSelect={handleSelectAction}
+        onClose={handleCloseActions}
+        onDismissed={handleActionsDismissed}
+      />
+
       {/* Edit message modal */}
       <MessageEditModal
         visible={editModalVisible}
         text={editText}
+        attachments={message.attachments}
         onChangeText={setEditText}
         onClose={() => setEditModalVisible(false)}
         onSubmit={handleSubmitEdit}

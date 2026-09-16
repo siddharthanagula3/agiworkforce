@@ -7,12 +7,15 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import type { MessageAttachment } from '@/types/chat';
 
 interface MessageEditModalProps {
   visible: boolean;
   text: string;
+  attachments?: MessageAttachment[];
   onChangeText: (text: string) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -21,6 +24,7 @@ interface MessageEditModalProps {
 export function MessageEditModal({
   visible,
   text,
+  attachments,
   onChangeText,
   onClose,
   onSubmit,
@@ -84,6 +88,25 @@ export function MessageEditModal({
               accessibilityLabel="Edit message text"
               accessibilityHint="Modify your message then tap Send"
             />
+            {attachments && attachments.length > 0 ? (
+              <View style={styles.attachments} accessibilityLabel="Attachments kept on this edit">
+                {attachments.map((attachment) => (
+                  <View key={attachment.url} style={styles.attachmentRow}>
+                    <Paperclip size={12} color={colors.textMuted} />
+                    <Text
+                      style={{ flex: 1, fontSize: 12, color: colors.textSecondary }}
+                      numberOfLines={1}
+                    >
+                      {attachment.fileName}
+                    </Text>
+                  </View>
+                ))}
+                <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                  These stay attached when you send the edit.
+                </Text>
+              </View>
+            ) : null}
+
             <View style={styles.buttonRow}>
               <Pressable
                 style={styles.cancelBtn}
@@ -137,6 +160,15 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     borderWidth: 1,
     marginBottom: 16,
+  },
+  attachments: {
+    gap: 6,
+    marginBottom: 16,
+  },
+  attachmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   buttonRow: {
     flexDirection: 'row',

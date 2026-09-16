@@ -12,6 +12,22 @@ jest.mock('expo-router', () => ({
     back: jest.fn(),
     canGoBack: () => false,
   }),
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    const React = require('react');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    React.useEffect(() => cb(), []);
+  },
+}));
+
+// The screen reads live OS permission and channel state, so the OS has to be
+// present for it to render at all.
+jest.mock('@/services/notifications', () => ({
+  getPushPermissionStatus: jest.fn().mockResolvedValue('granted'),
+  enablePushNotifications: jest.fn().mockResolvedValue('granted'),
+}));
+
+jest.mock('@/services/notificationChannels', () => ({
+  androidChannelVibrates: jest.fn().mockResolvedValue(null),
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
@@ -75,8 +91,11 @@ describe('notification category settings', () => {
     });
   });
 
-  it('summarizes the real channel and opens the selected category detail', () => {
+  it('summarizes the real channel and opens the selected category detail', async () => {
     const screen = render(<NotificationPreferencesScreen />);
+    // The screen reads the OS permission on focus, so let that settle before
+    // asserting on a tree it will re-render.
+    await screen.findByText('Your device is delivering notifications');
 
     expect(screen.getByLabelText('Approvals. Push')).toBeTruthy();
     expect(screen.getByLabelText('Work Updates. Push')).toBeTruthy();

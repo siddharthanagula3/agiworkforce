@@ -9,13 +9,14 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { VoiceOrb } from '@/src/features/voice/components/VoiceOrb';
-import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
+import { transcribeAudioFile } from '@/src/features/voice/services/voiceInput';
+import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
 import { colors } from '@/src/ui/theme';
-import { getDisplayName } from '@/src/features/model-picker/service';
+import { getDisplayName, isCloudManagedModelId } from '@/src/features/model-picker/service';
 import {
   createMessageIdSet,
   findNewAssistantResponse,
@@ -34,9 +35,9 @@ const PHASE_LABEL: Record<Phase, string> = {
 };
 
 const PHASE_SUBLABEL: Record<Phase, string> = {
-  idle: 'Voice companion, on-device',
+  idle: 'Speech stays on this device',
   listening: 'Speak naturally',
-  thinking: 'Processing on-device',
+  thinking: '',
   speaking: 'AI is responding',
 };
 
@@ -45,8 +46,11 @@ function phaseLabel(phase: Phase, pttMode: boolean): string {
   return PHASE_LABEL[phase];
 }
 
-function phaseSublabel(phase: Phase, pttMode: boolean): string {
+// Speech in and out is on-device; the reply comes from whichever model is
+// selected, so the label follows that model rather than claiming either one.
+function phaseSublabel(phase: Phase, pttMode: boolean, cloudModel: boolean): string {
   if (pttMode && phase === 'listening') return 'Release to send';
+  if (phase === 'thinking') return cloudModel ? 'Sending to AGI Cloud' : 'Answering on this device';
   return PHASE_SUBLABEL[phase];
 }
 
@@ -109,11 +113,10 @@ function CompanionOrb({
 
 export default function VoiceScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const params = useLocalSearchParams<{ returnTo?: string; audioUri?: string }>();
   const insets = useSafeAreaInsets();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
-  const speechRate = useSettingsStore((s) => s.speechRate);
+  const voiceInputEnabled = useSettingsStore((s) => s.voiceEnabled);
   const pttMode = useSettingsStore((s) => s.voicePushToTalk);
   const setVoicePushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
   const selectedModel = useModelStore((s) => s.selectedModel);
@@ -121,8 +124,10 @@ export default function VoiceScreen() {
   const sendMessage = useChatStore((s) => s.sendMessage);
 
   const [lastResponseMs, setLastResponseMs] = useState<number | undefined>(undefined);
+  const [fileTranscription, setFileTranscription] = useState<string | null>(null);
 
   const convIdRef = useRef<string | null>(null);
+  const transcribedUriRef = useRef<string | null>(null);
 
   useEffect(() => {
     createConversation('Voice session')
@@ -163,22 +168,43 @@ export default function VoiceScreen() {
     toggleMute,
     endConversation,
   } = useVoiceConversation({
-    enabled: true,
+    enabled: voiceInputEnabled,
     pttMode,
     hapticsEnabled,
     sendMessage: sendVoiceMessage,
-    speak: (text, callbacks) =>
-      VoiceOutput.speak(text, {
-        voice: selectedVoiceId ?? undefined,
-        rate: speechRate,
-        ...callbacks,
-      }),
+    speak: (text, callbacks) => VoiceOutput.speak(text, { ...speechSettings(), ...callbacks }),
     stopSpeaking: () => VoiceOutput.stop().catch(() => {}),
     onCaptureError: (err) => {
       Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
     },
     onSttComplete: (ms) => setLastResponseMs(ms),
   });
+
+  // "Transcribe with AGI" hands over a recording; transcribe that file and send
+  // it as the first turn instead of opening a microphone the user did not ask for.
+  useEffect(() => {
+    const audioUri = params.audioUri;
+    if (!audioUri || transcribedUriRef.current === audioUri) return;
+    transcribedUriRef.current = audioUri;
+    setFileTranscription('Transcribing the recording…');
+    transcribeAudioFile(audioUri, { lang: activeSpeechLanguage() })
+      .then(async ({ text }) => {
+        const trimmed = text.trim();
+        if (!trimmed) {
+          setFileTranscription('No speech was found in that recording.');
+          return;
+        }
+        setFileTranscription(trimmed);
+        await sendVoiceMessage(trimmed).catch((err: unknown) => {
+          setFileTranscription(
+            err instanceof Error ? err.message : 'That recording could not be sent.',
+          );
+        });
+      })
+      .catch((err: unknown) => {
+        setFileTranscription(voiceCaptureErrorMessage(err));
+      });
+  }, [params.audioUri, sendVoiceMessage]);
 
   const handlePttToggle = useCallback(() => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -196,6 +222,7 @@ export default function VoiceScreen() {
   }, [hapticsEnabled, endConversation, params.returnTo, router]);
 
   const modelLabel = getDisplayName(selectedModel);
+  const isCloudModel = isCloudManagedModelId(selectedModel);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -214,44 +241,56 @@ export default function VoiceScreen() {
 
       {/* Main content */}
       <View style={styles.content}>
-        <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode)}</Text>
+        <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode, isCloudModel)}</Text>
 
         <CompanionOrb
           phase={phase}
           audioLevel={audioLevel}
-          label={phaseLabel(phase, pttMode)}
-          hint={pttMode ? 'Hold to talk, release to send' : 'Tap to start or stop listening'}
-          onPress={pttMode ? undefined : handleOrbPress}
-          onPressIn={pttMode ? handleOrbPressIn : undefined}
-          onPressOut={pttMode ? handleOrbPressOut : undefined}
+          label={voiceInputEnabled ? phaseLabel(phase, pttMode) : 'Voice Input is off'}
+          hint={
+            voiceInputEnabled
+              ? pttMode
+                ? 'Hold to talk, release to send'
+                : 'Tap to start or stop listening'
+              : 'Turn Voice Input on in Settings, Voice'
+          }
+          onPress={!voiceInputEnabled || pttMode ? undefined : handleOrbPress}
+          onPressIn={voiceInputEnabled && pttMode ? handleOrbPressIn : undefined}
+          onPressOut={voiceInputEnabled && pttMode ? handleOrbPressOut : undefined}
         />
 
         <Text style={[styles.phaseLabel, { color: PHASE_LABEL_COLOR }]}>
-          {phaseLabel(phase, pttMode)}
+          {voiceInputEnabled ? phaseLabel(phase, pttMode) : 'Voice Input is off'}
         </Text>
+
+        {!voiceInputEnabled ? (
+          <Text testID="voice-input-disabled-notice" style={styles.sublabel}>
+            Turn Voice Input on in Settings, Voice to speak to AGI.
+          </Text>
+        ) : null}
 
         {/* Model badge */}
         <Animated.View entering={FadeIn.duration(400)} style={styles.modelBadge}>
           <Text style={styles.modelLabel}>{modelLabel.toUpperCase()}</Text>
-          <Text style={styles.onDeviceBadge}>ON-DEVICE</Text>
+          <Text testID="voice-processing-badge" style={styles.onDeviceBadge}>
+            {isCloudModel ? 'REPLIES FROM AGI CLOUD' : 'ON-DEVICE'}
+          </Text>
         </Animated.View>
 
-        {/* Performance chip */}
+        {/* Transcription latency, only for a capture the user chose to stop */}
         {lastResponseMs !== undefined && (
           <Animated.View entering={FadeIn.duration(300)}>
-            <PerformanceChip
-              model="on-device STT"
-              tier="Tier 2"
-              firstTokenLatencyMs={lastResponseMs}
-            />
+            <Text testID="voice-stt-latency" style={styles.latencyLabel}>
+              {`Transcribed in ${lastResponseMs} ms`}
+            </Text>
           </Animated.View>
         )}
 
         {/* Transcript preview */}
-        {transcriptPreview ? (
+        {transcriptPreview || fileTranscription ? (
           <Animated.View entering={FadeIn.duration(200)} style={styles.transcriptBox}>
-            <Text style={styles.transcriptText} numberOfLines={3}>
-              {transcriptPreview}
+            <Text testID="voice-transcript-preview" style={styles.transcriptText} numberOfLines={3}>
+              {transcriptPreview || fileTranscription}
             </Text>
           </Animated.View>
         ) : null}
@@ -347,6 +386,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     letterSpacing: 1.2,
+  },
+  latencyLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
   },
   onDeviceBadge: {
     color: colors.terraCotta,

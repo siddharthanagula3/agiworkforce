@@ -156,6 +156,7 @@ export class LiveVoiceSession {
   private readonly pendingDelegations = new Set<string>();
   private closeResolve: (() => void) | null = null;
   private usageSeconds: number | null = null;
+  private pendingMuted: boolean | null = null;
 
   private constructor(
     microphone: MediaStream,
@@ -240,6 +241,16 @@ export class LiveVoiceSession {
     this.microphone.getAudioTracks().forEach((track) => {
       track.enabled = !muted;
     });
+    // Commands are held until the session starts, so a mute chosen while
+    // connecting has to be replayed rather than dropped.
+    if (!this.started) {
+      this.pendingMuted = muted;
+      return;
+    }
+    this.sendMuteState(muted);
+  }
+
+  private sendMuteState(muted: boolean): void {
     this.send({ type: muted ? 'session.input_audio.mute' : 'session.input_audio.unmute' });
   }
 
@@ -317,10 +328,14 @@ export class LiveVoiceSession {
       return;
     }
     switch (parsed.type) {
-      case 'session.started':
+      case 'session.started': {
         this.started = true;
+        const pendingMuted = this.pendingMuted;
+        this.pendingMuted = null;
+        if (pendingMuted !== null) this.sendMuteState(pendingMuted);
         this.callbacks.onStarted();
         return;
+      }
       case 'session.input_transcript.delta':
         this.appendUser(String(parsed['delta'] ?? ''));
         return;

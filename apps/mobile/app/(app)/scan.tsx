@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { CameraView, useCameraPermissions, type FlashMode } from 'expo-camera';
-import { useRouter } from 'expo-router';
-import { X, Zap, ZapOff, Send, RotateCcw, ScanText, Copy } from 'lucide-react-native';
+import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { X, Zap, ZapOff, Send, RotateCcw, ScanText, Copy, SwitchCamera } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
@@ -35,8 +35,11 @@ export default function ScanScreen() {
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [permission, requestPermission] = useCameraPermissions();
 
+  const params = useLocalSearchParams<{ imageUri?: string }>();
+
   const [phase, setPhase] = useState<ScanPhase>('camera');
   const [flashMode, setFlashMode] = useState<FlashMode>('off');
+  const [facing, setFacing] = useState<CameraType>('back');
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -53,6 +56,7 @@ export default function ScanScreen() {
   const [copied, setCopied] = useState(false);
 
   const cameraRef = useRef<CameraView>(null);
+  const scannedUriRef = useRef<string | null>(null);
   const createConversation = useChatMessageStore((s) => s.createConversation);
   const sendMessage = useChatExecutionStore((s) => s.sendMessage);
   const selectedModel = useModelStore((s) => s.selectedModel);
@@ -71,6 +75,39 @@ export default function ScanScreen() {
     router.back();
   }, [router]);
 
+  const scanImage = useCallback(async (uri: string) => {
+    setCapturedUri(uri);
+    setPhase('processing');
+    setOcrError(null);
+
+    try {
+      const result = await recognizeText(uri);
+      setExtractedText(result.text);
+      setRegions(result.regions);
+
+      const prefill = result.text.trim()
+        ? `Summarize this:\n\n${result.text.trim()}`
+        : 'What does this image say?';
+      setPromptText(prefill);
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'OCR failed';
+      setOcrError(msg);
+      setPromptText('');
+    }
+
+    setPhase('preview');
+  }, []);
+
+  // "Scan with AGI" can hand over an image instead of opening the camera.
+  useEffect(() => {
+    const imageUri = params.imageUri;
+    if (!imageUri || scannedUriRef.current === imageUri) return;
+    scannedUriRef.current = imageUri;
+    void scanImage(imageUri);
+  }, [params.imageUri, scanImage]);
+
   const handleCapture = useCallback(async () => {
     if (!cameraRef.current || isCapturing || !cameraReady) return;
 
@@ -78,29 +115,7 @@ export default function ScanScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
       if (!photo?.uri) return;
-
-      setCapturedUri(photo.uri);
-      setPhase('processing');
-      setOcrError(null);
-
-      try {
-        const result = await recognizeText(photo.uri);
-        setExtractedText(result.text);
-        setRegions(result.regions);
-
-        const prefill = result.text.trim()
-          ? `Summarize this:\n\n${result.text.trim()}`
-          : 'What does this image say?';
-        setPromptText(prefill);
-
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'OCR failed';
-        setOcrError(msg);
-        setPromptText('');
-      }
-
-      setPhase('preview');
+      await scanImage(photo.uri);
     } catch (error) {
       const message =
         error instanceof Error
@@ -110,7 +125,7 @@ export default function ScanScreen() {
     } finally {
       setIsCapturing(false);
     }
-  }, [isCapturing, cameraReady]);
+  }, [isCapturing, cameraReady, scanImage]);
 
   const handleRetake = useCallback(() => {
     setCapturedUri(null);
@@ -165,6 +180,11 @@ export default function ScanScreen() {
       setIsSending(false);
     }
   }, [capturedUri, isSending, createConversation, sendMessage, selectedModel, promptText, router]);
+
+  const toggleFacing = useCallback(() => {
+    setCameraReady(false);
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+  }, []);
 
   const toggleFlash = useCallback(() => {
     setFlashMode((prev) => (prev === 'off' ? 'on' : 'off'));
@@ -369,7 +389,7 @@ export default function ScanScreen() {
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
-        facing="back"
+        facing={facing}
         flash={flashMode}
         mode="picture"
         onCameraReady={handleCameraReady}
@@ -397,18 +417,32 @@ export default function ScanScreen() {
 
           <Text style={styles.screenTitle}>Scan Text</Text>
 
-          <Pressable
-            onPress={toggleFlash}
-            style={styles.iconButton}
-            accessibilityRole="button"
-            accessibilityLabel={flashMode === 'on' ? 'Turn flash off' : 'Turn flash on'}
-          >
-            {flashMode === 'on' ? (
-              <Zap size={20} color={c.agentWarning} />
-            ) : (
-              <ZapOff size={20} color={c.cameraOverlayText} />
-            )}
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Pressable
+              testID="scan-facing-toggle"
+              onPress={toggleFacing}
+              style={styles.iconButton}
+              accessibilityRole="button"
+              accessibilityLabel={
+                facing === 'back' ? 'Switch to front camera' : 'Switch to rear camera'
+              }
+            >
+              <SwitchCamera size={20} color={c.cameraOverlayText} />
+            </Pressable>
+
+            <Pressable
+              onPress={toggleFlash}
+              style={styles.iconButton}
+              accessibilityRole="button"
+              accessibilityLabel={flashMode === 'on' ? 'Turn flash off' : 'Turn flash on'}
+            >
+              {flashMode === 'on' ? (
+                <Zap size={20} color={c.agentWarning} />
+              ) : (
+                <ZapOff size={20} color={c.cameraOverlayText} />
+              )}
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
 

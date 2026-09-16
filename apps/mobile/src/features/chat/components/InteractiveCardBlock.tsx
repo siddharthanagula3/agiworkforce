@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Linking, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { MapPinned, Navigation, ExternalLink } from 'lucide-react-native';
 import type { InteractiveCard, MapSearchCardBody, MapSearchView } from '@agiworkforce/types';
 import { getAuthHeaders } from '@/services/authSession';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 
 const TILE_SIZE = 256;
@@ -289,10 +290,11 @@ function MapSearchCard({
             accessibilityRole="button"
             accessibilityLabel={primary.label}
             onPress={() => {
-              void Linking.openURL(primary.url).catch(() => {
+              void openUntrustedUrlInAppBrowser(primary.url).then((opened) => {
+                if (opened) return;
                 Alert.alert(
-                  'Could not open Maps',
-                  'Check your connection and try opening the result again.',
+                  'Could not open this place',
+                  'This result did not include a link this app is allowed to open.',
                 );
               });
             }}

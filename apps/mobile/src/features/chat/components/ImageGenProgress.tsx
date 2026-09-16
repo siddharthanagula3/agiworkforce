@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { View } from 'react-native';
-import { ImagePlus, AlertCircle, Loader2 } from 'lucide-react-native';
+import { View, Pressable } from 'react-native';
+import { ImagePlus, AlertCircle, Loader2, Square } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -19,6 +19,7 @@ interface ImageGenProgressProps {
   estimatedTime?: number;
   errorMessage?: string;
   onRetry?: () => void;
+  onStop?: () => void;
 }
 
 export function ImageGenProgress({
@@ -28,6 +29,7 @@ export function ImageGenProgress({
   estimatedTime,
   errorMessage,
   onRetry,
+  onStop,
 }: ImageGenProgressProps) {
   const colors = useThemeColors();
 
@@ -200,6 +202,32 @@ export function ImageGenProgress({
           <Text style={{ fontSize: 12, color: colors.textMuted }}>
             Generating securely in AGI Cloud…
           </Text>
+        ) : null}
+
+        {onStop && !isFailed ? (
+          <Pressable
+            testID="image-gen-stop"
+            onPress={onStop}
+            accessibilityRole="button"
+            accessibilityLabel="Stop generating this image"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              alignSelf: 'flex-start',
+              gap: 6,
+              minHeight: 32,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Square size={11} color={colors.textSecondary} />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+              Stop generating
+            </Text>
+          </Pressable>
         ) : null}
 
         {/* Failed state: error message + retry button */}

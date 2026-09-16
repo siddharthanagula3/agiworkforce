@@ -10,7 +10,12 @@ import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useTheme, type ColorScheme } from '@/src/ui/theme';
-import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
+import {
+  assertDownloadAllowed,
+  downloadModel,
+  cancelDownload,
+  ModelDownloadError,
+} from '@/services/modelDownload';
 import { getInstalledModel, recordInstalledModel } from '@/storage/installedModels';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
@@ -36,6 +41,7 @@ import {
 import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 
 const DISCLOSURE_PROVIDERS: string[] = [];
 
@@ -284,6 +290,8 @@ export default function OnboardingScreen() {
 
   const handleStartDownload = useCallback(
     (cellularEnabled = false) => {
+      // The choice made here is the persisted policy every later download reads.
+      useModelInstallStore.getState().setAllowCellularDownloads(cellularEnabled);
       if (!recommendedModel.needsDownload) {
         finishOnboarding(recommendedModel.id);
         return;
@@ -296,9 +304,19 @@ export default function OnboardingScreen() {
       if (recommendedModel.executorchPreset) {
         const preset = recommendedModel.executorchPreset;
         setTier2Loading(true);
-        tier2LoadModel(preset, (fractional) => {
-          setDownloadProgress(fractional * 100);
-        })
+        tier2LoadModel(
+          preset,
+          (fractional) => {
+            setDownloadProgress(fractional * 100);
+          },
+          {
+            ensureDownloadAllowed: () =>
+              assertDownloadAllowed({
+                wifiOnly: !cellularEnabled,
+                requiredBytes: recommendedModel.fileSizeBytes,
+              }),
+          },
+        )
           .then(async () => {
             await recordInstalledModel({
               id: recommendedModel.id,
@@ -348,13 +366,9 @@ export default function OnboardingScreen() {
               return;
             }
             const msg =
-              kind === 'wifi_required'
-                ? 'Wi-Fi required. Connect to Wi-Fi or enable cellular download.'
-                : kind === 'checksum_mismatch'
-                  ? 'Download corrupted. Please try again.'
-                  : kind === 'storage_full'
-                    ? 'Not enough storage. Free up space and try again.'
-                    : 'Download failed. You can try again or continue without the model.';
+              err instanceof ModelDownloadError && kind !== 'network_error'
+                ? err.message
+                : 'Download failed. You can try again or continue without the model.';
             setDownloadError(msg);
           });
         return;

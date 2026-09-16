@@ -243,6 +243,16 @@ describe('LiveVoiceSession', () => {
     });
   });
 
+  it('replays a mute chosen while the session was still connecting', async () => {
+    const { session } = await startSession();
+    session.setMuted(true);
+    expect(mockState.peer.channel.sent).toEqual([]);
+
+    mockState.peer.channel.receive({ type: 'session.started' });
+
+    expect(mockState.peer.channel.sent.at(-1)).toMatchObject({ type: 'session.input_audio.mute' });
+  });
+
   it('closes on the session.closed acknowledgement and stops the microphone', async () => {
     const { session, cb } = await startSession();
 

@@ -66,7 +66,6 @@ export function MessageList({
   const colors = useThemeColors();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
 
-  const isNearBottomRef = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   const fabOpacity = useSharedValue(0);
@@ -75,19 +74,6 @@ export function MessageList({
   const scrollToBottom = useCallback(() => {
     listRef.current?.scrollToEnd({ animated: true });
   }, []);
-
-  const lastMessage = messages[messages.length - 1];
-  const lastContent = lastMessage?.content;
-  const lastIsStreaming = lastMessage?.isStreaming;
-
-  useEffect(() => {
-    if (messages.length > 0 && isNearBottomRef.current) {
-      const timer = setTimeout(() => {
-        listRef.current?.scrollToEnd({ animated: true });
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [messages.length, lastContent, lastIsStreaming]);
 
   useEffect(() => {
     fabOpacity.value = withTiming(showScrollButton ? 1 : 0, {
@@ -159,9 +145,7 @@ export function MessageList({
           const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
           const distanceFromBottom =
             contentSize.height - contentOffset.y - layoutMeasurement.height;
-          const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
-          isNearBottomRef.current = nearBottom;
-          setShowScrollButton(!nearBottom);
+          setShowScrollButton(distanceFromBottom >= NEAR_BOTTOM_THRESHOLD);
         }}
         scrollEventThrottle={100}
         refreshControl={

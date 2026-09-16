@@ -30,74 +30,74 @@ export interface PermissionRegistryEntry {
   requestPermission: () => Promise<OsPermissionStatus>;
 }
 
-function toOsStatus(status: string | undefined, canAskAgain?: boolean): OsPermissionStatus {
+function toOsStatus(status: string | undefined): OsPermissionStatus {
   if (status === 'granted') return 'granted';
-  if (status === 'undetermined' || canAskAgain === true) return 'undetermined';
+  if (status === 'undetermined') return 'undetermined';
   return 'denied';
 }
 
 async function getMicStatus(): Promise<OsPermissionStatus> {
   const result = await Camera.getMicrophonePermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function requestMic(): Promise<OsPermissionStatus> {
   const result = await Camera.requestMicrophonePermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function getCameraStatus(): Promise<OsPermissionStatus> {
   const result = await Camera.getCameraPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function requestCamera(): Promise<OsPermissionStatus> {
   const result = await Camera.requestCameraPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function getPhotosStatus(): Promise<OsPermissionStatus> {
   const result = await ImagePicker.getMediaLibraryPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function requestPhotos(): Promise<OsPermissionStatus> {
   const result = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function getNotificationsStatus(): Promise<OsPermissionStatus> {
   const result = await Notifications.getPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function requestNotifications(): Promise<OsPermissionStatus> {
   const result = await Notifications.requestPermissionsAsync({
     ios: { allowAlert: true, allowBadge: true, allowSound: true },
   });
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function getCalendarStatus(): Promise<OsPermissionStatus> {
   const result = await Calendar.getCalendarPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function requestCalendar(): Promise<OsPermissionStatus> {
   const result = await Calendar.requestCalendarPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function getRemindersStatus(): Promise<OsPermissionStatus> {
   if (Platform.OS !== 'ios') return 'denied';
   const result = await Calendar.getRemindersPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 async function requestReminders(): Promise<OsPermissionStatus> {
   if (Platform.OS !== 'ios') return 'denied';
   const result = await Calendar.requestRemindersPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
+  return toOsStatus(result.status);
 }
 
 export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, PermissionRegistryEntry>> =

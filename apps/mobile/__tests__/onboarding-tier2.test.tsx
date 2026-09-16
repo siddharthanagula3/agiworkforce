@@ -211,6 +211,7 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
       expect(mockTier2LoadModel).toHaveBeenCalledWith(
         expect.objectContaining({ modelName: EXECUTORCH_PRESET_NAME }),
         expect.any(Function),
+        expect.objectContaining({ ensureDownloadAllowed: expect.any(Function) }),
       );
     });
   });

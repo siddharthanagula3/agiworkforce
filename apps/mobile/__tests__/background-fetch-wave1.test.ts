@@ -26,6 +26,16 @@ jest.mock('expo-notifications', () => ({
   setNotificationCategoryAsync: jest.fn(async () => undefined),
 }));
 
+// Approval polling is Cloud-only since MOBILE-076, so the task needs a Cloud
+// app mode to reach the network at all.
+jest.mock('@/src/features/chat/store/appModeStore', () => ({
+  useChatAppModeStore: { getState: jest.fn(() => ({ appMode: 'cloud' })) },
+}));
+
+jest.mock('@/stores/settings/cloudSettingsStore', () => ({
+  useCloudSettingsStore: { getState: jest.fn(() => ({ notificationsEnabled: true })) },
+}));
+
 jest.mock('../services/api', () => ({
   api: {
     get: jest.fn(),

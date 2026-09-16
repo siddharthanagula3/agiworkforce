@@ -11,17 +11,15 @@ import type {
   LiveTranscriptTurn,
   LiveVoiceSession,
 } from '@/src/features/voice/services/liveVoiceSession';
-
-type LiveVoiceModule = typeof import('@/src/features/voice/services/liveVoiceSession');
+import {
+  loadLiveVoiceModule,
+  type LiveVoiceModule,
+} from '@/src/features/voice/services/liveVoiceModule';
 
 let liveVoice: LiveVoiceModule | null = null;
 
-/**
- * react-native-webrtc builds a native event emitter the moment it is imported,
- * so the chat screens must not pull it in until a live session actually starts.
- */
 async function loadLiveVoice(): Promise<LiveVoiceModule> {
-  liveVoice ??= await import('@/src/features/voice/services/liveVoiceSession');
+  liveVoice ??= await loadLiveVoiceModule();
   return liveVoice;
 }
 
@@ -184,6 +182,7 @@ export function useLiveVoiceSession({
 
     const appState = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active' || cancelled) return;
+      cancelled = true;
       const session = sessionRef.current;
       sessionRef.current = null;
       if (session) void session.close().then((closed) => finish(session, closed));

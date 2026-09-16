@@ -9,6 +9,7 @@ const mockCreateConversation = jest.fn();
 const mockSendMessage = jest.fn();
 
 let capturedOnReady: (() => void) | undefined;
+const mockSearchParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({
@@ -17,6 +18,7 @@ jest.mock('expo-router', () => ({
     replace: mockReplace,
     canGoBack: mockCanGoBack,
   }),
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 jest.mock('react-native-safe-area-context', () => ({

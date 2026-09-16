@@ -25,7 +25,7 @@
  *    16. Renders the three toggle labels
  *    17. Renders Run Benchmark button
  *    18. Run Benchmark button has correct accessibility role
- *    19. Switches have accessibilityRole switch (3 total)
+ *    19. Switches have accessibilityRole switch (1 total)
  */
 
 const mockStorage = new Map<string, string>();
@@ -297,11 +297,7 @@ describe('performanceMonitor service', () => {
   });
 });
 
-import {
-  PERF_CHIP_SHOW_KEY,
-  PERF_THERMAL_PAUSE_KEY,
-  PERF_BATTERY_PAUSE_KEY,
-} from '../app/(app)/settings/performance';
+import { PERF_CHIP_SHOW_KEY } from '../app/(app)/settings/performance';
 
 describe('perf settings MMKV keys', () => {
   beforeEach(() => {
@@ -309,10 +305,8 @@ describe('perf settings MMKV keys', () => {
   });
 
   // 8. Exported key constants
-  it('exports the three settings key constants with correct values', () => {
+  it('exports only the settings key that a consumer actually reads', () => {
     expect(PERF_CHIP_SHOW_KEY).toBe('perf-show-chip-v1');
-    expect(PERF_THERMAL_PAUSE_KEY).toBe('perf-pause-at-thermal-v1');
-    expect(PERF_BATTERY_PAUSE_KEY).toBe('perf-pause-at-battery-v1');
   });
 
   it('bool round-trip via raw mmkv storage', () => {
@@ -396,11 +390,11 @@ describe('PerformanceScreen rendering', () => {
     expect(getByText('Inference Settings')).toBeTruthy();
   });
 
-  it('renders the three toggle labels', async () => {
-    const { getByText } = await renderSettledPerformanceScreen();
-    expect(getByText('Pause at serious thermal')).toBeTruthy();
-    expect(getByText('Pause at 15% battery')).toBeTruthy();
+  it('offers only toggles that change runtime behaviour', async () => {
+    const { getByText, queryByText } = await renderSettledPerformanceScreen();
     expect(getByText('Show performance chip in chat')).toBeTruthy();
+    expect(queryByText('Pause at serious thermal')).toBeNull();
+    expect(queryByText('Pause at 15% battery')).toBeNull();
   });
 
   it('renders the Run Benchmark button', async () => {
@@ -414,9 +408,9 @@ describe('PerformanceScreen rendering', () => {
     expect(btn).toBeTruthy();
   });
 
-  it('switches have accessibilityRole switch (3 total)', async () => {
+  it('switches have accessibilityRole switch (1 total)', async () => {
     const { getAllByRole } = await renderSettledPerformanceScreen();
     const switches = getAllByRole('switch');
-    expect(switches.length).toBe(3);
+    expect(switches.length).toBe(1);
   });
 });

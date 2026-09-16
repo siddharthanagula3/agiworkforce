@@ -33,6 +33,34 @@ interface CloudMessageState {
   clearCloudData: () => void;
 }
 
+const INTERRUPTED_IMAGE_MESSAGE =
+  'Image generation stopped when the app closed. Retry to generate it again.';
+const INTERRUPTED_VIDEO_MESSAGE =
+  'Video generation stopped when the app closed. Retry to generate it again.';
+
+export function resolveInterruptedGeneration(message: ChatMessage): ChatMessage {
+  if (message.isGeneratingImage === true) {
+    return {
+      ...message,
+      isGeneratingImage: false,
+      imageGenStatus: 'failed',
+      imageGenProgress: 100,
+      imageGenError: message.imageGenError ?? INTERRUPTED_IMAGE_MESSAGE,
+    };
+  }
+  if (message.isGeneratingVideo === true) {
+    return {
+      ...message,
+      isGeneratingVideo: false,
+      videoGenStatus: 'failed',
+      videoGenProgress: 100,
+      videoGenCancelRequested: false,
+      videoGenError: message.videoGenError ?? INTERRUPTED_VIDEO_MESSAGE,
+    };
+  }
+  return message;
+}
+
 function stripEphemeralGeneratedImage(message: ChatMessage): ChatMessage {
   if (message.imageGenPersisted !== false) return message;
   return {
@@ -197,7 +225,9 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
               (message) =>
                 dirtyMessageIds?.has(message.id) === true && !selectedIds.has(message.id),
             );
-            messages[id] = [...dirtyOutsideCap, ...selected].map(stripEphemeralGeneratedImage);
+            messages[id] = [...dirtyOutsideCap, ...selected].map((message) =>
+              stripEphemeralGeneratedImage(resolveInterruptedGeneration(message)),
+            );
           }
         }
         return { conversations, messages, historyStats: state.historyStats };

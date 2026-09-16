@@ -384,6 +384,11 @@ describe('ChatInput', () => {
       expect(getByLabelText('Add to chat')).toBeTruthy();
     });
 
+    it('hides [+] on a surface that cannot accept attachments', () => {
+      const { queryByLabelText } = renderInput({ onOpenAddToChat: undefined });
+      expect(queryByLabelText('Add to chat')).toBeNull();
+    });
+
     it('keeps the model label out of the compact pill', () => {
       const { queryByTestId } = renderInput();
       expect(queryByTestId('chat.composer.model')).toBeNull();
@@ -403,6 +408,40 @@ describe('ChatInput', () => {
       const { getByLabelText, getByTestId } = renderInput();
       fireEvent.changeText(getByLabelText('Message input'), 'Hello');
       expect(getByTestId('send-button')).toBeTruthy();
+    });
+  });
+
+  describe('attachment send failure', () => {
+    it('marks a staged attachment "Not sent" when the surface rejects the send', async () => {
+      const onSend = jest.fn().mockResolvedValue(false);
+      const attachRef = React.createRef<ChatInputHandle>();
+      const { getByLabelText, getByTestId } = renderInput({ onSend, attachRef });
+
+      await act(async () => {
+        attachRef.current?.addAttachments([
+          {
+            id: 'a-1',
+            uri: 'file:///doc.pdf',
+            mimeType: 'application/pdf',
+            fileName: 'doc.pdf',
+            fileSize: 1024,
+          },
+        ]);
+      });
+
+      fireEvent.changeText(getByLabelText('Message input'), 'read this');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+
+      await waitFor(() => {
+        expect(
+          capturedAttachmentPreviewProps?.attachments.find((a) => a.id === 'a-1')?.sendFailed,
+        ).toBe(true);
+      });
+      expect(onSend).toHaveBeenCalledTimes(1);
+      const sentAttachments = onSend.mock.calls[0][1] as Array<Record<string, unknown>>;
+      expect(sentAttachments[0]).not.toHaveProperty('sendFailed');
     });
   });
 
@@ -634,6 +673,20 @@ describe('ChatInput', () => {
         .filter((a) => a.pastedText)
         .map((a) => a.fileName);
       expect(pastedNames).toEqual([pastedTextFileName(1), pastedTextFileName(2)]);
+    });
+
+    it('removes the text a large paste replaced instead of restoring it', () => {
+      const { getByLabelText } = renderInput();
+
+      const input = getByLabelText('Message input');
+      fireEvent.changeText(input, 'keep REPLACED tail');
+
+      const bigBlock = 'x'.repeat(12_000);
+      fireEvent.changeText(getByLabelText('Message input'), `keep ${bigBlock} tail`);
+
+      expect(getByLabelText('Message input').props.value).toBe('keep  tail');
+      const pasted = capturedAttachmentPreviewProps?.attachments.find((a) => a.pastedText);
+      expect(pasted?.pastedText).toBe(bigBlock);
     });
 
     it('does not convert gradual typing under the paste threshold', () => {

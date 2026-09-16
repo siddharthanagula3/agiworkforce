@@ -1,6 +1,6 @@
 import { View, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { Lock, X, FileText, ClipboardList } from 'lucide-react-native';
+import { Lock, X, FileText, ClipboardList, AlertCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
@@ -17,6 +17,7 @@ export interface Attachment {
   fileSize?: number;
   assetId?: string;
   pastedText?: string;
+  sendFailed?: boolean;
 }
 
 interface AttachmentPreviewProps {
@@ -60,6 +61,7 @@ function AttachmentThumbnail({
 
   const imageAttachment = isImage(attachment.mimeType);
   const isPastedText = Boolean(attachment.pastedText);
+  const sendFailed = attachment.sendFailed === true;
 
   return (
     <Animated.View
@@ -67,6 +69,9 @@ function AttachmentThumbnail({
       exiting={FadeOut.duration(150)}
       layout={Layout.springify()}
       className="relative mr-2"
+      accessibilityLabel={
+        sendFailed ? `${attachment.fileName} was not sent. Send again to retry.` : undefined
+      }
     >
       {imageAttachment ? (
         <View
@@ -153,6 +158,28 @@ function AttachmentThumbnail({
       >
         <X size={10} color={colors.textSecondary} />
       </Pressable>
+
+      {sendFailed ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.dangerBorder,
+            backgroundColor: colors.dangerSurface,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+          }}
+        >
+          <AlertCircle size={16} color={colors.agentError} />
+          <Text style={{ fontSize: 9, fontWeight: '600', color: colors.agentError }}>Not sent</Text>
+        </View>
+      ) : null}
 
       {/* Privacy chip, outbound destination per attachment */}
       {privacyShortLabel ? (

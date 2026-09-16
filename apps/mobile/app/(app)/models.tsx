@@ -21,7 +21,10 @@ import {
   LOCAL_MODEL_LIST,
   getDisplayName,
   getModelByIdForCloudAccess,
+  getModelListForCloudAccess,
+  isSelectableModelIdForAccess,
 } from '@/src/features/model-picker/service';
+import type { ModelDef } from '@/src/features/model-picker/service';
 
 function installLabel(status: ModelInstallJob['status']): string {
   switch (status) {
@@ -46,6 +49,7 @@ export default function ModelsScreen() {
   const pickerRef = useRef<BottomSheet>(null);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const setModel = useModelStore((s) => s.setModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const subscriptionTier = useTierStore((s) => s.tier);
   const favorites = useModelStore((s) => s.favorites);
@@ -97,11 +101,28 @@ export default function ModelsScreen() {
       ? `${selectedLocalModel.detailLabel} - ${statusLabelFor(selectedLocalModel)}`
       : (selectedModelDef?.detailLabel ?? 'Model'));
 
-  const favoriteModels = LOCAL_MODEL_LIST.filter((m) => favorites.includes(m.id)).slice(0, 5);
+  const catalog = getModelListForCloudAccess(cloudUnlocked, subscriptionTier);
+  const favoriteModels = catalog.filter((m) => favorites.includes(m.id)).slice(0, 5);
   const recentModelDefs = recentModels
-    .map((id) => LOCAL_MODEL_LIST.find((m) => m.id === id))
-    .filter(Boolean)
-    .slice(0, 5) as (typeof LOCAL_MODEL_LIST)[number][];
+    .map((id) => catalog.find((m) => m.id === id))
+    .filter((m): m is ModelDef => m !== undefined)
+    .slice(0, 5);
+
+  const statusForRow = useCallback(
+    (model: ModelDef) => (model.surface === 'local' ? statusLabelFor(model) : model.detailLabel),
+    [statusLabelFor],
+  );
+
+  const selectModel = useCallback(
+    (model: ModelDef) => {
+      if (!isSelectableModelIdForAccess(model.id, cloudUnlocked, subscriptionTier)) {
+        openPicker();
+        return;
+      }
+      setModel(model.id);
+    },
+    [cloudUnlocked, openPicker, setModel, subscriptionTier],
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.surfaceBase }}>
@@ -181,19 +202,20 @@ export default function ModelsScreen() {
               <View key={m.id}>
                 {idx > 0 && <View style={{ height: 1, backgroundColor: c.border }} />}
                 <Pressable
-                  onPress={openPicker}
+                  onPress={() => selectModel(m)}
                   className="flex-row items-center justify-between py-2.5 -mx-1 px-1 rounded-lg"
                   style={({ pressed }) => ({
                     backgroundColor: pressed ? c.surfaceHover : c.transparent,
                   })}
                   accessibilityRole="button"
+                  accessibilityState={{ selected: m.id === selectedModel }}
                   accessibilityLabel={`Select ${m.name}`}
                 >
                   <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                     {m.name}
                   </Text>
                   <Text className="text-xs" style={{ color: c.textMuted }}>
-                    {statusLabelFor(m)}
+                    {statusForRow(m)}
                   </Text>
                 </Pressable>
               </View>
@@ -213,19 +235,20 @@ export default function ModelsScreen() {
               <View key={m.id}>
                 {idx > 0 && <View style={{ height: 1, backgroundColor: c.border }} />}
                 <Pressable
-                  onPress={openPicker}
+                  onPress={() => selectModel(m)}
                   className="flex-row items-center justify-between py-2.5 -mx-1 px-1 rounded-lg"
                   style={({ pressed }) => ({
                     backgroundColor: pressed ? c.surfaceHover : c.transparent,
                   })}
                   accessibilityRole="button"
+                  accessibilityState={{ selected: m.id === selectedModel }}
                   accessibilityLabel={`Select ${m.name}`}
                 >
                   <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                     {m.name}
                   </Text>
                   <Text className="text-xs" style={{ color: c.textMuted }}>
-                    {statusLabelFor(m)}
+                    {statusForRow(m)}
                   </Text>
                 </Pressable>
               </View>

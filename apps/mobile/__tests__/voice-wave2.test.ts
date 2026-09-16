@@ -1,4 +1,3 @@
-
 import { Platform } from 'react-native';
 
 jest.mock('expo-speech-recognition', () => {
@@ -61,6 +60,7 @@ import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 
 const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
   __clearListeners: () => void;
+  __fireResult: (event: unknown) => void;
   ExpoSpeechRecognitionModule: {
     start: jest.Mock;
     requestPermissionsAsync: jest.Mock;
@@ -89,10 +89,23 @@ describe('voiceInput service', () => {
     expect(result).toBe(true);
   });
 
-  it('transcribeOnDevice returns isOnDevice: true', async () => {
-    const result = await VoiceInput.transcribeOnDevice('file:///test.m4a');
-    expect(result.isOnDevice).toBe(true);
-    expect(typeof result.text).toBe('string');
+  it('transcribeAudioFile reads the given recording instead of the microphone', async () => {
+    const pending = VoiceInput.transcribeAudioFile('file:///test.m4a');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledWith(
+      expect.objectContaining({ audioSource: { uri: 'file:///test.m4a' } }),
+    );
+    speechRecognitionMock.__fireResult({
+      results: [{ transcript: 'from the file', confidence: 0.9 }],
+      isFinal: true,
+    });
+    const result = await pending;
+    expect(result.text).toBe('from the file');
+  });
+
+  it('transcribeAudioFile refuses an empty uri instead of returning a stale transcript', async () => {
+    await expect(VoiceInput.transcribeAudioFile('')).rejects.toThrow('No audio file was provided.');
   });
 
   it('cancelCapture is safe when no recording is active', async () => {

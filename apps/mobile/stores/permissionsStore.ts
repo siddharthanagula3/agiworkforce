@@ -5,13 +5,10 @@ import type {
   MobilePermissionKind,
   StoredPermissionState,
   OsPermissionStatus,
-  MobilePermissionLevel,
 } from '@/src/features/settings/permissions/types';
-import { osStatusToLevel } from '@/src/features/settings/permissions/registry';
 
 const DEFAULT_STATE: StoredPermissionState = {
   lastObservedStatus: 'undetermined',
-  userIntent: 'denied',
 };
 
 type AllPermissionsMap = Record<MobilePermissionKind, StoredPermissionState>;
@@ -27,12 +24,14 @@ function makeDefaults(): AllPermissionsMap {
   };
 }
 
+function isOsPermissionStatus(value: unknown): value is OsPermissionStatus {
+  return value === 'granted' || value === 'denied' || value === 'undetermined';
+}
+
 export interface PermissionsStoreState {
   permissions: AllPermissionsMap;
 
   setObservedStatus: (kind: MobilePermissionKind, status: OsPermissionStatus) => void;
-
-  setUserIntent: (kind: MobilePermissionKind, level: MobilePermissionLevel) => void;
 
   getPermission: (kind: MobilePermissionKind) => StoredPermissionState;
 }
@@ -43,34 +42,10 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
       permissions: makeDefaults(),
 
       setObservedStatus: (kind, status) => {
-        set((state) => {
-          const prev = state.permissions[kind];
-          const wasUndetermined = prev?.lastObservedStatus === 'undetermined';
-          const userIntent =
-            wasUndetermined || status !== 'granted'
-              ? osStatusToLevel(status, kind)
-              : (prev?.userIntent ?? osStatusToLevel(status, kind));
-          return {
-            permissions: {
-              ...state.permissions,
-              [kind]: {
-                ...prev,
-                lastObservedStatus: status,
-                userIntent,
-              },
-            },
-          };
-        });
-      },
-
-      setUserIntent: (kind, level) => {
         set((state) => ({
           permissions: {
             ...state.permissions,
-            [kind]: {
-              ...state.permissions[kind],
-              userIntent: level,
-            },
+            [kind]: { lastObservedStatus: status },
           },
         }));
       },
@@ -82,6 +57,17 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
     {
       name: 'permissions-store',
       storage: createJSONStorage(() => mmkvStorage),
+      version: 1,
+      migrate: (persisted) => {
+        const stored = (persisted as { permissions?: Record<string, unknown> } | null)?.permissions;
+        const permissions = makeDefaults();
+        for (const kind of Object.keys(permissions) as MobilePermissionKind[]) {
+          const observed = (stored?.[kind] as StoredPermissionState | undefined)
+            ?.lastObservedStatus;
+          if (isOsPermissionStatus(observed)) permissions[kind] = { lastObservedStatus: observed };
+        }
+        return { permissions };
+      },
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[permissionsStore] Hydration failed:', error);

@@ -119,6 +119,7 @@ import {
   getMinimumRequiredTier,
   getModelReasoning,
   type ModelReasoning,
+  getAutoRoutingProfileTiers,
 } from '@agiworkforce/types';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
 
@@ -298,11 +299,18 @@ describe('ModelPickerSheet', () => {
     expect(queryByLabelText(/sign in required/i)).toBeNull();
   });
 
-  it('renders local and locked cloud hierarchy when all models are requested', () => {
-    const { getByText, getAllByText } = renderPicker({ modelScope: 'all' });
+  it('sections cloud models by capability tier, not by raw provider', () => {
+    const { getByText, queryByText, getAllByText } = renderPicker({ modelScope: 'all' });
+
+    const firstLocked = LOCKED_CLOUD_MODELS[0]!;
+    const tierLabel = getAutoRoutingProfileTiers().find(
+      (tier) => tier.profile === firstLocked.tier,
+    )?.label;
 
     expect(getByText('On device')).toBeTruthy();
-    expect(getByText(LOCKED_CLOUD_MODELS[0]!.providerLabel)).toBeTruthy();
+    expect(tierLabel).toBeTruthy();
+    expect(getByText(tierLabel!)).toBeTruthy();
+    expect(queryByText(firstLocked.providerLabel)).toBeNull();
     expect(getAllByText('Sign in').length).toBeGreaterThan(0);
   });
 

@@ -4,7 +4,14 @@ import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import type { MobileAuthSession } from './authSession';
 import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
-import { notificationAllowed } from './notificationGate';
+import { storage, whenMmkvReady } from '@/lib/mmkv';
+import { notificationAllowed, vibrationAllowed } from './notificationGate';
+import {
+  androidChannelId,
+  registerAndroidChannels,
+  IOS_INTERRUPTION_LEVELS,
+  type NotificationPriority,
+} from './notificationChannels';
 import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from './notificationCategories';
 import type { NotificationEventType } from './notificationEventTypes';
 import {
@@ -23,7 +30,7 @@ export function setCurrentSession(session: MobileAuthSession | null): void {
 
 export type { NotificationEventType };
 
-export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
+export type { NotificationPriority };
 
 export interface NotificationData {
   type: NotificationEventType;
@@ -32,49 +39,6 @@ export interface NotificationData {
   agentId?: string;
   [key: string]: unknown;
 }
-
-const ANDROID_CHANNELS: Record<
-  string,
-  {
-    id: string;
-    name: string;
-    importance: number;
-    vibrationPattern?: number[];
-    lightColor: string;
-    bypassDnd?: boolean;
-    sound?: string;
-  }
-> = {
-  critical: {
-    id: 'critical',
-    name: 'Critical Alerts',
-    importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 500, 250, 500, 250, 500],
-    lightColor: '#ef4444',
-    bypassDnd: true,
-    sound: 'default',
-  },
-  high: {
-    id: 'high',
-    name: 'High Priority',
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 300, 200, 300],
-    lightColor: '#f59e0b',
-    sound: 'default',
-  },
-  normal: {
-    id: 'normal',
-    name: 'Normal',
-    importance: Notifications.AndroidImportance.DEFAULT,
-    lightColor: '#21808d',
-  },
-  low: {
-    id: 'low',
-    name: 'Status Updates',
-    importance: Notifications.AndroidImportance.MIN,
-    lightColor: '#21808d',
-  },
-};
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
@@ -130,6 +94,45 @@ function accountContextIsCurrent(accountContext: PushNotificationAccountContext)
   return !accountContext.signal.aborted && accountContext.isCurrent();
 }
 
+let _accountContext: PushNotificationAccountContext | null = null;
+
+export function setPushAccountContext(accountContext: PushNotificationAccountContext | null): void {
+  _accountContext = accountContext;
+}
+
+export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined';
+
+function toPushPermissionStatus(status: string): PushPermissionStatus {
+  if (status === 'granted') return 'granted';
+  if (status === 'undetermined') return 'undetermined';
+  return 'denied';
+}
+
+export async function getPushPermissionStatus(): Promise<PushPermissionStatus> {
+  const { status } = await Notifications.getPermissionsAsync();
+  return toPushPermissionStatus(status);
+}
+
+// The OS prompt fires exactly once per install, so it is spent from an explicit
+// user action after a primer, never from a lifecycle effect (MOBILE-021).
+export async function enablePushNotifications(): Promise<PushPermissionStatus> {
+  const current = await getPushPermissionStatus();
+  let status = current;
+  if (status !== 'granted') {
+    const requested = await Notifications.requestPermissionsAsync({
+      ios: { allowAlert: true, allowBadge: true, allowSound: true },
+    });
+    status = toPushPermissionStatus(requested.status);
+  }
+  if (status !== 'granted') return status;
+
+  await registerAndroidChannels();
+  if (_accountContext && accountContextIsCurrent(_accountContext)) {
+    await registerForPushNotifications(_accountContext);
+  }
+  return 'granted';
+}
+
 export async function registerForPushNotifications(
   accountContext: PushNotificationAccountContext,
 ): Promise<string | null> {
@@ -137,31 +140,13 @@ export async function registerForPushNotifications(
     if (!accountContextIsCurrent(accountContext)) return null;
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     if (!accountContextIsCurrent(accountContext)) return null;
-    let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (!accountContextIsCurrent(accountContext)) return null;
-      finalStatus = status;
-    }
-
-    if (finalStatus !== 'granted') {
       return null;
     }
 
-    if (Platform.OS === 'android') {
-      for (const channel of Object.values(ANDROID_CHANNELS)) {
-        await Notifications.setNotificationChannelAsync(channel.id, {
-          name: channel.name,
-          importance: channel.importance,
-          vibrationPattern: 'vibrationPattern' in channel ? channel.vibrationPattern : undefined,
-          lightColor: channel.lightColor,
-          sound: 'sound' in channel ? (channel.sound as string) : undefined,
-          bypassDnd: 'bypassDnd' in channel ? (channel.bypassDnd as boolean) : undefined,
-        });
-        if (!accountContextIsCurrent(accountContext)) return null;
-      }
-    }
+    await registerAndroidChannels();
+    if (!accountContextIsCurrent(accountContext)) return null;
 
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     const tokenData = await Notifications.getExpoPushTokenAsync(
@@ -221,14 +206,14 @@ export async function scheduleLocalNotification(opts: {
     data: data as unknown as Record<string, unknown>,
     sound: priority === 'critical' || priority === 'high' ? 'default' : undefined,
     badge: 1,
+    interruptionLevel: IOS_INTERRUPTION_LEVELS[priority],
   };
 
   if (Platform.OS === 'android') {
-    (content as Record<string, unknown>).channelId = priority;
-  }
-
-  if (Platform.OS === 'ios' && priority === 'critical') {
-    (content as Record<string, unknown>).interruptionLevel = 'timeSensitive';
+    (content as Record<string, unknown>).channelId = androidChannelId(
+      priority,
+      vibrationAllowed(priority),
+    );
   }
 
   await Notifications.scheduleNotificationAsync({
@@ -296,8 +281,10 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
 
   notificationCenterStore.add(response.notification);
 
+  // Local Mode is the app's own front door, so a tap never lands on a sign-in
+  // wall. Whatever the notification was about, the app opens (MOBILE-052).
   if (!_isSignedIn) {
-    safeNavigate({ pathname: '/(auth)/login' as const });
+    safeNavigate({ pathname: '/(app)' as const });
     return;
   }
 
@@ -369,11 +356,50 @@ export interface NotificationCenterItem {
 
 type NotificationCenterListener = (items: NotificationCenterItem[]) => void;
 
+const NOTIFICATION_CENTER_KEY = 'notification-center-items';
+const NOTIFICATION_CENTER_LIMIT = 50;
+
+function isStoredItem(value: unknown): value is NotificationCenterItem {
+  const item = value as NotificationCenterItem | null;
+  return (
+    typeof item?.id === 'string' &&
+    typeof item.title === 'string' &&
+    typeof item.body === 'string' &&
+    typeof item.receivedAt === 'string' &&
+    typeof item.read === 'boolean'
+  );
+}
+
+function readStoredItems(): NotificationCenterItem[] {
+  try {
+    const raw = storage.getString(NOTIFICATION_CENTER_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isStoredItem) : [];
+  } catch {
+    return [];
+  }
+}
+
 const notificationCenterStore = (() => {
   let items: NotificationCenterItem[] = [];
   const listeners = new Set<NotificationCenterListener>();
 
-  function notify(): void {
+  function persist(): void {
+    try {
+      storage.set(NOTIFICATION_CENTER_KEY, JSON.stringify(items));
+    } catch (err) {
+      console.warn('[notifications] Could not persist notification history:', err);
+    }
+  }
+
+  function commit(next: NotificationCenterItem[]): void {
+    const seen = new Set<string>();
+    items = next
+      .filter((item) => !seen.has(item.id) && seen.add(item.id))
+      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+      .slice(0, NOTIFICATION_CENTER_LIMIT);
+    persist();
     for (const listener of listeners) {
       listener([...items]);
     }
@@ -382,38 +408,38 @@ const notificationCenterStore = (() => {
   return {
     getAll: (): NotificationCenterItem[] => [...items],
 
+    hydrate: (): void => {
+      commit([...items, ...readStoredItems()]);
+    },
+
     add: (notification: Notifications.Notification): void => {
       const content = notification.request.content;
       const data = (content.data ?? {}) as NotificationData;
-      const priority = data.priority ?? inferPriority(data.type);
 
-      const item: NotificationCenterItem = {
-        id: notification.request.identifier,
-        title: content.title ?? '',
-        body: content.body ?? '',
-        data,
-        priority,
-        receivedAt: new Date().toISOString(),
-        read: false,
-      };
-
-      items = [item, ...items].slice(0, 50);
-      notify();
+      commit([
+        {
+          id: notification.request.identifier,
+          title: content.title ?? '',
+          body: content.body ?? '',
+          data,
+          priority: data.priority ?? inferPriority(data.type),
+          receivedAt: new Date().toISOString(),
+          read: false,
+        },
+        ...items,
+      ]);
     },
 
     markRead: (id: string): void => {
-      items = items.map((item) => (item.id === id ? { ...item, read: true } : item));
-      notify();
+      commit(items.map((item) => (item.id === id ? { ...item, read: true } : item)));
     },
 
     markAllRead: (): void => {
-      items = items.map((item) => ({ ...item, read: true }));
-      notify();
+      commit(items.map((item) => ({ ...item, read: true })));
     },
 
     clear: (): void => {
-      items = [];
-      notify();
+      commit([]);
     },
 
     subscribe: (listener: NotificationCenterListener): (() => void) => {
@@ -424,6 +450,11 @@ const notificationCenterStore = (() => {
     getUnreadCount: (): number => items.filter((i) => !i.read).length,
   };
 })();
+
+whenMmkvReady(() => {
+  notificationCenterStore.hydrate();
+  Notifications.setBadgeCountAsync(notificationCenterStore.getUnreadCount()).catch(() => undefined);
+});
 
 export { notificationCenterStore };
 
@@ -457,8 +488,9 @@ let responseSubscription: Notifications.Subscription | null = null;
 let tokenSubscription: Notifications.Subscription | null = null;
 
 export function setupNotificationListeners(
-  accountContext: PushNotificationAccountContext | null,
+  accountContext: PushNotificationAccountContext | null = null,
 ): () => void {
+  if (accountContext) setPushAccountContext(accountContext);
   if (foregroundSubscription || responseSubscription || tokenSubscription) {
     return () => {
       foregroundSubscription?.remove();
@@ -493,8 +525,9 @@ export function setupNotificationListeners(
   );
 
   tokenSubscription = Notifications.addPushTokenListener((newToken) => {
-    if (accountContext && accountContextIsCurrent(accountContext)) {
-      void sendTokenToBackend(newToken.data, accountContext);
+    const current = _accountContext;
+    if (current && accountContextIsCurrent(current)) {
+      void sendTokenToBackend(newToken.data, current);
     }
   });
 

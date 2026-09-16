@@ -10,13 +10,16 @@ import {
   Download,
   FileDown,
   AlertTriangle,
+  Signal,
 } from 'lucide-react-native';
-import { cacheDirectory, deleteAsync } from 'expo-file-system/legacy';
+import { cacheDirectory, deleteAsync, getFreeDiskStorageAsync } from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { listInstalledModels, deleteInstalledModel } from '@/storage/installedModels';
+import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { deleteDownloadedModel, getModelStorageBytes } from '@/services/modelDownload';
 import {
   exportAllUserData,
@@ -74,20 +77,27 @@ export default function StorageManagerScreen() {
   const [models, setModels] = useState<InstalledModel[]>([]);
   const [modelStorageBytes, setModelStorageBytes] = useState(0);
   const [cacheBytes, setCacheBytes] = useState(0);
+  const [freeBytes, setFreeBytes] = useState<number | null>(null);
+
+  const allowCellularDownloads = useModelInstallStore((s) => s.allowCellularDownloads);
+  const setAllowCellularDownloads = useModelInstallStore((s) => s.setAllowCellularDownloads);
+  const forgetInstalledModel = useModelInstallStore((s) => s.forgetInstalledModel);
 
   const [exportProgress, setExportProgress] = useState<DsarExportProgress | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isWiping, setIsWiping] = useState(false);
 
   const loadStorageInfo = useCallback(async () => {
-    const [installed, modelBytes, cacheBytes] = await Promise.all([
+    const [installed, modelBytes, cacheBytes, diskFreeBytes] = await Promise.all([
       listInstalledModels(),
       getModelStorageBytes(),
       cacheDirectory ? getDirectorySizeBytes(cacheDirectory) : Promise.resolve(0),
+      getFreeDiskStorageAsync().catch(() => null),
     ]);
     setModels(installed);
     setModelStorageBytes(modelBytes);
     setCacheBytes(cacheBytes);
+    setFreeBytes(diskFreeBytes);
   }, []);
 
   useEffect(() => {
@@ -100,25 +110,29 @@ export default function StorageManagerScreen() {
     router.navigate(target as Parameters<typeof router.navigate>[0]);
   }, [params.returnTo, router]);
 
-  const handleDeleteModel = useCallback((model: InstalledModel) => {
-    Alert.alert(
-      `Delete ${model.display_name}?`,
-      `This will remove ${formatBytes(model.size_bytes ?? 0)} from your device. You can re-download it later.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteDownloadedModel(model.id, model.format);
-            await deleteInstalledModel(model.id);
-            setModels((prev) => prev.filter((m) => m.id !== model.id));
-            setModelStorageBytes((prev) => Math.max(0, prev - (model.size_bytes ?? 0)));
+  const handleDeleteModel = useCallback(
+    (model: InstalledModel) => {
+      Alert.alert(
+        `Delete ${model.display_name}?`,
+        `This will remove ${formatBytes(model.size_bytes ?? 0)} from your device. You can re-download it later.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              await deleteDownloadedModel(model.id, model.format);
+              await deleteInstalledModel(model.id);
+              forgetInstalledModel(model.id);
+              setModels((prev) => prev.filter((m) => m.id !== model.id));
+              setModelStorageBytes((prev) => Math.max(0, prev - (model.size_bytes ?? 0)));
+            },
           },
-        },
-      ],
-    );
-  }, []);
+        ],
+      );
+    },
+    [forgetInstalledModel],
+  );
 
   const handleClearCache = useCallback(() => {
     Alert.alert(
@@ -271,6 +285,41 @@ export default function StorageManagerScreen() {
                 {formatBytes(cacheBytes)}
               </Text>
             </View>
+            {freeBytes !== null && (
+              <View className="flex-row justify-between">
+                <Text className="text-sm" style={{ color: c.textSecondary }}>
+                  Free space
+                </Text>
+                <Text
+                  testID="storage-free-space"
+                  className="text-sm font-medium"
+                  style={{ color: c.textPrimary }}
+                >
+                  {formatBytes(freeBytes)}
+                </Text>
+              </View>
+            )}
+          </View>
+        </Card>
+
+        {/* Download policy */}
+        <Card>
+          <View className="flex-row items-center gap-3">
+            <Signal size={18} color={c.teal} />
+            <View className="flex-1">
+              <Text className="text-[14px]" style={{ color: c.textPrimary }}>
+                Download over cellular
+              </Text>
+              <Text className="text-xs mt-0.5" style={{ color: c.textMuted }}>
+                Off means model downloads wait for Wi-Fi. Models are several gigabytes.
+              </Text>
+            </View>
+            <Switch
+              testID="storage-cellular-downloads"
+              value={allowCellularDownloads}
+              onValueChange={setAllowCellularDownloads}
+              accessibilityLabel="Download models over cellular"
+            />
           </View>
         </Card>
 

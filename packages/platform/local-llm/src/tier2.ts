@@ -80,9 +80,19 @@ export function tier2IsVisionReady(): boolean {
   return _instance !== null && _loadedPresetVision;
 }
 
+export interface Tier2LoadOptions {
+  /**
+   * Runs before ExecuTorch fetches any artifact. The host app supplies the same
+   * network-consent and free-space gate the GGUF path uses; throwing here stops
+   * the download before the first byte.
+   */
+  ensureDownloadAllowed?: () => Promise<void>;
+}
+
 export async function tier2LoadModel(
   preset: ExecutorchPreset,
   onDownloadProgress?: (progress: number) => void,
+  options?: Tier2LoadOptions,
 ): Promise<void> {
   if (_loadedPresetName === preset.modelName && _instance) return;
   if (_loadPromise) {
@@ -92,6 +102,8 @@ export async function tier2LoadModel(
 
   const LLMModule = getLLMModuleClass();
   if (!LLMModule) throw new Error('react-native-executorch not available');
+
+  await options?.ensureDownloadAllowed?.();
 
   const loadGeneration = ++_loadGeneration;
   _loadPromise = (async () => {

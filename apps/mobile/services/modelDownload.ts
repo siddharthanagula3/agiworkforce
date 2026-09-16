@@ -1,4 +1,3 @@
-
 import {
   documentDirectory,
   getInfoAsync,
@@ -7,6 +6,7 @@ import {
   readAsStringAsync,
   writeAsStringAsync,
   createDownloadResumable,
+  getFreeDiskStorageAsync,
   EncodingType,
   type FileInfo,
   type DownloadResumable,
@@ -25,6 +25,7 @@ import type { InstalledModel, ModelRuntime, ModelFormat } from '@/storage/types'
 
 export type ModelDownloadErrorKind =
   | 'wifi_required'
+  | 'offline'
   | 'checksum_mismatch'
   | 'storage_full'
   | 'network_error'
@@ -140,9 +141,56 @@ async function ensureDir(dir: string): Promise<void> {
   }
 }
 
-async function checkWifi(): Promise<boolean> {
+const FREE_SPACE_HEADROOM_BYTES = 256 * 1024 * 1024;
+
+export const CELLULAR_CONSENT_SETTING_PATH = 'Settings, Storage, Download over cellular';
+
+async function assertNetworkAllowed(wifiOnly: boolean): Promise<void> {
   const state = await NetInfo.fetch();
-  return state.type === 'wifi' && state.isConnected === true;
+  if (state.isConnected === false) {
+    throw new ModelDownloadError(
+      'offline',
+      'This device is offline, so the download cannot start. Reconnect and try again.',
+    );
+  }
+  if (!wifiOnly) return;
+  if (state.type === 'wifi') return;
+  throw new ModelDownloadError(
+    'wifi_required',
+    `This download needs Wi-Fi. Connect to Wi-Fi, or turn on ${CELLULAR_CONSENT_SETTING_PATH} to use mobile data.`,
+  );
+}
+
+function formatGigabytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+/**
+ * Free space is checked before the first byte is written, so an oversized model
+ * fails with the real number instead of a mid-download write error.
+ */
+export async function assertFreeSpaceFor(requiredBytes: number): Promise<void> {
+  let freeBytes: number;
+  try {
+    freeBytes = await getFreeDiskStorageAsync();
+  } catch {
+    return;
+  }
+  if (!Number.isFinite(freeBytes) || freeBytes <= 0) return;
+  const needed = requiredBytes + FREE_SPACE_HEADROOM_BYTES;
+  if (freeBytes >= needed) return;
+  throw new ModelDownloadError(
+    'storage_full',
+    `This model needs ${formatGigabytes(needed)} free and this device has ${formatGigabytes(freeBytes)}. Free up space and try again.`,
+  );
+}
+
+export async function assertDownloadAllowed(params: {
+  wifiOnly: boolean;
+  requiredBytes: number;
+}): Promise<void> {
+  await assertNetworkAllowed(params.wifiOnly);
+  await assertFreeSpaceFor(params.requiredBytes);
 }
 
 const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -329,15 +377,10 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     }
   }
 
-  if (wifiOnly) {
-    const isWifi = await checkWifi();
-    if (!isWifi) {
-      throw new ModelDownloadError(
-        'wifi_required',
-        'Wi-Fi connection required to download models. Connect to Wi-Fi or disable the Wi-Fi-only setting.',
-      );
-    }
-  }
+  await assertDownloadAllowed({
+    wifiOnly,
+    requiredBytes: fileSizeBytes + (opts.mmprojSizeBytes ?? 0),
+  });
 
   await ensureDir(modelDir(modelId));
 

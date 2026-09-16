@@ -765,7 +765,8 @@ export default function ChatTabScreen() {
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
     sendMessage: handleVoiceSendMessage,
-    speak: (text, callbacks) => TTS.speak(text, { ...callbacks }),
+    speak: (text, callbacks) =>
+      TTS.speak(text, { ...TTS.speechOptionsFromSettings(), ...callbacks }),
     stopSpeaking: () => TTS.stop(),
     onCaptureError: (err) => {
       setVoiceInlineVisible(false);

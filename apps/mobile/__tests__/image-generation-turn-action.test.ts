@@ -134,6 +134,35 @@ describe('runImageGenerationTurn', () => {
     expect(outcome).toEqual({ status: 'completed', assistantMessageId: 'assistant-1' });
   });
 
+  it('fails a hung generation on its own timeout instead of stranding the turn', async () => {
+    const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+    const generate = jest.fn(() => new Promise<never>(() => undefined));
+
+    const outcome = await runImageGenerationTurn(
+      {
+        conversationId: 'conversation-1',
+        displayText: '/image Mars',
+        prompt: 'Mars',
+        model: 'registry-image-route',
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      {
+        generate,
+        getUri: (image) => image?.url ?? null,
+        timeoutMs: 5,
+      },
+    );
+
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      expect.stringContaining('timed out'),
+    );
+    expect(callbacks.onUnexpectedError).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+  });
+
   it('removes the placeholder and delegates paywall presentation', async () => {
     const callbacks = createCallbacks();
     const error = new ApiPaywallError('image_quota', 'pro', 'Monthly image limit reached');

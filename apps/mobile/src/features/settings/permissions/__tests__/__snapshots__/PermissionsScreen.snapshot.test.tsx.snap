@@ -94,6 +94,8 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
   >
     <View>
       <View
+        accessibilityLabel="Camera. Not Requested. Used for photo capture and document scanning."
+        accessibilityRole="summary"
         style={
           {
             "alignItems": "center",
@@ -143,7 +145,7 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
               }
             }
           >
-            Access Denied
+            Not Requested
           </Text>
           <Text
             style={
@@ -159,332 +161,110 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
           </Text>
         </View>
       </View>
-      <View
+      <Text
         style={
           {
-            "marginBottom": 12,
-            "marginTop": 22,
+            "color": "#777",
+            "fontSize": 13,
+            "lineHeight": 18,
+            "marginTop": 14,
+            "paddingHorizontal": 2,
           }
         }
       >
-        <Text
-          style={
-            {
-              "color": "#777",
-              "fontSize": 12,
-              "fontWeight": "700",
-              "textTransform": "uppercase",
-            }
-          }
-        >
-          Access Level
-        </Text>
-      </View>
+        Your device has not been asked yet. Nothing is accessed until you allow it.
+      </Text>
       <View
+        accessibilityLabel="Allow Camera"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": false,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
         style={
           {
+            "alignItems": "center",
             "backgroundColor": "#1a1a1a",
             "borderColor": "#333",
             "borderRadius": 18,
             "borderWidth": 1,
-            "overflow": "hidden",
-            "paddingHorizontal": 10,
+            "flexDirection": "row",
+            "gap": 12,
+            "marginTop": 18,
+            "minHeight": 62,
+            "opacity": 1,
+            "paddingHorizontal": 16,
+            "paddingVertical": 14,
           }
         }
       >
-        <View>
-          <View
-            accessibilityLabel="Never. App cannot access this permission."
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": true,
-              }
+        <View
+          style={
+            {
+              "flex": 1,
+              "minWidth": 0,
             }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
+          }
+        >
+          <Text
             style={
               {
-                "alignItems": "center",
-                "flexDirection": "row",
-                "gap": 14,
-                "minHeight": 74,
-                "paddingHorizontal": 10,
-                "paddingVertical": 12,
+                "color": "#fff",
+                "fontSize": 16,
+                "fontWeight": "600",
               }
             }
           >
-            <View
-              style={
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "#1a1a1a",
-                  "borderColor": "#fff",
-                  "borderRadius": 12,
-                  "borderWidth": 1.5,
-                  "height": 24,
-                  "justifyContent": "center",
-                  "width": 24,
-                }
-              }
-            >
-              <View
-                style={
-                  {
-                    "backgroundColor": "#fff",
-                    "borderRadius": 5,
-                    "height": 10,
-                    "width": 10,
-                  }
-                }
-              />
-            </View>
-            <View
-              style={
-                {
-                  "flex": 1,
-                  "minWidth": 0,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#fff",
-                    "fontSize": 16,
-                    "fontWeight": "600",
-                  }
-                }
-              >
-                Never
-              </Text>
-              <Text
-                style={
-                  {
-                    "color": "#777",
-                    "fontSize": 13,
-                    "lineHeight": 18,
-                    "marginTop": 2,
-                  }
-                }
-              >
-                App cannot access this permission.
-              </Text>
-            </View>
-          </View>
-          <View
-            testID="separator"
-          />
-        </View>
-        <View>
-          <View
-            accessibilityLabel="Ask each time. The OS will ask each time the app needs access."
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": false,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
+            Allow Camera
+          </Text>
+          <Text
             style={
               {
-                "alignItems": "center",
-                "flexDirection": "row",
-                "gap": 14,
-                "minHeight": 74,
-                "paddingHorizontal": 10,
-                "paddingVertical": 12,
+                "color": "#777",
+                "fontSize": 13,
+                "lineHeight": 18,
+                "marginTop": 2,
               }
             }
           >
-            <View
-              style={
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "#1a1a1a",
-                  "borderColor": "#333",
-                  "borderRadius": 12,
-                  "borderWidth": 1.5,
-                  "height": 24,
-                  "justifyContent": "center",
-                  "width": 24,
-                }
-              }
-            />
-            <View
-              style={
-                {
-                  "flex": 1,
-                  "minWidth": 0,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#fff",
-                    "fontSize": 16,
-                    "fontWeight": "600",
-                  }
-                }
-              >
-                Ask each time
-              </Text>
-              <Text
-                style={
-                  {
-                    "color": "#777",
-                    "fontSize": 13,
-                    "lineHeight": 18,
-                    "marginTop": 2,
-                  }
-                }
-              >
-                The OS will ask each time the app needs access.
-              </Text>
-            </View>
-          </View>
-          <View
-            testID="separator"
-          />
+            Your device asks you to decide. AGI never sees an answer you do not give.
+          </Text>
         </View>
-        <View>
-          <View
-            accessibilityLabel="While using the app. Access is granted only while the app is in the foreground."
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": false,
-              }
+        <View
+          color="#777"
+          size={18}
+          style={
+            {
+              "flexShrink": 0,
             }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "flexDirection": "row",
-                "gap": 14,
-                "minHeight": 74,
-                "paddingHorizontal": 10,
-                "paddingVertical": 12,
-              }
-            }
-          >
-            <View
-              style={
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "#1a1a1a",
-                  "borderColor": "#333",
-                  "borderRadius": 12,
-                  "borderWidth": 1.5,
-                  "height": 24,
-                  "justifyContent": "center",
-                  "width": 24,
-                }
-              }
-            />
-            <View
-              style={
-                {
-                  "flex": 1,
-                  "minWidth": 0,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#fff",
-                    "fontSize": 16,
-                    "fontWeight": "600",
-                  }
-                }
-              >
-                While using the app
-              </Text>
-              <Text
-                style={
-                  {
-                    "color": "#777",
-                    "fontSize": 13,
-                    "lineHeight": 18,
-                    "marginTop": 2,
-                  }
-                }
-              >
-                Access is granted only while the app is in the foreground.
-              </Text>
-            </View>
-          </View>
-        </View>
+          }
+          testID="icon-ChevronRight"
+        />
       </View>
       <View
         style={
@@ -508,7 +288,7 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
             }
           }
         >
-          Some permission changes may open Settings. AGI cannot change device permissions without your approval.
+          This screen shows what your device currently reports. AGI cannot change a device permission on your behalf.
         </Text>
       </View>
     </View>
