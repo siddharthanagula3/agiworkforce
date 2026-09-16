@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LOCAL_INFERENCE_COMMANDS } from '@agiworkforce/local-runtime-contract';
 import type {
   PermissionScope,
   PermissionState,
@@ -300,148 +301,26 @@ describe('dispatch, opening files', () => {
 });
 
 describe('dispatch, local models', () => {
-  it('reports server status without asking for anything', async () => {
+  const LOCAL_COMMANDS: readonly string[] = LOCAL_INFERENCE_COMMANDS;
+
+  it('refuses every local inference command on the cloud-only shell', async () => {
+    getPermissionState.mockReturnValue('granted');
+
+    for (const command of LOCAL_COMMANDS) {
+      const response = await dispatch(window, command, {});
+      expect(response).toMatchObject({ ok: false, error: { code: 'unsupported-platform' } });
+    }
+  });
+
+  it('refuses before asking for permission or touching a local server', async () => {
     getPermissionState.mockReturnValue('prompt');
 
-    const response = await dispatch(window, 'local_model_servers', {});
+    for (const command of LOCAL_COMMANDS) {
+      await dispatch(window, command, {});
+    }
 
     expect(requestPermission).not.toHaveBeenCalled();
-    expect(response).toMatchObject({ ok: true, value: { granted: false } });
-  });
-
-  it('says the grant is held once local.inference is granted', async () => {
-    getPermissionState.mockReturnValue('granted');
-
-    const response = await dispatch(window, 'local_model_servers', {});
-
-    expect(response).toMatchObject({ ok: true, value: { granted: true } });
-  });
-
-  it('gates listing installed models on local.inference', async () => {
-    getPermissionState.mockReturnValue('prompt');
-    requestPermission.mockResolvedValue('granted');
-
-    await dispatch(window, 'local_model_list', {});
-
-    const call = requestPermission.mock.calls[0] as unknown as unknown[];
-    expect(call[1]).toBe('local.inference');
-    expect(listLocalModels).toHaveBeenCalled();
-  });
-
-  it('never reaches the local server when the grant is refused', async () => {
-    getPermissionState.mockReturnValue('prompt');
-    requestPermission.mockResolvedValue('denied');
-
-    const response = await dispatch(window, 'local_chat_start', {
-      runId: 'run-1',
-      modelId: 'local:ollama/tiny-chat:1b',
-      messages: [{ role: 'user', content: 'hi' }],
-    });
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
-    expect(runLocalChat).not.toHaveBeenCalled();
-  });
-
-  it('runs a granted turn and streams its deltas to the page', async () => {
-    getPermissionState.mockReturnValue('granted');
-    runLocalChat.mockImplementation(async (_input: unknown, emit: (delta: unknown) => void) => {
-      emit({ runId: 'run-1', channel: 'text', delta: 'hel' });
-      emit({ runId: 'run-1', channel: 'text', delta: 'lo' });
-      return {
-        runId: 'run-1',
-        modelId: 'local:ollama/tiny-chat:1b',
-        serverId: 'ollama',
-        text: 'hello',
-        thinking: '',
-        stopReason: 'end_turn',
-        durationMs: 4,
-      };
-    });
-
-    const response = await dispatch(window, 'local_chat_start', {
-      runId: 'run-1',
-      modelId: 'local:ollama/tiny-chat:1b',
-      messages: [{ role: 'user', content: 'hi' }],
-    });
-
-    expect(response).toMatchObject({ ok: true, value: { text: 'hello' } });
-    expect(send).toHaveBeenCalledWith(expect.any(String), {
-      kind: 'local-chat-delta',
-      runId: 'run-1',
-      channel: 'text',
-      delta: 'hel',
-    });
-  });
-
-  it('refuses a turn whose messages carry an attachment', async () => {
-    getPermissionState.mockReturnValue('granted');
-
-    const response = await dispatch(window, 'local_chat_start', {
-      runId: 'run-attach',
-      modelId: 'local:ollama/tiny-chat:1b',
-      messages: [{ role: 'user', content: 'read this', attachments: [{ name: 'a.pdf' }] }],
-    });
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('cannot read attachments') },
-    });
-    expect(runLocalChat).not.toHaveBeenCalled();
-  });
-
-  it('refuses a turn whose text carries attachment bytes', async () => {
-    getPermissionState.mockReturnValue('granted');
-
-    const response = await dispatch(window, 'local_chat_start', {
-      runId: 'run-bytes',
-      modelId: 'local:ollama/tiny-chat:1b',
-      messages: [{ role: 'user', content: 'data:image/png;base64,iVBORw0KGgo=' }],
-    });
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('cannot read attachments') },
-    });
-    expect(runLocalChat).not.toHaveBeenCalled();
-  });
-
-  it('refuses a turn with no messages before it starts', async () => {
-    getPermissionState.mockReturnValue('granted');
-
-    const response = await dispatch(window, 'local_chat_start', {
-      runId: 'run-1',
-      modelId: 'local:ollama/tiny-chat:1b',
-      messages: [],
-    });
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
-    expect(runLocalChat).not.toHaveBeenCalled();
-  });
-
-  it('refuses a message list with an unknown role', async () => {
-    getPermissionState.mockReturnValue('granted');
-
-    const response = await dispatch(window, 'local_chat_start', {
-      runId: 'run-1',
-      modelId: 'local:ollama/tiny-chat:1b',
-      messages: [{ role: 'tool', content: 'hi' }],
-    });
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
-  });
-
-  it('reads and writes the base urls without a prompt', async () => {
-    getPermissionState.mockReturnValue('prompt');
-
-    await dispatch(window, 'local_model_settings_read', {});
-    await dispatch(window, 'local_model_settings_write', {
-      settings: { baseUrls: { ollama: 'http://127.0.0.1:11434' } },
-    });
-
-    expect(requestPermission).not.toHaveBeenCalled();
-    expect(writeLocalModelSettings).toHaveBeenCalledWith({
-      baseUrls: { ollama: 'http://127.0.0.1:11434' },
-    });
+    expect(writeLocalModelSettings).not.toHaveBeenCalled();
   });
 });
 

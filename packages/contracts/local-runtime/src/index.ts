@@ -186,6 +186,7 @@ export {
   describeHostPlatform,
   desktopDeepLink,
   getHostBridge,
+  hostHasLocalMode,
   isHostCommand,
   parseDesktopDeepLink,
 } from './host-bridge';
@@ -198,6 +199,7 @@ export type {
   HostNotifyRequest,
   HostPreferences,
   HostPreferencesState,
+  HostShell,
   HostShortcutKey,
   HostShortcutStatus,
   HostUpdateAvailability,

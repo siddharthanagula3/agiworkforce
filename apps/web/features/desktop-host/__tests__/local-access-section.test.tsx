@@ -83,6 +83,21 @@ describe('LocalAccessSection', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('offers no local models on the cloud-only shell, but keeps folders and commands', async () => {
+    render(<LocalAccessSection />);
+    expect(await screen.findByText('project')).toBeInTheDocument();
+    expect(screen.getByText('git')).toBeInTheDocument();
+    expect(screen.queryByText('Local models')).not.toBeInTheDocument();
+    expect(screen.queryByText('Allow local models')).not.toBeInTheDocument();
+  });
+
+  it('offers local models on the shell that has a local mode', async () => {
+    window.agiHost = { ...window.agiHost!, shell: 'tauri' };
+    render(<LocalAccessSection />);
+    expect(await screen.findByText('Local models')).toBeInTheDocument();
+    expect(screen.getByText('project')).toBeInTheDocument();
+  });
+
   it('lists the approved folders and the command policy', async () => {
     render(<LocalAccessSection />);
     expect(await screen.findByText('project')).toBeInTheDocument();

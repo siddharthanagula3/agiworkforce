@@ -36,7 +36,8 @@ const listCalls = vi.fn();
 function installHost(): void {
   const host: HostBridge = {
     ...hostBridgeStub(),
-    platform: 'electron-darwin',
+    shell: 'tauri' as const,
+    platform: 'tauri-darwin',
     appVersion: '1.2.0',
     async invokeRuntime<T>(command: string) {
       if (command === 'local_model_servers') {
@@ -99,6 +100,13 @@ async function openPicker() {
 describe('the model picker on the desktop shell', () => {
   it('offers no On this device section in a browser', async () => {
     delete window.agiHost;
+    await openPicker();
+    expect(screen.queryByText('On this device')).not.toBeInTheDocument();
+  });
+
+  it('offers no On this device section on the cloud-only shell', async () => {
+    installHost();
+    window.agiHost = { ...window.agiHost!, shell: 'electron', platform: 'electron-darwin' };
     await openPicker();
     expect(screen.queryByText('On this device')).not.toBeInTheDocument();
   });

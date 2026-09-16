@@ -7,7 +7,7 @@ import {
   type LocalModel,
   type LocalModelSnapshot,
 } from '@agiworkforce/local-runtime-contract';
-import { useDesktopHost } from '../lib/host';
+import { useLocalModeHost } from '../lib/host';
 import { listLocalModels, readLocalModelSnapshot } from '../lib/runtime-client';
 
 export interface LocalModelsState {
@@ -31,7 +31,7 @@ const GRANT_REFUSED = 'Local models stay off until you allow them.';
  * what the user has installed until they ask for it.
  */
 export function useLocalModels(active: boolean): LocalModelsState {
-  const host = useDesktopHost();
+  const host = useLocalModeHost();
   const [snapshot, setSnapshot] = useState<LocalModelSnapshot | null>(null);
   const [models, setModels] = useState<LocalModel[]>([]);
   const [error, setError] = useState<string | null>(null);

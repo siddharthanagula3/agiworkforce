@@ -30,6 +30,7 @@ export function hostPreferencesStub(
 export function hostBridgeStub(overrides: Partial<HostBridge> = {}): HostBridge {
   return {
     platform: 'electron-darwin',
+    shell: 'electron',
     appVersion: '1.2.0',
     invokeRuntime: async () => ({
       ok: false as const,
