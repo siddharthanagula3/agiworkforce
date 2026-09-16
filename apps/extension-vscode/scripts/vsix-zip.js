@@ -16,7 +16,7 @@ const UNIX_SPECIAL_BITS = 0o7000;
 const UNIX_TYPE_MASK = 0o170000;
 const ZIP_OPTIONS = Object.freeze({
   checkOverlappingEntry: true,
-  checkSignature: true,
+  checkCrc32: true,
   useCompressionStream: true,
   useWebWorkers: false,
 });
