@@ -16,7 +16,7 @@ export interface PluginRuntimeComponents {
   skills: string[];
   skillPaths: string[];
   commands: number;
-  agents: number;
+  agents: string[];
   hooks: boolean;
   mcpServers: PluginMcpServerSummary[];
   lspServers: string[];
