@@ -139,21 +139,25 @@ describe('collapsed rail keeps every expanded nav destination', () => {
     },
   );
 
-  it.each(['design', 'research', 'automation'] as const)(
-    'drops %s entirely on a host that cannot reach Local mode',
-    (navId) => {
-      // These three run on the device and the shell renders them only in Local
-      // mode. A shipped Electron build cannot enter Local mode at all, so
-      // listing them there gave the user a control whose only answer was a
-      // toast naming a mode with no way in.
-      expect(renderNavIds('byok', false, false)).not.toContain(navId);
-      expect(renderNavIds('byok', true, false)).not.toContain(navId);
-    },
-  );
+  // Every one of these is gated on `privacyMode === 'local'` by the shell, so a
+  // host that cannot reach Local mode can never open any of them. Derived from
+  // one list rather than written out per case: the defect was three of five
+  // being fixed and two siblings, one file over, being left behind.
+  const DEVICE_ONLY_NAV = ['artifacts', 'code', 'design', 'research', 'automation'] as const;
+
+  it.each(DEVICE_ONLY_NAV)('drops %s entirely on a host that cannot reach Local mode', (navId) => {
+    expect(renderNavIds('byok', false, false)).not.toContain(navId);
+    expect(renderNavIds('byok', true, false)).not.toContain(navId);
+  });
+
+  it.each(DEVICE_ONLY_NAV)('keeps %s where Local mode can be reached', (navId) => {
+    expect(renderNavIds('local', false, true)).toContain(navId);
+    expect(renderNavIds('local', true, true)).toContain(navId);
+  });
 
   it('still offers the destinations that do work on a Cloud-only host', () => {
     const ids = renderNavIds('byok', false, false);
-    expect(ids).toEqual(expect.arrayContaining(['artifacts', 'code', 'tasks', 'customize']));
+    expect(ids).toEqual(expect.arrayContaining(['tasks', 'scheduled', 'customize']));
   });
 
   it('keeps Code off the managed nav in both layouts', () => {
