@@ -141,7 +141,12 @@ export default function SharePreviewScreen() {
         <Text style={{ fontSize: 17, fontWeight: '600', color: themeColors.textPrimary }}>
           Shared Content
         </Text>
-        <Pressable onPress={handleDismiss} hitSlop={12}>
+        <Pressable
+          onPress={handleDismiss}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss share preview"
+        >
           <X size={22} color={themeColors.textMuted} />
         </Pressable>
       </View>

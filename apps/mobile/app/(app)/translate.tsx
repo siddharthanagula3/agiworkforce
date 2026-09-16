@@ -403,6 +403,7 @@ export default function TranslateScreen() {
         onRequestClose={() => setLangPickerFor(null)}
       >
         <Pressable
+          accessible={false}
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
           onPress={() => setLangPickerFor(null)}
         >
