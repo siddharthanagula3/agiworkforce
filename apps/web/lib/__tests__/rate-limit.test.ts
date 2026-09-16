@@ -7,18 +7,32 @@ import { KEY_VALUE_PROVIDER_ENV } from '@agiworkforce/key-value';
 
 const NO_SHARED_STORE = 'none';
 
-const upstash = vi.hoisted(() => ({
-  client: {
-    zremrangebyscore: vi.fn(async () => 0),
-    zcard: vi.fn(async () => 0),
-    zadd: vi.fn(async () => 1),
-    zrem: vi.fn(async () => 1),
-    expire: vi.fn(async () => 1),
-    evalsha: vi.fn(async () => [1, 0]),
-    eval: vi.fn(async () => [1, 0]),
-    scriptLoad: vi.fn(async () => 'sha'),
-  },
-}));
+const upstash = vi.hoisted(() => {
+  const pipeline = {
+    zremrangebyscore: vi.fn(),
+    zadd: vi.fn(),
+    expire: vi.fn(),
+    zrange: vi.fn(),
+    exec: vi.fn(async (): Promise<unknown[]> => [0, 1, 1, ['turn']]),
+  };
+  for (const name of ['zremrangebyscore', 'zadd', 'expire', 'zrange'] as const) {
+    pipeline[name].mockImplementation(() => pipeline);
+  }
+  return {
+    pipeline,
+    client: {
+      zremrangebyscore: vi.fn(async () => 0),
+      zcard: vi.fn(async () => 0),
+      zadd: vi.fn(async () => 1),
+      zrem: vi.fn(async () => 1),
+      expire: vi.fn(async () => 1),
+      evalsha: vi.fn(async () => [1, 0]),
+      eval: vi.fn(async () => [1, 0]),
+      scriptLoad: vi.fn(async () => 'sha'),
+      pipeline: vi.fn(() => pipeline),
+    },
+  };
+});
 
 vi.mock('@upstash/redis', () => ({
   Redis: function RedisMock() {
@@ -173,10 +187,8 @@ describe('managed concurrent-turn ceiling', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    upstash.client.zremrangebyscore.mockResolvedValue(0);
-    upstash.client.zcard.mockResolvedValue(0);
-    upstash.client.zadd.mockResolvedValue(1);
-    upstash.client.expire.mockResolvedValue(1);
+    upstash.pipeline.exec.mockResolvedValue([0, 1, 1, ['turn-1']]);
+    upstash.client.zrem.mockResolvedValue(1);
     process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.invalid';
     process.env['UPSTASH_REDIS_REST_TOKEN'] = 'token';
     process.env[KEY_VALUE_PROVIDER_ENV] = 'upstash';
@@ -202,11 +214,16 @@ describe('managed concurrent-turn ceiling', () => {
 
     expect(result.admitted).toBe(true);
     expect(result.limit).toBe(paidCeiling);
-    expect(upstash.client.zadd).toHaveBeenCalledTimes(1);
+    expect(result.active).toBe(1);
+    expect(upstash.client.pipeline).toHaveBeenCalledTimes(1);
+    expect(upstash.pipeline.zadd).toHaveBeenCalledTimes(1);
+    expect(upstash.pipeline.exec).toHaveBeenCalledTimes(1);
+    expect(upstash.client.zrem).not.toHaveBeenCalled();
   });
 
-  it('refuses a turn once the plan ceiling is full', async () => {
-    upstash.client.zcard.mockResolvedValue(paidCeiling);
+  it('refuses a turn once the plan ceiling is full and gives its own slot back', async () => {
+    const occupied = Array.from({ length: paidCeiling }, (_, index) => `turn-${index}`);
+    upstash.pipeline.exec.mockResolvedValue([0, 1, 1, [...occupied, 'turn-2']]);
     const { acquireManagedTurnSlot } = await import('../rate-limit');
 
     const result = await acquireManagedTurnSlot({
@@ -217,11 +234,12 @@ describe('managed concurrent-turn ceiling', () => {
 
     expect(result.admitted).toBe(false);
     expect(result.denial).toBe('ceiling-reached');
-    expect(upstash.client.zadd).not.toHaveBeenCalled();
+    expect(result.active).toBe(paidCeiling);
+    expect(upstash.client.zrem).toHaveBeenCalledWith(expect.any(String), 'turn-2');
   });
 
   it('refuses the turn when Redis fails, instead of removing the ceiling', async () => {
-    upstash.client.zcard.mockRejectedValue(new Error('redis unavailable'));
+    upstash.pipeline.exec.mockRejectedValue(new Error('redis unavailable'));
     const { acquireManagedTurnSlot } = await import('../rate-limit');
 
     const result = await acquireManagedTurnSlot({
@@ -236,7 +254,7 @@ describe('managed concurrent-turn ceiling', () => {
   });
 
   it('admits the turn when the shared store reports its monthly quota exhausted', async () => {
-    upstash.client.zremrangebyscore.mockRejectedValue(
+    upstash.pipeline.exec.mockRejectedValue(
       new Error('Command failed: ERR max requests limit exceeded. Limit: 500000, Usage: 500002.'),
     );
     const { acquireManagedTurnSlot } = await import('../rate-limit');
@@ -288,7 +306,7 @@ describe('managed concurrent-turn ceiling', () => {
 
   it('admits on a Redis failure only when an operator configured fail-open', async () => {
     process.env[POLICY_ENV] = 'fail-open';
-    upstash.client.zcard.mockRejectedValue(new Error('redis unavailable'));
+    upstash.pipeline.exec.mockRejectedValue(new Error('redis unavailable'));
     const { acquireManagedTurnSlot } = await import('../rate-limit');
 
     const result = await acquireManagedTurnSlot({

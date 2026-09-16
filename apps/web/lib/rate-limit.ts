@@ -741,9 +741,7 @@ function rateLimitNamespace(key: RateLimitKey): string {
 const CLIENT_IP_SOURCE_ENV = 'AGI_RATE_LIMIT_CLIENT_IP_SOURCE';
 
 type ClientIpSource =
-  | { mode: 'x-real-ip' }
-  | { mode: 'xff-rightmost' }
-  | { mode: 'xff-hop'; hops: number };
+  { mode: 'x-real-ip' } | { mode: 'xff-rightmost' } | { mode: 'xff-hop'; hops: number };
 
 function parseClientIpSource(raw: string | undefined): ClientIpSource {
   const value = raw?.trim().toLowerCase();
@@ -1111,6 +1109,10 @@ function unavailableTurnSlot(
   return { admitted: false, limit, active: 0, slot: null, denial: 'limiter-unavailable' };
 }
 
+function sortedMemberCount(reply: unknown): number {
+  return Array.isArray(reply) ? reply.length : 0;
+}
+
 export async function acquireManagedTurnSlot(input: {
   userId: string;
   planTier: string | null | undefined;
@@ -1133,24 +1135,27 @@ export async function acquireManagedTurnSlot(input: {
   const now = Date.now();
 
   try {
-    await store.sortedRemoveByScore(
+    const admission = store.batch();
+    admission.sortedRemoveByScore(
       key,
       MANAGED_TURN_SLOT_OLDEST_SCORE,
       now - MANAGED_TURN_SLOT_TTL_SECONDS * MILLISECONDS_PER_SECOND,
     );
-    const active = await store.sortedSize(key);
-    if (active >= limit) {
-      return { admitted: false, limit, active, slot: null, denial: 'ceiling-reached' };
+    admission.sortedAdd(key, { score: now, member: input.turnId });
+    admission.expire(key, MANAGED_TURN_SLOT_TTL_SECONDS);
+    admission.sortedRangeByScore(key, MANAGED_TURN_SLOT_OLDEST_SCORE, Number.POSITIVE_INFINITY);
+    const replies = await admission.exec();
+    const active = sortedMemberCount(replies[replies.length - 1]);
+    if (active > limit) {
+      await store.sortedRemove(key, input.turnId);
+      return { admitted: false, limit, active: active - 1, slot: null, denial: 'ceiling-reached' };
     }
-
-    await store.sortedAdd(key, { score: now, member: input.turnId });
-    await store.expire(key, MANAGED_TURN_SLOT_TTL_SECONDS);
 
     let released = false;
     return {
       admitted: true,
       limit,
-      active: active + 1,
+      active,
       slot: {
         release: async () => {
           if (released) return;
