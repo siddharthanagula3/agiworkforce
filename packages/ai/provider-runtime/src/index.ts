@@ -7,15 +7,16 @@
  * resolution, and message-history repair toolkit.
  *
  * This package is consumed by:
- *   - `services/api-gateway/`, server-side LLM proxy.
- *   - `apps/web/app/api/llm/`, Next.js LLM routes (where applicable).
- *   - `apps/desktop/src-tauri/src/llm/`, Tauri-side LLM calls.
- *   - `packages/ai/providers/{anthropic,openai,google,ollama,...}`.
- *     each adapter wraps its `stream()` body in `withRetry` and
- *     `withStreamIdleWatchdog`.
- *
- * @see tasks/research/deep/m8-services-api.md
- * @see tasks/research/gap-matrix/pkg-api-providers-normalize.md
+ *   - `packages/ai/providers/*`, every adapter, for `classifyError`,
+ *     `toStreamErrorClassification` and `withStreamIdleWatchdog`. No adapter
+ *     calls `withRetry`: an adapter retrying its own `stream()` would compete
+ *     with the turn's deadline and failover budget, which it cannot see.
+ *   - `apps/web/app/api/llm/`, the Next.js LLM routes, which own retry for a
+ *     turn. The backoff runs at the stream-start seam in
+ *     `chat/completions/lib/provider-deadlines.ts`, the one point where an
+ *     attempt is known to have emitted nothing, and rotation runs above it in
+ *     `chat/completions/lib/managed-failover.ts`.
+ *   - `apps/extension` and `apps/mobile`, for the error taxonomy.
  *
  * @packageDocumentation
  */
