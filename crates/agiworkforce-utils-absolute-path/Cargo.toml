@@ -13,7 +13,7 @@ name = "agiworkforce_utils_absolute_path"
 path = "src/lib.rs"
 
 [dependencies]
-dirs = "6"
+dirs = "7"
 dunce = "1.0.4"
 path-absolutize = "4.0.1"
 schemars = "1.2.0"
