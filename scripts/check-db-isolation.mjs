@@ -559,20 +559,16 @@ const CROSS_TENANT_TABLES = new Map([
 ]);
 
 const UNPOLICED_APP_ENFORCED_TABLES = new Map([
+  // Seven tables left this list on 2026-09-16: the data export gave each of them
+  // a real, textually scannable query site, so the reason below stopped being
+  // true for them and pass 1 polices them directly now.
   ...[
     'account_lockout_attempts',
     'account_sessions',
     'agent_tool_executions',
     'agent_tools',
-    'chat_folders',
-    'conversation_tags',
-    'message_bookmarks',
-    'message_reactions',
     'search_history',
     'shared_conversations',
-    'support_ticket_replies',
-    'support_tickets',
-    'user_shortcuts',
     'messaging_connections',
   ].map((t) => [
     t,
