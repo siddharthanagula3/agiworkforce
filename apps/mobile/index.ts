@@ -1,5 +1,5 @@
 import './polyfills';
-import { initExecutorch } from 'react-native-executorch';
+import { initExecutorch } from 'react-native-executorch/legacy';
 import { ExpoResourceFetcher } from 'react-native-executorch-expo-resource-fetcher';
 import 'expo-router/entry';
 
