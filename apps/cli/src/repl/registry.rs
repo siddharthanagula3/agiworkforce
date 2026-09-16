@@ -10,19 +10,112 @@ use crate::sessions;
 use crate::terminal_style as ts;
 use crate::terminal_text::sanitize_terminal_text;
 
+/// What a command decided, so that one place owns both the decision and the
+/// wording for it.
+///
+/// The REPL prints these with its own labels; the TUI renders the message into
+/// its transcript. Neither surface restates the outcome, which is how the TUI
+/// came to answer "Session saved." to a write that had been refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommandOutcome {
+    /// An already-rendered listing the REPL prints bare, as it always has.
+    Block(String),
+    Info(String),
+    Warn(String),
+    Error(String),
+}
+
+impl CommandOutcome {
+    pub fn message(&self) -> &str {
+        match self {
+            Self::Block(message)
+            | Self::Info(message)
+            | Self::Warn(message)
+            | Self::Error(message) => message,
+        }
+    }
+
+    /// The message without this process's own colouring, for a surface that
+    /// draws text into its own buffer instead of writing to the terminal.
+    pub fn plain_message(&self) -> String {
+        sanitize_terminal_text(self.message()).into_owned()
+    }
+
+    pub fn print(&self) {
+        match self {
+            Self::Block(message) => eprintln!("{}", message),
+            Self::Info(message) => output::print_info(message),
+            Self::Warn(message) => output::print_warn(message),
+            Self::Error(message) => output::print_error(message),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_support {
+    use std::path::Path;
+
+    use crate::agent::AgentSession;
+    use crate::context::SystemContext;
+    use crate::runtime::session::ManagedSession;
+    use crate::runtime::session_control::ManagedSessionStore;
+
+    pub(super) fn test_session(persistence: bool) -> AgentSession {
+        let context = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new(crate::model_catalog::default_model(), &context, None);
+        session.set_session_persistence(persistence);
+        session
+    }
+
+    /// Back the session with a managed session inside `store_dir`, so a save or
+    /// a fork writes there instead of the user's config root.
+    pub(super) fn seed_managed_session(
+        session: &mut AgentSession,
+        store_dir: &Path,
+        session_id: &str,
+    ) {
+        let mut managed =
+            ManagedSession::with_messages(session_id, chrono::Utc::now(), session.messages.clone());
+        managed.model = Some(session.model.clone());
+        managed.routing_authority = Some(session.current_routing_authority());
+
+        let path = ManagedSessionStore::new(store_dir.to_path_buf())
+            .save(&managed)
+            .expect("seed a managed session in the temp store");
+        session
+            .adopt_managed_session(managed, path)
+            .expect("adopt the seeded managed session");
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Conversation commands
 // ---------------------------------------------------------------------------
 
-pub fn handle_save(session: &mut AgentSession) {
+/// Save the session, returning what to tell the user.
+pub fn save_session_for_display(session: &mut AgentSession) -> CommandOutcome {
     // Fail closed and say so: with `--no-session-persistence` the write gate in
     // `persist_managed_session` silently no-ops, which would leave /save
     // printing nothing and reading as a dead command.
     if !session.session_persistence_enabled() {
-        output::print_error(
-            "Cannot save, this run was started with --no-session-persistence, so nothing is written to disk. Restart without that flag to save sessions.",
+        return CommandOutcome::Error(
+            "Cannot save, this run was started with --no-session-persistence, so nothing is written to disk. Restart without that flag to save sessions."
+                .to_string(),
         );
-        return;
     }
 
     if !session
@@ -30,24 +123,77 @@ pub fn handle_save(session: &mut AgentSession) {
         .iter()
         .any(|message| message.role != "system")
     {
-        output::print_warn("Nothing to save, no messages in session yet.");
-        return;
+        return CommandOutcome::Warn("Nothing to save, no messages in session yet.".to_string());
     }
 
     if session.managed_session_id().is_none() {
         if let Err(error) = session.enable_managed_session() {
-            output::print_error(&format!("Failed to initialize managed session: {error:#}"));
-            return;
+            return CommandOutcome::Error(format!(
+                "Failed to initialize managed session: {error:#}"
+            ));
         }
     }
 
     if let Err(error) = session.persist_managed_session() {
-        output::print_error(&format!("Failed to persist managed session: {error:#}"));
-        return;
+        return CommandOutcome::Error(format!("Failed to persist managed session: {error:#}"));
     }
 
-    if let Some(session_id) = session.managed_session_id() {
-        output::print_info(&format!("Managed session saved: {}", session_id));
+    match session.managed_session_id() {
+        Some(session_id) => CommandOutcome::Info(format!("Managed session saved: {}", session_id)),
+        None => CommandOutcome::Error(
+            "Saved nothing, this run has no managed session to write to.".to_string(),
+        ),
+    }
+}
+
+pub fn handle_save(session: &mut AgentSession) {
+    save_session_for_display(session).print();
+}
+
+#[cfg(test)]
+mod save_tests {
+    use super::test_support::{seed_managed_session, test_session};
+    use super::{save_session_for_display, CommandOutcome};
+    use crate::models::Message;
+
+    #[test]
+    fn refuses_to_claim_a_save_the_privacy_flag_forbids() {
+        let mut session = test_session(false);
+        session.messages.push(Message::text("user", "hello"));
+
+        match save_session_for_display(&mut session) {
+            CommandOutcome::Error(message) => {
+                assert!(message.contains("--no-session-persistence"), "{message}")
+            }
+            other => panic!("a refused write must not read as a save: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reports_an_empty_session_as_nothing_to_save() {
+        let mut session = test_session(true);
+
+        match save_session_for_display(&mut session) {
+            CommandOutcome::Warn(message) => {
+                assert!(message.contains("Nothing to save"), "{message}")
+            }
+            other => panic!("an empty session has nothing to save: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn names_the_session_it_actually_wrote() {
+        let store = tempfile::tempdir().expect("tempdir");
+        let mut session = test_session(true);
+        session.messages.push(Message::text("user", "hello"));
+        seed_managed_session(&mut session, store.path(), "saved-session-id");
+
+        match save_session_for_display(&mut session) {
+            CommandOutcome::Info(message) => {
+                assert!(message.contains("saved-session-id"), "{message}")
+            }
+            other => panic!("expected the saved session id: {other:?}"),
+        }
     }
 }
 
@@ -214,24 +360,76 @@ pub(super) fn handle_delete(arg: &str) {
     }
 }
 
-pub fn handle_export(arg: &str, session: &AgentSession) {
+/// Render the conversation for export, returning the text to show or why
+/// there is nothing to show.
+///
+/// The text comes back rather than going to stdout because the TUI has taken
+/// the screen over: it used to answer "Exported above." with nothing above it.
+pub fn export_conversation_for_display(
+    arg: &str,
+    session: &AgentSession,
+) -> Result<String, CommandOutcome> {
     if !session
         .messages
         .iter()
         .any(|message| message.role != "system")
     {
-        output::print_warn("Nothing to export, no messages in session yet.");
-        return;
+        return Err(CommandOutcome::Warn(
+            "Nothing to export, no messages in session yet.".to_string(),
+        ));
     }
 
     if arg == "json" {
-        match conversations::export_as_json(session) {
-            Ok(json) => println!("{}", json),
-            Err(e) => output::print_error(&format!("Export failed: {:#}", e)),
-        }
+        conversations::export_as_json(session)
+            .map_err(|e| CommandOutcome::Error(format!("Export failed: {:#}", e)))
     } else {
         let md = conversations::export_as_markdown(session);
-        println!("{}", sanitize_terminal_text(&md));
+        Ok(sanitize_terminal_text(&md).into_owned())
+    }
+}
+
+pub fn handle_export(arg: &str, session: &AgentSession) {
+    match export_conversation_for_display(arg, session) {
+        Ok(text) => println!("{}", text),
+        Err(outcome) => outcome.print(),
+    }
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::test_support::test_session;
+    use super::{export_conversation_for_display, CommandOutcome};
+    use crate::models::Message;
+
+    #[test]
+    fn reports_an_empty_session_instead_of_an_empty_export() {
+        let session = test_session(true);
+
+        match export_conversation_for_display("markdown", &session) {
+            Err(CommandOutcome::Warn(message)) => {
+                assert!(message.contains("Nothing to export"), "{message}")
+            }
+            other => panic!("an empty session exports nothing: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn returns_the_export_itself_so_a_full_screen_caller_can_show_it() {
+        // The TUI said "Exported above." over a screen it had taken over, so
+        // the export had to come back as text rather than go to stdout.
+        let mut session = test_session(true);
+        session.messages.push(Message::text("user", "a question"));
+        session
+            .messages
+            .push(Message::text("assistant", "an answer"));
+
+        let markdown = export_conversation_for_display("markdown", &session)
+            .expect("a session with messages exports");
+        assert!(markdown.contains("a question"), "{markdown}");
+        assert!(markdown.contains("an answer"), "{markdown}");
+
+        let json = export_conversation_for_display("json", &session).expect("json export");
+        assert!(json.contains("a question"), "{json}");
     }
 }
 
@@ -621,7 +819,8 @@ pub async fn handle_compact(arg: &str, session: &mut AgentSession, config: &CliC
     ));
 }
 
-pub fn handle_rewind(arg: &str, session: &mut AgentSession) {
+/// Rewind the session, returning what to tell the user.
+pub fn rewind_session_for_display(arg: &str, session: &mut AgentSession) -> CommandOutcome {
     let count = if arg.is_empty() {
         1usize
     } else {
@@ -638,26 +837,76 @@ pub fn handle_rewind(arg: &str, session: &mut AgentSession) {
     }
 
     if rewound == 0 {
-        output::print_warn("No checkpoints available to rewind to.");
+        CommandOutcome::Warn("No checkpoints available to rewind to.".to_string())
     } else {
-        output::print_info(&format!(
+        CommandOutcome::Info(format!(
             "Rewound {} checkpoint{}. {} remaining. ({} messages in context)",
             rewound,
             if rewound == 1 { "" } else { "s" },
             session.checkpoint_count(),
             session.messages.len()
-        ));
+        ))
     }
 }
 
-pub fn handle_branch(arg: &str, session: &mut AgentSession) {
+pub fn handle_rewind(arg: &str, session: &mut AgentSession) {
+    rewind_session_for_display(arg, session).print();
+}
+
+#[cfg(test)]
+mod rewind_tests {
+    use super::test_support::test_session;
+    use super::{rewind_session_for_display, CommandOutcome};
+    use crate::models::Message;
+
+    #[test]
+    fn refuses_to_claim_a_rewind_with_no_checkpoint_to_rewind_to() {
+        let mut session = test_session(true);
+
+        match rewind_session_for_display("", &mut session) {
+            CommandOutcome::Warn(message) => {
+                assert!(message.contains("No checkpoints"), "{message}")
+            }
+            other => panic!("nothing was rewound: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stops_at_the_last_checkpoint_and_counts_only_what_it_undid() {
+        let mut session = test_session(true);
+        session.messages.push(Message::text("user", "first"));
+        session.save_checkpoint();
+        session.messages.push(Message::text("user", "second"));
+
+        match rewind_session_for_display("5", &mut session) {
+            CommandOutcome::Info(message) => {
+                assert!(message.contains("Rewound 1 checkpoint."), "{message}");
+                assert!(message.contains("0 remaining"), "{message}");
+            }
+            other => panic!("one checkpoint was available: {other:?}"),
+        }
+    }
+}
+
+/// Fork the session, returning what to tell the user.
+pub fn branch_session_for_display(arg: &str, session: &mut AgentSession) -> CommandOutcome {
+    branch_session_in(arg, session, None)
+}
+
+/// `store` is injected only so a test can fork inside a temp directory; every
+/// caller in the product passes `None` and forks in the user's config root.
+fn branch_session_in(
+    arg: &str,
+    session: &mut AgentSession,
+    store: Option<&crate::runtime::session_control::ManagedSessionStore>,
+) -> CommandOutcome {
     // Branching writes a second session file to disk; refuse rather than fork
     // around the privacy opt-out.
     if !session.session_persistence_enabled() {
-        output::print_error(
-            "Cannot branch, this run was started with --no-session-persistence, so no session file exists to fork. Restart without that flag to branch.",
+        return CommandOutcome::Error(
+            "Cannot branch, this run was started with --no-session-persistence, so no session file exists to fork. Restart without that flag to branch."
+                .to_string(),
         );
-        return;
     }
 
     if !session
@@ -665,8 +914,7 @@ pub fn handle_branch(arg: &str, session: &mut AgentSession) {
         .iter()
         .any(|message| message.role != "system")
     {
-        output::print_warn("Nothing to branch, no messages yet.");
-        return;
+        return CommandOutcome::Warn("Nothing to branch, no messages yet.".to_string());
     }
 
     let branch_name = if arg.is_empty() {
@@ -677,26 +925,29 @@ pub fn handle_branch(arg: &str, session: &mut AgentSession) {
 
     if session.managed_session_id().is_none() {
         if let Err(error) = session.enable_managed_session() {
-            output::print_error(&format!(
+            return CommandOutcome::Error(format!(
                 "Failed to initialize a managed session before branching: {error:#}"
             ));
-            return;
         }
     }
 
     let Some(session_id) = session.managed_session_id().map(str::to_string) else {
-        output::print_error("Managed session is unavailable for branching.");
-        return;
+        return CommandOutcome::Error("Managed session is unavailable for branching.".to_string());
     };
 
     if let Err(error) = session.persist_managed_session() {
-        output::print_error(&format!(
+        return CommandOutcome::Error(format!(
             "Failed to persist current session before fork: {error:#}"
         ));
-        return;
     }
 
-    match crate::runtime::session_control::fork_managed_session(&session_id) {
+    let forked = match store {
+        Some(store) => crate::runtime::session_control::ManagedSessionReference::parse(&session_id)
+            .and_then(|reference| store.fork(reference)),
+        None => crate::runtime::session_control::fork_managed_session(&session_id),
+    };
+
+    match forked {
         Ok(forked_session) => {
             if let Ok(conn) = sessions::open_db() {
                 let _ = sessions::rename_session(
@@ -705,13 +956,98 @@ pub fn handle_branch(arg: &str, session: &mut AgentSession) {
                     &branch_name,
                 );
             }
-            output::print_info(&format!(
+            CommandOutcome::Info(format!(
                 "Branched conversation '{}' as managed session {}. Resume with: agiworkforce --session {}",
                 branch_name, forked_session.summary.session_id, forked_session.summary.session_id
-            ));
+            ))
         }
-        Err(error) => {
-            output::print_error(&format!("Failed to fork managed session: {error:#}"));
+        Err(error) => CommandOutcome::Error(format!("Failed to fork managed session: {error:#}")),
+    }
+}
+
+pub fn handle_branch(arg: &str, session: &mut AgentSession) {
+    branch_session_for_display(arg, session).print();
+}
+
+#[cfg(test)]
+mod branch_tests {
+    use super::test_support::{seed_managed_session, test_session};
+    use super::{branch_session_for_display, branch_session_in, CommandOutcome};
+    use crate::models::Message;
+    use crate::runtime::session_control::ManagedSessionStore;
+
+    #[test]
+    fn refuses_to_claim_a_fork_the_privacy_flag_forbids() {
+        let mut session = test_session(false);
+        session.messages.push(Message::text("user", "hello"));
+
+        match branch_session_for_display("", &mut session) {
+            CommandOutcome::Error(message) => {
+                assert!(message.contains("--no-session-persistence"), "{message}")
+            }
+            other => panic!("a refused fork must not read as a fork: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reports_an_empty_session_as_nothing_to_branch() {
+        let mut session = test_session(true);
+
+        match branch_session_for_display("", &mut session) {
+            CommandOutcome::Warn(message) => {
+                assert!(message.contains("Nothing to branch"), "{message}")
+            }
+            other => panic!("an empty session has nothing to branch: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reports_a_fork_the_store_refused_as_a_failure() {
+        let store = tempfile::tempdir().expect("tempdir");
+        let elsewhere = tempfile::tempdir().expect("tempdir");
+        let mut session = test_session(true);
+        session.messages.push(Message::text("user", "hello"));
+        seed_managed_session(&mut session, store.path(), "absent-from-the-fork-store");
+
+        // The session exists, but not in the store the fork reads, so the fork
+        // fails after the write the earlier guards check.
+        let outcome = branch_session_in(
+            "a branch",
+            &mut session,
+            Some(&ManagedSessionStore::new(elsewhere.path().to_path_buf())),
+        );
+        match outcome {
+            CommandOutcome::Error(message) => {
+                assert!(message.contains("Failed to fork"), "{message}")
+            }
+            other => panic!("the fork could not have succeeded: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn names_the_session_the_fork_produced() {
+        let store = tempfile::tempdir().expect("tempdir");
+        let mut session = test_session(true);
+        session.messages.push(Message::text("user", "hello"));
+        seed_managed_session(&mut session, store.path(), "forked-session-source");
+
+        let outcome = branch_session_in(
+            "a branch",
+            &mut session,
+            Some(&ManagedSessionStore::new(store.path().to_path_buf())),
+        );
+        match outcome {
+            CommandOutcome::Info(message) => {
+                assert!(
+                    message.contains("Branched conversation 'a branch'"),
+                    "{message}"
+                );
+                assert!(
+                    !message.contains("forked-session-source"),
+                    "the fork must name the new session, not the source: {message}"
+                );
+            }
+            other => panic!("expected the forked session id: {other:?}"),
         }
     }
 }
@@ -1057,7 +1393,24 @@ pub(super) async fn handle_worktree_in(repo: &std::path::Path, arg: &str) -> Str
 // Memory commands
 // ---------------------------------------------------------------------------
 
-pub fn handle_memory(arg: &str) {
+/// Whether the caller can hand this terminal to `$EDITOR`.
+///
+/// `/memory edit` runs the editor in the foreground for as long as the user
+/// keeps it open. The full-screen UI cannot give the terminal up without
+/// tearing down its own alternate screen, so it is told plainly rather than
+/// left with an invisible editor drawing over a corrupt frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditorAvailability {
+    Available,
+    TerminalOwnedByUi,
+}
+
+/// Run a `/memory` subcommand, returning what to show.
+///
+/// The listing comes back as text rather than going to the terminal because
+/// the TUI has taken the screen over: it used to answer "Memory shown above."
+/// with nothing above it.
+pub fn memory_for_display(arg: &str, editor: EditorAvailability) -> CommandOutcome {
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let mgr = MemoryManager::new(&cwd);
 
@@ -1067,8 +1420,7 @@ pub fn handle_memory(arg: &str) {
 
     match sub_cmd {
         "" | "show" => {
-            eprintln!("{}", ts::accent_header("Memory Hierarchy:"));
-            eprintln!();
+            let mut block = format!("{}\n\n", ts::accent_header("Memory Hierarchy:"));
 
             let tiers = mgr.list();
             for (tier, path, exists) in &tiers {
@@ -1077,40 +1429,42 @@ pub fn handle_memory(arg: &str) {
                 } else {
                     "not found".dimmed().to_string()
                 };
-                eprintln!(
-                    "  {} {} ({})",
+                block.push_str(&format!(
+                    "  {} {} ({})\n",
                     format_args!("[{}]", tier).to_string().bold(),
                     path.display(),
                     status
-                );
+                ));
 
                 if *exists {
                     if let Ok(content) = std::fs::read_to_string(path) {
                         let preview = memory::content_preview(&content, 5);
                         for line in preview.lines() {
-                            eprintln!("    {}", ts::muted(line));
+                            block.push_str(&format!("    {}\n", ts::muted(line)));
                         }
-                        eprintln!();
+                        block.push('\n');
                     }
                 }
             }
+
+            block.pop();
+            CommandOutcome::Block(block)
         }
         "add" => {
             let (tier, text) = parse_tier_and_text(sub_arg);
             if text.is_empty() {
-                output::print_warn("Usage: /memory add [global|project|local] <text>");
-                return;
+                return CommandOutcome::Warn(
+                    "Usage: /memory add [global|project|local] <text>".to_string(),
+                );
             }
 
             match mgr.save(&tier, text) {
-                Ok(path) => {
-                    output::print_info(&format!(
-                        "Appended to {} memory ({})",
-                        tier,
-                        path.display()
-                    ));
-                }
-                Err(e) => output::print_error(&e),
+                Ok(path) => CommandOutcome::Info(format!(
+                    "Appended to {} memory ({})",
+                    tier,
+                    path.display()
+                )),
+                Err(e) => CommandOutcome::Error(e),
             }
         }
         "edit" => {
@@ -1120,11 +1474,21 @@ pub fn handle_memory(arg: &str) {
                 _ => MemoryTier::Project,
             };
 
+            if editor == EditorAvailability::TerminalOwnedByUi {
+                let location = mgr
+                    .path_for_tier(&tier)
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| format!("the {} memory file", tier));
+                return CommandOutcome::Error(format!(
+                    "Cannot edit memory here, /memory edit runs $EDITOR in this terminal and the full-screen UI is holding it. Use /memory add, or edit {} directly.",
+                    location
+                ));
+            }
+
             let path = match mgr.path_for_tier(&tier) {
                 Some(p) => p.to_path_buf(),
                 None => {
-                    output::print_warn(&format!("No path for {} memory tier.", tier));
-                    return;
+                    return CommandOutcome::Warn(format!("No path for {} memory tier.", tier));
                 }
             };
 
@@ -1135,18 +1499,19 @@ pub fn handle_memory(arg: &str) {
                 let _ = std::fs::write(&path, format!("# {} Memory\n", tier));
             }
 
-            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-            match std::process::Command::new(&editor).arg(&path).status() {
+            let editor_command = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+            match std::process::Command::new(&editor_command).arg(&path).status() {
                 Ok(status) => {
                     if status.success() {
-                        output::print_info(&format!("Saved {} memory.", tier));
+                        CommandOutcome::Info(format!("Saved {} memory.", tier))
                     } else {
-                        output::print_warn("Editor exited with non-zero status.");
+                        CommandOutcome::Warn("Editor exited with non-zero status.".to_string())
                     }
                 }
-                Err(e) => {
-                    output::print_error(&format!("Failed to open editor '{}': {}", editor, e))
-                }
+                Err(e) => CommandOutcome::Error(format!(
+                    "Failed to open editor '{}': {}",
+                    editor_command, e
+                )),
             }
         }
         "global" | "project" | "local" => {
@@ -1161,26 +1526,81 @@ pub fn handle_memory(arg: &str) {
                 entries.iter().filter(|e| e.source == tier).collect();
 
             if matching.is_empty() {
-                output::print_info(&format!("No {} memory found.", tier));
+                CommandOutcome::Info(format!("No {} memory found.", tier))
             } else {
+                let mut block = String::new();
                 for entry in matching {
-                    eprintln!(
-                        "{}",
+                    block.push_str(&format!(
+                        "{}\n",
                         ts::accent_header(format!(
                             "{} Memory ({}):",
                             entry.source,
                             entry.file_path.display()
                         ))
-                    );
-                    eprintln!("{}", sanitize_terminal_text(&entry.content));
+                    ));
+                    block.push_str(&format!("{}\n", sanitize_terminal_text(&entry.content)));
                 }
+                block.pop();
+                CommandOutcome::Block(block)
             }
         }
-        _ => {
-            output::print_warn(
-                "Usage: /memory [show|add [global|project|local] <text>|edit [global|project|local]|global|project|local]",
-            );
+        _ => CommandOutcome::Warn(
+            "Usage: /memory [show|add [global|project|local] <text>|edit [global|project|local]|global|project|local]"
+                .to_string(),
+        ),
+    }
+}
+
+pub fn handle_memory(arg: &str) {
+    memory_for_display(arg, EditorAvailability::Available).print();
+}
+
+#[cfg(test)]
+mod memory_tests {
+    use super::{memory_for_display, CommandOutcome, EditorAvailability};
+
+    #[test]
+    fn rejects_an_unknown_subcommand_instead_of_claiming_it_showed_memory() {
+        match memory_for_display("wat", EditorAvailability::TerminalOwnedByUi) {
+            CommandOutcome::Warn(message) => assert!(message.starts_with("Usage:"), "{message}"),
+            other => panic!("an unknown subcommand shows nothing: {other:?}"),
         }
+    }
+
+    #[test]
+    fn rejects_an_add_with_no_text() {
+        match memory_for_display("add", EditorAvailability::TerminalOwnedByUi) {
+            CommandOutcome::Warn(message) => assert!(message.starts_with("Usage:"), "{message}"),
+            other => panic!("there is nothing to append: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn refuses_to_run_the_editor_under_a_full_screen_caller() {
+        match memory_for_display("edit project", EditorAvailability::TerminalOwnedByUi) {
+            CommandOutcome::Error(message) => {
+                assert!(message.contains("$EDITOR"), "{message}");
+                assert!(message.contains("/memory add"), "{message}");
+            }
+            other => panic!("the editor cannot take a terminal the UI holds: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn returns_the_listing_itself_so_a_full_screen_caller_can_show_it() {
+        // "Memory shown above." was printed over a screen the TUI owned, with
+        // the listing on a stream the user could not see.
+        let outcome = memory_for_display("", EditorAvailability::TerminalOwnedByUi);
+        match &outcome {
+            CommandOutcome::Block(block) => {
+                assert!(block.contains("Memory Hierarchy:"), "{block}")
+            }
+            other => panic!("the listing has to come back as text: {other:?}"),
+        }
+        assert!(
+            !outcome.plain_message().contains('\u{1b}'),
+            "a caller that renders into its own buffer cannot show escapes"
+        );
     }
 }
 
@@ -1207,11 +1627,17 @@ pub(super) fn parse_tier_and_text(input: &str) -> (MemoryTier, &str) {
 // Project init command
 // ---------------------------------------------------------------------------
 
-pub fn handle_init_project() {
-    let agents_md = std::path::Path::new("AGENTS.md");
+/// Write the project's AGENTS.md, returning what to tell the user.
+pub fn init_project_for_display() -> CommandOutcome {
+    init_project_in(std::path::Path::new("."))
+}
+
+/// `dir` is a parameter so a test can reach both branches without moving the
+/// process's working directory out from under every other test.
+fn init_project_in(dir: &std::path::Path) -> CommandOutcome {
+    let agents_md = dir.join("AGENTS.md");
     if agents_md.exists() {
-        output::print_info("AGENTS.md already exists in current directory.");
-        return;
+        return CommandOutcome::Info("AGENTS.md already exists in current directory.".to_string());
     }
 
     let template = "# Project Instructions\n\n\
@@ -1226,9 +1652,58 @@ pub fn handle_init_project() {
                     ## Development Rules\n\n\
                     - Add your coding conventions here\n";
 
-    match std::fs::write(agents_md, template) {
-        Ok(()) => output::print_info("Created AGENTS.md in current directory."),
-        Err(e) => output::print_error(&format!("Failed to create AGENTS.md: {}", e)),
+    match std::fs::write(&agents_md, template) {
+        Ok(()) => CommandOutcome::Info("Created AGENTS.md in current directory.".to_string()),
+        Err(e) => CommandOutcome::Error(format!("Failed to create AGENTS.md: {}", e)),
+    }
+}
+
+pub fn handle_init_project() {
+    init_project_for_display().print();
+}
+
+#[cfg(test)]
+mod init_tests {
+    use super::{init_project_in, CommandOutcome};
+
+    #[test]
+    fn reports_a_file_it_did_not_write_as_already_there() {
+        // The TUI answered "Project initialized." here, so a user who ran
+        // /init in a project that already had AGENTS.md was told their
+        // instructions had just been created.
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("AGENTS.md"), "# Mine\n").expect("seed AGENTS.md");
+
+        match init_project_in(dir.path()) {
+            CommandOutcome::Info(message) => {
+                assert!(message.contains("already exists"), "{message}")
+            }
+            other => panic!("nothing was created: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reports_a_directory_it_cannot_write_to_as_a_failure() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let missing = dir.path().join("no-such-directory");
+
+        match init_project_in(&missing) {
+            CommandOutcome::Error(message) => {
+                assert!(message.contains("Failed to create AGENTS.md"), "{message}")
+            }
+            other => panic!("the write could not have succeeded: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reports_the_file_it_did_write() {
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        match init_project_in(dir.path()) {
+            CommandOutcome::Info(message) => assert!(message.contains("Created"), "{message}"),
+            other => panic!("the write should have succeeded: {other:?}"),
+        }
+        assert!(dir.path().join("AGENTS.md").exists());
     }
 }
 

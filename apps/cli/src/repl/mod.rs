@@ -20,9 +20,11 @@ use slash_commands::{handle_slash_command, SlashResult};
 
 // Re-export the public handler functions used by tui_app.rs and lib.rs.
 pub use registry::{
-    handle_branch, handle_compact, handle_export, handle_history, handle_init_project, handle_load,
-    handle_memory, handle_permissions, handle_rename, handle_rewind, handle_save,
-    rename_session_for_display,
+    branch_session_for_display, export_conversation_for_display, handle_branch, handle_compact,
+    handle_export, handle_history, handle_init_project, handle_load, handle_memory,
+    handle_permissions, handle_rename, handle_rewind, handle_save, init_project_for_display,
+    memory_for_display, rename_session_for_display, rewind_session_for_display,
+    save_session_for_display, CommandOutcome, EditorAvailability,
 };
 
 type ManagedSessionResume = (crate::runtime::session::ManagedSession, std::path::PathBuf);

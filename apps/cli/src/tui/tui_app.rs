@@ -3562,34 +3562,19 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(String::new())
         }
 
-        // Both arms report the outcome themselves rather than trusting the
-        // handler's `output::print_*`, stdout is not visible under the
-        // alternate screen, so an unconditional "Session saved." would be a
-        // false claim whenever the write was refused.
+        // Every arm below renders the outcome the command itself decided.
+        // Restating it here is what let the TUI answer "Session saved." to a
+        // write that was refused, and "Exported above." to an empty screen.
         "/fork" | "/branch" => {
-            if !app.session.session_persistence_enabled() {
-                SlashResult::SystemMessage(
-                    "Cannot branch, this run was started with --no-session-persistence, so no session file exists to fork."
-                        .to_string(),
-                )
-            } else {
-                crate::repl::handle_branch(arg, &mut app.session);
-                app.sync_stats();
-                SlashResult::SystemMessage("Session forked.".to_string())
-            }
+            let outcome = crate::repl::branch_session_for_display(arg, &mut app.session);
+            app.sync_stats();
+            SlashResult::SystemMessage(outcome.plain_message())
         }
 
         "/save" => {
-            if !app.session.session_persistence_enabled() {
-                SlashResult::SystemMessage(
-                    "Cannot save, this run was started with --no-session-persistence, so nothing is written to disk."
-                        .to_string(),
-                )
-            } else {
-                crate::repl::handle_save(&mut app.session);
-                app.sync_stats();
-                SlashResult::SystemMessage("Session saved.".to_string())
-            }
+            let outcome = crate::repl::save_session_for_display(&mut app.session);
+            app.sync_stats();
+            SlashResult::SystemMessage(outcome.plain_message())
         }
 
         "/rename" => {
@@ -3600,14 +3585,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/export" => {
-            crate::repl::handle_export(if arg.is_empty() { "markdown" } else { arg }, &app.session);
-            SlashResult::SystemMessage("Exported above.".to_string())
+            let arg = if arg.is_empty() { "markdown" } else { arg };
+            match crate::repl::export_conversation_for_display(arg, &app.session) {
+                Ok(export) => {
+                    SlashResult::SystemMessage(sanitize_terminal_text(&export).into_owned())
+                }
+                Err(outcome) => SlashResult::SystemMessage(outcome.plain_message()),
+            }
         }
 
-        "/rewind" => {
-            crate::repl::handle_rewind(arg, &mut app.session);
-            SlashResult::SystemMessage("Rewound to previous checkpoint.".to_string())
-        }
+        "/rewind" => SlashResult::SystemMessage(
+            crate::repl::rewind_session_for_display(arg, &mut app.session).plain_message(),
+        ),
 
         // ── Tools & plugins ──
         "/mcp" => {
@@ -3698,8 +3687,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/init" => {
-            crate::repl::handle_init_project();
-            SlashResult::SystemMessage("Project initialized.".to_string())
+            SlashResult::SystemMessage(crate::repl::init_project_for_display().plain_message())
         }
 
         "/skills" => {
@@ -3807,10 +3795,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         // ── Memory ──
-        "/memory" | "/mem" => {
-            crate::repl::handle_memory(arg);
-            SlashResult::SystemMessage("Memory shown above.".to_string())
-        }
+        "/memory" | "/mem" => SlashResult::SystemMessage(
+            crate::repl::memory_for_display(arg, crate::repl::EditorAvailability::TerminalOwnedByUi)
+                .plain_message(),
+        ),
 
         // ── Voice ──
         // The slash handler is sync and `run_voice_mode` is async, which is why
