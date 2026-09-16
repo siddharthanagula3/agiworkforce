@@ -114,6 +114,39 @@ impl Drop for ActiveProcessTreeGuard {
     }
 }
 
+/// Kill every registered process tree, whoever owns it.
+///
+/// Owner scoping is right when one turn is cancelled and unrelated work must
+/// survive. A terminating signal is ending the whole process, so anything still
+/// running is about to be orphaned onto the user's machine with no parent left
+/// to reap it. Synchronous on purpose: the caller is on its way out and has no
+/// runtime left to await.
+pub(crate) fn kill_all_process_trees() {
+    let Some(registry) = ACTIVE_PROCESS_TREES.get() else {
+        return;
+    };
+    let registry = registry
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    for entry in registry.entries.values() {
+        kill_process_group_now(entry.process_id);
+    }
+}
+
+#[cfg(unix)]
+fn kill_process_group_now(process_id: Option<u32>) {
+    use nix::sys::signal::{killpg, Signal};
+    use nix::unistd::Pid;
+
+    let Some(process_id) = process_id.and_then(|id| i32::try_from(id).ok()) else {
+        return;
+    };
+    let _ = killpg(Pid::from_raw(process_id), Signal::SIGKILL);
+}
+
+#[cfg(windows)]
+fn kill_process_group_now(_process_id: Option<u32>) {}
+
 fn active_process_trees() -> &'static StdMutex<ActiveProcessTrees> {
     ACTIVE_PROCESS_TREES.get_or_init(|| StdMutex::new(ActiveProcessTrees::new()))
 }
@@ -728,6 +761,9 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_kills_tree_reaps_child_and_prevents_delayed_side_effect() {
+        let _serial = CHILD_SPAWNING_TESTS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let temp = tempfile::tempdir().expect("temp directory");
         let sentinel = temp.path().join("sentinel");
         let pid_file = temp.path().join("pids");
@@ -750,8 +786,44 @@ mod tests {
         assert_processes_absent(&process_ids);
     }
 
+    /// The signal path kills every tree, not just the caller's, because a
+    /// process on its way out leaves anything it spares with no parent to reap
+    /// it. This is the orphan the audit found and could not test.
+    #[tokio::test]
+    async fn a_terminating_signal_takes_every_tree_with_it() {
+        let _serial = CHILD_SPAWNING_TESTS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let temp = tempfile::tempdir().expect("temp directory");
+        let sentinel = temp.path().join("signal-sentinel");
+        let pid_file = temp.path().join("signal-pids");
+        let mut command = Command::new("sh");
+        command
+            .arg("-c")
+            .arg(delayed_sentinel_script(&sentinel, &pid_file));
+        let child = ProcessTreeChild::spawn(command).expect("spawn child");
+
+        let process_ids = read_process_ids(&pid_file).await;
+        kill_all_process_trees();
+        // A signalled process exits and init reaps what it leaves. This one keeps
+        // running, so the killed child stays a zombie and still answers a liveness
+        // check until its handle is dropped.
+        drop(child);
+        wait_for_processes_to_exit(&process_ids).await;
+        tokio::time::sleep(Duration::from_millis(900)).await;
+
+        assert!(
+            !sentinel.exists(),
+            "a child outlived the signal and still wrote its sentinel"
+        );
+        assert_processes_absent(&process_ids);
+    }
+
     #[tokio::test]
     async fn dropping_an_interactive_child_kills_and_reaps_its_tree() {
+        let _serial = CHILD_SPAWNING_TESTS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let temp = tempfile::tempdir().expect("temp directory");
         let sentinel = temp.path().join("interactive-sentinel");
         let pid_file = temp.path().join("interactive-pids");
@@ -796,6 +868,12 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
+
+    /// Tests run concurrently in one process and `kill_all_process_trees`
+    /// deliberately reaches every tree, so the tests that spawn real children
+    /// take turns. Without this, the signal test kills a sibling's child and
+    /// fails a test that is not broken.
+    pub(super) static CHILD_SPAWNING_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     pub(super) async fn wait_for_processes_to_exit(process_ids: &[i32]) {
         let deadline = Instant::now() + Duration::from_secs(2);
