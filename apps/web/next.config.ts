@@ -4,6 +4,7 @@ import type { NextConfig } from 'next';
 import bundleAnalyzer from '@next/bundle-analyzer';
 import { withBotId } from 'botid/next/config';
 import { withWorkflow } from 'workflow/next';
+import { withSentryConfig } from '@sentry/nextjs';
 import { API_HOST_REWRITE_ROUTES } from './lib/api-host-route-contract';
 import { BOT_PROTECTION_MODES, resolveBotProtectionMode } from './lib/security/bot-protection';
 import { isPlatformHosted } from './lib/server/hosting';
@@ -204,4 +205,35 @@ const withBundleAnalyzer = bundleAnalyzer({
 const withOptionalBotId = (config: NextConfig): NextConfig =>
   botProtectionEnabled ? withBotId(config) : config;
 
-export default withWorkflow(withOptionalBotId(withBundleAnalyzer(nextConfig)));
+// Source maps are what turns a production stack trace into a source line, and
+// they are useless without the release tag `lib/sentry-shared.ts` puts on every
+// event: Sentry matches maps to a release, so an untagged event matches none.
+// Uploading needs credentials this repository does not hold, so the wrapper is
+// skipped entirely unless all three are present, rather than left to fail the
+// build on a deploy that has none.
+const sentryUpload =
+  process.env['SENTRY_AUTH_TOKEN'] && process.env['SENTRY_ORG'] && process.env['SENTRY_PROJECT']
+    ? {
+        authToken: process.env['SENTRY_AUTH_TOKEN'],
+        org: process.env['SENTRY_ORG'],
+        project: process.env['SENTRY_PROJECT'],
+      }
+    : null;
+
+const withOptionalSentry = (config: NextConfig): NextConfig =>
+  sentryUpload
+    ? withSentryConfig(config, {
+        ...sentryUpload,
+        silent: true,
+        telemetry: false,
+        disableLogger: true,
+        widenClientFileUpload: true,
+        // The maps go to Sentry, never to a browser: serving them publishes the
+        // unminified application.
+        sourcemaps: { deleteSourcemapsAfterUpload: true },
+      })
+    : config;
+
+// Applied inside withWorkflow, not around it: withWorkflow returns a phase
+// function rather than a config object, which withSentryConfig cannot take.
+export default withWorkflow(withOptionalSentry(withOptionalBotId(withBundleAnalyzer(nextConfig))));
