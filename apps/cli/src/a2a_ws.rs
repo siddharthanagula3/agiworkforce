@@ -103,7 +103,7 @@ async fn handle_ws_connection(
             Message::Text(text) => {
                 let request_json = text.to_string();
                 let response = process_text_frame(&request_json, &registry, &self_card);
-                ws.send(Message::Text(response)).await?;
+                ws.send(Message::text(response)).await?;
             }
             Message::Binary(_) => {
                 let err = serde_json::json!({
@@ -111,7 +111,7 @@ async fn handle_ws_connection(
                     "id": null,
                     "error": { "code": -32700, "message": "binary frames not supported" }
                 });
-                ws.send(Message::Text(err.to_string())).await?;
+                ws.send(Message::text(err.to_string())).await?;
             }
             Message::Close(_) => break,
             _ => {}
@@ -238,7 +238,7 @@ mod tests {
         let (mut ws, _) = tokio_tungstenite::connect_async(url).await.unwrap();
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#;
-        ws.send(Message::Text(req.to_string())).await.unwrap();
+        ws.send(Message::text(req)).await.unwrap();
 
         let resp = ws.next().await.unwrap().unwrap();
         let body = resp.into_text().unwrap();
@@ -294,8 +294,8 @@ mod tests {
             .insert("Authorization", format!("Bearer {token}").parse().unwrap());
 
         let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
-        ws.send(Message::Text(
-            r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#.to_string(),
+        ws.send(Message::text(
+            r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#,
         ))
         .await
         .unwrap();

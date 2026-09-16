@@ -620,7 +620,7 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
         .expect("authenticated websocket connects");
 
     websocket
-        .send(Message::Text(
+        .send(Message::text(
             serde_json::to_string(&initialize()).expect("serialize initialize"),
         ))
         .await
@@ -668,7 +668,7 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
         decision: ReviewDecision::ApprovedForSession,
     };
     websocket
-        .send(Message::Text(
+        .send(Message::text(
             serde_json::to_string(&request(2, method::APPROVAL_RESPOND, approval.clone()))
                 .expect("serialize approval response"),
         ))
@@ -1264,14 +1264,14 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
         .await
         .expect("token-carrying upgrade is accepted");
     socket
-        .send(Message::Text(
+        .send(Message::text(
             serde_json::to_string(&initialize()).expect("initialize frame"),
         ))
         .await
         .expect("send initialize");
     let _ = socket.next().await.expect("handshake response");
     socket
-        .send(Message::Text(
+        .send(Message::text(
             serde_json::to_string(&request(2, method::ACCOUNT_TOKEN, serde_json::json!({})))
                 .expect("token frame"),
         ))
