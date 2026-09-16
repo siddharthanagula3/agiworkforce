@@ -6,6 +6,7 @@ export interface ShortcutModifiers {
 }
 
 export type RendererShortcutAction =
+  | 'chat.new'
   | 'app.search'
   | 'app.commandPalette'
   | 'model.select'
@@ -34,6 +35,14 @@ export interface GlobalShortcutDefinition extends ShortcutBase {
 export type ShortcutDefinition = RendererShortcutDefinition | GlobalShortcutDefinition;
 
 export const RENDERER_SHORTCUTS: RendererShortcutDefinition[] = [
+  {
+    id: 'new-chat',
+    key: 'n',
+    modifiers: { meta: true },
+    description: 'New chat',
+    category: 'navigation',
+    action: 'chat.new',
+  },
   {
     id: 'search',
     key: 'k',

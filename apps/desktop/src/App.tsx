@@ -1325,6 +1325,14 @@ const DesktopShell = () => {
 
   const shortcutHandlers = useMemo<Record<RendererShortcutAction, () => void>>(
     () => ({
+      // Routes first, so the shortcut works from any panel rather than only
+      // from chat, which is where every other entry point into a new chat goes.
+      'chat.new': () => {
+        void (async () => {
+          await routeToChatSurface();
+          await startNewChat();
+        })();
+      },
       'app.search': () => useSearchModal.getState().toggle(),
       'app.commandPalette': () => setCommandPaletteOpen((open) => !open),
       'model.select': () => openSettingsDialog(isCloudMode ? 'capabilities' : 'models-keys'),
@@ -1335,7 +1343,7 @@ const DesktopShell = () => {
       },
       'window.minimize': () => void actions.minimize(),
     }),
-    [actions, isCloudMode, openSettingsDialog],
+    [actions, isCloudMode, openSettingsDialog, routeToChatSurface, startNewChat],
   );
 
   const customKeybindings = useSettingsStore((s) => s.customKeybindings);
