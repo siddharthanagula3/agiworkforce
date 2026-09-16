@@ -63,6 +63,32 @@ describe('GET /api/user/export completeness', () => {
     mockQuery.mockResolvedValue([]);
   });
 
+  it('says a capped section is truncated instead of calling the export complete', async () => {
+    // The two highest-cardinality sections are capped so the download stays
+    // usable. Reporting 'complete' while holding only the most recent rows is
+    // the one claim an access request must not make loosely.
+    mockQuery.mockImplementation(async (sql: unknown) =>
+      String(sql).includes('security_audit_logs')
+        ? Array.from({ length: 1000 }, (_, index) => ({
+            id: `evt-${index}`,
+            event_type: 'login',
+            severity: 'info',
+            ip_address: null,
+            user_agent: null,
+            endpoint: null,
+            created_at: '2026-09-01T00:00:00.000Z',
+          }))
+        : [],
+    );
+
+    const body = await (await GET(exportRequest())).json();
+
+    expect(body.data.export_metadata.completeness.status).toBe('partial');
+    expect(body.data.export_metadata.completeness.truncated_sections).toEqual([
+      { section: 'security_audit_logs', limit: 1000 },
+    ]);
+  });
+
   it('reports a complete export when every section was read', async () => {
     const response = await GET(exportRequest());
     const body = await response.json();
