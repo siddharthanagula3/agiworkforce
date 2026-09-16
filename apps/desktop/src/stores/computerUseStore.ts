@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
-import { invoke, isElectronHost, listen, type UnlistenFn } from '../lib/tauri-mock';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useAppModeStore, selectPrivacyMode } from './appModeStore';
 import { isLocalProvider } from '../types/provider';
@@ -402,18 +402,17 @@ export const useComputerUseStore = create<ComputerUseState>()(
 
       stopSession: async () => {
         const { sessionId } = get();
-        // The two hosts stop differently, and only one of them was ever asked.
-        // `computer_use_stop_session` is a Tauri command, so on Electron this
-        // resolved to nothing, the failure was swallowed as cleanup, and the
-        // flag below went false while the input helper carried on with the
-        // pointer. `computer_stop` is the Electron side of the same request.
+        // This store drives the Tauri screen-control session; the Electron
+        // runtime's `computer_*` family serves the hosted page instead, so a
+        // stop there belongs to that caller, not here.
         let stopFailure: string | null = null;
-        try {
-          if (isElectronHost) await invoke('computer_stop');
-          else if (sessionId) await invoke('computer_use_stop_session', { sessionId });
-        } catch (error) {
-          stopFailure =
-            error instanceof Error ? error.message : 'Desktop control could not be stopped.';
+        if (sessionId) {
+          try {
+            await invoke('computer_use_stop_session', { sessionId });
+          } catch (error) {
+            stopFailure =
+              error instanceof Error ? error.message : 'Desktop control could not be stopped.';
+          }
         }
         set(
           (state) => {
