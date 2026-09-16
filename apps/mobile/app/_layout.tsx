@@ -426,7 +426,19 @@ export default function RootLayout() {
       ageGateConfirmed: isAgeGateConfirmed(),
     });
     if (redirect) router.replace(redirect as never);
-  }, [isClerkSignedIn, isClerkLoaded, isInitialized, isMmkvReady, segments, router, authEnabled]);
+    // clerkUserId, not only isClerkSignedIn: a direct account switch keeps
+    // signed-in true while onboarding and age-gate state, which this reads from
+    // per-account storage, belong to a different person.
+  }, [
+    isClerkSignedIn,
+    clerkUserId,
+    isClerkLoaded,
+    isInitialized,
+    isMmkvReady,
+    segments,
+    router,
+    authEnabled,
+  ]);
 
   // C1: Deep linking, handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
   // Required for QR desktop pairing when app is backgrounded or closed
