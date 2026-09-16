@@ -101,7 +101,10 @@ import {
   resolveModelEscalation,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
-import type { AgentActivityState } from '@agiworkforce/client-runtime';
+import {
+  isLocalPlaceholderActivityEntry,
+  type AgentActivityState,
+} from '@agiworkforce/client-runtime';
 
 const MarkdownContent = dynamic(
   () => import('@agiworkforce/unified-chat').then((mod) => mod.MarkdownContent),
@@ -1489,6 +1492,12 @@ const MessageBubbleComponent = function MessageBubble({
   const voiceModeActive = useVoiceModeActive();
   const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
   const canonicalActivity = !isUser ? message.metadata?.agentActivity : undefined;
+  const placeholderOnlyActivity =
+    canonicalActivity !== undefined &&
+    !isAgiWorkTurn &&
+    message.isStreaming === true &&
+    canonicalActivity.entries.every(isLocalPlaceholderActivityEntry);
+  const activityTimeline = placeholderOnlyActivity ? undefined : canonicalActivity;
   /**
    * A turn the user stopped before its first token has no words and no media.
    * Copy, the two ratings and Read aloud all act on that text, so on this turn
@@ -1684,7 +1693,7 @@ const MessageBubbleComponent = function MessageBubble({
             />
           )}
 
-          {!isUser && canonicalActivity && !voiceModeActive && (
+          {!isUser && activityTimeline && !voiceModeActive && (
             <AgentActivityTimeline
               className="mb-3"
               // `defaultExpanded` only seeds AgentActivityTimeline's own expand
@@ -1693,7 +1702,7 @@ const MessageBubbleComponent = function MessageBubble({
               // collapsed. Keying on it forces the one remount that lets the
               // failed-tool row start open instead of needing a click.
               key={showNoSearchResultsNotice ? `${message.id}-no-sources` : message.id}
-              activity={canonicalActivity}
+              activity={activityTimeline}
               {...(isAgiWorkTurn ? { workMode: AGI_WORK_MODE } : {})}
               defaultExpanded={showNoSearchResultsNotice}
               onApprove={resolveToolApproval ? handleApproveTool : undefined}
@@ -1890,7 +1899,7 @@ const MessageBubbleComponent = function MessageBubble({
               {message.isStreaming &&
               !cleanedContent.trim() &&
               !streamingBlock &&
-              !canonicalActivity &&
+              !activityTimeline &&
               !message.metadata?.isExecutingCode &&
               !message.metadata?.codeExecutionResult &&
               message.metadata?.toolType !== 'image-generation' &&
