@@ -5,13 +5,12 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/chat',
   useSearchParams: () => new URLSearchParams(),
 }));
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
 const CACHED_CONVERSATION_ID = 'fixture-conversation';
-const NOTE_TEXT = 'Starts a new prompt cache';
-const NOTE_MS = 3000;
+const HINT_TEXT = 'Switching models here starts a new prompt cache';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
@@ -140,28 +139,25 @@ describe('ComposerFooter · model switch is immediate', () => {
     expect(screen.queryByText(/keep current model/i)).not.toBeInTheDocument();
   });
 
-  it('shows the cache note once and retires it', async () => {
+  it('names the cache reset inside the picker while a completed turn exists', async () => {
     const onModelChange = vi.fn().mockResolvedValue(true);
     render(<ComposerFooter onModelChange={onModelChange} />);
-
-    await selectSecondaryModel();
-    expect(screen.getByText(NOTE_TEXT)).toBeInTheDocument();
-
-    await act(async () => {
-      vi.advanceTimersByTime(NOTE_MS);
-    });
-    expect(screen.queryByText(NOTE_TEXT)).not.toBeInTheDocument();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole('button', { name: /change model/i }));
+    expect(screen.getByText(HINT_TEXT)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /secondary model/i }));
+    await waitFor(() => expect(onModelChange).toHaveBeenCalledWith('fixture-secondary-model'));
   });
 
-  it('shows no cache note when the conversation holds no completed assistant turn', async () => {
+  it('shows no cache hint when the conversation holds no completed assistant turn', async () => {
     chatStoreState.activeConversationId = null;
     chatStoreState.messages = [];
     const onModelChange = vi.fn().mockResolvedValue(true);
     render(<ComposerFooter onModelChange={onModelChange} />);
-
-    await selectSecondaryModel();
-
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole('button', { name: /change model/i }));
+    expect(screen.queryByText(HINT_TEXT)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /secondary model/i }));
     await waitFor(() => expect(onModelChange).toHaveBeenCalledWith('fixture-secondary-model'));
-    expect(screen.queryByText(NOTE_TEXT)).not.toBeInTheDocument();
   });
 });

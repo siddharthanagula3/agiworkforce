@@ -25,7 +25,7 @@ const START_WAIT_MS = 12_000;
 const START_POLL_MS = 400;
 const START_RETRY_ACTION_LABEL = 'Retry this turn';
 const CONVERSATION_PACE_MS = 15_000;
-const CACHE_NOTE_TEXT = 'Starts a new prompt cache';
+const CACHE_HINT_TEXT = 'Switching models here starts a new prompt cache';
 const TURN_FAILED_LEAD = 'Response failed';
 const THEME_STORAGE_KEY = 'theme';
 type CaptureTheme = 'dark' | 'light';
@@ -303,7 +303,9 @@ test.describe('chat run recovery', () => {
     await shoot(page, 'a6-picker-opened');
   });
 
-  test('switching model mid-conversation asks nothing and notes the cache', async ({ page }) => {
+  test('switching model mid-conversation asks nothing and names the cache reset in the picker', async ({
+    page,
+  }) => {
     const mock = await installSseChatMock(page);
     await page.goto('/chat');
 
@@ -315,6 +317,8 @@ test.describe('chat run recovery', () => {
     await page.getByRole('button', { name: /change model/i }).click();
     const picker = page.getByRole('dialog', { name: 'Models' });
     await expect(picker).toBeVisible();
+    await expect(picker.getByText(CACHE_HINT_TEXT)).toBeVisible();
+    await shoot(page, 'a1-cache-hint');
     const currentModel = (
       await page.getByRole('button', { name: /change model/i }).textContent()
     )?.trim();
@@ -337,10 +341,8 @@ test.describe('chat run recovery', () => {
 
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(page.getByText('Switch model mid-conversation?')).toHaveCount(0);
-    await expect(page.getByText(CACHE_NOTE_TEXT)).toBeVisible();
     await expect(picker).toBeHidden();
-
-    await shoot(page, 'a1-cache-note');
+    await expect(page.getByText(CACHE_HINT_TEXT)).toHaveCount(0);
   });
 
   test('the composer says Follow up and marks a queued message', async ({ page }) => {
