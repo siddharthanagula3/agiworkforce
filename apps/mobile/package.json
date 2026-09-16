@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "private": true,
   "license": "PROPRIETARY",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
     "dev": "expo start",
     "android": "expo run:android",
@@ -167,6 +167,13 @@
           "react-native-executorch",
           "react-native-executorch-expo-resource-fetcher",
           "llama.rn"
+        ]
+      }
+    },
+    "autolinking": {
+      "ios": {
+        "buildFromSource": [
+          "expo-contacts"
         ]
       }
     }
