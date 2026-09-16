@@ -1,5 +1,6 @@
 const mockRouterPush = jest.fn();
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   router: {
     push: (...args: unknown[]) => mockRouterPush(...args),
   },
@@ -12,6 +13,7 @@ let capturedResponseListener:
     }) => void)
   | null = null;
 jest.mock('expo-notifications', () => ({
+  ...jest.requireActual('@/__mocks__/expo-notifications.mock').expoNotificationsMock(),
   __esModule: true,
   DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
   setNotificationHandler: jest.fn(),

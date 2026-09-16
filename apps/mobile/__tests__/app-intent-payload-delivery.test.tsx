@@ -10,6 +10,7 @@ const rootLayoutSource = fs.readFileSync(path.join(__dirname, '..', 'app', '_lay
 let mockSearchParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: jest.fn(),
     back: jest.fn(),

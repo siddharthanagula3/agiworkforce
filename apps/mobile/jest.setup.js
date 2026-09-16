@@ -113,38 +113,11 @@ jest.mock('react-native-reanimated', () => {
   return Reanimated;
 });
 
-jest.mock('expo-notifications', () => {
-  const makeSubscription = () => ({ remove: jest.fn() });
+jest.mock('expo-notifications', () =>
+  require('./__mocks__/expo-notifications.mock').expoNotificationsMock(),
+);
 
-  return {
-    __esModule: true,
-    AndroidImportance: {
-      MAX: 5,
-      HIGH: 4,
-      DEFAULT: 3,
-      MIN: 1,
-    },
-    PermissionStatus: {
-      GRANTED: 'granted',
-      DENIED: 'denied',
-      UNDETERMINED: 'undetermined',
-    },
-    DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
-    setNotificationHandler: jest.fn(),
-    getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
-    requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
-    setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
-    setNotificationCategoryAsync: jest.fn().mockResolvedValue(undefined),
-    getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'ExponentPushToken[test]' }),
-    scheduleNotificationAsync: jest.fn().mockResolvedValue(undefined),
-    addNotificationReceivedListener: jest.fn(() => makeSubscription()),
-    addNotificationResponseReceivedListener: jest.fn(() => makeSubscription()),
-    addPushTokenListener: jest.fn(() => makeSubscription()),
-    getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null),
-    setBadgeCountAsync: jest.fn().mockResolvedValue(undefined),
-    getBadgeCountAsync: jest.fn().mockResolvedValue(0),
-  };
-});
+jest.mock('expo-router', () => require('./__mocks__/expo-router.mock').expoRouterMock());
 
 jest.mock('react-native-webview', () => {
   const WebView = require('react-native').View;

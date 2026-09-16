@@ -21,6 +21,7 @@ jest.mock('@clerk/expo', () => ({
 }));
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,

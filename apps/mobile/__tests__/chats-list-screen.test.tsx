@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Modal } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -82,6 +82,7 @@ const mockLibraryImages = [
 ];
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
@@ -254,22 +255,29 @@ describe('ChatsListScreen', () => {
   });
 
   it('offers the same rename, pin and delete actions the drawer has, on a long press', () => {
-    const { getByLabelText, getByText } = render(<ChatsListScreen />);
+    const screen = render(<ChatsListScreen />);
+    const { getAllByTestId, getByLabelText, getByTestId, getByText } = screen;
+
+    // The sheet defers each action to the modal's `onDismiss` so an Alert never
+    // races a dismissing modal on iOS; nothing fires that prop without a host.
+    const dismissSheet = () => {
+      const sheet = screen.UNSAFE_getAllByType(Modal).find((node) => node.props.onDismiss);
+      act(() => (sheet?.props.onDismiss as () => void)());
+    };
 
     fireEvent(getByLabelText('Open chat: Launch checklist'), 'longPress');
 
-    const [title, , buttons] = (Alert.alert as jest.Mock).mock.calls.at(-1) as [
-      string,
-      undefined,
-      Array<{ text: string; onPress?: () => void }>,
-    ];
-    expect(title).toBe('Launch checklist');
-    expect(buttons.map((button) => button.text)).toEqual(['Rename', 'Pin', 'Delete', 'Cancel']);
+    expect(getAllByTestId(/^conversation-action-/).map((node) => node.props.accessibilityLabel)) //
+      .toEqual(['Rename', 'Pin', 'Delete', 'Cancel']);
 
-    act(() => buttons.find((button) => button.text === 'Pin')?.onPress?.());
+    fireEvent.press(getByTestId('conversation-action-pin'));
+    dismissSheet();
     expect(mockPinConversation).toHaveBeenCalledWith('chat-1');
 
-    act(() => buttons.find((button) => button.text === 'Rename')?.onPress?.());
+    fireEvent(getByLabelText('Open chat: Launch checklist'), 'longPress');
+    fireEvent.press(getByTestId('conversation-action-rename'));
+    dismissSheet();
+
     fireEvent.changeText(getByLabelText('Chat title'), 'Launch checklist v2');
     fireEvent.press(getByLabelText('Submit rename'));
 
@@ -278,15 +286,14 @@ describe('ChatsListScreen', () => {
   });
 
   it('does not offer chat actions on a non-chat search result', () => {
-    const { getByLabelText } = render(<ChatsListScreen />);
+    const { getByLabelText, queryAllByTestId } = render(<ChatsListScreen />);
     fireEvent.changeText(
       getByLabelText('Search chats, projects, files, library, and artifacts'),
       'launch',
     );
-    (Alert.alert as jest.Mock).mockClear();
 
     fireEvent(getByLabelText('Open project: Launch project'), 'longPress');
 
-    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(queryAllByTestId(/^conversation-action-/)).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ const mockReplace = jest.fn();
 const mockOpenExternalUrl = jest.fn();
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     replace: mockReplace,
   }),

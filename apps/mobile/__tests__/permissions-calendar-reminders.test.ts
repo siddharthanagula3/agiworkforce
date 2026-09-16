@@ -20,7 +20,9 @@ jest.mock('expo-camera', () => ({
 }));
 
 jest.mock('expo-image-picker', () => ({}));
-jest.mock('expo-notifications', () => ({}));
+jest.mock('expo-notifications', () =>
+  jest.requireActual('@/__mocks__/expo-notifications.mock').expoNotificationsMock(),
+);
 
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);

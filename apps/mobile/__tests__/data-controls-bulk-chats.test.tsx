@@ -45,6 +45,7 @@ jest.mock('@/src/features/waitlist/store', () => ({
 }));
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: mockPush,
     back: jest.fn(),

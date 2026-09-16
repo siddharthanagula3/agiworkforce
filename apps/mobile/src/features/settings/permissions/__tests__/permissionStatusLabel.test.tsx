@@ -54,6 +54,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
@@ -103,6 +104,7 @@ jest.mock('expo-image-picker', () => ({
 }));
 
 jest.mock('expo-notifications', () => ({
+  ...jest.requireActual('@/__mocks__/expo-notifications.mock').expoNotificationsMock(),
   getPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
   requestPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));

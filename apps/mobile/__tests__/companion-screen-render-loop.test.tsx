@@ -38,6 +38,7 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: jest.fn(),
     back: jest.fn(),

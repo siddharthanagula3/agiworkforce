@@ -42,6 +42,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,6 +87,7 @@ jest.mock('expo-image-picker', () => ({
 }));
 
 jest.mock('expo-notifications', () => ({
+  ...jest.requireActual('@/__mocks__/expo-notifications.mock').expoNotificationsMock(),
   getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined' }),
   requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined' }),
 }));

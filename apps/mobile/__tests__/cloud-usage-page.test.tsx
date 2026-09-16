@@ -13,6 +13,7 @@ let mockAccountOwner = 'user-a';
 let mockAccountEpoch = 1;
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockPush }),
 }));
 

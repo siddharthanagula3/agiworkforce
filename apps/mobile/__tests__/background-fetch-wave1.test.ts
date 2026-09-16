@@ -22,6 +22,7 @@ jest.mock('expo-background-task', () => ({
 }));
 
 jest.mock('expo-notifications', () => ({
+  ...jest.requireActual('@/__mocks__/expo-notifications.mock').expoNotificationsMock(),
   scheduleNotificationAsync: jest.fn(async () => 'notification-id'),
   setNotificationCategoryAsync: jest.fn(async () => undefined),
 }));

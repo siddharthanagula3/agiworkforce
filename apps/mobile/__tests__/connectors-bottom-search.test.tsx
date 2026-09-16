@@ -16,6 +16,7 @@ const mockTierState = {
 };
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ navigate: jest.fn(), push: jest.fn() }),
 }));
 

@@ -1,9 +1,10 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, Linking, View as MockView } from 'react-native';
+import { Alert, View as MockView } from 'react-native';
 import type { InteractiveCard } from '@agiworkforce/types';
 
 const mockExpoImage = jest.fn();
 const mockGetAuthHeaders = jest.fn();
+const mockOpenUntrustedUrl = jest.fn();
 
 jest.mock('expo-image', () => ({
   Image: (props: Record<string, unknown>) => {
@@ -20,6 +21,10 @@ jest.mock('lucide-react-native', () => ({
 
 jest.mock('@/services/authSession', () => ({
   getAuthHeaders: (...args: unknown[]) => mockGetAuthHeaders(...args),
+}));
+
+jest.mock('@/lib/safeOpenURL', () => ({
+  openUntrustedUrlInAppBrowser: (...args: unknown[]) => mockOpenUntrustedUrl(...args),
 }));
 
 jest.mock('@/src/ui/theme', () => ({
@@ -92,6 +97,7 @@ describe('InteractiveCardBlock authenticated map tiles', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer short-lived-token' });
+    mockOpenUntrustedUrl.mockResolvedValue(true);
   });
 
   it('passes the current owner bearer header to every Expo Image tile source', async () => {
@@ -111,7 +117,6 @@ describe('InteractiveCardBlock authenticated map tiles', () => {
   });
 
   it('never consults auth or creates tile images for a Local transcript, while keeping the provider link', () => {
-    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     const { getByLabelText, getByText } = renderMap(false);
 
     expect(getByText('Map preview is available in Managed Cloud.')).toBeTruthy();
@@ -119,12 +124,11 @@ describe('InteractiveCardBlock authenticated map tiles', () => {
     expect(mockExpoImage).not.toHaveBeenCalled();
 
     fireEvent.press(getByLabelText('Open in Google Maps'));
-    expect(openUrl).toHaveBeenCalledWith(PROVIDER_URL);
-    openUrl.mockRestore();
+    expect(mockOpenUntrustedUrl).toHaveBeenCalledWith(PROVIDER_URL);
   });
 
   it('shows a visible error when the platform cannot open the provider map', async () => {
-    const openUrl = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no handler'));
+    mockOpenUntrustedUrl.mockResolvedValue(false);
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { getByLabelText } = renderMap(false);
 
@@ -132,11 +136,10 @@ describe('InteractiveCardBlock authenticated map tiles', () => {
 
     await waitFor(() =>
       expect(alert).toHaveBeenCalledWith(
-        'Could not open Maps',
+        'Could not open this place',
         'Check your connection and try opening the result again.',
       ),
     );
-    openUrl.mockRestore();
     alert.mockRestore();
   });
 

@@ -15,13 +15,12 @@ let mockChatInputOnSend: ((text: string) => void | boolean | Promise<void | bool
 let mockChatFeatures = { imageGen: true };
 const mockCloudAccountStorage = new Map<string, string>();
 let mockChatInputDraftProvenance:
-  | { scope: 'local' }
-  | { scope: 'cloud'; ownerId: string }
-  | undefined;
+  { scope: 'local' } | { scope: 'cloud'; ownerId: string } | undefined;
 let mockChatInputOnOpenCompare: (() => void) | undefined;
 let mockChatInputSelectedSkillName: string | undefined;
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
     // eslint-disable-next-line react-hooks/exhaustive-deps
