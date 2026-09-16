@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { describeOutboundRefusal } from '../../core/outboundContentGuard';
 
 const CONTEXT_RADIUS = 15;
 
@@ -47,6 +48,9 @@ export function buildExplainSelectionPrompt(targetRange?: vscode.Range): EditorU
   const range = targetRange ?? (editor.selection.isEmpty ? undefined : editor.selection);
   if (range === undefined) return { ok: false, message: 'Select some code first.' };
 
+  const refusal = describeOutboundRefusal(editor.document);
+  if (refusal !== null) return { ok: false, message: refusal };
+
   const selected = editor.document.getText(range);
   if (selected.trim() === '') return { ok: false, message: 'Select some code first.' };
 
@@ -65,6 +69,9 @@ export function buildExplainErrorPrompt(): EditorUtilityPrompt {
   if (editor === undefined) return { ok: false, message: 'No active editor. Open a file first.' };
 
   const { document, selection } = editor;
+  const refusal = describeOutboundRefusal(document);
+  if (refusal !== null) return { ok: false, message: refusal };
+
   const relevant = vscode.languages
     .getDiagnostics(document.uri)
     .filter((diagnostic) =>
@@ -112,6 +119,9 @@ export function buildAskAboutCodePrompt(question: string): EditorUtilityPrompt {
   if (editor === undefined) return { ok: true, prompt: trimmed };
 
   const { document } = editor;
+  const refusal = describeOutboundRefusal(document);
+  if (refusal !== null) return { ok: true, prompt: trimmed };
+
   const language = document.languageId;
   const path = vscode.workspace.asRelativePath(document.uri);
   const visible = editor.visibleRanges[0];
@@ -130,6 +140,8 @@ export function buildAskAboutCodePrompt(question: string): EditorUtilityPrompt {
 
 export function buildExplainTerminalPrompt(output: string): EditorUtilityPrompt {
   if (output.trim() === '') return { ok: false, message: 'No terminal output to explain.' };
+  const refusal = describeOutboundRefusal();
+  if (refusal !== null) return { ok: false, message: refusal };
   return {
     ok: true,
     prompt:

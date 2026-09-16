@@ -4,6 +4,7 @@ import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../platform/applyEdit';
 import * as telemetry from './telemetry';
 import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
+import { describeOutboundRefusal } from './outboundContentGuard';
 
 export type InlineCommand = 'fix' | 'refactor' | 'tests' | 'docs';
 
@@ -36,6 +37,12 @@ export async function runInlineCommand(
     return;
   }
 
+  const refusal = describeOutboundRefusal(editor.document);
+  if (refusal !== null) {
+    vscode.window.showWarningMessage(`AGI Workforce: ${refusal}`);
+    return;
+  }
+
   const selectedText = editor.document.getText(explicitRange);
 
   if (selectedText.trim() === '') {
@@ -45,14 +52,8 @@ export async function runInlineCommand(
 
   const lang = editor.document.languageId;
   const planModeEnabled = Config.agentPlanMode();
-  const rawAutoApplyFixes =
+  const autoApplyFixes =
     vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('autoApplyFixes') ?? false;
-  const autoApplyFixes = vscode.workspace.isTrusted ? rawAutoApplyFixes : false;
-  if (rawAutoApplyFixes && !vscode.workspace.isTrusted) {
-    vscode.window.showInformationMessage(
-      'AGI Workforce: autoApplyFixes is disabled in this untrusted workspace. Trust the workspace to enable.',
-    );
-  }
 
   if (planModeEnabled) {
     const choice = await vscode.window.showInformationMessage(
