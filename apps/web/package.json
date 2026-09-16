@@ -138,7 +138,7 @@
     "undici": "^8.10.2",
     "vaul": "^1.1.2",
     "workflow": "4.8.8",
-    "zod": "^4.6.3",
+    "zod": "^4.6.4",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
