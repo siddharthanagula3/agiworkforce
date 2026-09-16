@@ -111,10 +111,15 @@ function homeDirectory(): { home?: string } {
 }
 
 function generatePairCode(): string {
-  const bytes = randomBytes(PAIR_CODE_LENGTH);
-  return Array.from(bytes)
-    .map((byte) => PAIR_CODE_ALPHABET[byte % PAIR_CODE_ALPHABET.length])
-    .join('');
+  const unbiasedLimit = 256 - (256 % PAIR_CODE_ALPHABET.length);
+  let code = '';
+  while (code.length < PAIR_CODE_LENGTH) {
+    for (const byte of randomBytes(PAIR_CODE_LENGTH)) {
+      if (byte >= unbiasedLimit || code.length === PAIR_CODE_LENGTH) continue;
+      code += PAIR_CODE_ALPHABET[byte % PAIR_CODE_ALPHABET.length];
+    }
+  }
+  return code;
 }
 
 function codeMatches(supplied: string, expected: string): boolean {

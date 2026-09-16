@@ -14,6 +14,8 @@
  * into a browser halfway through signing in.
  */
 
+const SLASH_CODE = 47;
+
 export const PRODUCT_ROUTE_PREFIXES = [
   '/chat',
   '/code',
@@ -55,10 +57,16 @@ export const SESSION_AUTH_ROUTE_PREFIXES = ['/__clerk', '/login', '/signup'] as 
 export type ProductRoutePrefix = (typeof PRODUCT_ROUTE_PREFIXES)[number];
 export type AuthRoutePrefix = (typeof AUTH_ROUTE_PREFIXES)[number];
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === SLASH_CODE) end -= 1;
+  return value.slice(0, end);
+}
+
 function normalizePath(pathname: string): string {
   const withoutQuery = pathname.split(/[?#]/u)[0] ?? '';
   const withLeadingSlash = withoutQuery.startsWith('/') ? withoutQuery : `/${withoutQuery}`;
-  return withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/u, '') : withLeadingSlash;
+  return withLeadingSlash.length > 1 ? trimTrailingSlashes(withLeadingSlash) : withLeadingSlash;
 }
 
 function matchesPrefix(pathname: string, prefixes: readonly string[]): boolean {

@@ -461,7 +461,7 @@ export function requiredArity(parameterText) {
 }
 
 function resolveNamedHandler(source, name) {
-  const escaped = name.replace(/\$/g, '\\$');
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const declaration = source.match(
     new RegExp(
       `(?:^|\\n)[ \\t]*(?:export\\s+)?(?:async\\s+)?function\\s*\\*?\\s*${escaped}\\s*\\(`,
