@@ -151,10 +151,10 @@ function navItemsForMode(
     ];
   }
   return [
-    { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
-    { id: 'code', label: t('sidebar.nav.code'), icon: FileCode },
     ...(supportsLocalAppMode
       ? ([
+          { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
+          { id: 'code', label: t('sidebar.nav.code'), icon: FileCode },
           { id: 'design', label: t('sidebar.nav.design'), icon: Palette },
           { id: 'research', label: t('sidebar.nav.research'), icon: Telescope },
           { id: 'automation', label: t('sidebar.nav.automation'), icon: Zap },
@@ -182,11 +182,12 @@ function projectAccent(project: Project, index: number): string {
 }
 
 /**
- * The design board, deep research and automations run on this device, so the
- * shell only renders them in Local mode. A host that cannot reach Local mode at
- * all, which is every shipped Electron build, showed all three anyway and
- * answered a click with a toast naming a mode it has no way to enter. They are
- * listed only where switching to Local is something the user can actually do.
+ * Device artifacts, the code workspace, the design board, deep research and
+ * automations all act on this device, so the shell renders them only in Local
+ * mode. A host that cannot reach Local mode at all, which is every shipped
+ * Electron build, showed all five anyway and answered a click with a toast
+ * naming a mode it has no way to enter. They are listed only where switching to
+ * Local is something the user can actually do.
  */
 function railItems(
   privacyMode: 'local' | 'byok' | 'managed',
@@ -198,9 +199,9 @@ function railItems(
     items.push({ id: 'tasks', icon: ListChecks, title: t('sidebar.nav.tasks') });
     items.push({ id: 'scheduled', icon: CalendarClock, title: t('sidebar.nav.scheduled') });
   } else {
-    items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
-    items.push({ id: 'code', icon: FileCode, title: t('sidebar.nav.code') });
     if (supportsLocalAppMode) {
+      items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
+      items.push({ id: 'code', icon: FileCode, title: t('sidebar.nav.code') });
       items.push({ id: 'design', icon: Palette, title: t('sidebar.nav.design') });
       items.push({ id: 'research', icon: Telescope, title: t('sidebar.nav.research') });
       items.push({ id: 'automation', icon: Zap, title: t('sidebar.nav.automation') });
