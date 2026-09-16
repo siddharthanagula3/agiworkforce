@@ -1314,6 +1314,11 @@ mod tests {
             SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS
                 .contains(&LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION)
         );
+        assert_eq!(
+            SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.first(),
+            Some(&DEVELOPER_SESSION_PROTOCOL_VERSION),
+            "the list is newest first and clients pin an exact version, so dropping the current one refuses every up-to-date client at initialize"
+        );
 
         let notification = agent_event_notification(
             "thread-1",
