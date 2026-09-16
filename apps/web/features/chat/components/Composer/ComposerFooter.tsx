@@ -51,7 +51,6 @@ import {
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
-import { assessModelSwitchCache } from '@agiworkforce/routing';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   EFFORT_LABEL,
@@ -116,10 +115,7 @@ const EFFORT_OFF_LABEL = 'Off';
 const MODEL_TRIGGER_CLASS =
   'flex min-h-7 min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm';
 
-const CACHE_RESET_NOTE_TEXT = 'Starts a new prompt cache';
-const CACHE_RESET_NOTE_MS = 3000;
-const CACHE_RESET_NOTE_CLASS =
-  'pointer-events-none absolute right-0 top-full z-10 mt-1 whitespace-nowrap text-xs leading-4 text-muted-foreground';
+const CACHE_RESET_HINT_TEXT = 'Switching models here starts a new prompt cache';
 
 const PICKER_VIEWPORT_INSET_PX = 16;
 const PICKER_ANCHOR_OFFSET_PX = 6;
@@ -914,16 +910,9 @@ export function ComposerFooter({
       s.conversations.find((conversation) => conversation.id === s.activeConversationId)?.model ??
       null,
   );
-  const [cacheResetNoteVisible, setCacheResetNoteVisible] = useState(false);
-  const cacheResetNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [modelChangePending, setModelChangePending] = useState(false);
 
-  useEffect(
-    () => () => {
-      if (cacheResetNoteTimer.current) clearTimeout(cacheResetNoteTimer.current);
-    },
-    [],
-  );
+  useEffect(() => () => {}, []);
 
   const localModels = useLocalModels(open);
   const localSelection = useLocalModelSelection((state) => state.selected);
@@ -978,32 +967,9 @@ export function ComposerFooter({
         closeModelPopover();
         return;
       }
-      const assessment = assessModelSwitchCache({
-        priorModelId: selectedModelId,
-        nextModelId: model.id,
-        priorTurnCount: assistantTurnCount,
-        priorModelLabel: selectedModel?.name,
-        nextModelLabel: model.name,
-      });
-      if (assessment.resetsCache) {
-        if (cacheResetNoteTimer.current) clearTimeout(cacheResetNoteTimer.current);
-        setCacheResetNoteVisible(true);
-        cacheResetNoteTimer.current = setTimeout(
-          () => setCacheResetNoteVisible(false),
-          CACHE_RESET_NOTE_MS,
-        );
-      }
       void commitModel(model.id);
     },
-    [
-      selectedModelId,
-      assistantTurnCount,
-      selectedModel,
-      commitModel,
-      closeModelPopover,
-      localSelection,
-      leaveLocalModel,
-    ],
+    [selectedModelId, commitModel, closeModelPopover, localSelection, leaveLocalModel],
   );
 
   const lockedDisplayModel =
@@ -1395,6 +1361,11 @@ export function ComposerFooter({
                       )}
                     </div>
                   )}
+                  {!catalogueOpen && assistantTurnCount > 0 && (
+                    <p className="shrink-0 border-t border-[var(--chat-border)] px-3 py-1.5 text-xs text-muted-foreground">
+                      {CACHE_RESET_HINT_TEXT}
+                    </p>
+                  )}
                   {!catalogueOpen && !shortList.plan.admitsEveryModel && (
                     <div className="shrink-0 border-t border-[var(--chat-border)] p-1">
                       <a
@@ -1616,12 +1587,6 @@ export function ComposerFooter({
                 )}
               </PopoverContent>
             </Popover>
-          )}
-
-          {cacheResetNoteVisible && (
-            <span role="status" className={CACHE_RESET_NOTE_CLASS}>
-              {CACHE_RESET_NOTE_TEXT}
-            </span>
           )}
         </div>
       </div>
