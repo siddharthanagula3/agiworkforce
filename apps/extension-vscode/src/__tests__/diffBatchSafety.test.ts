@@ -87,6 +87,13 @@ describe('batch diff scoping', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Accept now reads the file to confirm nobody edited those lines first, so
+    // the document has to answer with the text each diff was written against.
+    vi.mocked(vscode.workspace.openTextDocument).mockImplementation((async (target: unknown) => {
+      const path = String((target as { fsPath?: string })?.fsPath ?? target ?? '');
+      const name = path.split('/').pop()?.replace('.ts', '') ?? '';
+      return { getText: () => `old ${name}`, version: 1 };
+    }) as never);
     provider = new DiffDecorationProvider();
     seed(provider);
   });
@@ -131,6 +138,13 @@ describe('bulk diff commands never write or discard silently', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Accept now reads the file to confirm nobody edited those lines first, so
+    // the document has to answer with the text each diff was written against.
+    vi.mocked(vscode.workspace.openTextDocument).mockImplementation((async (target: unknown) => {
+      const path = String((target as { fsPath?: string })?.fsPath ?? target ?? '');
+      const name = path.split('/').pop()?.replace('.ts', '') ?? '';
+      return { getText: () => `old ${name}`, version: 1 };
+    }) as never);
     __resetSubsystemHealthForTests();
     vscode.window.activeTextEditor = undefined;
     ({ handlers, provider } = registerDiffCommands());

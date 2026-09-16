@@ -71,6 +71,11 @@ describe('diff keybinding commands (SIX-14)', () => {
     vscode.window.activeTextEditor = undefined;
     vscode.window.visibleTextEditors = [];
     vi.mocked(vscode.workspace.applyEdit).mockResolvedValue(true);
+    // Accept now reads the file to confirm nobody edited those lines first.
+    vi.mocked(vscode.workspace.openTextDocument).mockResolvedValue({
+      getText: () => 'old value',
+      version: 1,
+    } as never);
   });
 
   it('binds acceptDiff and rejectDiff with no arguments, the shape under test', () => {
