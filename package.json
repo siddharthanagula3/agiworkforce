@@ -224,9 +224,9 @@
     "generate:repo-tree": "node scripts/generate-repo-tree.mjs"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.5.0",
-    "@commitlint/config-conventional": "^20.5.0",
-    "@eslint/js": "^9.39.4",
+    "@commitlint/cli": "^20.5.3",
+    "@commitlint/config-conventional": "^20.5.3",
+    "@eslint/js": "^9.39.5",
     "@neondatabase/serverless": "^1.1.0",
     "@playwright/test": "^1.58.2",
     "@types/node": "^24.13.3",
@@ -234,21 +234,21 @@
     "@typescript-eslint/parser": "^8.57.2",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "husky": "^9.1.7",
-    "knip": "^6.27.0",
+    "knip": "^6.35.1",
     "lint-staged": "^16.4.0",
-    "pg": "^8.22.0",
+    "pg": "^8.23.0",
     "playwright": "^1.58.2",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
-    "turbo": "2.10.5",
+    "turbo": "2.10.12",
     "typescript": "5.9.3",
     "vitest": "^4.1.11",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   },
   "lint-staged": {
     "**/*.{ts,tsx,js,jsx,cjs,mjs}": [
@@ -263,6 +263,6 @@
     ]
   },
   "dependencies": {
-    "simple-icons": "^16.18.1"
+    "simple-icons": "^16.30.0"
   }
 }

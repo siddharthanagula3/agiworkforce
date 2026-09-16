@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@noble/curves": "^1.9.7",
-    "zod": "^4.4.2"
+    "zod": "^4.6.3"
   },
   "devDependencies": {
     "tsx": "^4.20.6",
