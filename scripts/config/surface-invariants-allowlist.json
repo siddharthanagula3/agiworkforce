@@ -55,6 +55,7 @@
         "reason": "This component implements the menu keyboard pattern inline rather than calling useMenuKeyboard: it owns focusTrigger, menuItems, focusItem and its own arrow, Escape and Tab handling, plus viewport flipping the hook does not do. Folding it onto the hook is a refactor, not a defect; declared so no NEW unguarded role=\"menu\" panel can land.",
         "trackedBy": "SIX-32"
       }
-    ]
+    ],
+    "dialog-answers-the-keyboard": []
   }
 }
