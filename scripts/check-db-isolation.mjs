@@ -9,6 +9,7 @@ const root = process.cwd();
 
 const SCOPE_TOKENS = [
   'user_id',
+  'owner_user_id',
   'owner_id',
   'owner_session_key',
   'organization_id',
@@ -559,38 +560,15 @@ const CROSS_TENANT_TABLES = new Map([
 ]);
 
 const UNPOLICED_APP_ENFORCED_TABLES = new Map([
-  // Seven tables left this list on 2026-09-16: the data export gave each of them
-  // a real, textually scannable query site, so the reason below stopped being
-  // true for them and pass 1 polices them directly now.
-  ...[
-    'account_lockout_attempts',
-    'account_sessions',
-    'agent_tool_executions',
-    'agent_tools',
-    'search_history',
-    'shared_conversations',
-    'messaging_connections',
-  ].map((t) => [
+  // Tables keep leaving this list as the data export gives each of them a real,
+  // textually scannable query site: the reason below stops being true for one
+  // the moment pass 1 can police it directly.
+  ...['account_lockout_attempts', 'account_sessions', 'search_history'].map((t) => [
     t,
     'only query site is the interpolated-table erasure loop in ' +
       'lib/server/account-erasure.ts, which deletes `where ${column} = $1` from ' +
       'USER_SCOPED_TABLES; owner-scoped, but not attributable to a table by a textual scan',
   ]),
-  [
-    'waitlist',
-    'real SQL lives in app/api/waitlist/route.ts, retired wholesale by the bare `api/waitlist` ' +
-      'ALLOWLIST entry (waitlist rows are pre-account). The insert does carry user_id.',
-  ],
-  [
-    'cloud_managed_waitlist',
-    'real SQL lives in app/api/waitlist/public and /cloud-managed, retired wholesale by the same ' +
-      'bare `api/waitlist` ALLOWLIST entry.',
-  ],
-  [
-    'feature_flags',
-    'no SQL anywhere in the repo. The `feature_flags` in app/api/me/route.ts is a plain JS object ' +
-      'assembled from entitlements, not a read of this table.',
-  ],
   [
     'referrals',
     'no query site at all, the table is provisioned by 0016_misc.sql and nothing reads or ' +
