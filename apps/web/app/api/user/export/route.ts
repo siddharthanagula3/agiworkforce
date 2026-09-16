@@ -635,6 +635,7 @@ async function queryExportRowsAcrossWorkspaces<T>(params: {
   section: string;
   userId: string;
   ledger: ExportCompletenessLedger;
+  rowLimit?: number;
 }): Promise<T[]> {
   const { scopedDbFor, workspaces, ...query } = params;
   const collected: T[] = [];
@@ -643,6 +644,725 @@ async function queryExportRowsAcrossWorkspaces<T>(params: {
   }
   return collected;
 }
+
+const gatewayConversationExportSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable(),
+  model: z.string().nullable(),
+  is_archived: z.boolean(),
+  is_deleted: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const gatewayChatMessageExportSchema = z.object({
+  id: z.string(),
+  conversation_id: z.string().nullable(),
+  desktop_id: z.string().nullable(),
+  role: z.string(),
+  content: z.string(),
+  source: z.string(),
+  model: z.string().nullable(),
+  metadata: z.unknown(),
+  created_at: timestampSchema,
+});
+
+const conversationBranchExportSchema = z.object({
+  id: z.string(),
+  source_conversation_id: z.string(),
+  target_conversation_id: z.string(),
+  branch_point_message_id: z.string().nullable(),
+  request_id: z.string().nullable(),
+  created_at: timestampSchema,
+});
+
+const sharedConversationExportSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable(),
+  messages_json: z.string(),
+  expires_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+});
+
+const sharedSessionExportSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  model_id: z.string().nullable(),
+  provider: z.string().nullable(),
+  messages: z.unknown(),
+  total_messages: z.number().int(),
+  visibility: z.string(),
+  expires_at: timestampSchema,
+  created_at: timestampSchema,
+});
+
+const cloudAgentRunExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  request_id: z.string(),
+  conversation_id: z.string().nullable(),
+  origin_surface: z.string(),
+  work_mode: z.string(),
+  state: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  workflow_run_id: z.string().nullable(),
+  settled_usage: z.unknown(),
+  cancellation_requested_at: nullableTimestampSchema,
+  completed_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const cloudCodeSessionExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  request_id: z.string(),
+  title: z.string(),
+  repository_url: z.string().nullable(),
+  repository_branch: z.string().nullable(),
+  base_branch: z.string().nullable(),
+  working_branch: z.string().nullable(),
+  pull_request_url: z.string().nullable(),
+  pull_request_number: z.number().int().nullable(),
+  network_access: z.string(),
+  state: z.string(),
+  workspace_path: z.string(),
+  runtime_id: z.string().nullable(),
+  last_error: z.string().nullable(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+  closed_at: nullableTimestampSchema,
+  archived_at: nullableTimestampSchema,
+});
+
+const videoGenerationJobExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  conversation_id: z.string().nullable(),
+  asset_id: z.string().nullable(),
+  provider: z.string(),
+  model: z.string(),
+  prompt: z.string(),
+  duration_secs: z.number().int(),
+  resolution: z.string(),
+  aspect_ratio: z.string(),
+  generate_audio: z.boolean(),
+  source_surface: z.string(),
+  status: z.string(),
+  progress: z.number().int().nullable(),
+  public_error: z.string().nullable(),
+  provider_started_at: nullableTimestampSchema,
+  cancel_requested_at: nullableTimestampSchema,
+  terminal_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const pluginInstallationExportSchema = z.object({
+  id: z.string(),
+  plugin_id: z.string(),
+  installed_version: z.string(),
+  enabled: z.boolean(),
+  enabled_skills: z.unknown(),
+  custom_example_prompts: z.unknown(),
+  installed_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const pluginMarketplaceSourceExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  repository_url: z.string(),
+  ref: z.string().nullable(),
+  status: z.string(),
+  last_error: z.string().nullable(),
+  content_hash: z.string().nullable(),
+  last_synced_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const pluginMarketplaceInstallationExportSchema = z.object({
+  id: z.string(),
+  entry_id: z.string(),
+  installed_version: z.string(),
+  enabled: z.boolean(),
+  enabled_skills: z.unknown(),
+  custom_example_prompts: z.unknown(),
+  installed_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const agentToolExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  type: z.string(),
+  integration_type: z.string(),
+  invocation_pattern: z.string(),
+  parameters: z.unknown(),
+  is_active: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const agentApprovalRequestExportSchema = z.object({
+  id: z.string(),
+  desktop_id: z.string(),
+  agent_id: z.string().nullable(),
+  tool_name: z.string(),
+  tool_args: z.unknown(),
+  status: z.string(),
+  denial_reason: z.string().nullable(),
+  created_at: timestampSchema,
+  resolved_at: nullableTimestampSchema,
+});
+
+const agentToolExecutionExportSchema = z.object({
+  id: z.string(),
+  tool_id: z.string(),
+  parameters: z.unknown(),
+  result: z.unknown(),
+  success: z.boolean(),
+  error_message: z.string().nullable(),
+  duration_ms: z.number().int().nullable(),
+  created_at: timestampSchema,
+});
+
+const connectorToolPermissionExportSchema = z.object({
+  id: z.string(),
+  connector_id: z.string(),
+  tool_name: z.string(),
+  level: z.string(),
+  destructive: z.boolean(),
+  updated_at: timestampSchema,
+});
+
+const mcpTaskBindingExportSchema = z.object({
+  connector_id: z.string(),
+  task_id: z.string(),
+  expires_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+});
+
+const messagingConnectionExportSchema = z.object({
+  id: z.string(),
+  platform: z.string(),
+  is_active: z.boolean(),
+  connected_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const githubInstallationExportSchema = z.object({
+  id: z.string(),
+  installation_id: nullableNumericSchema,
+  account_login: z.string(),
+  account_type: z.string(),
+  pr_review_enabled: z.boolean(),
+  review_model: z.string().nullable(),
+  verified_repositories: z.array(z.string()).nullable(),
+  ownership_verified_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+});
+
+const featureFlagExportSchema = z.object({
+  id: z.string(),
+  flag_name: z.string(),
+  enabled: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const waitlistExportSchema = z.object({
+  id: z.string(),
+  email: z.string().nullable(),
+  plan: z.string().nullable(),
+  billing_interval: z.string().nullable(),
+  source: z.string().nullable(),
+  status: z.string().nullable(),
+  joined_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: nullableTimestampSchema,
+});
+
+const cloudManagedWaitlistExportSchema = z.object({
+  id: z.string(),
+  email: z.string().nullable(),
+  email_prefix: z.string().nullable(),
+  source: z.string(),
+  joined_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const betaApplicationExportSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  full_name: z.string(),
+  role: z.string(),
+  company: z.string().nullable(),
+  surfaces: z.array(z.string()),
+  use_case: z.string().nullable(),
+  discord_handle: z.string().nullable(),
+  status: z.string(),
+  source: z.string().nullable(),
+  metadata: z.unknown(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const supportActionProposalExportSchema = z.object({
+  id: z.string(),
+  action_id: z.string(),
+  params: z.unknown(),
+  surface: z.string(),
+  conversation_ref: z.string().nullable(),
+  outcome: z.string(),
+  expires_at: timestampSchema,
+  consumed_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+});
+
+const supportHandoffSessionExportSchema = z.object({
+  id: z.string(),
+  reference_id: z.string(),
+  surface: z.string(),
+  reason: z.string(),
+  status: z.string(),
+  contact_email: z.string(),
+  summary: z.string(),
+  transcript: z.unknown(),
+  attempted_actions: z.unknown(),
+  citations: z.unknown(),
+  account_context: z.unknown(),
+  page_path: z.string().nullable(),
+  locale: z.string().nullable(),
+  wait_expires_at: nullableTimestampSchema,
+  connected_at: nullableTimestampSchema,
+  last_activity_at: timestampSchema,
+  closed_at: nullableTimestampSchema,
+  email_sent_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const usageEventExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  event_type: z.string(),
+  quantity: z.number().int().nullable(),
+  metadata: z.unknown(),
+  created_at: timestampSchema,
+});
+
+const tokenCreditExportSchema = z.object({
+  id: z.string(),
+  subscription_id: z.string().nullable(),
+  period_start: timestampSchema,
+  period_end: timestampSchema,
+  credits_allocated_cents: z.number().int(),
+  credits_used_cents: z.number().int(),
+  top_up_allocated_cents: z.number().int(),
+  bonus_granted_cents: z.number().int(),
+  flagship_daily_cap_cents: z.number().int(),
+  flagship_used_today_cents: z.number().int(),
+  flagship_cap_reset_date: nullableTimestampSchema,
+  credits_allocated_microusd: nullableNumericSchema,
+  credits_used_microusd: nullableNumericSchema,
+  top_up_allocated_microusd: nullableNumericSchema,
+  flagship_used_today_microusd: nullableNumericSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const managedUsageRequestExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  idempotency_key: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  is_flagship: z.boolean(),
+  status: z.string(),
+  estimated_cost_cents: z.number().int(),
+  actual_cost_cents: z.number().int().nullable(),
+  estimated_cost_microusd: nullableNumericSchema,
+  actual_cost_microusd: nullableNumericSchema,
+  reservation_settlement_status: z.string().nullable(),
+  final_settlement_status: z.string().nullable(),
+  final_error_code: z.string().nullable(),
+  usage: z.unknown(),
+  provider_started_at: nullableTimestampSchema,
+  provider_succeeded_at: nullableTimestampSchema,
+  client_delivered_at: nullableTimestampSchema,
+  finalized_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const mobileIapTransactionExportSchema = z.object({
+  id: z.string(),
+  platform: z.string(),
+  product_key: z.string(),
+  product_id: z.string(),
+  product_kind: z.string(),
+  store_transaction_id: z.string(),
+  original_transaction_id: z.string().nullable(),
+  plan_tier: z.string().nullable(),
+  units_granted: z.number().int(),
+  intended_amount_cents: z.number().int(),
+  refunded_amount_cents: z.number().int(),
+  status: z.string(),
+  environment: z.string().nullable(),
+  purchased_at: nullableTimestampSchema,
+  expires_at: nullableTimestampSchema,
+  processed_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const mobileIapAccountExportSchema = z.object({
+  user_id: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
+  section: string;
+  table: string;
+  sql: string;
+  schema: z.ZodType<unknown>;
+  rowLimit?: number;
+  acrossWorkspaces?: boolean;
+}> = [
+  {
+    section: 'gateway_conversations',
+    table: 'conversations',
+    sql: `select id, title, model, is_archived, is_deleted, created_at, updated_at
+          from conversations
+          where user_id = $1
+          order by created_at asc`,
+    schema: gatewayConversationExportSchema,
+  },
+  {
+    section: 'gateway_chat_messages',
+    table: 'chat_messages',
+    sql: `select id, conversation_id, desktop_id, role, content, source, model, metadata, created_at
+          from chat_messages
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: gatewayChatMessageExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'conversation_branches',
+    table: 'conversation_branches',
+    sql: `select id, source_conversation_id, target_conversation_id, branch_point_message_id,
+                 request_id, created_at
+          from conversation_branches
+          where user_id = $1
+          order by created_at asc`,
+    schema: conversationBranchExportSchema,
+  },
+  {
+    section: 'shared_conversations',
+    table: 'shared_conversations',
+    sql: `select id, title, messages_json, expires_at, created_at
+          from shared_conversations
+          where user_id = $1
+          order by created_at asc`,
+    schema: sharedConversationExportSchema,
+  },
+  {
+    section: 'shared_sessions',
+    table: 'shared_sessions',
+    sql: `select id, title, model_id, provider, messages, total_messages, visibility,
+                 expires_at, created_at
+          from shared_sessions
+          where owner_id = $1
+          order by created_at asc`,
+    schema: sharedSessionExportSchema,
+  },
+  {
+    section: 'cloud_agent_runs',
+    table: 'cloud_agent_runs',
+    sql: `select id, organization_id, request_id, conversation_id, origin_surface, work_mode,
+                 state, provider, model, workflow_run_id, settled_usage,
+                 cancellation_requested_at, completed_at, created_at, updated_at
+          from cloud_agent_runs
+          where user_id = $1
+          order by created_at asc`,
+    schema: cloudAgentRunExportSchema,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'cloud_code_sessions',
+    table: 'cloud_code_sessions',
+    sql: `select id, organization_id, request_id, title, repository_url, repository_branch,
+                 base_branch, working_branch, pull_request_url, pull_request_number,
+                 network_access, state, workspace_path, runtime_id, last_error,
+                 created_at, updated_at, closed_at, archived_at
+          from cloud_code_sessions
+          where user_id = $1
+          order by created_at asc`,
+    schema: cloudCodeSessionExportSchema,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'video_generation_jobs',
+    table: 'video_generation_jobs',
+    sql: `select id, organization_id, conversation_id, asset_id, provider, model, prompt,
+                 duration_secs, resolution, aspect_ratio, generate_audio, source_surface,
+                 status, progress, public_error, provider_started_at, cancel_requested_at,
+                 terminal_at, created_at, updated_at
+          from video_generation_jobs
+          where user_id = $1
+          order by created_at asc`,
+    schema: videoGenerationJobExportSchema,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'plugin_installations',
+    table: 'plugin_installations',
+    sql: `select id, plugin_id, installed_version, enabled, enabled_skills,
+                 custom_example_prompts, installed_at, updated_at
+          from plugin_installations
+          where user_id = $1
+          order by installed_at asc`,
+    schema: pluginInstallationExportSchema,
+  },
+  {
+    section: 'plugin_marketplace_sources',
+    table: 'plugin_marketplace_sources',
+    sql: `select id, name, kind, repository_url, ref, status, last_error, content_hash,
+                 last_synced_at, created_at, updated_at
+          from plugin_marketplace_sources
+          where user_id = $1
+          order by created_at asc`,
+    schema: pluginMarketplaceSourceExportSchema,
+  },
+  {
+    section: 'plugin_marketplace_installations',
+    table: 'plugin_marketplace_installations',
+    sql: `select id, entry_id, installed_version, enabled, enabled_skills,
+                 custom_example_prompts, installed_at, updated_at
+          from plugin_marketplace_installations
+          where user_id = $1
+          order by installed_at asc`,
+    schema: pluginMarketplaceInstallationExportSchema,
+  },
+  {
+    section: 'agent_tools',
+    table: 'agent_tools',
+    sql: `select id, name, description, type, integration_type, invocation_pattern,
+                 parameters, is_active, created_at, updated_at
+          from agent_tools
+          where user_id = $1
+          order by created_at asc`,
+    schema: agentToolExportSchema,
+  },
+  {
+    section: 'agent_approval_requests',
+    table: 'agent_approval_requests',
+    sql: `select id, desktop_id, agent_id, tool_name, tool_args, status, denial_reason,
+                 created_at, resolved_at
+          from agent_approval_requests
+          where user_id = $1
+          order by created_at asc`,
+    schema: agentApprovalRequestExportSchema,
+  },
+  {
+    section: 'agent_tool_executions',
+    table: 'agent_tool_executions',
+    sql: `select id, tool_id, parameters, result, success, error_message, duration_ms, created_at
+          from agent_tool_executions
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: agentToolExecutionExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'connector_tool_permissions',
+    table: 'connector_tool_permissions',
+    sql: `select id, connector_id, tool_name, level, destructive, updated_at
+          from connector_tool_permissions
+          where user_id = $1
+          order by connector_id asc, tool_name asc`,
+    schema: connectorToolPermissionExportSchema,
+  },
+  {
+    section: 'mcp_task_bindings',
+    table: 'mcp_task_bindings',
+    sql: `select connector_id, task_id, expires_at, created_at
+          from mcp_task_bindings
+          where user_id = $1
+          order by created_at asc`,
+    schema: mcpTaskBindingExportSchema,
+  },
+  {
+    section: 'messaging_connections',
+    table: 'messaging_connections',
+    sql: `select id, platform, is_active, connected_at, updated_at
+          from messaging_connections
+          where user_id = $1
+          order by connected_at asc`,
+    schema: messagingConnectionExportSchema,
+  },
+  {
+    section: 'github_installations',
+    table: 'github_installations',
+    sql: `select id, installation_id, account_login, account_type, pr_review_enabled,
+                 review_model, verified_repositories, ownership_verified_at, created_at
+          from github_installations
+          where user_id = $1
+          order by created_at asc`,
+    schema: githubInstallationExportSchema,
+  },
+  {
+    section: 'feature_flags',
+    table: 'feature_flags',
+    sql: `select id, flag_name, enabled, created_at, updated_at
+          from feature_flags
+          where user_id = $1
+          order by flag_name asc`,
+    schema: featureFlagExportSchema,
+  },
+  {
+    section: 'waitlist',
+    table: 'waitlist',
+    sql: `select id, email, plan, billing_interval, source, status, joined_at,
+                 created_at, updated_at
+          from waitlist
+          where user_id = $1
+          order by created_at asc`,
+    schema: waitlistExportSchema,
+  },
+  {
+    section: 'cloud_managed_waitlist',
+    table: 'cloud_managed_waitlist',
+    sql: `select id, email, email_prefix, source, joined_at, updated_at
+          from cloud_managed_waitlist
+          where user_id = $1
+          order by joined_at asc`,
+    schema: cloudManagedWaitlistExportSchema,
+  },
+  {
+    section: 'beta_applications',
+    table: 'beta_applications',
+    sql: `select id, email, full_name, role, company, surfaces, use_case, discord_handle,
+                 status, source, metadata, created_at, updated_at
+          from beta_applications
+          where user_id = $1
+          order by created_at asc`,
+    schema: betaApplicationExportSchema,
+  },
+  {
+    section: 'support_action_proposals',
+    table: 'support_action_proposals',
+    sql: `select id, action_id, params, surface, conversation_ref, outcome, expires_at,
+                 consumed_at, created_at
+          from support_action_proposals
+          where user_id = $1
+          order by created_at asc`,
+    schema: supportActionProposalExportSchema,
+  },
+  {
+    section: 'support_handoff_sessions',
+    table: 'support_handoff_sessions',
+    sql: `select id, reference_id, surface, reason, status, contact_email, summary,
+                 transcript, attempted_actions, citations, account_context, page_path,
+                 locale, wait_expires_at, connected_at, last_activity_at, closed_at,
+                 email_sent_at, created_at, updated_at
+          from support_handoff_sessions
+          where owner_user_id = $1
+          order by created_at asc`,
+    schema: supportHandoffSessionExportSchema,
+  },
+  {
+    section: 'usage_events',
+    table: 'usage_events',
+    sql: `select id, organization_id, event_type, quantity, metadata, created_at
+          from usage_events
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: usageEventExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'token_credits',
+    table: 'token_credits',
+    sql: `select id, subscription_id, period_start, period_end, credits_allocated_cents,
+                 credits_used_cents, top_up_allocated_cents, bonus_granted_cents,
+                 flagship_daily_cap_cents, flagship_used_today_cents, flagship_cap_reset_date,
+                 credits_allocated_microusd, credits_used_microusd, top_up_allocated_microusd,
+                 flagship_used_today_microusd, created_at, updated_at
+          from token_credits
+          where user_id = $1
+          order by period_start asc`,
+    schema: tokenCreditExportSchema,
+  },
+  {
+    section: 'managed_usage_requests',
+    table: 'managed_usage_requests',
+    sql: `select id, organization_id, idempotency_key, provider, model, is_flagship, status,
+                 estimated_cost_cents, actual_cost_cents, estimated_cost_microusd,
+                 actual_cost_microusd, reservation_settlement_status, final_settlement_status,
+                 final_error_code, usage, provider_started_at, provider_succeeded_at,
+                 client_delivered_at, finalized_at, created_at, updated_at
+          from managed_usage_requests
+          where user_id = $1
+          order by created_at asc`,
+    schema: managedUsageRequestExportSchema,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'mobile_iap_transactions',
+    table: 'mobile_iap_transactions',
+    sql: `select id, platform, product_key, product_id, product_kind, store_transaction_id,
+                 original_transaction_id, plan_tier, units_granted, intended_amount_cents,
+                 refunded_amount_cents, status, environment, purchased_at, expires_at,
+                 processed_at, created_at, updated_at
+          from mobile_iap_transactions
+          where user_id = $1
+          order by created_at asc`,
+    schema: mobileIapTransactionExportSchema,
+  },
+  {
+    section: 'mobile_iap_accounts',
+    table: 'mobile_iap_accounts',
+    sql: `select user_id, created_at, updated_at
+          from mobile_iap_accounts
+          where user_id = $1`,
+    schema: mobileIapAccountExportSchema,
+  },
+];
+
+export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
+  user_two_factor:
+    'Holds the live second factor. This download is a file handed to whoever ends up with it, and a credential in it stays valid.',
+  connector_oauth_grants:
+    'Holds the live tokens a connector authenticates with. The connection itself is exported as user_connectors.',
+  connector_oauth_authorizations:
+    'In-flight authorization codes and verifiers for a connector handshake; a live credential, not subject content.',
+  account_sessions:
+    'Session state, not subject content. The devices that hold those sessions are exported as desktop_devices and mobile_devices.',
+  account_lockout_attempts:
+    'Failed sign-in counters kept to slow an attacker down, not a record of what the subject did.',
+  device_pairings:
+    'The pairing secret a device redeems. The device it belongs to is exported as desktop_devices, mobile_devices or device_authorizations.',
+  device_refresh_tokens:
+    'Live refresh credentials. What the subject would want, which device and when it was registered, is exported as desktop_devices and mobile_devices.',
+  revoked_jwts:
+    'The deny list a signed-out token is checked against; token state, not subject content.',
+  mcp_app_payloads:
+    'Transient cache in front of a connector call (0147 names it a stateless cache); nothing is held here that is not read back from the connector.',
+  web_artifact_index:
+    'Derived lookup rebuilt from web_artifacts, which is exported in full alongside every version.',
+};
 
 const MEDIA_DOWNLOAD_FIELD = 'download_url';
 
@@ -1298,6 +2018,22 @@ async function collectUserData(
     ledger,
     rowLimit: EXPORT_ROW_LIMIT,
   });
+
+  for (const { section, sql, schema, rowLimit, acrossWorkspaces } of ADDITIONAL_EXPORT_SECTIONS) {
+    const query = {
+      sql,
+      values: [user.id],
+      schema,
+      section,
+      userId: user.id,
+      ledger,
+      ...(rowLimit === undefined ? {} : { rowLimit }),
+    };
+    const rows = acrossWorkspaces
+      ? await queryExportRowsAcrossWorkspaces({ scopedDbFor, workspaces, ...query })
+      : await queryExportRows({ db, ...query });
+    if (rows.length > 0) exportData[section] = rows;
+  }
 
   try {
     exportData['billing_invoices'] = await listUserBillingInvoices(db, user.id);
