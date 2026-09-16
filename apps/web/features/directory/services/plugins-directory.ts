@@ -244,7 +244,7 @@ export function toDirectoryShape(
         skills: entry.declaredSkills,
         skillPaths: [],
         commands: 0,
-        agents: 0,
+        agents: [],
         hooks: false,
         mcpServers: [],
         lspServers: [],
@@ -482,7 +482,7 @@ function toComponents(entry: PluginDirectoryEntry): DirectoryPluginComponents {
   return {
     skills: components.skills,
     commands: components.commands,
-    agents: components.agents,
+    agents: components.agents.length,
     hooks: components.hooks,
     mcpServers: components.mcpServers.map((server) => ({
       name: server.name,
@@ -815,12 +815,10 @@ export async function installPlugin(
 }
 
 export type PluginUninstallTarget =
-  | { kind: 'builtin'; pluginId: string }
-  | { kind: 'installation'; installationId: string };
+  { kind: 'builtin'; pluginId: string } | { kind: 'installation'; installationId: string };
 
 export type PluginUninstallOutcome =
-  | { status: 'removed' }
-  | { status: 'disabled'; message: string };
+  { status: 'removed' } | { status: 'disabled'; message: string };
 
 export async function uninstallPlugin(
   target: PluginUninstallTarget,
