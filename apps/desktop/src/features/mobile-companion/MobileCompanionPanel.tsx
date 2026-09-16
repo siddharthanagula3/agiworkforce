@@ -7,6 +7,7 @@ import { QRPairingCard } from './QRPairingCard';
 import { RemoteApprovalCard } from './RemoteApprovalCard';
 import { Badge } from '@/ui/Badge';
 import { Button } from '@/ui/Button';
+import { REMOTE_CONTROL_UNAVAILABLE, remoteControlSupported } from '@/lib/remoteControlSupport';
 
 export function MobileCompanionPanel() {
   const { status, peerConnected, stopSession } = useConnectionStore(
@@ -20,8 +21,24 @@ export function MobileCompanionPanel() {
 
   const isConnected = status === 'streaming' || (status === 'pairing' && peerConnected);
   const isPaired = peerConnected;
+  const supported = remoteControlSupported();
 
   useEffect(() => {}, []);
+
+  if (!supported) {
+    return (
+      <div className="flex flex-col h-full gap-4 p-4">
+        <div className="flex items-center gap-2">
+          <Smartphone className="h-5 w-5 text-violet-500" />
+          <h2 className="text-base font-semibold text-foreground">Mobile Companion</h2>
+        </div>
+        <div className="flex items-start gap-2 rounded-lg border border-border p-3">
+          <WifiOff className="mt-0.5 h-4 w-4 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">{REMOTE_CONTROL_UNAVAILABLE}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full gap-4 p-4 overflow-y-auto">
