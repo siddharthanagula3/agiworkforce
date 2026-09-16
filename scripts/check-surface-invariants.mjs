@@ -627,6 +627,48 @@ export function partitionViolations(violations, allowedEntries) {
   };
 }
 
+const MENU_SURFACE_ROOTS = [
+  'apps/web/app',
+  'apps/web/features',
+  'apps/web/shared',
+  'apps/desktop/src',
+  'apps/extension-vscode/src',
+  'packages/ui',
+];
+
+const MENU_ROLE_ATTRIBUTE = /(?<!\[)\brole=(?:"menu"|'menu'|\{\s*['"]menu['"]\s*\})/u;
+
+export function menuPanelHonoursKeyboard(source) {
+  if (!MENU_ROLE_ATTRIBUTE.test(source)) return true;
+  return /useMenuKeyboard/u.test(source) || /@radix-ui\//u.test(source);
+}
+
+/**
+ * `role="menu"` promises the WAI-ARIA menu keyboard pattern: arrow navigation,
+ * Escape, and focus returning to the trigger. A panel that only closes on an
+ * outside click claims a contract it does not honour, which is invisible to a
+ * mouse and total to a keyboard. `useMenuKeyboard` is that contract; a Radix
+ * menu brings its own.
+ */
+export function checkMenusHonourKeyboardContract() {
+  const violations = [];
+
+  for (const root of MENU_SURFACE_ROOTS) {
+    for (const file of productFiles(root)) {
+      if (!/\.tsx$/u.test(file)) continue;
+      if (menuPanelHonoursKeyboard(readSource(file))) continue;
+      violations.push({
+        id: file,
+        detail:
+          `${file} renders a role="menu" panel without useMenuKeyboard or a Radix menu, so arrow ` +
+          'navigation, Escape and focus return are missing. Wire useMenuKeyboard, or drop the role.',
+      });
+    }
+  }
+
+  return violations;
+}
+
 export const INVARIANTS = [
   {
     id: 'settings-section-registered',
@@ -652,6 +694,11 @@ export const INVARIANTS = [
     id: 'keybinding-tolerates-no-args',
     label: 'Every keybound command tolerates a zero-argument invocation',
     run: () => checkKeybindingsTolerateNoArgs(),
+  },
+  {
+    id: 'menu-honours-keyboard-contract',
+    label: 'Every role="menu" panel implements the menu keyboard pattern',
+    run: () => checkMenusHonourKeyboardContract(),
   },
 ];
 

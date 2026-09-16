@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { supportsLocalAppMode } from '@/lib/runtimeEnvironment';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -42,7 +42,7 @@ import type { V3Mode } from './DesktopShellV3';
 import { UpdatePill } from '../updates';
 import { NotificationCenter } from '../notifications';
 import { AccountMenu } from './AccountMenu';
-import { AgiMark, shortcutLabel } from '@agiworkforce/ui';
+import { AgiMark, shortcutLabel, useMenuKeyboard } from '@agiworkforce/ui';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { useCloudTaskBadge } from './useCloudTaskBadge';
 
@@ -379,6 +379,16 @@ export function Sidebar({
     },
     [archiveProject],
   );
+
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeAccountMenu = useCallback(() => onOpenAccountMenu?.(), [onOpenAccountMenu]);
+  useMenuKeyboard({
+    open: Boolean(showAccountMenu) && !collapsed,
+    onClose: closeAccountMenu,
+    panelRef: accountMenuRef,
+    triggerRef: accountTriggerRef,
+  });
 
   const handleFooterPrimaryClick = useCallback(() => {
     if (isSignedIn) {
@@ -872,7 +882,9 @@ export function Sidebar({
               aria-hidden="true"
             />
             <div
+              ref={accountMenuRef}
               role="menu"
+              aria-label={t('accountMenu.accountFallback')}
               style={{
                 position: 'absolute',
                 bottom: 'calc(100% + 6px)',
@@ -901,8 +913,11 @@ export function Sidebar({
           }}
         >
           <button
+            ref={accountTriggerRef}
             onClick={handleFooterPrimaryClick}
             data-open={showAccountMenu}
+            aria-haspopup={isSignedIn ? 'menu' : undefined}
+            aria-expanded={isSignedIn ? Boolean(showAccountMenu) : undefined}
             aria-label={
               collapsed
                 ? isSignedIn
