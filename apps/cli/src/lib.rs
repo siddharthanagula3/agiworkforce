@@ -3109,6 +3109,7 @@ pub async fn run_main() -> Result<()> {
                 let provider_label = format!("{:?}", session.provider).to_lowercase();
 
                 if json_events {
+                    agent_events::claim_machine_stream(session_id.clone());
                     agent_events::AgentEvent::Spawning {
                         session_id: session_id.clone(),
                         model: m.clone(),

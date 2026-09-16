@@ -123,6 +123,11 @@ fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
         )
         .dimmed()
     );
+    crate::agent_events::emit_terminal_error(
+        "approval_required",
+        format!("{action} requires approval and no confirmation is possible here."),
+        "Pass --full-auto, -y or --dangerously-skip-permissions, or run where stdin is a terminal.",
+    );
     std::process::exit(1);
 }
 
