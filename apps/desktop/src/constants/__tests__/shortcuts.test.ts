@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SHORTCUTS, serializeCombo } from '../shortcuts';
+import { DEFAULT_SHORTCUTS, RENDERER_SHORTCUTS, serializeCombo } from '../shortcuts';
 
 describe('DEFAULT_SHORTCUTS', () => {
   it('has a unique key combo per shortcut', () => {
@@ -18,5 +18,16 @@ describe('DEFAULT_SHORTCUTS', () => {
   it('has a unique id per shortcut', () => {
     const ids = DEFAULT_SHORTCUTS.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  // Starting a new chat is the binding a user arrives already knowing, so it
+  // takes the key every comparable app uses rather than whatever was free.
+  it('starts a new chat on the key every desktop app uses for it', () => {
+    const newChat = RENDERER_SHORTCUTS.find((shortcut) => shortcut.action === 'chat.new');
+
+    expect(newChat).toBeDefined();
+    expect(serializeCombo(newChat!.key, newChat!.modifiers)).toBe(
+      serializeCombo('n', { meta: true }),
+    );
   });
 });
