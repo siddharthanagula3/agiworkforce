@@ -15,6 +15,7 @@ import {
   Trash,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMenuKeyboard } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 import { cn, debounce } from '../../lib/utils';
 import { FILTER_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
@@ -465,28 +466,30 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     setContextMenu({ path: node.path, isDirectory: node.isDirectory, x, y });
   };
 
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
   useEffect(() => {
     if (!contextMenu) {
       return;
     }
 
     const handleClose = () => setContextMenu(null);
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setContextMenu(null);
-      }
-    };
 
     window.addEventListener('click', handleClose);
     window.addEventListener('contextmenu', handleClose);
-    window.addEventListener('keydown', handleEscape);
 
     return () => {
       window.removeEventListener('click', handleClose);
       window.removeEventListener('contextmenu', handleClose);
-      window.removeEventListener('keydown', handleEscape);
     };
   }, [contextMenu]);
+
+  useMenuKeyboard({
+    open: contextMenu !== null,
+    onClose: closeContextMenu,
+    panelRef: contextMenuRef,
+  });
 
   const displayTree = useMemo(
     () => filterTree(tree, debouncedSearchQuery),
@@ -575,6 +578,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
       {contextMenu && (
         <div className="fixed inset-0 z-40">
           <div
+            ref={contextMenuRef}
             className="absolute z-50 w-52 rounded-md border border-border bg-background p-1 shadow-lg"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             role="menu"
