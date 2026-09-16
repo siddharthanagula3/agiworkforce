@@ -159,6 +159,23 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     };
   }
 
+  /**
+   * Fork keeps the original where it is, so the owner map is not rewritten:
+   * the copy belongs to the same runtime and is picked up by the refresh.
+   */
+  async forkThread(threadId: string, title?: string): Promise<string | null> {
+    let owner = this.runtimeByThread.get(threadId);
+    if (owner === undefined) {
+      await this.getThreads();
+      owner = this.runtimeByThread.get(threadId);
+    }
+    if (owner === undefined) return null;
+    const forked = await owner.runtime.forkThread(threadId, title);
+    this.runtimeByThread.set(forked.id, owner);
+    this.refresh();
+    return forked.id;
+  }
+
   async archiveThread(threadId: string): Promise<boolean> {
     let owner = this.runtimeByThread.get(threadId);
     if (owner === undefined) {
