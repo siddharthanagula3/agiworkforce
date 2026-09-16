@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useMenuKeyboard } from '@agiworkforce/ui';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -101,6 +102,8 @@ export function ProjectRow({
     setMenuOpen(true);
   }, []);
 
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+
   useEffect(() => {
     if (!menuOpen) return;
     function onDoc(e: MouseEvent) {
@@ -109,16 +112,16 @@ export function ProjectRow({
       if (triggerRef.current?.contains(target)) return;
       setMenuOpen(false);
     }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setMenuOpen(false);
-    }
     document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('mousedown', onDoc);
   }, [menuOpen]);
+
+  useMenuKeyboard({
+    open: menuOpen,
+    onClose: closeMenu,
+    panelRef: menuRef,
+    triggerRef: triggerRef,
+  });
 
   useEffect(() => {
     if (!editing) return;

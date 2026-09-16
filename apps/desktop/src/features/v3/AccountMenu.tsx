@@ -201,6 +201,8 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
         return (
           <button
             key={i}
+            type="button"
+            role="menuitem"
             onClick={action}
             style={{
               width: '100%',

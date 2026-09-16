@@ -10,12 +10,40 @@ import {
   findWriteOnlyCollections,
   findWriteOnlyStorageKeys,
   INVARIANTS,
+  menuPanelHonoursKeyboard,
   normalizeRoutePath,
   partitionViolations,
   readAllowlist,
   requiredArity,
   routePathForFile,
 } from './check-surface-invariants.mjs';
+
+test('a role="menu" panel with no keyboard wiring is reported', () => {
+  const source = `export function Menu() {\n  return <div role="menu"><button role="menuitem">Rename</button></div>;\n}`;
+
+  assert.equal(menuPanelHonoursKeyboard(source), false);
+});
+
+test('useMenuKeyboard and a Radix menu both satisfy the contract', () => {
+  const hook = `import { useMenuKeyboard } from '@agiworkforce/ui';\nconst a = <div role="menu" />;`;
+  const radix = `import * as M from '@radix-ui/react-dropdown-menu';\nconst a = <div role="menu" />;`;
+
+  assert.equal(menuPanelHonoursKeyboard(hook), true);
+  assert.equal(menuPanelHonoursKeyboard(radix), true);
+});
+
+// A file that merely asks whether focus is inside someone else's menu is not
+// rendering one. The first version of this check flagged the web composer for
+// a closest('[role="menu"]') guard.
+test('a [role="menu"] selector string is not a menu panel', () => {
+  const source = `if (active.closest('[role="dialog"], [role="menu"]')) return;`;
+
+  assert.equal(menuPanelHonoursKeyboard(source), true);
+});
+
+test('a file with no menu at all passes', () => {
+  assert.equal(menuPanelHonoursKeyboard('export const x = 1;'), true);
+});
 
 test('a keybinding with no args fails against a handler that requires one', () => {
   const sources = new Map([
@@ -336,6 +364,7 @@ test('every declared invariant is runnable and has an allowlist bucket', () => {
     'persisted-field-has-reader',
     'collection-has-reader',
     'keybinding-tolerates-no-args',
+    'menu-honours-keyboard-contract',
   ]);
   for (const invariant of INVARIANTS) {
     assert.equal(typeof invariant.run, 'function');
