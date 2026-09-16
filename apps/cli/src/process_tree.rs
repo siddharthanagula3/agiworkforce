@@ -145,7 +145,19 @@ fn kill_process_group_now(process_id: Option<u32>) {
 }
 
 #[cfg(windows)]
-fn kill_process_group_now(_process_id: Option<u32>) {}
+fn kill_process_group_now(process_id: Option<u32>) {
+    let Some(process_id) = process_id else {
+        return;
+    };
+    // Blocking on purpose: the only caller is on its way out of the process and
+    // has no runtime left to await a child on.
+    let _ = std::process::Command::new("taskkill")
+        .args(["/PID", &process_id.to_string(), "/T", "/F"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
 
 fn active_process_trees() -> &'static StdMutex<ActiveProcessTrees> {
     ACTIVE_PROCESS_TREES.get_or_init(|| StdMutex::new(ActiveProcessTrees::new()))
