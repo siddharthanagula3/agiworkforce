@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 import {
   Camera,
   CheckCircle2,
@@ -72,6 +73,8 @@ interface ScreenshotModalProps {
 }
 
 function ScreenshotModal({ src, onClose }: ScreenshotModalProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useDialogKeyboard({ open: true, onClose, panelRef });
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
@@ -80,7 +83,7 @@ function ScreenshotModal({ src, onClose }: ScreenshotModalProps) {
       aria-modal="true"
       aria-label="Screenshot preview"
     >
-      <div className="relative max-w-4xl max-h-[90vh] overflow-auto rounded-lg">
+      <div ref={panelRef} className="relative max-w-4xl max-h-[90vh] overflow-auto rounded-lg">
         <img
           src={`data:image/png;base64,${src}`}
           alt="Browser screenshot"

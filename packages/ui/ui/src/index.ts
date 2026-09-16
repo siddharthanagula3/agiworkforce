@@ -342,6 +342,7 @@ export {
 export { useConfirmAction } from './primitives/ConfirmAction';
 export type { ConfirmActionRequest } from './primitives/ConfirmAction';
 export { useMenuKeyboard } from './primitives/useMenuKeyboard';
+export { useDialogKeyboard } from './primitives/useDialogKeyboard';
 
 export {
   DirectoryPanel,
