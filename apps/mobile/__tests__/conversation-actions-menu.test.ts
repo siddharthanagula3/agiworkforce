@@ -1,6 +1,12 @@
+const mockMmkvValues = new Map<string, string>();
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
+  storage: {
+    getString: (key: string) => mockMmkvValues.get(key),
+    set: (key: string, value: string) => mockMmkvValues.set(key, value),
+    delete: (key: string) => mockMmkvValues.delete(key),
+  },
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
@@ -28,6 +34,10 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 import { requireLocalModel } from '../test-utils/modelFixtures';
 
 const T = '2026-06-20T00:00:00.000Z';
@@ -35,6 +45,9 @@ const LOCAL_MODEL_ID = requireLocalModel().id;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockMmkvValues.clear();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('conversation-actions-test-account');
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {}, currentConversationId: null });
   useChatAppModeStore.getState().setAppMode('cloud');
