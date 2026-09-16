@@ -51,11 +51,6 @@ import type { PatchApplyEndEvent } from './PatchApplyEndEvent';
 import type { PatchApplyUpdatedEvent } from './PatchApplyUpdatedEvent';
 import type { PlanDeltaEvent } from './PlanDeltaEvent';
 import type { RawResponseItemEvent } from './RawResponseItemEvent';
-import type { RealtimeConversationClosedEvent } from './RealtimeConversationClosedEvent';
-import type { RealtimeConversationListVoicesResponseEvent } from './RealtimeConversationListVoicesResponseEvent';
-import type { RealtimeConversationRealtimeEvent } from './RealtimeConversationRealtimeEvent';
-import type { RealtimeConversationSdpEvent } from './RealtimeConversationSdpEvent';
-import type { RealtimeConversationStartedEvent } from './RealtimeConversationStartedEvent';
 import type { ReasoningContentDeltaEvent } from './ReasoningContentDeltaEvent';
 import type { ReasoningRawContentDeltaEvent } from './ReasoningRawContentDeltaEvent';
 import type { RequestPermissionsEvent } from './RequestPermissionsEvent';
@@ -89,10 +84,6 @@ export type EventMsg =
   | ({ type: 'error' } & ErrorEvent)
   | ({ type: 'warning' } & WarningEvent)
   | ({ type: 'guardian_warning' } & WarningEvent)
-  | ({ type: 'realtime_conversation_started' } & RealtimeConversationStartedEvent)
-  | ({ type: 'realtime_conversation_realtime' } & RealtimeConversationRealtimeEvent)
-  | ({ type: 'realtime_conversation_closed' } & RealtimeConversationClosedEvent)
-  | ({ type: 'realtime_conversation_sdp' } & RealtimeConversationSdpEvent)
   | ({ type: 'model_reroute' } & ModelRerouteEvent)
   | ({ type: 'model_verification' } & ModelVerificationEvent)
   | ({ type: 'context_compacted' } & ContextCompactedEvent)
@@ -144,9 +135,6 @@ export type EventMsg =
   | ({ type: 'get_history_entry_response' } & GetHistoryEntryResponseEvent)
   | ({ type: 'mcp_list_tools_response' } & McpListToolsResponseEvent)
   | ({ type: 'list_skills_response' } & ListSkillsResponseEvent)
-  | ({
-      type: 'realtime_conversation_list_voices_response';
-    } & RealtimeConversationListVoicesResponseEvent)
   | { type: 'skills_update_available' }
   | ({ type: 'plan_update' } & UpdatePlanArgs)
   | ({ type: 'turn_aborted' } & TurnAbortedEvent)
