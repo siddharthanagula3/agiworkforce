@@ -45,6 +45,19 @@ updates:
         applies-to: version-updates
         update-types:
           - 'major'
+    ignore:
+      # Held back on purpose: sysinfo 0.39 needs rustc 1.95 (toolchain pins 1.94),
+      # schemars 1 and ts-rs 12 need a migration of the protocol crate's custom
+      # impls, lopdf 0.44 does not compile against its own time crate, bincode 3.0.0
+      # is a compile_error! poison release, cpal 0.16+ links ALSA twice on Linux,
+      # and llama-cpp-sys-2 must match the llama-cpp-2 binding exactly.
+      - dependency-name: 'sysinfo'
+      - dependency-name: 'schemars'
+      - dependency-name: 'ts-rs'
+      - dependency-name: 'lopdf'
+      - dependency-name: 'bincode'
+      - dependency-name: 'cpal'
+      - dependency-name: 'llama-cpp-sys-2'
 
   # ─── Cargo (Rust), apps/desktop/src-tauri ──────────────────────────────────
   - package-ecosystem: 'cargo'
@@ -81,6 +94,17 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: 'tauri-plugin-*'
         update-types: ['version-update:semver-major']
+      # The desktop crate's major bumps are a migration (RustCrypto 0.11, rusqlite
+      # 0.40, oauth2 5, whisper-rs 0.16, webrtc 0.17, windows 0.62) that is taken on
+      # purpose, not by a weekly group: 2026-09-15's group merge broke the build in
+      # 143 places.
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'sysinfo'
+      - dependency-name: 'lopdf'
+      - dependency-name: 'bincode'
+      - dependency-name: 'cpal'
+      - dependency-name: 'llama-cpp-sys-2'
 
   # ─── npm / pnpm, root workspace ────────────────────────────────────────────
   - package-ecosystem: 'npm'
@@ -213,6 +237,13 @@ updates:
       - dependency-name: 'react-native-reanimated'
       - dependency-name: 'react-native-worklets'
       - dependency-name: '@types/react'
+      # Expo SDK 57 pins these; `expo install --check` flags any other version.
+      - dependency-name: '@react-native-community/slider'
+      - dependency-name: '@shopify/flash-list'
+      - dependency-name: 'react-native-safe-area-context'
+      - dependency-name: 'react-native-screens'
+      - dependency-name: 'react-native-svg'
+      - dependency-name: 'react-native-webview'
 
   # ─── npm / pnpm, apps/extension ────────────────────────────────────────────
   - package-ecosystem: 'npm'

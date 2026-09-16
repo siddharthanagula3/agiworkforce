@@ -16,9 +16,9 @@ path = "src/lib.rs"
 dirs = "6"
 dunce = "1.0.4"
 path-absolutize = "4.0.1"
-schemars = "1.2.0"
+schemars = "0.8.22"
 serde = { version = "1", features = ["derive"] }
-ts-rs = { version = "12", features = ["serde-json-impl", "no-serde-warnings"] }
+ts-rs = { version = "11", features = ["serde-json-impl", "no-serde-warnings"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
