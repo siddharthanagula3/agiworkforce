@@ -9,6 +9,7 @@ const mockReplace = jest.fn();
 const mockParams: { title?: string; due?: string } = {};
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useLocalSearchParams: () => mockParams,
   useRouter: () => ({ canGoBack: () => true, back: mockBack, replace: mockReplace }),
 }));

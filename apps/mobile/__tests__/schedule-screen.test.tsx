@@ -8,6 +8,7 @@ const mockReplace = jest.fn();
 const mockFetchSchedules = jest.fn(async () => undefined);
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: mockPush,
     back: mockBack,

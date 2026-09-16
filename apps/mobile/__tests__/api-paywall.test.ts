@@ -10,6 +10,7 @@ jest.mock('react-native', () => ({
 }));
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   router: { push: jest.fn() },
 }));
 
@@ -138,8 +139,7 @@ describe('Cloud account request isolation', () => {
 
   it('cancels an in-flight direct-to-storage upload on account teardown', async () => {
     let resolveUpload:
-      | ((value: { status: number; body: string; headers: object }) => void)
-      | undefined;
+      ((value: { status: number; body: string; headers: object }) => void) | undefined;
     mockUploadAsync.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveUpload = resolve;

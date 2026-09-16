@@ -8,6 +8,7 @@ const mockCloseDrawer = jest.fn();
 let mockPathname = '/chat';
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockPush, navigate: mockNavigate }),
   usePathname: () => mockPathname,
 }));

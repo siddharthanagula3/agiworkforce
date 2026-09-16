@@ -18,6 +18,7 @@ let mockUserId: string | null = null;
 jest.mock('expo-router', () => {
   const { Text } = require('react-native');
   return {
+    ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
     Redirect: ({ href }: { href: string }) => <Text>Redirect:{href}</Text>,
     useLocalSearchParams: () => mockSearchParams,
     useRouter: () => ({ replace: mockReplace }),

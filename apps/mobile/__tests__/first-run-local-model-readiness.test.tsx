@@ -5,6 +5,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
     // eslint-disable-next-line react-hooks/exhaustive-deps

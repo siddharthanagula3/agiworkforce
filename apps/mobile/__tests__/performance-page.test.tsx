@@ -125,6 +125,7 @@ jest.mock('react-native-svg', () => {
 });
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: jest.fn(),
     replace: jest.fn(),

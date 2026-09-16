@@ -17,6 +17,7 @@ function deferred<T>() {
 }
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: mockPush,
     back: mockBack,
