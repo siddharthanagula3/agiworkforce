@@ -287,6 +287,13 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
                 .push((mention, "not a file in this workspace".to_string()));
             continue;
         }
+        if crate::sensitive_files::is_sensitive_file(&mention) {
+            expansion.skipped.push((
+                mention,
+                "holds credentials, only the path was sent".to_string(),
+            ));
+            continue;
+        }
         if crate::is_image_extension(&mention) {
             expansion.images.push(mention);
             continue;

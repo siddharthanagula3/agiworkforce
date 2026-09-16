@@ -267,6 +267,14 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         }
     };
 
+    if crate::sensitive_files::is_sensitive_file(path) {
+        return Ok(ToolResult {
+            tool_name: "read_file".to_string(),
+            success: false,
+            output: crate::sensitive_files::sensitive_refusal(path),
+        });
+    }
+
     let start_line: Option<usize> = args.get("start_line").and_then(|s| s.parse().ok());
     let end_line: Option<usize> = args.get("end_line").and_then(|s| s.parse().ok());
 
