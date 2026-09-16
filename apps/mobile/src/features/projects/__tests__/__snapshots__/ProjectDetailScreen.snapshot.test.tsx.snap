@@ -180,14 +180,14 @@ exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a mana
       }
     >
       <View
-        color="rgba(244, 244, 244, 0.48)"
+        color="rgba(244, 244, 244, 0.56)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -207,7 +207,7 @@ exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a mana
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -493,14 +493,14 @@ exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a sky-
       }
     >
       <View
-        color="rgba(244, 244, 244, 0.48)"
+        color="rgba(244, 244, 244, 0.56)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -520,7 +520,7 @@ exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a sky-
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }
@@ -540,7 +540,7 @@ exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a sky-
       <Text
         style={
           {
-            "color": "rgba(244, 244, 244, 0.48)",
+            "color": "rgba(244, 244, 244, 0.56)",
             "fontSize": 11,
           }
         }

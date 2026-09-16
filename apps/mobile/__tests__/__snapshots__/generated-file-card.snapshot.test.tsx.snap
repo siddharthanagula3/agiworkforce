@@ -139,7 +139,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           accessibilityLabel="SHA-256 abcdef012345"
           style={
             {
-              "color": "rgba(244, 244, 244, 0.48)",
+              "color": "rgba(244, 244, 244, 0.56)",
               "fontSize": 11,
             }
           }
@@ -250,7 +250,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
   <Text
     style={
       {
-        "color": "rgba(244, 244, 244, 0.48)",
+        "color": "rgba(244, 244, 244, 0.56)",
         "fontSize": 11,
       }
     }
@@ -399,7 +399,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           accessibilityLabel="SHA-256 abcdef012345"
           style={
             {
-              "color": "rgba(244, 244, 244, 0.48)",
+              "color": "rgba(244, 244, 244, 0.56)",
               "fontSize": 11,
             }
           }
@@ -510,7 +510,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
   <Text
     style={
       {
-        "color": "rgba(244, 244, 244, 0.48)",
+        "color": "rgba(244, 244, 244, 0.56)",
         "fontSize": 11,
       }
     }
@@ -659,7 +659,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           accessibilityLabel="SHA-256 abcdef012345"
           style={
             {
-              "color": "rgba(244, 244, 244, 0.48)",
+              "color": "rgba(244, 244, 244, 0.56)",
               "fontSize": 11,
             }
           }
@@ -909,7 +909,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           accessibilityLabel="SHA-256 abcdef012345"
           style={
             {
-              "color": "rgba(244, 244, 244, 0.48)",
+              "color": "rgba(244, 244, 244, 0.56)",
               "fontSize": 11,
             }
           }
@@ -1020,7 +1020,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
   <Text
     style={
       {
-        "color": "rgba(244, 244, 244, 0.48)",
+        "color": "rgba(244, 244, 244, 0.56)",
         "fontSize": 11,
       }
     }

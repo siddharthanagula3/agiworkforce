@@ -292,7 +292,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
         <Text
           style={
             {
-              "color": "rgba(244, 244, 244, 0.48)",
+              "color": "rgba(244, 244, 244, 0.56)",
               "fontSize": 13,
               "fontWeight": "500",
             }
@@ -373,12 +373,12 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
           style={
             {
-              "backgroundColor": "rgba(244, 244, 244, 0.48)14",
+              "backgroundColor": "rgba(244, 244, 244, 0.56)14",
             }
           }
         >
           <View
-            color="rgba(244, 244, 244, 0.48)"
+            color="rgba(244, 244, 244, 0.56)"
             size={28}
             testID="icon-message-square"
           />
@@ -850,14 +850,14 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             }
           >
             <View
-              color="rgba(244, 244, 244, 0.48)"
+              color="rgba(244, 244, 244, 0.56)"
               size={11}
               testID="icon-users"
             />
             <Text
               style={
                 {
-                  "color": "rgba(244, 244, 244, 0.48)",
+                  "color": "rgba(244, 244, 244, 0.56)",
                   "fontSize": 11,
                 }
               }
@@ -877,7 +877,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             <Text
               style={
                 {
-                  "color": "rgba(244, 244, 244, 0.48)",
+                  "color": "rgba(244, 244, 244, 0.56)",
                   "fontSize": 11,
                 }
               }
@@ -1091,7 +1091,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
         <Text
           style={
             {
-              "color": "rgba(244, 244, 244, 0.48)",
+              "color": "rgba(244, 244, 244, 0.56)",
               "fontSize": 13,
               "fontWeight": "500",
             }
@@ -1172,12 +1172,12 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
           style={
             {
-              "backgroundColor": "rgba(244, 244, 244, 0.48)14",
+              "backgroundColor": "rgba(244, 244, 244, 0.56)14",
             }
           }
         >
           <View
-            color="rgba(244, 244, 244, 0.48)"
+            color="rgba(244, 244, 244, 0.56)"
             size={28}
             testID="icon-message-square"
           />

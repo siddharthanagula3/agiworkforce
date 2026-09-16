@@ -169,7 +169,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
   <Text
     style={
       {
-        "color": "rgba(244, 244, 244, 0.48)",
+        "color": "rgba(244, 244, 244, 0.56)",
         "fontSize": 10,
       }
     }
@@ -229,14 +229,14 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
     }
   >
     <View
-      color="rgba(244, 244, 244, 0.48)"
+      color="rgba(244, 244, 244, 0.56)"
       size={12}
       testID="icon-chevron-down"
     />
     <Text
       style={
         {
-          "color": "rgba(244, 244, 244, 0.48)",
+          "color": "rgba(244, 244, 244, 0.56)",
           "fontSize": 9,
           "fontWeight": "700",
           "letterSpacing": 0.5,
@@ -329,7 +329,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
   <Text
     style={
       {
-        "color": "rgba(244, 244, 244, 0.48)",
+        "color": "rgba(244, 244, 244, 0.56)",
         "fontSize": 10,
       }
     }
