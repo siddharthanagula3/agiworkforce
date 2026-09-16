@@ -67,23 +67,34 @@ interface SoleOwnedWorkspace {
  * already done the thing this guard would ask them to do, and both schedules
  * run down to their own purge.
  */
-async function listSoleOwnedWorkspaces(userId: string): Promise<SoleOwnedWorkspace[]> {
-  return getNeonDb().query<SoleOwnedWorkspace>(
-    `select o.id::text as id, o.name
+function soleOwnedWorkspacesSql(excludeScheduled: boolean): string {
+  return `select o.id::text as id, o.name
        from public.organization_members mine
        join public.organizations o on o.id = mine.organization_id
       where mine.user_id = $1
         and mine.role = 'owner'
-        and o.deletion_scheduled_for is null
+        ${excludeScheduled ? 'and o.deletion_scheduled_for is null' : ''}
         and not exists (
           select 1
             from public.organization_members others
            where others.organization_id = mine.organization_id
              and others.role = 'owner'
              and others.user_id <> $1
-        )`,
-    [userId],
-  );
+        )`;
+}
+
+async function listSoleOwnedWorkspaces(userId: string): Promise<SoleOwnedWorkspace[]> {
+  const db = getNeonDb();
+  try {
+    return await db.query<SoleOwnedWorkspace>(soleOwnedWorkspacesSql(true), [userId]);
+  } catch (error) {
+    // The workspace-deletion schedule is a later migration than this guard. Where
+    // it has not been applied, every workspace is still owned, so the guard asks
+    // the question it can answer rather than refusing every deletion on a column
+    // that is not there yet.
+    if (!isMissingDeletionColumns(error)) throw error;
+    return db.query<SoleOwnedWorkspace>(soleOwnedWorkspacesSql(false), [userId]);
+  }
 }
 
 function soleOwnerMessage(workspaces: SoleOwnedWorkspace[]): string {

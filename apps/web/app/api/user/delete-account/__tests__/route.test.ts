@@ -176,6 +176,27 @@ describe('DELETE /api/user/delete-account', () => {
     expect(ownershipSql).toContain('deletion_scheduled_for is null');
   });
 
+  it('still guards ownership where the deletion-schedule column is not there yet', async () => {
+    // Refusing every account deletion because a later migration has not run is a
+    // worse answer than asking the question the schema can answer.
+    mockExecute.mockResolvedValue(1);
+    const seen: string[] = [];
+    mockQuery.mockImplementation(async (sql: unknown) => {
+      const text = String(sql);
+      if (!text.includes('organization_members')) return [];
+      seen.push(text);
+      if (text.includes('deletion_scheduled_for')) throw pgError('42703');
+      return [{ id: 'org-1', name: 'Acme' }];
+    });
+
+    const response = await DELETE(deleteRequest());
+
+    expect(response.status).toBe(409);
+    expect(seen).toHaveLength(2);
+    expect(seen[1]).not.toContain('deletion_scheduled_for');
+    expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+  });
+
   it('proceeds when the account owns nothing alone', async () => {
     mockExecute.mockResolvedValue(1);
 
