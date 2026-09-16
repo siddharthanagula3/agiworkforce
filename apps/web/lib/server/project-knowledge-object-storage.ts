@@ -1,6 +1,13 @@
 import 'server-only';
 
-import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  createHmac,
+  hkdfSync,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from 'node:crypto';
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { objectStorageConfig } from './object-storage-runtime';
@@ -17,6 +24,7 @@ import {
 
 const UPLOAD_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
 const UPLOAD_TOKEN_VERSION = 2;
+const SIGNING_KEY_BYTES = 32;
 const SEALED_KNOWLEDGE_SEGMENT = 'sealed';
 
 export interface ProjectKnowledgeUploadClaims {
@@ -146,11 +154,15 @@ function parseClaims(value: unknown): ProjectKnowledgeUploadClaims | null {
 async function uploadSigningSecret(): Promise<Buffer> {
   const storageSecret = objectStorageConfig().secretAccessKey;
   if (storageSecret) {
-    return createHash('sha256')
-      .update(
-        `agi-project-knowledge-upload-authorization-v${UPLOAD_TOKEN_VERSION}\0${storageSecret}`,
-      )
-      .digest();
+    return Buffer.from(
+      hkdfSync(
+        'sha256',
+        storageSecret,
+        '',
+        `agi-project-knowledge-upload-authorization-v${UPLOAD_TOKEN_VERSION}`,
+        SIGNING_KEY_BYTES,
+      ),
+    );
   }
   return localSigningSecret();
 }
