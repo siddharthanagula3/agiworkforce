@@ -1,8 +1,13 @@
-# Homebrew formula for AGI Workforce CLI
-# Install via tap: brew install siddharthanagula3/tap/agiworkforce
+# Reference copy of the Homebrew formula. NOT the published one, and not read by
+# anything: update-homebrew-tap.sh writes the tap's formula from its own heredoc,
+# so this file is a shape to read, never a file that ships.
 #
-# Auto-updated by scripts/update-homebrew-tap.sh on each v-cli-* release.
-# Tap repo lives at: https://github.com/siddharthanagula3/homebrew-tap
+# The placeholders below are therefore placeholders forever. They have already
+# been mistaken for a broken install path once, on a release-gate review; the
+# published formula at github.com/siddharthanagula3/homebrew-tap carries real
+# checksums and is what `brew install` resolves.
+#
+# Install via tap: brew install siddharthanagula3/tap/agiworkforce
 
 class Agiworkforce < Formula
   desc "Multi-model AI agent for your terminal, BYOK, 25 providers, MCP, computer-use"
