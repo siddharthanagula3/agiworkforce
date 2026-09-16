@@ -16,6 +16,46 @@ export function isSentryConfigured(): boolean {
   return process.env.NODE_ENV === 'production' && !!getSentryDsn();
 }
 
+/**
+ * The build an event came from.
+ *
+ * Without it every production stack frame is minified for good: Sentry matches
+ * uploaded source maps to a release, and an event with no release matches
+ * nothing. The commit SHA is what Vercel already brands the build with, so it
+ * is the same identifier the deploy, the CI run and the git log use.
+ *
+ * `NEXT_PUBLIC_` variants come first because only those are inlined into the
+ * browser bundle; the bare ones are read on the server, where the whole
+ * environment is present. An explicit `SENTRY_RELEASE` overrides both, for a
+ * build that is not deployed from git. Returning undefined is correct when
+ * nothing identifies the build: a made-up release is worse than none, because
+ * it silently attaches events to a version that was never shipped.
+ */
+export function getSentryRelease(): string | undefined {
+  return (
+    process.env['NEXT_PUBLIC_SENTRY_RELEASE'] ||
+    process.env['SENTRY_RELEASE'] ||
+    process.env['NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA'] ||
+    process.env['VERCEL_GIT_COMMIT_SHA'] ||
+    undefined
+  );
+}
+
+/**
+ * Preview deployments build with NODE_ENV=production, so tagging events with
+ * NODE_ENV alone filed every preview error under `production` and made the
+ * production error rate unreadable. `VERCEL_ENV` is the distinction, and is
+ * what the rest of this app already reads for the same question.
+ */
+export function getSentryEnvironment(): string {
+  return (
+    process.env['NEXT_PUBLIC_VERCEL_ENV'] ||
+    process.env['VERCEL_ENV'] ||
+    process.env.NODE_ENV ||
+    'unknown'
+  );
+}
+
 export const TELEMETRY_CONSENT_STORAGE_KEY = 'agi.privacy.shareTelemetry';
 
 export function hasTelemetryConsent(): boolean {
@@ -298,10 +338,12 @@ function scrubAndTagTransaction(hook: (event: TenantTaggedEvent) => void) {
 
 export function commonInitOptions(options: CommonInitOptions = {}) {
   const { tenantTagHook, tracesSampleRate, skipOpenTelemetrySetup } = options;
+  const release = getSentryRelease();
   return {
     dsn: getSentryDsn(),
     enabled: isSentryConfigured(),
-    environment: process.env.NODE_ENV,
+    environment: getSentryEnvironment(),
+    ...(release ? { release } : {}),
     sendDefaultPii: false,
     tracesSampleRate: tracesSampleRate ?? DEFAULT_TRACES_SAMPLE_RATE,
     ...(skipOpenTelemetrySetup ? { skipOpenTelemetrySetup: true } : {}),

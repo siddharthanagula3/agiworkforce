@@ -450,6 +450,52 @@ describe('sentry-shared transaction and span scrub', () => {
   });
 });
 
+describe('an event names the build and the deployment it came from', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('tags the release with the commit the build was made from', () => {
+    vi.stubEnv('VERCEL_GIT_COMMIT_SHA', 'abc123def');
+    expect(commonInitOptions().release).toBe('abc123def');
+  });
+
+  it('prefers the browser-visible commit, the only one inlined into the client bundle', () => {
+    vi.stubEnv('VERCEL_GIT_COMMIT_SHA', 'server-only');
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA', 'in-the-bundle');
+    expect(commonInitOptions().release).toBe('in-the-bundle');
+  });
+
+  it('lets an explicit release override a git build', () => {
+    vi.stubEnv('VERCEL_GIT_COMMIT_SHA', 'abc123def');
+    vi.stubEnv('SENTRY_RELEASE', 'v2.1.0');
+    expect(commonInitOptions().release).toBe('v2.1.0');
+  });
+
+  it('sends no release rather than a made-up one when nothing identifies the build', () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_RELEASE', '');
+    vi.stubEnv('SENTRY_RELEASE', '');
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA', '');
+    vi.stubEnv('VERCEL_GIT_COMMIT_SHA', '');
+    expect('release' in commonInitOptions()).toBe(false);
+  });
+
+  it('files a preview error under preview, not production', () => {
+    // Preview builds run with NODE_ENV=production, so NODE_ENV alone filed every
+    // preview error under production and made the production rate unreadable.
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    expect(commonInitOptions().environment).toBe('preview');
+  });
+
+  it('falls back to NODE_ENV off Vercel', () => {
+    vi.stubEnv('VERCEL_ENV', '');
+    vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', '');
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(commonInitOptions().environment).toBe('development');
+  });
+});
+
 describe('commonInitOptions tenant tag hook', () => {
   it('leaves the scrubbers untouched with no hook, preserving referential identity', () => {
     const options = commonInitOptions();
