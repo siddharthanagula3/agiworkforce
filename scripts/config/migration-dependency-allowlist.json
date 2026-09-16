@@ -178,13 +178,58 @@
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 155,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
       "migration": 157,
       "reason": "the export reads every section through queryExportRows, whose catch marks the section unavailable and continues, so a table or column this migration has not created yet produces a partial export that names what it could not read, never a failed request. The dependency is declared rather than removed so the section starts working the moment the migration is applied."
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 159,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 160,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
       "migration": 168,
       "reason": "the export reads every section through queryExportRows, whose catch marks the section unavailable and continues, so a table or column this migration has not created yet produces a partial export that names what it could not read, never a failed request. The dependency is declared rather than removed so the section starts working the moment the migration is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 175,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 176,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 177,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 182,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 187,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 188,
+      "reason": "The export reads this table through queryExportRows, which catches a failing statement, marks the section unavailable in the completeness ledger and returns status 'partial' with a retry instruction. A column this migration has not yet added costs the subject one named section of their download, not the request; widen nothing here when it ships, the query already names the columns."
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
