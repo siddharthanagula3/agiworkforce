@@ -84,6 +84,52 @@ pub enum AgentEvent {
     },
 }
 
+/// The session id for the machine event stream, when one is running.
+///
+/// A denial or an abort deep in the tool layer has no handle on the flag the
+/// top level uses to decide whether to emit events, and a process that exits
+/// without a terminal event leaves a script reading a stream that simply stops.
+/// Registering the id once lets any path close the stream before it exits.
+static MACHINE_STREAM_SESSION: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Claim the machine event stream for `session_id`.
+pub fn claim_machine_stream(session_id: impl Into<String>) {
+    if let Ok(mut held) = MACHINE_STREAM_SESSION.lock() {
+        *held = Some(session_id.into());
+    }
+}
+
+/// Release the claim. Tests share one process, so they must not decide the
+/// answer for every test that runs after them.
+pub fn release_machine_stream() {
+    if let Ok(mut held) = MACHINE_STREAM_SESSION.lock() {
+        *held = None;
+    }
+}
+
+/// Emit a terminal [`AgentEvent::Error`] when a machine stream is running.
+/// Does nothing otherwise, so a human-facing run stays unchanged.
+pub fn emit_terminal_error(
+    kind: &'static str,
+    message: impl Into<String>,
+    hint: impl Into<String>,
+) {
+    let session_id = match MACHINE_STREAM_SESSION.lock() {
+        Ok(held) => match held.as_ref() {
+            Some(id) => id.clone(),
+            None => return,
+        },
+        Err(_) => return,
+    };
+    AgentEvent::Error {
+        session_id,
+        kind,
+        message: message.into(),
+        hint: hint.into(),
+    }
+    .emit_stdout();
+}
+
 impl AgentEvent {
     /// Build an [`AgentEvent::Error`] from a [`CliError`]. Keeps `kind` and
     /// `hint` consistent with the human-facing error text.
@@ -99,13 +145,8 @@ impl AgentEvent {
     /// Serialize the event to JSON and append a newline. Errors are written
     /// to stderr, never panic on a user-driver bug.
     pub fn emit<W: Write>(&self, out: &mut W) {
-        match serde_json::to_string(self) {
-            Ok(json) => {
-                let _ = writeln!(out, "{}", json);
-            }
-            Err(err) => {
-                eprintln!("[agent_events] failed to serialize {self:?}: {err}");
-            }
+        if let Err(err) = crate::sdk_io::ndjson::write_event_sync(out, self) {
+            eprintln!("[agent_events] failed to write {self:?}: {err}");
         }
     }
 
@@ -209,5 +250,40 @@ mod tests {
             json.contains("limit_dollars"),
             "missing limit_dollars: {json}"
         );
+    }
+
+    #[test]
+    fn a_delta_carrying_line_separators_stays_one_ndjson_record() {
+        let event = AgentEvent::MessageDelta {
+            session_id: "s1".to_string(),
+            text: "before\u{2028}after\u{2029}end".to_string(),
+        };
+        let mut out: Vec<u8> = Vec::new();
+        event.emit(&mut out);
+        let written = String::from_utf8(out).expect("utf8");
+
+        assert_eq!(
+            written.lines().count(),
+            1,
+            "a model delta must not split the stream: {written}"
+        );
+        assert!(written.contains("\\u2028"), "U+2028 not escaped: {written}");
+        assert!(written.contains("\\u2029"), "U+2029 not escaped: {written}");
+        assert!(
+            !written.contains('\u{2028}'),
+            "raw U+2028 survived: {written}"
+        );
+    }
+
+    #[test]
+    fn a_terminal_error_is_silent_until_the_stream_is_claimed() {
+        release_machine_stream();
+        emit_terminal_error("approval_required", "denied", "pass a flag");
+        claim_machine_stream("s-terminal");
+        let held = MACHINE_STREAM_SESSION.lock().expect("lock");
+        assert_eq!(held.as_deref(), Some("s-terminal"));
+        drop(held);
+        release_machine_stream();
+        assert!(MACHINE_STREAM_SESSION.lock().expect("lock").is_none());
     }
 }
