@@ -18,7 +18,7 @@
  *    snake_case DB fields) to match the store type.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   Check,
@@ -31,7 +31,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { useConfirmAction, useDialogKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import type { Checkpoint } from '../stores/checkpointStore';
 
@@ -66,10 +66,13 @@ export interface CheckpointManagerProps {
 interface MiniDialogProps {
   open: boolean;
   title: string;
+  onClose: () => void;
   children: React.ReactNode;
 }
 
-function MiniDialog({ open, title, children }: MiniDialogProps) {
+function MiniDialog({ open, title, onClose, children }: MiniDialogProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useDialogKeyboard({ open, onClose, panelRef });
   if (!open) return null;
   return (
     <div
@@ -78,7 +81,10 @@ function MiniDialog({ open, title, children }: MiniDialogProps) {
       aria-label={title}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
     >
-      <div className="relative w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-xl">
+      <div
+        ref={panelRef}
+        className="relative w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-xl"
+      >
         <p className="mb-4 text-lg font-semibold">{title}</p>
         {children}
       </div>
@@ -104,6 +110,10 @@ export function CheckpointManager({
   const [newLabel, setNewLabel] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const cancelCreate = useCallback(() => {
+    setShowCreateDialog(false);
+    setError(null);
+  }, []);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const loadCheckpoints = useCallback(async () => {
@@ -220,7 +230,7 @@ export function CheckpointManager({
       {confirmDialog}
 
       {/* Create checkpoint dialog */}
-      <MiniDialog open={showCreateDialog} title="Create Checkpoint">
+      <MiniDialog open={showCreateDialog} title="Create Checkpoint" onClose={cancelCreate}>
         <div className="space-y-4">
           <div>
             <label htmlFor="uc-cp-name" className="mb-1 block text-sm font-medium">
@@ -255,10 +265,7 @@ export function CheckpointManager({
             <button
               type="button"
               disabled={creating}
-              onClick={() => {
-                setShowCreateDialog(false);
-                setError(null);
-              }}
+              onClick={cancelCreate}
               className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
             >
               Cancel

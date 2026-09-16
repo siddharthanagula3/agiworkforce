@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertOctagon, X } from 'lucide-react';
 import { useBudgetStore, selectBudget, selectBudgetPercentage } from '@agiworkforce/unified-chat';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 
 interface CapModalProps {
   onSwitchModel?: () => void;
@@ -14,6 +15,8 @@ export function CapModal({ onSwitchModel }: CapModalProps) {
   const [waitDismissed, setWaitDismissed] = useState(false);
 
   const atCap = budget.enabled && usagePercent >= 100;
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const dismiss = useCallback(() => setWaitDismissed(true), []);
 
   useEffect(() => {
     if (!atCap) {
@@ -21,10 +24,13 @@ export function CapModal({ onSwitchModel }: CapModalProps) {
     }
   }, [atCap]);
 
+  useDialogKeyboard({ open: atCap && !waitDismissed, onClose: dismiss, panelRef });
+
   if (!atCap || waitDismissed) return null;
 
   return (
     <div
+      ref={panelRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="cap-modal-title"
@@ -64,7 +70,7 @@ export function CapModal({ onSwitchModel }: CapModalProps) {
           </div>
           <button
             type="button"
-            onClick={() => setWaitDismissed(true)}
+            onClick={dismiss}
             aria-label={t('capModal.dismiss')}
             className="rounded p-1 transition-colors hover:bg-[var(--chat-surface-hover)]"
             style={{ color: 'var(--chat-text-muted)' }}
@@ -89,7 +95,7 @@ export function CapModal({ onSwitchModel }: CapModalProps) {
           )}
           <button
             type="button"
-            onClick={() => setWaitDismissed(true)}
+            onClick={dismiss}
             className="text-sm transition-colors hover:opacity-80"
             style={{ color: 'var(--chat-text-muted)' }}
           >

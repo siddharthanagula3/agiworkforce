@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 import { Check, Globe2, ShieldCheck, X } from 'lucide-react';
 import { invoke, isTauri, listen } from '../../lib/tauri-mock';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
@@ -277,16 +278,28 @@ export function SelectedContextReview({ onAccept }: SelectedContextReviewProps) 
     await settle(current);
   }, [busy, current, settle]);
 
+  const panelRef = useRef<HTMLElement | null>(null);
+  const dismiss = useCallback(() => {
+    void discard();
+  }, [discard]);
+
   const queueLabel = useMemo(
     () => (queue.length > 1 ? `1 of ${queue.length} pending selections` : '1 pending selection'),
     [queue.length],
   );
+
+  useDialogKeyboard({
+    open: current !== null,
+    onClose: dismiss,
+    panelRef,
+  });
 
   if (!current) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
       <section
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="selected-context-review-title"
