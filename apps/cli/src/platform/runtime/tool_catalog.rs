@@ -286,6 +286,27 @@ pub fn is_file_edit_tool(tool_name: &str) -> bool {
     )
 }
 
+/// Tools that read something private to the user rather than the workspace.
+///
+/// Read-only answers "does this mutate", which is not the same question as "may
+/// this run without asking". These two read the browser the user is actually
+/// signed in to, so what comes back can be their bank, their mail or a private
+/// repository, and it lands in the model's context and the session transcript.
+/// A file read is bounded by the workspace; this is not.
+///
+/// They escape pre-approval today only because the catalog the approval engine
+/// scans does not carry the browser family, which is an accident of assembly
+/// rather than a decision. This states the decision, so merging those lists
+/// stays the tidy-up it looks like instead of silently letting `--yes`,
+/// `acceptEdits`, `dontAsk`, the daemon, cron and A2A sessions read the user's
+/// browser unattended.
+pub fn reads_a_private_surface(tool_name: &str) -> bool {
+    matches!(
+        canonical_tool_name(tool_name),
+        "browser_read_page" | "browser_screenshot"
+    )
+}
+
 pub fn is_plan_mode_mutating_tool_definition(tool_definition: &ToolDefinition) -> bool {
     tool_definition.name != "update_plan"
         && !tool_definition.is_read_only

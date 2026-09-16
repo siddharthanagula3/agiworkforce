@@ -359,7 +359,9 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         });
     }
 
-    let pre_approved = (opts.auto_approve_safe && is_catalog_read_only_tool(canonical_name))
+    let pre_approved = (opts.auto_approve_safe
+        && is_catalog_read_only_tool(canonical_name)
+        && !crate::platform::runtime::tool_catalog::reads_a_private_surface(canonical_name))
         || (opts.auto_approve_edits
             && crate::platform::runtime::tool_catalog::is_file_edit_tool(canonical_name));
     let mut require_confirm = opts.require_confirmation && !pre_approved;
@@ -1444,6 +1446,38 @@ decision = "deny"
         assert!(!is_catalog_read_only_tool("write_file"));
         assert!(!is_catalog_read_only_tool("Write"));
         assert!(!is_catalog_read_only_tool("notebook_edit"));
+    }
+
+    #[test]
+    fn reading_the_users_own_browser_is_never_pre_approved() {
+        use crate::platform::runtime::tool_catalog::{
+            browser_tool_definitions, reads_a_private_surface,
+        };
+
+        // The two browser reads declare themselves read-only, and today they
+        // escape pre-approval only because the catalog this reads does not
+        // carry the browser family at all. That is an accident of assembly, not
+        // a decision: fold the families together, a reasonable tidy-up, and
+        // both would start reading the user's signed-in browser unattended.
+        let read_only_browser_tools: Vec<String> = browser_tool_definitions()
+            .into_iter()
+            .filter(|tool| tool.is_read_only)
+            .map(|tool| tool.name)
+            .collect();
+        assert_eq!(
+            read_only_browser_tools,
+            vec!["browser_read_page", "browser_screenshot"]
+        );
+        for tool in &read_only_browser_tools {
+            assert!(reads_a_private_surface(tool), "{tool} must still ask");
+            assert!(!is_catalog_read_only_tool(tool), "{tool} is not pre-approved");
+        }
+
+        // The workspace-bounded reads keep running without a prompt.
+        for tool in ["read_file", "Read", "Grep", "lsp_hover", "read_many_files"] {
+            assert!(is_catalog_read_only_tool(tool), "{tool} stays pre-approved");
+            assert!(!reads_a_private_surface(tool), "{tool} should not ask");
+        }
     }
 
     #[test]
