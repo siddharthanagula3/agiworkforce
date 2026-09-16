@@ -29,6 +29,63 @@ fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// What this process last saw on disk for a session path: byte length and
+/// modification time.
+///
+/// Two processes on one session id (two terminals, or a terminal and the
+/// app-server) each load, each append, and each rewrite the whole file, so the
+/// second rename erases the first writer's turns with no trace. Messages carry
+/// no identifier, only a role and content, so the two files cannot be merged
+/// without inventing an order the user never had. Detect the collision instead
+/// and keep the copy that would have been destroyed.
+static SESSION_FINGERPRINTS: std::sync::Mutex<
+    Option<std::collections::HashMap<PathBuf, (u64, std::time::SystemTime)>>,
+> = std::sync::Mutex::new(None);
+
+fn fingerprint_of(path: &Path) -> Option<(u64, std::time::SystemTime)> {
+    let meta = fs::metadata(path).ok()?;
+    Some((meta.len(), meta.modified().ok()?))
+}
+
+fn remember_fingerprint(path: &Path) {
+    let Some(current) = fingerprint_of(path) else {
+        return;
+    };
+    if let Ok(mut held) = SESSION_FINGERPRINTS.lock() {
+        held.get_or_insert_with(std::collections::HashMap::new)
+            .insert(path.to_path_buf(), current);
+    }
+}
+
+/// Drop what this process remembers about `path`, so a test can act as a
+/// second process without spawning one.
+#[cfg(test)]
+pub(crate) fn forget_fingerprint(path: &Path) {
+    if let Ok(mut held) = SESSION_FINGERPRINTS.lock() {
+        if let Some(map) = held.as_mut() {
+            map.remove(path);
+        }
+    }
+}
+
+fn seen_fingerprint(path: &Path) -> Option<(u64, std::time::SystemTime)> {
+    let held = SESSION_FINGERPRINTS.lock().ok()?;
+    held.as_ref()?.get(path).copied()
+}
+
+/// Move a session file that changed underneath us out of the way, so the write
+/// about to happen cannot destroy it. Returns the path it was kept at.
+fn quarantine_conflicting_session(path: &Path) -> Option<PathBuf> {
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.3f");
+    let mut kept = path.as_os_str().to_os_string();
+    kept.push(format!(".conflict-{stamp}"));
+    let kept = PathBuf::from(kept);
+    match fs::rename(path, &kept) {
+        Ok(()) => Some(kept),
+        Err(_) => None,
+    }
+}
+
 /// Current on-disk schema version for managed CLI sessions.
 /// v1: messages + fork only.
 /// v2: adds permission_mode, plan_mode, plan_approved, current_plan, fast_mode,
@@ -521,13 +578,31 @@ impl ManagedSession {
             );
         }
 
+        if path.exists() && fingerprint_of(path) != seen_fingerprint(path) {
+            match quarantine_conflicting_session(path) {
+                Some(kept) => eprintln!(
+                    "[session] {} changed outside this process; its previous contents were kept at {}",
+                    path.display(),
+                    kept.display()
+                ),
+                None => bail!(
+                    "Managed session file {} changed outside this process and could not be set \
+                     aside; refusing to overwrite it",
+                    path.display()
+                ),
+            }
+        }
+
         atomic_write_session(path, &buf)
-            .with_context(|| format!("Failed to write session file {}", path.display()))
+            .with_context(|| format!("Failed to write session file {}", path.display()))?;
+        remember_fingerprint(path);
+        Ok(())
     }
 
     /// Load a managed session from a JSONL or JSON file.
     pub fn load_from_path(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
+        remember_fingerprint(path);
         let metadata = fs::metadata(path).with_context(|| {
             format!("Failed to inspect managed session file {}", path.display())
         })?;
@@ -1085,5 +1160,57 @@ mod tests {
         let error = ManagedSession::load_from_path(&path)
             .expect_err("oversized session must be rejected before parsing");
         assert!(error.to_string().contains("exceeds"), "{error:#}");
+    }
+
+    #[test]
+    fn a_second_writer_never_erases_the_first_writers_turns() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("s1.jsonl");
+        let created = Utc.with_ymd_and_hms(2026, 9, 16, 4, 0, 0).unwrap();
+
+        let mut mine = ManagedSession::new("s1", created);
+        mine.messages.push(Message::text("user", "mine"));
+        mine.save_to_path(&path).expect("first save");
+
+        let mut theirs = ManagedSession::new("s1", created);
+        theirs.messages.push(Message::text("user", "theirs"));
+        std::thread::sleep(std::time::Duration::from_millis(15));
+        theirs.save_to_path(&path).expect("foreign save");
+        super::forget_fingerprint(&path);
+
+        mine.messages
+            .push(Message::text("assistant", "more of mine"));
+        mine.save_to_path(&path).expect("second save");
+
+        let kept: Vec<String> = std::fs::read_dir(dir.path())
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".conflict-"))
+            .collect();
+        assert_eq!(
+            kept.len(),
+            1,
+            "the other writer's file must survive: {kept:?}"
+        );
+
+        let rescued =
+            ManagedSession::load_from_path(dir.path().join(&kept[0])).expect("load kept copy");
+        assert!(
+            rescued
+                .messages
+                .iter()
+                .any(|message| format!("{:?}", message.content).contains("theirs")),
+            "the quarantined copy must hold the other writer's turn"
+        );
+
+        let current = ManagedSession::load_from_path(&path).expect("load current");
+        assert!(
+            current
+                .messages
+                .iter()
+                .any(|message| format!("{:?}", message.content).contains("more of mine")),
+            "the writer that won must still have written its turn"
+        );
     }
 }
