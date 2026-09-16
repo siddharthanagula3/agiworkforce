@@ -22,6 +22,7 @@ use slash_commands::{handle_slash_command, SlashResult};
 pub use registry::{
     handle_branch, handle_compact, handle_export, handle_history, handle_init_project, handle_load,
     handle_memory, handle_permissions, handle_rename, handle_rewind, handle_save,
+    rename_session_for_display,
 };
 
 type ManagedSessionResume = (crate::runtime::session::ManagedSession, std::path::PathBuf);
