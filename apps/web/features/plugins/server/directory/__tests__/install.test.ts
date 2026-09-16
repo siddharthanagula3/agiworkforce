@@ -146,6 +146,10 @@ describe('installDirectoryPlugin', () => {
       'Adobe tools.',
       `0.0.0+sha.${SHA}`,
       JSON.stringify(['background-removal']),
+      JSON.stringify([]),
+      JSON.stringify([]),
+      JSON.stringify([]),
+      JSON.stringify([]),
       'a'.repeat(64),
     ]);
     const installInsert = db.query.mock.calls.find(([text]) =>
@@ -158,6 +162,41 @@ describe('installDirectoryPlugin', () => {
       JSON.stringify(['background-removal']),
     ]);
     expect(mocks.getMarketplaceInstallation).toHaveBeenCalledWith(db, 'user-1', 'installation-1');
+  });
+
+  it('records what the plugin declares, so the install screen can name it', async () => {
+    // These four columns were literal empty arrays, and the conflict branch did
+    // not refresh them, so a plugin that needed GitHub and asked for filesystem
+    // access installed claiming to need and ask for nothing.
+    const db = database();
+    const base = directoryEntry();
+    mocks.findRecord.mockResolvedValueOnce(
+      directoryEntry({
+        requiredConnectors: ['github'],
+        permissions: ['filesystem:read'],
+        examplePrompts: ['Remove the background'],
+        runtime: {
+          ...base.runtime,
+          components: { ...base.runtime.components, agents: ['reviewer', 'writer'] },
+        },
+      }),
+    );
+
+    await installDirectoryPlugin(db, 'user-1', 'adobe-for-creativity', { fetchImpl: fetchSkill });
+
+    const entryInsert = db.query.mock.calls.find(([text]) =>
+      (text as string).includes('insert into public.plugin_marketplace_entries'),
+    );
+    expect(entryInsert?.[1]).toEqual(
+      expect.arrayContaining([
+        JSON.stringify(['github']),
+        JSON.stringify(['reviewer', 'writer']),
+        JSON.stringify(['Remove the background']),
+        JSON.stringify(['filesystem:read']),
+      ]),
+    );
+    expect(entryInsert?.[0]).toContain('required_connectors = excluded.required_connectors');
+    expect(entryInsert?.[0]).toContain('permissions = excluded.permissions');
   });
 
   it('reports an unknown id and a built-in pack without touching the database', async () => {

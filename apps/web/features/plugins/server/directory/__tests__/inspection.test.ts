@@ -40,7 +40,7 @@ const TREE = [
 ];
 
 describe('classifyPluginTree', () => {
-  it('counts skills, commands and agents under the plugin path only', () => {
+  it('lists skills and agents, and counts commands, under the plugin path only', () => {
     const classified = classifyPluginTree(TREE, LOCATION.path);
     expect(classified.components.skills).toEqual(['background-removal', 'vectorize']);
     expect(classified.components.skillPaths).toEqual([
@@ -48,7 +48,7 @@ describe('classifyPluginTree', () => {
       'skills/vectorize/SKILL.md',
     ]);
     expect(classified.components.commands).toBe(1);
-    expect(classified.components.agents).toBe(1);
+    expect(classified.components.agents).toEqual(['reviewer']);
     expect(classified.components.hooks).toBe(false);
     expect(classified.hasMetadata).toBe(true);
     expect(classified.hasMcpFile).toBe(false);
@@ -246,7 +246,7 @@ describe('inspectPluginSource', () => {
         skills: ['background-removal', 'vectorize'],
         skillPaths: ['skills/background-removal/SKILL.md', 'skills/vectorize/SKILL.md'],
         commands: 1,
-        agents: 1,
+        agents: ['reviewer'],
         hooks: false,
         mcpServers: [{ name: 'adobe', transport: 'http' }],
         lspServers: [],

@@ -79,6 +79,14 @@ async function ensureShadowSource(
   return inserted[0]!.id;
 }
 
+/**
+ * The four declaration columns were written as literal empty arrays, and the
+ * conflict branch did not refresh them either, so an installed plugin claimed
+ * to need no connectors, request no permissions and ship no agents whatever its
+ * manifest said. The install screen reads these to tell the user what they are
+ * agreeing to, which made the omission the difference between an informed
+ * install and a blind one.
+ */
 async function upsertShadowEntry(
   tx: DatabaseAdapter,
   sourceId: string,
@@ -92,12 +100,16 @@ async function upsertShadowEntry(
        (source_id, plugin_key, name, description, version,
         declared_skills, required_connectors, agents, example_prompts, permissions,
         content_hash, updated_at)
-     values ($1, $2, $3, $4, $5, $6::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, $7, now())
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11, now())
      on conflict (source_id, plugin_key) do update
        set name = excluded.name,
            description = excluded.description,
            version = excluded.version,
            declared_skills = excluded.declared_skills,
+           required_connectors = excluded.required_connectors,
+           agents = excluded.agents,
+           example_prompts = excluded.example_prompts,
+           permissions = excluded.permissions,
            content_hash = excluded.content_hash,
            updated_at = now()
      returning id`,
@@ -108,6 +120,10 @@ async function upsertShadowEntry(
       record.description.length > 0 ? record.description : record.name,
       installedVersion(record.version, sha),
       JSON.stringify(skills.map((skill) => skill.name)),
+      JSON.stringify(record.requiredConnectors),
+      JSON.stringify(record.runtime.components.agents),
+      JSON.stringify(record.examplePrompts),
+      JSON.stringify(record.permissions),
       contentHash,
     ],
   );

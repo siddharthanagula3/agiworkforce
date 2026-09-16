@@ -70,7 +70,7 @@ export const EMPTY_COMPONENTS: PluginRuntimeComponents = {
   skills: [],
   skillPaths: [],
   commands: 0,
-  agents: 0,
+  agents: [],
   hooks: false,
   mcpServers: [],
   lspServers: [],
@@ -175,8 +175,8 @@ export function classifyPluginTree(
     blobs.add(entry.path.slice(prefix.length));
   }
   const skills = new Map<string, string>();
+  const agents = new Set<string>();
   let commands = 0;
-  let agents = 0;
   const skillPattern = new RegExp(
     `^${CLAUDE_PLUGIN_SKILLS_DIRECTORY}/([^/]+)/${CLAUDE_SKILL_FILE_NAME.replace('.', '\\.')}$`,
   );
@@ -195,7 +195,9 @@ export function classifyPluginTree(
       relative.startsWith(`${CLAUDE_PLUGIN_AGENTS_DIRECTORY}/`) &&
       relative.endsWith(MARKDOWN_SUFFIX)
     ) {
-      agents += 1;
+      agents.add(
+        relative.slice(CLAUDE_PLUGIN_AGENTS_DIRECTORY.length + 1, -MARKDOWN_SUFFIX.length),
+      );
     }
   }
   for (const declared of declaredSkills) {
@@ -209,7 +211,7 @@ export function classifyPluginTree(
       skills: names,
       skillPaths: names.map((name) => skills.get(name) ?? ''),
       commands,
-      agents,
+      agents: [...agents].sort(),
       hooks: blobs.has(CLAUDE_PLUGIN_HOOKS_PATH),
     },
     hasMetadata: blobs.has(CLAUDE_PLUGIN_METADATA_PATH),
