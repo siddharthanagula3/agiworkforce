@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { notificationLedColors } from '@/src/ui/theme/tokens';
 
 export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 
@@ -23,18 +24,22 @@ const ANDROID_CHANNELS: Record<
   critical: {
     name: 'Critical Alerts',
     vibrationPattern: [0, 500, 250, 500, 250, 500],
-    lightColor: '#ef4444',
+    lightColor: notificationLedColors.critical,
     bypassDnd: true,
     sound: 'default',
   },
   high: {
     name: 'High Priority',
     vibrationPattern: [0, 300, 200, 300],
-    lightColor: '#f59e0b',
+    lightColor: notificationLedColors.high,
     sound: 'default',
   },
-  normal: { name: 'Normal', vibrationPattern: [0, 250], lightColor: '#21808d' },
-  low: { name: 'Status Updates', vibrationPattern: [0, 150], lightColor: '#21808d' },
+  normal: { name: 'Normal', vibrationPattern: [0, 250], lightColor: notificationLedColors.normal },
+  low: {
+    name: 'Status Updates',
+    vibrationPattern: [0, 150],
+    lightColor: notificationLedColors.low,
+  },
 };
 
 function androidImportance(priority: NotificationPriority): number {
