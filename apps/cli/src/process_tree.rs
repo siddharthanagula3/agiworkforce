@@ -758,6 +758,21 @@ fn signal_process_tree_on_drop(process_id: Option<u32>) {
 #[cfg(not(any(unix, windows)))]
 fn signal_process_tree_on_drop(_process_id: Option<u32>) {}
 
+/// Serializes every unit test that leaves a child in the tree registry.
+///
+/// `kill_all_process_trees` is process-wide by design, which is right for a
+/// signal and wrong for a shared test binary: the signal test reaped a hook
+/// test's `sleep`, and that test then saw a killed process where it expected its
+/// own timeout. Living inside the unix-only test module was not enough, because
+/// the rule is about spawning, not about where the test lives. Any test that
+/// registers a child must take this, wherever it is.
+///
+/// Async-aware on purpose: holders keep it across `.await`, and a
+/// `std::sync::Mutex` guard held across an await can park the runtime thread
+/// while another task waits on the same lock.
+#[cfg(test)]
+pub(crate) static CHILD_SPAWNING_TESTS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
@@ -773,7 +788,7 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_kills_tree_reaps_child_and_prevents_delayed_side_effect() {
-        let _serial = CHILD_SPAWNING_TESTS.lock().await;
+        let _serial = super::CHILD_SPAWNING_TESTS.lock().await;
         let temp = tempfile::tempdir().expect("temp directory");
         let sentinel = temp.path().join("sentinel");
         let pid_file = temp.path().join("pids");
@@ -801,7 +816,7 @@ mod tests {
     /// it. This is the orphan the audit found and could not test.
     #[tokio::test]
     async fn a_terminating_signal_takes_every_tree_with_it() {
-        let _serial = CHILD_SPAWNING_TESTS.lock().await;
+        let _serial = super::CHILD_SPAWNING_TESTS.lock().await;
         let temp = tempfile::tempdir().expect("temp directory");
         let sentinel = temp.path().join("signal-sentinel");
         let pid_file = temp.path().join("signal-pids");
@@ -829,7 +844,7 @@ mod tests {
 
     #[tokio::test]
     async fn dropping_an_interactive_child_kills_and_reaps_its_tree() {
-        let _serial = CHILD_SPAWNING_TESTS.lock().await;
+        let _serial = super::CHILD_SPAWNING_TESTS.lock().await;
         let temp = tempfile::tempdir().expect("temp directory");
         let sentinel = temp.path().join("interactive-sentinel");
         let pid_file = temp.path().join("interactive-pids");
@@ -874,16 +889,6 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
-
-    /// Tests run concurrently in one process and `kill_all_process_trees`
-    /// deliberately reaches every tree, so the tests that spawn real children
-    /// take turns. Without this, the signal test kills a sibling's child and
-    /// fails a test that is not broken.
-    /// Async-aware on purpose: these tests hold the lock across `.await`, and a
-    /// `std::sync::Mutex` guard held across an await can park the whole runtime
-    /// thread while another task waits on the same lock.
-    pub(super) static CHILD_SPAWNING_TESTS: tokio::sync::Mutex<()> =
-        tokio::sync::Mutex::const_new(());
 
     pub(super) async fn wait_for_processes_to_exit(process_ids: &[i32]) {
         let deadline = Instant::now() + Duration::from_secs(2);
