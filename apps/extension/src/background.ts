@@ -10,6 +10,7 @@ import type {
 import { logger, originOfUrl, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
+import { ALWAYS_ASK_TOOLS } from './features/computer-use/agentLoop';
 import { timingSafeEqual } from '@agiworkforce/utils/crypto';
 import {
   loadShortcuts,
@@ -2413,8 +2414,7 @@ async function executeScheduledTask(
       throw new ScheduledTaskCancelledError();
     }
     let managedCredential:
-      | NonNullable<Awaited<ReturnType<typeof getManagedCloudAuthContext>>>
-      | undefined;
+      NonNullable<Awaited<ReturnType<typeof getManagedCloudAuthContext>>> | undefined;
     if (task.managedCloudAccountId !== undefined) {
       managedCredential = await requireScheduledTaskCredential(task);
       managedExecutionOwner = managedCredential.owner;
@@ -4019,77 +4019,86 @@ async function handleMessageAsync(
         credential: authContext.token,
       });
 
-      const onBeforeAction = askBeforeActing
-        ? async (
-            toolName: string,
-            args: Record<string, unknown>,
-            signal?: AbortSignal,
-          ): Promise<boolean> => {
-            const requestId = `cu_approve_${crypto.randomUUID()}`;
-            broadcastComputerUseForCurrentRun(lease, {
-              type: 'AGI_CU_APPROVE_REQUEST',
-              requestId,
-              toolName,
-              description: describeComputerUseAction(toolName, args),
-            });
-            const decision = await new Promise<boolean>((resolve, reject) => {
-              let settled = false;
-              const cleanup = (): void => {
-                clearTimeout(timeout);
-                signal?.removeEventListener('abort', onAbort);
-                chrome.runtime.onMessage.removeListener(listener);
-              };
-              const finish = (allowed: boolean): void => {
-                if (settled) return;
-                settled = true;
-                cleanup();
-                resolve(allowed);
-              };
-              const onAbort = (): void => {
-                if (settled) return;
-                settled = true;
-                cleanup();
-                reject(
-                  signal?.reason instanceof Error
-                    ? signal.reason
-                    : new DOMException('Computer-use approval was cancelled', 'AbortError'),
-                );
-              };
-              const timeout = setTimeout(() => {
-                finish(false);
-              }, 30_000);
-              function listener(msg: unknown, sender: chrome.runtime.MessageSender): void {
-                if (
-                  !isTrustedExtensionPageSender(
-                    {
-                      id: sender.id,
-                      url: sender.url,
-                      origin: sender.origin,
-                      tabUrl: sender.tab?.url,
-                      hasTab: sender.tab != null,
-                    },
-                    chrome.runtime.id,
-                    chrome.runtime.getURL('/').replace(/\/+$/, ''),
-                  )
-                ) {
-                  return;
-                }
-                if (
-                  typeof msg === 'object' &&
-                  msg !== null &&
-                  (msg as Record<string, unknown>)['type'] === 'AGI_CU_APPROVE_RESPONSE' &&
-                  (msg as Record<string, unknown>)['requestId'] === requestId
-                ) {
-                  finish((msg as Record<string, unknown>)['allowed'] === true);
-                }
+      // Provided in both modes. With "ask before acting" off it approves the
+      // routine steps without a prompt and still asks for the few that always
+      // need a person, which previously went ahead unasked because the hook was
+      // simply absent.
+      // Built in both modes. With "ask before acting" off it approves the
+      // routine steps without a prompt and still asks for the few that always
+      // need a person, which previously went ahead unasked because the hook was
+      // absent altogether.
+      const onBeforeAction = async (
+        toolName: string,
+        args: Record<string, unknown>,
+        signal?: AbortSignal,
+      ): Promise<boolean> => {
+        if (!askBeforeActing && !ALWAYS_ASK_TOOLS.has(toolName)) return true;
+        {
+          const requestId = `cu_approve_${crypto.randomUUID()}`;
+          broadcastComputerUseForCurrentRun(lease, {
+            type: 'AGI_CU_APPROVE_REQUEST',
+            requestId,
+            toolName,
+            description: describeComputerUseAction(toolName, args),
+          });
+          const decision = await new Promise<boolean>((resolve, reject) => {
+            let settled = false;
+            const cleanup = (): void => {
+              clearTimeout(timeout);
+              signal?.removeEventListener('abort', onAbort);
+              chrome.runtime.onMessage.removeListener(listener);
+            };
+            const finish = (allowed: boolean): void => {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              resolve(allowed);
+            };
+            const onAbort = (): void => {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              reject(
+                signal?.reason instanceof Error
+                  ? signal.reason
+                  : new DOMException('Computer-use approval was cancelled', 'AbortError'),
+              );
+            };
+            const timeout = setTimeout(() => {
+              finish(false);
+            }, 30_000);
+            function listener(msg: unknown, sender: chrome.runtime.MessageSender): void {
+              if (
+                !isTrustedExtensionPageSender(
+                  {
+                    id: sender.id,
+                    url: sender.url,
+                    origin: sender.origin,
+                    tabUrl: sender.tab?.url,
+                    hasTab: sender.tab != null,
+                  },
+                  chrome.runtime.id,
+                  chrome.runtime.getURL('/').replace(/\/+$/, ''),
+                )
+              ) {
+                return;
               }
-              chrome.runtime.onMessage.addListener(listener);
-              signal?.addEventListener('abort', onAbort, { once: true });
-              if (signal?.aborted) onAbort();
-            });
-            return decision;
-          }
-        : undefined;
+              if (
+                typeof msg === 'object' &&
+                msg !== null &&
+                (msg as Record<string, unknown>)['type'] === 'AGI_CU_APPROVE_RESPONSE' &&
+                (msg as Record<string, unknown>)['requestId'] === requestId
+              ) {
+                finish((msg as Record<string, unknown>)['allowed'] === true);
+              }
+            }
+            chrome.runtime.onMessage.addListener(listener);
+            signal?.addEventListener('abort', onAbort, { once: true });
+            if (signal?.aborted) onAbort();
+          });
+          return decision;
+        }
+      };
 
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
