@@ -31,6 +31,7 @@ function temporaryRoot(): string {
 async function makeStoredArchive(): Promise<Uint8Array> {
   const writer = new ZipWriter(new Uint8ArrayWriter(), {
     useCompressionStream: false,
+    useUnicodeFileNames: true,
     useWebWorkers: false,
   });
   await writer.add('extension/package.json', new TextReader('{"name":"fixture"}\n'), { level: 0 });
@@ -72,7 +73,7 @@ describe('portable VSIX ZIP inspection', () => {
     archive[markerOffset] ^= 0xff;
     fs.writeFileSync(archivePath, archive);
 
-    await expect(inspectVsixArchive(archivePath)).rejects.toThrow(/Invalid signature/u);
+    await expect(inspectVsixArchive(archivePath)).rejects.toThrow(/Invalid CRC32/u);
   });
 
   // NOT COVERED HERE: the useCompressionStream bug fixed in scripts/vsix-zip.js.

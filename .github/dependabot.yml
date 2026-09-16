@@ -137,6 +137,23 @@ updates:
       # once image-size and extract-zip publish a patched version.
       - dependency-name: 'image-size'
       - dependency-name: 'extract-zip'
+      # The root group also walks apps/mobile and packages/platform/local-llm,
+      # so the Expo SDK 57 pins held in the mobile block are held here too.
+      - dependency-name: 'expo'
+      - dependency-name: 'react-native'
+      - dependency-name: 'react-native-reanimated'
+      - dependency-name: '@react-native/*'
+      - dependency-name: 'react-native-worklets'
+      - dependency-name: '@types/react'
+      - dependency-name: '@react-native-community/slider'
+      - dependency-name: '@shopify/flash-list'
+      - dependency-name: 'react-native-safe-area-context'
+      - dependency-name: 'react-native-screens'
+      - dependency-name: 'react-native-svg'
+      - dependency-name: 'react-native-webview'
+      # apps/extension-vscode types against its engines floor (vsce refuses a
+      # higher @types/vscode); the extension tests pin the range.
+      - dependency-name: '@types/vscode'
 
   # ─── npm / pnpm, apps/desktop ──────────────────────────────────────────────
   - package-ecosystem: 'npm'
@@ -235,6 +252,7 @@ updates:
       - dependency-name: 'expo'
       - dependency-name: 'react-native'
       - dependency-name: 'react-native-reanimated'
+      - dependency-name: '@react-native/*'
       - dependency-name: 'react-native-worklets'
       - dependency-name: '@types/react'
       # Expo SDK 57 pins these; `expo install --check` flags any other version.
