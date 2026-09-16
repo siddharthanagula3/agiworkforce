@@ -6,6 +6,7 @@ import type { ReactTestInstance } from 'react-test-renderer';
 const mockInsetBottom = 34;
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');

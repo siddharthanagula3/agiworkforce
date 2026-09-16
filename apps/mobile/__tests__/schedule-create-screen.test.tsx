@@ -8,6 +8,7 @@ const mockScheduleForm = jest.fn(() => null);
 let mockSearchParams: { id?: string; template?: string } = {};
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     back: mockBack,
     push: mockPush,

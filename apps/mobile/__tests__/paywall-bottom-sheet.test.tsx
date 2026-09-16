@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
@@ -34,6 +33,7 @@ jest.mock('../src/ui/theme', () => {
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockPush }),
 }));
 

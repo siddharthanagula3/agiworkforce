@@ -3,6 +3,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: jest.fn(),
     navigate: jest.fn(),

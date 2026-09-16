@@ -294,7 +294,7 @@ function MapSearchCard({
                 if (opened) return;
                 Alert.alert(
                   'Could not open this place',
-                  'This result did not include a link this app is allowed to open.',
+                  'Check your connection and try opening the result again.',
                 );
               });
             }}

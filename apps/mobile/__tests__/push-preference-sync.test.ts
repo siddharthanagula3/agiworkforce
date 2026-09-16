@@ -2,8 +2,7 @@ import { AppState } from 'react-native';
 
 const mockApiPost = jest.fn();
 let capturedNotificationHandler:
-  | ((notification: { request: { content: { data?: unknown } } }) => Promise<unknown>)
-  | undefined;
+  ((notification: { request: { content: { data?: unknown } } }) => Promise<unknown>) | undefined;
 
 jest.mock('../services/api', () => ({
   api: {
@@ -21,6 +20,7 @@ jest.mock('expo-constants', () => ({
 }));
 
 jest.mock('expo-notifications', () => ({
+  ...jest.requireActual('@/__mocks__/expo-notifications.mock').expoNotificationsMock(),
   __esModule: true,
   setNotificationHandler: jest.fn((handler: { handleNotification: unknown }) => {
     capturedNotificationHandler = handler.handleNotification as typeof capturedNotificationHandler;

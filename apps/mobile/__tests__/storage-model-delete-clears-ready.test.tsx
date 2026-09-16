@@ -17,6 +17,7 @@ const INSTALLED = {
 };
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: jest.fn(), back: jest.fn(), navigate: jest.fn(), replace: jest.fn() }),
   useLocalSearchParams: () => ({}),
 }));

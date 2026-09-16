@@ -1,10 +1,14 @@
 const mockMmkvValues = new Map<string, string>();
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
+  router: { push: jest.fn() },
+}));
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
 
 jest.mock('expo-notifications', () => ({
+  ...jest.requireActual('@/__mocks__/expo-notifications.mock').expoNotificationsMock(),
   __esModule: true,
   DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
   AndroidImportance: { MIN: 1, LOW: 2, DEFAULT: 3, HIGH: 4, MAX: 5, NONE: 0 },

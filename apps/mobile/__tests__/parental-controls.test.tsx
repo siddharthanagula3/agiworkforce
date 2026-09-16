@@ -6,6 +6,7 @@ const mockPush = jest.fn();
 let mockMinorMode = false;
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
     push: mockPush,
     canGoBack: jest.fn().mockReturnValue(true),

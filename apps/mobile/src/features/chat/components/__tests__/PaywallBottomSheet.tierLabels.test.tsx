@@ -2,6 +2,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockPush }),
 }));
 

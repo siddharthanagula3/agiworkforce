@@ -6,6 +6,7 @@ const mockLibraryScreen = jest.fn().mockReturnValue(null);
 const mockArtifactsScreen = jest.fn().mockReturnValue(null);
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useLocalSearchParams: () => mockParams,
 }));
 

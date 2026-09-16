@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ canGoBack: () => false, back: jest.fn(), replace: jest.fn() }),
 }));
 
