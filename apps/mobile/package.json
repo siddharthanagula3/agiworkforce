@@ -132,6 +132,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.6",
     "@napi-rs/canvas": "^1.0.9",
+    "@react-native/jest-preset": "0.86.2",
     "@react-native/metro-config": "0.86.2",
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^29.5.14",
