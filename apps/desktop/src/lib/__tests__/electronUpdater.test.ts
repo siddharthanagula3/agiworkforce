@@ -17,6 +17,7 @@ const preferences: Awaited<ReturnType<ElectronHostBridge['readPreferences']>> = 
 
 function installHost(openExternal: ElectronHostBridge['openExternal']): void {
   const host: ElectronHostBridge = {
+    shell: 'electron',
     platform: 'electron-darwin',
     appVersion: '1.2.0',
     handles: () => false,
