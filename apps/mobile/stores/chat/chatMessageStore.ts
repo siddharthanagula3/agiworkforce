@@ -39,6 +39,7 @@ import {
   useArtifactStore,
 } from '@/src/features/artifacts/store';
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
+import { resolveInterruptedGeneration } from '@/stores/chat/chatCloudMessageStore';
 import { getConversationMessageStore } from './conversationRepository';
 import { cancelVideoGeneration } from '@/src/features/video/services/videogen';
 import { useCloudSyncStateStore } from './cloudSyncStateStore';
@@ -118,6 +119,7 @@ interface MessageState {
     assistantMessageId: string,
     errorMessage: string,
   ) => void;
+  stopImageGeneration: (conversationId: string, assistantMessageId: string) => void;
   beginVideoGeneration: (
     conversationId: string,
     commandContent: string,
@@ -747,6 +749,7 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       completeImageGeneration: (conversationId, assistantMessageId, result) => {
+        if (!isImageGenerationLive(conversationId, assistantMessageId)) return;
         const now = new Date().toISOString();
         const finalContent = result.revisedPrompt
           ? `Generated image: ${result.revisedPrompt}`
@@ -830,6 +833,7 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       failImageGeneration: (conversationId, assistantMessageId, errorMessage) => {
+        if (!isImageGenerationLive(conversationId, assistantMessageId)) return;
         const now = new Date().toISOString();
         const finalContent = `Image generation failed: ${presentableMediaError(errorMessage)}`;
 
@@ -876,6 +880,17 @@ export const useChatMessageStore = create<MessageState>()(
           markMessageForSync(conversationId, assistantMessageId);
           void syncNow();
         }
+      },
+
+      stopImageGeneration: (conversationId, assistantMessageId) => {
+        if (!isImageGenerationLive(conversationId, assistantMessageId)) return;
+        patchGenerationMessage(conversationId, assistantMessageId, {
+          content: 'Image generation stopped.',
+          isGeneratingImage: false,
+          imageGenStatus: 'failed',
+          imageGenProgress: 100,
+          imageGenError: 'You stopped this image generation. Retry to run it again.',
+        });
       },
 
       beginVideoGeneration: (conversationId, commandContent, prompt, model) => {
@@ -1070,7 +1085,7 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       recordVideoGenerationTask: (conversationId, assistantMessageId, taskId) => {
-        patchVideoGenerationMessage(conversationId, assistantMessageId, { videoTaskId: taskId });
+        patchGenerationMessage(conversationId, assistantMessageId, { videoTaskId: taskId });
       },
 
       isVideoGenerationCancelRequested: (conversationId, assistantMessageId) =>
@@ -1082,21 +1097,21 @@ export const useChatMessageStore = create<MessageState>()(
         if (!target?.videoTaskId || target.isGeneratingVideo !== true) return;
         if (target.videoGenCancelRequested === true) return;
 
-        patchVideoGenerationMessage(conversationId, assistantMessageId, {
+        patchGenerationMessage(conversationId, assistantMessageId, {
           videoGenCancelRequested: true,
           videoGenCancelError: undefined,
         });
 
         try {
           const outcome = await cancelVideoGeneration(target.videoTaskId);
-          patchVideoGenerationMessage(conversationId, assistantMessageId, {
+          patchGenerationMessage(conversationId, assistantMessageId, {
             content: outcome.message ?? 'Video generation stopped.',
             isGeneratingVideo: false,
             videoGenStatus: 'cancelled',
             videoGenProgress: 100,
           });
         } catch (error) {
-          patchVideoGenerationMessage(conversationId, assistantMessageId, {
+          patchGenerationMessage(conversationId, assistantMessageId, {
             videoGenCancelRequested: false,
             videoGenCancelError: presentableMediaError(
               error instanceof Error ? error.message : String(error),
@@ -1141,16 +1156,14 @@ export const useChatMessageStore = create<MessageState>()(
         if (error) console.warn('[chatMessageStore] Hydration failed:', error);
       },
       partialize: (state) => {
-        const MAX_CONVERSATIONS = 200;
-        const MAX_MESSAGES_PER_CONVERSATION = 100;
-        const conversations = state.conversations
-          .filter((c) => executionModeForConversation(c) === 'local' && !c.temporary)
-          .slice(0, MAX_CONVERSATIONS);
+        const conversations = state.conversations.filter(
+          (c) => executionModeForConversation(c) === 'local' && !c.temporary,
+        );
         const conversationIds = new Set(conversations.map((c) => c.id));
         const messages: Record<string, ChatMessage[]> = {};
         for (const [id, msgs] of Object.entries(state.messages)) {
           if (conversationIds.has(id)) {
-            messages[id] = msgs.filter((m) => !m.isStreaming).slice(-MAX_MESSAGES_PER_CONVERSATION);
+            messages[id] = msgs.filter((m) => !m.isStreaming).map(resolveInterruptedGeneration);
           }
         }
         return { conversations, messages, currentConversationId: state.currentConversationId };
@@ -1167,6 +1180,15 @@ function generateMessageId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function isImageGenerationLive(conversationId: string, assistantMessageId: string): boolean {
+  return (
+    getConversationMessageStore(conversationId)
+      .getState()
+      .messages[conversationId]?.find((message) => message.id === assistantMessageId)
+      ?.isGeneratingImage === true
+  );
+}
+
 function videoGenerationMessage(
   conversationId: string,
   assistantMessageId: string,
@@ -1176,7 +1198,7 @@ function videoGenerationMessage(
     .messages[conversationId]?.find((message) => message.id === assistantMessageId);
 }
 
-function patchVideoGenerationMessage(
+function patchGenerationMessage(
   conversationId: string,
   assistantMessageId: string,
   changes: Partial<ChatMessage>,

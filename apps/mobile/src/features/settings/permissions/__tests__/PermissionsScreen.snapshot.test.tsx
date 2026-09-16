@@ -147,7 +147,7 @@ jest.mock('expo-calendar', () => ({
   requestRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
-const mockDefaultPerm = { lastObservedStatus: 'undetermined', userIntent: 'denied' };
+const mockDefaultPerm = { lastObservedStatus: 'undetermined' };
 
 const mockPermissionsState = {
   permissions: {
@@ -159,7 +159,6 @@ const mockPermissionsState = {
     reminders: { ...mockDefaultPerm },
   },
   setObservedStatus: jest.fn(),
-  setUserIntent: jest.fn(),
   getPermission: jest.fn().mockReturnValue(mockDefaultPerm),
 };
 

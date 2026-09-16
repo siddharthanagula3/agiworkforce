@@ -395,6 +395,18 @@ function createLocalAttachmentReferences(
   }));
 }
 
+function restoreComposerAttachments(attachments?: MessageAttachment[]): Attachment[] | undefined {
+  if (!attachments || attachments.length === 0) return undefined;
+  return attachments.map((attachment, index) => ({
+    id: attachment.assetId ?? `${attachment.url}#${index}`,
+    uri: attachment.url,
+    mimeType: attachment.mimeType,
+    fileName: attachment.fileName,
+    ...(attachment.fileSize != null ? { fileSize: attachment.fileSize } : {}),
+    ...(attachment.assetId ? { assetId: attachment.assetId } : {}),
+  }));
+}
+
 async function buildLocalImageOcrContext(imageUploads: MessageAttachment[]): Promise<string[]> {
   const context: string[] = [];
   for (const image of imageUploads) {
@@ -1674,6 +1686,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         : 'chat';
 
       let cloudContentRaw = '';
+      let lastParsedTags = parseCurrentTurnAssistantOutput(cloudContentRaw, content);
       const turnGeneratedFiles: GeneratedFileWire[] = [];
       const turnInteractiveCards: InteractiveCard[] = [];
       let turnFinishReason: string | undefined;
@@ -1758,7 +1771,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const state = get();
             lastDeltaTimes.set(conversationId, Date.now());
 
-            const previousParsedTags = parseCurrentTurnAssistantOutput(cloudContentRaw, content);
+            const previousParsedTags = lastParsedTags;
             let contentChunk = delta.content;
             const canonicalText =
               delta.x_agent_event?.event.type === 'text-delta'
@@ -1780,7 +1793,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             const prevContentLength = cloudContentRaw.length;
             if (contentChunk) cloudContentRaw += contentChunk;
-            const parsedTags = parseCurrentTurnAssistantOutput(cloudContentRaw, content);
+            const parsedTags = contentChunk
+              ? parseCurrentTurnAssistantOutput(cloudContentRaw, content)
+              : previousParsedTags;
+            lastParsedTags = parsedTags;
             const newContent = parsedTags.content;
 
             if (!delta.durableReplay && contentChunk) {
@@ -1868,37 +1884,38 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             const thinkingStartedAt = thinkingStartTimes.get(conversationId);
             const currentMsgStore = getConversationMessageStore(conversationId);
-            const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
-            const updatedMsgs = msgs.map((m) =>
-              m.id === assistantMessageId
-                ? {
-                    ...m,
-                    content: newContent,
-                    reasoning: newReasoning || undefined,
-                    isStreaming: true,
-                    ...(toolCalls.length > 0 ? { toolCalls } : {}),
-                    ...(thinkingStartedAt !== undefined ||
-                    agentActivity ||
-                    cloudAgentRun ||
-                    turnResearch
-                      ? {
-                          metadata: {
-                            ...m.metadata,
-                            ...(thinkingStartedAt !== undefined ? { thinkingStartedAt } : {}),
-                            ...(agentActivity ? { agentActivity } : {}),
-                            ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
-                            ...(turnResearch ? { research: { ...turnResearch } } : {}),
-                          },
-                        }
-                      : {}),
-                  }
-                : m,
-            );
 
             set({ streamingContent: newContent, streamingReasoning: newReasoning });
-            currentMsgStore.setState((s) => ({
-              messages: { ...s.messages, [conversationId]: updatedMsgs },
-            }));
+            currentMsgStore.setState((s) => {
+              const msgs = s.messages[conversationId];
+              if (!msgs) return s;
+              const index = msgs.findIndex((m) => m.id === assistantMessageId);
+              if (index < 0) return s;
+              const target = msgs[index];
+              const nextMsgs = [...msgs];
+              nextMsgs[index] = {
+                ...target,
+                content: newContent,
+                reasoning: newReasoning || undefined,
+                isStreaming: true,
+                ...(toolCalls.length > 0 ? { toolCalls } : {}),
+                ...(thinkingStartedAt !== undefined ||
+                agentActivity ||
+                cloudAgentRun ||
+                turnResearch
+                  ? {
+                      metadata: {
+                        ...target.metadata,
+                        ...(thinkingStartedAt !== undefined ? { thinkingStartedAt } : {}),
+                        ...(agentActivity ? { agentActivity } : {}),
+                        ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+                        ...(turnResearch ? { research: { ...turnResearch } } : {}),
+                      },
+                    }
+                  : {}),
+              };
+              return { messages: { ...s.messages, [conversationId]: nextMsgs } };
+            });
           },
 
           onDone: () => {
@@ -3170,13 +3187,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const userModel = targetMsg.model ?? DEFAULT_AUTO_MODE_ID;
     const editedParentId = targetMsg.parentId ?? null;
+    const editedAttachments = restoreComposerAttachments(targetMsg.attachments);
 
     set({ isEditing: true });
 
     const trimmedMsgs = msgs.slice(0, msgIndex);
     void (async () => {
       if (branches) {
-        await get().sendMessage(conversationId, newContent, userModel, undefined, {
+        await get().sendMessage(conversationId, newContent, userModel, editedAttachments, {
           branchParentId: editedParentId,
         });
         return;
@@ -3191,7 +3209,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
       }));
-      await get().sendMessage(conversationId, newContent, userModel);
+      await get().sendMessage(conversationId, newContent, userModel, editedAttachments);
     })()
       .catch((err) => {
         set({

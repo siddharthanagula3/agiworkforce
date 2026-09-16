@@ -7,7 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CLOUD_LOCK_REASON, type ModelDef } from '@/src/features/model-picker/service';
 import { getModelReasoning } from '@agiworkforce/types';
-import type { ModelInstallJob } from '@/src/features/model-picker/installStore';
+import {
+  useModelInstallStore,
+  type ModelInstallJob,
+} from '@/src/features/model-picker/installStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 
@@ -77,6 +80,11 @@ export function ModelRow({
   const handleThinkingToggle = () => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onToggleThinking(model.id);
+  };
+
+  const handleCancelDownload = () => {
+    if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    useModelInstallStore.getState().cancelModelDownload(model.id);
   };
 
   const iconBackground = visiblySelected
@@ -208,9 +216,26 @@ export function ModelRow({
         </View>
       ) : null}
 
+      {isDownloading ? (
+        <View style={{ paddingLeft: 58, paddingRight: 16, paddingBottom: 10 }}>
+          <Pressable
+            testID={`model-cancel-${model.id}`}
+            onPress={handleCancelDownload}
+            accessibilityRole="button"
+            accessibilityLabel={`Cancel downloading ${model.name}`}
+            hitSlop={8}
+            style={{ minHeight: 28, justifyContent: 'center' }}
+          >
+            <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+              Cancel download
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {(isFailed || isUnavailable) && installStatus.error ? (
         <View style={{ paddingLeft: 58, paddingRight: 16, paddingBottom: 10 }}>
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+          <Text numberOfLines={3} style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
             {installStatus.error}
           </Text>
         </View>

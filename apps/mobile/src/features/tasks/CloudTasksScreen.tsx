@@ -39,7 +39,7 @@ import { useCloudRunApprovalSignal } from './useApprovalSignal';
 
 export const CLOUD_TASK_LIST_POLL_INTERVAL_MS = 15_000;
 
-const SCREEN_TITLE = 'Cloud tasks';
+const SCREEN_TITLE = 'AGI Work';
 const SCREEN_SUBTITLE = 'AGI Cloud';
 const SCOPE_NOTE = `Every agent run on your AGI Cloud account, whichever surface started it. Pairing with a nearby desktop stays in ${MOBILE_REMOTE_SCREEN_LABEL}.`;
 const BACKGROUND_ALERTS_OFF_NOTE =

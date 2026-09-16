@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
+import {
+  activeSpeechLanguage,
+  autoListenEnabled,
+} from '@/src/features/voice/services/speechSettings';
 
 export type VoiceConversationPhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -27,6 +32,9 @@ interface CaptureEntry {
   stopRequestedAt: number | null;
 }
 
+export const VOICE_INPUT_DISABLED_MESSAGE =
+  'Voice Input is off. Turn it on in Settings, Voice to use the microphone.';
+
 export function voiceCaptureErrorMessage(err: unknown): string {
   if (err instanceof VoiceInput.VoiceCaptureError) {
     if (err.code === 'mic-permission-denied') {
@@ -36,12 +44,15 @@ export function voiceCaptureErrorMessage(err: unknown): string {
       return 'On-device speech recognition is not available for this device or language yet.';
     }
     if (err.code === 'already-active') return 'Voice capture is already running.';
+    if (err.code === 'max-duration-reached') return err.message;
+    if (err.code === 'voice-input-disabled') return VOICE_INPUT_DISABLED_MESSAGE;
     return err.message;
   }
   return 'Voice input could not start. Please try again.';
 }
 
 export function useVoiceConversation(options: UseVoiceConversationOptions) {
+  const voiceInputEnabled = useSettingsStore((s) => s.voiceEnabled);
   const [phase, setPhase] = useState<VoiceConversationPhase>('idle');
   const [muted, setMuted] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -49,6 +60,8 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
 
   const activeRef = useRef(false);
   const autoListenRef = useRef(false);
+  const voiceInputEnabledRef = useRef(voiceInputEnabled);
+  voiceInputEnabledRef.current = voiceInputEnabled;
   const mutedRef = useRef(false);
   const pttHeldRef = useRef(false);
   const captureRef = useRef<CaptureEntry | null>(null);
@@ -66,9 +79,11 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     if (entry.consumed) return;
     entry.consumed = true;
     if (captureRef.current === entry) captureRef.current = null;
-    optionsRef.current.onSttComplete?.(
-      entry.stopRequestedAt ? Date.now() - entry.stopRequestedAt : 0,
-    );
+    // Only a user-requested stop has a latency worth showing; a recognizer that
+    // finalized on its own has no stop event to measure from.
+    if (entry.stopRequestedAt) {
+      optionsRef.current.onSttComplete?.(Date.now() - entry.stopRequestedAt);
+    }
 
     if (!activeRef.current) return;
     setPhase('thinking');
@@ -146,29 +161,43 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     async (viaPtt = false) => {
       if (!activeRef.current || mutedRef.current) return;
       if (VoiceInput.isCapturing()) return;
+      if (!voiceInputEnabledRef.current) {
+        setPhase('idle');
+        optionsRef.current.onCaptureError?.(
+          new VoiceInput.VoiceCaptureError('voice-input-disabled', VOICE_INPUT_DISABLED_MESSAGE),
+        );
+        return;
+      }
 
       try {
         setTranscriptPreview('');
         hapticTap();
         const entry: CaptureEntry = { consumed: false, stopRequestedAt: null };
-        const session = await VoiceInput.startCaptureSession((event) => {
-          if (!activeRef.current) return;
-          const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
-          setAudioLevel(normalized);
-        });
+        const session = await VoiceInput.startCaptureSession(
+          (event) => {
+            if (!activeRef.current) return;
+            const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
+            setAudioLevel(normalized);
+          },
+          undefined,
+          { lang: activeSpeechLanguage() },
+        );
         captureRef.current = entry;
         session.result.then(
           ({ text }) => {
             void processTranscript(entry, text);
           },
-          () => {
+          (err: unknown) => {
             if (entry.consumed) return;
             entry.consumed = true;
             if (captureRef.current === entry) captureRef.current = null;
-            if (activeRef.current) {
-              setPhase('idle');
-              setAudioLevel(0);
-            }
+            if (!activeRef.current) return;
+            setPhase('idle');
+            setAudioLevel(0);
+            // A recognizer that fails after capture started is still a failure
+            // the caller has to show; only a deliberate abort stays silent.
+            if (err instanceof VoiceInput.VoiceCaptureError && err.code === 'aborted') return;
+            optionsRef.current.onCaptureError?.(err);
           },
         );
         if (!activeRef.current) return;
@@ -195,13 +224,13 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
 
   const handleOrbPress = useCallback(() => {
     if (phase === 'idle') {
-      autoListenRef.current = true;
+      autoListenRef.current = autoListenEnabled();
       void startListening();
     } else if (phase === 'listening') {
       void stopListeningAndProcess();
     } else if (phase === 'speaking') {
       void optionsRef.current.stopSpeaking();
-      autoListenRef.current = true;
+      autoListenRef.current = autoListenEnabled();
       void startListening();
     }
   }, [phase, startListening, stopListeningAndProcess]);

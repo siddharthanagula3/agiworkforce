@@ -59,6 +59,7 @@ export function VoiceInputButton({
   const colors = useThemeColors();
   const [state, setState] = useState<VoiceState>('idle');
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const voiceInputEnabled = useSettingsStore((s) => s.voiceEnabled);
 
   const ringScale = useSharedValue(1);
   const ringOpacity = useSharedValue(0);
@@ -312,6 +313,10 @@ export function VoiceInputButton({
   const isActive = state === 'recording' || state === 'ptt';
   const isProcessing = state === 'processing' || state === 'starting';
   const isDisabled = disabled || isProcessing;
+
+  // Voice Input off means no microphone affordance anywhere, which is what the
+  // setting promises.
+  if (!voiceInputEnabled) return null;
 
   const iconColor = isActive
     ? colors.agentError

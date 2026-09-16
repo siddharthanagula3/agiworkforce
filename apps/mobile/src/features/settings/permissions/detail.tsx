@@ -5,17 +5,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { Separator } from '@/components/ui/separator';
-import { useTheme, useThemeColors } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
 import { usePermissionsStore } from '@/stores/permissionsStore';
-import { PERMISSION_REGISTRY, isPermissionGranted, osStatusToLevel } from './registry';
+import { PERMISSION_REGISTRY, isPermissionGranted } from './registry';
 import {
-  LEVEL_LABELS,
-  LEVEL_DESCRIPTIONS,
+  STATUS_HEADLINES,
+  STATUS_EXPLANATIONS,
   type MobilePermissionKind,
-  type MobilePermissionLevel,
   type OsPermissionStatus,
 } from './types';
 
@@ -23,79 +21,10 @@ function isMobilePermissionKind(value: string | undefined): value is MobilePermi
   return typeof value === 'string' && value in PERMISSION_REGISTRY;
 }
 
-interface LevelRowProps {
-  level: MobilePermissionLevel;
-  label: string;
-  isSelected: boolean;
-  isLast: boolean;
-  onSelect: (level: MobilePermissionLevel) => void;
-}
-
-function LevelRow({ level, label, isSelected, isLast, onSelect }: LevelRowProps) {
-  const c = useThemeColors();
-  return (
-    <View>
-      <Pressable
-        onPress={() => onSelect(level)}
-        accessibilityRole="button"
-        accessibilityState={{ selected: isSelected }}
-        accessibilityLabel={`${label}. ${LEVEL_DESCRIPTIONS[level]}`}
-        style={{
-          minHeight: 74,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 14,
-          paddingVertical: 12,
-          paddingHorizontal: 10,
-        }}
-      >
-        <View
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderWidth: 1.5,
-            borderColor: isSelected ? c.textPrimary : c.border,
-            backgroundColor: c.surfaceElevated,
-          }}
-        >
-          {isSelected ? (
-            <View
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 5,
-                backgroundColor: c.textPrimary,
-              }}
-            />
-          ) : null}
-        </View>
-
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ color: c.textPrimary, fontSize: 16, fontWeight: '600' }}>{label}</Text>
-          <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, marginTop: 2 }}>
-            {LEVEL_DESCRIPTIONS[level]}
-          </Text>
-        </View>
-      </Pressable>
-      {!isLast && <Separator />}
-    </View>
-  );
-}
-
 function openAppSettings() {
   Linking.openSettings().catch(() => {
     Alert.alert('Could not open Settings', 'Please open your device Settings app manually.');
   });
-}
-
-function alertOpenSettings(message: string) {
-  Alert.alert('Open Settings', message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Open Settings', onPress: openAppSettings },
-  ]);
 }
 
 export default function PermissionDetailScreen() {
@@ -108,12 +37,12 @@ export default function PermissionDetailScreen() {
   const entry = isKnownPermission ? PERMISSION_REGISTRY[kind] : null;
 
   const setObservedStatus = usePermissionsStore((s) => s.setObservedStatus);
-  const setUserIntent = usePermissionsStore((s) => s.setUserIntent);
   const permState = usePermissionsStore((s) => s.permissions[kind]);
 
   const [osStatus, setOsStatus] = useState<OsPermissionStatus>(
     permState?.lastObservedStatus ?? 'undetermined',
   );
+  const [requesting, setRequesting] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -135,9 +64,6 @@ export default function PermissionDetailScreen() {
     }, [entry, kind, setObservedStatus]),
   );
 
-  const currentLevel = entry ? osStatusToLevel(osStatus, kind) : 'denied';
-  const selectedLevel = permState?.userIntent ?? currentLevel;
-
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -146,46 +72,17 @@ export default function PermissionDetailScreen() {
     router.navigate('/(app)/settings/permissions' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
-  const handleSelectLevel = useCallback(
-    async (level: MobilePermissionLevel) => {
-      const alreadyGranted = isPermissionGranted(osStatus);
-      if (!entry) return;
-
-      if (level === 'denied') {
-        setUserIntent(kind, level);
-        alertOpenSettings(
-          `To deny ${entry.label} access, go to Settings and change the permission there.`,
-        );
-        return;
-      }
-
-      if (alreadyGranted) {
-        setUserIntent(kind, level);
-        if (level !== currentLevel) {
-          alertOpenSettings(
-            `To change ${entry.label} access, go to Settings and update the permission.`,
-          );
-        }
-        return;
-      }
-
-      if (osStatus === 'undetermined') {
-        setUserIntent(kind, level);
-        const newStatus = await entry.requestPermission();
-        setOsStatus(newStatus);
-        setObservedStatus(kind, newStatus);
-        if (newStatus === 'denied') {
-          setUserIntent(kind, 'denied');
-        }
-      } else {
-        setUserIntent(kind, level);
-        alertOpenSettings(
-          `${entry.label} access was previously denied. To allow it, open Settings.`,
-        );
-      }
-    },
-    [osStatus, currentLevel, entry, kind, setUserIntent, setObservedStatus],
-  );
+  const handleRequest = useCallback(async () => {
+    if (!entry || requesting) return;
+    setRequesting(true);
+    try {
+      const newStatus = await entry.requestPermission();
+      setOsStatus(newStatus);
+      setObservedStatus(kind, newStatus);
+    } finally {
+      setRequesting(false);
+    }
+  }, [entry, kind, requesting, setObservedStatus]);
 
   if (!entry) {
     return (
@@ -221,11 +118,19 @@ export default function PermissionDetailScreen() {
 
   const Icon = entry.icon;
   const granted = isPermissionGranted(osStatus);
+  const canRequest = osStatus === 'undetermined';
+  const actionLabel = canRequest
+    ? requesting
+      ? `Asking for ${entry.label} access…`
+      : `Allow ${entry.label}`
+    : 'Open Settings';
+  const actionHint = canRequest
+    ? 'Your device asks you to decide. AGI never sees an answer you do not give.'
+    : `${entry.label} access is decided in your device Settings, not here.`;
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
       <StatusBar style={statusBarStyle} />
-      {/* Header */}
       <View
         style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
       >
@@ -263,8 +168,9 @@ export default function PermissionDetailScreen() {
         contentContainerStyle={{ paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Permission summary card */}
         <View
+          accessibilityRole="summary"
+          accessibilityLabel={`${entry.label}. ${STATUS_HEADLINES[osStatus]}. ${entry.description}`}
           style={{
             marginTop: 10,
             padding: 16,
@@ -291,7 +197,7 @@ export default function PermissionDetailScreen() {
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: c.textPrimary, fontSize: 17, fontWeight: '700' }}>
-              {granted ? 'Access Granted' : 'Access Denied'}
+              {STATUS_HEADLINES[osStatus]}
             </Text>
             <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, marginTop: 3 }}>
               {entry.description}
@@ -299,43 +205,50 @@ export default function PermissionDetailScreen() {
           </View>
         </View>
 
-        {/* Level selector */}
-        <View style={{ marginTop: 22, marginBottom: 12 }}>
-          <Text
-            style={{
-              color: c.textMuted,
-              fontSize: 12,
-              fontWeight: '700',
-              textTransform: 'uppercase',
-            }}
-          >
-            Access Level
-          </Text>
-        </View>
-
-        <View
+        <Text
           style={{
+            color: c.textMuted,
+            fontSize: 13,
+            lineHeight: 18,
+            marginTop: 14,
+            paddingHorizontal: 2,
+          }}
+        >
+          {STATUS_EXPLANATIONS[osStatus]}
+        </Text>
+
+        <Pressable
+          onPress={canRequest ? handleRequest : openAppSettings}
+          disabled={requesting}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          accessibilityState={{ disabled: requesting }}
+          style={{
+            marginTop: 18,
+            minHeight: 62,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
             borderRadius: 18,
             borderWidth: 1,
             borderColor: c.border,
             backgroundColor: c.surfaceElevated,
-            overflow: 'hidden',
-            paddingHorizontal: 10,
+            opacity: requesting ? 0.6 : 1,
           }}
         >
-          {entry.applicableLevels.map((level, idx) => (
-            <LevelRow
-              key={level}
-              level={level}
-              label={entry.levelLabels?.[level] ?? LEVEL_LABELS[level]}
-              isSelected={selectedLevel === level}
-              isLast={idx === entry.applicableLevels.length - 1}
-              onSelect={handleSelectLevel}
-            />
-          ))}
-        </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: c.textPrimary, fontSize: 16, fontWeight: '600' }}>
+              {actionLabel}
+            </Text>
+            <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, marginTop: 2 }}>
+              {actionHint}
+            </Text>
+          </View>
+          <ChevronRight size={18} color={c.textMuted} style={{ flexShrink: 0 }} />
+        </Pressable>
 
-        {/* Footer notice */}
         <View
           style={{
             marginTop: 16,
@@ -348,8 +261,8 @@ export default function PermissionDetailScreen() {
           }}
         >
           <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>
-            Some permission changes may open Settings. AGI cannot change device permissions without
-            your approval.
+            This screen shows what your device currently reports. AGI cannot change a device
+            permission on your behalf.
           </Text>
         </View>
       </ScrollView>

@@ -1,11 +1,16 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 import { api } from './api';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { notificationAllowed } from './notificationGate';
+import { notificationAllowed, vibrationAllowed } from './notificationGate';
+import {
+  androidChannelId,
+  registerAndroidChannels,
+  type NotificationPriority,
+} from './notificationChannels';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import {
   AGENT_APPROVAL_CATEGORY_IDENTIFIER,
@@ -13,6 +18,7 @@ import {
 } from './notificationCategories';
 
 const BACKGROUND_FETCH_TASK = 'agent-status-check';
+const APPROVAL_PRIORITY: NotificationPriority = 'high';
 
 /**
  * Shape of `GET /api/mobile/agent-status` (apps/web). Each entry is one open
@@ -53,8 +59,10 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     return BackgroundTask.BackgroundTaskResult.Success;
   }
   const appMode = useChatAppModeStore.getState?.()?.appMode ?? 'local';
-  const modeSettings =
-    appMode === 'cloud' ? useCloudSettingsStore.getState?.() : useLocalSettingsStore.getState?.();
+  if (appMode !== 'cloud') {
+    return BackgroundTask.BackgroundTaskResult.Success;
+  }
+  const modeSettings = useCloudSettingsStore.getState?.();
   if (!modeSettings?.notificationsEnabled) {
     return BackgroundTask.BackgroundTaskResult.Success;
   }
@@ -84,19 +92,25 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
         }
 
         for (const approval of result.pendingApprovals) {
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'AGI Workforce',
-              body: `${result.pendingApprovals.length} agent action${result.pendingApprovals.length === 1 ? ' is' : 's are'} waiting on you`,
-              data: {
-                type: 'agent_approval_needed',
-                approvalId: approval.id,
-                route: '/(app)/companion',
-              },
-              categoryIdentifier: AGENT_APPROVAL_CATEGORY_IDENTIFIER,
+          const content: Notifications.NotificationContentInput = {
+            title: 'AGI Workforce',
+            body: `${result.pendingApprovals.length} agent action${result.pendingApprovals.length === 1 ? ' is' : 's are'} waiting on you`,
+            data: {
+              type: 'agent_approval_needed',
+              priority: APPROVAL_PRIORITY,
+              approvalId: approval.id,
+              route: '/(app)/companion',
             },
-            trigger: null,
-          });
+            categoryIdentifier: AGENT_APPROVAL_CATEGORY_IDENTIFIER,
+            interruptionLevel: 'timeSensitive',
+          };
+          if (Platform.OS === 'android') {
+            (content as Record<string, unknown>).channelId = androidChannelId(
+              APPROVAL_PRIORITY,
+              vibrationAllowed(APPROVAL_PRIORITY),
+            );
+          }
+          await Notifications.scheduleNotificationAsync({ content, trigger: null });
           lastApprovalNotificationKey = notificationKey;
           break;
         }
@@ -129,6 +143,7 @@ export async function registerBackgroundFetch(): Promise<void> {
   }
 
   try {
+    await registerAndroidChannels();
     await registerNotificationCategories();
   } catch (err) {
     console.warn(

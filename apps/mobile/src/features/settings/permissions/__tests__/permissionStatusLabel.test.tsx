@@ -115,13 +115,11 @@ jest.mock('expo-calendar', () => ({
 }));
 
 const mockPermissionsState: {
-  permissions: Record<string, { lastObservedStatus: string; userIntent: string }>;
+  permissions: Record<string, { lastObservedStatus: string }>;
   setObservedStatus: jest.Mock;
-  setUserIntent: jest.Mock;
 } = {
   permissions: {},
   setObservedStatus: jest.fn(),
-  setUserIntent: jest.fn(),
 };
 
 jest.mock('@/stores/permissionsStore', () => ({
@@ -140,7 +138,7 @@ import type { OsPermissionStatus } from '@/src/features/settings/permissions/typ
 
 function setAllStatuses(status: OsPermissionStatus) {
   mockPermissionsState.permissions = Object.fromEntries(
-    PERMISSION_KINDS.map((kind) => [kind, { lastObservedStatus: status, userIntent: 'denied' }]),
+    PERMISSION_KINDS.map((kind) => [kind, { lastObservedStatus: status }]),
   );
 }
 

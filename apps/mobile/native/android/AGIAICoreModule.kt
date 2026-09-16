@@ -2,6 +2,7 @@ package com.agiworkforce.app.native
 
 import android.app.ActivityManager
 import android.content.Context
+import android.net.ConnectivityManager
 import android.os.Build
 import android.os.PowerManager
 import com.facebook.react.bridge.*
@@ -33,6 +34,18 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
     private var client: GenerativeModel? = null
 
     private val downloadInFlight = AtomicBoolean(false)
+
+    // Mirrors the app's persisted "download over cellular" consent. Off until JS
+    // says otherwise, so a multi-gigabyte AICore fetch never starts on mobile data.
+    @Volatile
+    private var cellularDownloadAllowed = false
+
+    fun isDownloadNetworkAllowed(context: Context): Boolean {
+      if (cellularDownloadAllowed) return true
+      val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        ?: return false
+      return runCatching { !cm.isActiveNetworkMetered }.getOrDefault(false)
+    }
 
     private fun getOrCreateClient(): GenerativeModel {
       return client ?: synchronized(this) {
@@ -69,7 +82,13 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
 
   override fun getName() = MODULE_NAME
 
+  @ReactMethod
+  fun setCellularDownloadAllowed(allowed: Boolean) {
+    cellularDownloadAllowed = allowed
+  }
+
   private fun triggerBackgroundDownload(model: GenerativeModel) {
+    if (!isDownloadNetworkAllowed(reactContext)) return
     if (!downloadInFlight.compareAndSet(false, true)) return
     launch {
       try {
@@ -126,7 +145,13 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
         val status = runCatching { model.checkStatus() }.getOrDefault(FeatureStatus.UNAVAILABLE)
         if (status != FeatureStatus.AVAILABLE) {
           if (status == FeatureStatus.DOWNLOADABLE) triggerBackgroundDownload(model)
-          promise.reject("UNAVAILABLE", "The AICore model is not available on this device yet")
+          promise.reject(
+            "UNAVAILABLE",
+            if (status == FeatureStatus.DOWNLOADABLE && !isDownloadNetworkAllowed(reactContext))
+              "The AICore model still needs to download. Connect to Wi-Fi, or turn on Settings, Storage, Download over cellular."
+            else
+              "The AICore model is not available on this device yet"
+          )
           return@launch
         }
 

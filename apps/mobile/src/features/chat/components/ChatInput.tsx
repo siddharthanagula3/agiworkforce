@@ -315,16 +315,34 @@ export function ChatInput({
 
       const sentText = sourceText;
       const sentAttachmentIds = new Set(attachments.map((a) => a.id));
+      const markSendFailed = () => {
+        setAttachments((current) =>
+          current.map((a) => (sentAttachmentIds.has(a.id) ? { ...a, sendFailed: true } : a)),
+        );
+      };
       sendPendingRef.current = true;
+      setAttachments((current) =>
+        current.map((a) => (a.sendFailed ? { ...a, sendFailed: false } : a)),
+      );
 
-      Promise.resolve(onSend(outgoing, fileAttachments.length > 0 ? fileAttachments : undefined))
+      Promise.resolve(
+        onSend(
+          outgoing,
+          fileAttachments.length > 0
+            ? fileAttachments.map(({ sendFailed: _sendFailed, ...rest }) => rest)
+            : undefined,
+        ),
+      )
         .then((accepted) => {
-          if (accepted === false) return;
+          if (accepted === false) {
+            markSendFailed();
+            return;
+          }
           clearDraft(draftKey, draftProvenance);
           setText((current) => (current === sentText ? '' : current));
           setAttachments((current) => current.filter((a) => !sentAttachmentIds.has(a.id)));
         })
-        .catch(() => {})
+        .catch(markSendFailed)
         .finally(() => {
           sendPendingRef.current = false;
         });
@@ -339,7 +357,10 @@ export function ChatInput({
   const returnQueuedToComposer = useCallback((item: QueuedFollowUp) => {
     setText((current) => (current ? `${item.text}\n\n${current}` : item.text));
     if (item.attachments.length > 0) {
-      setAttachments((current) => [...item.attachments, ...current]);
+      setAttachments((current) => [
+        ...item.attachments.map((attachment) => ({ ...attachment, sendFailed: true })),
+        ...current,
+      ]);
     }
   }, []);
 
@@ -386,6 +407,7 @@ export function ChatInput({
         const pasted = next.slice(prefix, next.length - suffix);
         if (isLargePaste(pasted)) {
           const id = `pasted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          setText(next.slice(0, prefix) + next.slice(next.length - suffix));
           setAttachments((prev) => [
             ...prev,
             {
@@ -881,7 +903,7 @@ export function ChatInput({
               ChatGPT's, and the founder chose ChatGPT style. Hidden while the
               pill is showing recording/transcribing state, and while stacked,
               where the plus moves to the controls row beneath the text. */}
-          {!stacked && !isRecording && !isTranscribing ? (
+          {onOpenAddToChat && !stacked && !isRecording && !isTranscribing ? (
             <Pressable
               testID="chat.composer.plus"
               onPress={handlePlusPress}
@@ -993,24 +1015,26 @@ export function ChatInput({
           >
             {stacked ? (
               <>
-                <Pressable
-                  testID="chat.composer.plus.stacked"
-                  onPress={handlePlusPress}
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: radii.full,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: themeColors.inputSurface,
-                  }}
-                  hitSlop={6}
-                  accessibilityLabel="Add to chat"
-                  accessibilityHint="Opens attachment, mode, and feature options"
-                  accessibilityRole="button"
-                >
-                  <Plus size={18} color={themeColors.textMuted} />
-                </Pressable>
+                {onOpenAddToChat ? (
+                  <Pressable
+                    testID="chat.composer.plus.stacked"
+                    onPress={handlePlusPress}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: radii.full,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: themeColors.inputSurface,
+                    }}
+                    hitSlop={6}
+                    accessibilityLabel="Add to chat"
+                    accessibilityHint="Opens attachment, mode, and feature options"
+                    accessibilityRole="button"
+                  >
+                    <Plus size={18} color={themeColors.textMuted} />
+                  </Pressable>
+                ) : null}
                 {/* The model answering this chat, on the control row beside [+]
                     - Claude's arrangement (IMG_0730); ChatGPT puts the same
                     text-only label next to the mic (IMG_0689). It lives here

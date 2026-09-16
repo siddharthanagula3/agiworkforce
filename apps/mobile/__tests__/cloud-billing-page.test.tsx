@@ -70,9 +70,22 @@ jest.mock('@/src/features/settings/common', () => {
       </RN.View>
     ),
     SettingsGroup: ({ children }: { children: React.ReactNode }) => <RN.View>{children}</RN.View>,
-    SettingsRow: ({ label, onPress }: { label: string; onPress?: () => void }) => (
-      <RN.Pressable accessibilityLabel={label} onPress={onPress}>
+    SettingsRow: ({
+      label,
+      value,
+      onPress,
+    }: {
+      label: string;
+      value?: string;
+      onPress?: () => void;
+    }) => (
+      <RN.Pressable
+        accessibilityLabel={label}
+        accessibilityState={{ disabled: !onPress }}
+        onPress={onPress}
+      >
         <RN.Text>{label}</RN.Text>
+        {value ? <RN.Text>{value}</RN.Text> : null}
       </RN.Pressable>
     ),
     CloudSyncBlockedBanner: ({ onSwitchToCloud }: { onSwitchToCloud: () => void }) => (
@@ -441,5 +454,50 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(openExternalUrl).not.toHaveBeenCalledWith(
       'https://apps.apple.com/account/subscriptions',
     );
+  });
+});
+
+describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFeatures.billing = false;
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'free',
+      billingStatus: 'none',
+      billingSource: 'none',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+  });
+
+  it('marks the row unavailable before the tap and says where plans are changed', () => {
+    const { getByLabelText, getByText } = render(<CloudBillingScreen />);
+
+    const row = getByLabelText('Upgrade plan');
+    expect(row.props.accessibilityState.disabled).toBe(true);
+    expect(getByText('Unavailable in the app')).toBeTruthy();
+    expect(getByText('Plan changes are not in this app yet')).toBeTruthy();
+  });
+
+  it('does not open a paywall whose only content is an apology', () => {
+    const { getByLabelText } = render(<CloudBillingScreen />);
+
+    fireEvent.press(getByLabelText('Upgrade plan'));
+
+    const props = mockPaywallBottomSheet.mock.calls.at(-1)?.[0] as
+      Record<string, unknown> | undefined;
+    expect(props?.['primaryActionUnavailableMessage']).toBe(
+      "Plan changes aren't available in the app yet. Check back soon.",
+    );
+  });
+
+  it('restores a working Upgrade row once in-app billing is on', () => {
+    mockFeatures.billing = true;
+
+    const { getByLabelText, queryByText } = render(<CloudBillingScreen />);
+
+    expect(getByLabelText('Upgrade plan').props.accessibilityState.disabled).toBe(false);
+    expect(queryByText('Unavailable in the app')).toBeNull();
+    expect(queryByText('Plan changes are not in this app yet')).toBeNull();
   });
 });

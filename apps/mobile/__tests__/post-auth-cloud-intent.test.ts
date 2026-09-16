@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { useTierStore } from '../src/features/billing/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import {
@@ -104,4 +106,25 @@ describe('post-auth Cloud intent', () => {
     expect(useChatAppModeStore.getState().appMode).toBe('local');
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
   });
+});
+
+describe('NEW-mqa-05, every Cloud entry point stages the intent', () => {
+  const entryPoints = [
+    'app/(app)/chat/[id].tsx',
+    'app/(app)/(tabs)/chat.tsx',
+    'app/(public)/onboarding.tsx',
+  ];
+
+  it.each(entryPoints)(
+    'routes %s through beginCloudPostAuthIntent, not a bare login push',
+    (file) => {
+      const source = readFileSync(join(__dirname, '..', file), 'utf8');
+
+      expect(source).toContain('beginCloudPostAuthIntent');
+      // A bare push to the auth stack signs the user in and leaves them in Local
+      // Mode, which is the defect this guards.
+      expect(source).not.toMatch(/push\(\s*'\/\(auth\)\/login'/);
+      expect(source).not.toMatch(/replace\(\s*'\/\(auth\)\/login'/);
+    },
+  );
 });

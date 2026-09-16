@@ -14,6 +14,7 @@ import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
@@ -49,6 +50,9 @@ const initialStreamState = (): CompareStreamState => ({
   ttftMs: null,
   durationMs: null,
 });
+
+const COMPARE_ATTACHMENTS_UNSUPPORTED =
+  'Compare sends prompt text only. Remove the attachment, or run this prompt in a chat to include it.';
 
 const LOCAL_MODE_COMPARE_NOTICE =
   'Model comparison runs on AGI Cloud, so it is unavailable while chat is in Local Mode. ' +
@@ -127,8 +131,19 @@ export default function CompareScreen() {
   }, [cloudUnlocked, router, setAppMode]);
 
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, attachments?: Attachment[]) => {
       if (!text.trim()) return false;
+
+      if (attachments && attachments.length > 0) {
+        const unsupported: CompareStreamState = {
+          ...initialStreamState(),
+          isDone: true,
+          errorMessage: COMPARE_ATTACHMENTS_UNSUPPORTED,
+        };
+        setStateA(unsupported);
+        setStateB(unsupported);
+        return false;
+      }
 
       if (useChatAppModeStore.getState().appMode !== 'cloud') {
         const localModeState: CompareStreamState = {
