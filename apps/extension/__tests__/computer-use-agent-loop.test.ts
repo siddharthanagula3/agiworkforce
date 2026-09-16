@@ -163,6 +163,31 @@ function makeToolCallSseStream(): ReadableStream<Uint8Array> {
   return makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']);
 }
 
+function makeNamedToolCallSseStream(
+  name: string,
+  args: Record<string, unknown>,
+): ReadableStream<Uint8Array> {
+  const chunk = JSON.stringify({
+    choices: [
+      {
+        finish_reason: 'tool_calls',
+        delta: {
+          content: null,
+          tool_calls: [
+            {
+              index: 0,
+              id: 'call_dl',
+              type: 'function',
+              function: { name, arguments: JSON.stringify(args) },
+            },
+          ],
+        },
+      },
+    ],
+  });
+  return makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']);
+}
+
 function makeFinalSseStream(): ReadableStream<Uint8Array> {
   const chunk = JSON.stringify({
     choices: [
@@ -357,6 +382,47 @@ describe('computer-use agent loop, one round-trip', () => {
     expect(result.stepsUsed).toBe(2);
     expect(result.cappedAtMaxSteps).toBe(false);
     expect(result.history.length).toBeGreaterThan(2);
+  });
+
+  it('refuses a download when the run has nobody to ask, rather than taking the file', async () => {
+    // Turning "ask before acting" off used to remove the approval hook, so a
+    // download ran unasked. A file written to the machine outlives the run and
+    // the tab, so it needs a person even in an autonomous run.
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: makeNamedToolCallSseStream('download_file', { url: 'https://x.test/a.zip' }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+
+    await runAgentLoop('Grab that file', 42, { maxSteps: 10 });
+
+    const secondCallArgs = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(secondCallArgs[1].body as string) as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const toolResult = body.messages.find((m) => m.role === 'tool');
+    expect(toolResult?.content as string).toContain('always needs approval');
+  });
+
+  it('still asks for a download when the run can ask, and takes the answer', async () => {
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: makeNamedToolCallSseStream('download_file', { url: 'https://x.test/a.zip' }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    const onBeforeAction = vi.fn().mockResolvedValue(false);
+
+    await runAgentLoop('Grab that file', 42, { maxSteps: 10, onBeforeAction });
+
+    expect(onBeforeAction).toHaveBeenCalledWith('download_file', {
+      url: 'https://x.test/a.zip',
+    });
   });
 
   it('respects onBeforeAction, skips the tool if the callback returns false', async () => {

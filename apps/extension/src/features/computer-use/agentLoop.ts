@@ -23,6 +23,23 @@ import { formatNetworkEntries, readNetworkEntries } from '../browser-tools/netwo
 import { startPageWatch, stopPageWatch } from '../browser-tools/pageWatch';
 import { formatDownloadRecord, startBrowserToolDownload } from '../browser-tools/downloads';
 
+/**
+ * Actions that need a person even when the run is autonomous.
+ *
+ * "Ask before acting" is a preference about routine steps, clicking and typing
+ * and scrolling, and turning it off used to remove the approval hook outright,
+ * so a download went ahead with nobody asked. A file written to the user's
+ * machine is not a routine step, and it is the one action here that outlives
+ * the run and the tab.
+ *
+ * The floor lives in the loop rather than in the caller that builds the hook,
+ * because a caller that forgets is exactly how it went missing.
+ */
+export const ALWAYS_ASK_TOOLS: ReadonlySet<string> = new Set(['download_file']);
+
+export const ALWAYS_ASK_REFUSAL =
+  'Downloading a file always needs approval, and this run has no way to ask. Start the run from the side panel to approve it.';
+
 export interface AgentLoopOptions {
   maxSteps?: number;
   onBeforeAction?: (
@@ -52,12 +69,7 @@ export interface AgentLoopUsage {
 }
 
 export type AgentLoopStepKind =
-  | 'screenshot'
-  | 'tool_call'
-  | 'tool_result'
-  | 'final'
-  | 'error'
-  | 'injection_blocked';
+  'screenshot' | 'tool_call' | 'tool_result' | 'final' | 'error' | 'injection_blocked';
 
 export interface AgentLoopStep {
   kind: AgentLoopStepKind;
@@ -515,6 +527,13 @@ async function dispatchToolCall(
     toolName,
     toolArgs: args,
   });
+
+  if (ALWAYS_ASK_TOOLS.has(toolName) && options.onBeforeAction === undefined) {
+    const refusal = ALWAYS_ASK_REFUSAL;
+    await assertRunOwnership(options);
+    options.onProgress?.({ kind: 'tool_result', stepNumber, toolName, toolResult: refusal });
+    return { role: 'tool', content: refusal, tool_call_id: toolCall.id, name: toolName };
+  }
 
   if (options.onBeforeAction) {
     let allowed: boolean;
