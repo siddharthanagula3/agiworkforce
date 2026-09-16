@@ -437,8 +437,14 @@ fn summary_from_session(
     session: &ManagedSession,
     metadata: Option<&SessionMetadata>,
 ) -> SessionSummary {
+    // Two writers hold a title: `/rename` writes the metadata sidecar, and the
+    // developer protocol (thread/start, thread/fork) writes the session header.
+    // Reading only the sidecar meant a session named through the protocol
+    // listed under a title inferred from its first message instead of the one
+    // it was given.
     let title = metadata
         .and_then(|value| value.title.clone())
+        .or_else(|| session.title.clone())
         .unwrap_or_else(|| infer_title(&session.messages));
     let model = metadata
         .and_then(|value| value.model.clone())
@@ -911,6 +917,45 @@ mod tests {
         let tempdir = tempdir().unwrap();
         let conn = open_db_in(tempdir.path()).unwrap();
         (tempdir, conn)
+    }
+
+    #[test]
+    fn a_title_set_through_the_developer_protocol_reaches_the_session_list() {
+        // Two writers hold a title. `/rename` writes the metadata sidecar and
+        // the developer protocol writes the session header, and the list read
+        // only the first, so a session named by thread/start or thread/fork
+        // listed under a title guessed from its first message.
+        let (tempdir, conn) = temp_connection();
+        save_session(&conn, "s-named", "Hello there", "claude", "/tmp", "main").unwrap();
+
+        let path = resolve_reference_path(&conn.base_dir, "s-named").unwrap();
+        let mut session = load_managed_session_from_path(&path).unwrap();
+        session.title = Some("Named by the protocol".to_string());
+        let summary = summary_from_session(&path, &session, None);
+
+        assert_eq!(summary.title, "Named by the protocol");
+        drop(tempdir);
+    }
+
+    #[test]
+    fn a_renamed_session_still_wins_over_the_header() {
+        // The sidecar is what `/rename` writes, so it stays authoritative; the
+        // header is the fallback, not a replacement.
+        let (tempdir, conn) = temp_connection();
+        save_session(&conn, "s-both", "Hello there", "claude", "/tmp", "main").unwrap();
+
+        let path = resolve_reference_path(&conn.base_dir, "s-both").unwrap();
+        let mut session = load_managed_session_from_path(&path).unwrap();
+        session.title = Some("From the header".to_string());
+        let metadata = SessionMetadata {
+            title: Some("From the rename".to_string()),
+            ..SessionMetadata::default()
+        };
+
+        let summary = summary_from_session(&path, &session, Some(&metadata));
+
+        assert_eq!(summary.title, "From the rename");
+        drop(tempdir);
     }
 
     #[test]
