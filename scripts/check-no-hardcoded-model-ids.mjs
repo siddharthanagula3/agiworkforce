@@ -78,6 +78,7 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   'docs/research/provider-free-value-matrix-2026-09-01.md',
   'docs/research/free-inference-tos-workbook-2026-09-01.md',
   'docs/architecture/byok-provider-strategy.md',
+  'docs/work/openai-api-audit-and-plan-2026-09-16.md',
 ]);
 
 const OWNER_PATH_SET = new Set(MODEL_ID_OWNER_PATHS);
