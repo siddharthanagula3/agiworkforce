@@ -52,6 +52,7 @@ import {
   movePointer,
   pressKey,
   scrollPointer,
+  stopComputerUseHelper,
   typeText,
   waitFor,
 } from './computerUseService';
@@ -93,7 +94,12 @@ import {
 } from './developerSessionService';
 import { reportShellIdentity } from '../shellIdentity';
 import { PathRefused } from './pathGuard';
-import { consumeSingleUse, getPermissionState, requestPermission } from './permissionManager';
+import {
+  consumeSingleUse,
+  getPermissionState,
+  requestPermission,
+  revokePermission,
+} from './permissionManager';
 import {
   findContainingRoot,
   getRoot,
@@ -338,6 +344,25 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   computer_key: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_wait: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
 };
+
+/**
+ * Stop a screen-control run now.
+ *
+ * Killing the helper ends the action in flight, and withdrawing the grant is
+ * what stops the next one: each step is independent here, so without that the
+ * very next call spawns a new helper and the pointer keeps moving. The user
+ * grants again to carry on, which is the same prompt that started it.
+ *
+ * Deliberately outside the capability table. Needing permission to stop
+ * something already running is the one place a prompt must not appear, and
+ * until now the only way to end a run was to quit the app while it held the
+ * mouse.
+ */
+function stopComputerUse(): { stopped: true } {
+  stopComputerUseHelper();
+  revokePermission('computer.use', { kind: 'global' });
+  return { stopped: true };
+}
 
 async function snapshotFor(root: WorkspaceRoot): Promise<WorkspaceSnapshot> {
   const git = await readWorkspaceGit(root);
@@ -676,6 +701,8 @@ async function execute(
       return pressKey(requireString(args, 'key'), requireModifiers(args));
     case 'computer_wait':
       return waitFor(optionalNumberOr(args, 'ms', 500));
+    case 'computer_stop':
+      return stopComputerUse();
     case 'device_host_declaration':
       return declareDeviceHost();
     case 'developer_runtime_status':
