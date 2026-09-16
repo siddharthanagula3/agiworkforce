@@ -4,6 +4,14 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { DesktopShellV3 } from '../DesktopShellV3';
 
+// These cases are about the Local-only panels, which the sidebar now lists only
+// on a host that can reach Local mode at all. A shipped Electron build cannot,
+// and the jsdom default matches it, so the scenario has to say which host it is.
+vi.mock('../../../lib/runtimeEnvironment', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/runtimeEnvironment')>()),
+  supportsLocalAppMode: true,
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, string>) => {
