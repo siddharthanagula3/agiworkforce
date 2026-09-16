@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { supportsLocalAppMode } from '@/lib/runtimeEnvironment';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -152,9 +153,13 @@ function navItemsForMode(
   return [
     { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
     { id: 'code', label: t('sidebar.nav.code'), icon: FileCode },
-    { id: 'design', label: t('sidebar.nav.design'), icon: Palette },
-    { id: 'research', label: t('sidebar.nav.research'), icon: Telescope },
-    { id: 'automation', label: t('sidebar.nav.automation'), icon: Zap },
+    ...(supportsLocalAppMode
+      ? ([
+          { id: 'design', label: t('sidebar.nav.design'), icon: Palette },
+          { id: 'research', label: t('sidebar.nav.research'), icon: Telescope },
+          { id: 'automation', label: t('sidebar.nav.automation'), icon: Zap },
+        ] as NavItem[])
+      : []),
     { id: 'tasks', label: t('sidebar.nav.tasks'), icon: ListChecks },
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
     { id: 'customize', label: t('sidebar.nav.customize'), icon: Settings },
@@ -176,6 +181,13 @@ function projectAccent(project: Project, index: number): string {
   );
 }
 
+/**
+ * The design board, deep research and automations run on this device, so the
+ * shell only renders them in Local mode. A host that cannot reach Local mode at
+ * all, which is every shipped Electron build, showed all three anyway and
+ * answered a click with a toast naming a mode it has no way to enter. They are
+ * listed only where switching to Local is something the user can actually do.
+ */
 function railItems(
   privacyMode: 'local' | 'byok' | 'managed',
   t: TFunction,
@@ -188,9 +200,11 @@ function railItems(
   } else {
     items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
     items.push({ id: 'code', icon: FileCode, title: t('sidebar.nav.code') });
-    items.push({ id: 'design', icon: Palette, title: t('sidebar.nav.design') });
-    items.push({ id: 'research', icon: Telescope, title: t('sidebar.nav.research') });
-    items.push({ id: 'automation', icon: Zap, title: t('sidebar.nav.automation') });
+    if (supportsLocalAppMode) {
+      items.push({ id: 'design', icon: Palette, title: t('sidebar.nav.design') });
+      items.push({ id: 'research', icon: Telescope, title: t('sidebar.nav.research') });
+      items.push({ id: 'automation', icon: Zap, title: t('sidebar.nav.automation') });
+    }
     items.push({ id: 'tasks', icon: ListChecks, title: t('sidebar.nav.tasks') });
     items.push({ id: 'scheduled', icon: RefreshCw, title: t('sidebar.nav.scheduled') });
   }
