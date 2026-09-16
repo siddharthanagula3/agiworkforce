@@ -5753,7 +5753,8 @@ mod tests {
             "go",
         ])
         .expect("both flags should parse");
-        let resolved = CliOptions::from_cli(&cli).effective_permissions(cli.mode, false, false, None);
+        let resolved =
+            CliOptions::from_cli(&cli).effective_permissions(cli.mode, false, false, None);
 
         assert_eq!(resolved.mode, PermissionMode::Plan);
         assert!(!resolved.mode.auto_approves_edits());

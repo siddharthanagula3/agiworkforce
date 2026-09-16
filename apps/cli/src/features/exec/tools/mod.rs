@@ -1470,7 +1470,10 @@ decision = "deny"
         );
         for tool in &read_only_browser_tools {
             assert!(reads_a_private_surface(tool), "{tool} must still ask");
-            assert!(!is_catalog_read_only_tool(tool), "{tool} is not pre-approved");
+            assert!(
+                !is_catalog_read_only_tool(tool),
+                "{tool} is not pre-approved"
+            );
         }
 
         // The workspace-bounded reads keep running without a prompt.

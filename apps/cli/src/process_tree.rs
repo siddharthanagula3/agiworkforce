@@ -882,7 +882,8 @@ mod tests {
     /// Async-aware on purpose: these tests hold the lock across `.await`, and a
     /// `std::sync::Mutex` guard held across an await can park the whole runtime
     /// thread while another task waits on the same lock.
-    pub(super) static CHILD_SPAWNING_TESTS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    pub(super) static CHILD_SPAWNING_TESTS: tokio::sync::Mutex<()> =
+        tokio::sync::Mutex::const_new(());
 
     pub(super) async fn wait_for_processes_to_exit(process_ids: &[i32]) {
         let deadline = Instant::now() + Duration::from_secs(2);
