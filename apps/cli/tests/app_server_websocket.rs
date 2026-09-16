@@ -32,7 +32,7 @@ async fn cli_websocket_uses_the_full_typed_developer_session() {
 
     let mut websocket = connect_with_retry(port, token, &mut child).await;
     websocket
-        .send(Message::Text(
+        .send(Message::text(
             json!({
                 "id": 1,
                 "method": "initialize",
@@ -62,7 +62,7 @@ async fn cli_websocket_uses_the_full_typed_developer_session() {
     assert_eq!(initialized["result"]["capabilities"]["approvals"], true);
 
     websocket
-        .send(Message::Text(
+        .send(Message::text(
             json!({
                 "id": 2,
                 "method": "thread/list",

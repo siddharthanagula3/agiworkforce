@@ -58,6 +58,11 @@ updates:
       - dependency-name: 'bincode'
       - dependency-name: 'cpal'
       - dependency-name: 'llama-cpp-sys-2'
+      # apps/desktop/src-tauri is a member of this workspace, so this block walks its
+      # manifest too; its 36 majors are the migration the src-tauri block holds. Majors
+      # for apps/cli and crates/* are taken on purpose, one crate at a time.
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   # ─── Cargo (Rust), apps/desktop/src-tauri ──────────────────────────────────
   - package-ecosystem: 'cargo'
