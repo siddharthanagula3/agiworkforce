@@ -10,6 +10,7 @@ import { parseWebviewMessage } from '../../protocol/webviewMessages';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { resolveTierSync } from '../../integrations/tierResolver';
 import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
+import { AttentionState } from './attentionBadge';
 
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
 export type {
@@ -25,6 +26,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _messageListener?: vscode.Disposable;
   private _conversationTreeListener?: vscode.Disposable;
   private _pendingComposerDraft?: Extract<ExtToWebviewMessage, { type: 'composerDraft' }>;
+  private _visibilityListener?: vscode.Disposable;
+  private readonly _attention = new AttentionState();
   private readonly _stateManager: ChatStateManager;
 
   constructor(
@@ -39,7 +42,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._stateManager = new ChatStateManager(
       secrets,
       this._extensionContext,
-      (msg: ExtToWebviewMessage) => this._view?.webview.postMessage(msg),
+      (msg: ExtToWebviewMessage) => this._postToWebview(msg),
       this._conversationTreeProvider,
       workspaceState,
       localRuntimes,
@@ -95,14 +98,53 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       void this._stateManager.pushRecentConversations();
     });
 
+    this._visibilityListener?.dispose();
+    // Optional-called for the same reason `show` is below: a Code-OSS fork can
+    // ship a narrower WebviewView, and an attention badge is not worth failing
+    // to open the panel over.
+    this._visibilityListener = webviewView.onDidChangeVisibility?.(() => this._refreshBadge());
+
     webviewView.onDidDispose(() => {
       this._messageListener?.dispose();
       delete this._messageListener;
       this._conversationTreeListener?.dispose();
       delete this._conversationTreeListener;
+      this._visibilityListener?.dispose();
+      delete this._visibilityListener;
+      this._attention.record('seen');
       this._stateManager.cancelInFlight();
       delete this._view;
     });
+  }
+
+  /**
+   * Mark the view when a turn wants something and nobody is looking at it.
+   *
+   * A turn keeps running while its panel is hidden, so an approval prompt or a
+   * finished reply could sit there indefinitely with nothing on screen saying
+   * so. The Activity Bar badge is the only surface VS Code gives a hidden view,
+   * and it is what the user's other extensions use for the same thing.
+   */
+  private _postToWebview(message: ExtToWebviewMessage): Thenable<boolean> | undefined {
+    if (message.type === 'approvalRequested') this._attention.record('approval-requested');
+    else if (message.type === 'approvalResolved') this._attention.record('approval-resolved');
+    else if (message.type === 'done' || message.type === 'error') {
+      this._attention.record('turn-finished');
+    }
+    this._refreshBadge();
+    return this._view?.webview.postMessage(message);
+  }
+
+  private _refreshBadge(): void {
+    const view = this._view;
+    if (view === undefined) return;
+    if (view.visible === true) this._attention.record('seen');
+    try {
+      view.badge = this._attention.badge();
+    } catch {
+      // A host that does not implement the badge is not a reason to drop the
+      // message this was riding along with.
+    }
   }
 
   public reveal(): void {
