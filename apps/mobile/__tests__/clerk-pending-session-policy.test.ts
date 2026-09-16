@@ -102,11 +102,33 @@ describe('Clerk native pending-session policy', () => {
 
     expect(source).toContain('const clerkUserId = useAuthStore((state) => state.clerkUserId);');
     expect(source).toContain('beginPushTokenAccountSession(clerkUserId, getAuthToken)');
-    expect(source).toContain('[isMmkvReady, isClerkSignedIn, clerkUserId]');
-    expect(source).toContain('[isClerkSignedIn, clerkUserId, isInitialized, refreshTier]');
-    expect(source).toContain('[isClerkSignedIn, clerkUserId, refreshTier]');
-    expect(source).toContain('[isClerkSignedIn, clerkUserId, isCloud, isMmkvReady, refreshTier]');
-    expect(source).toContain('[isClerkSignedIn, clerkUserId, isCloud, isInitialized]');
-    expect(source).toContain('[isClerkSignedIn, clerkUserId]');
+
+    // Read as normalized dependency sets rather than source substrings: the
+    // previous form pinned six exact one-line arrays, so adding a dependency to
+    // any of them failed the test for formatting rather than for behaviour, and
+    // said nothing about which effect had changed.
+    const dependencySets = [...source.matchAll(/\}, \[([^\]]*)\]\);/g)].map((match) =>
+      (match[1] ?? '')
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean),
+    );
+    const accountScoped = dependencySets.filter((deps) => deps.includes('isClerkSignedIn'));
+
+    // Two effects are deliberately not account-scoped: one mirrors the signed-in
+    // boolean onto the notification service, the other reacts to a pairing URL.
+    const notAccountScoped = accountScoped.filter((deps) => !deps.includes('clerkUserId'));
+    expect(notAccountScoped).toEqual([
+      ['isClerkSignedIn'],
+      ['url', 'isClerkSignedIn', 'isInitialized', 'router'],
+    ]);
+
+    // Everything else that reads the session must re-run when the person behind
+    // it changes, including the router effect, whose onboarding and age-gate
+    // reads come from per-account storage.
+    const routing = accountScoped.find((deps) => deps.includes('segments'));
+    expect(routing).toBeDefined();
+    expect(routing).toContain('clerkUserId');
+    expect(accountScoped.filter((deps) => deps.includes('clerkUserId'))).toHaveLength(7);
   });
 });
