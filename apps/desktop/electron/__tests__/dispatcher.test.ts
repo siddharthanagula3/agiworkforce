@@ -17,6 +17,8 @@ const root: WorkspaceRoot = {
 const getPermissionState = vi.fn<() => PermissionState>();
 const requestPermission = vi.fn<() => Promise<PermissionState>>();
 const consumeSingleUse = vi.fn();
+const revokePermission = vi.fn();
+const stopComputerUseHelper = vi.fn();
 const runShellCommand = vi.fn();
 const cancelShellRun = vi.fn();
 const readShellPolicy = vi.fn();
@@ -42,6 +44,22 @@ vi.mock('../runtime/permissionManager', () => ({
   getPermissionState,
   requestPermission,
   consumeSingleUse,
+  revokePermission,
+}));
+
+vi.mock('../runtime/computerUseService', () => ({
+  ComputerUseRefused: class extends Error {},
+  captureRegion: vi.fn(),
+  captureScreen: vi.fn(),
+  clickPointer: vi.fn(),
+  computerUseAvailability: () => ({ supported: true }),
+  dragPointer: vi.fn(),
+  movePointer: vi.fn(),
+  pressKey: vi.fn(),
+  scrollPointer: vi.fn(),
+  stopComputerUseHelper,
+  typeText: vi.fn(),
+  waitFor: vi.fn(),
 }));
 
 vi.mock('../runtime/workspaceStore', () => ({
@@ -419,5 +437,35 @@ describe('the account the shell hands its app-servers', () => {
 
     expect(reportShellIdentity).toHaveBeenCalledExactlyOnceWith({ signedIn: false, email: null });
     expect(syncDeveloperAccounts).toHaveBeenCalledOnce();
+  });
+});
+
+describe('stopping screen control', () => {
+  beforeEach(() => {
+    revokePermission.mockClear();
+    stopComputerUseHelper.mockClear();
+  });
+
+  it('stops without asking for permission first', async () => {
+    // Needing a prompt to stop something already holding the mouse is the one
+    // place a prompt must not appear, so this command is outside the capability
+    // table and must not consult it.
+    getPermissionState.mockReturnValue('prompt');
+
+    const result = await dispatch(window, 'computer_stop', {});
+
+    expect(result.ok).toBe(true);
+    expect(stopComputerUseHelper).toHaveBeenCalledOnce();
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('withdraws the grant so the next step cannot simply restart it', async () => {
+    // Each screen step is independent here: killing the helper alone would let
+    // the very next call spawn a new one and carry on moving the pointer.
+    getPermissionState.mockReturnValue('granted');
+
+    await dispatch(window, 'computer_stop', {});
+
+    expect(revokePermission).toHaveBeenCalledWith('computer.use', { kind: 'global' });
   });
 });
