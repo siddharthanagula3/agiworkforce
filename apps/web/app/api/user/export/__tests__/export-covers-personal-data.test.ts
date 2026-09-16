@@ -35,6 +35,28 @@ describe('the data export covers the personal data the product holds', () => {
     }
   });
 
+  // A right-of-access download is a copy handed to whoever holds the file. A
+  // credential in it stays valid, so no query may select one. Only the select
+  // list is scanned: `from api_keys` names a table, not a column.
+  //
+  // `key_hash` and `auth_header` are in the pattern because they are what this
+  // schema actually calls its two credential columns; a pattern that only knows
+  // the generic names passes the tables it most needs to guard.
+  it('never selects a credential column', () => {
+    const secretColumn =
+      /token|secret|password|key_hash|client_secret|private_key|auth_header|credential/i;
+    for (const query of source.matchAll(/sql: `([\s\S]*?)`/g)) {
+      const sql = query[1] as string;
+      const selectList = /\bselect\b([\s\S]*?)\bfrom\b/i.exec(sql);
+      if (!selectList) continue;
+      for (const column of (selectList[1] as string).split(',')) {
+        expect(column, `export query selects a credential: ${column.trim()}`).not.toMatch(
+          secretColumn,
+        );
+      }
+    }
+  });
+
   it('still covers the categories it already did', () => {
     const sections = exportedSections();
     for (const required of [
@@ -45,6 +67,27 @@ describe('the data export covers the personal data the product holds', () => {
       'project_knowledge_files',
       'memories',
       'artifacts',
+      'user_settings',
+      'user_connectors',
+      'user_custom_connectors',
+      'user_skills',
+      'user_shortcuts',
+      'scheduled_tasks',
+      'support_tickets',
+      'support_ticket_replies',
+      'feedback',
+      'notifications',
+      'message_bookmarks',
+      'message_reactions',
+      'conversation_tags',
+      'chat_folders',
+      'research_reports',
+      'published_artifacts',
+      'consent_records',
+      'data_rights_requests',
+      'search_history',
+      'api_keys',
+      'security_audit_logs',
     ]) {
       expect(sections).toContain(required);
     }
