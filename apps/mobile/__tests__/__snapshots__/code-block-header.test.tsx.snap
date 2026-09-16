@@ -32,7 +32,7 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
         style={
           [
             {
-              "color": "rgba(17, 17, 17, 0.48)",
+              "color": "rgba(17, 17, 17, 0.62)",
               "flexShrink": 1,
               "fontSize": 11,
               "fontWeight": "500",
@@ -96,7 +96,7 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
           meetOrSlice={0}
           minX={0}
           minY={0}
-          stroke="rgba(17, 17, 17, 0.48)"
+          stroke="rgba(17, 17, 17, 0.62)"
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={2}
@@ -131,7 +131,7 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
             }
             stroke={
               {
-                "payload": 2047938833,
+                "payload": 2651918609,
                 "type": 0,
               }
             }
@@ -155,7 +155,7 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
               ry="2"
               stroke={
                 {
-                  "payload": 2047938833,
+                  "payload": 2651918609,
                   "type": 0,
                 }
               }
@@ -180,7 +180,7 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
               }
               stroke={
                 {
-                  "payload": 2047938833,
+                  "payload": 2651918609,
                   "type": 0,
                 }
               }
@@ -268,7 +268,7 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
         style={
           [
             {
-              "color": "rgba(17, 17, 17, 0.48)",
+              "color": "rgba(17, 17, 17, 0.62)",
               "flexShrink": 1,
               "fontSize": 11,
               "fontWeight": "500",
@@ -332,7 +332,7 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
           meetOrSlice={0}
           minX={0}
           minY={0}
-          stroke="rgba(17, 17, 17, 0.48)"
+          stroke="rgba(17, 17, 17, 0.62)"
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={2}
@@ -367,7 +367,7 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
             }
             stroke={
               {
-                "payload": 2047938833,
+                "payload": 2651918609,
                 "type": 0,
               }
             }
@@ -391,7 +391,7 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
               ry="2"
               stroke={
                 {
-                  "payload": 2047938833,
+                  "payload": 2651918609,
                   "type": 0,
                 }
               }
@@ -416,7 +416,7 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
               }
               stroke={
                 {
-                  "payload": 2047938833,
+                  "payload": 2651918609,
                   "type": 0,
                 }
               }
