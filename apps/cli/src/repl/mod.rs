@@ -756,6 +756,7 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
     let opts = crate::tools::ToolExecOptions {
         require_confirmation: !session.skip_permissions,
         auto_approve_safe: session.auto_approve_safe,
+        auto_approve_edits: session.permission_mode.auto_approves_edits(),
         quiet: session.quiet,
         approval_callback: None,
         privacy_mode: session.privacy_mode,
@@ -810,6 +811,7 @@ async fn run_advisor_question(
     let opts = crate::tools::ToolExecOptions {
         require_confirmation: false,
         auto_approve_safe: true,
+        auto_approve_edits: false,
         quiet: false,
         approval_callback: None,
         privacy_mode,

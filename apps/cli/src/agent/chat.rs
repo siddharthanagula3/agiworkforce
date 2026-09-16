@@ -1900,6 +1900,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         let opts = crate::tools::ToolExecOptions {
             require_confirmation: !self.session.skip_permissions,
             auto_approve_safe: self.session.auto_approve_safe,
+            auto_approve_edits: self.session.permission_mode.auto_approves_edits(),
             quiet: self.session.quiet,
             approval_callback: self
                 .session
@@ -2058,6 +2059,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             let opts = crate::tools::ToolExecOptions {
                 require_confirmation: !self.session.skip_permissions,
                 auto_approve_safe: self.session.auto_approve_safe,
+                auto_approve_edits: self.session.permission_mode.auto_approves_edits(),
                 quiet: self.session.quiet,
                 approval_callback: self
                     .session
