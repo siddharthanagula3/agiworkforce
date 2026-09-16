@@ -1,10 +1,15 @@
-import type { HostBridge, HostNotifyRequest } from '@agiworkforce/local-runtime-contract';
+import type {
+  HostBridge,
+  HostNotifyRequest,
+  HostShell,
+} from '@agiworkforce/local-runtime-contract';
 
 export type {
   DesktopDeepLink,
   DesktopDeepLinkTarget,
   HostBridge,
   HostNotifyRequest,
+  HostShell,
 } from '@agiworkforce/local-runtime-contract';
 export {
   DESKTOP_DEEP_LINK_SCHEME,
@@ -15,6 +20,12 @@ export {
 } from '@agiworkforce/local-runtime-contract';
 
 export type ElectronNotifyRequest = HostNotifyRequest;
+
+/**
+ * What the preload answers `shell` with. A hosted page reads it to decide
+ * whether this shell has a Local mode; AGI Cloud is Electron and has none.
+ */
+export const ELECTRON_HOST_SHELL: HostShell = 'electron';
 
 export const ELECTRON_BRIDGE_COMMANDS = [
   'account_clerk_native_request',

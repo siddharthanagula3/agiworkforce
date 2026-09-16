@@ -1,4 +1,4 @@
-export { isDesktopHost, useDesktopHost } from './lib/host';
+export { isDesktopHost, isLocalModeHost, useDesktopHost, useLocalModeHost } from './lib/host';
 export { PRODUCT_HOME_PATH, conversationDeepLink, deepLinkDestination } from './lib/deep-links';
 export { notifyJobComplete, type DesktopJobNotification } from './lib/notify';
 export {

@@ -15,6 +15,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import {
   ELECTRON_BRIDGE_COMMANDS,
+  ELECTRON_HOST_SHELL,
   ELECTRON_IPC_CHANNELS,
   type ElectronDialogRequest,
   type ElectronHostBridge,
@@ -31,6 +32,7 @@ const bridgeCommands = new Set<string>(ELECTRON_BRIDGE_COMMANDS);
 
 const agiHost: ElectronHostBridge = {
   platform: `electron-${process.platform}`,
+  shell: ELECTRON_HOST_SHELL,
   appVersion: argValue('--agi-app-version='),
 
   handles(command: string): boolean {
@@ -116,9 +118,7 @@ const agiHost: ElectronHostBridge = {
 
   async dialog(request: ElectronDialogRequest): Promise<string | boolean | null> {
     return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.dialog, request)) as
-      | string
-      | boolean
-      | null;
+      string | boolean | null;
   },
 
   async notify(request: ElectronNotifyRequest): Promise<void> {

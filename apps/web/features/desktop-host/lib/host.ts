@@ -1,7 +1,11 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { getHostBridge, type HostBridge } from '@agiworkforce/local-runtime-contract';
+import {
+  getHostBridge,
+  hostHasLocalMode,
+  type HostBridge,
+} from '@agiworkforce/local-runtime-contract';
 
 function subscribe(): () => void {
   return () => undefined;
@@ -29,4 +33,20 @@ export function useDesktopHost(): HostBridge | null {
 
 export function isDesktopHost(): boolean {
   return getHostBridge() !== null;
+}
+
+/**
+ * The bridge, but only from a shell that has a Local mode.
+ *
+ * Every on-device surface hangs off this rather than off `useDesktopHost`:
+ * AGI Cloud is Electron and answers in the cloud, so under it there is no
+ * model to list, no server address to edit and no local runtime to grant.
+ */
+export function useLocalModeHost(): HostBridge | null {
+  const host = useDesktopHost();
+  return hostHasLocalMode(host) ? host : null;
+}
+
+export function isLocalModeHost(): boolean {
+  return hostHasLocalMode(getHostBridge());
 }

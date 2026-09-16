@@ -12,7 +12,7 @@ import {
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
-import { useDesktopHost } from '../lib/host';
+import { useDesktopHost, useLocalModeHost } from '../lib/host';
 import {
   listWorkspaceRoots,
   pickWorkspaceRoot,
@@ -77,6 +77,7 @@ function messageFor(error: unknown, fallback: string): string | null {
 }
 
 function LocalModelsPanel() {
+  const localHost = useLocalModeHost();
   const models = useLocalModels(true);
   const [settings, setSettings] = useState<LocalModelSettings | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<LocalModelServerId, string>>>({});
@@ -107,6 +108,8 @@ function LocalModelsPanel() {
     },
     [models],
   );
+
+  if (!localHost) return null;
 
   return (
     <div className="flex flex-col gap-3 border-t border-border/40 pt-4">

@@ -1,6 +1,7 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  LOCAL_INFERENCE_COMMANDS,
   LocalInferenceRefused,
   ShellCommandRefused,
   assertLocalTurnCarriesNoAttachments,
@@ -326,16 +327,6 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   clipboard_read: {
     capability: 'clipboard.read',
     reason: 'Attaching the clipboard copies whatever it holds right now into this conversation.',
-  },
-  local_model_list: {
-    capability: 'local.inference',
-    reason:
-      'Listing them reads which models you have pulled with Ollama or LM Studio. Nothing is sent anywhere.',
-  },
-  local_chat_start: {
-    capability: 'local.inference',
-    reason:
-      'The conversation is answered by a model running on this Mac. Nothing in it reaches AGI Cloud or any provider.',
   },
   computer_screenshot: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_zoom: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
@@ -814,8 +805,20 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
 }
 
 /**
+ * AGI Cloud is the Electron shell, and D-2026-09-15-04 makes it Cloud-only, so
+ * the shell refuses on-device inference rather than only hiding it: a hidden
+ * control over a live backend still leaves the capability reachable by
+ * anything that can reach the bridge.
+ */
+const LOCAL_INFERENCE_UNSUPPORTED =
+  'AGI Cloud answers every conversation in the cloud. Models running on this Mac are not one of its runtimes.';
+
+const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
+
+/**
  * The single entry point from IPC into anything privileged. Order matters:
- * classify, resolve the workspace, check permission, then call the service.
+ * refuse what this shell does not do, classify, resolve the workspace, check
+ * permission, then call the service.
  */
 export async function dispatch(
   window: BrowserWindow | null,
@@ -825,6 +828,10 @@ export async function dispatch(
   const args: Args = rawArgs ?? {};
 
   try {
+    if (localInferenceCommands.has(command)) {
+      return runtimeFailure('unsupported-platform', LOCAL_INFERENCE_UNSUPPORTED);
+    }
+
     if (isBrowserCommand(command)) {
       return await runBrowserCommand(window, command, args);
     }

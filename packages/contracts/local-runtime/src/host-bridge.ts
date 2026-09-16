@@ -251,8 +251,15 @@ export interface HostUpdateAvailability {
  * surface and a check reachable solely from the tray is one most users never
  * find.
  */
+export type HostShell = 'tauri' | 'electron';
+
 export interface HostBridge {
   readonly platform: string;
+  /**
+   * Which shell hosts the page. `platform` names the operating system and
+   * cannot answer this: both shells run on all three.
+   */
+  readonly shell: HostShell;
   readonly appVersion: string;
   invokeRuntime<T = unknown>(
     command: string,
@@ -283,4 +290,17 @@ declare global {
 export function getHostBridge(): HostBridge | null {
   if (typeof window === 'undefined') return null;
   return window.agiHost ?? null;
+}
+
+/**
+ * Whether this shell has a Local mode at all.
+ *
+ * AGI Cloud is the Electron shell and answers every turn in the cloud
+ * (D-2026-09-15-04), so it offers no on-device model, no server address and no
+ * local provider credential. A bridge that names no shell is an older build
+ * than this page and is read as Cloud-only: guessing the other way renders the
+ * one surface that decision forbids.
+ */
+export function hostHasLocalMode(bridge: HostBridge | null | undefined): boolean {
+  return bridge?.shell === 'tauri';
 }
