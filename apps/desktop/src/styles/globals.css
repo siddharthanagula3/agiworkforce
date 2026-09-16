@@ -1297,3 +1297,32 @@
     color: CanvasText !important;
   }
 }
+
+/*
+ * OS reduced motion.
+ *
+ * The two blocks above answer it for one scroll helper and the message-bubble
+ * entrance. Everything else in this shell animates through Tailwind utilities,
+ * so a per-class answer leaves the rest at full speed and a new animation
+ * escapes silently. One blanket rule is the only shape that cannot rot.
+ *
+ * `scroll-behavior` is included because a smooth-scrolled jump is motion too.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* A spinner is the signal that a wait is in progress, so reduced motion slows
+     it rather than stopping it: a frozen spinner reads as a hung screen, which
+     is a worse answer than a slow one. This matches apps/web/app/globals.css. */
+  .animate-spin {
+    animation-duration: 3s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
