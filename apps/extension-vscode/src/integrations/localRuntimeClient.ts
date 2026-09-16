@@ -841,6 +841,15 @@ export class LocalRuntimeClient {
     ) as ThreadReadResponse;
   }
 
+  async forkThread(threadId: string, title?: string): Promise<ThreadSummary> {
+    const connection = await this.readyConnection();
+    const result = await connection.request('thread/fork', {
+      threadId,
+      ...(title !== undefined ? { title } : {}),
+    });
+    return threadStartResponseSchema.parse(result).thread as ThreadSummary;
+  }
+
   async archiveThread(threadId: string): Promise<void> {
     const connection = await this.readyConnection();
     await connection.request('thread/archive', { threadId });

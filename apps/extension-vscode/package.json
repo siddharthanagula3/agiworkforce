@@ -154,6 +154,11 @@
         "icon": "$(comment)"
       },
       {
+        "command": "agi-workforce.forkConversation",
+        "title": "AGI Workforce: Fork Conversation",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "agi-workforce.deleteConversation",
         "title": "AGI Workforce: Delete Conversation",
         "icon": "$(trash)"
@@ -1021,7 +1026,7 @@
         "agiWorkforce.agent.planMode": {
           "type": "boolean",
           "default": false,
-          "deprecationMessage": "Use AGI Workforce: Open Settings and choose Agent mode → Plan instead.",
+          "deprecationMessage": "Use AGI Workforce: Open Settings and choose Agent mode \u2192 Plan instead.",
           "description": "Deprecated, use agiWorkforce.agent.mode instead. When true, maps to agent.mode = 'plan'."
         },
         "agiWorkforce.agent.mode": {

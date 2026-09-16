@@ -104,6 +104,51 @@ describe('ConversationTreeProvider', () => {
     expect(changed).toHaveBeenCalledOnce();
   });
 
+  it('forks through the owning runtime and routes the copy to the same one', async () => {
+    // Fork leaves the original where it is, so the copy has to inherit its
+    // runtime: a fork the tree cannot route is a session nothing can resume.
+    const runtime = {
+      listThreads: vi.fn().mockResolvedValue({
+        threads: [thread('one', '2026-07-14T00:00:00Z', '/workspace/a')],
+      }),
+      forkThread: vi
+        .fn()
+        .mockResolvedValue(thread('one-fork', '2026-07-14T00:01:00Z', '/workspace/a')),
+      readThread: vi.fn().mockResolvedValue({
+        thread: thread('one-fork', '2026-07-14T00:01:00Z', '/workspace/a'),
+        messages: [],
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
+    const changed = vi.fn();
+    provider.onDidChangeTreeData(changed);
+    await provider.getThreads();
+
+    await expect(provider.forkThread('one', 'A copy')).resolves.toBe('one-fork');
+    expect(runtime.forkThread).toHaveBeenCalledWith('one', 'A copy');
+    expect(changed).toHaveBeenCalledOnce();
+
+    await provider.readThread('one-fork');
+    expect(runtime.readThread).toHaveBeenCalledWith('one-fork');
+  });
+
+  it('reports a fork of a session it cannot route rather than inventing one', async () => {
+    const runtime = {
+      listThreads: vi.fn().mockResolvedValue({ threads: [] }),
+      forkThread: vi.fn(),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
+
+    await expect(provider.forkThread('missing')).resolves.toBeNull();
+    expect(runtime.forkThread).not.toHaveBeenCalled();
+  });
+
   it('does not retain routing entries for threads removed from runtime history', async () => {
     const runtime = {
       listThreads: vi

@@ -549,6 +549,25 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await act(workspace, artifact);
     });
   };
+  /**
+   * Both session commands take a tree item, and no tree view is registered, so
+   * the command palette was their only entry point and reached them with no
+   * argument. Archiving threw on the missing title; forking would have done the
+   * same. Asked for here instead, which also makes the palette the working
+   * surface it already appeared to be.
+   */
+  const pickDeveloperSession = async (placeHolder: string) => {
+    const threads = await conversationTreeProvider.getThreads();
+    if (threads.length === 0) {
+      vscode.window.showInformationMessage('AGI Workforce: No developer sessions in this window.');
+      return undefined;
+    }
+    const picked = await vscode.window.showQuickPick(
+      threads.map((thread) => ({ label: thread.title, description: thread.id, thread })),
+      { placeHolder, ignoreFocusOut: true },
+    );
+    return picked?.thread;
+  };
   const revealFirstPartyChat = async (): Promise<void> => {
     try {
       await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
@@ -1009,18 +1028,41 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await sidebarProvider.resumeConversation(id);
     }),
 
-    register('agi-workforce.deleteConversation', async (item: ConversationTreeItem) => {
+    register('agi-workforce.deleteConversation', async (item?: ConversationTreeItem) => {
+      const thread = item?.thread ?? (await pickDeveloperSession('Archive which session?'));
+      if (thread === undefined) return;
       const choice = await vscode.window.showWarningMessage(
-        `Archive developer session "${item.thread.title}"?`,
+        `Archive developer session "${thread.title}"?`,
         { modal: true },
         'Archive',
       );
       if (choice === 'Archive') {
-        const archived = await conversationTreeProvider.archiveThread(item.thread.id);
+        const archived = await conversationTreeProvider.archiveThread(thread.id);
         if (!archived) {
           vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
         }
       }
+    }),
+
+    register('agi-workforce.forkConversation', async (item?: ConversationTreeItem) => {
+      const thread = item?.thread ?? (await pickDeveloperSession('Fork which session?'));
+      if (thread === undefined) return;
+      const title = await vscode.window.showInputBox({
+        prompt: 'Name for the forked session',
+        value: `${thread.title} (fork)`,
+        ignoreFocusOut: true,
+      });
+      if (title === undefined) return;
+      const forkedId = await conversationTreeProvider.forkThread(
+        thread.id,
+        title.trim() === '' ? undefined : title.trim(),
+      );
+      if (forkedId === null) {
+        vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
+        return;
+      }
+      await revealFirstPartyChat();
+      await sidebarProvider.resumeConversation(forkedId);
     }),
 
     register('agi-workforce.refreshConversations', () => {
