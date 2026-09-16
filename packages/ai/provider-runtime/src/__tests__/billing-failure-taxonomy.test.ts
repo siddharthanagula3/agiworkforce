@@ -142,19 +142,28 @@ describe('a tier entitlement refusal is not a credential failure', () => {
 });
 
 describe('quota exhaustion is distinct from a short rate limit', () => {
-  it('classifies OpenAI insufficient_quota as quota_exhausted, not rate_limit', () => {
-    const error = Object.assign(new Error('You exceeded your current quota'), {
-      status: 429,
-      error: { type: 'insufficient_quota' },
-    });
+  it('classifies OpenAI insufficient_quota as billing_exhausted, never a fallbackable quota', () => {
+    // `insufficient_quota` reads like a window and is not one: OpenAI sends it
+    // when the account is out of credit. Routing around it spends the next
+    // provider's money on a problem only the operator can fix, and hides the
+    // reason the request failed behind whichever provider failed last.
+    const error = Object.assign(
+      new Error('You exceeded your current quota, please check your plan and billing details'),
+      { status: 429, error: { type: 'insufficient_quota' } },
+    );
     const classified = classifyError(error);
 
-    expect(classified.category).toBe('quota_exhausted');
-    expect(classified.code).toBe('insufficient_quota_429');
-    // Retrying the same spent window is pointless...
+    expect(classified.category).toBe('billing_exhausted');
     expect(classified.retryable).toBe(false);
-    // ...but a different route with its own quota is a legitimate answer.
-    expect(classified.fallbackable).toBe(true);
+    expect(classified.fallbackable).toBe(false);
+  });
+
+  it('classifies a hard spend limit as billing_exhausted', () => {
+    const error = Object.assign(new Error('Billing limit reached'), {
+      status: 429,
+      error: { code: 'billing_hard_limit_reached' },
+    });
+    expect(classifyError(error).category).toBe('billing_exhausted');
   });
 
   it('reads the provider-native code from error.code as well as error.type', () => {
@@ -162,15 +171,28 @@ describe('quota exhaustion is distinct from a short rate limit', () => {
       status: 429,
       code: 'insufficient_quota',
     });
-    expect(classifyError(error).category).toBe('quota_exhausted');
+    expect(classifyError(error).category).toBe('billing_exhausted');
   });
 
-  it("recognises Google's RESOURCE_EXHAUSTED status", () => {
+  it('still classifies an unfunded account when only the message survives', () => {
+    // Across a stream-chunk boundary the structured fields are gone and the
+    // error is rebuilt from its text alone.
+    const error = Object.assign(
+      new Error('Error code: 429 - insufficient_quota: You exceeded your current quota'),
+      { status: 429 },
+    );
+    expect(classifyError(error).category).toBe('billing_exhausted');
+  });
+
+  it("recognises Google's RESOURCE_EXHAUSTED status as a spent window, not a billing state", () => {
     const error = Object.assign(new Error('Resource has been exhausted'), {
       status: 429,
       error: { status: 'RESOURCE_EXHAUSTED' },
     });
-    expect(classifyError(error).category).toBe('quota_exhausted');
+    const classified = classifyError(error);
+    expect(classified.category).toBe('quota_exhausted');
+    // A window resets, and another provider has its own: this one may fall back.
+    expect(classified.fallbackable).toBe(true);
   });
 
   it('keeps a plain 429 as a retryable short rate limit', () => {

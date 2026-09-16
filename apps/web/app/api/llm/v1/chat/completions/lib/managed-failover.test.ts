@@ -119,7 +119,13 @@ describe('rotation eligibility (gateway parity)', () => {
     ['server_overload (529)', httpError(529, '{"type":"overloaded_error"}')],
     ['rate limit (429)', httpError(429, 'rate limit exceeded')],
     [
-      'quota exhausted (429 insufficient_quota)',
+      'quota exhausted (429, spent window)',
+      httpError(429, 'resource_exhausted: quota exceeded for this window'),
+    ],
+    [
+      // Rotating at all is the narrow `isBillingRotationAllowed` exception: an
+      // Auto request the user never aimed at the unfunded route may cross once.
+      'billing exhausted (429 insufficient_quota)',
       httpError(429, 'insufficient_quota: exceeded your current quota'),
     ],
     [
@@ -214,17 +220,30 @@ describe('rotation eligibility (gateway parity)', () => {
   it('leaves an explicit selection on a quota-exhausted answer for its own normalized error', () => {
     const processed = makeProcessed({ fallbackModels: [] });
     const attempt = makePlan(processed).next(
-      httpError(429, 'insufficient_quota: exceeded your current quota'),
+      httpError(429, 'resource_exhausted: quota exceeded for this window'),
     );
     expect(attempt).toBeNull();
   });
 
   it('walks the whole auto ladder once on quota exhaustion, then stops', () => {
     const plan = makePlan(makeProcessed());
-    const quotaExhausted = () => httpError(429, 'insufficient_quota: exceeded your current quota');
+    const quotaExhausted = () =>
+      httpError(429, 'resource_exhausted: quota exceeded for this window');
     expect(plan.next(quotaExhausted())?.model).toBe('candidate-a');
     expect(plan.next(quotaExhausted())?.model).toBe('candidate-b');
     expect(plan.next(quotaExhausted())).toBeNull();
+  });
+
+  it('stops after one crossing when the account is unfunded, rather than walking the ladder', () => {
+    // `insufficient_quota` reads like a spent window and is not one: OpenAI
+    // sends it when the account is out of credit. Walking the ladder on it is
+    // exactly the unbounded shopping of an unfunded account that
+    // `NEVER_ROTATE_CATEGORIES` exists to forbid; the single crossing that does
+    // happen is the narrow `isBillingRotationAllowed` exception.
+    const plan = makePlan(makeProcessed());
+    const unfunded = () => httpError(429, 'insufficient_quota: exceeded your current quota');
+    expect(plan.next(unfunded())?.model).toBe('candidate-a');
+    expect(plan.next(unfunded())).toBeNull();
   });
 
   it('does not rotate a tool-bearing request across providers', () => {

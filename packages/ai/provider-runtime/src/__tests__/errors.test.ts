@@ -287,12 +287,13 @@ describe('classifyError', () => {
     expect(c.retryable).toBe(false);
   });
 
-  it('classifies a 429 with an insufficient_quota code as quota_exhausted, not rate_limit', () => {
+  it('classifies a 429 with an insufficient_quota code as billing_exhausted, not rate_limit', () => {
     const err = { status: 429, code: 'insufficient_quota', message: 'You exceeded your quota' };
     const c = classifyError(err);
-    expect(c.category).toBe('quota_exhausted');
+    expect(c.category).toBe('billing_exhausted');
     expect(c.retryable).toBe(false);
-    expect(c.fallbackable).toBe(true);
+    // An unfunded account is an operator problem; another provider cannot fix it.
+    expect(c.fallbackable).toBe(false);
   });
 
   it('classifies a 429 whose status is RESOURCE_EXHAUSTED as quota_exhausted', () => {
