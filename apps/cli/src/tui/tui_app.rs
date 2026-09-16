@@ -1093,7 +1093,34 @@ fn install_signal_restore_hook() {
     });
 }
 
-#[cfg(not(unix))]
+/// The Windows equivalents: closing the console window and a system shutdown
+/// both end the process without unwinding, exactly as a signal does elsewhere.
+#[cfg(windows)]
+fn install_signal_restore_hook() {
+    use tokio::signal::windows::{ctrl_break, ctrl_close, ctrl_shutdown};
+
+    static INSTALLED: std::sync::Once = std::sync::Once::new();
+    INSTALLED.call_once(|| {
+        macro_rules! on_event {
+            ($make:expr, $status:expr) => {
+                if let Ok(mut stream) = $make {
+                    tokio::spawn(async move {
+                        if stream.recv().await.is_some() {
+                            restore_terminal_state();
+                            crate::process_tree::kill_all_process_trees();
+                            std::process::exit($status);
+                        }
+                    });
+                }
+            };
+        }
+        on_event!(ctrl_close(), 143);
+        on_event!(ctrl_shutdown(), 143);
+        on_event!(ctrl_break(), 130);
+    });
+}
+
+#[cfg(not(any(unix, windows)))]
 fn install_signal_restore_hook() {}
 
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
