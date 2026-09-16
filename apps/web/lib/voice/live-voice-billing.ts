@@ -37,6 +37,11 @@ export interface LiveSessionFailure {
   message: string;
 }
 
+const PROVIDER_ACCOUNT_EXHAUSTED_CODES = new Set([
+  'credit_balance_exhausted',
+  'insufficient_quota',
+]);
+
 export function describeLiveSessionFailure(
   status: number,
   upstreamCode: string,
@@ -46,6 +51,13 @@ export function describeLiveSessionFailure(
       status: 403,
       code: 'live_voice_access_denied',
       message: `The provider refused the live voice model for this project (${upstreamCode}).`,
+    };
+  }
+  if (status === 429 && PROVIDER_ACCOUNT_EXHAUSTED_CODES.has(upstreamCode)) {
+    return {
+      status: 503,
+      code: 'live_voice_unavailable',
+      message: 'Live voice is unavailable right now.',
     };
   }
   if (status === 429) {

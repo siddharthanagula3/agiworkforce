@@ -151,6 +151,30 @@ describe('useChatStore, messages', () => {
     expect(useChatStore.getState().messagesByConversation['conv-x']?.[1]?.id).toBe('m2');
   });
 
+  it('addMessage replaces a message that already has the same id instead of duplicating it', () => {
+    const first = makeMessage({
+      id: 'turn-1',
+      content: 'Four.',
+      createdAt: '2026-09-16T00:00:00.000Z',
+    });
+    useChatStore.getState().addMessage('conv-x', first);
+    useChatStore.getState().addMessage(
+      'conv-x',
+      makeMessage({
+        id: 'turn-1',
+        content: 'Four. Goodbye.',
+        createdAt: '2026-09-16T00:00:05.000Z',
+      }),
+    );
+    const msgs = useChatStore.getState().messagesByConversation['conv-x']!;
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatchObject({
+      id: 'turn-1',
+      content: 'Four. Goodbye.',
+      createdAt: first.createdAt,
+    });
+  });
+
   it('addMessage keeps separate buckets for different conversationIds', () => {
     useChatStore.getState().addMessage('conv-a', makeMessage({ id: 'ma' }));
     useChatStore.getState().addMessage('conv-b', makeMessage({ id: 'mb' }));

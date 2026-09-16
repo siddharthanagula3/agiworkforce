@@ -12,6 +12,7 @@ const ASSISTANT_AUDIO_LEVEL = 0.03;
 const ASSISTANT_AUDIO_HOLD_MS = 350;
 const ASSISTANT_TURN_SETTLE_MS = 1_500;
 const OVERLAP_GRACE_MS = 800;
+const ASSISTANT_TRANSCRIPT_IDLE_MS = 2_500;
 const CLIENT_EVENT_PREFIX = 'agi';
 
 export const LIVE_SESSION_MESSAGE = {
@@ -158,6 +159,7 @@ export class LiveVoiceSession {
   private userTurn: { id: string; text: string; lastDeltaAt: number } | null = null;
   private assistantTurn: { id: string; text: string; lastDeltaAt: number } | null = null;
   private overlapTimer: number | null = null;
+  private idleTimer: number | null = null;
   private readonly pendingDelegations = new Set<string>();
   private closeResolve: (() => void) | null = null;
   private usageSeconds: number | null = null;
@@ -304,6 +306,7 @@ export class LiveVoiceSession {
 
   private send(event: Record<string, unknown>): void {
     if (this.channel.readyState !== 'open') return;
+    if (!this.started && event['type'] !== 'session.close') return;
     this.clientEventSeq += 1;
     this.channel.send(
       JSON.stringify({ event_id: `${CLIENT_EVENT_PREFIX}_${this.clientEventSeq}`, ...event }),
@@ -469,6 +472,15 @@ export class LiveVoiceSession {
       final: false,
     });
     this.scheduleOverlapSettle();
+    this.scheduleAssistantIdle();
+  }
+
+  private scheduleAssistantIdle(): void {
+    if (this.idleTimer !== null) window.clearTimeout(this.idleTimer);
+    this.idleTimer = window.setTimeout(() => {
+      this.idleTimer = null;
+      if (!this.speaking) this.finalizeAssistant();
+    }, ASSISTANT_TRANSCRIPT_IDLE_MS);
   }
 
   private scheduleOverlapSettle(): void {
@@ -498,6 +510,8 @@ export class LiveVoiceSession {
   }
 
   private finalizeAssistant(): void {
+    if (this.idleTimer !== null) window.clearTimeout(this.idleTimer);
+    this.idleTimer = null;
     const turn = this.assistantTurn;
     this.assistantTurn = null;
     if (!turn || !turn.text.trim()) return;
@@ -524,9 +538,11 @@ export class LiveVoiceSession {
     if (this.levelTimer !== null) window.clearInterval(this.levelTimer);
     if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);
     if (this.overlapTimer !== null) window.clearTimeout(this.overlapTimer);
+    if (this.idleTimer !== null) window.clearTimeout(this.idleTimer);
     this.levelTimer = null;
     this.settleTimer = null;
     this.overlapTimer = null;
+    this.idleTimer = null;
     this.clearDisconnectTimer();
   }
 }

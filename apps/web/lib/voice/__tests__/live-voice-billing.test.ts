@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 
 import {
+  describeLiveSessionFailure,
   LIVE_SESSION_CENTS_PER_MINUTE,
   liveSessionCostCents,
   liveSessionProviderCostCents,
@@ -49,5 +50,24 @@ describe('live voice session pricing', () => {
     // session rate, and the provider cost does not fall back to the constant.
     expect(liveSessionCostCents(SECONDS_PER_MINUTE)).toBe(LIVE_SESSION_CENTS_PER_MINUTE);
     expect(liveSessionProviderCostCents(SECONDS_PER_MINUTE, null)).toBeNull();
+  });
+});
+
+describe('live voice session failures', () => {
+  it('reports a provider account out of credit as unavailable rather than busy', () => {
+    for (const code of ['credit_balance_exhausted', 'insufficient_quota']) {
+      expect(describeLiveSessionFailure(429, code)).toEqual({
+        status: 503,
+        code: 'live_voice_unavailable',
+        message: 'Live voice is unavailable right now.',
+      });
+    }
+  });
+
+  it('keeps a plain rate limit on the busy message', () => {
+    expect(describeLiveSessionFailure(429, 'rate_limit_exceeded')).toMatchObject({
+      status: 429,
+      code: 'live_voice_busy',
+    });
   });
 });

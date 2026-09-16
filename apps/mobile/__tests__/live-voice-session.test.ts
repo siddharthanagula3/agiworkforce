@@ -227,6 +227,10 @@ describe('LiveVoiceSession', () => {
 
   it('mutes the microphone track and tells the session', async () => {
     const { session } = await startSession();
+    session.setMuted(true);
+    expect(mockState.tracks[0]?.enabled).toBe(false);
+    expect(mockState.peer.channel.sent).toEqual([]);
+    mockState.peer.channel.receive({ type: 'session.started' });
 
     session.setMuted(true);
     expect(mockState.tracks[0]?.enabled).toBe(false);

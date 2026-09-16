@@ -233,8 +233,42 @@ describe('LiveVoiceSession', () => {
     expect(cb.onTranscript).not.toHaveBeenCalled();
   });
 
+  it('finalizes an assistant turn from transcript silence when remote audio is never detected', async () => {
+    vi.useFakeTimers();
+    try {
+      const { cb } = await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+      peer.channel.receive({ type: 'session.output_transcript.delta', delta: 'Four.' });
+      peer.channel.receive({ type: 'session.output_transcript.delta', delta: ' Goodbye.' });
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(cb.turns.filter((turn) => turn.final)).toEqual([]);
+
+      await vi.advanceTimersByTimeAsync(600);
+      const finals = cb.turns.filter((turn) => turn.final);
+      expect(finals.map((turn) => [turn.role, turn.text])).toEqual([
+        ['assistant', 'Four. Goodbye.'],
+      ]);
+      expect(cb.onSpeaking).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('holds microphone commands until session.started and only mutes the track locally before it', async () => {
+    const { session } = await startSession();
+    session.setMuted(true);
+    expect(tracks[0]!.enabled).toBe(false);
+    expect(peer.channel.sent).toEqual([]);
+
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    session.setMuted(false);
+    expect(tracks[0]!.enabled).toBe(true);
+    expect(peer.channel.sent.at(-1)).toMatchObject({ type: 'session.input_audio.unmute' });
+  });
+
   it('reports usage snapshots and finishes the close handshake before tearing down', async () => {
     const { session, cb } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
     peer.channel.receive({ type: 'session.usage.updated', usage: { seconds: 12 } });
     expect(cb.onUsage).toHaveBeenCalledWith(12);
 

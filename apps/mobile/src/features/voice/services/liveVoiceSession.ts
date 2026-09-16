@@ -275,6 +275,7 @@ export class LiveVoiceSession {
 
   private send(event: Record<string, unknown>): void {
     if (this.channel.readyState !== 'open') return;
+    if (!this.started && event['type'] !== 'session.close') return;
     this.clientEventSeq += 1;
     this.channel.send(
       JSON.stringify({ event_id: `${CLIENT_EVENT_PREFIX}_${this.clientEventSeq}`, ...event }),

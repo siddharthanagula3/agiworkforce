@@ -197,7 +197,7 @@ Official references checked for this PRD include:
 | OpenAI function calling    | https://developers.openai.com/api/docs/guides/function-calling               |
 | OpenAI file inputs         | https://developers.openai.com/api/docs/guides/file-inputs                    |
 | OpenAI background mode     | https://developers.openai.com/api/docs/guides/background                     |
-| OpenAI Realtime/audio      | https://developers.openai.com/api/docs/guides/realtime                       |
+| OpenAI GPT Live voice      | https://developers.openai.com/api/docs/guides/live                           |
 | OpenAI ChatKit             | https://developers.openai.com/api/docs/guides/chatkit                        |
 | Claude Code Desktop        | https://code.claude.com/docs/en/desktop                                      |
 | Claude Code VS Code        | https://code.claude.com/docs/en/vs-code                                      |
