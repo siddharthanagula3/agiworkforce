@@ -268,3 +268,10 @@ export const radii = {
 
 export const cardRadius = radii['2xl'];
 export const sheetRadius = radii['3xl'];
+
+export const notificationLedColors = {
+  critical: '#ef4444',
+  high: '#f59e0b',
+  normal: '#21808d',
+  low: '#21808d',
+} as const;
