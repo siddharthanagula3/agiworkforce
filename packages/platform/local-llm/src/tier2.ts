@@ -63,7 +63,7 @@ function getLLMModuleClass(): LLMModuleStatic | null {
   if (_llmModuleOverride !== null) return _llmModuleOverride;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('react-native-executorch') as { LLMModule?: LLMModuleStatic };
+    const mod = require('react-native-executorch/legacy') as { LLMModule?: LLMModuleStatic };
     return mod.LLMModule ?? null;
   } catch {
     return null;

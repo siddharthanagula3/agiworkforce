@@ -21,7 +21,7 @@ function resolveTier1Status(rawStatus: unknown, available: boolean): Tier1Status
 function hasExecutorchRuntime(): boolean {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('react-native-executorch') as {
+    const mod = require('react-native-executorch/legacy') as {
       LLMModule?: unknown;
     };
     return Boolean(mod.LLMModule);

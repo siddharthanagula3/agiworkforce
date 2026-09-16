@@ -148,7 +148,7 @@ export function buildSurfaces() {
       label: 'Mobile (Expo Router)',
       entries: existingFiles([
         ...listSourceFiles(absolute('apps/mobile/app')),
-        absolute('apps/mobile/index.js'),
+        absolute('apps/mobile/index.ts'),
         absolute('apps/mobile/app.config.js'),
       ]),
       productRoots: [
