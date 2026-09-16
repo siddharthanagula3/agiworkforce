@@ -30,6 +30,7 @@ import {
 import {
   presentChatError,
   presentTurnFailure,
+  type ChatErrorHint,
   type ChatErrorPresentation,
 } from './errorPresentation';
 import { Config, type ComposerFollowUpBehavior } from '../../platform/config';
@@ -124,6 +125,30 @@ const MAX_QUEUED_SENDS = 20;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const PRE_START_EVENT_OVERFLOW_MESSAGE =
   'The local runtime emitted too many events before confirming the turn. AGI interrupted the turn to avoid losing its completion state.';
+
+/**
+ * What the sentences below are, told to the error block rather than left for a
+ * regex to infer. `retryable` means resending the identical turn could
+ * plausibly succeed, so every refusal of a precondition the user has to change
+ * first leaves it false.
+ */
+const PERMISSION_REFUSAL: ChatErrorHint = { category: 'permission' };
+const RUNTIME_REFUSAL: ChatErrorHint = { category: 'runtime' };
+const RUNTIME_FAILURE: ChatErrorHint = { category: 'runtime', retryable: true };
+const RUNTIME_SETUP_REFUSAL: ChatErrorHint = {
+  category: 'runtime',
+  action: { kind: 'open-settings', label: 'Open settings' },
+};
+const PLAN_REFUSAL: ChatErrorHint = {
+  category: 'subscription',
+  action: { kind: 'upgrade-plan', label: 'Upgrade your plan' },
+};
+const MODEL_UNAVAILABLE: ChatErrorHint = {
+  category: 'provider',
+  action: { kind: 'switch-model', label: 'Switch model' },
+};
+
+const MANAGE_TRUST_LABEL = 'Manage Trust';
 
 export type WebviewToExtMessage =
   | {
@@ -1199,7 +1224,10 @@ export class ChatStateManager {
           !this._localModelProviders.has(normalized) &&
           !isModelReachableForTier(normalized, tier)
         ) {
-          this._postError('This model is not available for your current plan or provider setup.');
+          this._postError(
+            'This model is not available for your current plan or provider setup.',
+            PLAN_REFUSAL,
+          );
           break;
         }
         await vscode.workspace
@@ -1519,7 +1547,10 @@ export class ChatStateManager {
       this._activeTurn === undefined;
 
     if (!vscode.workspace.isTrusted) {
-      return this._rejectResume('Trust this workspace before resuming a developer session.');
+      return this._rejectResume(
+        'Trust this workspace before resuming a developer session.',
+        PERMISSION_REFUSAL,
+      );
     }
     if (this._turnLifecycleActive || this._activeTurn !== undefined) {
       return this._rejectResume(
@@ -1527,34 +1558,50 @@ export class ChatStateManager {
       );
     }
     if (this._conversationTreeProvider === undefined) {
-      return this._rejectResume('Developer session history is unavailable in this chat surface.');
+      return this._rejectResume(
+        'Developer session history is unavailable in this chat surface.',
+        RUNTIME_REFUSAL,
+      );
     }
 
     try {
       const resolved = await this._conversationTreeProvider.resolveThread(threadId);
       if (!isCurrentAttempt()) return false;
       if (resolved === undefined || resolved.response.thread.id !== threadId) {
-        return this._rejectResume('Developer session not found in the open workspace.');
+        return this._rejectResume(
+          'Developer session not found in the open workspace.',
+          RUNTIME_REFUSAL,
+        );
       }
 
       const listed = resolved.response.thread;
       const statusError = resumeStatusError(listed);
-      if (statusError !== undefined) return this._rejectResume(statusError);
-      if (listed.trustMode === 'unknown') return this._rejectResume(unknownBoundaryMessage());
+      if (statusError !== undefined) return this._rejectResume(statusError, RUNTIME_REFUSAL);
+      if (listed.trustMode === 'unknown') {
+        return this._rejectResume(unknownBoundaryMessage(), PERMISSION_REFUSAL);
+      }
 
       const resumed = await resolved.runtime.resumeThread(threadId);
       if (!isCurrentAttempt()) return false;
       if (resumed.id !== threadId) {
-        return this._rejectResume('The local runtime returned a different developer session.');
+        return this._rejectResume(
+          'The local runtime returned a different developer session.',
+          RUNTIME_REFUSAL,
+        );
       }
       if (!isSameWorkspacePath(resolved.cwd, resumed.cwd)) {
         return this._rejectResume(
           'The developer session workspace does not match its owning local runtime.',
+          RUNTIME_REFUSAL,
         );
       }
       const resumedStatusError = resumeStatusError(resumed);
-      if (resumedStatusError !== undefined) return this._rejectResume(resumedStatusError);
-      if (resumed.trustMode === 'unknown') return this._rejectResume(unknownBoundaryMessage());
+      if (resumedStatusError !== undefined) {
+        return this._rejectResume(resumedStatusError, RUNTIME_REFUSAL);
+      }
+      if (resumed.trustMode === 'unknown') {
+        return this._rejectResume(unknownBoundaryMessage(), PERMISSION_REFUSAL);
+      }
 
       let localModels: LocalModelSummary[];
       let localModelDiscoveryFailed = false;
@@ -1593,6 +1640,7 @@ export class ChatStateManager {
       ) {
         return this._rejectResume(
           `This developer session uses model "${persistedModel}", which is not available in the current model catalog or local runtime. Start a new session after selecting an available model.`,
+          MODEL_UNAVAILABLE,
         );
       }
       this._activeModel = model;
@@ -1644,13 +1692,25 @@ export class ChatStateManager {
       if (!isCurrentAttempt()) return false;
       return this._rejectResume(
         error instanceof Error ? error.message : 'The developer session could not be resumed.',
+        RUNTIME_REFUSAL,
       );
     }
   }
 
-  private _rejectResume(message: string): false {
-    this._postError(message);
-    void vscode.window.showWarningMessage(`AGI Workforce: ${message}`);
+  private _rejectResume(message: string, hint?: ChatErrorHint): false {
+    this._postError(message, hint);
+    const warning = `AGI Workforce: ${message}`;
+    // The error block can only post the five `resolveTurnFailure` kinds, none of
+    // which reaches workspace trust, so the warning that already accompanies a
+    // refusal carries the one control that resolves it.
+    if (hint?.category === 'permission' && !vscode.workspace.isTrusted) {
+      void vscode.window.showWarningMessage(warning, MANAGE_TRUST_LABEL).then((choice) => {
+        if (choice !== MANAGE_TRUST_LABEL) return;
+        void vscode.commands.executeCommand('workbench.trust.manage');
+      });
+      return false;
+    }
+    void vscode.window.showWarningMessage(warning);
     return false;
   }
 
@@ -1671,8 +1731,11 @@ export class ChatStateManager {
     return getModelProviderInfo(this._activeModel).providerLabel;
   }
 
-  private _postError(message: string): void {
-    this._post({ type: 'error', payload: presentChatError(message, this._activeProviderLabel()) });
+  private _postError(message: string, hint?: ChatErrorHint): void {
+    this._post({
+      type: 'error',
+      payload: presentChatError(message, this._activeProviderLabel(), hint),
+    });
   }
 
   private _postSessionBoundary(
@@ -1806,7 +1869,10 @@ export class ChatStateManager {
       ) {
         return;
       }
-      this._postError(error instanceof Error ? error.message : 'The approval response failed.');
+      this._postError(
+        error instanceof Error ? error.message : 'The approval response failed.',
+        RUNTIME_FAILURE,
+      );
       await this._interruptActiveTurn();
     }
   }
@@ -1908,7 +1974,10 @@ export class ChatStateManager {
   }
 
   rewindLast(): void {
-    this._postError('Rewind is unavailable until the local runtime exposes turn rollback.');
+    this._postError(
+      'Rewind is unavailable until the local runtime exposes turn rollback.',
+      RUNTIME_REFUSAL,
+    );
   }
 
   private _dropQueuedSends(message: string): void {
@@ -2354,17 +2423,23 @@ export class ChatStateManager {
     const { text, model, browseWeb } = request;
     if (conversationEpoch !== this._conversationEpoch) return false;
     if (!vscode.workspace.isTrusted) {
-      this._postError('Trust this workspace before starting a developer session.');
+      this._postError(
+        'Trust this workspace before starting a developer session.',
+        PERMISSION_REFUSAL,
+      );
       return false;
     }
     const activeWorkspace = await getActiveWorkspaceFolder();
     const cwd = this._thread?.cwd ?? activeWorkspace?.uri.fsPath;
     if (cwd === undefined) {
-      this._postError('Open a workspace folder before starting a developer session.');
+      this._postError(
+        'Open a workspace folder before starting a developer session.',
+        RUNTIME_REFUSAL,
+      );
       return false;
     }
     if (this._localRuntimes === undefined) {
-      this._postError('The AGI local runtime is unavailable.');
+      this._postError('The AGI local runtime is unavailable.', RUNTIME_SETUP_REFUSAL);
       return false;
     }
 
@@ -2372,7 +2447,10 @@ export class ChatStateManager {
       (folder) => folder.uri.fsPath === cwd,
     );
     if (workspaceStillOpen !== true) {
-      this._postError('Reopen this developer session’s workspace before continuing.');
+      this._postError(
+        'Reopen this developer session’s workspace before continuing.',
+        RUNTIME_REFUSAL,
+      );
       return false;
     }
     const workspaceUri = vscode.Uri.file(cwd);
@@ -2394,7 +2472,7 @@ export class ChatStateManager {
     ) {
       const message =
         'AGI will not continue a Local developer session into BYOK, Managed Cloud, or Auto routing without a reviewed handoff. Use New Chat for a fresh provider session, or create a reviewed continuation in the AGI CLI.';
-      this._postError(message);
+      this._postError(message, PERMISSION_REFUSAL);
       this._post({
         type: 'followUpStatus',
         payload: {
@@ -2414,7 +2492,10 @@ export class ChatStateManager {
       !this._localModelProviders.has(requestedModel) &&
       !isModelReachableForTier(requestedModel, tier)
     ) {
-      this._postError('This model is not available for your current plan or provider setup.');
+      this._postError(
+        'This model is not available for your current plan or provider setup.',
+        PLAN_REFUSAL,
+      );
       return false;
     }
     this._activeModel = requestedModel;
@@ -2530,7 +2611,7 @@ export class ChatStateManager {
           preStartOverflowTurnId = event.turnId;
           bufferedTurnEvents.splice(0);
           uiSettled = true;
-          this._postError(PRE_START_EVENT_OVERFLOW_MESSAGE);
+          this._postError(PRE_START_EVENT_OVERFLOW_MESSAGE, RUNTIME_FAILURE);
           if (!terminal) {
             terminal = true;
             resolveCompletion();
@@ -2543,6 +2624,7 @@ export class ChatStateManager {
                 `The overflowing local turn could not be interrupted: ${
                   error instanceof Error ? error.message : 'Cancellation failed.'
                 }`,
+                RUNTIME_REFUSAL,
               );
             });
           return;
@@ -2655,7 +2737,10 @@ export class ChatStateManager {
       }
       return true;
     } catch (error) {
-      this._postError(error instanceof Error ? error.message : 'The AGI local runtime failed.');
+      this._postError(
+        error instanceof Error ? error.message : 'The AGI local runtime failed.',
+        RUNTIME_FAILURE,
+      );
       return false;
     }
   }
@@ -2702,7 +2787,7 @@ export class ChatStateManager {
     complete: () => void,
   ): Promise<void> {
     if (event.type === 'runtime_disconnected') {
-      this._postError(event.error);
+      this._postError(event.error, RUNTIME_REFUSAL);
       complete();
       return;
     }
@@ -2841,7 +2926,12 @@ export class ChatStateManager {
     if (event.failure !== undefined && event.failure !== null) {
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });
     } else {
-      this._postError(event.error ?? 'The local developer turn failed.');
+      // A runtime too old to send `failure` says nothing about the cause, so the
+      // category stays unknown; resending is still the only move the user has.
+      this._postError(event.error ?? 'The local developer turn failed.', {
+        category: 'unknown',
+        retryable: true,
+      });
     }
     complete();
   }
@@ -2865,7 +2955,10 @@ export class ChatStateManager {
       await active.runtime.interruptTurn({ threadId: active.threadId, turnId: active.turnId });
       if (!active.isUiSettled()) this._post({ type: 'done' });
     } catch (error) {
-      this._postError(error instanceof Error ? error.message : 'Cancellation failed.');
+      this._postError(
+        error instanceof Error ? error.message : 'Cancellation failed.',
+        RUNTIME_REFUSAL,
+      );
     } finally {
       active.complete();
     }

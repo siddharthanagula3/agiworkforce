@@ -5,7 +5,10 @@ import {
   ChatStateManager,
   type ExtToWebviewMessage,
 } from '../features/sidebar-webview/ChatStateManager';
-import { presentChatError } from '../features/sidebar-webview/errorPresentation';
+import {
+  presentChatError,
+  presentTurnFailure,
+} from '../features/sidebar-webview/errorPresentation';
 import {
   MODEL_CONTEXT_LIMITS,
   MODEL_PICKER_OPTIONS,
@@ -194,7 +197,11 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: presentChatError('Trust this workspace before starting a developer session.'),
+      payload: {
+        category: 'permission',
+        headline: 'Trust this workspace before starting a developer session.',
+        retryable: false,
+      },
     });
   });
 
@@ -924,8 +931,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     const attachmentAck = [...harness.posted]
       .reverse()
       .find((message) => message.type === 'attachFilesAck') as
-      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
-      | undefined;
+      Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }> | undefined;
     const attachmentId = attachmentAck?.payload.added[0]?.id;
 
     await harness.manager.handleMessage({
@@ -1200,8 +1206,7 @@ describe('ChatStateManager local turn lifecycle', () => {
       },
     });
     const attachmentAck = harness.posted.find((message) => message.type === 'attachFilesAck') as
-      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
-      | undefined;
+      Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }> | undefined;
     const attachmentId = attachmentAck?.payload.added[0]?.id;
     const steer = harness.manager.handleMessage({
       type: 'sendMessage',
@@ -1266,8 +1271,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     const attachmentAck = [...harness.posted]
       .reverse()
       .find((message) => message.type === 'attachFilesAck') as
-      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
-      | undefined;
+      Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }> | undefined;
     const attachmentId = attachmentAck?.payload.added[0]?.id;
     const steer = harness.manager.handleMessage({
       type: 'sendMessage',
@@ -1329,8 +1333,7 @@ describe('ChatStateManager local turn lifecycle', () => {
       },
     });
     const attachmentAck = harness.posted.find((message) => message.type === 'attachFilesAck') as
-      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
-      | undefined;
+      Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }> | undefined;
     const attachmentId = attachmentAck?.payload.added[0]?.id;
     expect(attachmentId).toMatch(/^att-/);
     await harness.manager.handleMessage({
@@ -1487,8 +1490,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     const attachmentAck = [...harness.posted]
       .reverse()
       .find((message) => message.type === 'attachFilesAck') as
-      | Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }>
-      | undefined;
+      Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }> | undefined;
     const attachmentId = attachmentAck?.payload.added[0]?.id;
     const catalogModel = MODEL_PICKER_OPTIONS.find((option) => option.id !== 'auto')!;
     await harness.manager.handleMessage({
@@ -2488,8 +2490,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     const pickerMessage = [...harness.posted]
       .reverse()
       .find((message) => message.type === 'modelPickerData') as
-      | Extract<ExtToWebviewMessage, { type: 'modelPickerData' }>
-      | undefined;
+      Extract<ExtToWebviewMessage, { type: 'modelPickerData' }> | undefined;
     expect(pickerMessage).toBeDefined();
     expect(pickerMessage?.payload.groups).toEqual(
       expect.arrayContaining([
@@ -2528,8 +2529,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     const pickerMessage = [...harness.posted]
       .reverse()
       .find((message) => message.type === 'modelPickerData') as
-      | Extract<ExtToWebviewMessage, { type: 'modelPickerData' }>
-      | undefined;
+      Extract<ExtToWebviewMessage, { type: 'modelPickerData' }> | undefined;
     expect(pickerMessage).toBeDefined();
     expect(pickerMessage?.payload.groups).toEqual(
       expect.arrayContaining([
@@ -2574,9 +2574,12 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: presentChatError(
-        'This model is not available for your current plan or provider setup.',
-      ),
+      payload: {
+        category: 'subscription',
+        headline: 'This model is not available for your current plan or provider setup.',
+        retryable: false,
+        action: { kind: 'upgrade-plan', label: 'Upgrade your plan' },
+      },
     });
     expect(harness.posted).not.toContainEqual({
       type: 'model',
@@ -2600,9 +2603,12 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: presentChatError(
-        'This model is not available for your current plan or provider setup.',
-      ),
+      payload: {
+        category: 'subscription',
+        headline: 'This model is not available for your current plan or provider setup.',
+        retryable: false,
+        action: { kind: 'upgrade-plan', label: 'Upgrade your plan' },
+      },
     });
   });
 
@@ -3005,7 +3011,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: presentChatError('approval channel closed'),
+      payload: { category: 'runtime', headline: 'approval channel closed', retryable: true },
     });
     await send;
   });
@@ -3495,6 +3501,199 @@ describe('ChatStateManager context usage reporting', () => {
     expect(harness.posted).toContainEqual({
       type: 'contextUsage',
       payload: { usedTokens: 1_000 },
+    });
+  });
+});
+
+describe('ChatStateManager error classification', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscode.workspace.isTrusted = true;
+    vscode.window.activeTextEditor = undefined;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+  });
+
+  it('refuses a resume in an untrusted workspace as a permission failure', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'history-1' }),
+        messages: [],
+        transcriptTruncated: false,
+      },
+    });
+    vscode.workspace.isTrusted = false;
+
+    await expect(harness.manager.resumeConversation('history-1')).resolves.toBe(false);
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: {
+        category: 'permission',
+        headline: 'Trust this workspace before resuming a developer session.',
+        retryable: false,
+      },
+    });
+  });
+
+  it('offers the workspace trust control the error block cannot carry', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'history-1' }),
+        messages: [],
+        transcriptTruncated: false,
+      },
+    });
+    vscode.workspace.isTrusted = false;
+    vscode.window.showWarningMessage.mockResolvedValueOnce('Manage Trust');
+
+    await harness.manager.resumeConversation('history-1');
+    await vi.waitFor(() =>
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.trust.manage'),
+    );
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'AGI Workforce: Trust this workspace before resuming a developer session.',
+      'Manage Trust',
+    );
+  });
+
+  it('does not offer trust for a boundary refusal in a workspace that is already trusted', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'legacy-1', trustMode: 'unknown', provider: undefined }),
+        messages: [],
+        transcriptTruncated: false,
+      },
+    });
+
+    await expect(harness.manager.resumeConversation('legacy-1')).resolves.toBe(false);
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: expect.objectContaining({ category: 'permission', retryable: false }),
+    });
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('no verified Local, BYOK, or Managed boundary'),
+    );
+  });
+
+  it('gives a plan refusal an upgrade action rather than an unknown dead end', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    const lockedModel = buildGroupedQuickPickItems('local').find(
+      (item) => item.modelId !== undefined && item.disabled === true,
+    );
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Bypass the picker', model: lockedModel!.modelId! },
+    });
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: {
+        category: 'subscription',
+        headline: 'This model is not available for your current plan or provider setup.',
+        retryable: false,
+        action: { kind: 'upgrade-plan', label: 'Upgrade your plan' },
+      },
+    });
+  });
+
+  it('routes a missing persisted model to the model picker', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'unknown-model-1', model: 'removed-provider-model' }),
+        messages: [],
+        transcriptTruncated: false,
+      },
+    });
+
+    await expect(harness.manager.resumeConversation('unknown-model-1')).resolves.toBe(false);
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: expect.objectContaining({
+        category: 'provider',
+        retryable: false,
+        action: { kind: 'switch-model', label: 'Switch model' },
+      }),
+    });
+  });
+
+  it('names a missing session a runtime failure with nothing to click', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'other-1' }),
+        messages: [],
+        transcriptTruncated: false,
+      },
+    });
+
+    await expect(harness.manager.resumeConversation('missing-1')).resolves.toBe(false);
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: {
+        category: 'runtime',
+        headline: 'Developer session not found in the open workspace.',
+        retryable: false,
+      },
+    });
+  });
+
+  it('leaves an unclassified sentence exactly as it was before call sites could classify', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({ type: 'shareDiagnostics' });
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: presentChatError('No active editor for diagnostics.'),
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: {
+        category: 'unknown',
+        headline: 'No active editor for diagnostics.',
+        retryable: false,
+      },
+    });
+  });
+
+  it('leaves the typed app-server failure path untouched', async () => {
+    const harness = makeHarness();
+    const failure = {
+      code: 'plan_excludes_model',
+      message: 'Cloud chat requires Max plan',
+      provider: 'anthropic',
+      retryable: false,
+      action: 'upgrade_plan',
+    } as const;
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Run tests' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'turn_failed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'failed',
+      response: '',
+      inputTokens: 0,
+      outputTokens: 0,
+      error: 'Cloud chat requires Max plan',
+      failure,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: presentTurnFailure(failure),
     });
   });
 });

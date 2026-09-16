@@ -33,6 +33,17 @@ export interface ChatErrorAction {
   provider?: string;
 }
 
+/**
+ * What a call site that already knows the failure says about it, for the
+ * sentences the extension writes itself. Those match none of the CLI rules
+ * below and would otherwise arrive as `unknown` with nothing to click.
+ */
+export interface ChatErrorHint {
+  category: ChatErrorCategory;
+  retryable?: boolean;
+  action?: ChatErrorAction;
+}
+
 export interface ChatErrorPresentation {
   category: ChatErrorCategory;
   /** One human sentence. Never the provider's own text. */
@@ -217,12 +228,7 @@ export interface TurnFailureShape {
   provider?: string;
   retryable: boolean;
   action:
-    | 'sign_in_provider'
-    | 'sign_in_account'
-    | 'upgrade_plan'
-    | 'open_settings'
-    | 'retry'
-    | 'none';
+    'sign_in_provider' | 'sign_in_account' | 'upgrade_plan' | 'open_settings' | 'retry' | 'none';
 }
 
 const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.freeze({
@@ -319,7 +325,11 @@ export function presentTurnFailure(failure: TurnFailureShape): ChatErrorPresenta
   };
 }
 
-export function presentChatError(raw: string, activeProvider?: string): ChatErrorPresentation {
+export function presentChatError(
+  raw: string,
+  activeProvider?: string,
+  hint?: ChatErrorHint,
+): ChatErrorPresentation {
   const text = raw.trim();
   if (text === '') {
     return { category: 'unknown', headline: "AGI couldn't finish the reply.", retryable: false };
@@ -332,16 +342,24 @@ export function presentChatError(raw: string, activeProvider?: string): ChatErro
     return classified.headline === text ? classified : { ...classified, detail: text };
   }
 
-  // Nothing matched. An extension-authored sentence is already readable and
-  // becomes the headline unchanged; anything machine-shaped goes behind Details
-  // so a raw provider string is never the first thing a user reads.
+  // Nothing matched, so the hint applies. A call site that caught a provider
+  // string still loses to `classify`: what the provider said about itself beats
+  // the situation the call site happened to be in.
+  const category = hint?.category ?? 'unknown';
+  const retryable = hint?.retryable ?? false;
+  const offer = hint?.action === undefined ? {} : { action: hint.action };
+
+  // Anything machine-shaped goes behind Details so a raw provider string is
+  // never the first thing a user reads; an extension-authored sentence is
+  // already readable and becomes the headline unchanged.
   if (text.length > MACHINE_LENGTH || MACHINE_SHAPED.test(text)) {
     return {
-      category: 'unknown',
+      category,
       headline: "AGI couldn't finish the reply.",
       detail: text,
-      retryable: false,
+      retryable,
+      ...offer,
     };
   }
-  return { category: 'unknown', headline: text, retryable: false };
+  return { category, headline: text, retryable, ...offer };
 }
