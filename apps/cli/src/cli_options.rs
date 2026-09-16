@@ -44,6 +44,13 @@ pub(crate) fn persisted_permission_mode(raw: &str) -> Option<PermissionMode> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct EffectivePermissions {
+    pub(crate) mode: PermissionMode,
+    pub(crate) skip_permissions: bool,
+    pub(crate) auto_approve_safe: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CliOptions {
     pub(crate) permission_mode: Option<PermissionMode>,
@@ -110,6 +117,35 @@ impl CliOptions {
                 self.permission_mode,
                 Some(PermissionMode::AcceptEdits) | Some(PermissionMode::DontAsk)
             )
+    }
+
+    /// The permission settings a run actually starts with.
+    ///
+    /// Resolved in one place because it is not one flag but five, and the
+    /// subcommand arms used to each answer a different subset. `agi exec` read
+    /// only `--full-auto`, so `--permission-mode`, `--mode`, `--yes`,
+    /// `--dangerously-skip-permissions` and the persisted config default were
+    /// all silently dropped on that path while the interactive path honoured
+    /// every one of them.
+    pub(crate) fn effective_permissions(
+        &self,
+        mode_flag: Option<PermissionMode>,
+        explicit_skip: bool,
+        explicit_yes: bool,
+        persisted_mode: Option<&str>,
+    ) -> EffectivePermissions {
+        // `--mode` wins over `--permission-mode` when both are given.
+        let mode = mode_flag
+            .or(self.permission_mode)
+            .or_else(|| persisted_mode.and_then(persisted_permission_mode))
+            .unwrap_or(PermissionMode::Default);
+        EffectivePermissions {
+            skip_permissions: self.should_skip_permissions(explicit_skip)
+                || matches!(mode, PermissionMode::BypassPermissions),
+            auto_approve_safe: self.should_auto_approve_safe(explicit_yes)
+                || matches!(mode, PermissionMode::AcceptEdits | PermissionMode::DontAsk),
+            mode,
+        }
     }
 
     pub(crate) fn mcp_config_load_options(&self) -> crate::mcp::McpConfigLoadOptions {

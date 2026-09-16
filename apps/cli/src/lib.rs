@@ -3064,9 +3064,18 @@ pub async fn run_main() -> Result<()> {
                 }
                 session.demo_force_rate_limit = cli.demo;
                 session.demo_mode = cli.demo;
-                if *full_auto {
-                    session.skip_permissions = true;
-                    session.auto_approve_safe = true;
+                let exec_permissions = normalized_cli_options.effective_permissions(
+                    cli.mode,
+                    cli.dangerously_skip_permissions,
+                    cli.yes,
+                    app_config.default.permission_mode.as_deref(),
+                );
+                session.permission_mode = exec_permissions.mode;
+                session.skip_permissions = exec_permissions.skip_permissions || *full_auto;
+                session.auto_approve_safe = exec_permissions.auto_approve_safe || *full_auto;
+                session.auto_approve_plan = cli.auto_approve_plan;
+                if matches!(exec_permissions.mode, cli_options::PermissionMode::Plan) {
+                    session.plan_mode = true;
                 }
                 session.quiet = true;
                 session.enable_managed_session()?;
@@ -4291,24 +4300,15 @@ pub async fn run_main() -> Result<()> {
     }
 
     let oneshot_output_mode = resolve_oneshot_output_mode(cli.json, cli.raw, cli.print, cli.output);
-    let effective_skip_permissions =
-        normalized_cli_options.should_skip_permissions(cli.dangerously_skip_permissions);
-    let effective_auto_approve_safe = normalized_cli_options.should_auto_approve_safe(cli.yes);
-
-    // Sprint B4: `--mode` wins over `--permission-mode` when both are
-    // provided. Falls back to Default when neither is set, matching the
-    // existing PermissionMode default.
-    let effective_permission_mode: cli_options::PermissionMode = cli
-        .mode
-        .or(cli.permission_mode)
-        .or_else(|| {
-            app_config
-                .default
-                .permission_mode
-                .as_deref()
-                .and_then(cli_options::persisted_permission_mode)
-        })
-        .unwrap_or(cli_options::PermissionMode::Default);
+    let resolved_permissions = normalized_cli_options.effective_permissions(
+        cli.mode,
+        cli.dangerously_skip_permissions,
+        cli.yes,
+        app_config.default.permission_mode.as_deref(),
+    );
+    let effective_skip_permissions = resolved_permissions.skip_permissions;
+    let effective_auto_approve_safe = resolved_permissions.auto_approve_safe;
+    let effective_permission_mode: cli_options::PermissionMode = resolved_permissions.mode;
     let effective_auto_approve_plan = cli.auto_approve_plan;
 
     // Resolve effective max_turns: explicit --max-turns wins, then --effort preset
@@ -5684,6 +5684,79 @@ mod tests {
         assert!(!options.session_persistence);
         assert_eq!(options.resume_session_at.as_deref(), Some("turn-9"));
         assert_eq!(options.setting_sources, vec!["project", "user"]);
+    }
+
+    #[test]
+    fn exec_resolves_the_same_permissions_as_an_interactive_run() {
+        use crate::cli_options::{CliOptions, PermissionMode};
+
+        // `agi exec` read only --full-auto, so every one of these was dropped on
+        // that path while the interactive path honoured all of them.
+        let accept = Cli::try_parse_from([
+            "agiworkforce",
+            "--permission-mode",
+            "acceptEdits",
+            "exec",
+            "fix bug",
+        ])
+        .expect("exec with a permission mode should parse");
+        let resolved =
+            CliOptions::from_cli(&accept).effective_permissions(accept.mode, false, false, None);
+        assert_eq!(resolved.mode, PermissionMode::AcceptEdits);
+        assert!(resolved.auto_approve_safe);
+        assert!(!resolved.skip_permissions);
+        assert!(resolved.mode.auto_approves_edits());
+
+        let bypass =
+            Cli::try_parse_from(["agiworkforce", "--mode", "bypassPermissions", "exec", "go"])
+                .expect("exec with --mode should parse");
+        let resolved =
+            CliOptions::from_cli(&bypass).effective_permissions(bypass.mode, false, false, None);
+        assert!(resolved.skip_permissions);
+
+        let plain = Cli::try_parse_from(["agiworkforce", "exec", "go"]).expect("plain exec parses");
+        let options = CliOptions::from_cli(&plain);
+
+        // The persisted default is read when no flag is given, and not when one is.
+        let persisted = options.effective_permissions(plain.mode, false, false, Some("plan"));
+        assert_eq!(persisted.mode, PermissionMode::Plan);
+        assert_eq!(
+            options
+                .effective_permissions(plain.mode, false, false, None)
+                .mode,
+            PermissionMode::Default
+        );
+
+        // --yes and --dangerously-skip-permissions still stand on their own.
+        assert!(
+            options
+                .effective_permissions(plain.mode, false, true, None)
+                .auto_approve_safe
+        );
+        assert!(
+            options
+                .effective_permissions(plain.mode, true, false, None)
+                .skip_permissions
+        );
+    }
+
+    #[test]
+    fn mode_wins_over_permission_mode_when_both_are_given() {
+        use crate::cli_options::{CliOptions, PermissionMode};
+
+        let cli = Cli::try_parse_from([
+            "agiworkforce",
+            "--permission-mode",
+            "acceptEdits",
+            "--mode",
+            "plan",
+            "go",
+        ])
+        .expect("both flags should parse");
+        let resolved = CliOptions::from_cli(&cli).effective_permissions(cli.mode, false, false, None);
+
+        assert_eq!(resolved.mode, PermissionMode::Plan);
+        assert!(!resolved.mode.auto_approves_edits());
     }
 
     #[test]
