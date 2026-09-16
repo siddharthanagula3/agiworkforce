@@ -9,6 +9,7 @@ import {
   extractPersistedKeys,
   findWriteOnlyCollections,
   findWriteOnlyStorageKeys,
+  dialogPanelAnswersTheKeyboard,
   INVARIANTS,
   menuPanelHonoursKeyboard,
   normalizeRoutePath,
@@ -17,6 +18,30 @@ import {
   requiredArity,
   routePathForFile,
 } from './check-surface-invariants.mjs';
+
+test('a role="dialog" panel that answers no key is reported', () => {
+  const source = `const a = <div role="dialog" aria-modal="true"><p>Are you sure?</p></div>;`;
+
+  assert.equal(dialogPanelAnswersTheKeyboard(source), false);
+});
+
+// The floor is "answers something", not the full contract: a bare Escape
+// handler passes here and is still short of focus entry and a tab trap.
+test('the hook, a Radix dialog and a bare Escape handler all clear the floor', () => {
+  const hook = `import { useDialogKeyboard } from '@agiworkforce/ui';\nconst a = <div role="dialog" />;`;
+  const radix = `import * as D from '@radix-ui/react-dialog';\nconst a = <div role="dialog" />;`;
+  const bare = `const a = <div role="alertdialog" onKeyDown={(e) => e.key === 'Escape' && close()} />;`;
+
+  for (const source of [hook, radix, bare]) {
+    assert.equal(dialogPanelAnswersTheKeyboard(source), true);
+  }
+});
+
+test('a [role="dialog"] selector string is not a dialog panel', () => {
+  const source = `if (active.closest('[role="dialog"]')) return;`;
+
+  assert.equal(dialogPanelAnswersTheKeyboard(source), true);
+});
 
 test('a role="menu" panel with no keyboard wiring is reported', () => {
   const source = `export function Menu() {\n  return <div role="menu"><button role="menuitem">Rename</button></div>;\n}`;
@@ -365,6 +390,7 @@ test('every declared invariant is runnable and has an allowlist bucket', () => {
     'collection-has-reader',
     'keybinding-tolerates-no-args',
     'menu-honours-keyboard-contract',
+    'dialog-answers-the-keyboard',
   ]);
   for (const invariant of INVARIANTS) {
     assert.equal(typeof invariant.run, 'function');
