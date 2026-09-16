@@ -139,6 +139,12 @@ const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
   'application.control': 'control the application',
   'clipboard.read': 'read the clipboard',
   'clipboard.monitor': 'watch the clipboard continuously',
+  // Enforced by Chromium, not by this engine: audio capture reaches the
+  // renderer through getUserMedia, so `setPermissionRequestHandler` and
+  // `setPermissionCheckHandler` in main.ts decide it, restricted to audio from
+  // a trusted origin. The label stays because the capability is part of the
+  // shared vocabulary a client can be asked about; no dispatcher command maps
+  // to it, and a review has already read that absence as ungated.
   microphone: 'use the microphone',
   'simulator.ios': 'control the iOS simulator',
   'emulator.android': 'control the Android emulator',
