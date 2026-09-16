@@ -40,6 +40,20 @@ function cliCrateVersion(relativePath: string): string {
   return version ?? '';
 }
 
+function rustU32SliceConstant(relativePath: string, name: string): number[] {
+  const source = readRepoFile(relativePath);
+  const match = new RegExp(`pub const ${name}: &\\[u32\\] = &\\[([^\\]]*)\\];`, 'u').exec(source);
+  expect(
+    match,
+    `${name} is no longer declared as a \`pub const … : &[u32]\` in ${relativePath}. This guard exists to catch that rename, re-point it before editing the extension's own constants.`,
+  ).not.toBeNull();
+  return (match?.[1] ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '')
+    .map(Number);
+}
+
 function extensionConstant(name: string): number {
   const source = readRepoFile('apps/extension-vscode/src/integrations/localRuntimeClient.ts');
   const match = new RegExp(`const ${name} = (\\d+);`, 'u').exec(source);
@@ -77,6 +91,23 @@ describe('developer-session contract with the shipped AGI CLI', () => {
         'DEVELOPER_SESSION_PROTOCOL_VERSION',
       ),
     );
+  });
+
+  // The extension states one version and refuses any other answer. That is
+  // only safe because the server echoes the requested version back when it is
+  // in this list, and answers -32005 when it is not, so a version missing from
+  // the list is not a downgrade, it is every install failing at the handshake.
+  it('asks for a version the CLI still answers', () => {
+    const requested = extensionConstant('SUPPORTED_PROTOCOL_VERSION');
+    const answered = rustU32SliceConstant(
+      'crates/agiworkforce-protocol/src/developer_session.rs',
+      'SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS',
+    );
+
+    expect(
+      answered,
+      `the CLI answers protocol ${answered.join(', ')} and the extension requests ${requested}. The handshake would fail with -32005 on every install.`,
+    ).toContain(requested);
   });
 
   it('accepts exactly the agent-event schema version the CLI emits', () => {
