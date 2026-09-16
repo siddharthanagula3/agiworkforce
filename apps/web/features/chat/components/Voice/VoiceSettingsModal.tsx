@@ -25,7 +25,7 @@ import {
   type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
-import { VoiceOrb } from './VoiceOrb';
+import { VoiceOrbPreview } from './VoiceOrb';
 
 const LABEL = {
   title: 'Voice settings',
@@ -222,12 +222,11 @@ export function VoiceSettingsModal({
         <DialogDescription className="sr-only">{LABEL.description}</DialogDescription>
 
         <div className="flex justify-center">
-          <VoiceOrb
+          <VoiceOrbPreview
             status={VOICE_SESSION_STATUS.entering}
             focus={false}
             growIn={false}
             reducedMotion={reducedMotion}
-            onClick={() => undefined}
           />
         </div>
 

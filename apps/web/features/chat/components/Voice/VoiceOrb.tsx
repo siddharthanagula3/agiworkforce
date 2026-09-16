@@ -5,6 +5,7 @@ import {
   ORB_STATE_LABEL,
   orbStateForStatus,
   VoiceOrb as SharedVoiceOrb,
+  VoiceOrbCanvas as SharedVoiceOrbCanvas,
   VOICE_SESSION_STATUS,
   type VoiceSessionStatus,
 } from '@agiworkforce/unified-chat';
@@ -19,6 +20,12 @@ export interface VoiceOrbProps {
   className?: string;
 }
 
+function orbStateFor(status: VoiceSessionStatus, backendBusy: boolean) {
+  return backendBusy && status === VOICE_SESSION_STATUS.listening
+    ? ORB_STATE.thinking
+    : orbStateForStatus(status);
+}
+
 export function VoiceOrb({
   status,
   backendBusy = false,
@@ -28,10 +35,7 @@ export function VoiceOrb({
   onClick,
   className,
 }: VoiceOrbProps) {
-  const orbState =
-    backendBusy && status === VOICE_SESSION_STATUS.listening
-      ? ORB_STATE.thinking
-      : orbStateForStatus(status);
+  const orbState = orbStateFor(status, backendBusy);
   return (
     <SharedVoiceOrb
       orbState={orbState}
@@ -40,6 +44,26 @@ export function VoiceOrb({
       growIn={growIn}
       reducedMotion={reducedMotion}
       onClick={onClick}
+      className={className}
+    />
+  );
+}
+
+export type VoiceOrbPreviewProps = Omit<VoiceOrbProps, 'onClick' | 'backendBusy'>;
+
+export function VoiceOrbPreview({
+  status,
+  focus,
+  growIn,
+  reducedMotion,
+  className,
+}: VoiceOrbPreviewProps) {
+  return (
+    <SharedVoiceOrbCanvas
+      orbState={orbStateFor(status, false)}
+      focus={focus}
+      growIn={growIn}
+      reducedMotion={reducedMotion}
       className={className}
     />
   );
