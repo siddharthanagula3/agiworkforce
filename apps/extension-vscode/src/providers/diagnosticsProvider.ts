@@ -1,5 +1,5 @@
-
 import * as vscode from 'vscode';
+import { describeOutboundRefusal } from '../core/outboundContentGuard';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 
 const DIAGNOSTIC_SOURCE = 'AGI Workforce';
@@ -20,6 +20,11 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
     secrets: vscode.SecretStorage,
     cancellationToken: vscode.CancellationToken,
   ): Promise<ReviewResult> {
+    const refusal = describeOutboundRefusal(editor.document);
+    if (refusal !== null) {
+      return { diagnosticCount: 0, summary: refusal };
+    }
+
     const selection = editor.selection;
     const selectedText = editor.document.getText(selection.isEmpty ? undefined : selection);
 
