@@ -773,9 +773,7 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_kills_tree_reaps_child_and_prevents_delayed_side_effect() {
-        let _serial = CHILD_SPAWNING_TESTS
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _serial = CHILD_SPAWNING_TESTS.lock().await;
         let temp = tempfile::tempdir().expect("temp directory");
         let sentinel = temp.path().join("sentinel");
         let pid_file = temp.path().join("pids");
@@ -803,9 +801,7 @@ mod tests {
     /// it. This is the orphan the audit found and could not test.
     #[tokio::test]
     async fn a_terminating_signal_takes_every_tree_with_it() {
-        let _serial = CHILD_SPAWNING_TESTS
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _serial = CHILD_SPAWNING_TESTS.lock().await;
         let temp = tempfile::tempdir().expect("temp directory");
         let sentinel = temp.path().join("signal-sentinel");
         let pid_file = temp.path().join("signal-pids");
@@ -833,9 +829,7 @@ mod tests {
 
     #[tokio::test]
     async fn dropping_an_interactive_child_kills_and_reaps_its_tree() {
-        let _serial = CHILD_SPAWNING_TESTS
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _serial = CHILD_SPAWNING_TESTS.lock().await;
         let temp = tempfile::tempdir().expect("temp directory");
         let sentinel = temp.path().join("interactive-sentinel");
         let pid_file = temp.path().join("interactive-pids");
@@ -885,7 +879,10 @@ mod tests {
     /// deliberately reaches every tree, so the tests that spawn real children
     /// take turns. Without this, the signal test kills a sibling's child and
     /// fails a test that is not broken.
-    pub(super) static CHILD_SPAWNING_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    /// Async-aware on purpose: these tests hold the lock across `.await`, and a
+    /// `std::sync::Mutex` guard held across an await can park the whole runtime
+    /// thread while another task waits on the same lock.
+    pub(super) static CHILD_SPAWNING_TESTS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     pub(super) async fn wait_for_processes_to_exit(process_ids: &[i32]) {
         let deadline = Instant::now() + Duration::from_secs(2);
