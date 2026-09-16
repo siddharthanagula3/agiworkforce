@@ -1669,6 +1669,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_single_hook_timeout() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
         let hook = Hook {
             command: "sleep 10".to_string(),
             args: Vec::new(),
