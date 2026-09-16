@@ -54,6 +54,7 @@ pub mod provider;
 pub mod repl;
 pub mod safety;
 pub mod secret_redaction;
+pub mod sensitive_files;
 pub mod sessions;
 pub mod skills;
 pub mod subagent;
