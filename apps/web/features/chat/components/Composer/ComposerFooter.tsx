@@ -1,5 +1,6 @@
 'use client';
 
+import { priorTurnsHoldCache } from '@agiworkforce/routing';
 import {
   useCallback,
   useEffect,
@@ -1361,7 +1362,7 @@ export function ComposerFooter({
                       )}
                     </div>
                   )}
-                  {!catalogueOpen && assistantTurnCount > 0 && (
+                  {!catalogueOpen && priorTurnsHoldCache(assistantTurnCount, selectedModelId) && (
                     <p className="shrink-0 border-t border-[var(--chat-border)] px-3 py-1.5 text-xs text-muted-foreground">
                       {CACHE_RESET_HINT_TEXT}
                     </p>
