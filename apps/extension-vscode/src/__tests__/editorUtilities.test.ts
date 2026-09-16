@@ -194,3 +194,62 @@ describe('routing', () => {
     );
   });
 });
+
+describe('what never leaves the machine', () => {
+  const selection = { startLine: 0, endLine: 2, empty: false };
+
+  function editorOn(path: string): unknown {
+    const editor = editorWith({ selection, text: 'const token = 1;' }) as {
+      document: { uri: unknown };
+    };
+    editor.document.uri = vscode.Uri.file(path);
+    return editor;
+  }
+
+  it('refuses to send a credential file even from a trusted workspace', () => {
+    vscode.workspace.isTrusted = true;
+    setEditor(editorOn('/workspace/.env'));
+
+    const built = buildExplainSelectionPrompt();
+
+    expect(built.ok).toBe(false);
+    expect(built.ok === false && built.message).toMatch(/credential-file policy/);
+  });
+
+  it('refuses to send ordinary source from an untrusted workspace', () => {
+    vscode.workspace.isTrusted = false;
+    setEditor(editorOn('/workspace/src/app.ts'));
+
+    const built = buildExplainSelectionPrompt();
+
+    expect(built.ok).toBe(false);
+    expect(built.ok === false && built.message).toMatch(/not trusted/);
+  });
+
+  it('refuses terminal output from an untrusted workspace', () => {
+    vscode.workspace.isTrusted = false;
+
+    const built = buildExplainTerminalPrompt('npm ERR! code E401');
+
+    expect(built.ok).toBe(false);
+  });
+
+  it('asks the question without the file when the file is a credential file', () => {
+    vscode.workspace.isTrusted = true;
+    setEditor(editorOn('/workspace/.env.local'));
+
+    const built = buildAskAboutCodePrompt('what is wrong here?');
+
+    expect(built.ok).toBe(true);
+    expect(built.ok === true && built.prompt).toBe('what is wrong here?');
+  });
+
+  it('still sends ordinary source from a trusted workspace', () => {
+    vscode.workspace.isTrusted = true;
+    setEditor(editorOn('/workspace/src/app.ts'));
+
+    const built = buildExplainSelectionPrompt();
+
+    expect(built.ok).toBe(true);
+  });
+});
