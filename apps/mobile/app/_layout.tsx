@@ -55,7 +55,7 @@ import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
 import { clearAuthSession, getAuthToken } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
-import { restoreStoredLanguage } from '@/src/i18n';
+import { syncDeviceLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
 import {
   parseSharedFilesParam,
@@ -251,10 +251,10 @@ export default function RootLayout() {
     setStorageStatus('pending');
     initMmkvEncryption()
       .then(async () => {
-        const language = await restoreStoredLanguage();
+        const language = await syncDeviceLanguage();
         if (language.directionChanged) {
-          void reloadAppAsync('Apply stored app language direction').catch((err) => {
-            console.warn('[RootLayout] app-language direction reload failed:', err);
+          void reloadAppAsync('Apply device language direction').catch((err) => {
+            console.warn('[RootLayout] device language direction reload failed:', err);
             setStorageStatus('ready');
           });
           return;
