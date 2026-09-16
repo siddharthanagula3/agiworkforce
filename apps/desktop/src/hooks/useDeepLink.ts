@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
+import { routeDesktopDeepLink, subscribeDesktopDeepLinkEvents } from '../lib/desktopDeepLinkRouter';
 
 const ALLOWED_DEEP_LINK_SCHEMES = new Set(['agiworkforce:', 'agiworkforce-cloud:']);
 const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
@@ -56,6 +57,7 @@ export function useDeepLink(enabled = true) {
 
     let isMounted = true;
     let unlistenFn: (() => void) | null = null;
+    const unsubscribeEvents = subscribeDesktopDeepLinkEvents();
 
     const setupListener = async () => {
       try {
@@ -80,6 +82,7 @@ export function useDeepLink(enabled = true) {
 
     return () => {
       isMounted = false;
+      unsubscribeEvents();
       if (unlistenFn) {
         unlistenFn();
         unlistenFn = null;
@@ -183,6 +186,10 @@ export function parseDeepLink(url: string): ParsedDeepLink | null {
 }
 
 function handleDeepLink(url: string) {
+  if (routeDesktopDeepLink(url)) {
+    return;
+  }
+
   const parsedLink = parseDeepLink(url);
   if (!parsedLink) {
     return;

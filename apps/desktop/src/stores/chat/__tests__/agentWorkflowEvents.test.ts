@@ -600,6 +600,26 @@ describe('agentWorkflowEvents', () => {
     );
   });
 
+  /**
+   * `agentId` is the background agent's own uuid, and the completion event
+   * carries nothing else to navigate by: the agent's `conversationId` stays in
+   * the Rust struct, and the only live producer (`background_agent_start`)
+   * defaults it to `tool:<call id>`. A `chat` link built from either would
+   * resolve to no conversation, so these two notifications carry no link until
+   * the event carries an id that names something the user can open.
+   */
+  it('sends no deep link, because a background agent id names no conversation', async () => {
+    createAssistantMessage();
+
+    await applyBackgroundAgentCompleted({
+      agentId: 'bg-agent-notify-4',
+      goal: 'Compile weekly report',
+    });
+
+    const request = mockSendNotification.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(Object.keys(request)).toEqual(['title', 'body']);
+  });
+
   it('respects the desktop_notifications=false setting and does not fire a notification', async () => {
     mockInvoke.mockImplementation(async (command: string) => {
       if (command === 'notification_get_settings') {
