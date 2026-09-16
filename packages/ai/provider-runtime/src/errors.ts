@@ -67,7 +67,9 @@ export type ErrorCategory =
   | 'billing_exhausted'
   /**
    * A 429 whose provider-native signal says the quota WINDOW is spent (e.g.
-   * OpenAI `insufficient_quota`), not that the caller is momentarily too fast.
+   * a spending cap), not that the caller is momentarily too fast. An account
+   * that is out of money is `billing_exhausted`, not this: that one cannot be
+   * solved by waiting or by another provider.
    *
    * Distinct from `rate_limit` because the correct response differs: a short
    * rate limit is worth waiting out on the same route; an exhausted quota pool
@@ -380,9 +382,19 @@ function matchesContextOverflow(message: string): boolean {
  * `RESOURCE_EXHAUSTED` in `error.status`, and was simply never read.
  */
 const QUOTA_EXHAUSTED_CODES: ReadonlySet<string> = new Set([
-  'insufficient_quota',
   'quota_exceeded',
   'resource_exhausted',
+]);
+
+/**
+ * Codes that mean the account is out of money, not that a window is momentarily
+ * spent. They read like quota and are not: waiting does not add funds and
+ * neither does another provider, so they must never be fallbackable. OpenAI
+ * sends `insufficient_quota` for "check your plan and billing details", and
+ * `billing_hard_limit_reached` when a spend ceiling is hit.
+ */
+const BILLING_EXHAUSTED_CODES: ReadonlySet<string> = new Set([
+  'insufficient_quota',
   'billing_hard_limit_reached',
 ]);
 
@@ -477,8 +489,6 @@ function matchesQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
     }
   }
   return (
-    lowerMessage.includes('insufficient_quota') ||
-    lowerMessage.includes('exceeded your current quota') ||
     lowerMessage.includes('quota exceeded') ||
     lowerMessage.includes('resource_exhausted') ||
     matchesSpendingCapExhausted(lowerMessage)
@@ -542,14 +552,27 @@ function matchesTierRestricted(
  * what previously caused an exhausted paid account to rotate the request onto a
  * DIFFERENT paid provider rather than surfacing the billing problem.
  */
-function matchesBillingExhausted(status: number | undefined, lowerMessage: string): boolean {
+function matchesBillingExhausted(
+  e: SDKErrorLike,
+  status: number | undefined,
+  lowerMessage: string,
+): boolean {
   if (status === 402) return true;
+  if (errorCodeFields(e).some((code) => BILLING_EXHAUSTED_CODES.has(code))) return true;
   return (
     lowerMessage.includes('credit balance is too low') ||
     lowerMessage.includes('insufficient credit') ||
     lowerMessage.includes('insufficient funds') ||
     lowerMessage.includes('payment required') ||
-    lowerMessage.includes('billing hard limit')
+    lowerMessage.includes('billing hard limit') ||
+    // The code itself, for the case the repo already knows about: once an error
+    // crosses a stream-chunk boundary the structured fields are gone and only
+    // the reconstructed message survives.
+    lowerMessage.includes('insufficient_quota') ||
+    // OpenAI's own sentence for an unfunded account. "exceeded your current
+    // quota" alone is deliberately NOT matched: several providers say that
+    // about a per-minute window, which is `quota_exhausted`, not this.
+    lowerMessage.includes('check your plan and billing details')
   );
 }
 
@@ -734,12 +757,29 @@ export function classifyError(err: unknown): ClassifiedError {
   }
 
   if (status === 429) {
-    // A 429 means two very different things depending on the provider-native
-    // code riding alongside it. OpenAI's `insufficient_quota` (and the
-    // equivalent wording other vendors use) says the billing/quota WINDOW is
-    // spent, retrying in a second cannot help, and the pool should be taken out
-    // of service until it resets. A plain 429 is back-pressure and IS worth
-    // waiting out. Both were previously collapsed into `rate_limit`.
+    // A 429 means three very different things depending on the provider-native
+    // code riding alongside it, and this branch returns before the generic
+    // matchers further down ever run, so all three are decided here.
+    //
+    // OpenAI answers an unfunded account with 429 + `insufficient_quota`
+    // ("check your plan and billing details"), which is an operator problem:
+    // no wait and no other provider fixes it, so it must reach the caller as
+    // `billing_exhausted` rather than being retried or routed around.
+    //
+    // A spent quota WINDOW is a 429 too, and there retrying in a second cannot
+    // help while a different pool is fine. A plain 429 is back-pressure and IS
+    // worth waiting out. All three were previously collapsed into `rate_limit`,
+    // and then the first two into `quota_exhausted`.
+    if (matchesBillingExhausted(e, status, lower)) {
+      return {
+        category: 'billing_exhausted',
+        code: 'credit_balance_low',
+        retryable: false,
+        fallbackable: false,
+        status: 429,
+        message,
+      };
+    }
     if (matchesQuotaExhausted(e, lower)) {
       return {
         category: 'quota_exhausted',
@@ -847,7 +887,7 @@ export function classifyError(err: unknown): ClassifiedError {
     };
   }
 
-  if (matchesBillingExhausted(status, lower)) {
+  if (matchesBillingExhausted(e, status, lower)) {
     return {
       category: 'billing_exhausted',
       code: status === 402 ? 'payment_required_402' : 'credit_balance_low',
