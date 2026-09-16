@@ -41,7 +41,8 @@ const SETTINGS: LocalModelSettings = {
 function installHost() {
   window.agiHost = {
     ...hostBridgeStub(),
-    platform: 'electron-darwin',
+    shell: 'tauri' as const,
+    platform: 'tauri-darwin',
     appVersion: '1.2.0',
     invokeRuntime: async () => ({
       ok: false as const,
