@@ -354,7 +354,12 @@ export default function MemoryScreen() {
             returnKeyType="search"
           />
           {searchText.length > 0 && (
-            <Pressable onPress={handleClearSearch} className="p-0.5">
+            <Pressable
+              onPress={handleClearSearch}
+              className="p-0.5"
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <X size={14} color={colors.textMuted} />
             </Pressable>
           )}

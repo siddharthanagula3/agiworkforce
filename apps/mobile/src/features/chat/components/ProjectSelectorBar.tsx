@@ -201,6 +201,7 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
         onRequestClose={() => setDropdownVisible(false)}
       >
         <Pressable
+          accessible={false}
           style={{
             flex: 1,
             justifyContent: 'flex-end',
@@ -210,6 +211,7 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
           accessibilityViewIsModal
         >
           <Pressable
+            accessible={false}
             onPress={(e) => e.stopPropagation()}
             style={{
               backgroundColor: colors.surfaceOverlay,

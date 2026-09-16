@@ -105,7 +105,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
     >
       <View className="flex-1 justify-end" style={{ backgroundColor: colors.scrim }}>
         {/* Tap outside to dismiss */}
-        <Pressable className="flex-1" onPress={handleDismiss} />
+        <Pressable accessible={false} className="flex-1" onPress={handleDismiss} />
 
         <Animated.View
           entering={reducedMotion ? undefined : SlideInDown.duration(300).springify()}
