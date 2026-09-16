@@ -644,6 +644,7 @@ impl ManagedSession {
     fn from_jsonl(contents: &str) -> Result<Self> {
         let mut header: Option<ManagedSession> = None;
         let mut messages = Vec::new();
+        let mut unreadable_lines: Vec<usize> = Vec::new();
 
         for (line_number, line) in contents.lines().enumerate() {
             let trimmed = line.trim();
@@ -651,13 +652,23 @@ impl ManagedSession {
                 continue;
             }
 
-            let record: ManagedSessionJsonlRecord =
-                serde_json::from_str(trimmed).with_context(|| {
-                    format!(
-                        "Invalid managed session JSONL record at line {}",
-                        line_number + 1
-                    )
-                })?;
+            // A JSONL log exists so that damage stays on one line. Failing the
+            // whole load on the first unreadable record threw away every good
+            // message before it, which is the outcome an append-only format is
+            // meant to rule out. The header is the exception below: without it
+            // there is no session to return.
+            let record: ManagedSessionJsonlRecord = match serde_json::from_str(trimmed) {
+                Ok(record) => record,
+                Err(error) => {
+                    unreadable_lines.push(line_number + 1);
+                    tracing::warn!(
+                        line = line_number + 1,
+                        %error,
+                        "skipping an unreadable managed session record"
+                    );
+                    continue;
+                }
+            };
 
             match record {
                 ManagedSessionJsonlRecord::Header(record) => {
@@ -700,8 +711,25 @@ impl ManagedSession {
             }
         }
 
-        let mut session =
-            header.ok_or_else(|| anyhow::anyhow!("Managed session JSONL file is empty"))?;
+        let mut session = header.ok_or_else(|| {
+            if unreadable_lines.is_empty() {
+                anyhow::anyhow!("Managed session JSONL file is empty")
+            } else {
+                // Every line was unreadable, so there is genuinely nothing to
+                // open, and saying it is empty would be the wrong diagnosis.
+                anyhow::anyhow!(
+                    "Managed session JSONL file has no readable header record ({} unreadable line(s))",
+                    unreadable_lines.len()
+                )
+            }
+        })?;
+        if !unreadable_lines.is_empty() {
+            tracing::warn!(
+                session_id = %session.session_id,
+                skipped = unreadable_lines.len(),
+                "managed session loaded with unreadable records skipped"
+            );
+        }
         session.messages = messages;
         Ok(session)
     }
@@ -820,7 +848,7 @@ mod tests {
     use super::{
         ManagedSession, ManagedSessionAutoRouting, ManagedSessionRoutingAuthority, PrivacyMode,
     };
-    use crate::models::{ContentBlock, Message};
+    use crate::models::{ContentBlock, Message, MessageContent};
     use chrono::{TimeZone, Utc};
     use std::path::PathBuf;
     use tempfile::tempdir;
@@ -1006,6 +1034,47 @@ mod tests {
         assert!(session.created_by.is_none());
         assert!(session.archived_at.is_none());
         assert!(session.require_routing_authority().is_err());
+    }
+
+    #[test]
+    fn one_unreadable_line_does_not_cost_the_whole_session() {
+        // The point of an append-only log is that damage stays on the line it
+        // landed on. This used to fail the load outright, so a single truncated
+        // write lost every message written before it.
+        let damaged = concat!(
+            r#"{"record_type":"header","version":1,"session_id":"damaged","created_at":"2025-03-01T00:00:00Z","updated_at":"2025-03-01T00:05:00Z"}"#,
+            "\n",
+            r#"{"record_type":"message","message":{"role":"user","content":"before"}}"#,
+            "\n",
+            r#"{"record_type":"message","message":{"role":"user","conte"#,
+            "\n",
+            r#"{"record_type":"message","message":{"role":"assistant","content":"after"}}"#,
+        );
+
+        let session = ManagedSession::from_serialized_str(damaged).expect("session still loads");
+
+        assert_eq!(session.session_id, "damaged");
+        let texts: Vec<String> = session
+            .messages
+            .iter()
+            .map(|message| match &message.content {
+                MessageContent::Text(text) => text.clone(),
+                other => format!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(texts, vec!["before".to_string(), "after".to_string()]);
+    }
+
+    #[test]
+    fn a_file_with_nothing_readable_says_so_rather_than_calling_itself_empty() {
+        let rubbish = "not json at all\n{\"record_type\":\"mess";
+
+        let error = ManagedSession::from_serialized_str(rubbish)
+            .expect_err("a file with no header cannot open");
+
+        let message = format!("{error:#}");
+        assert!(message.contains("unreadable"), "{message}");
+        assert!(!message.contains("empty"), "{message}");
     }
 
     #[test]
