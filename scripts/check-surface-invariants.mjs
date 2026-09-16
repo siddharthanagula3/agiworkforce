@@ -640,7 +640,7 @@ const MENU_ROLE_ATTRIBUTE = /(?<!\[)\brole=(?:"menu"|'menu'|\{\s*['"]menu['"]\s*
 
 export function menuPanelHonoursKeyboard(source) {
   if (!MENU_ROLE_ATTRIBUTE.test(source)) return true;
-  return /useMenuKeyboard/u.test(source) || /@radix-ui\//u.test(source);
+  return /\buseMenuKeyboard\b/u.test(source) || /@radix-ui\//u.test(source);
 }
 
 /**
@@ -662,6 +662,43 @@ export function checkMenusHonourKeyboardContract() {
         detail:
           `${file} renders a role="menu" panel without useMenuKeyboard or a Radix menu, so arrow ` +
           'navigation, Escape and focus return are missing. Wire useMenuKeyboard, or drop the role.',
+      });
+    }
+  }
+
+  return violations;
+}
+
+const DIALOG_ROLE_ATTRIBUTE = /(?<!\[)\brole=(?:"(?:alert)?dialog"|'(?:alert)?dialog')/u;
+
+export function dialogPanelAnswersTheKeyboard(source) {
+  if (!DIALOG_ROLE_ATTRIBUTE.test(source)) return true;
+  return (
+    /\buseDialogKeyboard\b/u.test(source) ||
+    /@radix-ui\//u.test(source) ||
+    /['"]Escape['"]/u.test(source)
+  );
+}
+
+/**
+ * A `role="dialog"` panel that answers no key at all cannot be closed, entered
+ * or escaped from a keyboard: Escape does nothing, focus never moves in, and
+ * Tab walks onto the page behind it. This is the floor, not the whole contract.
+ * `useDialogKeyboard` is the contract; Radix and `AccessibleDialog` bring their
+ * own. A bare Escape handler passes here and is still short of it.
+ */
+export function checkDialogsAnswerTheKeyboard() {
+  const violations = [];
+
+  for (const root of MENU_SURFACE_ROOTS) {
+    for (const file of productFiles(root)) {
+      if (!/\.tsx$/u.test(file)) continue;
+      if (dialogPanelAnswersTheKeyboard(readSource(file))) continue;
+      violations.push({
+        id: file,
+        detail:
+          `${file} renders a role="dialog" panel that answers no key at all, so Escape does ` +
+          'nothing and focus never enters it. Call useDialogKeyboard, or use AccessibleDialog.',
       });
     }
   }
@@ -699,6 +736,11 @@ export const INVARIANTS = [
     id: 'menu-honours-keyboard-contract',
     label: 'Every role="menu" panel implements the menu keyboard pattern',
     run: () => checkMenusHonourKeyboardContract(),
+  },
+  {
+    id: 'dialog-answers-the-keyboard',
+    label: 'Every role="dialog" panel answers at least one key',
+    run: () => checkDialogsAnswerTheKeyboard(),
   },
 ];
 
