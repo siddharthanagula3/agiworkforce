@@ -50,6 +50,57 @@ function periodEndLabel(subscription: SubscriptionInfo): string {
     : 'the end of the current billing period';
 }
 
+interface SoleOwnedWorkspace {
+  id: string;
+  name: string | null;
+}
+
+/**
+ * Workspaces this account is the ONLY owner of.
+ *
+ * Read through the privileged connection on purpose: `organization_members`
+ * allows a user to see their own membership row and nothing else, so a scoped
+ * read can say "I am an owner" but can never say whether anyone else is. The
+ * question here is about the other rows.
+ *
+ * A workspace already scheduled for deletion is not counted: the owner has
+ * already done the thing this guard would ask them to do, and both schedules
+ * run down to their own purge.
+ */
+async function listSoleOwnedWorkspaces(userId: string): Promise<SoleOwnedWorkspace[]> {
+  return getNeonDb().query<SoleOwnedWorkspace>(
+    `select o.id::text as id, o.name
+       from public.organization_members mine
+       join public.organizations o on o.id = mine.organization_id
+      where mine.user_id = $1
+        and mine.role = 'owner'
+        and o.deletion_scheduled_for is null
+        and not exists (
+          select 1
+            from public.organization_members others
+           where others.organization_id = mine.organization_id
+             and others.role = 'owner'
+             and others.user_id <> $1
+        )`,
+    [userId],
+  );
+}
+
+function soleOwnerMessage(workspaces: SoleOwnedWorkspace[]): string {
+  const named = workspaces
+    .map((workspace) => workspace.name?.trim())
+    .filter((name): name is string => Boolean(name));
+  const subject =
+    named.length > 0
+      ? named.length === 1
+        ? `the workspace ${named[0]}`
+        : `these workspaces: ${named.join(', ')}`
+      : workspaces.length === 1
+        ? 'a workspace'
+        : `${workspaces.length} workspaces`;
+  return `You are the only owner of ${subject}. Nothing was deleted. Make someone else an owner in Settings > Organization, or delete the workspace there first, then delete your account.`;
+}
+
 function activeSubscriptionMessage(subscription: SubscriptionInfo): string {
   const plan = subscription.plan_tier;
   if (subscription.cancel_at_period_end) {
@@ -161,6 +212,34 @@ export async function DELETE(request: NextRequest) {
         planTier: subscription.plan_tier,
         status: subscription.status,
         cancelAtPeriodEnd: subscription.cancel_at_period_end ?? false,
+      },
+      { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
+    );
+  }
+
+  let soleOwned: SoleOwnedWorkspace[];
+  try {
+    soleOwned = await listSoleOwnedWorkspaces(userId);
+  } catch (err) {
+    logger.error({ userId, err }, 'Account deletion halted: workspace ownership lookup failed');
+    return NextResponse.json(
+      {
+        error: `Your workspace ownership could not be verified, so nothing was deleted. Please try again, or contact ${CONTACT_EMAIL} if this persists.`,
+      },
+      { status: 503, headers: SECURITY_HEADERS },
+    );
+  }
+
+  if (soleOwned.length > 0) {
+    logger.warn(
+      { userId, workspaceCount: soleOwned.length },
+      'Account deletion refused while the account is the sole owner of a workspace',
+    );
+    return NextResponse.json(
+      {
+        error: soleOwnerMessage(soleOwned),
+        reason: 'sole_organization_owner',
+        workspaces: soleOwned.map((workspace) => ({ id: workspace.id, name: workspace.name })),
       },
       { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
     );

@@ -111,6 +111,89 @@ describe('DELETE /api/user/delete-account', () => {
     mockEraseUserAccountData.mockResolvedValue(completeErasure);
     mockDeleteUser.mockResolvedValue(undefined);
     mockGetSubscription.mockResolvedValue(null);
+    mockQuery.mockResolvedValue([]);
+  });
+
+  function ownsAlone(...workspaces: Array<{ id: string; name: string | null }>) {
+    mockQuery.mockImplementation(async (sql: unknown) =>
+      String(sql).includes('organization_members') ? workspaces : [],
+    );
+  }
+
+  it('refuses while the account is the only owner of a workspace, and deletes nothing', async () => {
+    // The owner invariant is already enforced when a sole owner tries to leave,
+    // be demoted, or be removed. Deleting the account reached the same end by a
+    // route that never asked, leaving a workspace nobody could administer.
+    mockExecute.mockResolvedValue(1);
+    ownsAlone({ id: 'org-1', name: 'Acme' });
+
+    const response = await DELETE(deleteRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.reason).toBe('sole_organization_owner');
+    expect(body.error).toContain('Acme');
+    expect(body.workspaces).toEqual([{ id: 'org-1', name: 'Acme' }]);
+    expect(mockExecute).not.toHaveBeenCalledWith(
+      expect.stringContaining('deletion_requested_at'),
+      expect.anything(),
+    );
+    expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+    expect(mockDeleteUser).not.toHaveBeenCalled();
+  });
+
+  it('names every workspace the account owns alone, so the user knows what to hand over', async () => {
+    mockExecute.mockResolvedValue(1);
+    ownsAlone({ id: 'org-1', name: 'Acme' }, { id: 'org-2', name: 'Globex' });
+
+    const body = await (await DELETE(deleteRequest())).json();
+
+    expect(body.error).toContain('Acme');
+    expect(body.error).toContain('Globex');
+  });
+
+  it('still refuses when the workspace has no name', async () => {
+    mockExecute.mockResolvedValue(1);
+    ownsAlone({ id: 'org-1', name: null });
+
+    const response = await DELETE(deleteRequest());
+
+    expect(response.status).toBe(409);
+    expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+  });
+
+  it('proceeds when the sole-owned workspace is already scheduled for deletion', async () => {
+    // The query excludes those rows, so an owner who decommissioned the
+    // workspace first is not trapped between two deletions.
+    mockExecute.mockResolvedValue(1);
+    let ownershipSql = '';
+    mockQuery.mockImplementation(async (sql: unknown) => {
+      if (String(sql).includes('organization_members')) ownershipSql = String(sql);
+      return [];
+    });
+
+    expect((await DELETE(deleteRequest())).status).toBe(200);
+    expect(ownershipSql).toContain('deletion_scheduled_for is null');
+  });
+
+  it('proceeds when the account owns nothing alone', async () => {
+    mockExecute.mockResolvedValue(1);
+
+    expect((await DELETE(deleteRequest())).status).toBe(200);
+  });
+
+  it('deletes nothing when the ownership lookup fails, rather than assuming nobody is owned', async () => {
+    mockExecute.mockResolvedValue(1);
+    mockQuery.mockImplementation(async (sql: unknown) => {
+      if (String(sql).includes('organization_members')) throw new Error('connection reset');
+      return [];
+    });
+
+    const response = await DELETE(deleteRequest());
+
+    expect(response.status).toBe(503);
+    expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+    expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 
   it('schedules deletion when the update touches the profile row', async () => {
