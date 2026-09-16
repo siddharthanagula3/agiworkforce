@@ -912,6 +912,17 @@ export function ChatInput({
         return;
       }
 
+      // After the slash menu, so an open menu still closes on the first press
+      // and a second one stops the reply. The stop control is the send button
+      // mid-stream, which is reachable only by leaving the composer; every
+      // comparable product stops on Escape and a user who wants a wrong answer
+      // to stop reaches for it before the mouse.
+      if (e.key === COMPOSER_MENU_KEYS.escape && isStreaming) {
+        e.preventDefault();
+        onStop();
+        return;
+      }
+
       const shortcutMatches =
         sendShortcut === 'mod-enter' ? (e.metaKey || e.ctrlKey) && !e.shiftKey : !e.shiftKey;
       if (e.key === 'Enter' && shortcutMatches && !e.nativeEvent.isComposing) {
@@ -919,7 +930,7 @@ export function ChatInput({
         handleSend();
       }
     },
-    [handleSend, handleSlashMenuKey, sendShortcut],
+    [handleSend, handleSlashMenuKey, isStreaming, onStop, sendShortcut],
   );
 
   const handleEditorTextChange = useCallback(
