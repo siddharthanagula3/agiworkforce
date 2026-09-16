@@ -21,6 +21,6 @@
   "devDependencies": {
     "@agiworkforce/artifacts": "workspace:*",
     "vitest": "^4.1.11",
-    "zod": "^4.4.2"
+    "zod": "^4.6.3"
   }
 }
