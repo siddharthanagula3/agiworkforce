@@ -1043,21 +1043,62 @@ fn install_panic_restore_hook() {
     INSTALLED.call_once(|| {
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
-            if super::tui_active() {
-                let mut stdout = io::stdout();
-                let _ = disable_raw_mode();
-                let _ = stdout.execute(DisableBracketedPaste);
-                let _ = stdout.execute(LeaveAlternateScreen);
-                let _ = stdout.execute(crossterm::cursor::Show);
-                super::set_tui_active(false);
-            }
+            restore_terminal_state();
             previous(info);
         }));
     });
 }
 
+/// Undo the three terminal changes `setup_terminal` makes, without a handle on
+/// the `Terminal`. The panic hook and the signal hook both need this; only the
+/// ordinary exit path still owns the terminal it set up.
+fn restore_terminal_state() {
+    if !super::tui_active() {
+        return;
+    }
+    let mut stdout = io::stdout();
+    let _ = disable_raw_mode();
+    let _ = stdout.execute(DisableBracketedPaste);
+    let _ = stdout.execute(LeaveAlternateScreen);
+    let _ = stdout.execute(crossterm::cursor::Show);
+    super::set_tui_active(false);
+}
+
+/// Leave the terminal usable and take no child with us when the process is
+/// told to stop.
+///
+/// A panic already restores the terminal and an ordinary exit already does, but
+/// `kill`, a closed terminal window and a shell shutting down all arrive as
+/// signals, and none of them ran either path: the user was dropped into raw
+/// mode inside the alternate screen with no cursor, and any command the agent
+/// had started outlived the session.
+#[cfg(unix)]
+fn install_signal_restore_hook() {
+    use tokio::signal::unix::{signal, SignalKind};
+
+    static INSTALLED: std::sync::Once = std::sync::Once::new();
+    INSTALLED.call_once(|| {
+        for (kind, status) in [(SignalKind::terminate(), 143), (SignalKind::hangup(), 129)] {
+            let Ok(mut stream) = signal(kind) else {
+                continue;
+            };
+            tokio::spawn(async move {
+                if stream.recv().await.is_some() {
+                    restore_terminal_state();
+                    crate::process_tree::kill_all_process_trees();
+                    std::process::exit(status);
+                }
+            });
+        }
+    });
+}
+
+#[cfg(not(unix))]
+fn install_signal_restore_hook() {}
+
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
     install_panic_restore_hook();
+    install_signal_restore_hook();
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     stdout.execute(EnterAlternateScreen)?;
