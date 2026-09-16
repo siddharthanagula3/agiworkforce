@@ -553,7 +553,7 @@ requireIncludes('.github/workflows/release-vscode-extension.yml', 'name: vscode-
 requireIncludes('.github/workflows/release-vscode-extension.yml', 'id-token: write');
 requireIncludes(
   '.github/workflows/release-vscode-extension.yml',
-  'azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2',
+  'azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0',
 );
 requireIncludes('.github/workflows/release-vscode-extension.yml', '--azure-credential');
 requireIncludes(
