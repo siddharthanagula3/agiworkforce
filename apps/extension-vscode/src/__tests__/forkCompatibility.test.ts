@@ -140,4 +140,32 @@ describe('Code-OSS fork compatibility', () => {
       payload: { text: '@src/queued.ts#L2-L3 ', references: [reference] },
     });
   });
+
+  it('opens on a view that has neither visibility events nor a badge', () => {
+    // The attention badge asks the host for two members a narrower fork need
+    // not implement. Losing the badge there is acceptable; failing to open the
+    // panel is not.
+    const extensionContext = context();
+    const provider = new SidebarProvider(
+      extensionContext.extensionUri,
+      extensionContext.secrets,
+      extensionContext,
+    );
+    const view = {
+      webview: {
+        options: {},
+        html: '',
+        cspSource: 'vscode-webview://mock',
+        asWebviewUri: (uri: vscode.Uri) => uri,
+        onDidReceiveMessage: vi.fn(() => new vscode.Disposable(() => undefined)),
+        postMessage: vi.fn().mockResolvedValue(true),
+      },
+      onDidDispose: vi.fn(() => new vscode.Disposable(() => undefined)),
+    } as unknown as vscode.WebviewView;
+
+    expect(() =>
+      provider.resolveWebviewView(view, {} as vscode.WebviewViewResolveContext, {} as never),
+    ).not.toThrow();
+    expect((view as { badge?: unknown }).badge).toBeUndefined();
+  });
 });
