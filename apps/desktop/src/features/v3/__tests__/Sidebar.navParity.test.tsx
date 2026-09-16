@@ -4,6 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   privacyMode: 'local' as 'local' | 'byok' | 'managed',
   collapsed: false,
+  supportsLocalAppMode: true,
+}));
+
+vi.mock('../../../lib/runtimeEnvironment', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/runtimeEnvironment')>()),
+  get supportsLocalAppMode() {
+    return mocks.supportsLocalAppMode;
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -83,9 +91,14 @@ function navIds(): string[] {
     .filter((id): id is string => id !== null);
 }
 
-function renderNavIds(privacyMode: 'local' | 'managed', collapsed: boolean): string[] {
+function renderNavIds(
+  privacyMode: 'local' | 'byok' | 'managed',
+  collapsed: boolean,
+  supportsLocalAppMode = true,
+): string[] {
   mocks.privacyMode = privacyMode;
   mocks.collapsed = collapsed;
+  mocks.supportsLocalAppMode = supportsLocalAppMode;
   render(<Sidebar mode="chat" />);
   const ids = navIds();
   cleanup();
@@ -96,6 +109,7 @@ describe('collapsed rail keeps every expanded nav destination', () => {
   beforeEach(() => {
     mocks.privacyMode = 'local';
     mocks.collapsed = false;
+    mocks.supportsLocalAppMode = true;
   });
 
   afterEach(() => cleanup());
@@ -124,6 +138,23 @@ describe('collapsed rail keeps every expanded nav destination', () => {
       expect(renderNavIds('managed', true)).not.toContain(navId);
     },
   );
+
+  it.each(['design', 'research', 'automation'] as const)(
+    'drops %s entirely on a host that cannot reach Local mode',
+    (navId) => {
+      // These three run on the device and the shell renders them only in Local
+      // mode. A shipped Electron build cannot enter Local mode at all, so
+      // listing them there gave the user a control whose only answer was a
+      // toast naming a mode with no way in.
+      expect(renderNavIds('byok', false, false)).not.toContain(navId);
+      expect(renderNavIds('byok', true, false)).not.toContain(navId);
+    },
+  );
+
+  it('still offers the destinations that do work on a Cloud-only host', () => {
+    const ids = renderNavIds('byok', false, false);
+    expect(ids).toEqual(expect.arrayContaining(['artifacts', 'code', 'tasks', 'customize']));
+  });
 
   it('keeps Code off the managed nav in both layouts', () => {
     expect(renderNavIds('managed', false)).not.toContain('code');
