@@ -70,14 +70,16 @@ setUuidV7RandomSource((byteCount) => Crypto.getRandomBytes(byteCount));
 import {
   registerForPushNotifications,
   setupNotificationListeners,
+  setPushAccountContext,
   handleInitialNotification,
   setNavigatorReady,
   setSignedIn,
 } from '@/services/notifications';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
-import { CLOUD_SIGN_IN_RETURN_PATH } from './(public)/age-gate';
+import { resolveRootRedirect } from '@/src/features/auth/services/rootRouting';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
@@ -213,6 +215,8 @@ export default function RootLayout() {
   const backPressCount = useRef(0);
   const { colors: themeColors, statusBarStyle } = useTheme();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const backgroundFetchEnabled = useSettingsStore((s) => s.backgroundFetchEnabled);
+  const cloudNotificationsEnabled = useCloudSettingsStore((s) => s.notificationsEnabled);
   const previousIsCloudRef = useRef(isCloud);
   const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
   const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
@@ -329,6 +333,18 @@ export default function RootLayout() {
     return () => setNavigatorReady(false);
   }, []);
 
+  // A Local Mode notification is still this app's notification, so the taps and
+  // the cold-start check are wired in every mode and without an account
+  // (MOBILE-053). Neither path asks the OS for permission (MOBILE-021).
+  useEffect(() => {
+    if (!isInitialized) return;
+    const removeListeners = setupNotificationListeners();
+    void handleInitialNotification().catch((err) => {
+      console.warn('[RootLayout] Initial notification handling failed:', err);
+    });
+    return removeListeners;
+  }, [isInitialized]);
+
   useEffect(() => {
     if (
       !FEATURES.auth ||
@@ -338,6 +354,7 @@ export default function RootLayout() {
       !isInitialized
     ) {
       if (isInitialized && (!isClerkSignedIn || !clerkUserId)) {
+        setPushAccountContext(null);
         void clearPushTokenAccountSession().catch((err) => {
           console.warn('[RootLayout] Push-token account cleanup failed:', err);
         });
@@ -346,16 +363,12 @@ export default function RootLayout() {
     }
 
     let disposed = false;
-    let removeListeners: (() => void) | undefined;
     void beginPushTokenAccountSession(clerkUserId, getAuthToken)
       .then(async (accountContext) => {
         if (!accountContext || disposed || !accountContext.isCurrent()) return;
         if (!isCloud) return;
+        setPushAccountContext(accountContext);
         await registerForPushNotifications(accountContext);
-        if (disposed || !accountContext.isCurrent()) return;
-
-        removeListeners = setupNotificationListeners(accountContext);
-        await handleInitialNotification();
       })
       .catch((err) => {
         if (!disposed) {
@@ -365,12 +378,16 @@ export default function RootLayout() {
 
     return () => {
       disposed = true;
-      removeListeners?.();
+      setPushAccountContext(null);
     };
   }, [isClerkSignedIn, clerkUserId, isCloud, isInitialized]);
 
+  // Polling for cloud approvals has nothing to poll outside Cloud Mode, and
+  // nothing to report when the user has turned background alerts off
+  // (MOBILE-076).
   useEffect(() => {
-    if (!FEATURES.dispatch || !isClerkSignedIn || !clerkUserId) return;
+    if (!FEATURES.dispatch || !isClerkSignedIn || !clerkUserId || !isCloud) return;
+    if (!backgroundFetchEnabled || !cloudNotificationsEnabled) return;
 
     let disposed = false;
     const ownerId = clerkUserId;
@@ -396,86 +413,19 @@ export default function RootLayout() {
         console.warn('[RootLayout] Background fetch unregister failed:', err);
       });
     };
-  }, [isClerkSignedIn, clerkUserId]);
+  }, [isClerkSignedIn, clerkUserId, isCloud, backgroundFetchEnabled, cloudNotificationsEnabled]);
 
   useEffect(() => {
     if (!isInitialized || !isMmkvReady) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-    const inOnboarding = (segments[0] as string) === '(public)';
-    const inLegal = segments[0] === 'legal';
-
-    if (!authEnabled) {
-      const onboardingDone = storage.getString('onboarding-done');
-      if (!onboardingDone && !inOnboarding && !inLegal) {
-        router.replace({ pathname: '/(public)/onboarding' as never });
-        return;
-      }
-      if (onboardingDone && (inAuthGroup || inOnboarding)) {
-        router.replace({ pathname: '/(app)' as const });
-      }
-      return;
-    }
-
-    if (!isClerkLoaded) return;
-
-    // The age gate guards CLOUD, not the app. Local Mode sends nothing off the
-    // device, so gating first launch on it was friction with no subject to
-    // protect, and a wall in front of a Local user, which the locked rule
-    // below forbids. It is raised here instead: the moment a user heads for
-    // Cloud sign-in, which is the first point personal data would leave.
-    if (!isClerkSignedIn && inAuthGroup && !isAgeGateConfirmed()) {
-      router.replace({
-        pathname: '/(public)/age-gate' as never,
-        params: { returnTo: CLOUD_SIGN_IN_RETURN_PATH },
-      } as never);
-      return;
-    }
-
-    if (!isClerkSignedIn && !inAuthGroup) {
-      const onboardingDone = storage.getString('onboarding-done');
-      if (!onboardingDone && !inOnboarding && !inLegal) {
-        router.replace({ pathname: '/(public)/onboarding' as never });
-      } else if (onboardingDone && inOnboarding) {
-        router.replace({ pathname: '/(app)' as const });
-      }
-      // LOCKED RULE (Local-first): a user who is NOT signed in but has completed
-      // onboarding must land in the app in LOCAL mode, never on a forced Clerk
-      // sign-in wall. This covers both the account-less Local user (the free hook)
-      // and a previously-signed-in user whose Cloud session expired: in both cases
-      // Local stays fully usable and Cloud sign-in is reached ON DEMAND via the
-      // Cloud mode toggle. Previously this branch did
-      // `router.replace('/(auth)/login')`, which (with login.tsx's dismissible
-      // AuthView routing back to /(app)) trapped Local users in an inescapable
-      // login loop after onboarding, a locked-rule / trust-boundary violation.
-      // Root index (app/index.tsx) already routes onboarding-done users to /(app),
-      // so we intentionally do nothing here and let them stay in Local.
-    } else if (isClerkSignedIn && inAuthGroup) {
-      const onboardingDone = storage.getString('onboarding-done');
-      if (!onboardingDone && !inOnboarding) {
-        if (!isAgeGateConfirmed()) {
-          router.replace({ pathname: '/(public)/age-gate' as never });
-        } else {
-          router.replace({ pathname: '/(public)/onboarding' as never });
-        }
-      } else {
-        router.replace({ pathname: '/(app)' as const });
-      }
-    } else if (isClerkSignedIn && inOnboarding) {
-      const onboardingDone = storage.getString('onboarding-done');
-      if (onboardingDone) {
-        router.replace({ pathname: '/(app)' as const });
-      }
-    } else if (isClerkSignedIn && !inAuthGroup && !inOnboarding) {
-      const onboardingDone = storage.getString('onboarding-done');
-      if (!onboardingDone) {
-        if (!isAgeGateConfirmed()) {
-          router.replace({ pathname: '/(public)/age-gate' as never });
-        } else {
-          router.replace({ pathname: '/(public)/onboarding' as never });
-        }
-      }
-    }
+    const redirect = resolveRootRedirect({
+      segments,
+      authEnabled,
+      isClerkLoaded,
+      isClerkSignedIn,
+      onboardingDone: Boolean(storage.getString('onboarding-done')),
+      ageGateConfirmed: isAgeGateConfirmed(),
+    });
+    if (redirect) router.replace(redirect as never);
   }, [isClerkSignedIn, isClerkLoaded, isInitialized, isMmkvReady, segments, router, authEnabled]);
 
   // C1: Deep linking, handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
@@ -641,15 +591,34 @@ export default function RootLayout() {
         });
         break;
       }
-      case 'scan':
-        router.push('/(app)/scan' as Parameters<typeof router.push>[0]);
+      case 'scan': {
+        const imageUri = getParam('imageUri');
+        router.push({
+          pathname: '/(app)/scan' as const,
+          params: imageUri ? { imageUri } : {},
+        });
         break;
-      case 'analyze_image':
-        router.push('/(app)/camera' as Parameters<typeof router.push>[0]);
+      }
+      case 'analyze_image': {
+        const imageUri = getParam('imageUri');
+        const question = getParam('question');
+        router.push({
+          pathname: '/(app)/camera' as const,
+          params: {
+            ...(imageUri ? { imageUri } : {}),
+            ...(question ? { question } : {}),
+          },
+        });
         break;
-      case 'transcribe':
-        router.push('/(app)/voice' as Parameters<typeof router.push>[0]);
+      }
+      case 'transcribe': {
+        const audioUri = getParam('audioUri');
+        router.push({
+          pathname: '/(app)/voice' as const,
+          params: audioUri ? { audioUri } : {},
+        });
         break;
+      }
       default:
         break;
     }

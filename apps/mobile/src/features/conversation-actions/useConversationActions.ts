@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import { archiveConversation } from '@/src/features/archived-chats';
 import {
@@ -11,6 +11,20 @@ import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import type { ConversationSummary } from '@/types/chat';
 
+export interface ConversationMenuAction {
+  key: string;
+  label: string;
+  destructive?: boolean;
+  run: () => void;
+}
+
+export interface ConversationMenuState {
+  visible: boolean;
+  title: string;
+  actions: ConversationMenuAction[];
+  close: () => void;
+}
+
 export interface ConversationRenameState {
   visible: boolean;
   title: string;
@@ -18,6 +32,7 @@ export interface ConversationRenameState {
   setText: (text: string) => void;
   submit: () => void;
   cancel: () => void;
+  menu: ConversationMenuState;
 }
 
 export interface ConversationActions {
@@ -29,6 +44,11 @@ interface PendingRename {
   conversationId: string;
   title: string;
   ownership: AccountScopedUiState;
+}
+
+interface OpenMenu {
+  title: string;
+  actions: ConversationMenuAction[];
 }
 
 function findConversation(
@@ -43,7 +63,9 @@ function findConversation(
  * The chat row action sheet shared by the drawer and the Chats list. Every
  * mutation re-checks the account that owned the row when the sheet opened, so
  * an account switch between the tap and the confirmation cannot write into the
- * account that is now signed in.
+ * account that is now signed in. The list is a sheet rather than an `Alert`
+ * because Android renders at most three alert buttons, which dropped Delete
+ * and Cancel from a Cloud chat's five-action menu.
  */
 export function useConversationActions(): ConversationActions {
   const conversations = useChatStore((s) => s.conversations);
@@ -54,6 +76,7 @@ export function useConversationActions(): ConversationActions {
 
   const [pendingRename, setPendingRename] = useState<PendingRename | null>(null);
   const [renameText, setRenameText] = useState('');
+  const [openMenu, setOpenMenu] = useState<OpenMenu | null>(null);
 
   const openActions = useCallback(
     (conversationId: string, title: string, pinned: boolean) => {
@@ -89,23 +112,26 @@ export function useConversationActions(): ConversationActions {
         })();
       });
 
-      Alert.alert(title || 'Chat', undefined, [
+      const actions: ConversationMenuAction[] = [
         {
-          text: 'Rename',
-          onPress: guard(() => {
+          key: 'rename',
+          label: 'Rename',
+          run: guard(() => {
             setRenameText(conversation.title ?? '');
             setPendingRename({ conversationId, title: title || 'Chat', ownership });
           }),
         },
         {
-          text: pinned ? 'Unpin' : 'Pin',
-          onPress: guard(() => void pinConversation(conversationId)),
+          key: 'pin',
+          label: pinned ? 'Unpin' : 'Pin',
+          run: guard(() => void pinConversation(conversationId)),
         },
-        ...(isCloudConversation ? [{ text: 'Archive', onPress: archive }] : []),
+        ...(isCloudConversation ? [{ key: 'archive', label: 'Archive', run: archive }] : []),
         {
-          text: 'Delete',
-          style: 'destructive' as const,
-          onPress: guard(() =>
+          key: 'delete',
+          label: 'Delete',
+          destructive: true,
+          run: guard(() =>
             Alert.alert(
               'Delete chat?',
               'This chat and its messages are removed from every device on this account. It cannot be recovered.',
@@ -120,10 +146,23 @@ export function useConversationActions(): ConversationActions {
             ),
           ),
         },
-        { text: 'Cancel', style: 'cancel' as const },
-      ]);
+      ];
+
+      setOpenMenu({ title: title || 'Chat', actions });
     },
     [cloudConversations, conversations, deleteConversation, pinConversation],
+  );
+
+  const closeMenu = useCallback(() => setOpenMenu(null), []);
+
+  const menu = useMemo<ConversationMenuState>(
+    () => ({
+      visible: openMenu !== null,
+      title: openMenu?.title ?? '',
+      actions: openMenu?.actions ?? [],
+      close: closeMenu,
+    }),
+    [closeMenu, openMenu],
   );
 
   const cancelRename = useCallback(() => {
@@ -150,6 +189,7 @@ export function useConversationActions(): ConversationActions {
       setText: setRenameText,
       submit: submitRename,
       cancel: cancelRename,
+      menu,
     },
   };
 }

@@ -11,7 +11,6 @@ import {
   PlayCircle,
   BarChart2,
   Timer,
-  MemoryStick,
   type LucideIcon,
 } from 'lucide-react-native';
 import Svg, { Polyline, Line, Text as SvgText, Circle } from 'react-native-svg';
@@ -39,8 +38,6 @@ import {
   type BenchmarkResult,
 } from '@/services/performanceMonitor';
 
-export const PERF_THERMAL_PAUSE_KEY = 'perf-pause-at-thermal-v1';
-export const PERF_BATTERY_PAUSE_KEY = 'perf-pause-at-battery-v1';
 export const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
 
 function readBool(key: string, def: boolean): boolean {
@@ -301,12 +298,6 @@ export default function PerformanceScreen() {
   const c = useThemeColors();
   const router = useRouter();
 
-  const [pauseAtThermal, setPauseAtThermal] = useState(() =>
-    readBool(PERF_THERMAL_PAUSE_KEY, true),
-  );
-  const [pauseAtBattery, setPauseAtBattery] = useState(() =>
-    readBool(PERF_BATTERY_PAUSE_KEY, true),
-  );
   const [showPerfChip, setShowPerfChip] = useState(() => readBool(PERF_CHIP_SHOW_KEY, true));
 
   const [caps, setCaps] = useState<DeviceCapabilities | null>(null);
@@ -351,16 +342,6 @@ export default function PerformanceScreen() {
   const handleBack = useCallback(() => {
     router.navigate('/(app)/settings/general' as Parameters<typeof router.navigate>[0]);
   }, [router]);
-
-  const handleThermalPause = useCallback((v: boolean) => {
-    setPauseAtThermal(v);
-    writeBool(PERF_THERMAL_PAUSE_KEY, v);
-  }, []);
-
-  const handleBatteryPause = useCallback((v: boolean) => {
-    setPauseAtBattery(v);
-    writeBool(PERF_BATTERY_PAUSE_KEY, v);
-  }, []);
 
   const handleChipToggle = useCallback((v: boolean) => {
     setShowPerfChip(v);
@@ -871,26 +852,6 @@ export default function PerformanceScreen() {
           >
             Inference Settings
           </Text>
-
-          <ToggleRow
-            icon={Thermometer}
-            label="Pause at serious thermal"
-            sublabel="Suspends inference when device is warm to protect battery"
-            value={pauseAtThermal}
-            onChange={handleThermalPause}
-          />
-
-          <Separator />
-
-          <ToggleRow
-            icon={MemoryStick}
-            label="Pause at 15% battery"
-            sublabel="Resumes automatically when charging"
-            value={pauseAtBattery}
-            onChange={handleBatteryPause}
-          />
-
-          <Separator />
 
           <ToggleRow
             icon={BarChart2}

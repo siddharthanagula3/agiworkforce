@@ -93,7 +93,9 @@ import ModelsScreen from '../app/(app)/models';
 import { getDefaultModel } from '@agiworkforce/local-llm';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
-import { LOCAL_MODEL_LIST } from '../src/features/model-picker/service';
+import { useTierStore } from '../src/features/billing/store';
+import { LOCAL_MODEL_LIST, getModelListForCloudAccess } from '../src/features/model-picker/service';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 describe('Models screen', () => {
   beforeEach(() => {
@@ -142,5 +144,28 @@ describe('Models screen', () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0].props.accessibilityRole).toBe('button');
     fireEvent.press(rows[0]);
+  });
+
+  it('lists a Cloud favourite once Cloud is unlocked (regression: MOBILE-070)', () => {
+    const cloudModelId = requireMobileCloudModel().id;
+    const cloudModel = getModelListForCloudAccess(true, 'max').find((m) => m.id === cloudModelId);
+    expect(cloudModel).toBeTruthy();
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max', billingTier: 'max' });
+    useModelStore.setState({ favorites: [cloudModelId], recentModels: [cloudModelId] });
+
+    const { getAllByLabelText } = render(<ModelsScreen />);
+
+    expect(getAllByLabelText(`Select ${cloudModel!.name}`).length).toBeGreaterThan(0);
+  });
+
+  it('selects a ready favourite instead of reopening the picker (regression: MOBILE-070)', () => {
+    const fav = LOCAL_MODEL_LIST[0];
+    useModelStore.setState({ favorites: [fav.id], recentModels: [] });
+
+    const { getAllByLabelText } = render(<ModelsScreen />);
+    fireEvent.press(getAllByLabelText(`Select ${fav.name}`)[0]);
+
+    expect(useModelStore.getState().selectedModel).toBe(fav.id);
   });
 });

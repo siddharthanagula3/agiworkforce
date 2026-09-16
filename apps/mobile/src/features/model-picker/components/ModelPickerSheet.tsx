@@ -15,7 +15,7 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
-import { getModelReasoning } from '@agiworkforce/types';
+import { getAutoRoutingProfileTiers, getModelReasoning } from '@agiworkforce/types';
 import {
   AUTO_MODES,
   CLOUD_LOCK_REASON,
@@ -73,21 +73,26 @@ function groupBySurface(
   if (local.length > 0)
     sections.push({ sectionId: 'local', sectionLabel: 'On device', models: local });
 
-  const byProvider = new Map<string, { label: string; models: ModelDef[] }>();
+  const byTier = new Map<string, ModelDef[]>();
   for (const model of cloud) {
-    const entry = byProvider.get(model.provider) ?? { label: model.providerLabel, models: [] };
-    entry.models.push(model);
-    byProvider.set(model.provider, entry);
+    const entry = byTier.get(model.tier) ?? [];
+    entry.push(model);
+    byTier.set(model.tier, entry);
   }
-  for (const [providerId, entry] of byProvider) {
-    const available = entry.models.filter((m) => m.availability !== 'locked');
-    const locked = entry.models.filter((m) => m.availability === 'locked');
+  const pushTier = (tierId: string, label: string) => {
+    const entry = byTier.get(tierId);
+    if (!entry || entry.length === 0) return;
+    byTier.delete(tierId);
+    const available = entry.filter((m) => m.availability !== 'locked');
+    const locked = entry.filter((m) => m.availability === 'locked');
     sections.push({
-      sectionId: `cloud-${providerId}`,
-      sectionLabel: entry.label,
+      sectionId: `cloud-${tierId}`,
+      sectionLabel: label,
       models: [...available, ...locked],
     });
-  }
+  };
+  for (const tier of getAutoRoutingProfileTiers()) pushTier(tier.profile, tier.label);
+  for (const tierId of [...byTier.keys()]) pushTier(tierId, tierId);
   return sections;
 }
 

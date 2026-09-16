@@ -56,6 +56,27 @@ export interface ImageGenerationTurnDependencies {
   getUri: (image: GeneratedImage | undefined) => string | null;
   getDurablePath?: (image: GeneratedImage | undefined) => string | null;
   readReferenceImage?: (uri: string) => Promise<string>;
+  timeoutMs?: number;
+}
+
+export const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
+
+const IMAGE_GENERATION_TIMEOUT_MESSAGE =
+  'Image generation timed out. Retry to run it again, or try a shorter prompt.';
+
+class ImageGenerationTimeout extends Error {}
+
+function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new ImageGenerationTimeout(IMAGE_GENERATION_TIMEOUT_MESSAGE)),
+      timeoutMs,
+    );
+  });
+  return Promise.race([work, expiry]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 export type ImageGenerationTurnOutcome = {
@@ -122,14 +143,17 @@ export async function runImageGenerationTurn(
         ? await (dependencies.readReferenceImage ?? readReferenceImageBase64)(input.sourceImage.uri)
         : null;
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
-    const result = await dependencies.generate({
-      prompt: input.prompt,
-      model: input.model,
-      ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
-      ...(referenceOperation && referenceBase64
-        ? { operation: referenceOperation, source_image: { b64_json: referenceBase64 } }
-        : {}),
-    });
+    const result = await withTimeout(
+      dependencies.generate({
+        prompt: input.prompt,
+        model: input.model,
+        ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
+        ...(referenceOperation && referenceBase64
+          ? { operation: referenceOperation, source_image: { b64_json: referenceBase64 } }
+          : {}),
+      }),
+      dependencies.timeoutMs ?? IMAGE_GENERATION_TIMEOUT_MS,
+    );
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     const image = result.images?.[0];
     const imageUrl = dependencies.getUri(image);
@@ -163,6 +187,11 @@ export async function runImageGenerationTurn(
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);
       return { status: 'paywall', assistantMessageId };
+    }
+
+    if (error instanceof ImageGenerationTimeout) {
+      input.fail(input.conversationId, assistantMessageId, IMAGE_GENERATION_TIMEOUT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
     }
 
     input.onUnexpectedError?.(error);

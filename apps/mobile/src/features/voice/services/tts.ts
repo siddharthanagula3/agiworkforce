@@ -1,4 +1,5 @@
 import * as Speech from 'expo-speech';
+import { speechSettings } from './speechSettings';
 
 export interface TTSOptions {
   voice?: string;
@@ -16,6 +17,18 @@ export interface VoiceInfo {
   name: string;
   quality: string;
   language: string;
+}
+
+/**
+ * The Voice settings applied as TTS options. Spread this before a call site's
+ * own overrides so every speaking surface honours voice, speed, pitch and
+ * language.
+ */
+export function speechOptionsFromSettings(): Pick<
+  TTSOptions,
+  'voice' | 'rate' | 'pitch' | 'language'
+> {
+  return speechSettings();
 }
 
 export async function speak(text: string, options?: TTSOptions): Promise<void> {

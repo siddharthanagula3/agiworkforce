@@ -3,12 +3,13 @@ import {
   View,
   Modal,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   TextInput,
   useWindowDimensions,
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Bell,
   BellOff,
@@ -32,6 +33,12 @@ import {
   type NotificationCategory,
 } from '@/stores/notificationPrefsStore';
 import { SettingsScreenShell } from '@/src/features/settings/common';
+import {
+  enablePushNotifications,
+  getPushPermissionStatus,
+  type PushPermissionStatus,
+} from '@/services/notifications';
+import { androidChannelVibrates } from '@/services/notificationChannels';
 import { useThemeColors } from '@/src/ui/theme';
 import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
@@ -296,6 +303,67 @@ function TimePickerModal({
   );
 }
 
+const PERMISSION_COPY: Record<PushPermissionStatus, { title: string; body: string }> = {
+  granted: {
+    title: 'Your device is delivering notifications',
+    body: 'The settings below decide which of them AGI actually sends.',
+  },
+  undetermined: {
+    title: 'Turn on notifications',
+    body: 'AGI alerts you when an agent needs an approval, finishes a task, or fails. Your device will ask you once.',
+  },
+  denied: {
+    title: 'Your device is blocking notifications',
+    body: 'Nothing below can reach you until notifications are allowed in Settings.',
+  },
+};
+
+function PushPermissionCard({
+  status,
+  busy,
+  onEnable,
+}: {
+  status: PushPermissionStatus;
+  busy: boolean;
+  onEnable: () => void;
+}) {
+  const colors = useThemeColors();
+  const copy = PERMISSION_COPY[status];
+  const actionLabel = status === 'undetermined' ? 'Turn on notifications' : 'Open Settings';
+  const Icon = status === 'granted' ? Bell : BellOff;
+
+  return (
+    <Card>
+      <View className="flex-row items-center gap-3 px-1 py-1">
+        <Icon size={18} color={status === 'granted' ? colors.teal : colors.agentWarning} />
+        <View className="flex-1">
+          <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+            {copy.title}
+          </Text>
+          <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+            {copy.body}
+          </Text>
+        </View>
+      </View>
+      {status === 'granted' ? null : (
+        <Pressable
+          onPress={onEnable}
+          disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          accessibilityState={{ disabled: busy }}
+          className="mt-3 py-2.5 px-3 rounded-xl items-center"
+          style={{ backgroundColor: colors.accentSurface, opacity: busy ? 0.6 : 1 }}
+        >
+          <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+            {actionLabel}
+          </Text>
+        </Pressable>
+      )}
+    </Card>
+  );
+}
+
 export default function NotificationPreferencesScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -314,6 +382,46 @@ export default function NotificationPreferencesScreen() {
   const pushTimeFocus = timeFocusSync.push;
 
   const [timePickerField, setTimePickerField] = useState<'start' | 'end' | null>(null);
+  const [pushPermission, setPushPermission] = useState<PushPermissionStatus>('undetermined');
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [channelOverridden, setChannelOverridden] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getPushPermissionStatus().then((status) => {
+        if (!cancelled) setPushPermission(status);
+      });
+      if (Platform.OS === 'android') {
+        void Promise.all(
+          (['critical', 'high', 'normal', 'low'] as const).map((priority) =>
+            androidChannelVibrates(priority, true),
+          ),
+        ).then((states) => {
+          if (!cancelled) setChannelOverridden(states.some((vibrates) => vibrates === false));
+        });
+      }
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  // The one OS prompt is spent here, after the primer above explains what AGI
+  // would send. Once the device has answered, only Settings can change it.
+  const handleEnablePush = useCallback(async () => {
+    if (permissionBusy) return;
+    if (pushPermission === 'denied') {
+      await Linking.openSettings().catch(() => undefined);
+      return;
+    }
+    setPermissionBusy(true);
+    try {
+      setPushPermission(await enablePushNotifications());
+    } finally {
+      setPermissionBusy(false);
+    }
+  }, [permissionBusy, pushPermission]);
 
   const updateQuietHours = useCallback(
     (updates: Parameters<typeof setQuietHours>[0]) => {
@@ -372,6 +480,20 @@ export default function NotificationPreferencesScreen() {
 
   return (
     <SettingsScreenShell title="Notification Preferences">
+      <View className="mt-3 mb-2">
+        <Text
+          className="text-[11px] uppercase mb-3"
+          style={{ color: colors.textMuted, letterSpacing: 0 }}
+        >
+          Device Permission
+        </Text>
+      </View>
+      <PushPermissionCard
+        status={pushPermission}
+        busy={permissionBusy}
+        onEnable={() => void handleEnablePush()}
+      />
+
       {/* Categories */}
       <View className="mt-3 mb-2">
         <Text
@@ -664,35 +786,46 @@ export default function NotificationPreferencesScreen() {
                 : 'Synced with your account, the same schedule applies on web and desktop.'}
       </Text>
 
-      {/* Vibration */}
-      <View className="mt-6 mb-2">
-        <Text
-          className="text-[11px] uppercase mb-3"
-          style={{ color: colors.textMuted, letterSpacing: 0 }}
-        >
-          Vibration
-        </Text>
-      </View>
-      <Card>
-        <View className="flex-row items-center gap-3 mb-3 px-1">
-          <Vibrate size={18} color={colors.textSecondary} />
-          <Text className="text-sm" style={{ color: colors.textSecondary }}>
-            Vibrate per priority level
-          </Text>
-        </View>
-        {priorityRows.map((row, idx) => (
-          <View key={row.key}>
-            {idx > 0 && <Separator />}
-            <PriorityVibrationRow
-              label={row.label}
-              priority={row.key}
-              color={row.color}
-              value={vibrationEnabled[row.key]}
-              onValueChange={(v) => setVibrationEnabled(row.key, v)}
-            />
+      {/* Vibration is a per-channel Android setting. iOS gives an app no way to
+          vibrate without sound, so there is nothing here to offer. */}
+      {Platform.OS !== 'android' ? null : (
+        <>
+          <View className="mt-6 mb-2">
+            <Text
+              className="text-[11px] uppercase mb-3"
+              style={{ color: colors.textMuted, letterSpacing: 0 }}
+            >
+              Vibration
+            </Text>
           </View>
-        ))}
-      </Card>
+          <Card>
+            <View className="flex-row items-center gap-3 mb-3 px-1">
+              <Vibrate size={18} color={colors.textSecondary} />
+              <Text className="text-sm" style={{ color: colors.textSecondary }}>
+                Vibrate per priority level
+              </Text>
+            </View>
+            {priorityRows.map((row, idx) => (
+              <View key={row.key}>
+                {idx > 0 && <Separator />}
+                <PriorityVibrationRow
+                  label={row.label}
+                  priority={row.key}
+                  color={row.color}
+                  value={vibrationEnabled[row.key]}
+                  onValueChange={(v) => setVibrationEnabled(row.key, v)}
+                />
+              </View>
+            ))}
+          </Card>
+          {channelOverridden ? (
+            <Text className="text-[11px] mt-2 px-1" style={{ color: colors.textMuted }}>
+              Your device has turned vibration off for one of these channels, which overrides the
+              switches above.
+            </Text>
+          ) : null}
+        </>
+      )}
 
       {/* Time picker modals. RN renders Modal in its own host view, so it adds
           no layout to the shell's scroll content. */}

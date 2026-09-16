@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { getModelReasoning, normalizeModelId } from '@agiworkforce/types';
@@ -5,6 +6,7 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
   DEFAULT_LOCAL_MODEL_ID,
   canAccessCloudModelForTier,
+  getDisplayName,
   getDefaultCloudModelIdForTier,
   getDefaultSelectableModelId,
   getModelByIdForCloudAccess,
@@ -249,6 +251,12 @@ function revalidateSelectedModelForTier(tier: string): void {
     selectedProvider: providerForModelId(fallbackId),
     thinkingModeEnabled: thinkingEnabledPerModel[fallbackId] ?? false,
   });
+  // The next message would otherwise run on a model the user never chose
+  // (MOBILE-072).
+  Alert.alert(
+    'Your model changed with your plan',
+    `${getDisplayName(selectedModel)} is not included in your current plan, so new messages will use ${getDisplayName(fallbackId)}. You can pick another model any time.`,
+  );
 }
 
 useTierStore.subscribe((state, prevState) => {

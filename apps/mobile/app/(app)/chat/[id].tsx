@@ -114,6 +114,7 @@ import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import type { ChatMessage } from '@/types/chat';
 import {
@@ -668,7 +669,7 @@ export default function ChatScreen() {
   }, [clearError, conversationMessages, id, localRecovery, retryMessage, router]);
 
   const handleOpenCloudSignIn = useCallback(() => {
-    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+    router.push(beginCloudPostAuthIntent());
   }, [router]);
 
   const sendRecoveryAction = useMemo(() => {
@@ -888,7 +889,7 @@ export default function ChatScreen() {
       return;
     }
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent());
       return;
     }
     setAppMode('cloud');
@@ -1245,7 +1246,8 @@ export default function ChatScreen() {
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
     sendMessage: handleVoiceSendMessage,
-    speak: (text, callbacks) => TTS.speak(text, { ...callbacks }),
+    speak: (text, callbacks) =>
+      TTS.speak(text, { ...TTS.speechOptionsFromSettings(), ...callbacks }),
     stopSpeaking: () => TTS.stop(),
     onCaptureError: (err) => {
       setVoiceInlineVisible(false);

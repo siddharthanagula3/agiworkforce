@@ -12,9 +12,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { CameraView, useCameraPermissions, type FlashMode } from 'expo-camera';
-import { useRouter } from 'expo-router';
-import { X, Zap, ZapOff, Send, RotateCcw, Camera } from 'lucide-react-native';
+import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { X, Zap, ZapOff, Send, RotateCcw, Camera, SwitchCamera } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
@@ -26,12 +26,14 @@ export default function CameraScreen() {
   const c = useThemeColors();
   const styles = useMemo(() => createStyles(c), [c]);
   const [permission, requestPermission] = useCameraPermissions();
+  const params = useLocalSearchParams<{ imageUri?: string; question?: string }>();
 
   const [flashMode, setFlashMode] = useState<FlashMode>('off');
-  const [capturedUri, setCapturedUri] = useState<string | null>(null);
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [capturedUri, setCapturedUri] = useState<string | null>(params.imageUri ?? null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [promptText, setPromptText] = useState('');
+  const [promptText, setPromptText] = useState(params.question ?? '');
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraSlow, setCameraSlow] = useState(false);
 
@@ -122,6 +124,11 @@ export default function CameraScreen() {
 
   const toggleFlash = useCallback(() => {
     setFlashMode((prev) => (prev === 'off' ? 'on' : 'off'));
+  }, []);
+
+  const toggleFacing = useCallback(() => {
+    setCameraReady(false);
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   }, []);
 
   const handleCameraReady = useCallback(() => {
@@ -249,7 +256,7 @@ export default function CameraScreen() {
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
-        facing="back"
+        facing={facing}
         flash={flashMode}
         mode="picture"
         onCameraReady={handleCameraReady}
@@ -267,18 +274,32 @@ export default function CameraScreen() {
             <X size={22} color={c.cameraOverlayText} />
           </Pressable>
 
-          <Pressable
-            onPress={toggleFlash}
-            style={styles.iconButton}
-            accessibilityRole="button"
-            accessibilityLabel={flashMode === 'on' ? 'Turn flash off' : 'Turn flash on'}
-          >
-            {flashMode === 'on' ? (
-              <Zap size={20} color={c.agentWarning} />
-            ) : (
-              <ZapOff size={20} color={c.cameraOverlayText} />
-            )}
-          </Pressable>
+          <View style={styles.topBarActions}>
+            <Pressable
+              testID="camera-facing-toggle"
+              onPress={toggleFacing}
+              style={styles.iconButton}
+              accessibilityRole="button"
+              accessibilityLabel={
+                facing === 'back' ? 'Switch to front camera' : 'Switch to rear camera'
+              }
+            >
+              <SwitchCamera size={20} color={c.cameraOverlayText} />
+            </Pressable>
+
+            <Pressable
+              onPress={toggleFlash}
+              style={styles.iconButton}
+              accessibilityRole="button"
+              accessibilityLabel={flashMode === 'on' ? 'Turn flash off' : 'Turn flash on'}
+            >
+              {flashMode === 'on' ? (
+                <Zap size={20} color={c.agentWarning} />
+              ) : (
+                <ZapOff size={20} color={c.cameraOverlayText} />
+              )}
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
 
@@ -403,6 +424,11 @@ function createStyles(colors: ColorScheme) {
       paddingHorizontal: 16,
       paddingTop: 8,
       paddingBottom: 8,
+    },
+    topBarActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
     },
     iconButton: {
       width: 40,

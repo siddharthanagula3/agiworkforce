@@ -14,9 +14,9 @@ import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
+import { CLOUD_SIGN_IN_RETURN_PATH } from '@/src/features/auth/services/rootRouting';
 
 const PARENTAL_CONTROLS_RETURN_PATH = '/(app)/settings/parental-controls' as const;
-export const CLOUD_SIGN_IN_RETURN_PATH = '/(auth)/login' as const;
 
 const RETURN_PATHS = [PARENTAL_CONTROLS_RETURN_PATH, CLOUD_SIGN_IN_RETURN_PATH] as const;
 type ReturnPath = (typeof RETURN_PATHS)[number];

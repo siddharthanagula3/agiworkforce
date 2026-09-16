@@ -152,6 +152,11 @@ export default function CloudBillingScreen() {
     paywallRecoveryAction === 'manage_billing'
       ? "Billing management isn't available in the app yet. Please try again later."
       : "Plan changes aren't available in the app yet. Check back soon.";
+  // Checklist rule 55: a plan change is either possible or it says so before the
+  // tap. A row that opens a sheet whose only content is an apology is the
+  // failure-after-effort this forbids (MOBILE-037).
+  const canChangePlanInApp =
+    canBuyNativeSubscription || subscriptionGuard.blocked || FEATURES.billing;
 
   const showSubscriptionOwnerGuard = useCallback(() => {
     const buttons: Array<{
@@ -233,6 +238,14 @@ export default function CloudBillingScreen() {
         }
         icon={CreditCard}
       />
+
+      {nextUpgradeTier && !isWorkspacePlan && !canChangePlanInApp ? (
+        <SettingsInfo
+          title="Plan changes are not in this app yet"
+          body="Your plan, invoices, and payment method are managed on agiworkforce.com. Everything you already pay for keeps working here."
+          icon={ShoppingBag}
+        />
+      ) : null}
 
       {!isCloudModeActive && <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />}
 
@@ -335,7 +348,8 @@ export default function CloudBillingScreen() {
             <SettingsRow
               label={isFreeTier ? 'Upgrade plan' : isEntitled ? 'Adjust plan' : 'Choose plan'}
               icon={ExternalLink}
-              onPress={handleUpgrade}
+              value={canChangePlanInApp ? undefined : 'Unavailable in the app'}
+              onPress={canChangePlanInApp ? handleUpgrade : undefined}
               isLast={isFreeTier}
             />
           ) : null}

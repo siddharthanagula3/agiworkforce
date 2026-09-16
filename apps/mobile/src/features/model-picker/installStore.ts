@@ -1,4 +1,6 @@
+import { NativeModules } from 'react-native';
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   getCapabilities,
   getModelById as getCatalogModelById,
@@ -9,7 +11,9 @@ import {
   tier2LoadModel,
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel } from '@agiworkforce/types';
-import { downloadModel } from '@/services/modelDownload';
+import { assertDownloadAllowed, cancelDownload, downloadModel } from '@/services/modelDownload';
+import type { ModelDownloadErrorKind } from '@/services/modelDownload';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
   getInstalledModel,
   listInstalledModels,
@@ -21,12 +25,24 @@ import type { ModelDef } from './service';
 import { useModelStore } from './store';
 
 export type ModelInstallStatus =
-  | 'ready'
-  | 'download_required'
-  | 'downloading'
-  | 'failed'
-  | 'unavailable'
-  | 'locked';
+  'ready' | 'download_required' | 'downloading' | 'failed' | 'unavailable' | 'locked';
+
+export const GENERIC_INSTALL_FAILURE = 'Unable to prepare the model. Please try again.';
+
+function downloadFailureKind(error: unknown): ModelDownloadErrorKind | null {
+  if (!(error instanceof Error) || error.name !== 'ModelDownloadError') return null;
+  const kind = (error as Error & { kind?: unknown }).kind;
+  return typeof kind === 'string' ? (kind as ModelDownloadErrorKind) : null;
+}
+
+/**
+ * A download failure names its real cause. Anything untyped keeps the generic
+ * wording rather than inventing a reason the code cannot stand behind.
+ */
+export function installFailureMessage(error: unknown): string {
+  if (downloadFailureKind(error) && error instanceof Error) return error.message;
+  return GENERIC_INSTALL_FAILURE;
+}
 
 export interface ModelInstallJob {
   status: ModelInstallStatus;
@@ -38,10 +54,25 @@ interface ModelInstallState {
   installedModelIds: string[];
   readySystemModelIds: string[];
   totalRAMMB: number | null;
+  allowCellularDownloads: boolean;
   jobs: Record<string, ModelInstallJob>;
+  setAllowCellularDownloads: (allowed: boolean) => void;
   hydrateInstalledModels: () => Promise<void>;
   prepareModel: (model: ModelDef) => Promise<void>;
+  cancelModelDownload: (modelId: string) => void;
+  forgetInstalledModel: (modelId: string) => void;
   statusForModel: (model: ModelDef) => ModelInstallJob;
+}
+
+/**
+ * AICore fetches its OS-resident model on its own once the app asks for
+ * capabilities, so the same consent has to reach the native side or the Android
+ * Tier 1 download ignores it.
+ */
+function pushCellularConsentToNative(allowed: boolean): void {
+  const aicore = (NativeModules as Record<string, unknown>)['AGIAICore'] as
+    { setCellularDownloadAllowed?: (allowed: boolean) => void } | undefined;
+  aicore?.setCellularDownloadAllowed?.(allowed);
 }
 
 export const MULTIMODAL_RAM_LOCK_REASON =
@@ -106,8 +137,10 @@ function defaultStatusForModel(
 async function installGgufModel(
   catalogModel: OnDeviceModel,
   onProgress: (fraction: number) => void,
+  wifiOnly: boolean,
 ): Promise<void> {
   await downloadModel({
+    wifiOnly,
     modelId: catalogModel.id,
     displayName: catalogModel.displayName,
     downloadUrl: catalogModel.downloadUrl!,
@@ -196,146 +229,205 @@ function activateReadyLocalModel(
   if (replacement) setModel(replacement);
 }
 
-export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
-  installedModelIds: [],
-  readySystemModelIds: [],
-  totalRAMMB: null,
-  jobs: {},
+export const useModelInstallStore = create<ModelInstallState>()(
+  persist(
+    (set, get) => ({
+      installedModelIds: [],
+      readySystemModelIds: [],
+      totalRAMMB: null,
+      allowCellularDownloads: false,
+      jobs: {},
 
-  hydrateInstalledModels: async () => {
-    const [installed, caps] = await Promise.all([
-      listInstalledModels().catch(() => []),
-      getCapabilities().catch(() => null),
-    ]);
-    const systemModel = getSystemModelForTier1Runtime(caps?.tier1Runtime ?? null);
-    const readySystemModelIds = systemModel ? [systemModel.id] : [];
-    const installedModelIds = installed.map((model) => model.id);
-    set({
-      installedModelIds,
-      readySystemModelIds,
-      totalRAMMB: caps?.totalRAMMB ?? null,
-    });
-    activateReadyLocalModel(installedModelIds, readySystemModelIds, get().jobs);
-  },
+      setAllowCellularDownloads: (allowed) => {
+        set({ allowCellularDownloads: allowed });
+        pushCellularConsentToNative(allowed);
+      },
 
-  prepareModel: async (model) => {
-    if (getCatalogModelById(model.id) && isMultimodalModel(getCatalogModelById(model.id)!)) {
-      const caps = await getCapabilities().catch(() => null);
-      const ramLock = multimodalRamLock(model, caps?.totalRAMMB ?? get().totalRAMMB);
-      if (ramLock) {
+      hydrateInstalledModels: async () => {
+        const [installed, caps] = await Promise.all([
+          listInstalledModels().catch(() => []),
+          getCapabilities().catch(() => null),
+        ]);
+        const systemModel = getSystemModelForTier1Runtime(caps?.tier1Runtime ?? null);
+        const readySystemModelIds = systemModel ? [systemModel.id] : [];
+        const installedModelIds = installed.map((model) => model.id);
+        set({
+          installedModelIds,
+          readySystemModelIds,
+          totalRAMMB: caps?.totalRAMMB ?? null,
+        });
+        pushCellularConsentToNative(get().allowCellularDownloads);
+        activateReadyLocalModel(installedModelIds, readySystemModelIds, get().jobs);
+      },
+
+      prepareModel: async (model) => {
+        if (getCatalogModelById(model.id) && isMultimodalModel(getCatalogModelById(model.id)!)) {
+          const caps = await getCapabilities().catch(() => null);
+          const ramLock = multimodalRamLock(model, caps?.totalRAMMB ?? get().totalRAMMB);
+          if (ramLock) {
+            set((state) => ({
+              totalRAMMB: caps?.totalRAMMB ?? state.totalRAMMB,
+              jobs: { ...state.jobs, [model.id]: ramLock },
+            }));
+            throw new Error(MULTIMODAL_RAM_LOCK_REASON);
+          }
+        }
+
+        if (model.availability === 'locked' || model.surface !== 'local') {
+          set((state) => ({
+            jobs: {
+              ...state.jobs,
+              [model.id]: {
+                status: 'locked',
+                progress: 0,
+                error: model.lockReason ?? 'This model is locked.',
+              },
+            },
+          }));
+          return;
+        }
+
+        if (isBuiltIn(model)) {
+          const isReady = get().readySystemModelIds.includes(model.id);
+          if (!isReady) {
+            const error = 'This system model is not available on this device yet.';
+            set((state) => ({
+              jobs: { ...state.jobs, [model.id]: { status: 'unavailable', progress: 0, error } },
+            }));
+            throw new Error(error);
+          }
+
+          set((state) => ({
+            installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
+            jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
+          }));
+          return;
+        }
+
+        const existing = await getInstalledModel(model.id).catch(() => null);
+        if (existing) {
+          set((state) => ({
+            installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
+            jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
+          }));
+          return;
+        }
+
+        const catalogModel = getCatalogModelById(model.id);
+        const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
+        const ggufInstallable = !preset && catalogModel && hasRunnableGgufArtifacts(catalogModel);
+        if (!preset && !ggufInstallable) {
+          const error = 'The native package for this model is not bundled yet.';
+          set((state) => ({
+            jobs: { ...state.jobs, [model.id]: { status: 'unavailable', progress: 0, error } },
+          }));
+          throw new Error(error);
+        }
+
         set((state) => ({
-          totalRAMMB: caps?.totalRAMMB ?? state.totalRAMMB,
-          jobs: { ...state.jobs, [model.id]: ramLock },
+          jobs: { ...state.jobs, [model.id]: { status: 'downloading', progress: 0.01 } },
         }));
-        throw new Error(MULTIMODAL_RAM_LOCK_REASON);
-      }
-    }
 
-    if (model.availability === 'locked' || model.surface !== 'local') {
-      set((state) => ({
-        jobs: {
-          ...state.jobs,
-          [model.id]: {
-            status: 'locked',
-            progress: 0,
-            error: model.lockReason ?? 'This model is locked.',
-          },
-        },
-      }));
-      return;
-    }
+        const reportProgress = (progress: number): void => {
+          if (get().jobs[model.id]?.status !== 'downloading') return;
+          set((state) => ({
+            jobs: {
+              ...state.jobs,
+              [model.id]: {
+                status: 'downloading',
+                progress: Math.max(0.01, clampProgress(progress)),
+              },
+            },
+          }));
+        };
 
-    if (isBuiltIn(model)) {
-      const isReady = get().readySystemModelIds.includes(model.id);
-      if (!isReady) {
-        const error = 'This system model is not available on this device yet.';
-        set((state) => ({
-          jobs: { ...state.jobs, [model.id]: { status: 'unavailable', progress: 0, error } },
-        }));
-        throw new Error(error);
-      }
+        const wifiOnly = !get().allowCellularDownloads;
 
-      set((state) => ({
-        installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
-        jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
-      }));
-      return;
-    }
+        try {
+          if (preset) {
+            await tier2LoadModel(preset, reportProgress, {
+              ensureDownloadAllowed: () =>
+                assertDownloadAllowed({
+                  wifiOnly,
+                  requiredBytes: model.fileSizeBytes ?? catalogModel?.fileSizeBytes ?? 0,
+                }),
+            });
+            const record = installedRecordFor(model);
+            await recordInstalledModel(record);
+          } else {
+            await installGgufModel(catalogModel!, reportProgress, wifiOnly);
+          }
 
-    const existing = await getInstalledModel(model.id).catch(() => null);
-    if (existing) {
-      set((state) => ({
-        installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
-        jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
-      }));
-      return;
-    }
+          set((state) => ({
+            installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
+            jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
+          }));
+        } catch (err) {
+          console.error(`[installStore] prepareModel(${model.id}) failed:`, err);
+          // A cancelled download is not an install: clear the job so the row
+          // offers Download again, and still reject so no caller selects it.
+          if (downloadFailureKind(err) === 'cancelled') {
+            set((state) => {
+              const { [model.id]: _removed, ...rest } = state.jobs;
+              return { jobs: rest };
+            });
+            throw err;
+          }
+          set((state) => ({
+            jobs: {
+              ...state.jobs,
+              [model.id]: {
+                status: 'failed',
+                progress: 0,
+                error: installFailureMessage(err),
+              },
+            },
+          }));
+          throw err;
+        }
+      },
 
-    const catalogModel = getCatalogModelById(model.id);
-    const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
-    const ggufInstallable = !preset && catalogModel && hasRunnableGgufArtifacts(catalogModel);
-    if (!preset && !ggufInstallable) {
-      const error = 'The native package for this model is not bundled yet.';
-      set((state) => ({
-        jobs: { ...state.jobs, [model.id]: { status: 'unavailable', progress: 0, error } },
-      }));
-      throw new Error(error);
-    }
+      cancelModelDownload: (modelId) => {
+        if (get().jobs[modelId]?.status !== 'downloading') return;
+        cancelDownload(modelId);
+        set((state) => {
+          const { [modelId]: _removed, ...rest } = state.jobs;
+          return { jobs: rest };
+        });
+      },
 
-    set((state) => ({
-      jobs: { ...state.jobs, [model.id]: { status: 'downloading', progress: 0.01 } },
-    }));
+      forgetInstalledModel: (modelId) => {
+        set((state) => {
+          const { [modelId]: _removed, ...rest } = state.jobs;
+          return {
+            installedModelIds: state.installedModelIds.filter((id) => id !== modelId),
+            jobs: rest,
+          };
+        });
+        activateReadyLocalModel(get().installedModelIds, get().readySystemModelIds, get().jobs);
+      },
 
-    const reportProgress = (progress: number): void => {
-      set((state) => ({
-        jobs: {
-          ...state.jobs,
-          [model.id]: {
-            status: 'downloading',
-            progress: Math.max(0.01, clampProgress(progress)),
-          },
-        },
-      }));
-    };
+      statusForModel: (model) => {
+        return (
+          get().jobs[model.id] ??
+          defaultStatusForModel(
+            model,
+            get().installedModelIds,
+            get().readySystemModelIds,
+            get().totalRAMMB,
+          )
+        );
+      },
+    }),
+    {
+      name: 'agi-model-install-v1',
+      storage: createJSONStorage(() => mmkvStorage),
+      partialize: (state) => ({ allowCellularDownloads: state.allowCellularDownloads }),
+      onRehydrateStorage: () => (state) => {
+        if (state) pushCellularConsentToNative(state.allowCellularDownloads);
+      },
+    },
+  ),
+);
 
-    try {
-      if (preset) {
-        await tier2LoadModel(preset, reportProgress);
-        const record = installedRecordFor(model);
-        await recordInstalledModel(record);
-      } else {
-        await installGgufModel(catalogModel!, reportProgress);
-      }
-
-      set((state) => ({
-        installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
-        jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
-      }));
-    } catch (err) {
-      console.error(`[installStore] prepareModel(${model.id}) failed:`, err);
-      set((state) => ({
-        jobs: {
-          ...state.jobs,
-          [model.id]: {
-            status: 'failed',
-            progress: 0,
-            error: 'Unable to prepare the model. Please try again.',
-          },
-        },
-      }));
-      throw err;
-    }
-  },
-
-  statusForModel: (model) => {
-    return (
-      get().jobs[model.id] ??
-      defaultStatusForModel(
-        model,
-        get().installedModelIds,
-        get().readySystemModelIds,
-        get().totalRAMMB,
-      )
-    );
-  },
-}));
+rehydrateWhenMmkvReady(useModelInstallStore, 'model-install');

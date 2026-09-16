@@ -1,4 +1,3 @@
-
 export { localGenerate, selectTier, getCapabilities, refreshCapabilities } from './selector';
 export { detectCapabilities, isThermallyThrottled } from './capabilities';
 export { tier1Generate } from './tier1';
@@ -9,6 +8,7 @@ export {
   tier2IsVisionReady,
   executorchVlmPresetInfo,
   _setLLMModuleForTesting,
+  type Tier2LoadOptions,
 } from './tier2';
 export {
   tier3LoadModel,
