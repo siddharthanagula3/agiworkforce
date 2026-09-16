@@ -952,52 +952,7 @@ const usageEventExportSchema = z.object({
   organization_id: z.string().nullable(),
   event_type: z.string(),
   quantity: z.number().int().nullable(),
-  metadata: z.unknown(),
   created_at: timestampSchema,
-});
-
-const tokenCreditExportSchema = z.object({
-  id: z.string(),
-  subscription_id: z.string().nullable(),
-  period_start: timestampSchema,
-  period_end: timestampSchema,
-  credits_allocated_cents: z.number().int(),
-  credits_used_cents: z.number().int(),
-  top_up_allocated_cents: z.number().int(),
-  bonus_granted_cents: z.number().int(),
-  flagship_daily_cap_cents: z.number().int(),
-  flagship_used_today_cents: z.number().int(),
-  flagship_cap_reset_date: nullableTimestampSchema,
-  credits_allocated_microusd: nullableNumericSchema,
-  credits_used_microusd: nullableNumericSchema,
-  top_up_allocated_microusd: nullableNumericSchema,
-  flagship_used_today_microusd: nullableNumericSchema,
-  created_at: timestampSchema,
-  updated_at: timestampSchema,
-});
-
-const managedUsageRequestExportSchema = z.object({
-  id: z.string(),
-  organization_id: z.string().nullable(),
-  idempotency_key: z.string(),
-  provider: z.string(),
-  model: z.string(),
-  is_flagship: z.boolean(),
-  status: z.string(),
-  estimated_cost_cents: z.number().int(),
-  actual_cost_cents: z.number().int().nullable(),
-  estimated_cost_microusd: nullableNumericSchema,
-  actual_cost_microusd: nullableNumericSchema,
-  reservation_settlement_status: z.string().nullable(),
-  final_settlement_status: z.string().nullable(),
-  final_error_code: z.string().nullable(),
-  usage: z.unknown(),
-  provider_started_at: nullableTimestampSchema,
-  provider_succeeded_at: nullableTimestampSchema,
-  client_delivered_at: nullableTimestampSchema,
-  finalized_at: nullableTimestampSchema,
-  created_at: timestampSchema,
-  updated_at: timestampSchema,
 });
 
 const mobileIapTransactionExportSchema = z.object({
@@ -1283,40 +1238,13 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   {
     section: 'usage_events',
     table: 'usage_events',
-    sql: `select id, organization_id, event_type, quantity, metadata, created_at
+    sql: `select id, organization_id, event_type, quantity, created_at
           from usage_events
           where user_id = $1
           order by created_at desc
           limit 1000`,
     schema: usageEventExportSchema,
     rowLimit: EXPORT_ROW_LIMIT,
-    acrossWorkspaces: true,
-  },
-  {
-    section: 'token_credits',
-    table: 'token_credits',
-    sql: `select id, subscription_id, period_start, period_end, credits_allocated_cents,
-                 credits_used_cents, top_up_allocated_cents, bonus_granted_cents,
-                 flagship_daily_cap_cents, flagship_used_today_cents, flagship_cap_reset_date,
-                 credits_allocated_microusd, credits_used_microusd, top_up_allocated_microusd,
-                 flagship_used_today_microusd, created_at, updated_at
-          from token_credits
-          where user_id = $1
-          order by period_start asc`,
-    schema: tokenCreditExportSchema,
-  },
-  {
-    section: 'managed_usage_requests',
-    table: 'managed_usage_requests',
-    sql: `select id, organization_id, idempotency_key, provider, model, is_flagship, status,
-                 estimated_cost_cents, actual_cost_cents, estimated_cost_microusd,
-                 actual_cost_microusd, reservation_settlement_status, final_settlement_status,
-                 final_error_code, usage, provider_started_at, provider_succeeded_at,
-                 client_delivered_at, finalized_at, created_at, updated_at
-          from managed_usage_requests
-          where user_id = $1
-          order by created_at asc`,
-    schema: managedUsageRequestExportSchema,
     acrossWorkspaces: true,
   },
   {
@@ -1342,6 +1270,10 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
 ];
 
 export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
+  token_credits:
+    "The internal credit ledger: allocation, consumption, flagship caps and the microUSD columns behind them. That is this product's cost accounting, not the subject's personal data. What the subject actually did is exported as top_up_purchases and the managed usage summary.",
+  managed_usage_requests:
+    "Per-turn cost accounting: estimated and actual cost, reservation and settlement state, and a usage blob carrying each provider observation's own cost. Exporting it would hand every requester this product's provider economics. The subject's own managed usage is exported as the managed usage summary.",
   user_two_factor:
     'Holds the live second factor. This download is a file handed to whoever ends up with it, and a credential in it stays valid.',
   connector_oauth_grants:
