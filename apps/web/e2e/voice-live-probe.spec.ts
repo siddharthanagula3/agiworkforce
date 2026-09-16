@@ -8,7 +8,7 @@ const LOOP = process.env['AGI_LIVE_VOICE_LOOP'] === '1';
 const LISTEN_MS = Number(process.env['AGI_LIVE_VOICE_LISTEN_MS'] ?? 30_000);
 const SESSIONS_PATH = '/api/voice/live/sessions';
 
-// llm-guardrail-allow: a real gpt-live-1 session bills the provider account, so the probe runs only when authorized.
+// llm-guardrail-allow: a real live voice session bills the provider account, so the probe runs only when authorized.
 test.skip(
   process.env['RUN_LIVE_MEDIA_E2E'] !== '1' || !WAV || !OUT,
   'Set RUN_LIVE_MEDIA_E2E=1, AGI_LIVE_VOICE_WAV and AGI_LIVE_VOICE_OUT to authorize the billed live probe.',
@@ -147,7 +147,9 @@ async function startSession(page: Page, label: string, log: Record<string, unkno
   await expect(page.getByTestId('voice-mode-surface')).toBeVisible();
 }
 
-test('gpt-live session over WebRTC: start, transcripts, mute, close, restart', async ({ page }) => {
+test('live voice session over WebRTC: start, transcripts, mute, close, restart', async ({
+  page,
+}) => {
   test.setTimeout(480_000);
   const log: Record<string, unknown> = { loop: LOOP, listenMs: LISTEN_MS };
   const browser: string[] = [];
