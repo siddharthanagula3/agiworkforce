@@ -92,7 +92,8 @@
       "@humanfs/node": ">=0.16.8",
       "fflate": ">=0.8.3",
       "@opentelemetry/propagator-jaeger": ">=2.9.0",
-      "@clerk/nextjs>@clerk/react": "6.16.1"
+      "@clerk/nextjs>@clerk/react": "6.16.1",
+      "react-native": "0.86.2"
     },
     "patchedDependencies": {
       "next-themes@0.4.6": "patches/next-themes@0.4.6.patch"
@@ -103,7 +104,7 @@
     "lint": "turbo run lint --filter='!@agiworkforce/extension'",
     "lint:extension": "turbo run lint --filter=@agiworkforce/extension",
     "lint:fix": "turbo run lint --filter='!@agiworkforce/extension' -- --fix",
-    "check:i18n-parity": "node scripts/check-i18n-parity.mjs",
+    "check:i18n-parity": "node --test scripts/check-i18n-parity.test.mjs && node scripts/check-i18n-parity.mjs",
     "check:connector-logos": "node scripts/check-connector-logos.mjs",
     "check:connector-scopes": "node --test scripts/check-connector-scopes.test.mjs && node scripts/check-connector-scopes.mjs",
     "check:audit-inventory": "node scripts/check-audit-inventory.mjs",
@@ -153,7 +154,6 @@
     "check:hook-fire-sites": "node apps/cli/scripts/check-hook-fire-sites.mjs",
     "check:hardcoded-arrays": "node scripts/check-hardcoded-fixture-arrays.mjs",
     "check:hardcoded-endpoints": "node --test scripts/check-no-hardcoded-endpoints.test.mjs && node scripts/check-no-hardcoded-endpoints.mjs",
-    "check:i18n-parity": "node --test scripts/check-i18n-parity.test.mjs && node scripts/check-i18n-parity.mjs",
     "check:model-id-literals": "node --test scripts/check-no-hardcoded-model-ids.test.mjs && node scripts/check-no-hardcoded-model-ids.mjs",
     "check:plan-tier-predicates": "node --test scripts/check-plan-tier-predicates.test.mjs && node scripts/check-plan-tier-predicates.mjs",
     "check:migration-dependencies": "node --test scripts/check-migration-dependencies.test.mjs && node scripts/check-migration-dependencies.mjs",
