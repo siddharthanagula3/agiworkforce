@@ -142,6 +142,14 @@ updates:
       # once image-size and extract-zip publish a patched version.
       - dependency-name: 'image-size'
       - dependency-name: 'extract-zip'
+      # mermaid 12 switches diagrams to the ELK layout and raises the browser floor to
+      # Safari 17.4; taking it is a product change, held with the root override.
+      - dependency-name: 'mermaid'
+        update-types: ['version-update:semver-major']
+      # react and react-dom are pinned exactly by the root override, so a manifest
+      # bump changes nothing installed.
+      - dependency-name: 'react'
+      - dependency-name: 'react-dom'
       # The root group also walks apps/mobile and packages/platform/local-llm,
       # so the Expo SDK 57 pins held in the mobile block are held here too.
       - dependency-name: 'expo'
@@ -197,6 +205,8 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: 'react-dom'
         update-types: ['version-update:semver-major']
+      - dependency-name: 'mermaid'
+        update-types: ['version-update:semver-major']
 
   # ─── npm / pnpm, apps/web ──────────────────────────────────────────────────
   - package-ecosystem: 'npm'
@@ -226,6 +236,8 @@ updates:
       - dependency-name: 'react'
         update-types: ['version-update:semver-major']
       - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'mermaid'
         update-types: ['version-update:semver-major']
 
   # ─── npm / pnpm, apps/mobile ────────────────────────────────────────────────
