@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 const onOpenUrlMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tauri-apps/plugin-deep-link', () => ({ onOpenUrl: onOpenUrlMock }));
-vi.mock('../../lib/runtimeEnvironment', () => ({
+vi.mock('../../lib/runtimeEnvironment', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/runtimeEnvironment')>()),
   isTauri: false,
   isElectronHost: true,
 }));
