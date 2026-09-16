@@ -1,10 +1,17 @@
 import * as vscode from 'vscode';
 
+const STALE_DIFF_MESSAGE =
+  'AGI Workforce: this file changed since the edit was proposed, so nothing was applied. Ask again to get a fresh edit.';
+
 export interface DiffSession {
   readonly id: string;
   readonly uri: vscode.Uri;
   readonly range: vscode.Range;
   readonly originalText: string;
+  /// The document version at propose time. An insertion has no original text to
+  /// compare, so its only evidence that the insertion point still means what it
+  /// meant is that nothing has changed at all.
+  readonly documentVersion?: number;
   readonly newText: string;
   readonly decorations: vscode.DecorationOptions[];
   readonly filePath?: string;
@@ -273,12 +280,14 @@ export class DiffDecorationProvider implements vscode.Disposable {
       }
     }
 
+    const documentVersion = (editor.document as { version?: number }).version;
     const sessionBase: Omit<DiffSession, 'filePath' | 'batchId' | 'confidence'> = {
       id,
       uri: editor.document.uri,
       range,
       originalText,
       newText,
+      ...(documentVersion === undefined ? {} : { documentVersion }),
       decorations: [...addedOpts, ...removedOpts, ...modifiedOpts],
     };
     const session: DiffSession = {
@@ -299,9 +308,40 @@ export class DiffDecorationProvider implements vscode.Disposable {
     return session;
   }
 
-  async acceptDiff(sessionId: string): Promise<boolean> {
+  /// Whether the text this edit was written against is still the text on screen.
+  ///
+  /// `applyEdit` answers a different question: it succeeds whenever the range is
+  /// structurally valid, so a human edit made between propose and Accept was
+  /// replaced without a word. Comparing against the captured original also
+  /// catches an edit earlier in the file, which shifts the range onto lines the
+  /// agent never saw.
+  private async _isStale(session: DiffSession): Promise<boolean> {
+    try {
+      const document = await vscode.workspace.openTextDocument(session.uri);
+      if (session.range.isEmpty) {
+        const version = (document as { version?: number }).version;
+        return (
+          version !== undefined &&
+          session.documentVersion !== undefined &&
+          version !== session.documentVersion
+        );
+      }
+      return document.getText(session.range) !== session.originalText;
+    } catch {
+      return true;
+    }
+  }
+
+  async acceptDiff(sessionId: string, options?: { quiet?: boolean }): Promise<boolean> {
     const session = this._activeDiffs.get(sessionId);
     if (session === undefined) return false;
+
+    if (await this._isStale(session)) {
+      if (options?.quiet !== true) {
+        vscode.window.showWarningMessage(STALE_DIFF_MESSAGE);
+      }
+      return false;
+    }
 
     const wsEdit = new vscode.WorkspaceEdit();
     wsEdit.replace(session.uri, session.range, session.newText);
@@ -428,11 +468,21 @@ export class DiffDecorationProvider implements vscode.Disposable {
       existing.push(session);
       byUri.set(key, existing);
     }
+    let stale = 0;
     for (const uriSessions of byUri.values()) {
       uriSessions.sort((a, b) => b.range.start.line - a.range.start.line);
       for (const session of uriSessions) {
-        await this.acceptDiff(session.id);
+        if (!(await this.acceptDiff(session.id, { quiet: true }))) {
+          stale += 1;
+        }
       }
+    }
+    if (stale > 0) {
+      vscode.window.showWarningMessage(
+        stale === 1
+          ? STALE_DIFF_MESSAGE
+          : `AGI Workforce: ${stale} edits were not applied because those files changed since they were proposed. Ask again to get fresh edits.`,
+      );
     }
   }
 
