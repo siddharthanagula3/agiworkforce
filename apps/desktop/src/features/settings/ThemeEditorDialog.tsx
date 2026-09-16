@@ -1,5 +1,5 @@
-
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 import { Moon, Sun, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ThemeDefinition, ThemeColors } from '../../themes/types';
@@ -233,6 +233,8 @@ const COLOR_FIELDS: Array<{ key: keyof ThemeColors; label: string }> = [
 ];
 
 export function ThemeEditorDialog({ onClose, onSaved }: ThemeEditorDialogProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useDialogKeyboard({ open: true, onClose, panelRef });
   const [name, setName] = useState('My Theme');
   const [variant, setVariant] = useState<'dark' | 'light'>('dark');
   const [author, setAuthor] = useState('');
@@ -270,7 +272,10 @@ export function ThemeEditorDialog({ onClose, onSaved }: ThemeEditorDialogProps) 
       aria-modal="true"
       aria-label="Create theme"
     >
-      <div className="flex h-[90vh] w-[720px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+      <div
+        ref={panelRef}
+        className="flex h-[90vh] w-[720px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-base font-semibold text-foreground">Create Custom Theme</h2>

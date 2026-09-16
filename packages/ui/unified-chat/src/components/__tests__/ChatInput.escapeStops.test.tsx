@@ -13,7 +13,9 @@ function renderComposer(onStop = vi.fn(), withSlashMenu = false) {
       hasMessages
       conversationId="conv-1"
       supportsResearch={false}
-      {...(withSlashMenu ? { slashCommandHost: { openRewindTimeline: vi.fn() } } : {})}
+      {...(withSlashMenu
+        ? { slashCommandHost: { togglePlanMode: vi.fn(), openRewindTimeline: vi.fn() } }
+        : {})}
     />,
   );
   return { onStop, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
