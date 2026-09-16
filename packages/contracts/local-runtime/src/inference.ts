@@ -208,8 +208,14 @@ export function isLoopbackBaseUrl(value: string): boolean {
   return LOOPBACK_HOSTNAMES.includes(hostname);
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
 export function normalizeLocalBaseUrl(value: string, fallback: string): string {
-  const trimmed = value.trim().replace(/\/+$/, '');
+  const trimmed = trimTrailingSlashes(value.trim());
   if (trimmed === '') return fallback;
   if (!isLoopbackBaseUrl(trimmed)) {
     throw new LocalInferenceRefused(
@@ -228,8 +234,8 @@ export function normalizeLocalModelSettings(
   for (const serverId of LOCAL_MODEL_SERVERS) {
     const candidate = value?.baseUrls?.[serverId];
     baseUrls[serverId] =
-      typeof candidate === 'string' && isLoopbackBaseUrl(candidate.trim().replace(/\/+$/, ''))
-        ? candidate.trim().replace(/\/+$/, '')
+      typeof candidate === 'string' && isLoopbackBaseUrl(trimTrailingSlashes(candidate.trim()))
+        ? trimTrailingSlashes(candidate.trim())
         : defaults[serverId];
   }
   return { baseUrls };
