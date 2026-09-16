@@ -4802,6 +4802,7 @@ mod tests {
             &crate::tools::ToolExecOptions {
                 require_confirmation: false,
                 auto_approve_safe: false,
+                auto_approve_edits: false,
                 quiet: true,
                 approval_callback: None,
                 privacy_mode: agent.privacy_mode,
@@ -4847,6 +4848,7 @@ mod tests {
             &crate::tools::ToolExecOptions {
                 require_confirmation: false,
                 auto_approve_safe: false,
+                auto_approve_edits: false,
                 quiet: true,
                 approval_callback: None,
                 privacy_mode: local_agent.privacy_mode,

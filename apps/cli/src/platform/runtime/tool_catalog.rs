@@ -273,6 +273,19 @@ pub fn tool_result_size_cap(tool_name: &str) -> Option<usize> {
         .and_then(|tool| tool.max_result_size_chars)
 }
 
+/// The tools that change a file's contents in place.
+///
+/// `acceptEdits` means edits, not everything that mutates. `run_command` is in
+/// the same permission class as these and must keep asking: a mode named for
+/// file edits that silently started running shell commands would be a larger
+/// hole than the one it closes.
+pub fn is_file_edit_tool(tool_name: &str) -> bool {
+    matches!(
+        canonical_tool_name(tool_name),
+        "write_file" | "edit_file" | "multiedit" | "apply_patch" | "notebook_edit" | "lsp_format"
+    )
+}
+
 pub fn is_plan_mode_mutating_tool_definition(tool_definition: &ToolDefinition) -> bool {
     tool_definition.name != "update_plan"
         && !tool_definition.is_read_only
@@ -982,6 +995,32 @@ fn filter_read_only_builtin_tool_definitions() -> Vec<ToolDefinition> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn accept_edits_covers_file_edits_and_never_shell() {
+        for tool in [
+            "write_file",
+            "edit_file",
+            "multiedit",
+            "apply_patch",
+            "notebook_edit",
+            "lsp_format",
+        ] {
+            assert!(is_file_edit_tool(tool), "{tool} should be a file edit");
+        }
+        for tool in [
+            "run_command",
+            "powershell",
+            "read_file",
+            "glob",
+            "web_search",
+        ] {
+            assert!(
+                !is_file_edit_tool(tool),
+                "{tool} must keep asking under acceptEdits"
+            );
+        }
+    }
     use super::*;
 
     fn tool_names(tool_definitions: &[ToolDefinition]) -> Vec<&str> {

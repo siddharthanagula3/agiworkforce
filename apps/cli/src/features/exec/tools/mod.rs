@@ -168,6 +168,8 @@ pub type ApprovalCallback = Arc<
 pub struct ToolExecOptions {
     pub require_confirmation: bool,
     pub auto_approve_safe: bool,
+    /// `acceptEdits`: a file edit runs without asking. Shell commands still ask.
+    pub auto_approve_edits: bool,
     pub quiet: bool,
     pub approval_callback: Option<ApprovalCallback>,
     /// Trust boundary of the session that requested this invocation.
@@ -316,6 +318,7 @@ pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result
     let opts = ToolExecOptions {
         require_confirmation,
         auto_approve_safe: false,
+        auto_approve_edits: false,
         quiet: false,
         approval_callback: None,
         // A sessionless invocation has no authority to leave the device.
@@ -356,8 +359,10 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         });
     }
 
-    let mut require_confirm = opts.require_confirmation
-        && !(opts.auto_approve_safe && is_catalog_read_only_tool(canonical_name));
+    let pre_approved = (opts.auto_approve_safe && is_catalog_read_only_tool(canonical_name))
+        || (opts.auto_approve_edits
+            && crate::platform::runtime::tool_catalog::is_file_edit_tool(canonical_name));
+    let mut require_confirm = opts.require_confirmation && !pre_approved;
     if let Some(workspace_root) = opts.workspace_root.as_deref() {
         let policy = crate::platform::policy::PolicyEngine::load_workspace(workspace_root)?;
         if policy.has_rules() {
@@ -1187,6 +1192,7 @@ mod tests {
         let opts = ToolExecOptions {
             require_confirmation: false,
             auto_approve_safe: true,
+            auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
@@ -1237,6 +1243,7 @@ reason = "regression test"
         let opts = ToolExecOptions {
             require_confirmation: false,
             auto_approve_safe: true,
+            auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
@@ -1286,6 +1293,7 @@ decision = "ask"
         let opts = ToolExecOptions {
             require_confirmation: false,
             auto_approve_safe: true,
+            auto_approve_edits: false,
             quiet: true,
             approval_callback: Some(callback),
             privacy_mode: crate::agent::PrivacyMode::Local,
@@ -1326,6 +1334,7 @@ decision = "deny"
         let opts = ToolExecOptions {
             require_confirmation: false,
             auto_approve_safe: true,
+            auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
@@ -1486,6 +1495,7 @@ decision = "deny"
         let opts = ToolExecOptions {
             require_confirmation: false,
             auto_approve_safe: true,
+            auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,

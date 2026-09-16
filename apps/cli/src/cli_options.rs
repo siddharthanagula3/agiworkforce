@@ -59,6 +59,18 @@ pub(crate) struct CliOptions {
     pub(crate) setting_sources: Vec<String>,
 }
 
+impl PermissionMode {
+    /// Whether a file edit may run without asking.
+    ///
+    /// `DontAsk` deliberately answers no: it pre-approves the read-only
+    /// allowlist and leaves every mutation at the gate. `AcceptEdits` is the
+    /// mode named for this and behaved identically to `DontAsk` until now, so
+    /// the flag accepted nothing.
+    pub(crate) fn auto_approves_edits(self) -> bool {
+        matches!(self, PermissionMode::AcceptEdits)
+    }
+}
+
 impl CliOptions {
     pub(crate) fn from_cli(cli: &crate::Cli) -> Self {
         Self {
@@ -146,6 +158,22 @@ pub(crate) fn session_persistence_policy_lock() -> std::sync::MutexGuard<'static
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn accept_edits_is_the_only_mode_that_accepts_edits() {
+        assert!(PermissionMode::AcceptEdits.auto_approves_edits());
+        for mode in [
+            PermissionMode::Default,
+            PermissionMode::Plan,
+            PermissionMode::DontAsk,
+            PermissionMode::BypassPermissions,
+        ] {
+            assert!(
+                !mode.auto_approves_edits(),
+                "{mode:?} must not auto-approve an edit"
+            );
+        }
+    }
     use super::*;
 
     #[test]

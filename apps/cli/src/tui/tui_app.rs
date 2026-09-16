@@ -4740,6 +4740,7 @@ async fn run_event_loop(
                                 let opts = crate::tools::ToolExecOptions {
                                     require_confirmation: false,
                                     auto_approve_safe: true,
+                                    auto_approve_edits: false,
                                     quiet: true,
                                     approval_callback: None,
                                     privacy_mode: app.session.privacy_mode,
@@ -5698,6 +5699,7 @@ mod tests {
             let opts = crate::tools::ToolExecOptions {
                 require_confirmation: true,
                 auto_approve_safe: false,
+                auto_approve_edits: false,
                 quiet: true,
                 approval_callback: Some(callback),
                 privacy_mode: crate::agent::PrivacyMode::Local,
@@ -5756,6 +5758,7 @@ mod tests {
             let opts = crate::tools::ToolExecOptions {
                 require_confirmation: true,
                 auto_approve_safe: false,
+                auto_approve_edits: false,
                 quiet: true,
                 approval_callback: Some(callback),
                 privacy_mode: crate::agent::PrivacyMode::Local,
@@ -5853,6 +5856,7 @@ mod tests {
             let opts = crate::tools::ToolExecOptions {
                 require_confirmation: true,
                 auto_approve_safe: false,
+                auto_approve_edits: false,
                 quiet: true,
                 approval_callback: Some(callback),
                 privacy_mode: crate::agent::PrivacyMode::Local,
