@@ -1,3 +1,17 @@
+/**
+ * Host dispatch for the desktop renderer, despite the filename.
+ *
+ * `invoke` here is not a mock. It routes a command to whichever host is
+ * actually present: the Tauri core, the Electron bridge, or a cloud API. The
+ * fixture `switch` further down exists for tests and the local UI dev shell and
+ * is unreachable in any shipped build, because `shouldServeFixtures` answers on
+ * `test || desktopUiDev` alone and a production bundle satisfies neither.
+ *
+ * Said plainly at the top because the name has misled a reader into recording
+ * this file as a mock on the shipped desktop, which is a release-gate verdict
+ * rather than a detail. The rule the name obscures is asserted directly in
+ * `src/__tests__/tauriMock.test.ts`, "which runtimes may answer with a fixture".
+ */
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import {
   createCloudConversation,
