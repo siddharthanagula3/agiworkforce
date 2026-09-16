@@ -635,10 +635,23 @@ pub fn delete_session(conn: &Connection, session_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Rename a session title by updating its metadata sidecar.
+/// Rename a session, in both places a title is kept.
+///
+/// The sidecar is what this command has always written and what the terminal's
+/// own list reads. The header inside the session file is what the developer
+/// protocol serves, so the editor's thread list kept showing the old name until
+/// this wrote there too.
+///
+/// The header goes first because saving validates the title, so an unacceptable
+/// one fails before the sidecar has been touched rather than leaving the two
+/// disagreeing. The load above remembers the file's fingerprint, so the save
+/// below is the same process writing what it just read.
 pub fn rename_session(conn: &Connection, session_id: &str, new_title: &str) -> Result<()> {
     let path = resolve_reference_path(&conn.base_dir, session_id)?;
-    let session = load_managed_session_from_path(&path)?;
+    let mut session = load_managed_session_from_path(&path)?;
+    session.title = Some(new_title.to_string());
+    session.save_to_path(&path)?;
+
     let mut metadata = read_metadata(&conn.base_dir, &session.session_id)?.unwrap_or_default();
     metadata.title = Some(new_title.to_string());
     metadata.custom_title = true;
@@ -917,6 +930,48 @@ mod tests {
         let tempdir = tempdir().unwrap();
         let conn = open_db_in(tempdir.path()).unwrap();
         (tempdir, conn)
+    }
+
+    #[test]
+    fn renaming_reaches_the_header_the_editor_reads() {
+        // The editor's thread list is served from the session header, so a
+        // rename that only wrote the sidecar left the old name on screen there.
+        let (tempdir, conn) = temp_connection();
+        save_session(&conn, "s-rename", "Hello there", "claude", "/tmp", "main").unwrap();
+
+        rename_session(&conn, "s-rename", "Chosen by a person").unwrap();
+
+        let path = resolve_reference_path(&conn.base_dir, "s-rename").unwrap();
+        let reloaded = load_managed_session_from_path(&path).unwrap();
+        assert_eq!(reloaded.title.as_deref(), Some("Chosen by a person"));
+
+        let summary = summary_from_session(&path, &reloaded, None);
+        assert_eq!(summary.title, "Chosen by a person");
+        drop(tempdir);
+    }
+
+    #[test]
+    fn a_rename_the_header_refuses_leaves_the_sidecar_alone() {
+        // Saving validates the title, so the two stores must not be left
+        // disagreeing: the header is written first for exactly this case.
+        let (tempdir, conn) = temp_connection();
+        save_session(&conn, "s-bad", "Hello there", "claude", "/tmp", "main").unwrap();
+        let overlong = "x".repeat(MANAGED_SESSION_TITLE_MAX_UTF16 + 1);
+
+        let before = read_metadata(&conn.base_dir, "s-bad")
+            .unwrap()
+            .and_then(|v| v.title);
+
+        assert!(rename_session(&conn, "s-bad", &overlong).is_err());
+
+        let after = read_metadata(&conn.base_dir, "s-bad")
+            .unwrap()
+            .and_then(|v| v.title);
+        assert_eq!(
+            after, before,
+            "the refused title must not reach the sidecar"
+        );
+        drop(tempdir);
     }
 
     #[test]
