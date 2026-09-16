@@ -511,33 +511,53 @@ pub(super) fn handle_sessions(arg: &str) {
     }
 }
 
-pub fn handle_rename(arg: &str) {
+/// Rename a stored session, returning what to tell the user.
+///
+/// Returns the outcome rather than printing it, because the TUI owns the screen
+/// and cannot use `output::print_*`: it discarded the result and reported
+/// "Renamed" whatever happened, so a typo in the id read as success.
+pub fn rename_session_for_display(arg: &str) -> Result<String, String> {
     let parts: Vec<&str> = arg.splitn(2, ' ').collect();
     if parts.len() < 2 || parts[0].is_empty() || parts[1].trim().is_empty() {
-        output::print_warn("Usage: /rename <id> <new title>");
-        return;
+        return Err("Usage: /rename <id> <new title>".to_string());
     }
     let session_id = parts[0];
     let new_title = parts[1].trim();
 
-    let conn = match sessions::open_db() {
-        Ok(c) => c,
-        Err(e) => {
-            output::print_error(&format!("Failed to open session store: {:#}", e));
-            return;
-        }
-    };
+    let conn = sessions::open_db().map_err(|e| format!("Failed to open session store: {:#}", e))?;
 
-    match sessions::rename_session(&conn, session_id, new_title) {
-        Ok(()) => {
-            output::print_info(&format!(
-                "Renamed session {} to '{}'",
-                session_id, new_title
-            ));
+    sessions::rename_session(&conn, session_id, new_title)
+        .map(|()| format!("Renamed session {} to '{}'", session_id, new_title))
+        .map_err(|e| format!("Failed to rename: {:#}", e))
+}
+
+pub fn handle_rename(arg: &str) {
+    match rename_session_for_display(arg) {
+        Ok(message) => output::print_info(&message),
+        Err(message) => output::print_error(&message),
+    }
+}
+
+#[cfg(test)]
+mod rename_tests {
+    use super::rename_session_for_display;
+
+    #[test]
+    fn refuses_an_argument_that_names_no_title() {
+        for arg in ["", "only-an-id", "only-an-id   "] {
+            let error = rename_session_for_display(arg).expect_err("no title given");
+            assert!(error.starts_with("Usage:"), "{arg}: {error}");
         }
-        Err(e) => {
-            output::print_error(&format!("Failed to rename: {:#}", e));
-        }
+    }
+
+    #[test]
+    fn reports_a_session_that_does_not_exist_as_a_failure() {
+        // The TUI used to answer "Renamed" here, so a typo in the id read as
+        // success and the user went looking for a rename that never happened.
+        let error = rename_session_for_display("not-a-session-id A new title")
+            .expect_err("unknown session should not succeed");
+        assert!(!error.starts_with("Usage:"), "{error}");
+        assert!(error.contains("Failed to"), "{error}");
     }
 }
 

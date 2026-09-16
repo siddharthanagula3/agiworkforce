@@ -3593,11 +3593,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/rename" => {
-            if arg.is_empty() {
-                SlashResult::SystemMessage("Usage: /rename <session_id> <new_title>".to_string())
-            } else {
-                crate::repl::handle_rename(arg);
-                SlashResult::SystemMessage(format!("Renamed: {arg}"))
+            match crate::repl::rename_session_for_display(arg) {
+                Ok(message) => SlashResult::SystemMessage(message),
+                Err(message) => SlashResult::SystemMessage(message),
             }
         }
 
