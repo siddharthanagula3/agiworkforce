@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { usePasskeys, type IdentityPasskey } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
-
-const PASSKEY_CANCELLED = /NotAllowedError|cancel/i;
+import { isPasskeyCancellation } from '@features/settings/lib/passkey-cancellation';
 
 function formatDate(value: Date | null): string | null {
   if (!value) return null;
@@ -46,8 +45,7 @@ export function PasskeysPanel() {
     try {
       await create();
     } catch (cause) {
-      const message = cause instanceof Error ? `${cause.name} ${cause.message}` : String(cause);
-      if (!PASSKEY_CANCELLED.test(message)) {
+      if (!isPasskeyCancellation(cause)) {
         setError(toUserMessage(cause, 'This passkey could not be added.'));
       }
     } finally {

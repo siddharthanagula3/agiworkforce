@@ -550,7 +550,10 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Notion' }));
 
-    const trigger = await screen.findByText('Tool permissions');
+    // The label is a span inside the button, and the button only renders once
+    // the connector detail has loaded. Querying the button waits for the
+    // control itself rather than for text that appears a tick earlier.
+    const trigger = await screen.findByRole('button', { name: /Tool permissions/ });
     expect(trigger).toBeTruthy();
   });
 
@@ -561,7 +564,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }));
-    fireEvent.click(await screen.findByText('Tool permissions'));
+    fireEvent.click(await screen.findByRole('button', { name: /Tool permissions/ }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('GitHub - Tool Permissions')).toBeTruthy();
