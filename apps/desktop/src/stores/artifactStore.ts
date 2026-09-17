@@ -109,6 +109,7 @@ interface ArtifactStoreState {
 
   isLoading: boolean;
   isStreaming: string | null;
+  summariesError: string | null;
 
   draft: ArtifactDraft | null;
 
@@ -197,6 +198,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         panelOpen: false,
         panelWidth: 480,
         isLoading: false,
+        summariesError: null,
         isStreaming: null,
         draft: null,
 
@@ -516,12 +518,20 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         },
 
         listPersistedArtifacts: async (conversationId, limit) => {
+          set({ isLoading: true });
           try {
             const summaries = await artifactListPersisted(conversationId, limit);
-            set({ summaries });
+            set({ summaries, summariesError: null, isLoading: false });
             return summaries;
           } catch (error) {
             console.error('Error listing persisted artifacts:', error);
+            // Returning [] without saying so renders the empty state, which
+            // tells someone who has artifacts that they have none.
+            set({
+              summariesError:
+                error instanceof Error ? error.message : 'Could not load your artifacts.',
+              isLoading: false,
+            });
             return [];
           }
         },
