@@ -63,6 +63,16 @@ const ALLOWLIST = [
       'mapped, and the contract is keyed by the Stripe subscription id only that event can supply',
   },
   {
+    match: /lib\/server\/data-region\.ts$/,
+    tables: ['organizations'],
+    reason:
+      'every statement is keyed by `id = $1`, which for organizations IS the tenant: the row ' +
+      'read and written is the workspace whose region is being read or moved, and there is no ' +
+      'narrower owner to constrain by. The callers prove admin membership of that workspace ' +
+      'before naming it, and a region cutover is deliberately a privileged write rather than ' +
+      'something a member can make under policy',
+  },
+  {
     match: /api\/webhooks\//,
     reason: 'inbound webhooks resolve their subject from the signed payload',
   },

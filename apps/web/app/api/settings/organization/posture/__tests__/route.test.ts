@@ -51,6 +51,9 @@ function bind({ role = 'admin' as 'owner' | 'admin' | 'member' | 'viewer', membe
       return [];
     }
     if (/from public\.organization_admin_policies/i.test(text)) return [];
+    // No customer-managed key association: this workspace is on the platform
+    // key, which is what every workspace is on today.
+    if (/from public\.organization_encryption_keys/i.test(text)) return [];
     return [{ count: 0 }];
   });
 }

@@ -28,6 +28,7 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'organization_spend_limits', column: 'organization_id' },
   { table: 'organization_admin_policies', column: 'organization_id' },
   { table: 'organization_audit_destinations', column: 'organization_id' },
+  { table: 'organization_encryption_keys', column: 'organization_id' },
   { table: 'sso_connections', column: 'organization_id' },
   { table: 'directory_sync_connections', column: 'organization_id' },
   { table: 'directory_sync_events', column: 'organization_id' },

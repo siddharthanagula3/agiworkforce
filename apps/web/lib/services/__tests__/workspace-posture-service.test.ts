@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/server/db-pool-tuning', () => ({ SERVICE_POOL_TUNING: {} }));
+vi.mock('@/lib/server/db-connection-error', () => ({
+  reportDatabaseConnectionError: vi.fn(),
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { readWorkspacePosture, type PostureSignal } from '../workspace-posture-service';
@@ -32,6 +40,8 @@ interface Fixture {
   auditDestination?: { enabled: boolean; failures: number } | null;
   policyRow?: Record<string, unknown> | null;
   org?: { name: string | null; licensed_seats: number | null; seats_consumed: number | null };
+  encryptionKey?: Record<string, unknown> | null;
+  region?: { data_region: string | null; data_region_requested: string | null };
 }
 
 /**
@@ -44,7 +54,19 @@ function harness(fixture: Fixture = {}) {
     const count = (n: number | undefined) => [{ count: n ?? 0 }];
 
     if (text.includes('from public.organizations')) {
+      if (text.includes('data_region')) {
+        return [
+          {
+            data_region: fixture.region?.data_region ?? null,
+            data_region_requested: fixture.region?.data_region_requested ?? null,
+            data_region_requested_at: null,
+          },
+        ];
+      }
       return [fixture.org ?? { name: 'Acme', licensed_seats: 25, seats_consumed: 4 }];
+    }
+    if (text.includes('from public.organization_encryption_keys')) {
+      return fixture.encryptionKey ? [fixture.encryptionKey] : [];
     }
     if (text.includes('from public.organization_members')) {
       return (
@@ -421,5 +443,107 @@ describe('readWorkspacePosture', () => {
       expect(s.detail.length).toBeGreaterThan(20);
       expect(s.label.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('readWorkspacePosture, residency and keys', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('says a workspace without its own key is on a per-workspace platform key, not its own', async () => {
+    vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', 'ab'.repeat(32));
+    const h = harness();
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const key = signal(posture.groups, 'encryption-key');
+
+    expect(key.value).toMatch(/platform key/i);
+    expect(key.detail).toMatch(/not offered yet/i);
+    expect(key.detail).not.toMatch(/customer-managed \(/i);
+  });
+
+  it('says so when the deployment has no platform key ring at all', async () => {
+    vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', '');
+    const h = harness();
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const key = signal(posture.groups, 'encryption-key');
+
+    expect(key.value).toBe('Not configured');
+    expect(key.enforcement).toBe('unconfigured');
+  });
+
+  it('reports an unreachable customer key as a refusal rather than smoothing it over', async () => {
+    const h = harness({
+      encryptionKey: {
+        organization_id: ORG,
+        provider: 'aws_kms',
+        key_uri: 'arn:aws:kms:us-east-1:1:key/abc',
+        key_region: 'us-east-1',
+        status: 'active',
+        key_version: '1',
+        wrapped_data_key: 'AAAABBBB',
+        retired_keys: [],
+        last_rotated_at: null,
+        revoked_at: null,
+      },
+    });
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const key = signal(posture.groups, 'encryption-key');
+
+    expect(key.value).toMatch(/unreachable/i);
+    expect(key.state).toBe('attention');
+    expect(key.detail).toMatch(/refused rather than served with a platform key/i);
+  });
+
+  it('reports a revoked key as sealed rather than as a fallback to the platform key', async () => {
+    const h = harness({
+      encryptionKey: {
+        organization_id: ORG,
+        provider: 'aws_kms',
+        key_uri: 'arn:aws:kms:us-east-1:1:key/abc',
+        key_region: 'us-east-1',
+        status: 'revoked',
+        key_version: '2',
+        wrapped_data_key: 'AAAABBBB',
+        retired_keys: [{ version: '1', wrapped: 'CCCCDDDD' }],
+        last_rotated_at: null,
+        revoked_at: '2026-09-16T00:00:00.000Z',
+      },
+    });
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const key = signal(posture.groups, 'encryption-key');
+
+    expect(key.value).toMatch(/revoked/i);
+    expect(key.detail).toMatch(/nothing falls back to a platform key/i);
+  });
+
+  it('never dresses the home region up as a residency commitment', async () => {
+    const h = harness();
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const region = signal(posture.groups, 'data-region');
+
+    expect(region.value).toBe('United States');
+    expect(region.enforcement).toBe('stated');
+    expect(region.detail).toMatch(/not as a residency commitment/i);
+  });
+
+  it('says a pinned workspace this deployment cannot serve is refused, not relocated', async () => {
+    const h = harness({ region: { data_region: 'eu', data_region_requested: null } });
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const region = signal(posture.groups, 'data-region');
+
+    expect(region.value).toMatch(/not provisioned/i);
+    expect(region.state).toBe('attention');
+    expect(region.detail).toMatch(/refused rather than served from another region/i);
+  });
+
+  it('shows a requested move as outstanding, not as where the data already is', async () => {
+    const h = harness({ region: { data_region: null, data_region_requested: 'eu' } });
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const region = signal(posture.groups, 'data-region');
+
+    expect(region.value).toBe('United States');
+    expect(region.detail).toMatch(/requested and not complete/i);
   });
 });

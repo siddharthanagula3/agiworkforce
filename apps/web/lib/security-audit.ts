@@ -281,6 +281,16 @@ export type AuditEventType =
   | 'skill_uninstalled'
   | 'remote_pairing_initiated'
   | 'encryption_key_rotated'
+  /**
+   * A workspace brought its own key, retired the one it was using, or withdrew
+   * the association. Revocation is the one an auditor looks for: after it, this
+   * product can no longer open that workspace's data, and the trail has to say
+   * when that became true and which key version it was true of.
+   */
+  | 'encryption_key_provisioned'
+  | 'encryption_key_revoked'
+  | 'data_region_change_requested'
+  | 'data_region_changed'
   | 'tool_executed'
   | 'browser_action'
   | 'computer_use_action'
@@ -341,6 +351,9 @@ export interface AuditEventDetail {
   keyVersion?: string;
   version?: string;
   variant?: string;
+  region?: string;
+  previousRegion?: string;
+  keyProvider?: string;
 }
 
 export interface AuditEvent {
@@ -388,6 +401,9 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'keyVersion',
   'version',
   'variant',
+  'region',
+  'previousRegion',
+  'keyProvider',
 ]);
 
 const SECRET_KEY_NAME_RE =
@@ -617,7 +633,12 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'remote_pairing_initiated':
       return 'remote_pairing';
     case 'encryption_key_rotated':
+    case 'encryption_key_provisioned':
+    case 'encryption_key_revoked':
       return 'encryption_key';
+    case 'data_region_change_requested':
+    case 'data_region_changed':
+      return 'data_region';
     case 'tool_executed':
       return 'tool';
     case 'browser_action':
