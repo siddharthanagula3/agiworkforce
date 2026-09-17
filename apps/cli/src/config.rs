@@ -23,9 +23,26 @@ pub struct CliConfig {
     #[serde(default)]
     pub providers: HashMap<String, ProviderConfig>,
 
+    /// Read from the user's global config only: `merge_from` never copies it,
+    /// so a repository's project config cannot opt its users into reporting.
+    #[serde(default, skip_serializing_if = "TelemetryConfig::is_default")]
+    pub telemetry: TelemetryConfig,
+
     /// Tracks provenance of configuration values. Excluded from serialization.
     #[serde(skip)]
     pub source: ConfigSource,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TelemetryConfig {
+    #[serde(default)]
+    pub crash_reports: bool,
+}
+
+impl TelemetryConfig {
+    pub fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -295,6 +312,7 @@ impl Default for CliConfig {
             default: DefaultConfig::new(),
             ui: UiConfig::default(),
             providers,
+            telemetry: TelemetryConfig::default(),
             source: ConfigSource::default(),
         }
     }
@@ -901,6 +919,9 @@ impl CliConfig {
             "output-style" | "ui.output-style" | "ui.output_style" => self.ui.output_style.clone(),
             "privacy-mode" | "ui.privacy-mode" | "ui.privacy_mode" => self.ui.privacy_mode.clone(),
             "edit-mode" | "ui.edit-mode" | "ui.edit_mode" => self.ui.edit_mode.clone(),
+            "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
+                Some(self.telemetry.crash_reports.to_string())
+            }
             _ => key
                 .strip_prefix("ui.keybindings.")
                 .or_else(|| key.strip_prefix("keybindings."))
@@ -975,6 +996,12 @@ impl CliConfig {
                 }
                 self.ui.edit_mode = Some(mode);
             }
+            "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
+                self.telemetry.crash_reports = value
+                    .trim()
+                    .parse::<bool>()
+                    .context("crash-reports must be true or false")?;
+            }
             _ => {
                 if let Some(action) = key
                     .strip_prefix("ui.keybindings.")
@@ -986,7 +1013,7 @@ impl CliConfig {
                     self.ui.keybindings = candidate;
                 } else {
                     bail!(
-                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, and ui.keybindings.<action>",
+                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, crash-reports, and ui.keybindings.<action>",
                         key
                     );
                 }

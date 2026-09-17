@@ -29,6 +29,9 @@ import { MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH } from '@agiworkforce/cloud-contrac
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
+import { recordFailure } from '@/lib/observability/metrics';
+import { withSpan } from '@/lib/observability/span';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 import { notifyAgentRunEvent, type AgentRunNotice } from './agent-notification-service';
 
@@ -1835,21 +1838,57 @@ function requireDeviceCheckpoint(
  * `device-step-requested` per paused call, then `task-state-changed:awaiting_input`,
  * then `lifecycle:paused`.
  */
-export async function saveCloudAgentDeviceCheckpoint(
+type SaveCloudAgentDeviceCheckpointInput = {
+  userId: string;
+  runId: string;
+  sessionId: string;
+  turnId: string;
+  nextEventSequence: number;
+  completedSteps: number;
+  request: Record<string, unknown>;
+  messages: unknown[];
+  pendingToolCalls: unknown[];
+  deviceStep: CloudAgentDeviceStepBinding;
+  events: unknown[];
+};
+
+const REMOTE_DEVICE_STEP_DISPATCH_SPAN = 'remote.device_step.dispatch';
+const REMOTE_DEVICE_STEP_CLAIM_SPAN = 'remote.device_step.claim';
+
+function tracedRemoteStep<R>(
+  name: string,
+  attributes: Readonly<Record<string, unknown>>,
+  operation: () => Promise<R>,
+): Promise<R> {
+  return withSpan(name, { kind: 'server', domain: 'tool', attributes }, async () => {
+    try {
+      return await operation();
+    } catch (error) {
+      recordFailure('remote', error instanceof Error ? error.name : typeof error);
+      throw error;
+    }
+  });
+}
+
+export function saveCloudAgentDeviceCheckpoint(
   db: DatabaseAdapter,
-  input: {
-    userId: string;
-    runId: string;
-    sessionId: string;
-    turnId: string;
-    nextEventSequence: number;
-    completedSteps: number;
-    request: Record<string, unknown>;
-    messages: unknown[];
-    pendingToolCalls: unknown[];
-    deviceStep: CloudAgentDeviceStepBinding;
-    events: unknown[];
-  },
+  input: SaveCloudAgentDeviceCheckpointInput,
+): Promise<CloudAgentDeviceCheckpoint> {
+  return tracedRemoteStep(
+    REMOTE_DEVICE_STEP_DISPATCH_SPAN,
+    {
+      [OBSERVABILITY_ATTRIBUTE.remoteSessionId]: input.runId,
+      [OBSERVABILITY_ATTRIBUTE.remoteDeviceId]: input.deviceStep.deviceId,
+      [OBSERVABILITY_ATTRIBUTE.sessionId]: input.sessionId,
+      [OBSERVABILITY_ATTRIBUTE.turnId]: input.turnId,
+    },
+    () => persistCloudAgentDeviceCheckpoint(db, input),
+  );
+}
+
+async function persistCloudAgentDeviceCheckpoint(
+  db: DatabaseAdapter,
+  input: SaveCloudAgentDeviceCheckpointInput,
 ): Promise<CloudAgentDeviceCheckpoint> {
   const request = z.record(z.string(), z.unknown()).parse(input.request);
   const messages = z.array(CheckpointMessageSchema).parse(input.messages);
@@ -1987,15 +2026,31 @@ export async function saveCloudAgentDeviceCheckpoint(
  * approval resume already uses, so a client never mistakes "someone else took
  * this" for "your answer was accepted".
  */
-export async function claimCloudAgentDeviceCheckpoint(
+type ClaimCloudAgentDeviceCheckpointInput = {
+  userId: string;
+  runId: string;
+  deviceId: string;
+  results: CloudAgentDeviceStepResult[];
+  leaseSeconds?: number;
+};
+
+export function claimCloudAgentDeviceCheckpoint(
   db: DatabaseAdapter,
-  input: {
-    userId: string;
-    runId: string;
-    deviceId: string;
-    results: CloudAgentDeviceStepResult[];
-    leaseSeconds?: number;
-  },
+  input: ClaimCloudAgentDeviceCheckpointInput,
+): Promise<ClaimedCloudAgentDeviceCheckpoint> {
+  return tracedRemoteStep(
+    REMOTE_DEVICE_STEP_CLAIM_SPAN,
+    {
+      [OBSERVABILITY_ATTRIBUTE.remoteSessionId]: input.runId,
+      [OBSERVABILITY_ATTRIBUTE.remoteDeviceId]: input.deviceId,
+    },
+    () => claimDeviceCheckpoint(db, input),
+  );
+}
+
+async function claimDeviceCheckpoint(
+  db: DatabaseAdapter,
+  input: ClaimCloudAgentDeviceCheckpointInput,
 ): Promise<ClaimedCloudAgentDeviceCheckpoint> {
   const results = z
     .array(

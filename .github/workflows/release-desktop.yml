@@ -306,6 +306,8 @@ jobs:
     permissions:
       contents: write
     timeout-minutes: 60
+    env:
+      VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN_DESKTOP }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -470,6 +472,8 @@ jobs:
       url: https://appstoreconnect.apple.com/access/integrations/api
     permissions:
       contents: write
+    env:
+      VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN_DESKTOP }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

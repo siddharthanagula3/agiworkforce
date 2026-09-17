@@ -130,6 +130,10 @@
       "reason": "reached only from the platform-admin operator route, deliberately platform-wide aggregate reads across every tenant"
     },
     {
+      "path": "apps/web/features/admin/services/service-health-metrics.ts",
+      "reason": "reached only from the platform-admin service-health route gated by requirePlatformAdmin, the audit, checkpoint, device, queue and knowledge-file reads are deliberately cross-tenant aggregates that return counts, rates and latency percentiles, never a row or a user id"
+    },
+    {
       "path": "apps/web/lib/connectors/mcp-state-store.ts",
       "reason": "mcp_app_payloads and mcp_task_bindings had row-level security disabled and no grants at all for the app_rls role, so a scoped statement was refused outright; the grants, row-level security and policies now exist as draft migration 0173 (NOT YET APPLIED in production) and this file can move to getUserScopedDb once it is applied"
     },

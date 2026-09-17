@@ -163,6 +163,7 @@ jobs:
     needs: [prepare-release, validate]
     environment: macos-release
     env:
+      VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN_DESKTOP }}
       TAG: ${{ needs.prepare-release.outputs.tag }}
       EXPECTED_VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:

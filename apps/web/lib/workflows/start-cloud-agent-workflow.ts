@@ -13,6 +13,8 @@ import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/manage
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { runToolLoop, type ApprovalMode } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { logger } from '@/lib/logger';
+import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
+import { withSpan, type ActiveSpan } from '@/lib/observability/span';
 import { claimLiveDurableStream, isDurableTransportCoolingDown } from './durable-stream-liveness';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
@@ -37,6 +39,9 @@ import {
 } from './cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from './durable-initial-turns';
 import type { ConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+
+const CLOUD_AGENT_ENQUEUE_SPAN = 'workflow.enqueue';
+const CLOUD_AGENT_QUEUE_NAME = 'cloud-agent-turn';
 
 export interface StartCloudAgentWorkflowExecutionInput {
   db: DatabaseAdapter;
@@ -66,11 +71,36 @@ export async function startCloudAgentWorkflowExecution(
   readable: WorkflowReadableStream<Uint8Array>;
   cancel: () => Promise<void>;
 }> {
+  return withSpan(
+    CLOUD_AGENT_ENQUEUE_SPAN,
+    {
+      kind: 'producer',
+      domain: 'task',
+      attributes: {
+        [OBSERVABILITY_ATTRIBUTE.queueName]: CLOUD_AGENT_QUEUE_NAME,
+        [OBSERVABILITY_ATTRIBUTE.runId]: input.runId,
+        [OBSERVABILITY_ATTRIBUTE.sessionId]: input.processed.conversationId,
+        [OBSERVABILITY_ATTRIBUTE.turnId]: input.processed.requestId,
+      },
+    },
+    (span) => enqueueCloudAgentWorkflow(input, span),
+  );
+}
+
+async function enqueueCloudAgentWorkflow(
+  input: StartCloudAgentWorkflowExecutionInput,
+  span: ActiveSpan,
+): Promise<{
+  workflowRunId: string;
+  readable: WorkflowReadableStream<Uint8Array>;
+  cancel: () => Promise<void>;
+}> {
   const workflowInput = buildCloudAgentWorkflowInput(input);
   const workflowRun = await withTimeout(
     () => start(cloudAgentWorkflow, [workflowInput]),
     WORKFLOW_WORLD_CALL_DEADLINE_MS,
   );
+  span.setAttributes({ [OBSERVABILITY_ATTRIBUTE.queueJobId]: workflowRun.runId });
   const cancel = async () => {
     await withTimeout(() => workflowRun.cancel(), WORKFLOW_WORLD_CALL_DEADLINE_MS);
   };

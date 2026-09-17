@@ -1,19 +1,13 @@
 import { logger } from '@/lib/logger';
 import { SPAN_DOMAIN_ATTRIBUTE, startBridgedSpan, type SpanKind } from './otel-span-bridge';
+import { recordSpanMetrics } from './metrics';
 import { redactAttributes, redactValue, type SpanAttributeValue } from './redact';
-import { getTraceContext, runWithTraceContext } from './trace-context';
+import { getTraceContext, runWithTraceContext, type TraceContext } from './trace-context';
 
 export type { SpanKind };
 
 export type SpanDomain =
-  | 'approval'
-  | 'billing'
-  | 'external'
-  | 'http'
-  | 'model'
-  | 'retrieval'
-  | 'task'
-  | 'tool';
+  'approval' | 'billing' | 'external' | 'http' | 'model' | 'retrieval' | 'task' | 'tool';
 
 export interface SpanOptions {
   readonly kind?: SpanKind;
@@ -29,6 +23,14 @@ export interface ActiveSpan {
 
 const DEFAULT_SPAN_KIND: SpanKind = 'internal';
 
+const activeSpans = new WeakMap<TraceContext, ActiveSpan>();
+
+export function annotateActiveSpan(attributes: Readonly<Record<string, unknown>>): void {
+  const context = getTraceContext();
+  if (!context) return;
+  activeSpans.get(context)?.setAttributes(attributes);
+}
+
 export async function withSpan<R>(
   name: string,
   options: SpanOptions,
@@ -37,7 +39,7 @@ export async function withSpan<R>(
   const parent = getTraceContext();
   const kind = options.kind ?? DEFAULT_SPAN_KIND;
   const bridged = startBridgedSpan(name, kind, parent);
-  const context = {
+  const context: TraceContext = {
     traceId: bridged.traceId,
     spanId: bridged.spanId,
     sampled: bridged.sampled,
@@ -50,9 +52,12 @@ export async function withSpan<R>(
       Object.assign(extra, attributes);
     },
   };
+  activeSpans.set(context, span);
 
   const startedAt = Date.now();
   const emit = (status: 'ok' | 'error', error?: unknown): void => {
+    const durationMs = Date.now() - startedAt;
+    recordSpanMetrics({ name, domain: options.domain, outcome: status, durationMs });
     const attributes = redactAttributes({ ...options.attributes, ...extra });
     const record: Record<string, SpanAttributeValue | undefined> = {
       event: 'span',
@@ -62,7 +67,7 @@ export async function withSpan<R>(
       trace_id: context.traceId,
       span_id: context.spanId,
       parent_span_id: parent?.spanId,
-      duration_ms: Date.now() - startedAt,
+      duration_ms: durationMs,
       status,
       ...attributes,
     };

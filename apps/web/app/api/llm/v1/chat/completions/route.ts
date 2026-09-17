@@ -47,6 +47,7 @@ import {
   saveResearchReport,
   type PersistedResearchReport,
 } from '@/lib/services/research-report-service';
+import { notifyResearchReportSettled } from '@/lib/services/agent-notification-service';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
 import { classifyToolLoopInputs } from './lib/tool-loop-routing';
@@ -127,7 +128,8 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runWithPhaseTimer, timePhase } from '@/lib/observability/phase-timer';
-import { withSpan } from '@/lib/observability/span';
+import { annotateActiveSpan, withSpan } from '@/lib/observability/span';
+import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { CHAT_TURN_PHASE, CHAT_TURN_SPAN } from './lib/turn-phases';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -409,6 +411,13 @@ async function dispatchChatCompletions(
   if (!processResult.ok) return processResult.response;
 
   const processed = processResult;
+  annotateActiveSpan({
+    [OBSERVABILITY_ATTRIBUTE.sessionId]: processed.conversationId,
+    [OBSERVABILITY_ATTRIBUTE.turnId]: processed.requestId,
+    [OBSERVABILITY_ATTRIBUTE.surface]: processed.chatSurface,
+    [OBSERVABILITY_ATTRIBUTE.providerName]: processed.provider,
+    [OBSERVABILITY_ATTRIBUTE.requestModel]: processed.chatRequest.model,
+  });
 
   // Read once, before any attempt: the rotation path consults it synchronously.
   const breakers = await resolveFailoverBreakerView(processed);
@@ -529,6 +538,14 @@ async function dispatchChatCompletions(
               model: processed.chatRequest.model,
               provider: processed.provider,
               ...report,
+            });
+            await notifyResearchReportSettled(runDb, {
+              userId,
+              reportId: storedResearchReport.id,
+              requestId: processed.requestId,
+              title: storedResearchReport.title || storedResearchReport.query,
+              status: storedResearchReport.status,
+              sourcesConsulted: storedResearchReport.sourcesConsulted,
             });
             return storedResearchReport;
           },

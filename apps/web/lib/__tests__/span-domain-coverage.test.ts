@@ -216,5 +216,7 @@ describe('span domain coverage', () => {
     expect(spans[0]!['span_name']).toBe('schedule.run');
     expect(spans[0]!['task.run_id']).toBe('run-1');
     expect(spans[0]!['task.status']).toBe('success');
+    expect(spans[0]!['messaging.destination.name']).toBe('scheduled-task');
+    expect(spans[0]!['messaging.message.id']).toBe('run-1');
   });
 });
