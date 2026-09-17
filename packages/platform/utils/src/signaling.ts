@@ -110,7 +110,9 @@ export class SignalingClient {
   }
 
   private connect() {
-    const socket = new WebSocket(this.options.wsUrl);
+    const socket = this.options.createSocket
+      ? this.options.createSocket(this.options.wsUrl)
+      : new WebSocket(this.options.wsUrl);
     this.socket = socket;
 
     socket.onopen = () => {

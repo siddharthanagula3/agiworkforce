@@ -170,6 +170,26 @@ const desktopDeviceExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const deviceRegistrationExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  surface: z.string(),
+  name: z.string().nullable(),
+  os: z.string(),
+  os_version: z.string().nullable(),
+  architecture: z.string().nullable(),
+  app_version: z.string().nullable(),
+  shell: z.string().nullable(),
+  browser_available: z.boolean(),
+  computer_use_available: z.boolean(),
+  local_models_available: z.boolean(),
+  local_mcp_available: z.boolean(),
+  remote_enabled: z.boolean(),
+  last_seen_at: timestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const mobileDeviceExportSchema = z.object({
   id: z.string(),
   platform: z.string().nullable(),
@@ -1518,6 +1538,20 @@ async function collectUserData(
     ledger,
   });
   if (mobileRows.length > 0) exportData['mobile_devices'] = mobileRows;
+
+  const registeredDeviceRows = await queryExportRows({
+    db,
+    sql: `select id, organization_id, surface, name, os, os_version, architecture, app_version,
+                 shell, browser_available, computer_use_available, local_models_available,
+                 local_mcp_available, remote_enabled, last_seen_at, created_at, updated_at
+          from device_registrations where user_id = $1`,
+    values: [user.id],
+    schema: deviceRegistrationExportSchema,
+    section: 'device_registrations',
+    userId: user.id,
+    ledger,
+  });
+  if (registeredDeviceRows.length > 0) exportData['device_registrations'] = registeredDeviceRows;
 
   const syncRows = await queryExportRows({
     db,

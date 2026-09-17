@@ -70,6 +70,7 @@ export { useWindowZoom } from './hooks/use-window-zoom';
 export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
 export { DesktopHostMount } from './components/DesktopHostMount';
 export { BrowserPairingSection } from './components/BrowserPairingSection';
+export { RemoteControlSection } from './components/RemoteControlSection';
 export { BrowserToolsDialog, type BrowserToolsDialogProps } from './components/BrowserToolsDialog';
 export { DesktopRouteMessage } from './components/DesktopRouteMessage';
 export { DesktopRouteSurface } from './components/DesktopRouteSurface';

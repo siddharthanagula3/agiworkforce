@@ -66,6 +66,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'device_authorization_codes', column: 'user_id' },
   { table: 'desktop_devices', column: 'user_id' },
   { table: 'mobile_devices', column: 'user_id' },
+  { table: 'device_registrations', column: 'user_id' },
   { table: 'device_pairings', column: 'user_id' },
   { table: 'device_refresh_tokens', column: 'user_id' },
   { table: 'revoked_jwts', column: 'user_id' },

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { registerContextHandoffUriHandler } from './features/context-handoff';
 import { Config } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
+import { startVscodeHeartbeat } from './features/device-registry';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
 import { validateAdvancedFeatureFlags } from './core/advancedFeatures';
@@ -54,6 +55,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   runBoot('model-metrics', () => {
     initModelMetrics(context);
+  });
+
+  runBoot('device-registry', () => {
+    context.subscriptions.push(startVscodeHeartbeat(context));
   });
 
   let providerState: ProviderState | undefined;

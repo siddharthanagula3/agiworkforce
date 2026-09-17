@@ -27,6 +27,7 @@ pub mod crash_reports;
 pub mod custom_commands;
 pub mod daemon;
 pub mod design_system;
+pub mod device_registry;
 pub mod doctor;
 pub mod errors;
 pub mod hex;
@@ -3487,6 +3488,7 @@ pub async fn run_main() -> Result<()> {
                     workspace_root,
                 )?);
                 let capabilities = host.capabilities();
+                let _heartbeat = device_registry::spawn_heartbeat_loop();
                 if listen == "stdio" {
                     return app_server::run_developer_session_stdio(host, capabilities).await;
                 }

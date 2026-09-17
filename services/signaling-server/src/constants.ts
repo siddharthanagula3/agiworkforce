@@ -20,6 +20,8 @@ export const MAX_USERNAME_FRAGMENT_SIZE = 100;
 
 export const MAX_CONTROL_PAYLOAD_SIZE = 4096;
 
+export const MAX_CODE_CONTROL_PAYLOAD_SIZE = 48 * 1024;
+
 export const MAX_ACTION_NAME_SIZE = 50;
 
 export const PAIRING_CODE_LENGTH = 12;

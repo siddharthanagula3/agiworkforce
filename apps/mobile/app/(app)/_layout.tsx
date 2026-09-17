@@ -1,6 +1,7 @@
 import { Drawer } from 'expo-router/drawer';
 import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
 import { ContinuityOnboardingGate } from '@/src/features/continuity';
+import { useDeviceRegistryHeartbeat } from '@/src/features/device-registry';
 import { useThemeColors } from '@/src/ui/theme';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 
@@ -11,6 +12,7 @@ const HIDDEN = { drawerItemStyle: { display: 'none' as const } };
 export default function AppLayout() {
   const colors = useThemeColors();
   const { drawerWidth, usesPersistentDrawer } = useResponsiveLayout();
+  useDeviceRegistryHeartbeat();
 
   return (
     <>
@@ -58,6 +60,7 @@ export default function AppLayout() {
         {/* Companion */}
         <Drawer.Screen name="companion/index" options={HIDDEN} />
         <Drawer.Screen name="companion/agent/[id]" options={HIDDEN} />
+        <Drawer.Screen name="companion/code/[threadId]" options={HIDDEN} />
 
         {/* Profile */}
         <Drawer.Screen name="profile/index" options={HIDDEN} />

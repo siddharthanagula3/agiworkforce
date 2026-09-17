@@ -16,3 +16,11 @@ export function isCredentialLinkMissing(error: unknown): boolean {
   const message = String(record['message'] ?? '');
   return /device_id|device_refresh_tokens/.test(message) && /does not exist/.test(message);
 }
+
+export function isRegistryMissing(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const record = error as Record<string, unknown>;
+  if (record['code'] === PG_UNDEFINED_TABLE) return true;
+  const message = String(record['message'] ?? '');
+  return /device_registrations/.test(message) && /does not exist/.test(message);
+}

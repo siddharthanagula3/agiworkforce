@@ -293,7 +293,8 @@ export type AuditEventType =
   | 'admin_api_key_created'
   | 'admin_api_key_revoked'
   | 'ediscovery_export'
-  | 'dlp_content_blocked';
+  | 'dlp_content_blocked'
+  | 'device_renamed';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 

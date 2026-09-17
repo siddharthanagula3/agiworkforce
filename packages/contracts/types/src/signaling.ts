@@ -209,4 +209,5 @@ export interface SignalingClientOptions {
   metadata?: Record<string, unknown>;
   onEvent: (event: SignalingEvent) => void;
   heartbeatIntervalMs?: number;
+  createSocket?: (wsUrl: string) => WebSocket;
 }

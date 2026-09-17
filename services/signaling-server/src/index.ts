@@ -49,7 +49,6 @@ import {
   MAX_SDP_MID_SIZE,
   MAX_SDP_MLINE_INDEX,
   MAX_USERNAME_FRAGMENT_SIZE,
-  MAX_CONTROL_PAYLOAD_SIZE,
   PAIRING_CODE_LENGTH,
   CODE_GENERATION_MAX_ATTEMPTS,
   SESSION_CLEANUP_INTERVAL_MS,
@@ -75,6 +74,7 @@ import {
   MAX_PENDING_APPROVALS_PER_SESSION,
   PENDING_APPROVAL_TTL_MS,
 } from './constants.js';
+import { controlPayloadSchema } from './control-payload.js';
 
 type Role = 'desktop' | 'mobile';
 
@@ -365,27 +365,6 @@ const icePayloadSchema = z.object({
   sdpMLineIndex: z.number().int().min(0).max(MAX_SDP_MLINE_INDEX).nullable().optional(),
   usernameFragment: z.string().max(MAX_USERNAME_FRAGMENT_SIZE).nullable().optional(),
 });
-
-const ALLOWED_CONTROL_ACTIONS = [
-  'approval_request',
-  'approval_response',
-  'sync_request',
-  'sync_response',
-  'dispatch_request',
-  'dispatch_response',
-  'heartbeat',
-  'heartbeat_ack',
-  'cancel',
-] as const;
-
-const controlPayloadSchema = z
-  .object({
-    action: z.enum(ALLOWED_CONTROL_ACTIONS),
-    data: z.record(z.string(), z.unknown()).optional(),
-  })
-  .refine((val) => JSON.stringify(val).length <= MAX_CONTROL_PAYLOAD_SIZE, {
-    message: 'Control payload too large',
-  });
 
 const signalMessageSchema = z.object({
   type: z.literal('signal'),
@@ -1248,8 +1227,7 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
 
   if (!peer && message.kind === 'control' && client.role === 'desktop') {
     const controlPayload = message.payload as
-      | { action?: string; data?: Record<string, unknown> }
-      | undefined;
+      { action?: string; data?: Record<string, unknown> } | undefined;
     if (controlPayload?.action === 'approval_request') {
       queuePendingApproval(client.code, controlPayload);
       socket.send(JSON.stringify({ type: 'approval_queued', code: client.code }));

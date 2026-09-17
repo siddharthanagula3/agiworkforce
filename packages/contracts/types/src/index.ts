@@ -113,6 +113,8 @@ export * from './cross-device';
 
 export * from './dispatch';
 
+export * from './remote-code';
+
 export * from './workspace-analytics';
 
 export * from './enterprise';

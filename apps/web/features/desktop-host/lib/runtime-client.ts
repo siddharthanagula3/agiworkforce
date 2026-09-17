@@ -1,12 +1,16 @@
 'use client';
 
 import {
+  DEVICE_REGISTRY_PROFILE_COMMAND,
   DesktopRuntimeError,
   assertLocalTurnCarriesNoAttachments,
   getHostBridge,
   type ApplicationOpenResult,
   type BrowserPairingState,
   type ClipboardSnapshot,
+  type DeviceRegistryProfile,
+  type RemoteControlStartRequest,
+  type RemoteControlState,
   type FileEntry,
   type FileBinaryContent,
   type FileTextContent,
@@ -212,6 +216,24 @@ export function clipboardAttachments(snapshot: ClipboardSnapshot, nowMs: number)
     );
   }
   return files;
+}
+
+export function readDeviceRegistryProfile(): Promise<DeviceRegistryProfile> {
+  return invoke<DeviceRegistryProfile>(DEVICE_REGISTRY_PROFILE_COMMAND);
+}
+
+export function readRemoteControl(): Promise<RemoteControlState> {
+  return invoke<RemoteControlState>('remote_control_state');
+}
+
+export function startRemoteControl(
+  request: RemoteControlStartRequest,
+): Promise<RemoteControlState> {
+  return invoke<RemoteControlState>('remote_control_start', { ...request });
+}
+
+export function stopRemoteControl(): Promise<RemoteControlState> {
+  return invoke<RemoteControlState>('remote_control_stop');
 }
 
 export function readBrowserPairing(): Promise<BrowserPairingState> {

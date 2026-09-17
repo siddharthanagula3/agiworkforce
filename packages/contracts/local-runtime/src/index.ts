@@ -258,3 +258,16 @@ export type {
   DeviceStepScope,
   DeviceStepTool,
 } from './device-steps';
+
+export {
+  DEVICE_REGISTRY_PROFILE_COMMAND,
+  IDLE_REMOTE_CONTROL_STATE,
+  REMOTE_CONTROL_COMMANDS,
+} from './remote-control';
+export type {
+  DeviceRegistryProfile,
+  RemoteControlCommand,
+  RemoteControlStartRequest,
+  RemoteControlState,
+  RemoteControlStatus,
+} from './remote-control';

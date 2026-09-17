@@ -39,6 +39,7 @@ export const USER_OWNED_TABLES = new Set([
   'agent_tool_executions',
   'desktop_devices',
   'mobile_devices',
+  'device_registrations',
   'sync_data',
   'github_installations',
   'messaging_connections',

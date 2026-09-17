@@ -21,6 +21,7 @@ import type {
 } from '@agiworkforce/local-runtime-contract';
 import type {
   DeveloperMessage,
+  DeveloperSessionFileChange,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
   ThreadStatus,
@@ -836,6 +837,85 @@ export async function readDeveloperSession(
     session: requireSession(rootId, result),
     messages: Array.isArray(messages) ? (messages as DeveloperMessage[]) : [],
     truncated: isRecord(result) && result['transcriptTruncated'] === true,
+  };
+}
+
+export interface DeveloperSessionActivity {
+  transcript: DeveloperSessionTranscript;
+  branch: string | null;
+  fileChanges: DeveloperSessionFileChange[];
+  activeTurn: {
+    turnId: string;
+    partialResponse: string;
+    pendingApprovals: Array<{ requestId: string; summary: string; detail: string }>;
+  } | null;
+}
+
+function toFileChanges(raw: unknown): DeveloperSessionFileChange[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const filePath = readString(entry, 'path');
+    const kind = readString(entry, 'kind');
+    if (!filePath || (kind !== 'created' && kind !== 'modified')) return [];
+    return [
+      {
+        path: filePath,
+        kind,
+        tool: readString(entry, 'tool') ?? '',
+        toolCallId: readString(entry, 'toolCallId') ?? '',
+        changedAt: readString(entry, 'changedAt') ?? '',
+      },
+    ];
+  });
+}
+
+function toActiveTurn(raw: unknown): DeveloperSessionActivity['activeTurn'] {
+  if (!isRecord(raw)) return null;
+  const active = raw['activeTurn'];
+  if (!isRecord(active)) return null;
+  const turnId = readString(active, 'turnId');
+  if (!turnId) return null;
+  const pending = Array.isArray(active['pendingApprovals']) ? active['pendingApprovals'] : [];
+  return {
+    turnId,
+    partialResponse: typeof active['partialResponse'] === 'string' ? active['partialResponse'] : '',
+    pendingApprovals: pending.flatMap((entry) => {
+      if (!isRecord(entry)) return [];
+      const requestId = readString(entry, 'requestId');
+      if (!requestId) return [];
+      return [
+        {
+          requestId,
+          summary: readString(entry, 'summary') ?? 'The agent needs approval to continue.',
+          detail: readString(entry, 'detail') ?? '',
+        },
+      ];
+    }),
+  };
+}
+
+export async function readDeveloperSessionActivity(
+  rootId: string,
+  threadId: string,
+): Promise<DeveloperSessionActivity> {
+  const root = requireRoot(rootId);
+  const server = await readyServer(root);
+  const [read, reconnect] = await Promise.all([
+    request(server, 'thread/read', { threadId }),
+    requestOrNull(server, 'thread/reconnect', { threadId }),
+  ]);
+  const messages = isRecord(read) ? read['messages'] : null;
+  const thread = isRecord(read) ? read['thread'] : null;
+  return {
+    transcript: {
+      session: requireSession(rootId, read),
+      messages: Array.isArray(messages) ? (messages as DeveloperMessage[]) : [],
+      truncated: isRecord(read) && read['transcriptTruncated'] === true,
+    },
+    branch: isRecord(thread) ? readString(thread, 'gitBranch') : null,
+    fileChanges: toFileChanges(isRecord(read) ? read['fileChanges'] : null),
+    activeTurn: toActiveTurn(reconnect),
   };
 }
 
