@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -62,6 +64,13 @@ async function handleInstallSkill(request: NextRequest) {
   }
 
   const { db, userId } = await getUserScopedDb(request);
+  const featureGate = await buildWorkspaceFeatureGateResponse(
+    userId,
+    request,
+    'skills',
+    resolveCloudChatSurface(request),
+  );
+  if (featureGate) return featureGate;
   const enabledPluginIds = await listEnabledPluginIds(db, userId);
   const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
   const skill = directory.find((candidate) => candidate.name === parsed.data.name);

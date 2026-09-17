@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   ShieldCheck,
+  UserCog,
   Users,
   Share2,
   KeyRound,
@@ -51,6 +52,12 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         hint: 'Roles, invitations, seats',
       },
       {
+        href: '/workspace/roles',
+        label: 'Roles',
+        icon: UserCog,
+        hint: 'Permissions, custom roles, groups',
+      },
+      {
         href: '/workspace/identity',
         label: 'Identity',
         icon: KeyRound,
@@ -65,7 +72,7 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         href: '/workspace/policy',
         label: 'Policy',
         icon: SlidersHorizontal,
-        hint: 'Privacy modes, managed compute, sync',
+        hint: 'Privacy, compute, features, exceptions',
       },
       {
         href: '/workspace/models',

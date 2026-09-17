@@ -8,6 +8,12 @@ const { mockGetUserScopedDb, mockQuery, mockExecute, mockCsrf } = vi.hoisted(() 
   mockCsrf: vi.fn(),
 }));
 
+const featureGateMock = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+);
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: (...args: unknown[]) => featureGateMock(...args),
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
@@ -88,6 +94,21 @@ describe('/api/skills create, edit, delete', () => {
     const res = await POST(postReq(DRAFT));
     expect(res.status).toBe(403);
     expect(mockGetUserScopedDb).not.toHaveBeenCalled();
+  });
+
+  it('POST refuses to create a skill when the workspace has turned Skills off', async () => {
+    featureGateMock.mockResolvedValueOnce(
+      Response.json({ error: { code: 'feature_disabled' } }, { status: 403 }),
+    );
+    const res = await POST(postReq(DRAFT));
+    expect(res.status).toBe(403);
+    expect(featureGateMock).toHaveBeenCalledWith(
+      'user-owner',
+      expect.anything(),
+      'skills',
+      expect.any(String),
+    );
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it('POST rejects a name already used by a built-in skill', async () => {

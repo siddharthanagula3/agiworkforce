@@ -8,6 +8,14 @@ const { mockQuery, mockNeonQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
 }));
 
+const callerRole = vi.hoisted(() => ({ value: 'admin' as string }));
+vi.mock('@/lib/services/organization-permission-service', () => ({
+  resolveOrganizationPermissions: vi.fn(async () =>
+    callerRole.value === 'member'
+      ? new Set(['content.read', 'content.share'])
+      : new Set(['content.read', 'content.share', 'sharing.manage']),
+  ),
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
@@ -36,6 +44,7 @@ const ORG_B = '22222222-2222-4222-8222-222222222222';
 const PROJECT_IN_ORG_B = '33333333-3333-4333-8333-333333333333';
 
 function bindCallerInOrgA(role: 'owner' | 'admin' | 'member' = 'admin'): void {
+  callerRole.value = role;
   mockQuery.mockImplementation(async (sql: string) => {
     if (/from public\.user_settings/i.test(sql) && /where s\.user_id = \$1/i.test(sql)) {
       return [{ organization_id: ORG_A }];

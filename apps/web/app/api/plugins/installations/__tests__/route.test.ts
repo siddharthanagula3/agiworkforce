@@ -24,6 +24,12 @@ const {
   recordWorkspaceAuditEventMock: vi.fn(),
 }));
 
+const featureGateMock = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+);
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: (...args: unknown[]) => featureGateMock(...args),
+}));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
@@ -156,6 +162,22 @@ describe('POST /api/plugins/installations (install)', () => {
     );
     expect(installWebPluginMock).not.toHaveBeenCalled();
     expect(recordWorkspaceAuditEventMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses every plugin install when the workspace has turned Plugins off', async () => {
+    featureGateMock.mockResolvedValueOnce(
+      Response.json({ error: { code: 'feature_disabled' } }, { status: 403 }),
+    );
+    const response = await POST(post({ pluginId: 'research-pack' }));
+    expect(response.status).toBe(403);
+    expect(featureGateMock).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      'plugins',
+      expect.any(String),
+    );
+    expect(pluginPolicyMock).not.toHaveBeenCalled();
+    expect(installWebPluginMock).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid plugin id with 400 and never installs', async () => {

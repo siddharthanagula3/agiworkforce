@@ -16,6 +16,8 @@ const {
   mockResolveMfaEnrolled: vi.fn(async () => true),
 }));
 
+const currentRole = vi.hoisted(() => ({ value: 'admin' as string }));
+
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
@@ -28,6 +30,13 @@ vi.mock('@/lib/security-audit', async (importOriginal) => {
   return { ...actual, recordAuditEvent: mockRecordAuditEvent };
 });
 vi.mock('@/lib/mfa-policy-gate', () => ({ resolveMfaEnrolled: mockResolveMfaEnrolled }));
+vi.mock('@/lib/services/organization-permission-service', () => ({
+  resolveOrganizationPermissions: vi.fn(async () => {
+    const role = currentRole.value;
+    if (role === 'owner' || role === 'admin') return new Set(['content.read', 'policy.manage']);
+    return new Set(role === 'member' ? ['content.read', 'content.share'] : ['content.read']);
+  }),
+}));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
@@ -60,6 +69,7 @@ interface Fixture {
 }
 
 function bindCaller({ role = 'admin', policyRow = null, upsertResult }: Fixture = {}): void {
+  currentRole.value = role;
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
     if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG_ID }];
@@ -460,5 +470,68 @@ describe('PATCH /api/settings/organization/policy', () => {
     const params = upsertParams();
     expect(params[2]).toEqual(['local', 'byok']);
     expect(params[5]).toEqual(['web']);
+  });
+
+  it('stores feature controls inside the metadata column, merged onto the saved switches', async () => {
+    bindCaller({
+      policyRow: {
+        ...SAVED_POLICY,
+        metadata: { controls: { featureAccess: { research: false } } },
+      },
+    });
+
+    const response = await PATCH(
+      request({
+        controls: { featureAccess: { code: false }, maxReasoningEffort: 'medium' },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    const controls = JSON.parse(upsertParams()[14] as string)['controls'];
+    expect(controls.featureAccess).toMatchObject({ code: false, research: false, work: true });
+    expect(controls.maxReasoningEffort).toBe('medium');
+  });
+
+  it('rejects a default model that is not in the model catalog', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(
+      request({ controls: { defaultModelId: 'not-a-real-model-anywhere' } }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalledWith(
+      expect.stringMatching(/insert into public\.organization_admin_policies/i),
+      expect.anything(),
+    );
+  });
+
+  it('rejects a feature the control plane does not model', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(
+      request({ controls: { featureAccess: { teleport: false } } }) as never,
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it('upper-cases and sorts allowed countries before writing', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(request({ controls: { allowedCountries: ['us', 'DE', 'us'] } }) as never);
+
+    expect(JSON.parse(upsertParams()[14] as string)['controls'].allowedCountries).toEqual([
+      'DE',
+      'US',
+    ]);
+  });
+
+  it('refuses a viewer', async () => {
+    bindCaller({ role: 'viewer', policyRow: SAVED_POLICY });
+
+    const response = await PATCH(request({ controls: { featureAccess: { code: true } } }) as never);
+
+    expect(response.status).toBe(403);
   });
 });

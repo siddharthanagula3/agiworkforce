@@ -2,7 +2,11 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { ResearchStep } from '@agiworkforce/types';
+import type {
+  ResearchStep,
+  ResolvedWorkspaceControls,
+  WorkspaceFeature,
+} from '@agiworkforce/types';
 import { NON_US_VENDOR_TRANSPORTS } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
@@ -102,7 +106,9 @@ import {
   getMinimumRequiredTier,
   getModelReasoning,
   clampEffortToEntitlement,
+  clampReasoningEffort,
   isAutoModeModelId,
+  WORKSPACE_FEATURE_LABELS,
   type Effort,
   getSlotForModel,
   normalizeModelId,
@@ -1949,11 +1955,49 @@ function freeTrialBudgetReachedResponse(subscription?: SubscriptionInfo): Proces
 const MAX_BODY_BYTES = 2_000_000;
 const MAX_TOTAL_LENGTH = 1000000;
 
+export interface ProcessRequestOptions {
+  workspaceControls?: ResolvedWorkspaceControls | null;
+}
+
+export function workspaceFeaturesForChatRequest(
+  chatRequest: Pick<ChatCompletionRequest, 'work_mode' | 'research' | 'tools' | 'skill_name'>,
+  chatSurface: string,
+): WorkspaceFeature[] {
+  const features: WorkspaceFeature[] = [];
+  if (chatRequest.work_mode === 'agiwork') features.push('work');
+  if (chatRequest.research === true) features.push('research');
+  if (chatRequest.skill_name) features.push('skills');
+  if (chatSurface === 'chrome' && (chatRequest.tools?.length ?? 0) > 0) features.push('browser');
+  return features;
+}
+
+export function applyWorkspaceDefaultModel(
+  chatRequest: Pick<ChatCompletionRequest, 'model'>,
+  controls: ResolvedWorkspaceControls | null,
+): void {
+  const defaultModelId = controls?.defaultModelId;
+  if (!defaultModelId || isAutoModeModelId(defaultModelId)) return;
+  if (isAutoModeModelId(chatRequest.model)) chatRequest.model = defaultModelId;
+}
+
+export function withoutWorkspaceDisabledDeviceCapabilities(
+  deviceHost: DesktopHostDeclaration | null,
+  controls: ResolvedWorkspaceControls | null,
+): DesktopHostDeclaration | null {
+  if (!deviceHost || !controls || controls.featureAccess.computer_use) return deviceHost;
+  return {
+    ...deviceHost,
+    capabilities: deviceHost.capabilities.filter((capability) => capability !== 'computer.use'),
+  };
+}
+
 export async function processRequest(
   request: NextRequest,
   auth: AuthGateSuccess,
+  options: ProcessRequestOptions = {},
 ): Promise<ProcessResult> {
   const { userId, subscription } = auth;
+  const workspaceControls = options.workspaceControls ?? null;
 
   let requestId: string;
   try {
@@ -2056,6 +2100,7 @@ export async function processRequest(
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
+  applyWorkspaceDefaultModel(chatRequest, workspaceControls);
   const workModeEntitlementError = getWorkModeEntitlementError(
     chatRequest.work_mode,
     subscription.plan_tier,
@@ -2096,10 +2141,33 @@ export async function processRequest(
   // authorization: it decides which device tools are offered, and the device
   // refuses or prompts for every step it produces. Only the desktop surface is
   // believed, so a browser tab cannot obtain the tools by sending the header.
-  const deviceHost =
+  const deviceHost = withoutWorkspaceDisabledDeviceCapabilities(
     chatSurface === 'desktop'
       ? parseDesktopHostDeclaration(request.headers.get(DEVICE_HOST_HEADER))
-      : null;
+      : null,
+    workspaceControls,
+  );
+  const disabledFeature = workspaceControls
+    ? workspaceFeaturesForChatRequest(chatRequest, chatSurface).find(
+        (feature) => !workspaceControls.featureAccess[feature],
+      )
+    : undefined;
+  if (disabledFeature) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `Your workspace administrator has turned off ${WORKSPACE_FEATURE_LABELS[disabledFeature]} for your account.`,
+            type: 'organization_policy',
+            code: 'feature_disabled',
+            feature: disabledFeature,
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
   const customInstructionsPromise =
     chatSurface === 'api'
       ? null
@@ -2118,7 +2186,9 @@ export async function processRequest(
     });
   skillInstallOverridesPromise.catch(() => {});
   const loadEnabledPluginIds = memoizeAsync(async () =>
-    listEnabledPluginIds((await scopedDbPromise).db, userId),
+    workspaceControls && !workspaceControls.featureAccess.plugins
+      ? new Set<string>()
+      : listEnabledPluginIds((await scopedDbPromise).db, userId),
   );
 
   // safety legs so both keep seeing the caller's own words.
@@ -3169,7 +3239,7 @@ export async function processRequest(
         ),
       };
     }
-  } else {
+  } else if (!workspaceControls || workspaceControls.featureAccess.skills) {
     const offeredSkills = await timePhase(CHAT_TURN_PHASE.skillCatalog, () =>
       applyImplicitManagedSkillOffer(chatRequest, {
         prompt: lastUserText,
@@ -3420,11 +3490,14 @@ export async function processRequest(
     };
   }
 
-  const effectiveEffort = resolveRequestEffort(
-    providerLower,
-    chatRequest.model,
-    chatRequest.effort,
-    subscription.plan_tier,
+  const effectiveEffort = clampReasoningEffort(
+    resolveRequestEffort(
+      providerLower,
+      chatRequest.model,
+      chatRequest.effort,
+      subscription.plan_tier,
+    ),
+    workspaceControls?.maxReasoningEffort ?? null,
   );
   let thinkingConfig: ReturnType<typeof buildThinkingConfig>;
   try {

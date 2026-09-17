@@ -3,6 +3,8 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
+  resolveWorkspaceControls,
+  type ResolvedWorkspaceControls,
   strictestSecretHandlingMode,
   type AdminPolicy,
   type SecretHandlingMode,
@@ -10,7 +12,12 @@ import {
 import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
-import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
+import {
+  readLayeredOrganizationPolicy,
+  readOrganizationPolicy,
+  type LayeredOrganizationPolicy,
+} from '@/lib/services/organization-policy-service';
+import { readApplicablePolicyOverrides } from '@/lib/services/organization-policy-override-service';
 import {
   CURRENT_COLLECTION_STATE,
   readOrganizationCollectionState,
@@ -38,6 +45,7 @@ import {
 const ACCOUNT_CONTROL_READ_ATTEMPTS = 2;
 const ACCOUNT_CONTROL_UNAVAILABLE_MESSAGE = WORKSPACE_POLICY_UNAVAILABLE_DECISION.reason;
 const SECRET_HANDLING_MODE_WHEN_UNREADABLE: SecretHandlingMode = 'block';
+const REQUEST_COUNTRY_HEADER = 'x-vercel-ip-country';
 
 interface ScopedRequest {
   headers: { get(name: string): string | null };
@@ -155,6 +163,12 @@ async function evaluateFundingOrganizationBillingHold(
   return { ...billingHold, organizationId };
 }
 
+function withRequestCountry(ask: PolicyAsk, request: ScopedRequest | undefined): PolicyAsk {
+  if (ask.resource !== 'managed_compute' && ask.resource !== 'feature') return ask;
+  if (ask.country !== undefined) return ask;
+  return { ...ask, country: request?.headers.get(REQUEST_COUNTRY_HEADER) ?? null };
+}
+
 /**
  * Resolves the caller's active workspace and asks the evaluator one question.
  *
@@ -221,9 +235,11 @@ export async function evaluateActiveWorkspacePolicy(
     if (unreadable) return unreadable;
   }
 
-  let policy: AdminPolicy | null;
+  let layered: LayeredOrganizationPolicy | null;
   try {
-    policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
+    layered = await withAccountControlRetry(() =>
+      readLayeredOrganizationPolicy(db, organizationId),
+    );
   } catch (error) {
     if (!isPurchaseAsk(ask)) {
       logger.error(
@@ -239,9 +255,29 @@ export async function evaluateActiveWorkspacePolicy(
     return billingHoldOrUnscoped(userId, organizationId, ask, collectionState);
   }
 
-  if (!policy) return billingHoldOrUnscoped(userId, organizationId, ask, collectionState);
+  if (!layered) return billingHoldOrUnscoped(userId, organizationId, ask, collectionState);
 
-  const decision = evaluateOrganizationPolicy(policy, ask, collectionState);
+  let policy = layered.policy;
+  if (layered.hasOverrides && !isPurchaseAsk(ask)) {
+    try {
+      const overrides = await withAccountControlRetry(() =>
+        readApplicablePolicyOverrides(db, organizationId, userId),
+      );
+      policy = { ...policy, controls: resolveWorkspaceControls(policy.controls, overrides) };
+    } catch (error) {
+      logger.error(
+        { error, userId, organizationId, resource: ask.resource },
+        '[org-policy] policy overrides unreadable after retry; request denied',
+      );
+      return { ...WORKSPACE_POLICY_UNAVAILABLE_DECISION, organizationId };
+    }
+  }
+
+  const decision = evaluateOrganizationPolicy(
+    policy,
+    withRequestCountry(ask, request),
+    collectionState,
+  );
 
   if (!decision.allowed) {
     logger.info(
@@ -251,6 +287,54 @@ export async function evaluateActiveWorkspacePolicy(
   }
 
   return { ...decision, organizationId };
+}
+
+export interface EffectiveWorkspaceControls {
+  organizationId: string;
+  revision: number;
+  controls: ResolvedWorkspaceControls;
+}
+
+export async function resolveEffectiveWorkspaceControls(
+  db: DatabaseAdapter,
+  userId: string,
+  request?: ScopedRequest,
+): Promise<EffectiveWorkspaceControls | null> {
+  let organizationId: string | null;
+  try {
+    organizationId = await withAccountControlRetry(() =>
+      resolveActiveOrganizationId(db, userId, request),
+    );
+  } catch (error) {
+    if (isAppError(error) && error.statusCode < 500) throw error;
+    logger.error({ error, userId }, '[workspace-controls] active workspace unresolved; denied');
+    throw accountControlUnavailable();
+  }
+  if (!organizationId) return null;
+  const scopedOrganizationId = organizationId;
+
+  try {
+    const layered = await withAccountControlRetry(() =>
+      readLayeredOrganizationPolicy(db, scopedOrganizationId),
+    );
+    if (!layered) return null;
+    const overrides = layered.hasOverrides
+      ? await withAccountControlRetry(() =>
+          readApplicablePolicyOverrides(db, scopedOrganizationId, userId),
+        )
+      : [];
+    return {
+      organizationId: scopedOrganizationId,
+      revision: layered.policy.revision ?? 0,
+      controls: resolveWorkspaceControls(layered.policy.controls, overrides),
+    };
+  } catch (error) {
+    logger.error(
+      { error, userId, organizationId: scopedOrganizationId },
+      '[workspace-controls] policy unreadable after retry; denied',
+    );
+    throw accountControlUnavailable();
+  }
 }
 
 export interface SecretHandlingPolicyResult {

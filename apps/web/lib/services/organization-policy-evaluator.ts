@@ -1,4 +1,10 @@
-import type { AdminPolicy, PrivacyMode, SourceSurface } from '@agiworkforce/types';
+import {
+  WORKSPACE_FEATURE_LABELS,
+  type AdminPolicy,
+  type PrivacyMode,
+  type SourceSurface,
+  type WorkspaceFeature,
+} from '@agiworkforce/types';
 import {
   CURRENT_COLLECTION_STATE,
   type CollectionState,
@@ -7,7 +13,13 @@ import {
 export type PolicySurface = SourceSurface | 'api' | 'unknown';
 
 export type PolicyAsk =
-  | { resource: 'managed_compute'; surface: PolicySurface }
+  | { resource: 'managed_compute'; surface: PolicySurface; country?: string | null }
+  | {
+      resource: 'feature';
+      feature: WorkspaceFeature;
+      surface?: PolicySurface;
+      country?: string | null;
+    }
   | { resource: 'chat_sync'; surface: PolicySurface }
   | { resource: 'privacy_mode'; mode: PrivacyMode }
   | { resource: 'audit_export' }
@@ -21,6 +33,9 @@ export type PolicyDecisionCode =
   | 'allowed'
   | 'unscoped'
   | 'managed_compute_disabled'
+  | 'feature_disabled'
+  | 'region_not_allowed'
+  | 'surface_not_allowed'
   | 'privacy_mode_not_allowed'
   | 'surface_sync_disabled'
   | 'audit_export_disabled'
@@ -168,6 +183,45 @@ const SURFACE_LABEL: Readonly<Record<PolicySurface, string>> = Object.freeze({
   unknown: 'this client',
 });
 
+function surfaceIsPermittedByControls(policy: AdminPolicy, surface: PolicySurface): boolean {
+  const allowed = policy.controls.allowedSurfaces;
+  if (!allowed || surface === 'api' || surface === 'unknown') return true;
+  return allowed.includes(surface);
+}
+
+function countryIsPermittedByControls(policy: AdminPolicy, country: string | null | undefined) {
+  const allowed = policy.controls.allowedCountries;
+  if (allowed.length === 0) return true;
+  const normalized = country?.trim().toUpperCase();
+  return Boolean(normalized) && allowed.includes(normalized as string);
+}
+
+function accessRestriction(
+  policy: AdminPolicy,
+  surface: PolicySurface | undefined,
+  country: string | null | undefined,
+  obligations: PolicyObligation[],
+): PolicyDecision | null {
+  if (!countryIsPermittedByControls(policy, country)) {
+    return {
+      allowed: false,
+      code: 'region_not_allowed',
+      reason:
+        'Your workspace administrator only allows access from certain countries, and this request came from somewhere else.',
+      obligations,
+    };
+  }
+  if (surface && !surfaceIsPermittedByControls(policy, surface)) {
+    return {
+      allowed: false,
+      code: 'surface_not_allowed',
+      reason: `Your workspace administrator does not allow access to this workspace from ${SURFACE_LABEL[surface]}.`,
+      obligations,
+    };
+  }
+  return null;
+}
+
 /**
  * The single decision point for an organization-governed request.
  *
@@ -212,6 +266,27 @@ export function evaluateOrganizationPolicy(
           allowed: false,
           code: 'surface_sync_disabled',
           reason: `Your workspace administrator has turned off cloud access from ${SURFACE_LABEL[ask.surface]}.`,
+          obligations,
+        };
+      }
+      const restriction = accessRestriction(policy, ask.surface, ask.country, obligations);
+      if (restriction) return restriction;
+      return {
+        allowed: true,
+        code: 'allowed',
+        reason: 'Allowed by workspace policy.',
+        obligations,
+      };
+    }
+
+    case 'feature': {
+      const restriction = accessRestriction(policy, ask.surface, ask.country, obligations);
+      if (restriction) return restriction;
+      if (!policy.controls.featureAccess[ask.feature]) {
+        return {
+          allowed: false,
+          code: 'feature_disabled',
+          reason: `Your workspace administrator has turned off ${WORKSPACE_FEATURE_LABELS[ask.feature]} for your account.`,
           obligations,
         };
       }

@@ -232,6 +232,11 @@
       "reason": "the export reads every section through queryExportRows, whose catch marks the section unavailable and continues, so a table or column this migration has not created yet produces a partial export that names what it could not read, never a failed request. The dependency is declared rather than removed so the section starts working the moment the migration is applied."
     },
     {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 199,
+      "reason": "the personal data export includes the notification category and target columns 0199 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
+    },
+    {
       "file": "apps/web/app/api/web-push/route.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -245,6 +250,11 @@
       "file": "apps/web/features/admin/services/economics-summary.ts",
       "migration": 181,
       "reason": "0181 adds provider_cost_reconciliation_days; the deploy runbook applies it before this code reaches production, and until it does the reconciliation window falls back to its default rather than reading a table that is not there."
+    },
+    {
+      "file": "apps/web/features/notifications/lib/notification-target.ts",
+      "migration": 199,
+      "reason": "names the category field of a notification object returned by /api/notifications, not the database column, and never queries the notifications table; the route that does is covered by its own entry."
     },
     {
       "file": "apps/web/features/plugins/server/directory/install.ts",
@@ -312,6 +322,11 @@
       "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
     },
     {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 195,
+      "reason": "account erasure clears the per-project cost attribution column 0195 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0195 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0195 is applied."
+    },
+    {
       "file": "apps/web/lib/server/neon-chat.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -357,6 +372,11 @@
       "reason": "the column is read and written by claimVideoCompletionNotice alone and is deliberately absent from JOB_COLUMNS, so before 0183 applies that one statement raises, deliverVideoCompletionNotice logs it and sends nothing, and every other query over video_generation_jobs is unaffected; the deploy runbook applies 0183 before the notice is relied on."
     },
     {
+      "file": "apps/web/lib/services/agent-notification-service.ts",
+      "migration": 199,
+      "reason": "agent run notices write a category through notification-service; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
+    },
+    {
       "file": "apps/web/lib/services/cloud-agent-run-service.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -365,6 +385,11 @@
       "file": "apps/web/lib/services/cloud-agent-run-service.ts",
       "migration": 190,
       "reason": "the founder-assistance entry for migrations 0183 to 0190 applies this migration before the deployment that carries this file; the device-step checkpoint column is written only when a desktop turn pauses on a device step"
+    },
+    {
+      "file": "apps/web/lib/services/cloud-agent-run-service.ts",
+      "migration": 196,
+      "reason": "pausing a Work run records pause_requested_at from 0196; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0196 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0196 is applied."
     },
     {
       "file": "apps/web/lib/services/cloud-code-agent-service.ts",
@@ -412,6 +437,11 @@
       "reason": "0180 adds these columns nullable; the deploy runbook applies it before this code reaches production, and until it does a row written without them keeps its history rather than being invented, so the reader sees null instead of a wrong number."
     },
     {
+      "file": "apps/web/lib/services/cogs-ledger-service.ts",
+      "migration": 195,
+      "reason": "cost events carry workload, project and session attribution from 0195; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0195 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0195 is applied."
+    },
+    {
       "file": "apps/web/lib/services/conversation-branch-service.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -430,6 +460,11 @@
       "file": "apps/web/lib/services/enterprise-billing-service.ts",
       "migration": 163,
       "reason": "the enterprise billing contract and invoice ledger is founder-gated; the deploy runbook applies migration 0163 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/enterprise-billing-service.ts",
+      "migration": 197,
+      "reason": "enterprise contracts sync billing and procurement contacts, payment terms and tax status from 0197; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0197 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0197 is applied."
     },
     {
       "file": "apps/web/lib/services/enterprise-collection-state.ts",
@@ -457,9 +492,34 @@
       "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
     },
     {
+      "file": "apps/web/lib/services/notification-service.ts",
+      "migration": 199,
+      "reason": "the feed writer and reader use the category, dedupe key, read and target columns 0199 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/organization-policy-override-service.ts",
+      "migration": 200,
+      "reason": "0200 adds the permission grid (organization_roles, member, group and manager grants, organization_member_permissions) that every workspace permission check and policy layer reads; the deploy runbook must apply 0200 before this code reaches production, because until it does permission checks and the layered policy read fail closed and refuse governed requests."
+    },
+    {
+      "file": "apps/web/lib/services/organization-policy-override-service.ts",
+      "migration": 201,
+      "reason": "0201 adds organization_policy_overrides and organization_policy_revisions, which the layered workspace policy read joins on every governed request; the deploy runbook must apply 0201 before this code reaches production, because until it does that read fails and the policy gate refuses governed requests with 503."
+    },
+    {
       "file": "apps/web/lib/services/organization-policy-service.ts",
       "migration": 164,
       "reason": "memory policy and context compaction are founder-gated; the deploy runbook applies migration 0164 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/organization-policy-service.ts",
+      "migration": 201,
+      "reason": "0201 adds organization_policy_overrides and organization_policy_revisions, which the layered workspace policy read joins on every governed request; the deploy runbook must apply 0201 before this code reaches production, because until it does that read fails and the policy gate refuses governed requests with 503."
+    },
+    {
+      "file": "apps/web/lib/services/organization-role-service.ts",
+      "migration": 200,
+      "reason": "0200 adds the permission grid (organization_roles, member, group and manager grants, organization_member_permissions) that every workspace permission check and policy layer reads; the deploy runbook must apply 0200 before this code reaches production, because until it does permission checks and the layered policy read fail closed and refuse governed requests."
     },
     {
       "file": "apps/web/lib/services/plugin-installation-service.ts",
@@ -517,9 +577,19 @@
       "reason": "0180 adds these columns nullable; the deploy runbook applies it before this code reaches production, and until it does a row written without them keeps its history rather than being invented, so the reader sees null instead of a wrong number."
     },
     {
+      "file": "apps/web/lib/services/schedule-notification-service.ts",
+      "migration": 199,
+      "reason": "schedule notices write a category through notification-service; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
+    },
+    {
       "file": "apps/web/lib/services/schedule-service.ts",
       "migration": 168,
       "reason": "scheduled task project scope is founder-gated; the deploy runbook applies migration 0168 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/spend-alert-service.ts",
+      "migration": 194,
+      "reason": "spend alerts record one alert per crossing in organization_spend_alerts from 0194; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0194 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0194 is applied."
     },
     {
       "file": "apps/web/lib/services/user-skill-service.ts",
@@ -535,56 +605,6 @@
       "file": "apps/web/lib/user-connector-tools.ts",
       "migration": 188,
       "reason": "0188 stores the repository set the linking GitHub account proved it can reach, which the Code session clone and push credentials are narrowed to; the deploy runbook applies it before this code reaches production, and until it does the installation read names a column that does not exist."
-    },
-    {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "migration": 195,
-      "reason": "account erasure clears the per-project cost attribution column 0195 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0195 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0195 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/cloud-agent-run-service.ts",
-      "migration": 196,
-      "reason": "pausing a Work run records pause_requested_at from 0196; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0196 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0196 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/cogs-ledger-service.ts",
-      "migration": 195,
-      "reason": "cost events carry workload, project and session attribution from 0195; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0195 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0195 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/enterprise-billing-service.ts",
-      "migration": 197,
-      "reason": "enterprise contracts sync billing and procurement contacts, payment terms and tax status from 0197; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0197 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0197 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/spend-alert-service.ts",
-      "migration": 194,
-      "reason": "spend alerts record one alert per crossing in organization_spend_alerts from 0194; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0194 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0194 is applied."
-    },
-    {
-      "file": "apps/web/app/api/user/export/route.ts",
-      "migration": 199,
-      "reason": "the personal data export includes the notification category and target columns 0199 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/agent-notification-service.ts",
-      "migration": 199,
-      "reason": "agent run notices write a category through notification-service; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/notification-service.ts",
-      "migration": 199,
-      "reason": "the feed writer and reader use the category, dedupe key, read and target columns 0199 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/schedule-notification-service.ts",
-      "migration": 199,
-      "reason": "schedule notices write a category through notification-service; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
-    },
-    {
-      "file": "apps/web/features/notifications/lib/notification-target.ts",
-      "migration": 199,
-      "reason": "names the category field of a notification object returned by /api/notifications, not the database column, and never queries the notifications table; the route that does is covered by its own entry."
     },
     {
       "file": "apps/web/shared/stores/notification-store.ts",

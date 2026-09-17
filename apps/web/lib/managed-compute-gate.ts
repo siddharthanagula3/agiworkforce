@@ -2,12 +2,17 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
+import type { ResolvedWorkspaceControls, WorkspaceFeature } from '@agiworkforce/types';
+import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { evaluateModelAccessForRequest } from '@/lib/services/model-policy-gate';
 import { evaluateSpendLimit } from '@/lib/services/spend-limit-service';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
+import {
+  evaluateActiveWorkspacePolicy,
+  resolveEffectiveWorkspaceControls,
+} from '@/lib/services/organization-policy-gate';
 import {
   isPolicyUnavailable,
   WORKSPACE_POLICY_UNAVAILABLE_DECISION,
@@ -135,6 +140,79 @@ export async function buildOrganizationPolicyGateResponse(
     },
     { status: isPolicyUnavailable(decision) ? 503 : 403, headers },
   );
+}
+
+export async function buildWorkspaceFeatureGateResponse(
+  userId: string,
+  request: NextRequest,
+  feature: WorkspaceFeature,
+  surface: PolicySurface,
+  headers?: HeadersInit,
+): Promise<NextResponse | null> {
+  let decision;
+  try {
+    decision = await evaluateActiveWorkspacePolicy(
+      getNeonDb(),
+      userId,
+      { resource: 'feature', feature, surface },
+      request,
+    );
+  } catch (error) {
+    logger.error({ error, userId, feature }, '[workspace-feature] policy unavailable; denied');
+    decision = { ...WORKSPACE_POLICY_UNAVAILABLE_DECISION, organizationId: null };
+  }
+
+  if (decision.allowed) return null;
+
+  logger.warn(
+    { userId, organizationId: decision.organizationId, code: decision.code, feature, surface },
+    '[workspace-feature] denied by workspace policy',
+  );
+
+  return NextResponse.json(
+    {
+      error: {
+        message: decision.reason,
+        type: 'organization_policy',
+        code: decision.code,
+        feature,
+      },
+    },
+    { status: isPolicyUnavailable(decision) ? 503 : 403, headers },
+  );
+}
+
+export type WorkspaceControlsResolution =
+  { ok: true; controls: ResolvedWorkspaceControls | null } | { ok: false; response: NextResponse };
+
+export async function resolveWorkspaceControlsForRequest(
+  userId: string,
+  request: NextRequest,
+  headers?: HeadersInit,
+): Promise<WorkspaceControlsResolution> {
+  try {
+    const effective = await resolveEffectiveWorkspaceControls(getNeonDb(), userId, request);
+    return { ok: true, controls: effective?.controls ?? null };
+  } catch (error) {
+    const status = isAppError(error) ? error.statusCode : 503;
+    const decision = status < 500 ? null : WORKSPACE_POLICY_UNAVAILABLE_DECISION;
+    logger.error({ error, userId }, '[workspace-controls] unresolved; request denied');
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              decision?.reason ??
+              'You are not a member of the selected workspace. Choose a workspace you belong to, then try again.',
+            type: 'organization_policy',
+            code: decision?.code ?? 'workspace_not_accessible',
+          },
+        },
+        { status: status < 500 ? 403 : 503, headers },
+      ),
+    };
+  }
 }
 
 /**

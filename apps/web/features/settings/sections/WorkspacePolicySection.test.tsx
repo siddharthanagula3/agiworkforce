@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { AdminPolicy } from '@agiworkforce/types';
+import { DEFAULT_WORKSPACE_CONTROLS, type AdminPolicy } from '@agiworkforce/types';
 
 const { mockOverview, mockUpdate } = vi.hoisted(() => ({
   mockOverview: vi.fn(),
@@ -38,6 +38,7 @@ function policy(overrides: Partial<AdminPolicy> = {}): AdminPolicy {
     monthlySpendCapCents: null,
     zeroDataRetentionOnly: false,
     ipAllowList: [],
+    controls: DEFAULT_WORKSPACE_CONTROLS,
     updatedAt: '2026-08-01T00:00:00.000Z',
     ...overrides,
   };

@@ -21,8 +21,8 @@ import {
   isOrgAdminRole,
   listReadableSharedProjectIds,
   listSharedProjects,
-  requireOrgAdmin,
   requireOrgMember,
+  requireSharingManager,
   resolveOrgMembership,
   resolveSharedProjectScope,
   setProjectMemberAccess,
@@ -73,15 +73,23 @@ describe('role gates fail closed', () => {
     expect(isOrgAdminRole('viewer')).toBe(false);
   });
 
-  it('rejects a missing membership with 403, never a 404 that leaks existence', () => {
-    expect(() => requireOrgAdmin(null)).toThrowError(/owner or admin/i);
+  it('rejects a missing membership with 403, never a 404 that leaks existence', async () => {
+    await expect(requireSharingManager(null, 'user-1')).rejects.toThrowError(/not a member/i);
     expect(() => requireOrgMember(null)).toThrowError(/not a member/i);
-    try {
-      requireOrgAdmin({ organizationId: ORG, role: 'member' });
-      throw new Error('should have thrown');
-    } catch (error) {
-      expect((error as { statusCode?: number }).statusCode).toBe(403);
-    }
+    mockNeonQuery.mockResolvedValueOnce([{ permissions: ['content.read', 'content.share'] }]);
+    await expect(
+      requireSharingManager({ organizationId: ORG, role: 'member' }, 'user-1'),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('admits whoever holds sharing.manage, including through a custom role', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ permissions: ['content.read', 'sharing.manage'] }]);
+    await expect(
+      requireSharingManager({ organizationId: ORG, role: 'member' }, 'user-1'),
+    ).resolves.toEqual({ organizationId: ORG, role: 'member' });
+    const [sql, params] = mockNeonQuery.mock.calls.at(-1) as [string, unknown[]];
+    expect(sql).toContain('organization_member_permissions');
+    expect(params).toEqual([ORG, 'user-1']);
   });
 });
 

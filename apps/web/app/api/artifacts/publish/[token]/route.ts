@@ -8,6 +8,10 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
+  requireOrganizationPermission,
+  SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+} from '@/lib/services/organization-permission-service';
+import {
   isArtifactSharingSchemaUnavailable,
   resolveArtifactShareTarget,
   shareArtifactWithOrganization,
@@ -103,6 +107,12 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext):
     const target = await resolveArtifactShareTarget(db, { userId, token });
 
     if (visibility === 'organization') {
+      await requireOrganizationPermission(
+        userId,
+        target.organizationId,
+        'content.share',
+        SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+      );
       await shareArtifactWithOrganization(db, {
         organizationId: target.organizationId,
         publishedArtifactId: target.publishedArtifactId,
