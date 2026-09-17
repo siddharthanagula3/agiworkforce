@@ -45,6 +45,7 @@ import { AccountMenu } from './AccountMenu';
 import { AgiMark, shortcutLabel, useMenuKeyboard } from '@agiworkforce/ui';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { useCloudTaskBadge } from './useCloudTaskBadge';
+import { filterNavByWorkspaceFeatures, useDisabledWorkspaceFeatures } from './useWorkspacePolicy';
 
 type RecentsGroup = {
   label: string;
@@ -311,9 +312,16 @@ export function Sidebar({
 
   const totalItems = useMemo(() => groups.reduce((n, g) => n + g.items.length, 0), [groups]);
 
-  const navItems = useMemo(() => navItemsForMode(mode, privacyMode, t), [mode, privacyMode, t]);
+  const disabledFeatures = useDisabledWorkspaceFeatures();
+  const navItems = useMemo(
+    () => filterNavByWorkspaceFeatures(navItemsForMode(mode, privacyMode, t), disabledFeatures),
+    [disabledFeatures, mode, privacyMode, t],
+  );
   const searchShortcut = useMemo(() => shortcutLabel('K'), []);
-  const RAIL_ITEMS = useMemo(() => railItems(privacyMode, t), [privacyMode, t]);
+  const RAIL_ITEMS = useMemo(
+    () => filterNavByWorkspaceFeatures(railItems(privacyMode, t), disabledFeatures),
+    [disabledFeatures, privacyMode, t],
+  );
   const { needsUserCount: tasksNeedingInput } = useCloudTaskBadge();
 
   const handleNavClick = useCallback(

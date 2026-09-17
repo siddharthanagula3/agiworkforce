@@ -391,6 +391,8 @@ export type SSOConnectionRow = {
   sp_metadata_url: string | null;
   domain_verified_at: string | null;
   domain_verification_token: string | null;
+  jit_provisioning_enabled: boolean;
+  jit_default_role: 'member' | 'viewer';
 };
 
 export type ReleaseRow = {

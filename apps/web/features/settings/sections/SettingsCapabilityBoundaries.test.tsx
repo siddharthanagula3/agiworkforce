@@ -82,7 +82,7 @@ describe('Web Settings capability boundaries', () => {
 
     expect(screen.getByText('Current account boundary')).toBeInTheDocument();
     expect(
-      screen.getByText(/Passkeys, security keys, SMS MFA, and trusted-device lists/),
+      screen.getByText(/Hardware security keys, SMS MFA, and trusted-device lists/),
     ).toBeInTheDocument();
     expect(screen.getByText('Trusted contact · Not configured')).toBeInTheDocument();
     expect(

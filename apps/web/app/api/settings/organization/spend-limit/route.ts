@@ -8,16 +8,15 @@ import { SETTINGS_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { createError } from '@/lib/errors';
 import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import {
-  isOrgAdminRole,
-  requireOrgMember,
-  resolveOrgMembership,
-} from '@/lib/services/org-sharing-service';
+  requireMemberPermission,
+  resolveOrganizationPermissions,
+} from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   deleteSpendLimit,
@@ -56,7 +55,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const payload: SpendLimitResponse = {
     organizationId: membership.organizationId,
-    canManageLimit: isOrgAdminRole(membership.role),
+    canManageLimit: (await resolveOrganizationPermissions(membership.organizationId, userId)).has(
+      'policy.manage',
+    ),
     currentUserRole: membership.role,
     state: await readSpendState(db, membership.organizationId),
   };
@@ -67,11 +68,12 @@ async function requireAdmin(request: NextRequest) {
   const { db, userId } = await getUserScopedDb(request);
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
-  if (!isOrgAdminRole(membership.role)) {
-    throw createError.forbidden(
-      'Only an organization owner or admin can change this workspace spend limit.',
-    );
-  }
+  await requireMemberPermission(
+    membership.organizationId,
+    userId,
+    'policy.manage',
+    'Your workspace role does not allow changing this workspace spend limit.',
+  );
   return { db, userId, membership };
 }
 

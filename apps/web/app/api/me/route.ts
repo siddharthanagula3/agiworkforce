@@ -34,6 +34,7 @@ import {
 import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
 import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
 import { getIdentityUser } from '@/lib/server/identity';
+import { provisionEnterpriseSignIn } from '@/lib/server/sso/jit-provisioning';
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 
@@ -69,6 +70,14 @@ async function handleGetMe(request: NextRequest) {
       clerkName =
         identityUser?.fullName ?? identityUser?.firstName ?? identityUser?.username ?? undefined;
       resolvedEmail = resolvedEmail ?? identityUser?.primaryEmail ?? undefined;
+      if (identityUser && identityUser.enterpriseAccounts.length > 0) {
+        await provisionEnterpriseSignIn(getNeonDb(), identityUser).catch((jitError: unknown) => {
+          logger.error(
+            { userId, error: jitError },
+            'Single sign-on first sign-in provisioning failed',
+          );
+        });
+      }
     } catch (identityLookupError) {
       logger.warn(
         { userId, error: identityLookupError },

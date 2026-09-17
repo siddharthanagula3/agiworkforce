@@ -42,6 +42,8 @@ const UpdateSchema = z
     oidc_client_secret: z.string().min(1).max(2048).optional(),
     attribute_mapping: z.record(z.string(), z.unknown()).optional(),
     is_active: z.boolean().optional(),
+    jit_provisioning_enabled: z.boolean().optional(),
+    jit_default_role: z.enum(['member', 'viewer']).optional(),
   })
   .strict();
 
@@ -334,7 +336,9 @@ export async function PATCH(
          acs_url = coalesce($9, acs_url),
          sp_entity_id = coalesce($10, sp_entity_id),
          sp_metadata_url = coalesce($11, sp_metadata_url),
-         is_active = $12
+         is_active = $12,
+         jit_provisioning_enabled = coalesce($13, jit_provisioning_enabled),
+         jit_default_role = coalesce($14, jit_default_role)
        where id = $1
        returning ${SSO_CONNECTION_SELECT_COLUMNS}`,
       [
@@ -350,6 +354,8 @@ export async function PATCH(
         provisioned?.spEntityId ?? null,
         provisioned?.spMetadataUrl ?? null,
         effectiveActive,
+        update.jit_provisioning_enabled ?? null,
+        update.jit_default_role ?? null,
       ],
     );
 

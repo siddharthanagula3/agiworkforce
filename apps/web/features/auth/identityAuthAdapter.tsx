@@ -27,6 +27,7 @@ const PROVIDER_STRATEGIES = {
 
 const IDENTIFIER_NOT_FOUND_CODES = ['form_identifier_not_found', 'form_param_nil'];
 const IDENTIFIER_EXISTS_CODES = ['form_identifier_exists'];
+const PASSKEY_DISMISSED_CODES = ['passkey_retrieval_cancelled', 'passkey_operation_aborted'];
 
 const SECOND_FACTOR_KINDS: Readonly<Record<string, AuthSecondFactorKind>> = {
   totp: 'authenticator',
@@ -346,6 +347,14 @@ export function useIdentityAuthClient(mode: AuthMode, redirects: AuthRedirects):
     [mode],
   );
 
+  const signInWithPasskey = useCallback(async (): Promise<AuthResult> => {
+    const { error } = await signInRef.current.passkey({ flow: 'discoverable' });
+    if (error && hasCode(error, PASSKEY_DISMISSED_CODES)) return { status: 'failed', message: '' };
+    if (error) return failure(error);
+    if (signInRef.current.status === 'complete') return finalizeSignIn();
+    return { status: 'failed', message: UNEXPECTED_FAILURE };
+  }, [finalizeSignIn]);
+
   const restart = useCallback(async (): Promise<void> => {
     await (mode === 'signup' ? signUpRef.current.reset() : signInRef.current.reset());
   }, [mode]);
@@ -362,12 +371,14 @@ export function useIdentityAuthClient(mode: AuthMode, redirects: AuthRedirects):
       startPasswordReset,
       startEmailCode,
       startProvider,
+      signInWithPasskey,
       restart,
     }),
     [
       isReady,
       resendCode,
       restart,
+      signInWithPasskey,
       startEmailCode,
       startPasswordReset,
       startProvider,

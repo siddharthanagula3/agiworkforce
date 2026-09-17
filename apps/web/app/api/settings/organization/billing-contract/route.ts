@@ -6,13 +6,10 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { SETTINGS_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import {
-  isOrgAdminRole,
-  requireOrgMember,
-  resolveOrgMembership,
-} from '@/lib/services/org-sharing-service';
+import { logAdminDataAccess } from '@/lib/server/admin-data-access';
+import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   readEnterpriseContractSummary,
@@ -35,12 +32,19 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
-  if (!isOrgAdminRole(membership.role)) {
-    throw createError.forbidden(
-      'Only an organization owner or admin can view the enterprise contract and invoices.',
-    );
-  }
+  await requireMemberPermission(
+    membership.organizationId,
+    userId,
+    'billing.read',
+    'Your workspace role does not allow viewing the enterprise contract and invoices.',
+  );
 
+  await logAdminDataAccess(request, {
+    userId,
+    organizationId: membership.organizationId,
+    role: membership.role,
+    resourceType: 'enterprise_contract',
+  });
   const payload: EnterpriseContractResponse = await readEnterpriseContractSummary(
     db,
     membership.organizationId,

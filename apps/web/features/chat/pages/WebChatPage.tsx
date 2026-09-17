@@ -169,6 +169,7 @@ import {
 } from '@shared/components/layout/sidebar-session-actions';
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
+import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
 import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonomyNotice';
 import { AGI_WORK_LABEL } from '../lib/agi-work';
@@ -998,6 +999,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const identitySignOut = useSignOut();
   const { user: identityUser } = useCurrentUser();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
+  const disabledFeatures = useDisabledWorkspaceFeatures();
   const { user: compatibilityUser, logout } = useAuthStore();
   const canonicalUser = useBillingStore((s) => s.user);
   const clerkAccountUser = useMemo<ChatAccountIdentity | null>(() => {
@@ -4787,9 +4789,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         navigate: (href) => router.push(href),
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
+        disabledFeatures,
         translate: (key, fallback) => t(`common:${key}`, { defaultValue: fallback }),
       }),
-    [hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
+    [disabledFeatures, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   const handleLogout = useCallback(async () => {
@@ -4935,7 +4938,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     mode: 'cloud' as const,
     headerSlot: <SidebarBrandRow />,
     onNewChat: handleSidebarNewChat,
-    onOpenCode: handleSidebarOpenCode,
+    onOpenCode: disabledFeatures.includes('code') ? undefined : handleSidebarOpenCode,
     onToggleCollapse: handleToggleSidebar,
     onOpenSearch: handleSidebarOpenSearch,
     navItems: sidebarNavItems,

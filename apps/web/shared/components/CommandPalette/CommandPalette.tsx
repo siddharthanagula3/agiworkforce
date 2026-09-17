@@ -39,6 +39,7 @@ import {
 } from '@/features/chat/lib/agi-work';
 import { formatRelativeTime } from '@shared/utils/format';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
+import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import { useTranslation } from 'react-i18next';
@@ -91,6 +92,7 @@ function useCommands(
   const { theme, setTheme } = useTheme();
   const conversations = useChatStore((state) => state.conversations);
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
+  const disabledFeatures = useDisabledWorkspaceFeatures();
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_HIDDEN_NAV_IDS;
 
   const themeLabel = theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System';
@@ -118,18 +120,22 @@ function useCommands(
       icon: SquarePen,
       action: () => router.push('/chat'),
     },
-    {
-      id: 'new-agi-work',
-      title: `New ${AGI_WORK_LABEL}`,
-      group: 'Quick actions',
-      icon: ListChecks,
-      action: () => {
-        useChatStore
-          .getState()
-          .setComposerToggles({ workMode: 'agiwork' }, PENDING_CONVERSATION_KEY);
-        router.push('/chat');
-      },
-    },
+    ...(disabledFeatures.includes('work')
+      ? []
+      : [
+          {
+            id: 'new-agi-work',
+            title: `New ${AGI_WORK_LABEL}`,
+            group: 'Quick actions',
+            icon: ListChecks,
+            action: () => {
+              useChatStore
+                .getState()
+                .setComposerToggles({ workMode: 'agiwork' }, PENDING_CONVERSATION_KEY);
+              router.push('/chat');
+            },
+          },
+        ]),
   ];
 
   const recents = recentConversationCommands(conversations, router);
@@ -143,6 +149,7 @@ function useCommands(
     navigate: (href) => router.push(href),
     isAdmin: isWorkspaceAdmin,
     hiddenIds: hiddenNavIds,
+    disabledFeatures,
     translate: (key, fallback) => t(key, { defaultValue: fallback }),
   }).map((item) => ({
     id: `nav-${item.id}`,
@@ -157,13 +164,17 @@ function useCommands(
     // Code left the rail (it has its own sidebar and its own route), so
     // `pageActions` no longer carries it and the palette has to name it
     // itself or the surface becomes unreachable from here.
-    {
-      id: 'go-code',
-      title: CODE_COPY.surface,
-      group: 'Actions',
-      icon: TerminalSquare,
-      action: () => router.push(CODE_ROUTES.root),
-    },
+    ...(disabledFeatures.includes('code')
+      ? []
+      : [
+          {
+            id: 'go-code',
+            title: CODE_COPY.surface,
+            group: 'Actions',
+            icon: TerminalSquare,
+            action: () => router.push(CODE_ROUTES.root),
+          },
+        ]),
     {
       id: 'go-work-history',
       title: WORK_HISTORY_LABEL,

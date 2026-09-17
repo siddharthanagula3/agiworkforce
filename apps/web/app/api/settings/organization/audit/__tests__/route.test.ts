@@ -2,6 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const permissionRole = vi.hoisted(() => ({
+  value: 'admin' as string | null,
+  grants: [] as Array<'audit.read'>,
+}));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
+
 const { mockQuery, mockGetUserScopedDb, mockRecordAuditEvent, mockRequireTeamAdminAccess } =
   vi.hoisted(() => ({
     mockQuery: vi.fn(),
@@ -21,6 +31,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+  getTeamAdminAccess: vi.fn(async () => ({ canManageTeam: true })),
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
 
@@ -69,6 +80,7 @@ interface Fixture {
 }
 
 function bind({ role = 'admin', policyRow = null, events = [auditRow()] }: Fixture = {}): void {
+  permissionRole.value = role;
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
     if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG }];
@@ -89,6 +101,7 @@ async function readStream(res: Response): Promise<string> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  permissionRole.grants = [];
   mockGetUserScopedDb.mockResolvedValue({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user-1',
@@ -108,6 +121,13 @@ describe('GET /api/settings/organization/audit', () => {
     bind({ role: 'viewer' });
 
     expect((await GET(req('/api/settings/organization/audit') as never)).status).toBe(403);
+  });
+
+  it('serves a member whose custom role grants audit.read, whatever the role is named', async () => {
+    bind({ role: 'member' });
+    permissionRole.grants = ['audit.read'];
+
+    expect((await GET(req('/api/settings/organization/audit') as never)).status).toBe(200);
   });
 
   it('returns events for an admin', async () => {

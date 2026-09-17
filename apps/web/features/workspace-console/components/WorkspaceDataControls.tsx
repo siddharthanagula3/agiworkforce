@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Gavel, ShieldAlert } from 'lucide-react';
+import { Download, Gavel, ShieldAlert } from 'lucide-react';
 import { useConfirmAction } from '@agiworkforce/ui';
 
 import {
@@ -64,6 +64,21 @@ function OutcomeChip({ sweep }: { sweep: RetentionSweepRecord }) {
   );
 }
 
+function HoldExportLink({ hold }: { hold: LegalHold }) {
+  return (
+    <a
+      href={`/api/settings/organization/legal-holds/${encodeURIComponent(hold.id)}/export`}
+      download
+      aria-label={`Export records held by ${hold.name}`}
+      className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+    >
+      <Download size={13} aria-hidden="true" />
+      Export records
+    </a>
+  );
+}
+
 function HoldRow({
   hold,
   onRelease,
@@ -99,11 +114,15 @@ function HoldRow({
         ) : null}
       </div>
       {released ? (
-        <span className="shrink-0 text-xs" style={{ color: 'var(--text-3)' }}>
-          Released
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <HoldExportLink hold={hold} />
+          <span className="text-xs" style={{ color: 'var(--text-3)' }}>
+            Released
+          </span>
+        </div>
       ) : (
         <div className="flex shrink-0 items-center gap-2">
+          <HoldExportLink hold={hold} />
           <button
             type="button"
             disabled={releasing}

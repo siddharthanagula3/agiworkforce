@@ -32,10 +32,12 @@ function writeTermsMarker(): void {
 export function AuthFlow({
   mode,
   providers,
+  passkeySignIn = false,
   redirects,
 }: {
   mode: AuthMode;
   providers: readonly AuthProvider[];
+  passkeySignIn?: boolean;
   redirects: AuthRedirects;
 }) {
   const client = useIdentityAuthClient(mode, redirects);
@@ -181,6 +183,8 @@ export function AuthFlow({
           void run(() => client.startWithEmail(email));
         }}
         onStartProvider={(provider) => void onStartProvider(provider)}
+        passkeySignIn={mode === 'login' && passkeySignIn}
+        onStartPasskey={() => void run(() => client.signInWithPasskey())}
       />
       {botProtection}
     </>

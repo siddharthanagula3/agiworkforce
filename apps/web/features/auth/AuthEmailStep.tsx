@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Spinner } from '@agiworkforce/ui';
+
+import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
 
 import { AuthDivider } from './AuthDivider';
 import { AuthField } from './AuthField';
@@ -10,7 +13,12 @@ import { AuthProviderButtons } from './AuthProviderButtons';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AuthSubmitButton } from './AuthSubmitButton';
 import { AuthSwitchLine, SWITCH_INSTEAD_LABELS } from './AuthSwitchLine';
-import { AUTH_ERROR_CLASS, AUTH_LINK_CLASS } from './authStyles';
+import {
+  AUTH_ERROR_CLASS,
+  AUTH_LINK_CLASS,
+  AUTH_PROVIDER_BUTTON_CLASS,
+  AUTH_PROVIDER_STACK_CLASS,
+} from './authStyles';
 import type { AuthMode, AuthProvider, AuthProviderId } from './authContract';
 
 const HEADINGS: Readonly<Record<AuthMode, string>> = {
@@ -20,6 +28,7 @@ const HEADINGS: Readonly<Record<AuthMode, string>> = {
 
 const EMAIL_FIELD_LABEL = 'Email address';
 const CONTINUE_LABEL = 'Continue';
+const PASSKEY_LABEL = 'Sign in with a passkey';
 
 export function AuthEmailStep({
   mode,
@@ -33,6 +42,8 @@ export function AuthEmailStep({
   providerPending,
   onSubmit,
   onStartProvider,
+  passkeySignIn = false,
+  onStartPasskey,
 }: {
   mode: AuthMode;
   providers: readonly AuthProvider[];
@@ -45,8 +56,15 @@ export function AuthEmailStep({
   providerPending: AuthProviderId | null;
   onSubmit: (email: string) => void;
   onStartProvider: (provider: AuthProviderId) => void;
+  passkeySignIn?: boolean;
+  onStartPasskey?: () => void;
 }) {
   const [email, setEmail] = useState('');
+  const [passkeysSupported, setPasskeysSupported] = useState(false);
+  useEffect(() => {
+    setPasskeysSupported(browserSupportsPasskeys());
+  }, []);
+  const offerPasskey = passkeySignIn && passkeysSupported && onStartPasskey !== undefined;
   const isSignup = mode === 'signup';
   const fieldMessage =
     fieldError && switchOffered ? (
@@ -71,6 +89,25 @@ export function AuthEmailStep({
         disabled={busy || !ready}
         onStart={onStartProvider}
       />
+
+      {offerPasskey ? (
+        <div
+          className={
+            providers.length > 0 ? `${AUTH_PROVIDER_STACK_CLASS} mt-3` : AUTH_PROVIDER_STACK_CLASS
+          }
+        >
+          <button
+            type="button"
+            className={AUTH_PROVIDER_BUTTON_CLASS}
+            disabled={busy || !ready || providerPending !== null}
+            aria-busy={busy || undefined}
+            onClick={onStartPasskey}
+          >
+            {busy ? <Spinner size="sm" /> : null}
+            <span>{PASSKEY_LABEL}</span>
+          </button>
+        </div>
+      ) : null}
 
       <AuthDivider />
 

@@ -22,9 +22,9 @@ import {
   listSharedProjects,
   requireOrgMember,
   resolveOrgMembership,
-  isOrgAdminRole,
   type SharedProjectSummary,
 } from '@/lib/services/org-sharing-service';
+import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 
 export const runtime = 'nodejs';
 
@@ -53,26 +53,33 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request);
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
 
-  const [members, sharedProjects, sharedConnectors, sharedArtifacts, sharedConversations] =
-    await Promise.all([
-      db.query<{ user_id: string; role: OrgMemberRosterEntry['role']; joined_at: string }>(
-        `select user_id, role, joined_at
+  const [
+    members,
+    sharedProjects,
+    sharedConnectors,
+    sharedArtifacts,
+    sharedConversations,
+    permissions,
+  ] = await Promise.all([
+    db.query<{ user_id: string; role: OrgMemberRosterEntry['role']; joined_at: string }>(
+      `select user_id, role, joined_at
          from public.organization_members
         where organization_id = $1
         order by joined_at asc`,
-        [membership.organizationId],
-      ),
-      listSharedProjects(db, membership.organizationId),
-      listSharedConnectors(db, membership.organizationId),
-      listSharedArtifacts(db, membership.organizationId),
-      listSharedSessions(db, membership.organizationId),
-    ]);
+      [membership.organizationId],
+    ),
+    listSharedProjects(db, membership.organizationId),
+    listSharedConnectors(db, membership.organizationId),
+    listSharedArtifacts(db, membership.organizationId),
+    listSharedSessions(db, membership.organizationId),
+    resolveOrganizationPermissions(membership.organizationId, userId),
+  ]);
 
   const payload: OrganizationSharedOverview = {
     organizationId: membership.organizationId,
     currentUserId: userId,
     currentUserRole: membership.role,
-    canManageSharing: isOrgAdminRole(membership.role),
+    canManageSharing: permissions.has('sharing.manage'),
     members: members.map((row) => ({
       userId: row.user_id,
       role: row.role,

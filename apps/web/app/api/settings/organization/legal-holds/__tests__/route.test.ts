@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
+
 const { mockQuery, mockGetUserScopedDb, mockRequireTeamAdminAccess, mockRecordAuditEvent } =
   vi.hoisted(() => ({
     mockQuery: vi.fn(),
@@ -56,6 +63,7 @@ function bind({
     holdRow({ released_at: '2026-08-23T01:00:00.000Z', released_by_user_id: 'user-1' }),
   ],
 } = {}) {
+  permissionRole.value = role;
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
     if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG }];
@@ -110,6 +118,13 @@ describe('legal holds', () => {
     const body = (await res.json()) as { holds: unknown[]; sweeps: unknown[] };
     expect(body.holds).toHaveLength(1);
     expect(Array.isArray(body.sweeps)).toBe(true);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'data_accessed',
+        organizationId: ORG,
+        detail: expect.objectContaining({ resourceType: 'legal_hold', count: 1 }),
+      }),
+    );
   });
 
   it('places an organization-wide hold and records it', async () => {

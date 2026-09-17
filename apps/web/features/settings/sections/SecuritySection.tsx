@@ -16,6 +16,7 @@ import {
 } from '@features/settings/schemas/settings-validation';
 import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
 import { TwoFactorEnrollmentPanel } from '@features/settings/components/Settings/TwoFactorEnrollment';
+import { PasskeysPanel } from '@features/settings/components/Settings/PasskeysPanel';
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 import { DeviceSignInToggle } from '@features/settings/components/DeviceSignInToggle';
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
@@ -102,9 +103,11 @@ export function SecuritySection() {
           Security
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Two-factor authentication, session timeout, and password.
+          Passkeys, two-factor authentication, session timeout, and password.
         </p>
       </div>
+
+      <PasskeysPanel />
 
       <TwoFactorEnrollmentPanel onStatusChange={handleTwoFactorStatus} />
 
@@ -143,10 +146,10 @@ export function SecuritySection() {
           Current account boundary
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
-          Passkeys, security keys, SMS MFA, and trusted-device lists are not available in the
-          current account contract. Authenticator app codes (TOTP) with recovery backup codes are
-          the supported second factor. To review active sessions or sign out other devices, use
-          Account settings.
+          Hardware security keys, SMS MFA, and trusted-device lists are not available in the current
+          account contract. Passkeys sign you in, and authenticator app codes (TOTP) with recovery
+          backup codes are the supported second factor. To review active sessions or sign out other
+          devices, use Account settings.
         </p>
       </section>
 

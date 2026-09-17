@@ -28,6 +28,7 @@ import {
   ShieldCheck,
 } from '@agiworkforce/icons';
 import type { SidebarIconComponent, SidebarNavItem } from '@agiworkforce/ui';
+import type { WorkspaceFeature } from '@agiworkforce/types';
 
 /**
  * Sections that live UNDER `/chat` but are their own rail destination. A
@@ -75,6 +76,7 @@ export interface AppNavDestination {
    * without it has no way back to the product's main surface.
    */
   hideable?: boolean;
+  feature?: WorkspaceFeature;
 }
 
 /**
@@ -137,6 +139,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     href: '/chat/schedules',
     isActive: (pathname) => isUnder(pathname, '/chat/schedules'),
     hideable: true,
+    feature: 'schedules',
   },
   // Admin, directory sync is the org-scoped page an admin or owner can
   // actually use. The console at `/admin` itself is platform-operator only
@@ -170,10 +173,21 @@ export function buildAppNavItems(options: {
    * this contains, so a stale or hand-edited value cannot empty the rail.
    */
   hiddenIds?: readonly string[];
+  disabledFeatures?: readonly WorkspaceFeature[];
   translate?: (key: string, fallback: string) => string;
 }): SidebarNavItem[] {
-  const { pathname, navigate, isAdmin = false, hiddenIds = [], translate } = options;
+  const {
+    pathname,
+    navigate,
+    isAdmin = false,
+    hiddenIds = [],
+    disabledFeatures = [],
+    translate,
+  } = options;
   return APP_NAV_DESTINATIONS.filter((destination) => !destination.adminOnly || isAdmin)
+    .filter(
+      (destination) => !destination.feature || !disabledFeatures.includes(destination.feature),
+    )
     .filter((destination) => !(destination.hideable && hiddenIds.includes(destination.id)))
     .map((destination) => {
       const { href } = destination;

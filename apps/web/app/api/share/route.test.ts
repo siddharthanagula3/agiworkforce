@@ -4,6 +4,10 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
+  secretMode: vi.fn(async (..._args: unknown[]) => ({
+    mode: 'redact' as 'warn' | 'redact' | 'block',
+    organizationId: null as string | null,
+  })),
   authUser: vi.fn(async (..._args: unknown[]) => ({ userId: 'user-1' })),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
@@ -31,6 +35,11 @@ vi.mock('@/lib/security-audit', () => ({
   BLOCK_APPEAL_PATH: '/support',
   logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
+}));
+
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  resolveSecretHandlingPolicy: (...a: unknown[]) => mocks.secretMode(...a),
 }));
 
 const { GET, POST } = await import('./route');
@@ -230,6 +239,29 @@ describe('POST /api/share, secret redaction', () => {
     expect(event.eventType).toBe('secret_detected');
     expect(event.detail['status']).toBe('redacted');
     expect(JSON.stringify(event)).not.toContain(STRIPE_KEY);
+  });
+
+  it('refuses to publish when the workspace blocks outbound secrets', async () => {
+    mocks.secretMode.mockResolvedValueOnce({ mode: 'block', organizationId: 'org-1' });
+
+    const res = await POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({
+          conversation_id: CONVERSATION_ID,
+          title: 'Session',
+          messages: [{ role: 'user', content: `use ${STRIPE_KEY} to bill` }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(
+      mocks.query.mock.calls.some((c) => /insert into shared_sessions/i.test(String(c[0]))),
+    ).toBe(false);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'dlp_content_blocked', organizationId: 'org-1' }),
+    );
   });
 
   it('does not record an audit event when nothing is redacted', async () => {

@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
+
 const { mockQuery, mockGetUserScopedDb, mockRequireTeamAdminAccess } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockGetUserScopedDb: vi.fn(),
@@ -23,6 +30,7 @@ import type { OrganizationUsageResponse } from '../route';
 const ORG = '11111111-1111-4111-8111-111111111111';
 
 function bind({ role = 'admin' as 'owner' | 'admin' | 'member' | 'viewer' } = {}) {
+  permissionRole.value = role;
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
     if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG }];

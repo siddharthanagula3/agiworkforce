@@ -116,3 +116,20 @@ describe('app rail · every destination resolves to a real route', () => {
     );
   });
 });
+
+describe('app rail · workspace feature controls', () => {
+  it('drops a destination whose feature the workspace turned off', () => {
+    const ids = buildAppNavItems({
+      pathname: '/chat',
+      navigate: vi.fn(),
+      disabledFeatures: ['schedules'],
+    }).map((item) => item.id);
+    expect(ids).not.toContain('schedules');
+    expect(ids).toContain('chat-home');
+  });
+
+  it('keeps every destination when no feature is turned off', () => {
+    const ids = buildAppNavItems({ pathname: '/chat', navigate: vi.fn() }).map((item) => item.id);
+    expect(ids).toContain('schedules');
+  });
+});

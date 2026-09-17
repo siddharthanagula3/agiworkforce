@@ -1,4 +1,3 @@
-import { isOrganizationAdminRole } from '@agiworkforce/types';
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,6 +8,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -49,9 +49,12 @@ async function requireAdminAccess(
   if (!row) {
     throw createError.forbidden('You are not a member of this organization');
   }
-  if (!isOrganizationAdminRole(row.role)) {
-    throw createError.forbidden('Only owners and admins can manage team members');
-  }
+  await requireMemberPermission(
+    organizationId,
+    requesterId,
+    'members.manage',
+    'Your workspace role does not allow managing team members.',
+  );
   return row;
 }
 

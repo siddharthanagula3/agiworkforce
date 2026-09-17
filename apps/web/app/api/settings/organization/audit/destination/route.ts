@@ -13,11 +13,8 @@ import { EgressPolicyError } from '@/lib/egress-policy';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import {
-  isOrgAdminRole,
-  requireOrgMember,
-  resolveOrgMembership,
-} from '@/lib/services/org-sharing-service';
+import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   deleteAuditDestination,
@@ -61,11 +58,12 @@ async function requireAdmin(request: NextRequest) {
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
-  if (!isOrgAdminRole(membership.role)) {
-    throw createError.forbidden(
-      'Only an organization owner or admin can configure audit streaming for this workspace.',
-    );
-  }
+  await requireMemberPermission(
+    membership.organizationId,
+    userId,
+    'policy.manage',
+    'Your workspace role does not allow configuring audit streaming for this workspace.',
+  );
 
   return { db, userId, membership };
 }

@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
+
 const { mockQuery, mockNeonQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockNeonQuery: vi.fn(),
@@ -24,6 +31,7 @@ const PROJECT = '33333333-3333-4333-8333-333333333333';
 const CONNECTOR = '44444444-4444-4444-8444-444444444444';
 
 function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
+  permissionRole.value = role;
   mockNeonQuery.mockImplementation(async (sql: string) => {
     if (/from public\.organization_shared_projects s/i.test(sql)) {
       return [

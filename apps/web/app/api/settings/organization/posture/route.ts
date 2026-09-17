@@ -5,13 +5,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import {
-  isOrgAdminRole,
-  requireOrgMember,
-  resolveOrgMembership,
-} from '@/lib/services/org-sharing-service';
+import { logAdminDataAccess } from '@/lib/server/admin-data-access';
+import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   readWorkspacePosture,
@@ -38,14 +35,21 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
-  if (!isOrgAdminRole(membership.role)) {
-    throw createError.forbidden(
-      'Only an organization owner or admin can view the workspace security posture.',
-    );
-  }
+  await requireMemberPermission(
+    membership.organizationId,
+    userId,
+    'audit.read',
+    'Your workspace role does not allow viewing the workspace security posture.',
+  );
 
   const posture = await readWorkspacePosture(db, membership.organizationId);
 
+  await logAdminDataAccess(request, {
+    userId,
+    organizationId: membership.organizationId,
+    role: membership.role,
+    resourceType: 'workspace_posture',
+  });
   const payload: WorkspacePostureResponse = {
     currentUserRole: membership.role,
     posture,

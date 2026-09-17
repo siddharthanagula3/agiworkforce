@@ -1,4 +1,3 @@
-import { isOrganizationAdminRole } from '@agiworkforce/types';
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow, ProfileRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -134,9 +134,12 @@ async function handleAddMember(request: NextRequest) {
       if (!requesterMembership) {
         throw createError.forbidden('You are not a member of this organization');
       }
-      if (!isOrganizationAdminRole(requesterMembership.role)) {
-        throw createError.forbidden('Only owners and admins can add team members');
-      }
+      await requireMemberPermission(
+        organizationId,
+        userId,
+        'members.manage',
+        'Your workspace role does not allow adding team members.',
+      );
 
       await expirePendingInvitations(tx, organizationId);
 

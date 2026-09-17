@@ -138,6 +138,11 @@ function toUser(user: ClerkUser): IdentityUser {
     twoFactorEnabled: user.twoFactorEnabled,
     createdAt: user.createdAt,
     lastSignInAt: user.lastSignInAt,
+    enterpriseAccounts: (user.enterpriseAccounts ?? []).map((account) => ({
+      connectionId: optional(account.enterpriseConnection?.id),
+      emailAddress: account.emailAddress,
+      active: account.active,
+    })),
   };
 }
 

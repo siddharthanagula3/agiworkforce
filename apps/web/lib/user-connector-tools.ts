@@ -17,6 +17,7 @@ import type { InteractiveCard } from '@agiworkforce/types';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
@@ -2360,36 +2361,65 @@ export function makeUserConnectorExecutor(
 
     options?.signal?.throwIfAborted();
 
+    const guarded = async (
+      run: (safeArgs: Record<string, unknown>) => Promise<ConnectorExecResult>,
+    ): Promise<ConnectorExecResult> => {
+      const verdict = await inspectOutboundContent({
+        channel: 'connector_write',
+        value: args,
+        userId,
+        organizationId: organizationId ?? null,
+        resourceId: `${serverId}:${toolName}`,
+        resolveMode: async () => {
+          const { resolveSecretHandlingPolicy } =
+            await import('@/lib/services/organization-policy-gate');
+          return resolveSecretHandlingPolicy(getNeonDb(), userId);
+        },
+      });
+      if (verdict.action === 'blocked') {
+        return { handled: true, content: verdict.message, isError: true };
+      }
+      return run(verdict.value);
+    };
+
     if (serverId === GITHUB_SERVER_ID) {
-      return executeGithubTool(userId, toolName, args);
+      return guarded((safeArgs) => executeGithubTool(userId, toolName, safeArgs));
     }
 
     const customShortId = customShortIdFromServerId(serverId);
     if (customShortId !== null) {
-      return executeCustomConnectorTool(userId, customShortId, toolName, args, options);
+      return guarded((safeArgs) =>
+        executeCustomConnectorTool(userId, customShortId, toolName, safeArgs, options),
+      );
     }
 
     const orgShortId = orgShortIdFromServerId(serverId);
     if (orgShortId !== null) {
-      return executeOrgSharedConnectorTool(
-        userId,
-        organizationId,
-        orgShortId,
-        toolName,
-        args,
-        options,
+      return guarded((safeArgs) =>
+        executeOrgSharedConnectorTool(
+          userId,
+          organizationId,
+          orgShortId,
+          toolName,
+          safeArgs,
+          options,
+        ),
       );
     }
 
     if (isDirectoryServerId(serverId)) {
-      return executeOAuthConnectorTool(userId, serverId, toolName, args, options);
+      return guarded((safeArgs) =>
+        executeOAuthConnectorTool(userId, serverId, toolName, safeArgs, options),
+      );
     }
 
     const map = loadConnectorMcpMap();
     const entry = map.get(serverId);
     if (!entry) {
       if (isConnectorOAuthSupported(serverId)) {
-        return executeOAuthConnectorTool(userId, serverId, toolName, args, options);
+        return guarded((safeArgs) =>
+          executeOAuthConnectorTool(userId, serverId, toolName, safeArgs, options),
+        );
       }
       return NOT_HANDLED;
     }
@@ -2403,6 +2433,8 @@ export function makeUserConnectorExecutor(
       };
     }
 
-    return executeRemoteConnectorTool(userId, entry, toolName, args, options);
+    return guarded((safeArgs) =>
+      executeRemoteConnectorTool(userId, entry, toolName, safeArgs, options),
+    );
   };
 }

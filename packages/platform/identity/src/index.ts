@@ -15,6 +15,7 @@ export {
   type IdentitySessionMiddleware,
   type IdentitySessionPage,
   type IdentitySignInRoute,
+  type IdentityEnterpriseAccount,
   type IdentityUser,
   type ListUserSessionsOptions,
   type SessionMiddlewareHandler,
