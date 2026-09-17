@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
+import { recordNotificationDelivery, type NotificationChannel } from '@/lib/observability/metrics';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendWebPushToUser } from './web-push-service';
 
@@ -130,6 +131,21 @@ async function sendExpoPushToUser(
 
 const NO_DELIVERY: PushDeliveryResult = { sent: 0, invalidated: 0 };
 
+function recordPushDelivery(
+  channel: NotificationChannel,
+  attempted: boolean,
+  result: PushDeliveryResult,
+): void {
+  if (!attempted) return;
+  recordNotificationDelivery({ channel, outcome: 'delivered', count: result.sent });
+  recordNotificationDelivery({
+    channel,
+    outcome: 'failed',
+    reason: result.error ?? 'device_not_registered',
+    count: result.invalidated + (result.error ? 1 : 0),
+  });
+}
+
 async function settle(
   transport: string,
   delivery: Promise<PushDeliveryResult>,
@@ -174,6 +190,9 @@ export async function sendPushToUser(
     toExpo ? settle('expo', sendExpoPushToUser(userId, message)) : NO_DELIVERY,
     toWeb ? settle('web', sendWebPushToUser(userId, message)) : NO_DELIVERY,
   ]);
+
+  recordPushDelivery('push_expo', toExpo, expo);
+  recordPushDelivery('push_web', toWeb, web);
 
   const error = expo.error ?? web.error;
   return {

@@ -1,0 +1,115 @@
+{
+  "description": "Every §109 cross-version pair in docs/work/enterprise-master-build-checklist-2026-09-16.md, and for each one either the test CI runs or the reason no test can exist yet. scripts/check-cross-version-matrix.mjs fails when a pair is missing, when a covered pair names a test file that is not there, or when a blocked pair does not name what would unblock it. A pair may never be both.",
+  "checklist": "docs/work/enterprise-master-build-checklist-2026-09-16.md",
+  "workflow": ".github/workflows/cross-version-compatibility.yml",
+  "releases": {
+    "cli": {
+      "current": "1.7.1",
+      "previousRelease": "v-cli-1.0.0",
+      "artifacts": "GitHub release assets (agiworkforce-linux-x64.tar.gz and four more). The npm package @agiworkforce/cli is scaffolded but unpublished; the registry 404s, which is why localRuntimeClient.ts keeps CLI_IS_PUBLISHED false."
+    },
+    "desktop": {
+      "current": "1.2.0",
+      "previousRelease": null,
+      "artifacts": "v-desktop-1.2.0 is the only Tauri release and carries the version the tree builds today (Linux .deb/.rpm/.AppImage only), so there is no N-1 desktop artifact."
+    },
+    "electron": { "current": "1.2.0", "previousRelease": null, "artifacts": "never released" },
+    "vscode": {
+      "current": "0.3.0",
+      "previousRelease": null,
+      "artifacts": "never published to the Marketplace or Open VSX"
+    },
+    "chrome": {
+      "current": "1.2.0",
+      "previousRelease": null,
+      "artifacts": "never published to the Chrome Web Store"
+    },
+    "mobile": {
+      "current": "1.2.0",
+      "previousRelease": null,
+      "artifacts": "never shipped to TestFlight, App Store or Play"
+    },
+    "web": {
+      "current": "0.1.1",
+      "previousRelease": null,
+      "artifacts": "the UI and its API deploy as one Vercel artifact; no separately versioned backend exists"
+    }
+  },
+  "pairs": [
+    {
+      "row": 1760,
+      "id": "new-web-old-backend",
+      "title": "New web plus old backend",
+      "status": "blocked",
+      "reason": "apps/web serves the UI and every /api route from one Next.js deployment, so there is no backend artifact that can be pinned a version behind the web build. A job that deployed the previous web commit would be testing the previous web, not an old backend.",
+      "unblockedBy": "A founder decision to split and separately version the API, or to re-scope this row onto the client/server contract the other pairs already measure."
+    },
+    {
+      "row": 1761,
+      "id": "old-mobile-new-backend",
+      "title": "Old mobile plus new backend",
+      "status": "blocked",
+      "reason": "No mobile build has ever been released. There is no N-1 mobile artifact to install against the current backend, so any job here would be running the current mobile source twice.",
+      "unblockedBy": "Founder action: ship mobile 1.2.0 to TestFlight and Play internal testing, so the next build has a released predecessor to pair with."
+    },
+    {
+      "row": 1762,
+      "id": "old-desktop-new-backend",
+      "title": "Old desktop plus new backend",
+      "status": "blocked",
+      "reason": "v-desktop-1.2.0 is the only Tauri release and it carries the same version apps/desktop builds today, so the released artifact is not a predecessor. The Electron shell has never been released at all.",
+      "unblockedBy": "The next desktop release. Once a second release exists, 1.2.0 becomes the N-1 artifact this job downloads."
+    },
+    {
+      "row": 1763,
+      "id": "new-cli-old-vscode",
+      "title": "New CLI plus old VS Code",
+      "status": "covered",
+      "surrogate": "The VS Code extension has never been published, so there is no N-1 extension binary. What an older extension is on the wire is a client that asks for protocol 7, or asks for nothing, and the current app-server is driven through exactly that handshake and then through the method surface such a client uses.",
+      "test": "crates/agiworkforce-app-server/tests/developer_sessions.rs",
+      "command": "cargo test -p agiworkforce-app-server --test developer_sessions"
+    },
+    {
+      "row": 1764,
+      "id": "old-cli-new-vscode",
+      "title": "Old CLI plus new VS Code",
+      "status": "covered",
+      "surrogate": "The released CLI v-cli-1.0.0 is below MINIMUM_SUPPORTED_RUNTIME_VERSION and speaks a protocol the extension refuses. The suite drives the real LocalRuntimeClient against a runtime that answers as that CLI does and asserts the refusal names the side to update.",
+      "test": "apps/extension-vscode/src/__tests__/localRuntimeClient.test.ts",
+      "command": "pnpm --filter agi-workforce exec vitest run src/__tests__/localRuntimeClient.test.ts src/__tests__/cliProtocolContract.test.ts"
+    },
+    {
+      "row": 1765,
+      "id": "new-remote-old-host",
+      "title": "New Mobile Remote plus old host",
+      "status": "covered",
+      "surrogate": "An old Desktop host is, on the wire, a QR carrying the legacy agiw: scheme. The suite parses that payload with the shipping parser and asserts the app refuses it and tells the user to update Desktop rather than pairing without the secret.",
+      "test": "apps/mobile/__tests__/pairing-payload-contract.test.ts",
+      "command": "pnpm --filter @agiworkforce/mobile exec jest --runInBand --forceExit __tests__/pairing-payload-contract.test.ts __tests__/manual-pairing.test.ts"
+    },
+    {
+      "row": 1766,
+      "id": "old-remote-new-host",
+      "title": "Old Remote plus new host",
+      "status": "blocked",
+      "reason": "The reverse direction needs a released mobile build to run against the current host, and no mobile build has ever been released. The host side cannot stand in for it: an old Remote is defined by the parser it shipped with, which only exists inside that artifact.",
+      "unblockedBy": "Founder action: the same mobile release that unblocks row 1761."
+    },
+    {
+      "row": 1767,
+      "id": "new-chrome-old-bridge",
+      "title": "New Chrome plus old bridge",
+      "status": "blocked",
+      "reason": "The native messaging bridge in apps/extension/native-host has never been released as a versioned artifact; it is installed from source by install.sh and declares no wire version, so there is nothing to pin an older build to.",
+      "unblockedBy": "A versioned native-host release, which needs the Chrome Web Store listing decision first, and a declared bridge protocol version to negotiate on."
+    },
+    {
+      "row": 1768,
+      "id": "old-chrome-new-bridge",
+      "title": "Old Chrome plus new bridge",
+      "status": "blocked",
+      "reason": "The extension has never been published to the Chrome Web Store, so there is no N-1 extension to load against the current bridge.",
+      "unblockedBy": "Founder action: publish the Chrome extension, so the next build has a released predecessor."
+    }
+  ]
+}
