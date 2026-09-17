@@ -15,6 +15,9 @@ import {
   updateTicketStatus,
 } from './store';
 import {
+  MAX_TICKETS_LISTED,
+  MAX_TICKET_MESSAGE_CHARS,
+  MAX_TICKET_SUBJECT_CHARS,
   OPEN_TICKET_STATUSES,
   canTransition,
   type SupportTicket,
@@ -22,9 +25,7 @@ import {
   type TicketStatus,
 } from './types';
 
-export const MAX_TICKET_SUBJECT_CHARS = 200;
-export const MAX_TICKET_MESSAGE_CHARS = 8_000;
-export const MAX_TICKETS_LISTED = 50;
+export { MAX_TICKETS_LISTED, MAX_TICKET_MESSAGE_CHARS, MAX_TICKET_SUBJECT_CHARS } from './types';
 
 export class TicketNotFoundError extends Error {
   constructor() {

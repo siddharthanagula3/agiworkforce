@@ -11,6 +11,7 @@ import {
   Signal,
 } from 'lucide-react';
 import { primaryModifierLabel } from '@agiworkforce/ui';
+import { SupportTicketsPanel } from '@/features/support/components/SupportTicketsPanel';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 
 interface HelpLink {
@@ -74,6 +75,8 @@ export function HelpSection() {
           Documentation, support, and service status.
         </p>
       </div>
+
+      <SupportTicketsPanel />
 
       <ul className="flex flex-col gap-2">
         {HELP_LINKS.map(({ href, label, description, icon: Icon }) => (

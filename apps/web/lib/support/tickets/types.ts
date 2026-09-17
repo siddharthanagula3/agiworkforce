@@ -9,6 +9,10 @@ import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
  * the transcript to retention does not lose the ticket.
  */
 
+export const MAX_TICKET_SUBJECT_CHARS = 200;
+export const MAX_TICKET_MESSAGE_CHARS = 8_000;
+export const MAX_TICKETS_LISTED = 50;
+
 export const TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
 export const TICKET_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 
