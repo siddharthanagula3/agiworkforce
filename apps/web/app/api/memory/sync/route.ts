@@ -12,6 +12,10 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
+import {
+  activeMemoryPredicate,
+  workspaceMemoryPredicate,
+} from '@/lib/services/managed-memory-context-service';
 
 const MAX_MEMORIES_PULL = 1000;
 
@@ -29,7 +33,7 @@ async function handlePull(request: NextRequest, url: URL) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const sinceRaw = url.searchParams.get('since') ?? '0';
   const parsedSince = ServerVersionSchema.safeParse(sinceRaw);
@@ -41,14 +45,15 @@ async function handlePull(request: NextRequest, url: URL) {
   try {
     const memories = await db.query<MemoryDelta>(
       `
-        select id, content, category, source, pinned, is_deleted,
+        select id, content, category, source, pinned,
+               not (${activeMemoryPredicate()}) as is_deleted,
                created_at, updated_at, server_version
         from user_memories
-        where user_id = $1 and server_version > $2
+        where user_id = $1 and server_version > $2 and ${workspaceMemoryPredicate(3)}
         order by server_version asc
         limit ${MAX_MEMORIES_PULL}
       `,
-      [userId, since],
+      [userId, since, organizationId ?? null],
     );
 
     const saturated = memories.length >= MAX_MEMORIES_PULL;
@@ -64,16 +69,16 @@ async function handleStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   let allMemories: { source: string | null; updated_at: string }[];
   try {
     allMemories = await db.query<{ source: string | null; updated_at: string }>(
       `select source, updated_at
        from user_memories
-       where user_id = $1 and is_deleted = false
+       where user_id = $1 and ${activeMemoryPredicate()} and ${workspaceMemoryPredicate(2)}
        order by updated_at desc`,
-      [userId],
+      [userId, organizationId ?? null],
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to get memory sync status');
@@ -91,7 +96,7 @@ async function handleStatus(request: NextRequest) {
 }
 
 async function handlePost(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
@@ -108,8 +113,9 @@ async function handlePost(request: NextRequest) {
   if (!hasMemoriesKey(rawBody)) {
     try {
       const [row] = await db.query<{ count: number }>(
-        `select count(*)::int as count from user_memories where user_id = $1 and is_deleted = false`,
-        [userId],
+        `select count(*)::int as count from user_memories
+          where user_id = $1 and ${activeMemoryPredicate()} and ${workspaceMemoryPredicate(2)}`,
+        [userId, organizationId ?? null],
       );
       return NextResponse.json({ synced: row?.count ?? 0, conflicts: 0 });
     } catch (error) {
@@ -166,14 +172,16 @@ async function handlePost(request: NextRequest) {
               from input as incoming
              where existing.id = incoming.id
                and existing.user_id = $1
+               and ${workspaceMemoryPredicate(3, 'existing.')}
                and existing.server_version = incoming.base_version
                and (existing.is_deleted = false or incoming.should_delete)
             returning existing.id, existing.server_version
           ), inserted as (
             insert into user_memories
-              (id, user_id, content, category, source, pinned, is_deleted, created_at, updated_at)
+              (id, user_id, content, category, source, pinned, is_deleted, organization_id,
+               created_at, updated_at)
             select incoming.id, $1, incoming.content, incoming.category, incoming.source,
-                   incoming.pinned, incoming.should_delete, now(), now()
+                   incoming.pinned, incoming.should_delete, $3::uuid, now(), now()
               from input as incoming
              where incoming.base_version = 0
             on conflict (user_id, id) do nothing
@@ -185,13 +193,14 @@ async function handlePost(request: NextRequest) {
                    case when current.id is null then null else jsonb_build_object(
                      'id', current.id::text, 'content', current.content,
                      'category', current.category, 'source', current.source,
-                     'pinned', current.pinned, 'is_deleted', current.is_deleted,
+                     'pinned', current.pinned, 'is_deleted', not (${activeMemoryPredicate('current.')}),
                      'created_at', current.created_at, 'updated_at', current.updated_at,
                      'server_version', current.server_version::text
                    ) end as current
               from input as incoming
               left join user_memories as current
                 on current.id = incoming.id and current.user_id = $1
+               and ${workspaceMemoryPredicate(3, 'current.')}
              where not exists (select 1 from applied_rows where applied_rows.id = incoming.id)
           )
           select 'applied'::text as kind, id::text, server_version::text, null::jsonb as current
@@ -199,7 +208,7 @@ async function handlePost(request: NextRequest) {
           union all
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [userId, JSON.stringify(allowed)],
+        [userId, JSON.stringify(allowed), organizationId ?? null],
       );
       for (const row of rows) {
         if (row.kind === 'applied' && row.server_version !== null) {

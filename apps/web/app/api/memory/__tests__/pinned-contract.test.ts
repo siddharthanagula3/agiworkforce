@@ -101,7 +101,7 @@ describe('/api/memory pinned contract', () => {
     expect(body.memory.pinned).toBe(true);
     expect(sql()).toContain('pinned = $1');
     expect(sql()).not.toContain('content = ');
-    expect(params()).toEqual([true, MEM_ID, 'user-1']);
+    expect(params()).toEqual([true, MEM_ID, 'user-1', null]);
   });
 
   it('PUT /api/memory/[id] updates content and pin state together', async () => {
@@ -118,7 +118,7 @@ describe('/api/memory pinned contract', () => {
     expect(res.status).toBe(200);
     expect(sql()).toContain('content = $1');
     expect(sql()).toContain('pinned = $2');
-    expect(params()).toEqual(['new text', false, MEM_ID, 'user-1']);
+    expect(params()).toEqual(['new text', false, MEM_ID, 'user-1', null]);
   });
 
   it('PUT /api/memory/[id] still requires content when no pin change is requested', async () => {
@@ -160,6 +160,6 @@ describe('/api/memory pinned contract', () => {
     expect(res.status).toBe(201);
     const body = (await res.json()) as { memory: { pinned: boolean } };
     expect(body.memory.pinned).toBe(true);
-    expect(params()[4]).toBe(true);
+    expect(params()[7]).toBe(true);
   });
 });

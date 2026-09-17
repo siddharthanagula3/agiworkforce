@@ -8,10 +8,22 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
+import {
+  parseMemoryExpiry,
+  unexpiredMemoryPredicate,
+  workspaceMemoryPredicate,
+} from '@/lib/services/managed-memory-context-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-type MemoryRow = UserMemoryRow & { pinned: boolean };
+type MemoryRow = UserMemoryRow & {
+  pinned: boolean;
+  expires_at?: string | null;
+  superseded_by?: string | null;
+};
+
+const MEMORY_COLUMNS =
+  'id, content, category, source, pinned, expires_at, superseded_by, created_at, updated_at';
 
 function serializeMemory(row: MemoryRow) {
   return {
@@ -20,6 +32,8 @@ function serializeMemory(row: MemoryRow) {
     category: row.category,
     source: row.source,
     pinned: row.pinned,
+    expiresAt: row.expires_at ?? null,
+    supersededBy: row.superseded_by ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -29,15 +43,16 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   const [data] = await db.query<MemoryRow>(
-    `select id, content, category, source, pinned, created_at, updated_at
+    `select ${MEMORY_COLUMNS}
      from user_memories
-     where id = $1 and user_id = $2 and is_deleted = false
+     where id = $1 and user_id = $2 and ${unexpiredMemoryPredicate()}
+       and ${workspaceMemoryPredicate(3)}
      limit 1`,
-    [id, userId],
+    [id, userId, organizationId ?? null],
   );
 
   if (!data) {
@@ -54,10 +69,10 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
-  let body: { content?: string; pinned?: boolean };
+  let body: { content?: string; pinned?: boolean; expiresAt?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -68,8 +83,14 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
     throw createError.validation('pinned must be a boolean');
   }
 
+  const expiry = parseMemoryExpiry(body.expiresAt);
+  if (!expiry.ok) {
+    throw createError.validation(expiry.message);
+  }
+
   const togglesPin = typeof body.pinned === 'boolean';
-  const editsContent = body.content !== undefined || !togglesPin;
+  const setsExpiry = expiry.expiresAt !== undefined;
+  const editsContent = body.content !== undefined || (!togglesPin && !setsExpiry);
 
   const assignments: string[] = [];
   const params: unknown[] = [];
@@ -92,13 +113,19 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
     assignments.push(`pinned = $${params.length}`);
   }
 
-  params.push(id, userId);
+  if (setsExpiry) {
+    params.push(expiry.expiresAt);
+    assignments.push(`expires_at = $${params.length}::timestamptz`);
+  }
+
+  params.push(id, userId, organizationId ?? null);
 
   const [data] = await db.query<MemoryRow>(
     `update user_memories
      set ${assignments.join(', ')}, updated_at = now()
-     where id = $${params.length - 1} and user_id = $${params.length} and is_deleted = false
-     returning id, content, category, source, pinned, created_at, updated_at`,
+     where id = $${params.length - 2} and user_id = $${params.length - 1}
+       and ${unexpiredMemoryPredicate()} and ${workspaceMemoryPredicate(params.length)}
+     returning ${MEMORY_COLUMNS}`,
     params,
   );
 
@@ -116,15 +143,16 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   try {
     await db.execute(
       `update user_memories
        set is_deleted = true, updated_at = now()
-       where id = $1 and user_id = $2 and is_deleted = false`,
-      [id, userId],
+       where id = $1 and user_id = $2 and is_deleted = false
+         and ${workspaceMemoryPredicate(3)}`,
+      [id, userId, organizationId ?? null],
     );
   } catch (error) {
     logger.error({ error, memoryId: id }, 'Failed to delete memory');

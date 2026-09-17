@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
-import { classifyMemoryCategory, normalizeMemoryKey } from '@agiworkforce/agent-core';
+import {
+  classifyMemoryCategory,
+  memoryConflictTopic,
+  memoryConsolidationKey,
+} from '@agiworkforce/agent-core';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
 import { withSpan } from '@/lib/observability/span';
 import { logger } from '@/lib/logger';
@@ -202,6 +206,235 @@ export const GLOBAL_MEMORY_SCOPE: MemoryScope = { projectId: null, usesGlobalMem
  * confinement means nothing. Inside a project the project's own rows are always
  * visible, and global rows join them unless the project opted out.
  */
+export function activeMemoryPredicate(alias = ''): string {
+  return `${alias}is_deleted = false and ${alias}superseded_by is null and (${alias}expires_at is null or ${alias}expires_at > now())`;
+}
+
+export function unexpiredMemoryPredicate(alias = ''): string {
+  return `${alias}is_deleted = false and (${alias}expires_at is null or ${alias}expires_at > now())`;
+}
+
+export function workspaceMemoryPredicate(paramIndex: number, alias = ''): string {
+  return `${alias}organization_id is not distinct from $${paramIndex}::uuid`;
+}
+
+function memoryContentKeySql(expression: string): string {
+  return `btrim(regexp_replace(lower(${expression}), '[^[:alnum:]]+', ' ', 'g'))`;
+}
+
+function memoryRankSql(alias: string): string {
+  return `case when ${alias}pinned then 2 when coalesce(${alias}source, 'web') = 'auto' then 0 else 1 end`;
+}
+
+export const MAX_MEMORY_EXPIRY_DAYS = 3650;
+
+const DAY_MS = 86_400_000;
+
+export type MemoryExpiryParse =
+  { ok: true; expiresAt: string | null | undefined } | { ok: false; message: string };
+
+export function parseMemoryExpiry(value: unknown, nowMs = Date.now()): MemoryExpiryParse {
+  if (value === undefined) return { ok: true, expiresAt: undefined };
+  if (value === null) return { ok: true, expiresAt: null };
+  if (typeof value !== 'string') return { ok: false, message: 'expiresAt must be a date string' };
+  const parsedMs = Date.parse(value);
+  if (!Number.isFinite(parsedMs)) return { ok: false, message: 'expiresAt must be a valid date' };
+  if (parsedMs <= nowMs) return { ok: false, message: 'expiresAt must be in the future' };
+  if (parsedMs > nowMs + MAX_MEMORY_EXPIRY_DAYS * DAY_MS) {
+    return {
+      ok: false,
+      message: `expiresAt must be within ${MAX_MEMORY_EXPIRY_DAYS} days`,
+    };
+  }
+  return { ok: true, expiresAt: new Date(parsedMs).toISOString() };
+}
+
+export interface ConsolidatedMemoryRow {
+  outcome: 'inserted' | 'merged';
+  id: string;
+  content: string;
+  category: string | null;
+  source: string | null;
+  pinned: boolean;
+  project_id: string | null;
+  expires_at: string | null;
+  superseded_by: string | null;
+  superseded_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConsolidatedMemoryWrite {
+  userId: string;
+  id?: string | null;
+  content: string;
+  category: string | null;
+  source: string;
+  pinned?: boolean;
+  projectId?: string | null;
+  organizationId?: string | null;
+  expiresAt?: string | null;
+}
+
+function memoryWriteRank(write: ConsolidatedMemoryWrite): number {
+  if (write.pinned) return 2;
+  return write.source === AUTO_MEMORY_SOURCE ? 0 : 1;
+}
+
+const CONSOLIDATED_MEMORY_COLUMNS = (alias: string, outcome: string) =>
+  `'${outcome}'::text as outcome, ${alias}.id::text as id, ${alias}.content, ${alias}.category,
+   ${alias}.source, ${alias}.pinned, ${alias}.project_id::text as project_id, ${alias}.expires_at,
+   ${alias}.superseded_by::text as superseded_by, ${alias}.created_at, ${alias}.updated_at`;
+
+export async function writeConsolidatedMemory(
+  db: ManagedMemoryContextDb,
+  write: ConsolidatedMemoryWrite,
+): Promise<ConsolidatedMemoryRow | null> {
+  const topic = memoryConflictTopic(write.content);
+  const topicPatterns = topic ? topic.prefixes.map((prefix) => `${prefix} %`) : [];
+  const [row] = await db.query<ConsolidatedMemoryRow>(
+    `with incoming as materialized (
+       select coalesce($2::uuid, gen_random_uuid()) as id,
+              $5::text as content,
+              ${memoryContentKeySql('$5::text')} as content_key,
+              $9::timestamptz as expires_at,
+              $10::text[] as topic_patterns,
+              $11::int as rank
+     ), duplicate as materialized (
+       select existing.id
+         from user_memories as existing, incoming
+        where existing.user_id = $1
+          and ${activeMemoryPredicate('existing.')}
+          and existing.project_id is not distinct from $3::uuid
+          and ${workspaceMemoryPredicate(4, 'existing.')}
+          and ${memoryContentKeySql('existing.content')} = incoming.content_key
+        order by existing.pinned desc, existing.updated_at desc
+        limit 1
+     ), merged as (
+       update user_memories as existing
+          set pinned = existing.pinned or $8::boolean,
+              expires_at = case
+                when existing.expires_at is null or incoming.expires_at is null then null
+                else greatest(existing.expires_at, incoming.expires_at)
+              end,
+              updated_at = now()
+         from duplicate, incoming
+        where existing.user_id = $1 and existing.id = duplicate.id
+       returning ${CONSOLIDATED_MEMORY_COLUMNS('existing', 'merged')}
+     ), rivals as materialized (
+       select existing.id, ${memoryRankSql('existing.')} as rank, existing.updated_at
+         from user_memories as existing, incoming
+        where not exists (select 1 from duplicate)
+          and cardinality(incoming.topic_patterns) > 0
+          and existing.user_id = $1
+          and existing.id <> incoming.id
+          and ${activeMemoryPredicate('existing.')}
+          and existing.project_id is not distinct from $3::uuid
+          and ${workspaceMemoryPredicate(4, 'existing.')}
+          and ${memoryContentKeySql('existing.content')} like any(incoming.topic_patterns)
+     ), keeper as materialized (
+       select rivals.id
+         from rivals, incoming
+        where rivals.rank > incoming.rank
+        order by rivals.rank desc, rivals.updated_at desc
+        limit 1
+     ), inserted as (
+       insert into user_memories as stored
+         (id, user_id, content, category, source, pinned, project_id, organization_id,
+          expires_at, superseded_by, superseded_at)
+       select incoming.id, $1, incoming.content, $6, $7, $8::boolean, $3::uuid, $4::uuid,
+              incoming.expires_at,
+              (select keeper.id from keeper),
+              case when exists (select 1 from keeper) then now() end
+         from incoming
+        where not exists (select 1 from duplicate)
+       on conflict (user_id, id) do update
+          set content = excluded.content,
+              category = excluded.category,
+              source = excluded.source,
+              pinned = stored.pinned or excluded.pinned,
+              expires_at = excluded.expires_at,
+              superseded_by = excluded.superseded_by,
+              superseded_at = excluded.superseded_at,
+              updated_at = now()
+        where stored.is_deleted = false
+          and (stored.superseded_by is not null
+               or (stored.expires_at is not null and stored.expires_at <= now()))
+          and stored.project_id is not distinct from excluded.project_id
+          and stored.organization_id is not distinct from excluded.organization_id
+       returning ${CONSOLIDATED_MEMORY_COLUMNS('stored', 'inserted')}
+     ), superseded as (
+       update user_memories as existing
+          set superseded_by = inserted.id::uuid, superseded_at = now(), updated_at = now()
+         from inserted, rivals
+        where inserted.superseded_by is null
+          and existing.user_id = $1
+          and existing.id = rivals.id
+       returning existing.id::text as id
+     )
+     select written.*,
+            coalesce((select array_agg(superseded.id) from superseded), array[]::text[])
+              as superseded_ids
+       from (select * from merged union all select * from inserted) as written`,
+    [
+      write.userId,
+      write.id ?? null,
+      write.projectId ?? null,
+      write.organizationId ?? null,
+      write.content,
+      write.category,
+      write.source,
+      write.pinned === true,
+      write.expiresAt ?? null,
+      topicPatterns,
+      memoryWriteRank(write),
+    ],
+  );
+  return row ?? null;
+}
+
+export interface ExpiredMemorySweep {
+  expired: number;
+  remaining: boolean;
+}
+
+export async function sweepExpiredMemories(
+  db: ManagedMemoryContextDb,
+  options: { batchSize?: number; maxBatches?: number; budgetMs?: number } = {},
+): Promise<ExpiredMemorySweep> {
+  const batchSize = options.batchSize ?? 500;
+  const maxBatches = options.maxBatches ?? 200;
+  const budgetMs = options.budgetMs ?? 240_000;
+  const startedAtMs = Date.now();
+  let expired = 0;
+  for (let batch = 0; batch < maxBatches; batch += 1) {
+    if (Date.now() - startedAtMs > budgetMs) return { expired, remaining: true };
+    const [row] = await db.query<{ count: number }>(
+      `with due as (
+         select user_id, id
+           from user_memories
+          where is_deleted = false
+            and expires_at is not null
+            and expires_at <= now()
+          order by expires_at
+          limit $1
+       ), expired as (
+         update user_memories as memory
+            set is_deleted = true, content = '', category = null, updated_at = now()
+           from due
+          where memory.user_id = due.user_id and memory.id = due.id
+         returning memory.id
+       )
+       select count(*)::int as count from expired`,
+      [batchSize],
+    );
+    const count = row?.count ?? 0;
+    expired += count;
+    if (count < batchSize) return { expired, remaining: false };
+  }
+  return { expired, remaining: true };
+}
+
 function scopePredicate(scope: MemoryScope, projectParamIndex: number): string {
   if (!scope.projectId) return 'and project_id is null';
   if (!scope.usesGlobalMemory) return `and project_id = $${projectParamIndex}::uuid`;
@@ -212,6 +445,7 @@ export async function loadManagedMemoryContext(
   db: ManagedMemoryContextDb,
   params: {
     userId: string;
+    organizationId?: string | null;
     suppressedSources?: readonly MemorySource[];
     scope?: MemoryScope;
   },
@@ -231,6 +465,7 @@ export async function loadManagedMemoryContext(
         scope,
         scope.projectId ? values.push(scope.projectId) : 0,
       );
+      const workspaceFilter = workspaceMemoryPredicate(values.push(params.organizationId ?? null));
 
       const rows = await db.query<{
         content: string;
@@ -241,7 +476,8 @@ export async function loadManagedMemoryContext(
             category,
             coalesce((to_jsonb(user_memories)->>'pinned')::boolean, false) as pinned
        from user_memories
-      where user_id = $1 and is_deleted = false ${sourceFilter} ${projectFilter}
+      where user_id = $1 and ${activeMemoryPredicate()} ${sourceFilter} ${projectFilter}
+        and ${workspaceFilter}
       order by pinned desc, updated_at desc
       limit ${MAX_MEMORIES}`,
         values,
@@ -366,56 +602,42 @@ export async function persistManagedAutoMemoryFacts(
   }
 
   const seen = new Set<string>();
-  const batch: Array<{
-    id: string;
-    content: string;
-    category: string;
-    normalizedKey: string;
-  }> = [];
+  const batch: Array<{ id: string; content: string; category: string }> = [];
   let excluded = 0;
   for (const candidate of params.candidates) {
-    const normalizedKey = normalizeMemoryKey(candidate);
-    if (!normalizedKey || seen.has(normalizedKey)) continue;
-    seen.add(normalizedKey);
+    const consolidationKey = memoryConsolidationKey(candidate);
+    if (!consolidationKey || seen.has(consolidationKey)) continue;
+    seen.add(consolidationKey);
     const content = candidate.trim();
     if (isMemoryExcluded(content, exclusions)) {
       excluded += 1;
       continue;
     }
+    const scopeSeed = params.organizationId
+      ? `${params.organizationId}::${params.projectId ?? ''}`
+      : (params.projectId ?? '');
     batch.push({
-      id: deterministicAutoMemoryId(params.userId, `${params.projectId ?? ''}::${normalizedKey}`),
+      id: deterministicAutoMemoryId(params.userId, `${scopeSeed}::${consolidationKey}`),
       content,
       category: classifyMemoryCategory(content),
-      normalizedKey,
     });
     if (batch.length >= MAX_AUTO_MEMORIES_PER_TURN) break;
   }
   if (batch.length === 0) return { extracted, inserted: 0, excluded };
 
-  const inserted = await db.query<{ id: string }>(
-    `with incoming as materialized (
-       select item ->> 'id' as id,
-              item ->> 'content' as content,
-              item ->> 'category' as category,
-              item ->> 'normalizedKey' as normalized_key
-         from jsonb_array_elements($2::jsonb) as source(item)
-     )
-     insert into user_memories (id, user_id, content, category, source, project_id, organization_id)
-     select incoming.id::uuid, $1, incoming.content, incoming.category, 'auto', $3::uuid, $4::uuid
-       from incoming
-      where not exists (
-        select 1
-          from user_memories as existing
-         where existing.user_id = $1
-           and existing.is_deleted = false
-           and existing.project_id is not distinct from $3::uuid
-           and lower(regexp_replace(btrim(existing.content), '\\s+', ' ', 'g')) =
-               incoming.normalized_key
-      )
-     on conflict (user_id, id) do nothing
-     returning id::text`,
-    [params.userId, JSON.stringify(batch), params.projectId ?? null, params.organizationId ?? null],
-  );
+  let inserted = 0;
+  for (const item of batch) {
+    const row = await writeConsolidatedMemory(db, {
+      userId: params.userId,
+      id: item.id,
+      content: item.content,
+      category: item.category,
+      source: AUTO_MEMORY_SOURCE,
+      projectId: params.projectId ?? null,
+      organizationId: params.organizationId ?? null,
+    });
+    if (row && row.outcome !== 'merged') inserted += 1;
+  }
 
-  return { extracted, inserted: inserted.length, excluded };
+  return { extracted, inserted, excluded };
 }
