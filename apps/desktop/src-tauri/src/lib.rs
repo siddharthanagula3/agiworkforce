@@ -2545,6 +2545,10 @@ pub fn run() {
             crate::sys::commands::computer_use_suggest_zoom_level,
             crate::sys::commands::computer_use_type_text,
             crate::sys::commands::computer_use_stop_session,
+            crate::sys::commands::computer_use_list_displays,
+            crate::sys::commands::computer_use_set_target_display,
+            crate::sys::commands::computer_use_take_over,
+            crate::sys::commands::computer_use_hand_back,
             crate::sys::commands::computer_use_zoom_at_point,
             // Stream 1: per-app permission registry
             crate::sys::commands::app_permissions_list,

@@ -420,8 +420,67 @@ describe('computer-use agent loop, one round-trip', () => {
 
     await runAgentLoop('Grab that file', 42, { maxSteps: 10, onBeforeAction });
 
-    expect(onBeforeAction).toHaveBeenCalledWith('download_file', {
-      url: 'https://x.test/a.zip',
+    expect(onBeforeAction).toHaveBeenCalledWith(
+      'download_file',
+      { url: 'https://x.test/a.zip' },
+      undefined,
+      { alwaysAsk: true, reason: 'download' },
+    );
+  });
+
+  it('refuses every step on a banking site when the run has nobody to ask', async () => {
+    chromeMock.tabs.get.mockImplementation((tabId: number) =>
+      Promise.resolve({ id: tabId, url: 'https://secure.chase.com/accounts' }),
+    );
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeToolCallSseStream() })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+
+    try {
+      await runAgentLoop('Read my balance', 42, { maxSteps: 10 });
+    } finally {
+      chromeMock.tabs.get.mockImplementation((tabId: number) =>
+        Promise.resolve({ id: tabId, url: 'https://example.com/page' }),
+      );
+    }
+
+    const secondCallArgs = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(secondCallArgs[1].body as string) as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const toolResult = body.messages.find((m) => m.role === 'tool');
+    expect(toolResult?.content as string).toContain('banking');
+    expect(toolResult?.content as string).toContain('no way to ask');
+  });
+
+  it('asks before clicking a file input, naming the upload', async () => {
+    stubDomResponses([
+      {
+        raw: true,
+        summary: JSON.stringify({
+          summary: CLEAN_DOM_SUMMARY,
+          indexMap: {
+            '1': { selector: 'html > body > input', signature: 'input||file|resume|Upload resume' },
+          },
+        }),
+      },
+    ]);
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: makeNamedToolCallSseStream('click', { index: 1 }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    const onBeforeAction = vi.fn().mockResolvedValue(false);
+
+    await runAgentLoop('Attach my resume', 42, { maxSteps: 10, onBeforeAction });
+
+    expect(onBeforeAction).toHaveBeenCalledWith('click', { index: 1 }, undefined, {
+      alwaysAsk: true,
+      reason: 'upload',
     });
   });
 
@@ -433,7 +492,7 @@ describe('computer-use agent loop, one round-trip', () => {
       onBeforeAction,
     });
 
-    expect(onBeforeAction).toHaveBeenCalledWith('read_dom', {});
+    expect(onBeforeAction).toHaveBeenCalledWith('read_dom', {}, undefined, { alwaysAsk: false });
 
     const secondCallArgs = fetchMock.mock.calls[1] as [string, RequestInit];
     const secondBody = JSON.parse(secondCallArgs[1].body as string) as {

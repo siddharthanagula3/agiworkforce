@@ -43,7 +43,11 @@ import {
   stopAllDeveloperRuntimes,
 } from './runtime/developerSessionService';
 import { approveDeviceCode, readShellIdentity } from './shellIdentity';
-import { stopComputerUseHelper } from './runtime/computerUseService';
+import {
+  handBackComputerUse,
+  stopComputerUseHelper,
+  takeOverComputerUse,
+} from './runtime/computerUseService';
 import { installAppMenu } from './appMenu';
 import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
 import {
@@ -976,6 +980,8 @@ if (!hasSingleInstanceLock) {
         goForward,
         setZoomLevel: applyZoomLevel,
         stepZoomLevel,
+        takeOverScreen: () => void takeOverComputerUse(),
+        handBackScreen: () => void handBackComputerUse(),
       },
       {
         quickAsk: getShortcuts().quickAskShortcut,

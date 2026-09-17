@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter as _};
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
-use crate::automation::screen::{capture_primary_screen, list_displays};
+use crate::automation::screen::{capture_display, list_displays};
 use crate::core::llm::llm_router::{LLMRouter, RouterContext, RouterPreferences};
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest, LLMResponse,
@@ -674,8 +674,8 @@ impl AnthropicComputerUseAgent {
 
     /// Captures a screenshot and returns it as a base64-encoded PNG string.
     fn capture_screenshot_base64(&self) -> Result<String> {
-        let screenshot =
-            capture_primary_screen().context("Failed to capture screen for computer use")?;
+        let screenshot = capture_display(super::control::target_display())
+            .context("Failed to capture screen for computer use")?;
 
         let mut png_data: Vec<u8> = Vec::new();
         let mut cursor = std::io::Cursor::new(&mut png_data);
@@ -748,11 +748,7 @@ impl AnthropicComputerUseAgent {
 /// Detects the primary display's logical dimensions.
 fn detect_logical_display_size() -> Result<(u32, u32)> {
     let displays = list_displays()?;
-    let primary = displays
-        .iter()
-        .find(|d| d.is_primary)
-        .or_else(|| displays.first())
-        .ok_or_else(|| anyhow::anyhow!("No display found"))?;
+    let primary = super::control::select_display(&displays, super::control::target_display())?;
 
     let logical_width = (primary.width as f32 / primary.scale_factor).round() as u32;
     let logical_height = (primary.height as f32 / primary.scale_factor).round() as u32;

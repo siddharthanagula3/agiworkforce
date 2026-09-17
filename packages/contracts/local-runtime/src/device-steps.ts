@@ -91,7 +91,7 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     capability: 'computer.use',
     scope: 'screen',
     description:
-      "Capture what is on the user's screen right now. Returns the picture plus the logical width and height of that screen. Every other screen step is aimed with these coordinates, so take a fresh screenshot after anything that changes the display.",
+      "Capture what is on one of the user's screens right now. Returns the picture, the logical width and height of that screen and the list of connected displays. Pass display to capture a different screen; every other screen step is aimed at the screen of the last screenshot, in its coordinates, so take a fresh screenshot after anything that changes the display.",
   },
   device_zoom: {
     command: 'computer_zoom',
@@ -205,6 +205,7 @@ export const MAX_DEVICE_SCROLL_DELTA = 5_000;
 export const MAX_DEVICE_TYPE_LENGTH = 4_000;
 export const MAX_DEVICE_WAIT_MS = 10_000;
 export const MAX_DEVICE_CLICK_COUNT = 3;
+export const MAX_DEVICE_DISPLAY_ID = 2 ** 32 - 1;
 
 /**
  * A granted folder as the model sees it. The path is included because a user
@@ -338,6 +339,33 @@ export function offeredDeviceStepTools(
   });
 }
 
+export interface DeviceScreenDisplay {
+  id: number;
+  name: string;
+  width: number;
+  height: number;
+  scaleFactor: number;
+  primary: boolean;
+}
+
+export function describeDeviceDisplays(
+  displays: readonly DeviceScreenDisplay[],
+  capturedId: number,
+): string {
+  if (displays.length <= 1) return '';
+  const listed = displays
+    .map((display) => {
+      const marks = [
+        display.primary ? 'primary' : null,
+        display.id === capturedId ? 'captured' : null,
+      ].filter(Boolean);
+      const suffix = marks.length > 0 ? `, ${marks.join(', ')}` : '';
+      return `display ${display.id} "${display.name}" ${display.width}x${display.height} at ${display.scaleFactor}x${suffix}`;
+    })
+    .join('; ');
+  return `${displays.length} displays are connected: ${listed}. Pass display to device_screenshot to work on another one.`;
+}
+
 export interface DeviceStepRegion {
   x: number;
   y: number;
@@ -363,6 +391,7 @@ export interface DeviceStepRequest {
   modifiers?: DeviceKeyModifier[];
   ms?: number;
   region?: DeviceStepRegion;
+  display?: number;
 }
 
 export class DeviceStepRefused extends Error {
@@ -442,8 +471,11 @@ function readRegion(value: unknown): DeviceStepRegion {
 
 function planScreenStep(tool: DeviceStepTool, args: Record<string, unknown>): DeviceStepRequest {
   switch (tool) {
-    case 'device_screenshot':
-      return { tool };
+    case 'device_screenshot': {
+      const display = args['display'];
+      if (display === undefined || display === null) return { tool };
+      return { tool, display: readNumber(display, 'display', 0, MAX_DEVICE_DISPLAY_ID) };
+    }
     case 'device_zoom':
       return { tool, region: readRegion(args['region']) };
     case 'device_move':
@@ -592,7 +624,9 @@ export function describeDeviceStep(
     case 'device_run_command':
       return `Run ${request.command} in ${where}`;
     case 'device_screenshot':
-      return 'Take a screenshot of your screen';
+      return request.display === undefined
+        ? 'Take a screenshot of your screen'
+        : `Take a screenshot of display ${request.display}`;
     case 'device_zoom':
       return `Look closely at ${request.region?.width}x${request.region?.height} of your screen at ${request.region?.x}, ${request.region?.y}`;
     case 'device_move':

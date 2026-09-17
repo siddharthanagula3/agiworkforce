@@ -31,6 +31,8 @@ export interface AppMenuActions {
   goForward: () => void;
   setZoomLevel: (level: number) => void;
   stepZoomLevel: (delta: number) => void;
+  takeOverScreen: () => void;
+  handBackScreen: () => void;
 }
 
 export interface AppMenuAccelerators {
@@ -105,6 +107,9 @@ function fileMenu(
       registerAccelerator: false,
       click: actions.captureScreenshot,
     },
+    { type: 'separator' },
+    { label: 'Take Over Screen Control', click: actions.takeOverScreen },
+    { label: 'Hand Back Screen Control', click: actions.handBackScreen },
     { type: 'separator' },
     {
       label: 'Settings',

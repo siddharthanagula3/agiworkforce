@@ -10,7 +10,10 @@ import type {
 import { logger, originOfUrl, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
-import { ALWAYS_ASK_TOOLS } from './features/computer-use/agentLoop';
+import {
+  describeApprovalReason,
+  type ActionApprovalRequirement,
+} from './features/computer-use/approvalPolicy';
 import { timingSafeEqual } from '@agiworkforce/utils/crypto';
 import {
   loadShortcuts,
@@ -4019,27 +4022,25 @@ async function handleMessageAsync(
         credential: authContext.token,
       });
 
-      // Provided in both modes. With "ask before acting" off it approves the
-      // routine steps without a prompt and still asks for the few that always
-      // need a person, which previously went ahead unasked because the hook was
-      // simply absent.
-      // Built in both modes. With "ask before acting" off it approves the
-      // routine steps without a prompt and still asks for the few that always
-      // need a person, which previously went ahead unasked because the hook was
-      // absent altogether.
       const onBeforeAction = async (
         toolName: string,
         args: Record<string, unknown>,
-        signal?: AbortSignal,
+        signal: AbortSignal | undefined,
+        requirement: ActionApprovalRequirement,
       ): Promise<boolean> => {
-        if (!askBeforeActing && !ALWAYS_ASK_TOOLS.has(toolName)) return true;
+        if (!askBeforeActing && !requirement.alwaysAsk) return true;
         {
           const requestId = `cu_approve_${crypto.randomUUID()}`;
+          const action =
+            requirement.reason === 'sensitive_input'
+              ? 'Type into this field. The text is hidden here.'
+              : describeComputerUseAction(toolName, args);
+          const reason = describeApprovalReason(requirement);
           broadcastComputerUseForCurrentRun(lease, {
             type: 'AGI_CU_APPROVE_REQUEST',
             requestId,
             toolName,
-            description: describeComputerUseAction(toolName, args),
+            description: reason ? `${reason} ${action}` : action,
           });
           const decision = await new Promise<boolean>((resolve, reject) => {
             let settled = false;
