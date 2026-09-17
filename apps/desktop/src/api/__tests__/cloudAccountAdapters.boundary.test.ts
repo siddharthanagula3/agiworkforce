@@ -5,7 +5,11 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
 }));
 
-vi.mock('../cloudApi', () => ({ CLOUD_API_BASE_URL: 'https://cloud.agi.example' }));
+vi.mock('../cloudApi', () => ({
+  CLOUD_API_BASE_URL: 'https://cloud.agi.example',
+  accountBoundCloudFetch: mocks.fetch,
+  getAuthHeaders: async () => ({ Authorization: 'Bearer live-account-a-token' }),
+}));
 vi.mock('../config', () => ({ WEB_APP_URL: 'https://cloud.agi.example' }));
 vi.mock('../../services/managedCloudRequestContext', () => ({
   createManagedCloudRequestContext: mocks.createManagedCloudRequestContext,

@@ -35,6 +35,7 @@ vi.mock('../../services/managedCloudBoundary', () => ({
     accessToken: 'desktop-token',
   }),
   assertManagedCloudBoundary: vi.fn(),
+  subscribeManagedCloudBoundary: vi.fn(() => () => {}),
 }));
 
 vi.mock('../runtimeEnvironment', async (importOriginal) => ({

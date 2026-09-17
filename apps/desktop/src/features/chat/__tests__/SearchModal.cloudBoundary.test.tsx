@@ -41,14 +41,19 @@ vi.mock('../../../stores/appModeStore', () => ({
     selector({ privacyMode: mocks.privacyMode }),
 }));
 
-vi.mock('../../../stores/auth', () => ({
-  selectHasCloudAccountSession: () => mocks.signedIn,
-  useAuthStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      cloudSessionEpoch: mocks.sessionEpoch,
-      user: mocks.accountId ? { id: mocks.accountId } : null,
-    }),
-}));
+vi.mock('../../../stores/auth', () => {
+  const authState = () => ({
+    cloudSessionEpoch: mocks.sessionEpoch,
+    user: mocks.accountId ? { id: mocks.accountId } : null,
+  });
+  const useUnifiedAuthStore = (selector: (state: unknown) => unknown) => selector(authState());
+  useUnifiedAuthStore.getState = authState;
+  return {
+    selectHasCloudAccountSession: () => mocks.signedIn,
+    useAuthStore: useUnifiedAuthStore,
+    useUnifiedAuthStore,
+  };
+});
 
 vi.mock('../../../services/managedCloudRequestContext', () => ({
   createManagedCloudRequestContext: (...args: unknown[]) =>
@@ -57,12 +62,18 @@ vi.mock('../../../services/managedCloudRequestContext', () => ({
 
 vi.mock('../../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://agiworkforce.com',
+  accountBoundCloudFetch: (...args: unknown[]) => mocks.fetch(...args),
+  getAuthHeaders: (...args: unknown[]) => mocks.getHeaders(...args),
 }));
 
 vi.mock('@agiworkforce/unified-chat', () => ({ useReducedMotion: () => false }));
 
 vi.mock('../../../lib/runtimeEnvironment', () => ({
   get isTauri() {
+    return mocks.isTauri;
+  },
+  isElectronHost: false,
+  get supportsLocalAppMode() {
     return mocks.isTauri;
   },
 }));

@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const guardedFetchMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../lib/egressGuard', () => ({ guardedFetch: guardedFetchMock }));
-vi.mock('../../lib/runtimeEnvironment', () => ({ isTauri: true }));
+vi.mock('../../lib/runtimeEnvironment', () => ({
+  isTauri: true,
+  isElectronHost: false,
+  isTestEnvironment: true,
+  isDesktopUiDevLocal: false,
+  supportsLocalAppMode: true,
+  isCloudWeb: false,
+}));
 
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { accountBoundCloudFetch } from '../cloudApi';

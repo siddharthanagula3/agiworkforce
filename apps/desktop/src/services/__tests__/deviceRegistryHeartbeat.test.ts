@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
 let signedIn = true;
 
-vi.mock('../../api/cloudApi', () => ({ CLOUD_API_BASE_URL: 'https://agiworkforce.example' }));
+vi.mock('../../api/cloudApi', () => ({
+  CLOUD_API_BASE_URL: 'https://agiworkforce.example',
+  accountBoundCloudFetch: () => fetchMock(),
+  getAuthHeaders: async () => ({ Authorization: 'Bearer desktop-token' }),
+}));
 vi.mock('../../lib/remoteControlSupport', () => ({ remoteControlSupported: () => true }));
 vi.mock('../../stores/auth', () => ({
   useAuthStore: { getState: () => ({}) },

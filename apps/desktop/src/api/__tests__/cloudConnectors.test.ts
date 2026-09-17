@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.agi.example',
+  accountBoundCloudFetch: mocks.cloudFetch,
+  getAuthHeaders: mocks.getAuthHeaders,
 }));
 
 vi.mock('../../services/managedCloudRequestContext', () => ({

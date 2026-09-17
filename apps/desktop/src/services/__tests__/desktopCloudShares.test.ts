@@ -5,6 +5,7 @@ const {
   assertManagedCloudBoundary,
   captureManagedCloudBoundary,
   getAuthHeaders,
+  subscribeManagedCloudBoundary,
 } = vi.hoisted(() => ({
   accountBoundCloudFetch: vi.fn(),
   assertManagedCloudBoundary: vi.fn(),
@@ -16,6 +17,7 @@ const {
     Authorization: 'Bearer token-1',
     'Content-Type': 'application/json',
   })),
+  subscribeManagedCloudBoundary: vi.fn(() => () => {}),
 }));
 
 vi.mock('../../api/cloudApi', () => ({
@@ -27,6 +29,7 @@ vi.mock('../../api/cloudApi', () => ({
 vi.mock('../managedCloudBoundary', () => ({
   assertManagedCloudBoundary,
   captureManagedCloudBoundary,
+  subscribeManagedCloudBoundary,
 }));
 
 import { createDesktopCloudShare } from '../desktopCloudShares';

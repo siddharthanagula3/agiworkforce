@@ -21,6 +21,8 @@ vi.mock('@agiworkforce/cloud-contracts', async (importOriginal) => {
 
 vi.mock('../cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.agi.example',
+  accountBoundCloudFetch: mocks.cloudFetch,
+  getAuthHeaders: mocks.getAuthHeaders,
 }));
 
 vi.mock('../../services/managedCloudRequestContext', () => ({
