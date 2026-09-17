@@ -55,7 +55,13 @@ class ErrorTrackingService {
         attachStacktrace: this.config.attachStacktrace,
         sendDefaultPii: this.config.sendDefaultPii,
         integrations: [Sentry.browserTracingIntegration()],
+        beforeSendTransaction(event) {
+          return isPrivateTrustBoundary() ? null : event;
+        },
         beforeSend(event, _hint) {
+          if (isPrivateTrustBoundary()) {
+            return null;
+          }
           if (event.request) {
             delete event.request.cookies;
             delete event.request.headers;

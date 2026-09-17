@@ -386,6 +386,28 @@ const ALLOWLIST = [
       'scope, so it is declared here rather than left to that accident',
   },
   {
+    match: /features\/admin\/services\/service-health-metrics\.ts$/,
+    tables: [
+      'security_audit_logs',
+      'cloud_agent_approval_checkpoints',
+      'desktop_devices',
+      'cloud_agent_runs',
+      'scheduled_tasks',
+      'scheduled_task_runs',
+      'video_generation_jobs',
+      'credit_settlement_jobs',
+      'project_knowledge_files',
+    ],
+    reason:
+      'only imported by app/api/admin/service-health/route.ts, which calls requirePlatformAdmin() ' +
+      'before the read, the same gate as the operator-metrics entry above. Every statement is a ' +
+      'platform-wide service-health aggregate: tool and browser outcome counts and latency ' +
+      'percentiles, device-step and desktop check-in counts, queue depth, and knowledge-file ' +
+      'extraction counts. Scoping any of them to one owner would report the operator their own ' +
+      'traffic instead of the fleet, and the response carries counts, rates and durations only, ' +
+      'never a row or a user id',
+  },
+  {
     match: /api\/settings\/organization\/route\.ts$/,
     tables: ['organizations'],
     functions: ['handleCreate', 'handlePatch'],

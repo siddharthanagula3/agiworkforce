@@ -1,5 +1,8 @@
+import { metrics } from '@opentelemetry/api';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
+import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import {
   BatchSpanProcessor,
@@ -21,6 +24,15 @@ export interface OtelTracing {
 const FULL_SAMPLE_RATIO = 1;
 const NO_INSTRUMENTATIONS = Object.freeze([]);
 
+function otlpMetricReader(config: OtelExportConfig): PeriodicExportingMetricReader {
+  return new PeriodicExportingMetricReader({
+    exporter: new OTLPMetricExporter({
+      url: config.metricsEndpoint,
+      headers: { ...config.headers },
+    }),
+  });
+}
+
 function otlpSpanProcessor(config: OtelExportConfig): SpanProcessor {
   return new BatchSpanProcessor(
     new OTLPTraceExporter({ url: config.tracesEndpoint, headers: { ...config.headers } }),
@@ -40,11 +52,21 @@ export function startOtelSdk(
   sentryClient?: SentryTracingClient | undefined,
 ): OtelTracing {
   const processor = otlpSpanProcessor(config);
+  const metricReader = otlpMetricReader(config);
 
   if (sentryClient) {
     if (!process.env['OTEL_SERVICE_NAME']) process.env['OTEL_SERVICE_NAME'] = config.serviceName;
     initOpenTelemetry(sentryClient, { spanProcessors: [processor] });
-    return { shutdown: () => processor.shutdown() };
+    const meterProvider = new MeterProvider({
+      resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: config.serviceName }),
+      readers: [metricReader],
+    });
+    metrics.setGlobalMeterProvider(meterProvider);
+    return {
+      shutdown: async () => {
+        await Promise.all([processor.shutdown(), meterProvider.shutdown()]);
+      },
+    };
   }
 
   const sdk = new NodeSDK({
@@ -54,6 +76,7 @@ export function startOtelSdk(
       root: new TraceIdRatioBasedSampler(config.sampleRatio ?? FULL_SAMPLE_RATIO),
     }),
     spanProcessors: [processor],
+    metricReaders: [metricReader],
   });
   sdk.start();
   return { shutdown: () => sdk.shutdown() };

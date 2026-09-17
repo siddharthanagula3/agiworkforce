@@ -51,6 +51,9 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
+import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
+import { recordToolOutcome } from '@/lib/observability/metrics';
+import { withSpan } from '@/lib/observability/span';
 import {
   classifyError,
   DATA_POLICY_NO_ENDPOINT_CODE,
@@ -643,6 +646,15 @@ export interface PendingToolCall {
 }
 
 export type CloudAgentToolRetrySafety = 'safe' | 'unsafe';
+
+const TOOL_EXECUTION_SPAN = 'gen_ai.execute_tool';
+const BROWSER_COMMAND_HANDOFF_SPAN = 'browser.command.handoff';
+
+export function toolSpanStatus(result: ToolLoopToolResult): string {
+  if (result.inputRequired) return 'input_required';
+  if (result.unavailable) return 'unavailable';
+  return result.isError ? 'failed' : 'completed';
+}
 
 export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySafety {
   return isUrlFetchTool(toolName) ||
@@ -2538,16 +2550,24 @@ export async function* runToolLoop(
     toolName: string,
     status: ToolCallAuditStatus,
     durationMs?: number,
-  ): Promise<void> =>
-    recordToolCallAudit({
+  ): Promise<void> => {
+    const category = canonicalToolCategory(toolName, mcpTools);
+    recordToolOutcome({
+      category,
+      status,
+      durationMs,
+      remote: isDeviceStepTool(toolName),
+    });
+    return recordToolCallAudit({
       userId: options.userId,
       organizationId: processed.organizationId,
       surface: processed.chatSurface,
       toolName,
-      category: canonicalToolCategory(toolName, mcpTools),
+      category,
       status,
       ...(durationMs === undefined ? {} : { durationMs }),
     });
+  };
   const llmRequest = {
     ...processed.llmRequest,
     tools:
@@ -3435,7 +3455,7 @@ export async function* runToolLoop(
         }
       }
       const searchCallOrdinal = webSearchCallsUsed;
-      const execute = async () => {
+      const executeUntraced = async () => {
         let searchReservation: SearchChargeReservation | null = null;
         if (isWebSearchTool(tc.qualifiedName)) {
           const admission = await admitSearchCall(searchCallOrdinal);
@@ -3474,6 +3494,30 @@ export async function* runToolLoop(
           if (searchReservation) await settleSearchCall(searchReservation);
         }
       };
+      const execute = () =>
+        withSpan(
+          TOOL_EXECUTION_SPAN,
+          {
+            kind: 'internal',
+            domain: 'tool',
+            attributes: {
+              [OBSERVABILITY_ATTRIBUTE.toolName]: tc.qualifiedName,
+              [OBSERVABILITY_ATTRIBUTE.toolCallId]: tc.id,
+              [OBSERVABILITY_ATTRIBUTE.toolCategory]: canonicalToolCategory(
+                tc.qualifiedName,
+                mcpTools,
+              ),
+              [OBSERVABILITY_ATTRIBUTE.sessionId]: sessionId,
+              [OBSERVABILITY_ATTRIBUTE.turnId]: turnId,
+              [OBSERVABILITY_ATTRIBUTE.surface]: processed.chatSurface,
+            },
+          },
+          async (span) => {
+            const result = await executeUntraced();
+            span.setAttributes({ [OBSERVABILITY_ATTRIBUTE.toolStatus]: toolSpanStatus(result) });
+            return result;
+          },
+        );
       // Each MRTR round is a distinct durable operation: re-running the same
       // paused call must not return the cached input_required receipt, so the
       // resume round scopes both keys below.
@@ -4484,9 +4528,27 @@ export async function* runToolLoop(
           '[tool-loop] returning tool calls to the caller that declared the tools',
         );
         for (const tc of pendingToolCalls) {
-          if (callerOwnedTools.has(tc.qualifiedName)) {
+          if (!callerOwnedTools.has(tc.qualifiedName)) continue;
+          if (!isBrowserCommand(tc.qualifiedName)) {
             await auditToolCall(tc.qualifiedName, 'handed_off');
+            continue;
           }
+          await withSpan(
+            BROWSER_COMMAND_HANDOFF_SPAN,
+            {
+              kind: 'producer',
+              domain: 'tool',
+              attributes: {
+                [OBSERVABILITY_ATTRIBUTE.browserTaskId]: taskId,
+                [OBSERVABILITY_ATTRIBUTE.toolName]: tc.qualifiedName,
+                [OBSERVABILITY_ATTRIBUTE.toolCallId]: tc.id,
+                [OBSERVABILITY_ATTRIBUTE.sessionId]: sessionId,
+                [OBSERVABILITY_ATTRIBUTE.turnId]: turnId,
+                [OBSERVABILITY_ATTRIBUTE.surface]: processed.chatSurface,
+              },
+            },
+            () => auditToolCall(tc.qualifiedName, 'handed_off'),
+          );
         }
         yield encoder.encode(toolHandoffEvent(pendingToolCalls, responseModel));
         yield* flushTerminal('tool-use');

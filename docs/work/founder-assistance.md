@@ -81,8 +81,8 @@ runs at `agiworkforce-signaling.fly.dev`. The Railway deploy job is skipped beca
 Production (`vercel env ls production`, names only, 2026-09-16) has no Sentry DSN, OTel exporter endpoint, web push
 VAPID keys, email provider key or sender, `AGI_AUTH_PROVIDERS`, support widget flag or `PAGER_WEBHOOK_URL`. The code
 ships and silently does nothing without them.
-**Exact action** Create or confirm the vendor accounts and set: `NEXT_PUBLIC_SENTRY_DSN` and the Sentry release variables; `AGI_OTEL_EXPORTER_ENDPOINT`; `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`; `RESEND_API_KEY`, `AGI_NOTIFICATIONS_FROM_EMAIL`; enable Apple and Microsoft connections in Clerk and set `AGI_AUTH_PROVIDERS`; `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED=1`; `PAGER_WEBHOOK_URL`.
-**Where** Vercel project environment, Sentry, the tracing backend, Resend, Clerk.
+**Exact action** Create or confirm the vendor accounts and set: `NEXT_PUBLIC_SENTRY_DSN` and the Sentry release variables; `AGI_OTEL_EXPORTER_ENDPOINT`; `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`; `RESEND_API_KEY`, `AGI_NOTIFICATIONS_FROM_EMAIL`; enable Apple and Microsoft connections in Clerk and set `AGI_AUTH_PROVIDERS`; `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED=1`; `PAGER_WEBHOOK_URL`. In GitHub Actions secrets, set `SENTRY_DSN_DESKTOP` (desktop release workflows), `SENTRY_DSN_CHROME_EXTENSION` (Chrome release) and `SENTRY_DSN_CLI` (CLI release); each build reports nothing until its secret exists.
+**Where** Vercel project environment, GitHub Actions secrets, Sentry, the tracing backend, Resend, Clerk.
 **Needed input** Vendor choices and about one hour.
 **How to verify completion** A test exception appears in Sentry with the release tag; a notification email arrives; the sign-in page shows Apple and Microsoft.
 **What remains after founder action** Live verification of each channel (agent).

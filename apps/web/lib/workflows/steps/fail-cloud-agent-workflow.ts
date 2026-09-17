@@ -3,6 +3,7 @@ import 'server-only';
 import { createAgentEventStreamEmitter } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import { upstreamFailureCopy } from '@/app/api/llm/v1/chat/completions/lib/upstream-error-copy';
 import { appendCloudAgentEvent, getCloudAgentRun } from '@/lib/services/cloud-agent-run-service';
+import { captureWorkerFailure } from '@/lib/observability/error-capture';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   parseCloudAgentWorkflowInput,
@@ -13,6 +14,7 @@ import { settleWorkflowInvocation } from './settle-workflow-invocation';
 
 const CLOUD_AGENT_WORKFLOW_FAILED_MESSAGE = 'The durable agent workflow failed.';
 const CLOUD_AGENT_WORKFLOW_FAILED_CODE = 'cloud_agent_workflow_failed';
+const CLOUD_AGENT_WORKER_NAME = 'cloud-agent-turn';
 
 // Classification needs Node (it logs and reads provider health), so it runs in the step.
 export async function failCloudAgentWorkflow(
@@ -22,6 +24,7 @@ export async function failCloudAgentWorkflow(
   'use step';
 
   const input = parseCloudAgentWorkflowInput(rawInput);
+  captureWorkerFailure(error, { worker: CLOUD_AGENT_WORKER_NAME, jobId: input.runId });
   const failure = upstreamFailureCopy(error, input.processed.provider, {
     requestedModel: input.processed.requestedModel,
   });

@@ -15,6 +15,7 @@ import OperatorCostsPanel from '../components/OperatorCostsPanel';
 import PrivacyRequestsPanel from '../components/PrivacyRequestsPanel';
 import RouteEconomicsPanel from '../components/RouteEconomicsPanel';
 import RoutingHealthPanel from '../components/RoutingHealthPanel';
+import ServiceHealthPanel from '../components/ServiceHealthPanel';
 import { SupportHandoffQueuePanel } from '@/features/support/components/SupportHandoffQueuePanel';
 import { formatCents, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 
@@ -24,6 +25,7 @@ const TABS = [
   'users',
   'costs',
   'routing',
+  'services',
   'routes',
   'economics',
   'content',
@@ -293,7 +295,7 @@ export function OperatorDashboardPage() {
         </p>
       </div>
 
-      <div role="tablist" aria-label="Dashboard views" className="flex gap-2">
+      <div role="tablist" aria-label="Dashboard views" className="flex flex-wrap gap-2">
         {TABS.map((value) => (
           <button
             key={value}
@@ -408,6 +410,8 @@ export function OperatorDashboardPage() {
       {tab === 'costs' ? <OperatorCostsPanel /> : null}
 
       {tab === 'routing' ? <RoutingHealthPanel /> : null}
+
+      {tab === 'services' ? <ServiceHealthPanel /> : null}
 
       {tab === 'routes' ? <RouteEconomicsPanel /> : null}
 

@@ -22,6 +22,7 @@ pub mod config;
 pub mod context;
 pub mod context_handoff;
 pub mod conversations;
+pub mod crash_reports;
 pub mod custom_commands;
 pub mod daemon;
 pub mod design_system;
@@ -3033,6 +3034,15 @@ pub async fn run_main() -> Result<()> {
             "Warning: config validation failed: {}. Continuing with defaults.",
             e
         );
+    }
+
+    let crash_reports_env = std::env::var(crash_reports::CRASH_REPORTS_ENV).ok();
+    if crash_reports::reporting_enabled(&app_config, crash_reports_env.as_deref()) {
+        if let Ok(root) = config::CliConfig::config_dir() {
+            let dir = crash_reports::report_dir(&root);
+            crash_reports::install_panic_hook(dir.clone());
+            tokio::spawn(crash_reports::upload_pending(dir));
+        }
     }
 
     // --- Subcommand dispatch ---

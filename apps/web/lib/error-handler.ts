@@ -14,6 +14,8 @@ import {
   type ApiGatewayPolicy,
 } from './api-gateway-policy';
 import { logger } from './logger';
+import { captureServerError } from './observability/error-capture';
+import { recordHttpRequest } from './observability/metrics';
 import { redactAttributes, redactValue } from './observability/redact';
 import {
   PayloadCeilingExceededError,
@@ -257,6 +259,16 @@ export function withErrorHandler<T extends unknown[]>(
         } catch (error) {
           thrown = error;
           status = 'error';
+          if (
+            !(error instanceof PayloadCeilingExceededError) &&
+            !(error instanceof InboundCircuitOpenError)
+          ) {
+            captureServerError(error, {
+              requestId,
+              method,
+              path: url ? safeUrlPath(url) : undefined,
+            });
+          }
           response =
             error instanceof PayloadCeilingExceededError
               ? payloadTooLargeResponse(
@@ -267,6 +279,9 @@ export function withErrorHandler<T extends unknown[]>(
                 ? circuitOpenResponse(error, requestId)
                 : handleError(error, requestId);
         }
+
+        const durationMs = Date.now() - startedAt;
+        recordHttpRequest({ method, statusCode: response.status, durationMs });
 
         const attributes = redactAttributes({
           [ATTR_HTTP_REQUEST_METHOD]: method,
@@ -284,7 +299,7 @@ export function withErrorHandler<T extends unknown[]>(
             trace_id: context.traceId,
             span_id: context.spanId,
             parent_span_id: inbound?.spanId,
-            duration_ms: Date.now() - startedAt,
+            duration_ms: durationMs,
             status,
             ...attributes,
           },

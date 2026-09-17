@@ -17,6 +17,8 @@ import {
   type ClaimedUserScope,
 } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
+import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
+import { captureWorkerFailure } from '@/lib/observability/error-capture';
 import { withSpan } from '@/lib/observability/span';
 import {
   assertDeliverableCadence,
@@ -33,6 +35,7 @@ const DEFAULT_LEASE_SECONDS = 45;
 const MAX_BATCH_SIZE = 100;
 const MAX_PAGE_SIZE = 100;
 const MAX_ERROR_LENGTH = 2_000;
+const SCHEDULE_WORKER_NAME = 'scheduled-task';
 
 export type ScheduleRunStatus = ManagedCloudScheduleRun['status'];
 export type ScheduleTriggerSource = ManagedCloudScheduleRun['triggerSource'];
@@ -1111,6 +1114,7 @@ async function announceScheduleRun(
       taskId: claim.task.id,
       taskName: claim.task.name,
       status,
+      runId: claim.runId,
     });
   } catch (error) {
     logger.warn({ error, taskId: claim.task.id }, 'Schedule completion notification failed');
@@ -1131,6 +1135,8 @@ export function processClaimedScheduleRun(
       attributes: {
         'task.run_id': claim.runId,
         'task.trigger_source': claim.triggerSource,
+        [OBSERVABILITY_ATTRIBUTE.queueName]: SCHEDULE_WORKER_NAME,
+        [OBSERVABILITY_ATTRIBUTE.queueJobId]: claim.runId,
       },
     },
     async (span) => {
@@ -1194,6 +1200,9 @@ async function runClaimedSchedule(
       : timedOut
         ? 'timeout'
         : 'failed';
+    if (!externallyCancelled) {
+      captureWorkerFailure(error, { worker: SCHEDULE_WORKER_NAME, jobId: claim.runId });
+    }
     const run = await finalizeScheduleRun(db, claim, {
       status,
       error: errorMessage(error),

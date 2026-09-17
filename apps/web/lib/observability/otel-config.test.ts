@@ -35,6 +35,15 @@ describe('resolveOtelExportConfig', () => {
     ).toBe(`${COLLECTOR}/v1/traces`);
   });
 
+  it('derives the otlp metrics path from the same collector', () => {
+    expect(resolveOtelExportConfig({ [OTEL_ENDPOINT_ENV]: COLLECTOR })?.metricsEndpoint).toBe(
+      `${COLLECTOR}/v1/metrics`,
+    );
+    expect(
+      resolveOtelExportConfig({ [OTEL_ENDPOINT_ENV]: `${COLLECTOR}/v1/traces` })?.metricsEndpoint,
+    ).toBe(`${COLLECTOR}/v1/metrics`);
+  });
+
   it('defaults the service name and lets the environment override it', () => {
     expect(resolveOtelExportConfig({ [OTEL_ENDPOINT_ENV]: COLLECTOR })?.serviceName).toBe(
       DEFAULT_OTEL_SERVICE_NAME,

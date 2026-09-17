@@ -175,6 +175,9 @@ jobs:
         if: matrix.cross
         run: |
           cat > Cross.toml <<'EOF'
+          [build.env]
+          passthrough = ["AGI_CLI_SENTRY_DSN"]
+
           [target.aarch64-unknown-linux-gnu]
           pre-build = [
               "dpkg --add-architecture $CROSS_DEB_ARCH",
@@ -184,10 +187,14 @@ jobs:
 
       - name: Build (cross)
         if: matrix.cross
+        env:
+          AGI_CLI_SENTRY_DSN: ${{ secrets.SENTRY_DSN_CLI }}
         run: cross build --release --target ${{ matrix.target }} -p agiworkforce-cli
 
       - name: Build (cargo)
         if: '!matrix.cross'
+        env:
+          AGI_CLI_SENTRY_DSN: ${{ secrets.SENTRY_DSN_CLI }}
         run: cargo build --release --target ${{ matrix.target }} -p agiworkforce-cli
 
       - name: Stage binary

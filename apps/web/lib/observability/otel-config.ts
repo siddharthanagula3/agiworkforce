@@ -2,6 +2,7 @@ export type EnvironmentSource = Readonly<Record<string, string | undefined>>;
 
 export interface OtelExportConfig {
   readonly tracesEndpoint: string;
+  readonly metricsEndpoint: string;
   readonly serviceName: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly sampleRatio: number | null;
@@ -15,15 +16,17 @@ export const OTEL_SAMPLE_RATIO_ENV = 'AGI_OTEL_SAMPLE_RATIO';
 export const DEFAULT_OTEL_SERVICE_NAME = 'agiworkforce-web';
 
 const OTLP_TRACES_PATH = 'v1/traces';
+const OTLP_METRICS_PATH = 'v1/metrics';
+const OTLP_SIGNAL_SUFFIX = /\/v1\/(?:traces|metrics)$/u;
 const HEADER_PAIR_SEPARATOR = ',';
 const HEADER_KEY_VALUE_SEPARATOR = '=';
 const TRAILING_SLASHES = /\/+$/u;
 const MIN_SAMPLE_RATIO = 0;
 const MAX_SAMPLE_RATIO = 1;
 
-function toTracesEndpoint(endpoint: string): string {
-  const base = endpoint.replace(TRAILING_SLASHES, '');
-  return base.endsWith(`/${OTLP_TRACES_PATH}`) ? base : `${base}/${OTLP_TRACES_PATH}`;
+function toSignalEndpoint(endpoint: string, signalPath: string): string {
+  const base = endpoint.replace(TRAILING_SLASHES, '').replace(OTLP_SIGNAL_SUFFIX, '');
+  return `${base}/${signalPath}`;
 }
 
 export function parseOtelHeaders(raw: string | undefined): Record<string, string> {
@@ -55,7 +58,8 @@ export function resolveOtelExportConfig(env: EnvironmentSource): OtelExportConfi
     return null;
   }
   return {
-    tracesEndpoint: toTracesEndpoint(endpoint),
+    tracesEndpoint: toSignalEndpoint(endpoint, OTLP_TRACES_PATH),
+    metricsEndpoint: toSignalEndpoint(endpoint, OTLP_METRICS_PATH),
     serviceName: env[OTEL_SERVICE_NAME_ENV]?.trim() || DEFAULT_OTEL_SERVICE_NAME,
     headers: parseOtelHeaders(env[OTEL_HEADERS_ENV]),
     sampleRatio: parseOtelSampleRatio(env[OTEL_SAMPLE_RATIO_ENV]),

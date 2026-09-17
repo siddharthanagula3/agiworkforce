@@ -1,0 +1,149 @@
+import {
+  metrics,
+  type Attributes,
+  type Counter,
+  type Histogram,
+  type MeterProvider,
+} from '@opentelemetry/api';
+import {
+  ATTR_HTTP_REQUEST_METHOD,
+  ATTR_HTTP_RESPONSE_STATUS_CODE,
+} from '@opentelemetry/semantic-conventions';
+import { scrubAttributes } from '@agiworkforce/observability';
+
+import { OBSERVABILITY_ATTRIBUTE } from './attributes';
+import { SPAN_DOMAIN_ATTRIBUTE, TRACER_NAME } from './otel-span-bridge';
+
+export const METRIC_NAME = {
+  spanCount: 'agi.span.count',
+  spanDuration: 'agi.span.duration',
+  httpRequests: 'http.server.request.count',
+  httpDuration: 'http.server.request.duration',
+  toolCalls: 'agi.tool.calls',
+  toolDuration: 'agi.tool.duration',
+  failures: 'agi.failures',
+} as const;
+
+export type FailureKind =
+  'api' | 'browser' | 'connector' | 'mcp' | 'model' | 'remote' | 'tool' | 'worker';
+
+export type SpanOutcome = 'ok' | 'error';
+
+const MILLISECONDS = 'ms';
+const SPAN_NAME_ATTRIBUTE = 'span.name';
+const SPAN_STATUS_ATTRIBUTE = 'span.status';
+const SERVER_ERROR_STATUS = 500;
+const SERVER_ERROR_TYPE = '5xx';
+
+interface Instruments {
+  readonly spanCount: Counter;
+  readonly spanDuration: Histogram;
+  readonly httpRequests: Counter;
+  readonly httpDuration: Histogram;
+  readonly toolCalls: Counter;
+  readonly toolDuration: Histogram;
+  readonly failures: Counter;
+}
+
+let cached: { provider: MeterProvider; instruments: Instruments } | null = null;
+
+function instruments(): Instruments {
+  const provider = metrics.getMeterProvider();
+  if (cached?.provider === provider) return cached.instruments;
+  const meter = provider.getMeter(TRACER_NAME);
+  const created: Instruments = {
+    spanCount: meter.createCounter(METRIC_NAME.spanCount),
+    spanDuration: meter.createHistogram(METRIC_NAME.spanDuration, { unit: MILLISECONDS }),
+    httpRequests: meter.createCounter(METRIC_NAME.httpRequests),
+    httpDuration: meter.createHistogram(METRIC_NAME.httpDuration, { unit: MILLISECONDS }),
+    toolCalls: meter.createCounter(METRIC_NAME.toolCalls),
+    toolDuration: meter.createHistogram(METRIC_NAME.toolDuration, { unit: MILLISECONDS }),
+    failures: meter.createCounter(METRIC_NAME.failures),
+  };
+  cached = { provider, instruments: created };
+  return created;
+}
+
+function clean(attributes: Readonly<Record<string, unknown>>): Attributes {
+  return scrubAttributes(attributes);
+}
+
+function nonNegative(durationMs: number): number {
+  return Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 0;
+}
+
+export function recordSpanMetrics(input: {
+  name: string;
+  domain: string;
+  outcome: SpanOutcome;
+  durationMs: number;
+}): void {
+  const attributes = clean({
+    [SPAN_NAME_ATTRIBUTE]: input.name,
+    [SPAN_DOMAIN_ATTRIBUTE]: input.domain,
+    [SPAN_STATUS_ATTRIBUTE]: input.outcome,
+  });
+  const recorded = instruments();
+  recorded.spanCount.add(1, attributes);
+  recorded.spanDuration.record(nonNegative(input.durationMs), attributes);
+}
+
+export function recordHttpRequest(input: {
+  method: string | undefined;
+  statusCode: number;
+  durationMs: number;
+}): void {
+  const attributes = clean({
+    [ATTR_HTTP_REQUEST_METHOD]: input.method,
+    [ATTR_HTTP_RESPONSE_STATUS_CODE]: input.statusCode,
+    [OBSERVABILITY_ATTRIBUTE.errorType]:
+      input.statusCode >= SERVER_ERROR_STATUS ? SERVER_ERROR_TYPE : undefined,
+  });
+  const recorded = instruments();
+  recorded.httpRequests.add(1, attributes);
+  recorded.httpDuration.record(nonNegative(input.durationMs), attributes);
+  if (input.statusCode >= SERVER_ERROR_STATUS) recordFailure('api', SERVER_ERROR_TYPE);
+}
+
+export function recordFailure(kind: FailureKind, errorType?: string): void {
+  instruments().failures.add(
+    1,
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.failureKind]: kind,
+      [OBSERVABILITY_ATTRIBUTE.errorType]: errorType,
+    }),
+  );
+}
+
+const TOOL_FAILURE_STATUS = 'failed';
+
+const CATEGORY_FAILURE_KIND: Readonly<Record<string, FailureKind>> = {
+  mcp: 'mcp',
+  connector: 'connector',
+  'computer-use': 'browser',
+};
+
+export function recordToolOutcome(input: {
+  category: string;
+  status: string;
+  durationMs?: number | undefined;
+  remote?: boolean;
+}): void {
+  const attributes = clean({
+    [OBSERVABILITY_ATTRIBUTE.toolCategory]: input.category,
+    [OBSERVABILITY_ATTRIBUTE.toolStatus]: input.status,
+  });
+  const recorded = instruments();
+  recorded.toolCalls.add(1, attributes);
+  if (input.durationMs !== undefined) {
+    recorded.toolDuration.record(nonNegative(input.durationMs), attributes);
+  }
+  if (input.status !== TOOL_FAILURE_STATUS) return;
+  recordFailure('tool', input.category);
+  if (input.remote) {
+    recordFailure('remote', input.category);
+    return;
+  }
+  const specific = CATEGORY_FAILURE_KIND[input.category];
+  if (specific) recordFailure(specific, input.category);
+}
