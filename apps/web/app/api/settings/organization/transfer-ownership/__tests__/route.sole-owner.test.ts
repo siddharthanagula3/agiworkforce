@@ -51,6 +51,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 
+import { BUILT_IN_ORGANIZATION_ROLES } from '@agiworkforce/types';
 import { POST } from '../route';
 import { PATCH, DELETE } from '@/app/api/settings/team/[memberId]/route';
 
@@ -66,6 +67,10 @@ function member(userId: string, role: string, organizationId = ORG_A) {
     provisioned_at: null,
     joined_at: '2026-07-23T00:00:00.000Z',
   };
+}
+
+function ownerPermissions() {
+  return { permissions: [...BUILT_IN_ORGANIZATION_ROLES.primary_owner.permissions] };
 }
 
 function transferRequest(body: unknown) {
@@ -197,7 +202,11 @@ describe('sole-owner protection on the member routes', () => {
 
   it('refuses to promote a second owner and names the transfer flow instead', async () => {
     const memberId = `${ORG_A}:successor`;
-    mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([member('current-owner', 'owner')]);
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (/organization_member_permissions/.test(sql)) return [ownerPermissions()];
+      if (/from public\.organization_members/.test(sql)) return [member('current-owner', 'owner')];
+      return [];
+    });
 
     const response = await PATCH(
       new Request(`http://localhost:3000/api/settings/team/${memberId}`, {
@@ -216,11 +225,20 @@ describe('sole-owner protection on the member routes', () => {
 
   it('refuses to remove the last owner', async () => {
     const memberId = `${ORG_A}:current-owner-2`;
-    mockQuery
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([member('current-owner', 'owner')])
-      .mockResolvedValueOnce([member('current-owner-2', 'owner')])
-      .mockResolvedValueOnce([{ owner_count: '1' }]);
+    let membershipReads = 0;
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (/organization_member_permissions/.test(sql)) return [ownerPermissions()];
+      if (/owner_count/.test(sql)) return [{ owner_count: '1' }];
+      if (/from public\.organization_members/.test(sql)) {
+        membershipReads += 1;
+        return [
+          membershipReads === 1
+            ? member('current-owner', 'owner')
+            : member('current-owner-2', 'owner'),
+        ];
+      }
+      return [];
+    });
 
     const response = await DELETE(
       new Request(`http://localhost:3000/api/settings/team/${memberId}`, {

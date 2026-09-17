@@ -102,12 +102,7 @@ const governanceRecords = modelRegistry.governance as unknown as Readonly<
 >;
 
 export type RouteFreeStatus =
-  | 'eligible'
-  | 'not_verified'
-  | 'expired'
-  | 'terms_incompatible'
-  | 'no_hard_stop'
-  | 'none';
+  'eligible' | 'not_verified' | 'expired' | 'terms_incompatible' | 'no_hard_stop' | 'none';
 
 const FREE_STATUS_BY_REASON: Readonly<Record<string, RouteFreeStatus>> = {
   not_verified_free: 'not_verified',

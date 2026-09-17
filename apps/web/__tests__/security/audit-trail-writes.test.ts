@@ -52,6 +52,7 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 }));
 
 import { NextRequest } from 'next/server';
+import { BUILT_IN_ORGANIZATION_ROLES } from '@agiworkforce/types';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { POST as createApiKey } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKey } from '@/app/api/settings/api-keys/[keyId]/route';
@@ -381,6 +382,9 @@ describe('PATCH /api/settings/team/[memberId] writes member_role_changed', () =>
     mockQuery.mockImplementation(async (sql: string) => {
       if (/pg_advisory_xact_lock/.test(sql)) return [];
       if (ENTERPRISE_WRITER.test(sql)) return [{ record_enterprise_audit_event: 'row-uuid' }];
+      if (/organization_member_permissions/.test(sql)) {
+        return [{ permissions: [...BUILT_IN_ORGANIZATION_ROLES.primary_owner.permissions] }];
+      }
       if (/from public\.organization_members/.test(sql)) {
         const calls = mockQuery.mock.calls.filter(([s]) =>
           /from public\.organization_members/.test(String(s)),

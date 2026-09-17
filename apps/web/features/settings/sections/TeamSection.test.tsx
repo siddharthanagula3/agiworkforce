@@ -232,7 +232,14 @@ describe('TeamSection', () => {
 
     render(<TeamSection />);
 
-    expect(screen.getByText('Workspace')).toBeVisible();
+    // The page heading is also "Workspace" since the one-vocabulary rename, so
+    // the picker is identified by the label bound to its own control.
+    const picker = screen.getByRole('combobox', { name: 'Active workspace' });
+    const label = document.querySelector<HTMLLabelElement>(`label[for="${picker.id}"]`);
+    expect(label).toHaveTextContent('Workspace');
+    const row = label!.parentElement!;
+    expect(row).toHaveStyle({ display: 'flex', alignItems: 'center' });
+    expect(row).toContainElement(picker);
     expect(screen.queryByText('Active workspace')).toBeNull();
     expect(screen.queryByText(/Switching reloads tenant-owned/)).toBeNull();
   });

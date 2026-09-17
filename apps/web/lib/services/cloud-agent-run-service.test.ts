@@ -9,6 +9,7 @@ vi.mock('./agent-notification-service', () => ({
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   APPROVAL_CHECKPOINT_TTL_HOURS,
@@ -30,6 +31,8 @@ import {
   saveCloudAgentApprovalCheckpoint,
   transitionCloudAgentRun,
 } from './cloud-agent-run-service';
+
+const TERMINAL_STATE_VALUES = [...TERMINAL_AGENT_TASK_STATES];
 
 const RUN_ROW = {
   id: '0190a000-0000-7000-8000-000000000001',
@@ -221,7 +224,7 @@ describe('cloud agent run service', () => {
 
     expect(active?.id).toBe(RUN_ROW.id);
     const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
-    expect(sql).toMatch(/state in \('running', 'queued'\)/i);
+    expect(sql).toMatch(/state in \('queued', 'planning', 'running', 'resuming'\)/i);
     expect(sql).toMatch(/cancellation_requested_at is null/i);
     expect(sql).toMatch(/request_id <> \$3/i);
     expect(params).toEqual([
@@ -267,7 +270,7 @@ describe('cloud agent run service', () => {
     expect(db.query).toHaveBeenNthCalledWith(
       2,
       expect.stringMatching(/update public\.cloud_agent_runs/i),
-      [RUN_ROW.id, 'user-1', 2, 'ready_for_review', 2],
+      [RUN_ROW.id, 'user-1', 2, 'ready_for_review', 2, TERMINAL_STATE_VALUES],
     );
     expect(run.state).toBe('ready_for_review');
   });
@@ -308,7 +311,7 @@ describe('cloud agent run service', () => {
       expect.stringMatching(
         /when \$4::text is not null and \$5::bigint >= runs\.last_event_sequence/i,
       ),
-      [RUN_ROW.id, 'user-1', 2, 'ready_for_review', 2],
+      [RUN_ROW.id, 'user-1', 2, 'ready_for_review', 2, TERMINAL_STATE_VALUES],
     );
     expect(run.state).toBe('ready_for_review');
     expect(run.lastEventSequence).toBe(3);
@@ -344,7 +347,7 @@ describe('cloud agent run service', () => {
     expect(db.query).toHaveBeenNthCalledWith(
       2,
       expect.stringMatching(/update public\.cloud_agent_runs/i),
-      [RUN_ROW.id, 'user-1', 3, null, 3],
+      [RUN_ROW.id, 'user-1', 3, null, 3, TERMINAL_STATE_VALUES],
     );
     expect(run.lastEventSequence).toBe(3);
   });
@@ -367,7 +370,7 @@ describe('cloud agent run service', () => {
     expect(db.query).toHaveBeenNthCalledWith(
       2,
       expect.stringMatching(/update public\.cloud_agent_runs/i),
-      [RUN_ROW.id, 'user-1', envelope.sequence, null, envelope.sequence],
+      [RUN_ROW.id, 'user-1', envelope.sequence, null, envelope.sequence, TERMINAL_STATE_VALUES],
     );
   });
 
@@ -587,7 +590,7 @@ describe('cloud agent run service', () => {
       ),
       [
         'user-1',
-        ['awaiting_input', 'ready_for_review'],
+        ['awaiting_input', 'awaiting_approval', 'ready_for_review'],
         null,
         '2026-07-17T20:00:00.000Z',
         '0190a000-0000-7000-8000-000000000099',
@@ -792,11 +795,13 @@ describe('cloud agent run service', () => {
       expect.stringMatching(/cancellation_requested_at = coalesce/i),
       [RUN_ROW.id, 'user-1'],
     );
-    expect(db.query).toHaveBeenNthCalledWith(2, expect.stringMatching(/state = \$3/i), [
-      RUN_ROW.id,
-      'user-1',
-      'failed',
-    ]);
+    expect(db.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(
+        /set state = case when runs\.state = any\(\$5::text\[\]\) then runs\.state else \$3 end/i,
+      ),
+      [RUN_ROW.id, 'user-1', 'failed', TERMINAL_STATE_VALUES, ['partial', 'timed_out']],
+    );
   });
 
   it('versions and stores a server-owned approval checkpoint under the run lock', async () => {
