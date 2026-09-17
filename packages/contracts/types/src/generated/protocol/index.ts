@@ -214,6 +214,7 @@ export * from './PluginListResponse';
 export * from './PluginScope';
 export * from './PluginSetEnabledParams';
 export * from './PluginSummary';
+export * from './ProtocolVersionUnsupportedData';
 export * from './RateLimitReachedType';
 export * from './RateLimitSnapshot';
 export * from './RateLimitWindow';

@@ -36,6 +36,7 @@ import {
   isAutoModeModelId,
   isExecutableImageModel,
   getModelVariantPartner,
+  getModelRegistryFacts,
   getPickerModelTier,
   getPickerModels,
   getPickerModelsForRuntimeProfile,
@@ -1151,5 +1152,56 @@ describe('resolveMaxOutputTokens', () => {
   it('falls back for an id the catalogue does not carry', () => {
     expect(resolveMaxOutputTokens('not-a-model')).toBeGreaterThan(1024);
     expect(resolveMaxOutputTokens(null)).toBeGreaterThan(1024);
+  });
+});
+
+describe('getModelRegistryFacts version, replacement and region', () => {
+  type RegistryEntry = {
+    identity: { provider: string; family: string | null; version: string | null };
+    lifecycle: { deprecated: boolean; replacedBy: string | null };
+    residencyRegions: string[] | null;
+  };
+  const entries = Object.entries(modelRegistry.models as unknown as Record<string, RegistryEntry>);
+  const governance = modelRegistry.governance as unknown as Record<
+    string,
+    { residencyRegions: string[] | null }
+  >;
+
+  it('gives every family member a dotted version and no family-less model one', () => {
+    const versioned = entries.filter(([, entry]) => entry.identity.version !== null);
+    expect(versioned.length).toBeGreaterThan(0);
+    for (const [modelId, entry] of entries) {
+      const facts = getModelRegistryFacts(modelId);
+      expect(facts?.version).toBe(entry.identity.version);
+      if (entry.identity.family === null) expect(facts?.version).toBeNull();
+      else expect(facts?.version).toMatch(/^\d+(\.\d+)*$/);
+    }
+  });
+
+  it('points every deprecated family member at a live successor in the same family', () => {
+    const deprecated = entries.filter(
+      ([, entry]) => entry.lifecycle.deprecated && entry.identity.family !== null,
+    );
+    expect(deprecated.length).toBeGreaterThan(0);
+    for (const [modelId, entry] of deprecated) {
+      const replacedBy = getModelRegistryFacts(modelId)?.replacedBy;
+      expect(replacedBy, modelId).toBeTruthy();
+      const successor = getModelRegistryFacts(replacedBy as string);
+      expect(successor?.family).toBe(entry.identity.family);
+      const successorEntry = entries.find(([id]) => id === replacedBy)?.[1];
+      expect(successorEntry?.lifecycle.deprecated).toBe(false);
+    }
+    for (const [modelId, entry] of entries) {
+      if (!entry.lifecycle.deprecated)
+        expect(getModelRegistryFacts(modelId)?.replacedBy).toBeNull();
+    }
+  });
+
+  it("projects each model's residency regions from its serving provider's governance", () => {
+    for (const [modelId, entry] of entries) {
+      const expected = governance[entry.identity.provider]?.residencyRegions ?? null;
+      expect(getModelRegistryFacts(modelId)?.residencyRegions ?? null, modelId).toEqual(expected);
+    }
+    expect(entries.some(([, entry]) => Array.isArray(entry.residencyRegions))).toBe(true);
   });
 });

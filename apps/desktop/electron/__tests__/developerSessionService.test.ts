@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MINIMUM_SUPPORTED_RUNTIME_VERSION } from '@agiworkforce/types';
 import type {
   DeveloperSessionEvent,
   DeveloperSessionList,
@@ -413,6 +414,22 @@ describe('developer session runtime', () => {
     expect(status.available).toBe(false);
     expect(status.path).toBeNull();
     expect(status.hint).toContain('agiworkforce.com/download');
+  });
+
+  it('refuses a CLI older than the runtime this app supports, naming the floor', async () => {
+    const { service } = await loadService((method) =>
+      method === 'initialize'
+        ? { ...HANDSHAKE, serverInfo: { ...HANDSHAKE.serverInfo, version: '0.9.0' } }
+        : defaultResponder(method),
+    );
+
+    const list: DeveloperSessionList = await service.listDeveloperSessions();
+
+    expect(list.groups[0]?.sessions).toEqual([]);
+    expect(list.groups[0]?.unavailable?.message).toContain(
+      `reports version "0.9.0"; this app needs ${MINIMUM_SUPPORTED_RUNTIME_VERSION} or newer`,
+    );
+    expect(list.groups[0]?.unavailable?.hint).toContain('Update the AGI CLI');
   });
 
   it('reports a missing CLI as an unavailable folder rather than throwing', async () => {

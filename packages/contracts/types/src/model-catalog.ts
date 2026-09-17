@@ -187,11 +187,7 @@ export interface ModelBenchmarks {
 export type ModelStatus = 'active' | 'beta' | 'deprecated';
 
 export type ReasoningControl =
-  | 'none'
-  | 'always_on'
-  | 'thinking_toggle'
-  | 'thinking_budget'
-  | 'effort_levels';
+  'none' | 'always_on' | 'thinking_toggle' | 'thinking_budget' | 'effort_levels';
 
 export interface ReasoningRequestPaths {
   api: 'chat' | 'responses' | 'messages' | 'gen';
@@ -1522,17 +1518,27 @@ export function getModelFamilySlotForModel(modelId: string): ModelFamilySlot | n
 
 export interface ModelRegistryFacts {
   family: string | null;
+  version: string | null;
   developer: string;
   isRouter: boolean;
   aliases: readonly string[];
   releasedOn: string | null;
   stage: string | null;
+  replacedBy: string | null;
+  residencyRegions: readonly string[] | null;
   capabilities: NormalizedModelCapabilities;
 }
 
 interface RegistryModelRecord {
-  identity: { family?: string | null; developer: string; role?: string; aliases?: string[] };
-  lifecycle: { releasedOn?: string | null; stage?: string | null };
+  identity: {
+    family?: string | null;
+    version?: string | null;
+    developer: string;
+    role?: string;
+    aliases?: string[];
+  };
+  lifecycle: { releasedOn?: string | null; stage?: string | null; replacedBy?: string | null };
+  residencyRegions?: string[] | null;
 }
 
 export function getModelRegistryFacts(modelId: string): ModelRegistryFacts | null {
@@ -1546,11 +1552,14 @@ export function getModelRegistryFacts(modelId: string): ModelRegistryFacts | nul
   )[canonicalModelId];
   return {
     family: entry.identity.family ?? null,
+    version: entry.identity.version ?? null,
     developer: entry.identity.developer,
     isRouter: entry.identity.role === 'router',
     aliases: Object.freeze([...(entry.identity.aliases ?? [])]),
     releasedOn: entry.lifecycle.releasedOn ?? null,
     stage: entry.lifecycle.stage ?? null,
+    replacedBy: entry.lifecycle.replacedBy ?? null,
+    residencyRegions: entry.residencyRegions ? Object.freeze([...entry.residencyRegions]) : null,
     capabilities: capabilities ?? {},
   };
 }

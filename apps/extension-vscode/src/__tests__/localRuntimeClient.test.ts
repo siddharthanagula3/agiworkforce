@@ -173,6 +173,9 @@ function fakeRuntime(
     exitOnShutdown?: boolean;
     shutdownResult?: unknown;
     malformedV8?: boolean;
+    initializeExtra?: Record<string, unknown>;
+    initializeError?: { code: number; message: string; data?: unknown };
+    trustMode?: string;
   } = {},
 ): {
   spawn: SpawnLocalRuntime;
@@ -224,6 +227,7 @@ function fakeRuntime(
                   worktrees: false,
                   models: true,
                 },
+                ...options.initializeExtra,
               }
           : method === 'thread/start' || method === 'thread/resume'
             ? {
@@ -233,7 +237,7 @@ function fakeRuntime(
                   model: SYNTHETIC_RUNTIME_MODEL_ID,
                   cwd: '/workspace',
                   provider: options.provider ?? 'anthropic',
-                  trustMode: 'byok',
+                  trustMode: options.trustMode ?? 'byok',
                   createdAt: '2026-07-14T00:00:00Z',
                   updatedAt: '2026-07-14T00:00:00Z',
                   createdBy: 'vscode',
@@ -256,7 +260,7 @@ function fakeRuntime(
                         model: SYNTHETIC_RUNTIME_MODEL_ID,
                         cwd: '/workspace',
                         provider: options.provider ?? 'anthropic',
-                        trustMode: 'byok',
+                        trustMode: options.trustMode ?? 'byok',
                         createdAt: '2026-07-14T00:00:00Z',
                         updatedAt: '2026-07-14T00:00:00Z',
                         createdBy: 'vscode',
@@ -272,7 +276,7 @@ function fakeRuntime(
                         model: SYNTHETIC_RUNTIME_MODEL_ID,
                         cwd: '/workspace',
                         provider: options.provider ?? 'anthropic',
-                        trustMode: 'byok',
+                        trustMode: options.trustMode ?? 'byok',
                         createdAt: '2026-07-14T00:00:00Z',
                         updatedAt: '2026-07-14T00:00:00Z',
                         createdBy: 'vscode',
@@ -292,7 +296,11 @@ function fakeRuntime(
                           ? MALFORMED_V8_RESULT
                           : V8_RESULTS[method as keyof typeof V8_RESULTS]
                         : { acknowledged: true };
-      stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result })}\n`);
+      const reply =
+        method === 'initialize' && options.initializeError !== undefined
+          ? { jsonrpc: '2.0', id: request.id, error: options.initializeError }
+          : { jsonrpc: '2.0', id: request.id, result };
+      stdout.write(`${JSON.stringify(reply)}\n`);
       if (method === 'shutdown' && options.exitOnShutdown !== false) {
         setImmediate(() => activeChild?.emit('exit', 0, null));
       }
@@ -364,6 +372,102 @@ describe('LocalRuntimeClient', () => {
       await client.dispose();
     },
   );
+
+  it('names the CLI as the side to update when an older server answers protocol 7', async () => {
+    const runtime = fakeRuntime(7);
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(
+      'uses developer-session protocol 7; this extension requires exactly protocol 8. Install a compatible AGI CLI',
+    );
+    await client.dispose();
+  });
+
+  it.each([
+    [[7], 7, 'Update the AGI CLI or set agiWorkforce.cliPath to a current binary.'],
+    [[10, 9], 9, 'Update AGI for VS Code.'],
+  ])(
+    'turns a structured version refusal from a server speaking %j into the side to update',
+    async (supportedProtocolVersions, minimumProtocolVersion, action) => {
+      const runtime = fakeRuntime(8, {
+        initializeError: {
+          code: -32005,
+          message: 'Client requested developer-session protocol 8',
+          data: {
+            requestedProtocolVersion: 8,
+            supportedProtocolVersions,
+            minimumProtocolVersion,
+          },
+        },
+      });
+      const client = new LocalRuntimeClient({
+        cliPath: 'agi',
+        cwd: '/workspace',
+        clientVersion: '0.3.0',
+        spawn: runtime.spawn,
+      });
+
+      await expect(client.initialize()).rejects.toThrow(
+        `this extension requires protocol 8. ${action}`,
+      );
+      await client.dispose();
+    },
+  );
+
+  it.each([
+    [5, 'Update AGI for VS Code.'],
+    [3, 'Update the AGI CLI'],
+  ])('refuses a handshake declaring agent event schema %i', async (schemaVersion, action) => {
+    const runtime = fakeRuntime(8, { initializeExtra: { agentEventSchemaVersion: schemaVersion } });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(
+      `streams agent events in schema ${schemaVersion}; this extension reads schema 4. ${action}`,
+    );
+    await client.dispose();
+  });
+
+  it('accepts a handshake that declares the schema and minimum it negotiates', async () => {
+    const runtime = fakeRuntime(8, {
+      initializeExtra: { agentEventSchemaVersion: 4, minimumProtocolVersion: 7 },
+    });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.initialize()).resolves.toMatchObject({
+      agentEventSchemaVersion: 4,
+      minimumProtocolVersion: 7,
+    });
+    await client.dispose();
+  });
+
+  it('reads a trust mode it does not know as unknown rather than dropping the thread', async () => {
+    const runtime = fakeRuntime(8, { trustMode: 'sovereign_cloud' });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    const listed = await client.listThreads({});
+    expect(listed.threads.map((thread) => thread.trustMode)).toEqual(['unknown']);
+    await client.dispose();
+  });
 
   it('rejects a runtime that cannot carry approval decisions', async () => {
     const runtime = fakeRuntime(8, { approvals: false });
@@ -596,6 +700,59 @@ describe('LocalRuntimeClient', () => {
       { type: 'tool_execution_start', id: 'tool-1' },
       { type: 'tool_execution_end', id: 'tool-1' },
       { type: 'progress_update', id: 'turn-work' },
+    ]);
+    await client.dispose();
+  });
+
+  it('skips an agent event kind it does not know and files an unknown tool category under other', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const events: Array<{ type: string; category?: string }> = [];
+    client.onEvent((event) =>
+      events.push(
+        event.type === 'tool_execution_start'
+          ? { type: event.type, category: event.category }
+          : { type: event.type },
+      ),
+    );
+    await client.initialize();
+
+    const envelope = (sequence: number, event: Record<string, unknown>) =>
+      `${JSON.stringify({
+        method: 'turn/agent_event',
+        params: {
+          schemaVersion: 4,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          sequence,
+          emittedAtMs: 1_784_335_200_000 + sequence,
+          event,
+        },
+      })}\n`;
+    runtime.stdout.write(envelope(0, { type: 'hologram-rendered', frame: 1 }));
+    runtime.stdout.write(
+      envelope(1, {
+        type: 'tool-execution-start',
+        toolCallId: 'tool-1',
+        name: 'teleport',
+        category: 'teleportation',
+        summary: 'Teleporting',
+        input: {},
+      }),
+    );
+    runtime.stdout.write(
+      `${JSON.stringify({ method: 'turn/output_delta', params: { threadId: 'thread-1', turnId: 'turn-1', delta: 'still here' } })}\n`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(events).toEqual([
+      { type: 'tool_execution_start', category: 'other' },
+      { type: 'output_delta' },
     ]);
     await client.dispose();
   });

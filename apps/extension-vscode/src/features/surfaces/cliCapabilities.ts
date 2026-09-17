@@ -1,4 +1,5 @@
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
+import type { AppServerCapabilities } from '../../integrations/localRuntimeClient';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 
 export const CLI_CAPABILITY_REQUIREMENT = 'Needs AGI CLI 1.8';
@@ -20,6 +21,42 @@ export const CLI_CAPABILITY_METHODS = {
 } as const;
 
 export type CliCapability = keyof typeof CLI_CAPABILITY_METHODS;
+
+type AdvertisedFamily = keyof Pick<
+  AppServerCapabilities,
+  'skills' | 'plugins' | 'mcp' | 'hooks' | 'instructions' | 'commands' | 'settings' | 'account'
+>;
+
+const CLI_CAPABILITY_FAMILIES: Record<CliCapability, AdvertisedFamily> = {
+  skills: 'skills',
+  plugins: 'plugins',
+  mcpServers: 'mcp',
+  hooks: 'hooks',
+  instructions: 'instructions',
+  commands: 'commands',
+  runCommand: 'commands',
+  readSettings: 'settings',
+  writeSettings: 'settings',
+  accountStatus: 'account',
+  accountLogin: 'account',
+  accountLoginWait: 'account',
+  accountToken: 'account',
+};
+
+const CLI_FAMILY_LABELS: Record<AdvertisedFamily, string> = {
+  skills: 'skills',
+  plugins: 'plugins',
+  mcp: 'MCP servers',
+  hooks: 'hooks',
+  instructions: 'instructions',
+  commands: 'commands',
+  settings: 'settings',
+  account: 'account sign-in',
+};
+
+export function cliCapabilityNotOffered(capability: CliCapability): string {
+  return `The AGI CLI for this workspace does not offer ${CLI_FAMILY_LABELS[CLI_CAPABILITY_FAMILIES[capability]]}.`;
+}
 
 export type CliCapabilityResult<T> =
   | { status: 'ok'; value: T }
@@ -87,6 +124,16 @@ export function normalizeCapabilityEntries(value: unknown): CliCapabilityEntry[]
   return entries;
 }
 
+async function advertisedCapabilities(
+  host: CapabilityHost,
+): Promise<AppServerCapabilities | undefined> {
+  const initialize = host['initialize'];
+  if (typeof initialize !== 'function') return undefined;
+  const handshake = (await (initialize as () => Promise<unknown>).apply(host)) as
+    { capabilities?: AppServerCapabilities } | undefined;
+  return handshake?.capabilities;
+}
+
 export class CliCapabilityAdapter {
   constructor(private readonly runtimes: LocalRuntimePool | undefined) {}
 
@@ -111,6 +158,10 @@ export class CliCapabilityAdapter {
       return { status: 'unavailable', reason: CLI_CAPABILITY_REQUIREMENT };
     }
     try {
+      const advertised = await advertisedCapabilities(host);
+      if (advertised !== undefined && advertised[CLI_CAPABILITY_FAMILIES[capability]] !== true) {
+        return { status: 'unavailable', reason: cliCapabilityNotOffered(capability) };
+      }
       const value = (await (method as (...args: unknown[]) => Promise<unknown>).apply(
         host,
         params,
