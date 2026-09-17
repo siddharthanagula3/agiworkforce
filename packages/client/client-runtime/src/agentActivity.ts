@@ -2,6 +2,7 @@ import type {
   AgentEventApprovalDecision,
   AgentEventApprovalRiskLevel,
   AgentEventEnvelope,
+  AgentEventFileChangeKind,
   AgentEventSource,
   AgentEventStopReason,
   AgentEventToolCategory,
@@ -80,6 +81,29 @@ export interface AgentActivityToolEntry {
   deviceStep?: AgentActivityDeviceStep;
   query?: string;
   sources?: AgentEventSource[];
+  /**
+   * Where this call sits in the iteration's dispatch queue, while it is still
+   * waiting. A surface shows what is behind the running step with this;
+   * without it a queued call is indistinguishable from one already running.
+   */
+  queue?: { position: number; depth: number };
+  /** The command line, for a shell call the runtime named. */
+  command?: string;
+  /** Working directory of that command, when it is not the session's own. */
+  commandCwd?: string;
+  /** Files this call wrote, in the order the runtime reported them. */
+  files?: AgentActivityFileChange[];
+}
+
+export interface AgentActivityFileChange {
+  path: string;
+  change: AgentEventFileChangeKind;
+}
+
+/** Everything one turn changed on disk, as the runtime stated it. */
+export interface AgentActivityTurnDiff {
+  unifiedDiff: string;
+  paths: string[];
 }
 
 export interface AgentActivityDeviceStep {
@@ -148,6 +172,7 @@ export interface AgentActivityState {
   taskId?: string;
   taskState?: AgentTaskState;
   entries: AgentActivityEntry[];
+  turnDiff?: AgentActivityTurnDiff;
 }
 
 export interface FinishAgentActivityLocallyOptions {
@@ -490,6 +515,51 @@ function applyAgentEvent(
       }
       return next;
     }
+
+    case 'tool-execution-queued': {
+      const id = `tool:${event.toolCallId}`;
+      if (next.entries.some((entry) => entry.id === id)) return next;
+      next.entries = [
+        ...next.entries,
+        {
+          kind: 'tool',
+          id,
+          toolCallId: event.toolCallId,
+          name: event.name,
+          category: event.category,
+          summary: event.name,
+          status: 'pending',
+          queue: { position: event.position, depth: event.queueDepth },
+          startedAtMs: envelope.emittedAtMs,
+        },
+      ];
+      return next;
+    }
+
+    case 'command-started': {
+      const index = next.entries.findIndex((entry) => entry.id === `tool:${event.toolCallId}`);
+      if (index < 0) return next;
+      next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
+        ...entry,
+        command: event.command,
+        ...(event.cwd === undefined || event.cwd === null ? {} : { commandCwd: event.cwd }),
+      }));
+      return next;
+    }
+
+    case 'file-changed': {
+      const index = next.entries.findIndex((entry) => entry.id === `tool:${event.toolCallId}`);
+      if (index < 0) return next;
+      next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
+        ...entry,
+        files: [...(entry.files ?? []), { path: event.path, change: event.change }],
+      }));
+      return next;
+    }
+
+    case 'turn-diff':
+      next = { ...next, turnDiff: { unifiedDiff: event.unifiedDiff, paths: event.paths } };
+      return next;
 
     case 'tool-execution-start': {
       next.entries = closeRunningGenerationProgress(next.entries, envelope.emittedAtMs);

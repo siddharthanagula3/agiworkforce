@@ -26,14 +26,45 @@ pub enum ColorLevel {
     TrueColor,
 }
 
+/// Whether this run renders in plain mode: no colour, no animation, no
+/// decorative rules, and words where a glyph carried the meaning.
+///
+/// `NO_COLOR` alone is not this. A screen reader is read a line at a time, so
+/// an animated spinner repainting eight frames a second and a rule drawn from
+/// box characters are both noise it has to speak, whatever colour they are.
+static PLAIN_OUTPUT: AtomicBool = AtomicBool::new(false);
+
+/// Publish the run's plain-output policy. Called once at entry, before
+/// anything prints, because every sink below reads it rather than taking it as
+/// an argument.
+pub fn set_plain_output(enabled: bool) {
+    PLAIN_OUTPUT.store(enabled, Ordering::Relaxed);
+}
+
+/// Whether plain mode was asked for, by `--plain` or by `AGI_PLAIN` in the
+/// environment.
+pub fn plain_output() -> bool {
+    PLAIN_OUTPUT.load(Ordering::Relaxed)
+}
+
+/// Whether the environment asks for plain mode on its own. `AGI_PLAIN` follows
+/// the `NO_COLOR` convention: any value at all means yes.
+pub fn plain_output_requested_by_environment() -> bool {
+    env::var("AGI_PLAIN").is_ok_and(|value| !value.is_empty())
+}
+
 /// Detect the terminal's color capability from environment variables.
 ///
 /// Checks (in order):
-/// 1. `NO_COLOR`: if set (any value), returns `None`.
-/// 2. `COLORTERM`: `truecolor` or `24bit` → `TrueColor`.
-/// 3. `TERM`: contains `256color` → `Ansi256`.
-/// 4. Fallback: `Ansi16`.
+/// 1. Plain mode: returns `None`.
+/// 2. `NO_COLOR`: if set (any value), returns `None`.
+/// 3. `COLORTERM`: `truecolor` or `24bit` → `TrueColor`.
+/// 4. `TERM`: contains `256color` → `Ansi256`.
+/// 5. Fallback: `Ansi16`.
 pub fn detect_color_level() -> ColorLevel {
+    if plain_output() {
+        return ColorLevel::None;
+    }
     // NO_COLOR spec: https://no-color.org/, presence means disable color
     if env::var("NO_COLOR").is_ok() {
         return ColorLevel::None;
@@ -118,6 +149,9 @@ pub fn format_duration_ms(ms: u64) -> String {
 /// Useful for file downloads, bulk operations, or any task with a known total.
 #[allow(dead_code)]
 pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
+    if plain_output() {
+        return announced_once(message);
+    }
     let pb = ProgressBar::new(total);
     pb.set_style(
         ProgressStyle::default_bar()
@@ -206,6 +240,9 @@ pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {
 
 /// Create a spinner with a message, suitable for "thinking" states.
 pub fn create_spinner(message: &str) -> ProgressBar {
+    if plain_output() {
+        return announced_once(message);
+    }
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
@@ -219,6 +256,14 @@ pub fn create_spinner(message: &str) -> ProgressBar {
     spinner.set_message(message.to_string());
     spinner.enable_steady_tick(Duration::from_millis(80));
     spinner
+}
+
+/// A progress affordance that says what it is doing once and then stays
+/// silent. Returned in plain mode in place of a bar or a spinner, so callers
+/// keep their existing `finish_and_clear` handling.
+fn announced_once(message: &str) -> ProgressBar {
+    eprintln!("{}", sanitize_terminal_text(message));
+    ProgressBar::hidden()
 }
 
 // ---------------------------------------------------------------------------
@@ -673,6 +718,9 @@ pub fn print_session_loaded(id: &str, msg_count: usize, model: &str) {
 /// Print a horizontal divider.
 #[allow(dead_code)]
 pub fn print_divider() {
+    if plain_output() {
+        return;
+    }
     eprintln!("{}", ts::muted("─".repeat(50)));
 }
 
@@ -1207,6 +1255,60 @@ mod tests {
             assert!(o >= 0.0, "negative output rate for {}", model.id);
         }
         assert_eq!(model_pricing("fixture-unknown-local-model"), (0.0, 0.0));
+    }
+
+    // -- plain mode --------------------------------------------------------
+
+    /// Plain mode is a process-wide policy, so these must not run beside the
+    /// tests that read the default.
+    #[test]
+    fn plain_mode_suppresses_colour_animation_and_rules_not_just_colour() {
+        let _guard = env_test_lock();
+        let prev_ct = env::var("COLORTERM").ok();
+        env::set_var("COLORTERM", "truecolor");
+        env::remove_var("NO_COLOR");
+
+        assert_eq!(
+            detect_color_level(),
+            ColorLevel::TrueColor,
+            "the fixture terminal must start colourful, or the assertion below proves nothing"
+        );
+
+        set_plain_output(true);
+        assert_eq!(detect_color_level(), ColorLevel::None);
+        assert!(
+            create_spinner("Thinking").is_hidden(),
+            "a spinner repainting eight frames a second is read out eight times a second"
+        );
+        assert!(create_progress_bar(10, "Downloading").is_hidden());
+        set_plain_output(false);
+
+        assert_eq!(detect_color_level(), ColorLevel::TrueColor);
+        match prev_ct {
+            Some(v) => env::set_var("COLORTERM", v),
+            None => env::remove_var("COLORTERM"),
+        }
+    }
+
+    #[test]
+    fn the_environment_can_ask_for_plain_mode_on_its_own() {
+        let _guard = env_test_lock();
+        let previous = env::var("AGI_PLAIN").ok();
+
+        env::remove_var("AGI_PLAIN");
+        assert!(!plain_output_requested_by_environment());
+        env::set_var("AGI_PLAIN", "");
+        assert!(
+            !plain_output_requested_by_environment(),
+            "an empty value is how a shell unsets a variable it still exports"
+        );
+        env::set_var("AGI_PLAIN", "1");
+        assert!(plain_output_requested_by_environment());
+
+        match previous {
+            Some(value) => env::set_var("AGI_PLAIN", value),
+            None => env::remove_var("AGI_PLAIN"),
+        }
     }
 
     // -- detect_color_level tests ------------------------------------------

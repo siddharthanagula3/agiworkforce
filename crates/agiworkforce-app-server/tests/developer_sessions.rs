@@ -1583,6 +1583,66 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
     server.abort();
 }
 
+/// Wire methods that existed before protocol 8 added the account, instruction,
+/// skill, plugin, MCP, hook, setting and command surfaces. An extension built
+/// against protocol 7 calls these and nothing else.
+const PRE_V8_METHODS: &[&str] = &[
+    method::THREAD_START,
+    method::THREAD_LIST,
+    method::THREAD_READ,
+    method::THREAD_RESUME,
+    method::THREAD_FORK,
+    method::THREAD_ARCHIVE,
+    method::THREAD_DELETE,
+    method::THREAD_RECONNECT,
+    method::THREAD_WRITER_RELEASE,
+    method::THREAD_WRITER_TAKEOVER,
+    method::MODEL_LIST,
+    method::TURN_START,
+    method::TURN_STEER,
+    method::TURN_INTERRUPT,
+    method::APPROVAL_RESPOND,
+];
+
+const METHOD_NOT_FOUND_ERROR_CODE: i32 = -32601;
+
+/// §109 "New CLI plus old VS Code". The extension has never been published, so
+/// the older client exists only as a wire shape: a handshake at protocol 7 and
+/// the method set that shipped with it. Adding a v8 method is safe; quietly
+/// dropping a v7 one is what this catches, and it would reach users as an
+/// editor that installs, connects, and then cannot open a thread.
+#[tokio::test]
+async fn every_method_an_old_editor_calls_is_still_dispatchable_after_a_v7_handshake() {
+    let mut processor =
+        DeveloperSessionProcessor::new(Arc::new(SurfaceHost::new()), capabilities());
+    let negotiated: InitializeResponse = serde_json::from_value(result_of(
+        processor
+            .process(initialize_at(Some(
+                LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+            )))
+            .await,
+    ))
+    .expect("typed handshake");
+    assert_eq!(
+        negotiated.protocol_version,
+        LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION
+    );
+
+    for (index, name) in PRE_V8_METHODS.iter().enumerate() {
+        let id = i64::try_from(index).expect("test index fits") + 2;
+        let response = processor
+            .process(request(id, name, serde_json::json!({})))
+            .await;
+        if let Some(error) = response.error {
+            assert_ne!(
+                error.code, METHOD_NOT_FOUND_ERROR_CODE,
+                "{name} is no longer dispatchable, so an editor built against protocol {LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION} would connect and then fail: {}",
+                error.message
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn a_client_that_states_no_version_is_answered_with_the_legacy_one() {
     let mut processor =

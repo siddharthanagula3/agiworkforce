@@ -205,7 +205,7 @@ pub(super) fn format_size(bytes: u64) -> String {
     }
 }
 
-pub(super) fn generate_simple_diff(old: &str, new: &str) -> String {
+pub(crate) fn generate_simple_diff(old: &str, new: &str) -> String {
     let old_lines: Vec<&str> = old.lines().collect();
     let new_lines: Vec<&str> = new.lines().collect();
 

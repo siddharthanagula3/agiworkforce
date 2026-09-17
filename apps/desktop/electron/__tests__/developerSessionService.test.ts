@@ -637,6 +637,65 @@ describe('developer session runtime', () => {
     expect(events[1]?.event).toMatchObject({ output: '# QA project', isError: false });
   });
 
+  it('carries the queue, the command line, each changed file and the turn diff through', async () => {
+    const { service, children, events } = await loadService();
+
+    await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'build it' });
+    const notify = (sequence: number, event: Record<string, unknown>): void => {
+      children[0]?.notify('turn/agent_event', {
+        schemaVersion: 5,
+        sessionId: thread.id,
+        turnId: 'turn-1',
+        sequence,
+        emittedAtMs: sequence,
+        event,
+      });
+    };
+
+    notify(0, {
+      type: 'tool-execution-queued',
+      toolCallId: 'call-1',
+      name: 'run_command',
+      category: 'shell',
+      position: 0,
+      queueDepth: 2,
+    });
+    notify(1, {
+      type: 'command-started',
+      toolCallId: 'call-1',
+      command: 'pnpm build',
+      cwd: '/repo',
+    });
+    notify(2, {
+      type: 'file-changed',
+      toolCallId: 'call-2',
+      path: '/repo/dist/index.js',
+      change: 'created',
+    });
+    notify(3, {
+      type: 'file-changed',
+      toolCallId: 'call-2',
+      path: '/repo/dist/index.js',
+      change: 'not-a-change',
+    });
+    notify(4, {
+      type: 'turn-diff',
+      unifiedDiff: '--- a/x\n+++ b/x\n+one',
+      paths: ['x'],
+    });
+
+    expect(events.map((entry) => entry.event.type)).toEqual([
+      'tool-queued',
+      'command-started',
+      'file-changed',
+      'turn-diff',
+    ]);
+    expect(events[0]?.event).toMatchObject({ toolCallId: 'call-1', position: 0, queueDepth: 2 });
+    expect(events[1]?.event).toMatchObject({ command: 'pnpm build', cwd: '/repo' });
+    expect(events[2]?.event).toMatchObject({ path: '/repo/dist/index.js', change: 'created' });
+    expect(events[3]?.event).toMatchObject({ unifiedDiff: '--- a/x\n+++ b/x\n+one', paths: ['x'] });
+  });
+
   it('carries the structured failure the CLI sends through to the surface', async () => {
     const { service, children, events } = await loadService();
 

@@ -185,8 +185,10 @@ const threadSummarySchema = z.object({
   trustMode: trustModeSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
-  createdBy: z.enum(['cli', 'vscode', 'desktop']),
-  status: z.enum(['idle', 'running', 'awaiting_approval', 'archived', 'failed']),
+  createdBy: z.enum(['cli', 'vscode', 'desktop', 'unknown']).catch('unknown'),
+  status: z
+    .enum(['idle', 'running', 'awaiting_approval', 'archived', 'failed', 'unknown'])
+    .catch('unknown'),
   gitBranch: z.string().min(1).max(512).optional(),
   worktreeRoot: z.string().min(1).max(16_384).optional(),
   client: z.string().min(1).max(200).optional(),
@@ -242,7 +244,7 @@ const localModelListResponseSchema = z.object({
 const turnSummarySchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
-  status: z.enum(['running', 'completed', 'interrupted', 'failed']),
+  status: z.enum(['running', 'completed', 'interrupted', 'failed', 'unknown']).catch('unknown'),
 });
 const turnStartResponseSchema = z.object({ turn: turnSummarySchema });
 

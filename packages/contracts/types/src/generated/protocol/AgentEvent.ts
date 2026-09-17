@@ -2,10 +2,12 @@
 import type { AgentEventApprovalRequested } from './AgentEventApprovalRequested';
 import type { AgentEventApprovalResolved } from './AgentEventApprovalResolved';
 import type { AgentEventArtifactProduced } from './AgentEventArtifactProduced';
+import type { AgentEventCommandStarted } from './AgentEventCommandStarted';
 import type { AgentEventContextCompacted } from './AgentEventContextCompacted';
 import type { AgentEventDeviceStepRequested } from './AgentEventDeviceStepRequested';
 import type { AgentEventDeviceStepResolved } from './AgentEventDeviceStepResolved';
 import type { AgentEventError } from './AgentEventError';
+import type { AgentEventFileChanged } from './AgentEventFileChanged';
 import type { AgentEventInputRequested } from './AgentEventInputRequested';
 import type { AgentEventInputResolved } from './AgentEventInputResolved';
 import type { AgentEventLifecycle } from './AgentEventLifecycle';
@@ -17,10 +19,12 @@ import type { AgentEventSourceList } from './AgentEventSourceList';
 import type { AgentEventStop } from './AgentEventStop';
 import type { AgentEventTextDelta } from './AgentEventTextDelta';
 import type { AgentEventToolExecutionEnd } from './AgentEventToolExecutionEnd';
+import type { AgentEventToolExecutionQueued } from './AgentEventToolExecutionQueued';
 import type { AgentEventToolExecutionStart } from './AgentEventToolExecutionStart';
 import type { AgentEventToolUseDelta } from './AgentEventToolUseDelta';
 import type { AgentEventToolUseEnd } from './AgentEventToolUseEnd';
 import type { AgentEventToolUseStart } from './AgentEventToolUseStart';
+import type { AgentEventTurnDiff } from './AgentEventTurnDiff';
 import type { AgentEventUsage } from './AgentEventUsage';
 import type { AgentTaskStateChanged } from './AgentTaskStateChanged';
 
@@ -42,7 +46,11 @@ export type AgentEvent =
   | ({ type: 'stop' } & AgentEventStop)
   | ({ type: 'lifecycle' } & AgentEventLifecycle)
   | ({ type: 'progress-update' } & AgentEventProgressUpdate)
+  | ({ type: 'tool-execution-queued' } & AgentEventToolExecutionQueued)
   | ({ type: 'tool-execution-start' } & AgentEventToolExecutionStart)
+  | ({ type: 'command-started' } & AgentEventCommandStarted)
+  | ({ type: 'file-changed' } & AgentEventFileChanged)
+  | ({ type: 'turn-diff' } & AgentEventTurnDiff)
   | ({ type: 'tool-execution-end' } & AgentEventToolExecutionEnd)
   | ({ type: 'source-list' } & AgentEventSourceList)
   | ({ type: 'approval-requested' } & AgentEventApprovalRequested)

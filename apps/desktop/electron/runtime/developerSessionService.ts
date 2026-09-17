@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type {
   DeveloperApprovalAnswer,
+  DeveloperFileChange,
   DeveloperTurnFailure,
   DeveloperHostModel,
   DeveloperModelOption,
@@ -28,6 +29,7 @@ import type {
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
+import { DEVELOPER_FILE_CHANGES } from '@agiworkforce/local-runtime-contract';
 import {
   DEVELOPER_SESSION_PROTOCOL_VERSION as PROTOCOL_VERSION,
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
@@ -234,6 +236,15 @@ function readString(source: Record<string, unknown>, key: string): string | null
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function readNumber(source: Record<string, unknown>, key: string): number | null {
+  const value = source[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function isDeveloperFileChange(value: string | null): value is DeveloperFileChange {
+  return value !== null && (DEVELOPER_FILE_CHANGES as readonly string[]).includes(value);
+}
+
 function closeServer(server: RunningServer, error: Error): void {
   if (server.closed) return;
   server.closed = true;
@@ -305,10 +316,58 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   const event = params['event'];
   if (!threadId || !turnId || !isRecord(event)) return;
 
-  const toolCallId = readString(event, 'toolCallId');
-  const name = readString(event, 'name');
-  if (!toolCallId || !name) return;
+  if (event['type'] === 'turn-diff') {
+    emit(server.root.id, {
+      type: 'turn-diff',
+      threadId,
+      turnId,
+      unifiedDiff: readString(event, 'unifiedDiff') ?? '',
+      paths: Array.isArray(event['paths'])
+        ? event['paths'].filter((path): path is string => typeof path === 'string')
+        : [],
+    });
+    return;
+  }
 
+  const toolCallId = readString(event, 'toolCallId');
+  if (!toolCallId) return;
+
+  if (event['type'] === 'command-started') {
+    const command = readString(event, 'command');
+    if (!command) return;
+    emit(server.root.id, {
+      type: 'command-started',
+      threadId,
+      turnId,
+      toolCallId,
+      command,
+      cwd: readString(event, 'cwd') ?? null,
+    });
+    return;
+  }
+  if (event['type'] === 'file-changed') {
+    const path = readString(event, 'path');
+    const change = readString(event, 'change');
+    if (!path || !isDeveloperFileChange(change)) return;
+    emit(server.root.id, { type: 'file-changed', threadId, turnId, toolCallId, path, change });
+    return;
+  }
+
+  const name = readString(event, 'name');
+  if (!name) return;
+
+  if (event['type'] === 'tool-execution-queued') {
+    emit(server.root.id, {
+      type: 'tool-queued',
+      threadId,
+      turnId,
+      toolCallId,
+      name,
+      position: readNumber(event, 'position') ?? 0,
+      queueDepth: readNumber(event, 'queueDepth') ?? 1,
+    });
+    return;
+  }
   if (event['type'] === 'tool-execution-start') {
     emit(server.root.id, {
       type: 'tool-started',

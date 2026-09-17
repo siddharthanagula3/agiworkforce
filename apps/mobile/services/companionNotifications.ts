@@ -6,6 +6,8 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 interface ControlPayload {
   action: string;
   requestId?: string;
+  rootId?: string;
+  threadId?: string;
   agentId?: string;
   agentName?: string;
   taskName?: string;
@@ -93,6 +95,9 @@ export async function dispatchCompanionNotification(payload: ControlPayload): Pr
     priority: spec.priority,
     agentId: typeof payload.agentId === 'string' ? payload.agentId : undefined,
     route: spec.route,
+    ...(typeof payload.rootId === 'string' ? { rootId: payload.rootId } : {}),
+    ...(typeof payload.threadId === 'string' ? { threadId: payload.threadId } : {}),
+    ...(typeof payload.requestId === 'string' ? { approvalId: payload.requestId } : {}),
   });
 }
 

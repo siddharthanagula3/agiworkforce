@@ -195,6 +195,11 @@ export async function scheduleLocalNotification(opts: {
   priority?: NotificationPriority;
   agentId?: string;
   route?: string;
+  /** The session a remote-code approval belongs to, so the tap opens it. */
+  rootId?: string;
+  threadId?: string;
+  /** The one approval this notification is about. */
+  approvalId?: string;
 }): Promise<void> {
   const priority = opts.priority ?? inferPriority(opts.type);
 
@@ -203,6 +208,9 @@ export async function scheduleLocalNotification(opts: {
     priority,
     agentId: opts.agentId,
     route: opts.route,
+    ...(opts.rootId ? { rootId: opts.rootId } : {}),
+    ...(opts.threadId ? { threadId: opts.threadId } : {}),
+    ...(opts.approvalId ? { approvalId: opts.approvalId } : {}),
   };
 
   const content: Notifications.NotificationContentInput = {
@@ -272,6 +280,40 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
   }
 }
 
+/**
+ * Where an approval notification opens.
+ *
+ * A tap on "approval required" that lands on the list of every session leaves
+ * the reader to find the one thing they were asked about, which is the whole
+ * reason the notification woke them. The payload names the session it came
+ * from, so the tap goes there and carries the approval's own id so the screen
+ * can put it in front.
+ */
+function approvalRoute(data: NotificationData): Parameters<typeof router.push>[0] {
+  const approvalId = readIdentifier(data, 'approvalId') ?? readIdentifier(data, 'requestId');
+  const threadId = readIdentifier(data, 'threadId');
+  const rootId = readIdentifier(data, 'rootId');
+  if (threadId && rootId) {
+    return {
+      pathname: '/(app)/companion/code/[threadId]' as const,
+      params: { threadId, rootId, ...(approvalId ? { approvalId } : {}) },
+    };
+  }
+  const agentId = readIdentifier(data, 'agentId');
+  if (agentId) {
+    return {
+      pathname: '/(app)/companion/agent/[id]' as const,
+      params: { id: agentId, ...(approvalId ? { approvalId } : {}) },
+    };
+  }
+  return { pathname: '/(app)/companion' as const };
+}
+
+function readIdentifier(data: NotificationData, key: string): string | null {
+  const value = data[key];
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
 function handleNotificationResponse(response: Notifications.NotificationResponse): void {
   const data = response.notification.request.content.data as NotificationData | undefined;
   if (!data) return;
@@ -316,7 +358,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
 
     case 'agent_approval_needed':
     case 'approval_pending_escalation':
-      safeNavigate({ pathname: '/(app)/companion' as const });
+      safeNavigate(approvalRoute(data) as Parameters<typeof router.push>[0]);
       break;
 
     case 'task_completed':

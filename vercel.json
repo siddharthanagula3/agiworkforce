@@ -71,6 +71,14 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/cron/evaluate-slo-burn",
+      "schedule": "5,35 * * * *"
+    },
+    {
+      "path": "/api/cron/replicate-object-backups",
+      "schedule": "25 * * * *"
+    },
+    {
       "path": "/api/cron/expire-organization-invitations",
       "schedule": "0 5 * * *"
     },

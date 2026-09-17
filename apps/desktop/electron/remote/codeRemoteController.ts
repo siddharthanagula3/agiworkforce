@@ -395,6 +395,15 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         await sendEvent(state, { type: 'approval-requested', ...approval });
         return;
       }
+      case 'turn-diff': {
+        // The runtime now states what the turn changed, so the phone stops
+        // depending on a diff scraped out of a tool's own text output.
+        for (const diff of splitDiffByFile(event.unifiedDiff)) {
+          state.toolDiffs.set(diff.path, diff);
+          await sendEvent(state, { type: 'diff', diff });
+        }
+        return;
+      }
       case 'approval-answered':
         state.pendingApprovals.delete(event.requestId);
         await sendEvent(state, {

@@ -146,6 +146,7 @@ export type {
   AgentEventApprovalDecision,
   AgentEventApprovalRiskLevel,
   AgentEventEnvelope,
+  AgentEventFileChangeKind,
   AgentEventSource,
   AgentEventStopReason,
   AgentEventToolCategory,

@@ -55,7 +55,7 @@ use crate::task_state::AgentTaskStateChanged;
 /// backward-incompatible change to the envelope or [`AgentEvent`] shape,
 /// mirroring `developer_session::DEVELOPER_SESSION_PROTOCOL_VERSION`'s
 /// precedent for a crate-level protocol version constant.
-pub const AGENT_EVENT_SCHEMA_VERSION: u32 = 4;
+pub const AGENT_EVENT_SCHEMA_VERSION: u32 = 5;
 
 /// The one envelope web SSE chunks, app-server `turn/*` notifications, and
 /// desktop stream events all translate into. Mirrors this crate's existing
@@ -184,11 +184,30 @@ pub enum AgentEvent {
     /// deliberately authored progress summary suitable for an inline,
     /// expandable activity timeline.
     ProgressUpdate(AgentEventProgressUpdate),
+    /// One tool call of an agentic iteration was accepted into the dispatch
+    /// queue and has not begun. Distinct from
+    /// [`AgentEvent::ToolExecutionStart`], which already implies dispatch: an
+    /// iteration that returns several calls runs them in a known order, and
+    /// without this a surface cannot show what is waiting behind the call it
+    /// is watching.
+    ToolExecutionQueued(AgentEventToolExecutionQueued),
     /// Caller-managed tool execution began after the model's arguments were
     /// assembled (and, when required, approved). Unlike `ToolUseStart`, which
     /// describes the model constructing a tool call, this event represents
     /// the real execution lifecycle shown to the user.
     ToolExecutionStart(AgentEventToolExecutionStart),
+    /// A shell command began executing on the user's machine. Carried
+    /// separately from the generic tool row because a command is the one tool
+    /// input a surface renders as a command line, and because its working
+    /// directory decides what the command could reach.
+    CommandStarted(AgentEventCommandStarted),
+    /// One file on disk was created, modified or deleted by a tool in this
+    /// turn.
+    FileChanged(AgentEventFileChanged),
+    /// The unified diff of everything this turn changed on disk, emitted once
+    /// the turn settles, so a surface can render the whole change without
+    /// pulling it back over a separate request.
+    TurnDiff(AgentEventTurnDiff),
     /// Caller-managed tool execution ended with its structured result.
     ToolExecutionEnd(AgentEventToolExecutionEnd),
     /// Web or document sources discovered by a tool invocation.
@@ -465,6 +484,59 @@ pub enum AgentEventToolCategory {
     ComputerUse,
     Artifact,
     Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventToolExecutionQueued {
+    pub tool_call_id: String,
+    pub name: String,
+    pub category: AgentEventToolCategory,
+    /// Zero-based place of this call in the iteration's dispatch order.
+    #[ts(type = "number")]
+    pub position: u32,
+    /// How many calls this iteration queued in total.
+    #[ts(type = "number")]
+    pub queue_depth: u32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentEventFileChangeKind {
+    Created,
+    Modified,
+    Deleted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventFileChanged {
+    pub tool_call_id: String,
+    pub path: String,
+    pub change: AgentEventFileChangeKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventCommandStarted {
+    pub tool_call_id: String,
+    /// The command line as it will run, already redacted by the emitter.
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventTurnDiff {
+    pub unified_diff: String,
+    /// Paths the diff covers, so a surface can list them without parsing it.
+    pub paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]

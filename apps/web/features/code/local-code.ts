@@ -1,6 +1,8 @@
 import {
+  DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
+  type DeveloperFileChange,
   type DeveloperRuntimeModels,
   type DeveloperSessionGroup,
   type DeveloperTurnFailure,
@@ -336,12 +338,30 @@ export function localSessionContext(
     .join(' · ');
 }
 
+export interface LocalFileChange {
+  path: string;
+  change: DeveloperFileChange;
+}
+
+export const LOCAL_TOOL_STATES = ['queued', 'running', 'finished'] as const;
+
+export type LocalToolState = (typeof LOCAL_TOOL_STATES)[number];
+
 export interface LocalToolRun {
   toolCallId: string;
   name: string;
   summary: string;
   output: string;
   isError: boolean;
+  state: LocalToolState;
+  /** The command line, when this call is a shell command the runtime named. */
+  command: string | null;
+  files: LocalFileChange[];
+}
+
+export interface LocalTurnDiff {
+  unifiedDiff: string;
+  paths: string[];
 }
 
 export interface LocalTurn {
@@ -349,6 +369,7 @@ export interface LocalTurn {
   prompt: string;
   reply: string;
   tools: LocalToolRun[];
+  diff: LocalTurnDiff | null;
   outcome: DeveloperTurnOutcome | null;
   failure: DeveloperTurnFailure | null;
 }
@@ -358,9 +379,25 @@ export const EMPTY_LOCAL_TURN: LocalTurn = {
   prompt: '',
   reply: '',
   tools: [],
+  diff: null,
   outcome: null,
   failure: null,
 };
+
+/**
+ * What a step row says it is doing. A queued call has not started, so it must
+ * not read as work in flight; a command names itself, because the command line
+ * is the only thing that says what it will do.
+ */
+export function localToolLabel(tool: LocalToolRun): string {
+  if (tool.state === 'queued') return `Queued · ${tool.summary}`;
+  return tool.command ?? tool.summary;
+}
+
+/** The files one call wrote, as the step row lists them under its output. */
+export function localToolFileLines(tool: LocalToolRun): string[] {
+  return tool.files.map((file) => `${DEVELOPER_FILE_CHANGE_LABELS[file.change]} ${file.path}`);
+}
 
 const OUTCOME_STOP_REASONS: Record<DeveloperTurnOutcome, CloudCodeAgentStopReason> = {
   completed: 'done',
@@ -380,10 +417,25 @@ function toSteps(tools: LocalToolRun[]): CloudCodeAgentStep[] {
   return tools.map((tool, index) => ({
     index,
     toolName: tool.name,
-    label: tool.summary,
-    output: tool.output,
+    label: localToolLabel(tool),
+    output: [tool.output, ...localToolFileLines(tool)].filter(Boolean).join('\n'),
     isError: tool.isError,
   }));
+}
+
+/**
+ * The turn's own diff as one final step. The runtime sends it once the turn
+ * settles, so it reads as what the turn changed rather than as another tool.
+ */
+function diffStep(diff: LocalTurnDiff, index: number): CloudCodeAgentStep {
+  const count = diff.paths.length;
+  return {
+    index,
+    toolName: 'turn_diff',
+    label: `Changed ${count} ${count === 1 ? 'file' : 'files'}`,
+    output: diff.unifiedDiff,
+    isError: false,
+  };
 }
 
 /**
@@ -418,8 +470,10 @@ export function localTranscriptItems(
   if (turn.prompt !== '') {
     items.push({ kind: 'task', id: 'live-task', at: '', text: turn.prompt });
   }
-  if (turn.tools.length > 0) {
-    items.push({ kind: 'steps', id: 'live-steps', at: '', steps: toSteps(turn.tools) });
+  const steps = toSteps(turn.tools);
+  if (turn.diff) steps.push(diffStep(turn.diff, steps.length));
+  if (steps.length > 0) {
+    items.push({ kind: 'steps', id: 'live-steps', at: '', steps });
   }
   const said = turn.failure === null ? null : localTurnFailureSentence(turn.failure);
   const reply = [turn.reply, said].filter(Boolean).join('\n\n');

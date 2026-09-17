@@ -12,10 +12,20 @@ use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
 
 const PATH_ARGUMENT_TOOLS: [&str; 4] = ["write_file", "edit_file", "multiedit", "notebook_edit"];
 
+/// A file larger than this is named in the turn diff but not diffed: holding
+/// two copies of every file a long turn touches is what would make this
+/// unaffordable, and a surface renders a header it can act on either way.
+const MAX_DIFFED_FILE_BYTES: u64 = 512 * 1024;
+
+/// How much unified diff one turn may carry. Past it the diff is truncated and
+/// the remaining paths still appear in `paths`.
+const MAX_TURN_DIFF_BYTES: usize = 256 * 1024;
+
 #[derive(Debug)]
 struct PendingWrite {
     tool: String,
     targets: Vec<(PathBuf, bool)>,
+    before: HashMap<PathBuf, String>,
 }
 
 /// What a session did that its transcript does not say on its own: the
@@ -26,6 +36,7 @@ pub struct SessionActivity {
     approvals: Vec<ManagedSessionApproval>,
     file_changes: Vec<ManagedSessionFileChange>,
     pending_writes: HashMap<String, PendingWrite>,
+    turn_diff: Vec<(PathBuf, String)>,
 }
 
 pub type SharedSessionActivity = Arc<Mutex<SessionActivity>>;
@@ -36,6 +47,7 @@ impl SessionActivity {
             approvals: session.approvals.clone(),
             file_changes: session.file_changes.clone(),
             pending_writes: HashMap::new(),
+            turn_diff: Vec::new(),
         }
     }
 
@@ -46,6 +58,28 @@ impl SessionActivity {
 
     pub fn file_changes(&self) -> &[ManagedSessionFileChange] {
         &self.file_changes
+    }
+
+    /// The unified diff of everything written since the last call, and the
+    /// paths it covers. Taking it clears it, so one turn's diff is never
+    /// reported again by the next.
+    pub fn take_turn_diff(&mut self) -> Option<(String, Vec<String>)> {
+        if self.turn_diff.is_empty() {
+            return None;
+        }
+        let mut unified = String::new();
+        let mut paths = Vec::new();
+        for (path, body) in std::mem::take(&mut self.turn_diff) {
+            let display = path.display().to_string();
+            paths.push(display.clone());
+            if unified.len() >= MAX_TURN_DIFF_BYTES {
+                continue;
+            }
+            unified.push_str(&format!("--- a/{display}\n+++ b/{display}\n"));
+            unified.push_str(body.as_str());
+            unified.push('\n');
+        }
+        Some((unified, paths))
     }
 
     pub fn record_approval(
@@ -91,11 +125,21 @@ impl SessionActivity {
         if targets.is_empty() {
             return;
         }
+        let mut before = HashMap::new();
+        for (path, existed) in &targets {
+            if !existed {
+                continue;
+            }
+            if let Some(text) = readable_text(path) {
+                before.insert(path.clone(), text);
+            }
+        }
         self.pending_writes.insert(
             call_id.to_string(),
             PendingWrite {
                 tool: tool.to_string(),
                 targets,
+                before,
             },
         );
     }
@@ -113,6 +157,15 @@ impl SessionActivity {
         for (path, existed) in pending.targets {
             if !path.exists() {
                 continue;
+            }
+            if let Some(after) = readable_text(&path) {
+                let before = pending.before.get(&path).cloned().unwrap_or_default();
+                if before != after {
+                    self.turn_diff.push((
+                        path.clone(),
+                        crate::tools::generate_simple_diff(&before, &after),
+                    ));
+                }
             }
             let change = ManagedSessionFileChange {
                 path,
@@ -160,6 +213,16 @@ pub fn recording_approval_callback(
             decision
         })
     })
+}
+
+/// The file's text, when it is small enough to hold two copies of and is not
+/// binary. `None` means the turn diff names the path without diffing it.
+fn readable_text(path: &Path) -> Option<String> {
+    let metadata = std::fs::metadata(path).ok()?;
+    if !metadata.is_file() || metadata.len() > MAX_DIFFED_FILE_BYTES {
+        return None;
+    }
+    std::fs::read_to_string(path).ok()
 }
 
 fn approval_outcome(decision: ApprovalDecision) -> ManagedSessionApprovalOutcome {
@@ -258,6 +321,58 @@ mod tests {
         activity.write_to(&mut session);
         assert_eq!(session.file_changes.len(), 2);
         assert_eq!(session.file_changes[0].tool, "write_file");
+    }
+
+    #[test]
+    fn a_turns_diff_covers_every_file_it_wrote_and_is_reported_once() {
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join("kept.rs"), "one\ntwo\n").unwrap();
+        let mut activity = SessionActivity::default();
+
+        activity.tool_started(
+            "call-1",
+            "edit_file",
+            &serde_json::json!({ "path": "kept.rs" }),
+            Some(workspace.path()),
+        );
+        activity.tool_started(
+            "call-2",
+            "write_file",
+            &serde_json::json!({ "path": "fresh.rs" }),
+            Some(workspace.path()),
+        );
+        std::fs::write(workspace.path().join("kept.rs"), "one\nthree\n").unwrap();
+        std::fs::write(workspace.path().join("fresh.rs"), "new\n").unwrap();
+        activity.tool_finished("call-1", true);
+        activity.tool_finished("call-2", true);
+
+        let (diff, paths) = activity.take_turn_diff().expect("the turn wrote files");
+        assert_eq!(paths.len(), 2);
+        assert!(diff.contains("-two"));
+        assert!(diff.contains("+three"));
+        assert!(diff.contains("+new"));
+        assert!(diff.contains("+++ b/"));
+        assert!(
+            activity.take_turn_diff().is_none(),
+            "the next turn must not be handed this turn's diff"
+        );
+    }
+
+    #[test]
+    fn a_write_that_changes_nothing_contributes_no_diff() {
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join("same.rs"), "unchanged\n").unwrap();
+        let mut activity = SessionActivity::default();
+
+        activity.tool_started(
+            "call-1",
+            "write_file",
+            &serde_json::json!({ "path": "same.rs" }),
+            Some(workspace.path()),
+        );
+        activity.tool_finished("call-1", true);
+
+        assert!(activity.take_turn_diff().is_none());
     }
 
     #[test]

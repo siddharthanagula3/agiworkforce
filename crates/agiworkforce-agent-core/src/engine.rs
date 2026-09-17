@@ -133,6 +133,21 @@ pub async fn run_turn(
             }
         }
 
+        let queue_depth = task_calls.len() + concurrent_calls.len() + other_calls.len();
+        for (position, call) in task_calls
+            .iter()
+            .chain(concurrent_calls.iter())
+            .chain(other_calls.iter())
+            .enumerate()
+        {
+            host.on_event(&TurnEvent::ToolQueued {
+                id: call.id.clone(),
+                name: call.name.clone(),
+                position,
+                queue_depth,
+            });
+        }
+
         let mut result_blocks: Vec<ResultBlock> = Vec::new();
 
         // Subagent `task` batch, spawned/awaited/collected entirely host-side.

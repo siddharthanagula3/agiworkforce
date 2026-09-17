@@ -45,6 +45,8 @@ export type {
 } from './protocol';
 
 export {
+  DEVELOPER_FILE_CHANGE_LABELS,
+  DEVELOPER_FILE_CHANGES,
   DEVELOPER_SESSION_COMMANDS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
@@ -53,6 +55,7 @@ export {
 } from './developer-sessions';
 export type {
   DeveloperApprovalAnswer,
+  DeveloperFileChange,
   DeveloperHostModel,
   DeveloperModelOption,
   DeveloperModelUnreachable,

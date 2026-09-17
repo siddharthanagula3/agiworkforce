@@ -69,7 +69,11 @@ function isDisplaySafeActivityEvent(envelope: AgentEventEnvelope): boolean {
   switch (envelope.event.type) {
     case 'lifecycle':
     case 'progress-update':
+    case 'tool-execution-queued':
     case 'tool-execution-start':
+    case 'command-started':
+    case 'file-changed':
+    case 'turn-diff':
     case 'tool-execution-end':
     case 'source-list':
     case 'approval-requested':

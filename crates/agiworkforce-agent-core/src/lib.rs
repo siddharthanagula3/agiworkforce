@@ -237,6 +237,15 @@ pub enum TurnEvent {
     },
     /// A parallel read-only batch of the named tools is starting.
     ParallelBatchStarted { names: Vec<String> },
+    /// One call of this iteration was accepted into the dispatch queue and has
+    /// not started. Emitted for every call before any of them run, in the
+    /// order the engine will dispatch them.
+    ToolQueued {
+        id: String,
+        name: String,
+        position: usize,
+        queue_depth: usize,
+    },
     /// A tool is about to execute (post pre-checks, pre-execution).
     ToolStarted {
         id: String,

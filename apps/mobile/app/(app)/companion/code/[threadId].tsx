@@ -13,7 +13,11 @@ import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 export default function CodeSessionScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  const { threadId, rootId } = useLocalSearchParams<{ threadId: string; rootId: string }>();
+  const { threadId, rootId, approvalId } = useLocalSearchParams<{
+    threadId: string;
+    rootId: string;
+    approvalId?: string;
+  }>();
   const connected = useConnectionStore((state) => state.status === 'connected');
 
   const handleBack = useCallback(() => {
@@ -39,7 +43,11 @@ export default function CodeSessionScreen() {
         </Text>
       </View>
       {connected && threadId && rootId ? (
-        <CodeSessionView rootId={rootId} threadId={threadId} />
+        <CodeSessionView
+          rootId={rootId}
+          threadId={threadId}
+          {...(approvalId ? { focusApprovalId: approvalId } : {})}
+        />
       ) : (
         <View className="flex-1 items-center justify-center px-8">
           <Text className="text-center text-sm text-white/50">

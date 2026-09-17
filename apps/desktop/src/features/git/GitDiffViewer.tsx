@@ -28,6 +28,26 @@ interface DiffLine {
   lineNumber?: number;
 }
 
+/**
+ * What a screen reader is told about one line. Colour and a `+` in a column
+ * the eye reads as a gutter are the only thing that distinguishes an added
+ * line from a removed one on screen, and neither reaches a screen reader, so
+ * each line states its own change in words.
+ */
+function diffLineAnnouncement(line: DiffLine): string {
+  const at = line.lineNumber === undefined ? '' : ` ${line.lineNumber}`;
+  switch (line.type) {
+    case 'add':
+      return `Added line${at}`;
+    case 'remove':
+      return 'Removed line';
+    case 'header':
+      return 'Hunk header';
+    default:
+      return `Unchanged line${at}`;
+  }
+}
+
 function parseDiffContent(diffContent: string): DiffLine[] {
   const lines: DiffLine[] = [];
   const rawLines = diffContent.split('\n');
@@ -209,13 +229,20 @@ export function GitDiffViewer({
               <div key={diffIndex} className="pb-4">
                 {/* File Header */}
                 <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 sticky top-0 z-10">
-                  <FileCode className="h-4 w-4 text-muted-foreground" />
+                  <FileCode aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-mono font-medium truncate flex-1">
                     {diff.file_path}
                   </span>
                   <div className="flex items-center gap-2 text-xs shrink-0">
-                    <span className="text-green-500">+{diff.additions}</span>
-                    <span className="text-red-500">-{diff.deletions}</span>
+                    <span className="text-green-500" aria-hidden="true">
+                      +{diff.additions}
+                    </span>
+                    <span className="text-red-500" aria-hidden="true">
+                      -{diff.deletions}
+                    </span>
+                    <span className="sr-only">
+                      {diff.additions} added, {diff.deletions} removed
+                    </span>
                   </div>
                 </div>
 
@@ -231,8 +258,11 @@ export function GitDiffViewer({
                         line.type === 'header' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
                       )}
                     >
+                      <span className="sr-only">{diffLineAnnouncement(line)}</span>
+
                       {/* Line Number */}
                       <div
+                        aria-hidden="true"
                         className={cn(
                           'w-12 shrink-0 text-right px-2 py-0.5 select-none',
                           'text-muted-foreground border-r border-border/50',
@@ -244,6 +274,7 @@ export function GitDiffViewer({
 
                       {/* Change Indicator */}
                       <div
+                        aria-hidden="true"
                         className={cn(
                           'w-6 shrink-0 text-center py-0.5 select-none',
                           line.type === 'add' && 'text-green-600 dark:text-green-400',
