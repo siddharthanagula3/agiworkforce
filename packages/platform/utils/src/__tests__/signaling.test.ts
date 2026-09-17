@@ -120,3 +120,25 @@ describe('SignalingClient, server-sent reconnect messages', () => {
     client.close();
   });
 });
+
+describe('SignalingClient, host-supplied socket', () => {
+  it('opens the socket the host builds, so a non-browser host can present its origin', () => {
+    const built: string[] = [];
+    new SignalingClient({
+      wsUrl: 'wss://relay.example/ws',
+      code: 'ABCD1234WXYZ',
+      pairToken: 'token',
+      role: 'desktop',
+      onEvent: () => undefined,
+      createSocket: (url) => {
+        built.push(url);
+        return new FakeWebSocket(url) as unknown as WebSocket;
+      },
+    });
+
+    expect(built).toEqual(['wss://relay.example/ws']);
+    const socket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1]!;
+    socket.onopen?.();
+    expect(JSON.parse(socket.sent[0]!)).toMatchObject({ type: 'register', role: 'desktop' });
+  });
+});

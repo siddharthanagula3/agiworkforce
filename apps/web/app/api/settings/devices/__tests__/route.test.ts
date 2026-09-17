@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 const {
+  mockGetSession,
+  mockRevokeSession,
   mockAuth,
   mockGetUserScopedDb,
   mockQuery,
@@ -11,6 +13,8 @@ const {
   mockAudit,
   mockNotifyDisconnected,
 } = vi.hoisted(() => ({
+  mockGetSession: vi.fn(),
+  mockRevokeSession: vi.fn(async () => undefined),
   mockNotifyDisconnected: vi.fn(async () => undefined),
   mockAuth: vi.fn(),
   mockGetUserScopedDb: vi.fn(),
@@ -29,6 +33,12 @@ vi.mock('@/lib/services/account-activity-notifications', () => ({
   notifyDeviceSignInApproved: vi.fn(async () => undefined),
 }));
 
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityProvider: () => ({ getSession: mockGetSession, revokeSession: mockRevokeSession }),
+  getRequestIdentity: vi.fn(async () => ({ sessionId: 'sess_current' })),
+  verifyIdentitySessionToken: vi.fn(async () => null),
+}));
+
 vi.mock('@clerk/nextjs/server', () => ({ auth: (...a: unknown[]) => mockAuth(...a) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -42,7 +52,7 @@ vi.mock('@/lib/security-audit', () => ({
 }));
 
 import { GET } from '../route';
-import { DELETE } from '../[deviceId]/route';
+import { DELETE, PATCH } from '../[deviceId]/route';
 
 const DEVICE_ID = '11111111-2222-4333-8444-555555555555';
 
@@ -54,8 +64,14 @@ function params(deviceId: string) {
   return { params: Promise.resolve({ deviceId }) };
 }
 
+function legacyOnly(rows: unknown[]) {
+  return async (sql: string) => (sql.includes('device_registrations') ? [] : rows);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockQuery.mockReset();
+  mockQuery.mockResolvedValue([]);
   mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: 'sess_current' });
   mockGetUserScopedDb.mockResolvedValue({
     db: { query: mockQuery, execute: mockExecute, transaction: mockTransaction },
@@ -66,28 +82,30 @@ beforeEach(() => {
 
 describe('listing linked devices', () => {
   it('scopes the query to the caller and reports whether a credential is still live', async () => {
-    mockQuery.mockResolvedValue([
-      {
-        device_id: DEVICE_ID,
-        kind: 'desktop',
-        name: 'Work laptop',
-        platform: 'macos',
-        version: '1.4.0',
-        last_seen_at: '2026-08-19T10:00:00.000Z',
-        registered_at: '2026-06-01T10:00:00.000Z',
-        live_credentials: 2,
-      },
-      {
-        device_id: '99999999-2222-4333-8444-555555555555',
-        kind: 'mobile',
-        name: null,
-        platform: 'ios',
-        version: null,
-        last_seen_at: null,
-        registered_at: '2026-05-01T10:00:00.000Z',
-        live_credentials: 0,
-      },
-    ]);
+    mockQuery.mockImplementation(
+      legacyOnly([
+        {
+          device_id: DEVICE_ID,
+          kind: 'desktop',
+          name: 'Work laptop',
+          platform: 'macos',
+          version: '1.4.0',
+          last_seen_at: '2026-08-19T10:00:00.000Z',
+          registered_at: '2026-06-01T10:00:00.000Z',
+          live_credentials: 2,
+        },
+        {
+          device_id: '99999999-2222-4333-8444-555555555555',
+          kind: 'mobile',
+          name: null,
+          platform: 'ios',
+          version: null,
+          last_seen_at: null,
+          registered_at: '2026-05-01T10:00:00.000Z',
+          live_credentials: 0,
+        },
+      ]),
+    );
 
     const response = await GET(req());
     expect(response.status).toBe(200);
@@ -233,5 +251,228 @@ describe('unlinking a device', () => {
       expect.objectContaining({ query: mockQuery }),
       { userId: 'user-1', deviceId: DEVICE_ID, kind: 'desktop', name: 'Laptop' },
     );
+  });
+});
+
+const REGISTERED_ID = '22222222-3333-4444-8555-666666666666';
+
+function registryRow(overrides: Record<string, unknown> = {}) {
+  return {
+    device_id: REGISTERED_ID,
+    surface: 'cli',
+    name: 'Build box',
+    os: 'linux',
+    os_version: '6.8',
+    architecture: 'x64',
+    app_version: '0.9.2',
+    shell: null,
+    organization_id: '33333333-4444-4555-8666-777777777777',
+    browser_available: false,
+    computer_use_available: false,
+    local_models_available: true,
+    local_mcp_available: true,
+    remote_enabled: false,
+    last_seen_at: new Date().toISOString(),
+    created_at: '2026-09-01T10:00:00.000Z',
+    live_credential: true,
+    ...overrides,
+  };
+}
+
+describe('the device registry', () => {
+  it('lists every surface with workspace, architecture, capabilities and presence', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('device_registrations')
+        ? [
+            registryRow(),
+            registryRow({
+              device_id: '44444444-3333-4444-8555-666666666666',
+              surface: 'desktop',
+              os: 'macos',
+              architecture: 'arm64',
+              shell: 'electron',
+              remote_enabled: true,
+              last_seen_at: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+            }),
+          ]
+        : [],
+    );
+
+    const response = await GET(req());
+    const body = (await response.json()) as { devices: Array<Record<string, unknown>> };
+
+    expect(body.devices[0]).toMatchObject({
+      id: REGISTERED_ID,
+      kind: 'cli',
+      platform: 'linux',
+      architecture: 'x64',
+      version: '0.9.2',
+      workspaceId: '33333333-4444-4555-8666-777777777777',
+      presence: 'online',
+      hasLiveCredential: true,
+      capabilities: {
+        browser: false,
+        computerUse: false,
+        localModels: true,
+        localMcp: true,
+        remoteControl: false,
+      },
+    });
+    expect(body.devices[1]).toMatchObject({
+      kind: 'desktop',
+      shell: 'electron',
+      presence: 'sleeping',
+      capabilities: expect.objectContaining({ remoteControl: true }),
+    });
+    const registrySql = mockQuery.mock.calls
+      .map((call) => call[0] as string)
+      .find((sql) => sql.includes('device_registrations'));
+    expect(registrySql).toContain('r.user_id = $1');
+  });
+
+  it('still lists legacy registrations while migration 0207 is pending', async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('device_registrations')) {
+        throw Object.assign(new Error('relation "device_registrations" does not exist'), {
+          code: '42P01',
+        });
+      }
+      return [
+        {
+          device_id: DEVICE_ID,
+          kind: 'mobile',
+          name: null,
+          platform: 'ios',
+          version: null,
+          last_seen_at: null,
+          registered_at: '2026-05-01T10:00:00.000Z',
+          live_credentials: 0,
+        },
+      ];
+    });
+
+    const response = await GET(req());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { devices: Array<Record<string, unknown>> };
+    expect(body.devices).toHaveLength(1);
+    expect(body.devices[0]).toMatchObject({ kind: 'mobile', presence: null, capabilities: null });
+  });
+
+  it('revokes the credential family and identity session the device holds', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from device_registrations')
+        ? [
+            {
+              kind: 'mobile',
+              name: 'Phone',
+              install_id: '55555555-3333-4444-8555-666666666666',
+              credential_family_id: 'family-9',
+              identity_session_id: 'sess_phone',
+            },
+          ]
+        : [],
+    );
+    const statements: Array<{ sql: string; values: unknown[] }> = [];
+    const txQuery = vi.fn(async (sql: string, values: unknown[]) => {
+      statements.push({ sql, values });
+      return sql.includes('update device_refresh_tokens') ? [{ id: 'tok-1' }] : [];
+    });
+    mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ query: txQuery, execute: mockExecute }),
+    );
+    mockGetSession.mockResolvedValue({ id: 'sess_phone', userId: 'user-1', status: 'active' });
+
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/settings/devices/x', { method: 'DELETE' }) as never,
+      params(REGISTERED_ID),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ revokedCredentials: 2 });
+    const revoke = statements.find((entry) => entry.sql.includes('update device_refresh_tokens'));
+    expect(revoke?.sql).toContain('family_id = $3');
+    expect(revoke?.values).toEqual([REGISTERED_ID, 'user-1', 'family-9']);
+    expect(mockRevokeSession).toHaveBeenCalledWith('sess_phone');
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('delete from device_registrations'),
+      [REGISTERED_ID, 'user-1'],
+    );
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('delete from mobile_devices where id::text = $1'),
+      ['55555555-3333-4444-8555-666666666666', 'user-1'],
+    );
+  });
+
+  it('never revokes an identity session that belongs to someone else', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from device_registrations')
+        ? [
+            {
+              kind: 'desktop',
+              name: 'Laptop',
+              install_id: 'install-abcdef',
+              credential_family_id: null,
+              identity_session_id: 'sess_other',
+            },
+          ]
+        : [],
+    );
+    mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ query: vi.fn(async () => []), execute: mockExecute }),
+    );
+    mockGetSession.mockResolvedValue({ id: 'sess_other', userId: 'user-2', status: 'active' });
+
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/settings/devices/x', { method: 'DELETE' }) as never,
+      params(REGISTERED_ID),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockRevokeSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('renaming a device', () => {
+  function patch(body: unknown) {
+    return new Request('http://localhost:3000/api/settings/devices/x', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }) as never;
+  }
+
+  it('renames a registered device inside the caller scope', async () => {
+    mockExecute.mockResolvedValueOnce(1);
+
+    const response = await PATCH(patch({ name: '  Studio Mac  ' }), params(REGISTERED_ID));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ id: REGISTERED_ID, name: 'Studio Mac' });
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('update device_registrations set name = $3'),
+      [REGISTERED_ID, 'user-1', 'Studio Mac'],
+    );
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'device_renamed' }),
+    );
+  });
+
+  it('falls back to the legacy tables and 404s a device the caller does not own', async () => {
+    mockExecute.mockResolvedValue(0);
+
+    const response = await PATCH(patch({ name: 'Mine now' }), params(REGISTERED_ID));
+
+    expect(response.status).toBe(404);
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('update mobile_devices set name'),
+      [REGISTERED_ID, 'user-1', 'Mine now'],
+    );
+    mockExecute.mockResolvedValue(1);
+  });
+
+  it('refuses an empty or oversized name', async () => {
+    expect((await PATCH(patch({ name: '   ' }), params(REGISTERED_ID))).status).toBe(400);
+    expect((await PATCH(patch({ name: 'x'.repeat(121) }), params(REGISTERED_ID))).status).toBe(400);
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 });

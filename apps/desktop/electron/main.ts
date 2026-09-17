@@ -42,6 +42,11 @@ import {
   configureDeveloperSessions,
   stopAllDeveloperRuntimes,
 } from './runtime/developerSessionService';
+import {
+  configureRemoteControl,
+  relayDeveloperSessionEvent,
+  stopRemoteControl,
+} from './remote/remoteControlService';
 import { approveDeviceCode, readShellIdentity } from './shellIdentity';
 import {
   handBackComputerUse,
@@ -991,8 +996,12 @@ if (!hasSingleInstanceLock) {
     applyLaunchAtLogin();
     applyGarnishShortcuts();
 
+    configureRemoteControl((state) => sendRuntimeEvent({ kind: 'remote-control-changed', state }));
     configureDeveloperSessions({
-      emit: (rootId, event) => sendRuntimeEvent({ kind: 'developer-session', rootId, event }),
+      emit: (rootId, event) => {
+        sendRuntimeEvent({ kind: 'developer-session', rootId, event });
+        relayDeveloperSessionEvent(rootId, event);
+      },
       resolveBinary: () => getPreferences().cliPath,
       accountBridge: { readShellIdentity, approveDeviceCode },
     });
@@ -1008,6 +1017,7 @@ if (!hasSingleInstanceLock) {
   app.on('will-quit', () => {
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
+    stopRemoteControl();
     stopAllDeveloperRuntimes();
     stopComputerUseHelper();
     void stopBrowserBridge();

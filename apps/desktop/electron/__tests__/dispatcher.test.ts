@@ -38,7 +38,7 @@ const writeLocalModelSettings = vi.fn();
 const send = vi.fn();
 
 vi.mock('electron', () => ({
-  app: { getPath: () => '/tmp' },
+  app: { getPath: () => '/tmp', getVersion: () => '1.8.0' },
   dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
   shell: { openPath: vi.fn() },
 }));
@@ -115,6 +115,20 @@ vi.mock('../runtime/localModelSettingsStore', () => ({
 }));
 
 vi.mock('../shellIdentity', () => ({ reportShellIdentity }));
+vi.mock('../runtime/deviceIdentity', () => ({
+  deviceIdentity: () => ({ deviceId: 'install-0000-1111', deviceName: 'Studio Mac' }),
+}));
+vi.mock('../browser/bridgeServer', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  pairingState: () => ({ paired: true }),
+}));
+const startRemoteControl = vi.fn((args: Record<string, unknown>) => ({ status: 'waiting', args }));
+vi.mock('../remote/remoteControlService', () => ({
+  remoteControlAvailable: () => true,
+  remoteControlState: () => ({ status: 'idle' }),
+  startRemoteControl,
+  stopRemoteControl: () => ({ status: 'idle' }),
+}));
 vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   syncDeveloperAccounts,
@@ -533,5 +547,35 @@ describe('screen control across displays and takeover', () => {
     const result = await dispatch(window, 'computer_hand_back', {});
 
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('device registry and remote control commands', () => {
+  it('describes this install for the registry without claiming what this shell refuses', async () => {
+    const response = await dispatch(window, 'device_registry_profile', {});
+    expect(response).toMatchObject({
+      ok: true,
+      value: {
+        installId: 'install-0000-1111',
+        name: 'Studio Mac',
+        platform: process.platform,
+        architecture: process.arch,
+        appVersion: '1.8.0',
+        capabilities: {
+          browser: true,
+          computerUse: true,
+          localModels: false,
+          localMcp: false,
+          remoteControl: true,
+        },
+      },
+    });
+  });
+
+  it('hands pairing details to the remote control host unchanged', async () => {
+    const args = { code: 'ABCD1234WXYZ', wsUrl: 'wss://relay', pairToken: 't', expiresAt: 1 };
+    const response = await dispatch(window, 'remote_control_start', args);
+    expect(startRemoteControl).toHaveBeenCalledWith(args);
+    expect(response).toMatchObject({ ok: true, value: { status: 'waiting' } });
   });
 });

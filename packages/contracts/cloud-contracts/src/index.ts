@@ -37,3 +37,4 @@ export * from './capability-handshake';
 export * from './schedules';
 export * from './skills';
 export * from './plugin-marketplaces';
+export * from './device-registry';

@@ -132,3 +132,11 @@ export async function readWorkspaceGit(root: WorkspaceRoot): Promise<WorkspaceGi
 }
 
 export { countPorcelain, parseAheadBehind };
+
+export async function readWorkingTreeDiff(
+  directory: string,
+  paths: readonly string[],
+): Promise<string | null> {
+  if (paths.length === 0) return null;
+  return gitOrNull(directory, ['diff', '--no-color', '--no-ext-diff', 'HEAD', '--', ...paths]);
+}

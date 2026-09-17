@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
@@ -20,6 +21,8 @@ import {
   type WorkspaceSnapshot,
 } from '@agiworkforce/local-runtime-contract';
 import {
+  DEVICE_REGISTRY_PROFILE_COMMAND,
+  type DeviceRegistryProfile,
   DEVICE_STEP_TOOLS,
   deviceStepCapability,
   deviceStepScope,
@@ -59,6 +62,13 @@ import {
   waitFor,
 } from './computerUseService';
 import { deviceIdentity } from './deviceIdentity';
+import { RemoteControlRefused } from '../remote/remoteControlHost';
+import {
+  remoteControlAvailable,
+  remoteControlState,
+  startRemoteControl,
+  stopRemoteControl,
+} from '../remote/remoteControlService';
 import {
   cancelLocalChat,
   listLocalModels,
@@ -594,6 +604,25 @@ function declareDeviceHost(): DesktopHostDeclaration {
   };
 }
 
+function describeDeviceForRegistry(): DeviceRegistryProfile {
+  const identity = deviceIdentity();
+  return {
+    installId: identity.deviceId,
+    name: identity.deviceName,
+    platform: process.platform,
+    osVersion: os.release(),
+    architecture: process.arch,
+    appVersion: app.getVersion(),
+    capabilities: {
+      browser: pairingState().paired,
+      computerUse: computerUseAvailability().supported,
+      localModels: false,
+      localMcp: false,
+      remoteControl: remoteControlAvailable(),
+    },
+  };
+}
+
 async function execute(
   window: BrowserWindow | null,
   command: string,
@@ -744,6 +773,14 @@ async function execute(
       return takeOverComputerUse();
     case 'device_host_declaration':
       return declareDeviceHost();
+    case DEVICE_REGISTRY_PROFILE_COMMAND:
+      return describeDeviceForRegistry();
+    case 'remote_control_state':
+      return remoteControlState();
+    case 'remote_control_start':
+      return startRemoteControl(args);
+    case 'remote_control_stop':
+      return stopRemoteControl();
     case 'developer_runtime_status':
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':
@@ -829,6 +866,9 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure('permission-denied', error.message);
   }
   if (error instanceof Cancelled) return runtimeFailure('cancelled', error.message);
+  if (error instanceof RemoteControlRefused) {
+    return runtimeFailure('invalid-arguments', error.message);
+  }
   if (error instanceof ComputerUseRefused) {
     const code =
       error.reason === 'permission'
