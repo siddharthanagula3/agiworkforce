@@ -20,6 +20,7 @@ import {
   type ShareExpiryDays,
 } from '../../hooks/use-share-conversation';
 import { memoWhenClosed } from '@shared/lib/memo-when-closed';
+import { TEMPORARY_CHAT_SHARE_REFUSAL } from '@/lib/temporary-chat-policy';
 
 const EXPIRY_OPTIONS: ReadonlyArray<{ days: ShareExpiryDays; label: string; detail: string }> = [
   { days: 1, label: '1 day', detail: 'Best for a quick review' },
@@ -32,6 +33,7 @@ export interface ShareConversationDialogProps {
   onOpenChange: (open: boolean) => void;
   conversationTitle?: string;
   modelId?: string;
+  conversationId?: string | null;
 }
 
 function formatExpiry(value: string): string {
@@ -51,12 +53,13 @@ function ShareConversationDialogImpl({
   onOpenChange,
   conversationTitle,
   modelId,
+  conversationId,
 }: ShareConversationDialogProps) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [expiryDays, setExpiryDays] = useState<ShareExpiryDays>(7);
   const [copied, setCopied] = useState(false);
-  const { share, revoke, setAudience, isSharing, activeShare, error, clearError } =
-    useShareConversation(conversationTitle, modelId);
+  const { share, revoke, setAudience, isSharing, isTemporary, activeShare, error, clearError } =
+    useShareConversation(conversationTitle, modelId, conversationId);
   const expiryLabel = useMemo(
     () => EXPIRY_OPTIONS.find((option) => option.days === expiryDays)?.label ?? '7 days',
     [expiryDays],
@@ -222,10 +225,20 @@ function ShareConversationDialogImpl({
                   </label>
                 ))}
               </fieldset>
-              <div className="flex gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-muted-foreground">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                <p>Anyone with the link can read the snapshot without signing in.</p>
-              </div>
+              {isTemporary ? (
+                <div
+                  data-testid="share-temporary-notice"
+                  className="flex gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground"
+                >
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>{TEMPORARY_CHAT_SHARE_REFUSAL}</p>
+                </div>
+              ) : (
+                <div className="flex gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-muted-foreground">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <p>Anyone with the link can read the snapshot without signing in.</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -265,7 +278,7 @@ function ShareConversationDialogImpl({
                 <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSharing}>
                   Cancel
                 </Button>
-                <Button onClick={() => void share(expiryDays)} disabled={isSharing}>
+                <Button onClick={() => void share(expiryDays)} disabled={isSharing || isTemporary}>
                   {isSharing ? 'Creating…' : `Create public link · ${expiryLabel}`}
                 </Button>
               </>

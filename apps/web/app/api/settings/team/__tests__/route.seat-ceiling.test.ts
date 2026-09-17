@@ -26,6 +26,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: vi.fn(async () => undefined),
   BLOCK_APPEAL_PATH: '/support',
+  logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/api-auth', () => ({

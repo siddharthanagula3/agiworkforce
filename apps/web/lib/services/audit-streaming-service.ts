@@ -191,6 +191,28 @@ export async function upsertAuditDestination(
   return { destination: format(row), secret: minted.secret };
 }
 
+export async function setAuditDestinationEnabled(
+  db: DatabaseAdapter,
+  organizationId: string,
+  enabled: boolean,
+): Promise<AuditDestination | null> {
+  const [row] = await db.query<DestinationRow>(
+    `update public.organization_audit_destinations
+        set enabled = $2,
+            consecutive_failures = case when $2 then 0 else consecutive_failures end
+      where organization_id = $1
+      returning ${PUBLIC_COLUMNS}`,
+    [organizationId, enabled],
+  );
+  if (!row) return null;
+  if (enabled) {
+    await markAuditStreamActive(organizationId);
+  } else {
+    await markAuditStreamInactive(organizationId);
+  }
+  return format(row);
+}
+
 export async function deleteAuditDestination(
   db: DatabaseAdapter,
   organizationId: string,

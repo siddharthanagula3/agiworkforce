@@ -22,6 +22,27 @@ const MESSAGE = {
 };
 
 describe('useShareConversation', () => {
+  it('refuses a temporary conversation before any request leaves the browser', async () => {
+    useChatStore.setState({
+      messages: [MESSAGE],
+      conversations: [{ id: 'conv-temp', title: 'Scratch', isTemporary: true } as never],
+    });
+    const fetchMock = vi.spyOn(global, 'fetch');
+
+    const { result } = renderHook(() => useShareConversation('Scratch', undefined, 'conv-temp'));
+    expect(result.current.isTemporary).toBe(true);
+
+    let shared = true;
+    await act(async () => {
+      shared = await result.current.share(7);
+    });
+
+    expect(shared).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.error).toMatch(/temporary chat cannot be shared/i);
+    useChatStore.setState({ conversations: [] });
+  });
+
   beforeEach(() => {
     useChatStore.setState({ messages: [MESSAGE] });
   });
@@ -44,7 +65,7 @@ describe('useShareConversation', () => {
       ),
     );
 
-    const { result } = renderHook(() => useShareConversation('My session'));
+    const { result } = renderHook(() => useShareConversation('My session', undefined, 'conv-1'));
 
     await act(async () => {
       await result.current.share(30);
@@ -57,6 +78,7 @@ describe('useShareConversation', () => {
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(Array.isArray(body.messages)).toBe(true);
     expect(body.expires_in_days).toBe(30);
+    expect(body.conversation_id).toBe('conv-1');
     expect(body.messages[0]).toMatchObject({ role: 'user', content: 'hello' });
     expect(result.current.activeShare?.token).toBe('abc123');
   });
@@ -92,7 +114,7 @@ describe('useShareConversation', () => {
       ),
     );
 
-    const { result } = renderHook(() => useShareConversation('My session'));
+    const { result } = renderHook(() => useShareConversation('My session', undefined, 'conv-1'));
 
     await act(async () => {
       await result.current.share(30);
@@ -122,7 +144,7 @@ describe('useShareConversation', () => {
       )
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
-    const { result } = renderHook(() => useShareConversation('My session'));
+    const { result } = renderHook(() => useShareConversation('My session', undefined, 'conv-1'));
 
     await act(async () => {
       await result.current.share(7);

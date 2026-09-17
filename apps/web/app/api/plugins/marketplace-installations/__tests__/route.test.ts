@@ -12,6 +12,7 @@ const {
   updateMarketplaceInstallationSettingsMock,
   installDirectoryPluginMock,
   uninstallDirectoryInstallationMock,
+  recordWorkspaceAuditEventMock,
 } = vi.hoisted(() => ({
   authUserMock: vi.fn(),
   csrfMock: vi.fn(),
@@ -24,6 +25,7 @@ const {
   updateMarketplaceInstallationSettingsMock: vi.fn(),
   installDirectoryPluginMock: vi.fn(),
   uninstallDirectoryInstallationMock: vi.fn(),
+  recordWorkspaceAuditEventMock: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -31,6 +33,9 @@ vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
+vi.mock('@/lib/workspace-audit', () => ({
+  recordWorkspaceAuditEvent: recordWorkspaceAuditEventMock,
+}));
 vi.mock('@/lib/services/plugin-marketplace-installation-service', () => ({
   installMarketplaceEntry: installMarketplaceEntryMock,
   listMarketplaceInstallations: listMarketplaceInstallationsMock,
@@ -149,6 +154,18 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
     expect(response.status).toBe(201);
     expect((await response.json()).installation).toEqual(INSTALLATION);
     expect(installDirectoryPluginMock).not.toHaveBeenCalled();
+    expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        eventType: 'plugin_installed',
+        detail: expect.objectContaining({
+          resourceId: INSTALLATION_ID,
+          resourceName: 'acme-support-bundle',
+          source: 'marketplace',
+        }),
+      }),
+    );
   });
 
   it('installs a directory plugin by id and returns the installation with its skills', async () => {
@@ -170,6 +187,18 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
       'adobe-for-creativity',
     );
     expect(installMarketplaceEntryMock).not.toHaveBeenCalled();
+    expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        eventType: 'plugin_installed',
+        detail: expect.objectContaining({
+          resourceName: 'adobe-for-creativity',
+          count: 1,
+          source: 'directory',
+        }),
+      }),
+    );
   });
 
   it('maps every directory install outcome to a status and a sentence', async () => {
@@ -242,6 +271,14 @@ describe('PATCH /api/plugins/marketplace-installations/[id]', () => {
     );
     expect(response.status).toBe(200);
     expect((await response.json()).installation.enabled).toBe(false);
+    expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        eventType: 'plugin_setting_changed',
+        detail: expect.objectContaining({ enabled: false }),
+      }),
+    );
   });
 
   it('404s when the installation does not exist', async () => {
@@ -266,6 +303,14 @@ describe('DELETE /api/plugins/marketplace-installations/[id]', () => {
       expect.anything(),
       'user-1',
       INSTALLATION_ID,
+    );
+    expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        eventType: 'plugin_removed',
+        detail: expect.objectContaining({ resourceId: INSTALLATION_ID }),
+      }),
     );
   });
 

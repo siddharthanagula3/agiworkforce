@@ -47,7 +47,12 @@ describe('ShareConversationDialog', () => {
     );
 
     render(
-      <ShareConversationDialog open onOpenChange={vi.fn()} conversationTitle="Private plan" />,
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId="conv-1"
+        conversationTitle="Private plan"
+      />,
     );
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -83,7 +88,12 @@ describe('ShareConversationDialog', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
     render(
-      <ShareConversationDialog open onOpenChange={vi.fn()} conversationTitle="Private plan" />,
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId="conv-1"
+        conversationTitle="Private plan"
+      />,
     );
 
     await act(async () => {
@@ -102,6 +112,40 @@ describe('ShareConversationDialog', () => {
       expect.objectContaining({ method: 'DELETE' }),
     );
     expect(await screen.findByRole('button', { name: /Create public link/ })).toBeInTheDocument();
+  });
+});
+
+describe('ShareConversationDialog temporary chat', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useChatStore.setState({ messages: [], conversations: [] });
+  });
+
+  it('explains the refusal and offers no create control for a temporary chat', () => {
+    useChatStore.setState({
+      messages: [
+        { id: 'm1', role: 'user', content: 'scratch', createdAt: '2026-08-11T00:00:00.000Z' },
+      ],
+      conversations: [{ id: 'conv-temp', title: 'Scratch', isTemporary: true } as never],
+    });
+    const fetchMock = vi.spyOn(global, 'fetch');
+
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId="conv-temp"
+        conversationTitle="Scratch"
+      />,
+    );
+
+    expect(screen.getByTestId('share-temporary-notice')).toHaveTextContent(
+      /temporary chat cannot be shared/i,
+    );
+    const create = screen.getByRole('button', { name: /Create public link/ });
+    expect(create).toBeDisabled();
+    fireEvent.click(create);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -140,7 +184,14 @@ describe('ShareConversationDialog audience', () => {
   it('offers no audience choice when the sharer belongs to no workspace', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(createdShare({ workspace: null }));
 
-    render(<ShareConversationDialog open onOpenChange={vi.fn()} conversationTitle="Plan" />);
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId="conv-1"
+        conversationTitle="Plan"
+      />,
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Create public link/ }));
@@ -155,7 +206,14 @@ describe('ShareConversationDialog audience', () => {
       createdShare({ workspace: { memberCount: 4 } }),
     );
 
-    render(<ShareConversationDialog open onOpenChange={vi.fn()} conversationTitle="Plan" />);
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId="conv-1"
+        conversationTitle="Plan"
+      />,
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Create public link/ }));
@@ -177,7 +235,14 @@ describe('ShareConversationDialog audience', () => {
         new Response(JSON.stringify({ visibility: 'organization' }), { status: 200 }),
       );
 
-    render(<ShareConversationDialog open onOpenChange={vi.fn()} conversationTitle="Plan" />);
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId="conv-1"
+        conversationTitle="Plan"
+      />,
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Create public link/ }));
@@ -205,7 +270,14 @@ describe('ShareConversationDialog audience', () => {
       createdShare({ workspace: { memberCount: 2 }, visibility: 'organization' }),
     );
 
-    render(<ShareConversationDialog open onOpenChange={vi.fn()} conversationTitle="Plan" />);
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId="conv-1"
+        conversationTitle="Plan"
+      />,
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Create public link/ }));

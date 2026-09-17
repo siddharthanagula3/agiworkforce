@@ -20,6 +20,7 @@ import {
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
 export const runtime = 'nodejs';
 
@@ -100,6 +101,11 @@ async function handleDeleteSkill(
   if (!deleted) {
     throw createError.notFound(`Skill "${name}" not found`);
   }
+  await recordWorkspaceAuditEvent(db, request, {
+    userId,
+    eventType: 'skill_uninstalled',
+    detail: { resourceType: 'skill', resourceId: name, source: 'authored' },
+  });
   return new NextResponse(null, { status: 204 });
 }
 

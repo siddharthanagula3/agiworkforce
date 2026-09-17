@@ -9,6 +9,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { setMarketplaceInstallationEnabled } from '@/lib/services/plugin-marketplace-installation-service';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { uninstallDirectoryInstallation } from '@/features/plugins/server/directory/install';
@@ -50,13 +51,26 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
   }
 
   try {
+    const db = getNeonDb();
     const installation = await setMarketplaceInstallationEnabled(
-      getNeonDb(),
+      db,
       auth.userId,
       params.data.id,
       body.data.enabled,
     );
     if (!installation) return notInstalled();
+    await recordWorkspaceAuditEvent(db, request, {
+      userId: auth.userId,
+      eventType: 'plugin_setting_changed',
+      detail: {
+        resourceType: 'plugin',
+        resourceId: installation.id,
+        resourceName: installation.pluginKey,
+        enabled: installation.enabled,
+        changedKeys: ['enabled'],
+        source: 'marketplace',
+      },
+    });
     return NextResponse.json({ installation });
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
@@ -71,8 +85,14 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
   if (!params.success) return notInstalled();
 
   try {
-    const removed = await uninstallDirectoryInstallation(getNeonDb(), auth.userId, params.data.id);
+    const db = getNeonDb();
+    const removed = await uninstallDirectoryInstallation(db, auth.userId, params.data.id);
     if (!removed) return notInstalled();
+    await recordWorkspaceAuditEvent(db, request, {
+      userId: auth.userId,
+      eventType: 'plugin_removed',
+      detail: { resourceType: 'plugin', resourceId: params.data.id, source: 'marketplace' },
+    });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();

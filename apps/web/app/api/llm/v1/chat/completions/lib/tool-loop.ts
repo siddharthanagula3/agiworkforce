@@ -65,11 +65,15 @@ import type {
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
-import { SECRET_HANDLING_MODE_DEFAULT, isAutoModeModelId } from '@agiworkforce/types';
+import {
+  SECRET_HANDLING_MODE_DEFAULT,
+  isAutoModeModelId,
+  isBrowserCommand,
+} from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import { recordAuditEvent } from '@/lib/security-audit';
+import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { redactSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
@@ -112,6 +116,7 @@ import {
   DEVICE_STEP_TTL_MINUTES,
   DeviceStepRefused,
   describeDeviceStep,
+  deviceStepScope,
   isDeviceStepTool,
   planDeviceStep,
   type DesktopHostDeclaration,
@@ -1326,8 +1331,7 @@ export async function enrichServerSearchResultsLine(
   const choices = event['choices'];
   if (!Array.isArray(choices)) return line;
   const delta = (choices[0] as Record<string, unknown> | undefined)?.['delta'] as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
   const block = delta?.['x_search_results'] as Record<string, unknown> | undefined;
   const content = block?.['content'];
   if (!Array.isArray(content)) return line;
@@ -2387,6 +2391,45 @@ export async function applyToolResultSecretPolicy(
   return nextContent;
 }
 
+export function toolAuditEventType(toolName: string): AuditEventType {
+  if (isBrowserCommand(toolName)) return 'browser_action';
+  if (isDeviceStepTool(toolName) && deviceStepScope(toolName) === 'screen') {
+    return 'computer_use_action';
+  }
+  return 'tool_executed';
+}
+
+export type ToolCallAuditStatus =
+  'completed' | 'failed' | 'blocked' | 'handed_off' | 'sent_to_device';
+
+export async function recordToolCallAudit(input: {
+  userId: string | undefined;
+  organizationId: string | null | undefined;
+  surface: string;
+  toolName: string;
+  category: AgentEventToolCategory;
+  status: ToolCallAuditStatus;
+  durationMs?: number;
+}): Promise<void> {
+  if (!input.userId) return;
+  const outcome =
+    input.status === 'blocked' ? 'denied' : input.status === 'failed' ? 'failure' : 'success';
+  await recordAuditEvent({
+    userId: input.userId,
+    organizationId: input.organizationId ?? null,
+    surface: input.surface,
+    eventType: toolAuditEventType(input.toolName),
+    outcome,
+    detail: {
+      resourceType: 'tool',
+      resourceId: input.toolName,
+      source: input.category,
+      status: input.status,
+      ...(input.durationMs === undefined ? {} : { durationMs: input.durationMs }),
+    },
+  });
+}
+
 export async function* runToolLoop(
   processed: ProcessedRequest,
   options: ToolLoopOptions = {},
@@ -2473,6 +2516,20 @@ export async function* runToolLoop(
             !PLATFORM_TOOL_METADATA[name] && !mcpTools.some((tool) => tool.qualifiedName === name),
         ),
   );
+  const auditToolCall = (
+    toolName: string,
+    status: ToolCallAuditStatus,
+    durationMs?: number,
+  ): Promise<void> =>
+    recordToolCallAudit({
+      userId: options.userId,
+      organizationId: processed.organizationId,
+      surface: processed.chatSurface,
+      toolName,
+      category: canonicalToolCategory(toolName, mcpTools),
+      status,
+      ...(durationMs === undefined ? {} : { durationMs }),
+    });
   const llmRequest = {
     ...processed.llmRequest,
     tools:
@@ -3498,6 +3555,8 @@ export async function* runToolLoop(
           tc.qualifiedName,
           rawFailText,
         );
+        const failedElapsedMs = Math.max(0, Date.now() - (toolStartedAt.get(tc.id) ?? Date.now()));
+        await auditToolCall(tc.qualifiedName, 'failed', failedElapsedMs);
         yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'failed', responseModel));
         yield encoder.encode(
           toolResultEvent(tc.id, tc.qualifiedName, failText, true, responseModel),
@@ -3509,7 +3568,7 @@ export async function* runToolLoop(
             name: tc.qualifiedName,
             output: toAgentEventJson(failText),
             isError: true,
-            elapsedMs: Math.max(0, Date.now() - (toolStartedAt.get(tc.id) ?? Date.now())),
+            elapsedMs: failedElapsedMs,
           }),
         );
         messages.push({
@@ -3549,6 +3608,8 @@ export async function* runToolLoop(
         tc.qualifiedName,
         content,
       );
+      const elapsedMs = Math.max(0, Date.now() - (toolStartedAt.get(tc.id) ?? Date.now()));
+      await auditToolCall(tc.qualifiedName, isError ? 'failed' : 'completed', elapsedMs);
       yield encoder.encode(
         toolResultEvent(tc.id, tc.qualifiedName, policedContent, isError, responseModel),
       );
@@ -3559,7 +3620,7 @@ export async function* runToolLoop(
           name: tc.qualifiedName,
           output: toAgentEventJson(policedContent),
           isError,
-          elapsedMs: Math.max(0, Date.now() - (toolStartedAt.get(tc.id) ?? Date.now())),
+          elapsedMs,
         }),
       );
 
@@ -3856,6 +3917,7 @@ export async function* runToolLoop(
               outcome: deviceResult.isError ? 'failed' : 'completed',
             }),
           );
+          await auditToolCall(p.qualifiedName, deviceResult.isError ? 'failed' : 'completed');
           const content = await applyToolResultSecretPolicy(
             options.userId,
             p.qualifiedName,
@@ -4335,6 +4397,11 @@ export async function* runToolLoop(
           },
           '[tool-loop] returning tool calls to the caller that declared the tools',
         );
+        for (const tc of pendingToolCalls) {
+          if (callerOwnedTools.has(tc.qualifiedName)) {
+            await auditToolCall(tc.qualifiedName, 'handed_off');
+          }
+        }
         yield encoder.encode(toolHandoffEvent(pendingToolCalls, responseModel));
         yield* flushTerminal('tool-use');
         return;
@@ -4466,6 +4533,7 @@ export async function* runToolLoop(
             ? refusedToolResultMessage(tc.qualifiedName)
             : blockedToolResultMessage(tc.qualifiedName),
         );
+        await auditToolCall(tc.qualifiedName, 'blocked');
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);
         yield encoder.encode(
           eventStream.emit({
@@ -4566,6 +4634,7 @@ export async function* runToolLoop(
             refusal = 'This turn cannot pause for your device. Ask again in a new message.';
           }
           if (refusal) {
+            await auditToolCall(tc.qualifiedName, 'blocked');
             const content = await applyToolResultSecretPolicy(
               options.userId,
               tc.qualifiedName,
@@ -4584,6 +4653,7 @@ export async function* runToolLoop(
           const deviceChunks: Uint8Array[] = [];
           const deviceEvents: AgentEventEnvelope[] = [];
           for (const { tc, summary, input } of planned) {
+            await auditToolCall(tc.qualifiedName, 'sent_to_device');
             deviceChunks.push(
               encoder.encode(
                 deviceStepRequestEvent(

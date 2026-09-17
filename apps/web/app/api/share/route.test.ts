@@ -29,11 +29,13 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
   BLOCK_APPEAL_PATH: '/support',
+  logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
 }));
 
 const { GET, POST } = await import('./route');
 
+const CONVERSATION_ID = '4f0c2b8e-6a1d-4c3e-9b7a-2d5e8f1a3c6b';
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
 
@@ -149,17 +151,21 @@ describe('POST /api/share, link lifetime', () => {
   }
 
   it('defaults to seven days when the caller says nothing', async () => {
-    await post({ title: 'Session' });
+    await post({ conversation_id: CONVERSATION_ID, title: 'Session' });
     expect(insertedExpiryDays()).toBe(7);
   });
 
   it('honors a caller-supplied lifetime', async () => {
-    await post({ title: 'Session', expires_in_days: 1 });
+    await post({ conversation_id: CONVERSATION_ID, title: 'Session', expires_in_days: 1 });
     expect(insertedExpiryDays()).toBe(1);
   });
 
   it('rejects a lifetime outside the allowed set', async () => {
-    const response = await post({ title: 'Session', expires_in_days: 3650 });
+    const response = await post({
+      conversation_id: CONVERSATION_ID,
+      title: 'Session',
+      expires_in_days: 3650,
+    });
     expect(response.status).toBe(400);
     expect(
       mocks.query.mock.calls.some((c) => /insert into shared_sessions/i.test(String(c[0]))),
@@ -192,6 +198,7 @@ describe('POST /api/share, secret redaction', () => {
       new NextRequest('https://agiworkforce.com/api/share', {
         method: 'POST',
         body: JSON.stringify({
+          conversation_id: CONVERSATION_ID,
           title: 'Session',
           messages: [{ role: 'user', content: `use ${STRIPE_KEY} to bill` }],
         }),
@@ -208,6 +215,7 @@ describe('POST /api/share, secret redaction', () => {
       new NextRequest('https://agiworkforce.com/api/share', {
         method: 'POST',
         body: JSON.stringify({
+          conversation_id: CONVERSATION_ID,
           title: 'Session',
           messages: [{ role: 'user', content: `use ${STRIPE_KEY} to bill` }],
         }),
@@ -228,7 +236,11 @@ describe('POST /api/share, secret redaction', () => {
     await POST(
       new NextRequest('https://agiworkforce.com/api/share', {
         method: 'POST',
-        body: JSON.stringify({ title: 'Session', messages: [{ role: 'user', content: 'hi' }] }),
+        body: JSON.stringify({
+          conversation_id: CONVERSATION_ID,
+          title: 'Session',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
       }),
     );
 
@@ -257,6 +269,7 @@ describe('POST /api/share, local path redaction', () => {
       new NextRequest('https://agiworkforce.com/api/share', {
         method: 'POST',
         body: JSON.stringify({
+          conversation_id: CONVERSATION_ID,
           title: 'Session',
           messages: [
             {
@@ -287,6 +300,7 @@ describe('POST /api/share, local path redaction', () => {
       new NextRequest('https://agiworkforce.com/api/share', {
         method: 'POST',
         body: JSON.stringify({
+          conversation_id: CONVERSATION_ID,
           title: 'Session',
           messages: [{ role: 'assistant', content: 'x', display_args: 'open /var/tmp/a/b' }],
         }),
@@ -294,5 +308,81 @@ describe('POST /api/share, local path redaction', () => {
     );
 
     expect(insertedMessages()[0]?.['display_args']).toBe('open [local-path]');
+  });
+});
+
+describe('POST /api/share, temporary chat policy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+    mocks.rateLimit.mockResolvedValue(null);
+  });
+
+  function conversationLookup(rows: unknown[]) {
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      if (/from web_conversations/i.test(String(sql))) return rows;
+      return [{ token: 'tok-new', expires_at: FUTURE, total_messages: 1 }];
+    });
+  }
+
+  function share(body: Record<string, unknown>) {
+    return POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Session',
+          messages: [{ role: 'user', content: 'hi' }],
+          ...body,
+        }),
+      }),
+    );
+  }
+
+  function inserted(): boolean {
+    return mocks.query.mock.calls.some((c) => /insert into shared_sessions/i.test(String(c[0])));
+  }
+
+  it('refuses to publish a temporary conversation and writes nothing', async () => {
+    conversationLookup([{ is_temporary: true }]);
+
+    const response = await share({ conversation_id: CONVERSATION_ID });
+
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error?: { message?: string } };
+    expect(body.error?.message).toMatch(/temporary chat cannot be shared/i);
+    expect(inserted()).toBe(false);
+  });
+
+  it('looks the conversation up under the caller, never another owner', async () => {
+    conversationLookup([{ is_temporary: false }]);
+
+    const response = await share({ conversation_id: CONVERSATION_ID });
+
+    expect(response.status).toBe(201);
+    const lookup = mocks.query.mock.calls.find((c) => /from web_conversations/i.test(String(c[0])));
+    expect(lookup?.[0]).toMatch(/user_id = \$2/);
+    expect(lookup?.[1]).toEqual([CONVERSATION_ID, 'user-1']);
+    expect(inserted()).toBe(true);
+  });
+
+  it('answers not found for a conversation the caller does not own', async () => {
+    conversationLookup([]);
+
+    const response = await share({ conversation_id: CONVERSATION_ID });
+
+    expect(response.status).toBe(404);
+    expect(inserted()).toBe(false);
+  });
+
+  it('publishes a share that names no conversation, as the desktop client sends it', async () => {
+    conversationLookup([]);
+
+    const response = await share({});
+
+    expect(response.status).toBeLessThan(300);
+    expect(inserted()).toBe(true);
+    expect(mocks.query.mock.calls.some((c) => /from web_conversations/i.test(String(c[0])))).toBe(
+      false,
+    );
   });
 });
