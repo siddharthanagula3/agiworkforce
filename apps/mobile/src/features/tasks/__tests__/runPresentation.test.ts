@@ -32,8 +32,10 @@ import {
   CLOUD_RUN_WORK_MODE_LABELS,
 } from '../runPresentation';
 
-// The list endpoint validates `state` with `z.array(AgentTaskStateSchema).max(9)`.
-const MAX_LIST_STATES = 9;
+// The list endpoint caps `state` at the size of the enum itself
+// (`z.array(AgentTaskStateSchema).max(AgentTaskStateSchema.options.length)`), so the
+// unfiltered view may always ask for every state the contract defines.
+const MAX_LIST_STATES = AgentTaskStateSchema.options.length;
 
 const NOW = Date.parse('2026-08-27T12:00:00.000Z');
 

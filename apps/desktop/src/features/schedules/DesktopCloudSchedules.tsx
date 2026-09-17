@@ -156,7 +156,16 @@ function recurrenceLabel(schedule: ManagedCloudScheduleTask): string {
     const days = Math.max(1, Math.round((schedule.intervalMs ?? DAY_MS) / DAY_MS));
     return `Every ${days} day${days === 1 ? '' : 's'}`;
   }
-  const labels: Record<Exclude<ManagedCloudScheduleRecurrence, 'once' | 'interval'>, string> = {
+  if (recurrence === 'rrule') {
+    return schedule.recurrenceRule
+      ? `Rule: ${schedule.recurrenceRule} · ${schedule.timezone}`
+      : `Custom rule · ${schedule.timezone}`;
+  }
+  if (recurrence === 'event') return 'When an event fires';
+  const labels: Record<
+    Exclude<ManagedCloudScheduleRecurrence, 'once' | 'interval' | 'rrule' | 'event'>,
+    string
+  > = {
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',

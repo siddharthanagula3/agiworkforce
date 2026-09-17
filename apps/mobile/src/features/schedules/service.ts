@@ -35,7 +35,11 @@ function parseResponse<T>(
 
 function recurrenceFromTask(task: ManagedCloudScheduleTask): ManagedCloudScheduleRecurrence {
   const stored = task.metadata?.['productRecurrence'];
-  if (['once', 'daily', 'weekly', 'monthly', 'custom', 'interval'].includes(String(stored))) {
+  if (
+    ['once', 'daily', 'weekly', 'monthly', 'custom', 'interval', 'rrule', 'event'].includes(
+      String(stored),
+    )
+  ) {
     return stored as ManagedCloudScheduleRecurrence;
   }
   return task.scheduleType === 'cron' ? 'custom' : task.scheduleType;
@@ -62,6 +66,7 @@ function mapSchedule(task: ManagedCloudScheduleTask): Schedule {
     model: task.model,
     recurrence,
     cronExpression: task.cronExpression ?? undefined,
+    recurrenceRule: task.recurrenceRule ?? undefined,
     scheduledAt: task.executeAt,
     intervalMs: task.intervalMs ?? undefined,
     daysOfWeek,
