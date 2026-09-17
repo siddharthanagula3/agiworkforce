@@ -1,0 +1,159 @@
+{
+  "suite": "chat",
+  "version": 1,
+  "passThreshold": 1,
+  "cases": [
+    {
+      "id": "chat/system-sign-off",
+      "family": "instruction-following",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Name the three primary colours of light.",
+      "system": "End every reply with the exact token [[done]] on its own and nothing after it.",
+      "checks": [
+        {
+          "kind": "includesAll",
+          "values": ["red", "green", "blue"]
+        },
+        {
+          "kind": "matches",
+          "pattern": "\\[\\[done\\]\\]\\s*$"
+        }
+      ]
+    },
+    {
+      "id": "chat/multi-turn-recall",
+      "family": "memory",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What codename and ship date did I give you? Reply in one sentence.",
+      "turns": [
+        {
+          "role": "user",
+          "content": "My project codename is Bluefinch and it ships on 14 March."
+        },
+        {
+          "role": "assistant",
+          "content": "Noted: Bluefinch ships on 14 March."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAll",
+          "values": ["Bluefinch", "14 March"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 25
+        }
+      ]
+    },
+    {
+      "id": "chat/follow-up-same-task",
+      "family": "memory",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Now do the same for 12 km, rounded to one decimal place. Reply with the number and unit only.",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Convert 5 km to miles."
+        },
+        {
+          "role": "assistant",
+          "content": "5 km is about 3.11 miles."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": ["7.5 mi"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 3
+        }
+      ],
+      "notes": "The follow-up only makes sense if the earlier turn is used: 'the same' means km to miles."
+    },
+    {
+      "id": "chat/ask-when-ambiguous",
+      "family": "clarification",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Book it for tomorrow.",
+      "checks": [
+        {
+          "kind": "matches",
+          "pattern": "\\?"
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["I have booked", "I've booked", "is booked", "booking is confirmed"]
+        }
+      ],
+      "notes": "Nothing in the conversation says what to book; claiming a booking was made is fabrication."
+    },
+    {
+      "id": "chat/stay-in-scope",
+      "family": "system-adherence",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Can you write me a poem about the sea?",
+      "system": "You are the support assistant for Acme Routers. Only answer questions about Acme Routers. For anything else, say briefly that you can only help with Acme Routers.",
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": ["only help", "can only assist", "only answer"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["Acme Router"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 60
+        }
+      ]
+    },
+    {
+      "id": "chat/track-list-edits",
+      "family": "memory",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "List my shopping list now, comma separated, nothing else.",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Here is my shopping list: eggs, flour, basil, lemons."
+        },
+        {
+          "role": "assistant",
+          "content": "Got it."
+        },
+        {
+          "role": "user",
+          "content": "Actually remove the basil and add butter."
+        },
+        {
+          "role": "assistant",
+          "content": "Updated."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAll",
+          "values": ["eggs", "flour", "lemons", "butter"]
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["basil"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 8
+        }
+      ]
+    }
+  ]
+}

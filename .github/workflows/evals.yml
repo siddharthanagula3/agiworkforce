@@ -26,6 +26,7 @@ on:
     paths:
       - 'tools/evals/**'
       - 'packages/contracts/types/src/models.json'
+      - 'packages/ai/model-registry/scripts/family-slots.mjs'
       - '.github/workflows/evals.yml'
   push:
     branches:
@@ -33,6 +34,7 @@ on:
     paths:
       - 'tools/evals/**'
       - 'packages/contracts/types/src/models.json'
+      - 'packages/ai/model-registry/scripts/family-slots.mjs'
       - '.github/workflows/evals.yml'
   schedule:
     # Weekly on Monday at 05:40 UTC, matching the other scheduled jobs in this
@@ -85,6 +87,12 @@ jobs:
 
       - name: Run the harness
         run: pnpm exec vitest run tools/evals
+
+      # Grades the committed reference recording and every committed live
+      # recording under tools/evals/measurements with no provider call. A
+      # recording whose request no longer matches the corpus fails here.
+      - name: Replay recorded responses (no network)
+        run: pnpm evals:replay
 
   live-quality:
     name: Live model quality (paid, weekly + on demand)

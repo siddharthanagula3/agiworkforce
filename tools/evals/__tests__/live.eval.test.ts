@@ -1,8 +1,7 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { anthropicResponder, readModelCatalog, resolveAnthropicModel } from '../src/anthropic';
-import { loadAllDatasets } from '../src/dataset';
+import { loadDatasets } from '../src/dataset';
 import { formatReport, runSuite } from '../src/suite';
 
 const liveEnabled = process.env['AGIWORKFORCE_LIVE_TEST'] === '1';
@@ -13,7 +12,7 @@ const SUITE_TIMEOUT_MS = 15 * 60 * 1000;
 
 // llm-guardrail-allow: paid live-network call, gated by AGIWORKFORCE_LIVE_TEST
 describe.skipIf(skip)('live output quality', () => {
-  it.each(loadAllDatasets())(
+  it.each(loadDatasets(['golden', 'refusal', 'jailbreak']))(
     'meets the $suite gate',
     async (dataset) => {
       const model = resolveAnthropicModel(readModelCatalog());

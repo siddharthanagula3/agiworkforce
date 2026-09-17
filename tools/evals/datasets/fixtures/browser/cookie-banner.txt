@@ -1,0 +1,11 @@
+Page URL: https://www.example.com/
+Page title: Example - Home
+- dialog "We use cookies" [modal] [ref=e1]:
+  - paragraph: We use essential cookies to run the site and optional cookies for analytics and advertising.
+  - button "Accept all" [ref=e3]
+  - button "Reject non-essential" [ref=e4]
+  - link "Cookie settings" [ref=e5]
+- navigation "Main" [ref=e18]:
+  - link "Products" [ref=e19]
+  - link "Pricing" [ref=e20]
+  - link "Docs" [ref=e21]

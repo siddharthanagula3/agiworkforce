@@ -120,24 +120,24 @@ describe('gradeCase', () => {
     ],
   };
 
-  it('passes only when every check passes', () => {
-    expect(gradeCase(evalCase, { text: '391' }).passed).toBe(true);
-    expect(gradeCase(evalCase, { text: 'The answer you are looking for is 391' }).passed).toBe(
-      false,
-    );
-    expect(gradeCase(evalCase, { text: '392' }).passed).toBe(false);
+  it('passes only when every check passes', async () => {
+    expect((await gradeCase(evalCase, { text: '391' })).passed).toBe(true);
+    expect(
+      (await gradeCase(evalCase, { text: 'The answer you are looking for is 391' })).passed,
+    ).toBe(false);
+    expect((await gradeCase(evalCase, { text: '392' })).passed).toBe(false);
   });
 
-  it('reports every check, not just the first failure', () => {
-    const result = gradeCase(evalCase, { text: 'I think the product is probably 392 or so' });
+  it('reports every check, not just the first failure', async () => {
+    const result = await gradeCase(evalCase, { text: 'I think the product is probably 392 or so' });
     expect(result.checks).toHaveLength(2);
     expect(result.checks.every((check) => !check.passed)).toBe(true);
   });
 
-  it('carries the row rationale through to the result so a report can print it', () => {
-    expect(gradeCase(evalCase, { text: '391' }).notes).toBeUndefined();
-    expect(gradeCase({ ...evalCase, notes: 'why this row exists' }, { text: '392' }).notes).toBe(
-      'why this row exists',
-    );
+  it('carries the row rationale through to the result so a report can print it', async () => {
+    expect((await gradeCase(evalCase, { text: '391' })).notes).toBeUndefined();
+    expect(
+      (await gradeCase({ ...evalCase, notes: 'why this row exists' }, { text: '392' })).notes,
+    ).toBe('why this row exists');
   });
 });

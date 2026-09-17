@@ -1,0 +1,123 @@
+{
+  "suite": "files",
+  "version": 1,
+  "passThreshold": 1,
+  "cases": [
+    {
+      "id": "files/csv-aggregate",
+      "family": "csv",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Using the attached CSV, what was the total revenue in USD for the EMEA region across all four quarters? Reply with 'Answer: <number>'.",
+      "attachments": [
+        {
+          "fixture": "files/quarterly-sales.csv",
+          "mediaType": "text/csv"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "800000"
+        }
+      ]
+    },
+    {
+      "id": "files/json-lookup",
+      "family": "json",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Using the attached roster, who is on call for the payments team? Reply with the name only.",
+      "attachments": [
+        {
+          "fixture": "files/team-roster.json",
+          "mediaType": "application/json"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": ["Teodor Lindqvist"]
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["Marisol"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 4
+        }
+      ],
+      "notes": "Marisol Okafor leads payments and is on call for search; naming her confuses the two fields."
+    },
+    {
+      "id": "files/markdown-owner-filter",
+      "family": "markdown",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "From the attached meeting notes, list only the action items owned by Priya, one per line.",
+      "attachments": [
+        {
+          "fixture": "files/meeting-notes.md",
+          "mediaType": "text/markdown"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAll",
+          "values": ["deprecation notice", "security review"]
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["benchmark", "runbook", "feedback"]
+        }
+      ]
+    },
+    {
+      "id": "files/cross-file-join",
+      "family": "multi-file",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Using both attached files: which region had the highest Q3 revenue, and who leads the team based in that region? Reply as '<region>, <name>'.",
+      "attachments": [
+        {
+          "fixture": "files/quarterly-sales.csv",
+          "mediaType": "text/csv"
+        },
+        {
+          "fixture": "files/team-roster.json",
+          "mediaType": "application/json"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAll",
+          "values": ["APAC", "Joon-ho Brennan"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 6
+        }
+      ]
+    },
+    {
+      "id": "files/policy-detail",
+      "family": "text",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "According to the attached policy, how many days per week may an employee work remotely? Reply with 'Answer: <number>'.",
+      "attachments": [
+        {
+          "fixture": "files/remote-work-policy.txt",
+          "mediaType": "text/plain"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "3"
+        }
+      ]
+    }
+  ]
+}

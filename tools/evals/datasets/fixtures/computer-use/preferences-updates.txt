@@ -1,0 +1,10 @@
+OS: macOS. Screen: 1440x900 points. Frames are (x, y, width, height) in screen points, origin top-left.
+Frontmost app: Notebook Pro
+- AXWindow "Settings" frame=(420,200,600,420)
+  - AXTabGroup frame=(420,228,600,40)
+    - AXRadioButton "General" selected=true frame=(560,234,80,28)
+    - AXRadioButton "Sync" frame=(650,234,80,28)
+  - AXCheckBox "Automatically check for updates" value=0 frame=(612,344,18,18)
+  - AXCheckBox "Download updates in the background" value=0 frame=(612,380,18,18)
+  - AXCheckBox "Send anonymous usage statistics" value=1 frame=(612,416,18,18)
+  - AXButton "Done" frame=(900,570,90,28)

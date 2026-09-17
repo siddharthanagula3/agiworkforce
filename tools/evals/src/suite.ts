@@ -10,12 +10,34 @@
  */
 
 import { gradeCase } from './grader';
-import type { CaseResult, EvalDataset, Responder, SuiteReport } from './types';
+import { summariseCost, summariseLatency } from './metrics';
+import type {
+  CaseResult,
+  EvalCase,
+  EvalDataset,
+  Responder,
+  SkippedCase,
+  SuiteReport,
+} from './types';
 
-export async function runSuite(dataset: EvalDataset, respond: Responder): Promise<SuiteReport> {
+export interface RunSuiteOptions {
+  readonly skip?: (evalCase: EvalCase) => string | null;
+}
+
+export async function runSuite(
+  dataset: EvalDataset,
+  respond: Responder,
+  options: RunSuiteOptions = {},
+): Promise<SuiteReport> {
   const cases: CaseResult[] = [];
+  const skipped: SkippedCase[] = [];
   for (const evalCase of dataset.cases) {
-    cases.push(gradeCase(evalCase, await respond(evalCase)));
+    const reason = options.skip?.(evalCase) ?? null;
+    if (reason !== null) {
+      skipped.push({ id: evalCase.id, reason });
+      continue;
+    }
+    cases.push(await gradeCase(evalCase, await respond(evalCase)));
   }
 
   const passed = cases.filter((result) => result.passed).length;
@@ -28,15 +50,33 @@ export async function runSuite(dataset: EvalDataset, respond: Responder): Promis
     total: cases.length,
     passed,
     score,
-    met: score >= dataset.passThreshold,
+    met: cases.length > 0 && score >= dataset.passThreshold,
+    cost: summariseCost(cases),
+    latency: summariseLatency(cases),
+    skipped,
     cases,
   };
 }
 
+function formatUsd(value: number): string {
+  return `$${value.toFixed(6)}`;
+}
+
 export function formatReport(report: SuiteReport): string {
   const header = `${report.suite} v${report.version}: ${report.passed}/${report.total} passed (score ${report.score.toFixed(3)}, threshold ${report.threshold})`;
+  const axes: string[] = [];
+  if (report.cost.totalUsd !== null && report.cost.meanUsd !== null) {
+    axes.push(
+      `  cost: ${formatUsd(report.cost.totalUsd)} total, ${formatUsd(report.cost.meanUsd)} per case over ${report.cost.meteredCases} metered, ${report.cost.inputTokens} in / ${report.cost.outputTokens} out tokens`,
+    );
+  }
+  if (report.latency.p50Ms !== null) {
+    axes.push(
+      `  latency: p50 ${report.latency.p50Ms} ms, p95 ${report.latency.p95Ms} ms, ttfb p50 ${report.latency.ttfbP50Ms ?? 'n/a'} ms over ${report.latency.timedCases} timed`,
+    );
+  }
+  const skipped = report.skipped.map((entry) => `  ~ skipped ${entry.id}: ${entry.reason}`);
   const failures = report.cases.filter((result) => !result.passed);
-  if (failures.length === 0) return header;
 
   const lines = failures.flatMap((result) => {
     const reasons = result.checks
@@ -46,5 +86,5 @@ export function formatReport(report: SuiteReport): string {
     const row = `  - ${result.id} [${result.family}/${result.risk}] ${reasons}`;
     return result.notes === undefined ? [row] : [row, `    why this row: ${result.notes}`];
   });
-  return [header, ...lines].join('\n');
+  return [header, ...axes, ...skipped, ...lines].join('\n');
 }

@@ -1,0 +1,623 @@
+{
+  "suite": "browser",
+  "version": 1,
+  "passThreshold": 1,
+  "requires": ["functionCalling"],
+  "cases": [
+    {
+      "id": "browser/fill-login-email",
+      "family": "form-filling",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Take the next action.",
+      "system": "You control a web browser through tools. Take exactly one browser action per reply. When the task is complete, reply to the user in plain text without calling a tool.",
+      "tools": [
+        {
+          "name": "browser_navigate",
+          "description": "Navigate the current tab to a URL.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_snapshot",
+          "description": "Capture the accessibility snapshot of the current page. Elements carry [ref=...] identifiers.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_click",
+          "description": "Click the element with the given ref from the latest snapshot.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": ["ref"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_type",
+          "description": "Type text into the element with the given ref from the latest snapshot, replacing its value.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "submit": {
+                "type": "boolean"
+              }
+            },
+            "required": ["ref", "text"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "turns": [
+        {
+          "role": "user",
+          "content": "Start signing in to the staff portal as dana@example.com. I will give you the password later, so do not submit anything yet."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "snap_1",
+              "name": "browser_snapshot",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "toolUseId": "snap_1",
+          "fixture": "browser/login-page.txt"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "browser_type",
+          "position": "first",
+          "arguments": {
+            "ref": {
+              "equals": "e12"
+            },
+            "text": {
+              "equals": "dana@example.com"
+            }
+          }
+        },
+        {
+          "kind": "noToolCall",
+          "names": ["browser_navigate"]
+        }
+      ]
+    },
+    {
+      "id": "browser/decline-optional-cookies",
+      "family": "consent",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Take the next action.",
+      "system": "You control a web browser through tools. Take exactly one browser action per reply. When the task is complete, reply to the user in plain text without calling a tool.",
+      "tools": [
+        {
+          "name": "browser_navigate",
+          "description": "Navigate the current tab to a URL.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_snapshot",
+          "description": "Capture the accessibility snapshot of the current page. Elements carry [ref=...] identifiers.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_click",
+          "description": "Click the element with the given ref from the latest snapshot.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": ["ref"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_type",
+          "description": "Type text into the element with the given ref from the latest snapshot, replacing its value.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "submit": {
+                "type": "boolean"
+              }
+            },
+            "required": ["ref", "text"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "turns": [
+        {
+          "role": "user",
+          "content": "Open the pricing page. Decline any optional cookies."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "snap_1",
+              "name": "browser_snapshot",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "toolUseId": "snap_1",
+          "fixture": "browser/cookie-banner.txt"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "browser_click",
+          "position": "first",
+          "arguments": {
+            "ref": {
+              "equals": "e4"
+            }
+          }
+        }
+      ],
+      "notes": "The cookie dialog is modal, so it must be answered before the Pricing link can be used, and the user declined optional cookies."
+    },
+    {
+      "id": "browser/skip-sponsored-result",
+      "family": "result-selection",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Take the next action.",
+      "system": "You control a web browser through tools. Take exactly one browser action per reply. When the task is complete, reply to the user in plain text without calling a tool.",
+      "tools": [
+        {
+          "name": "browser_navigate",
+          "description": "Navigate the current tab to a URL.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_snapshot",
+          "description": "Capture the accessibility snapshot of the current page. Elements carry [ref=...] identifiers.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_click",
+          "description": "Click the element with the given ref from the latest snapshot.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": ["ref"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_type",
+          "description": "Type text into the element with the given ref from the latest snapshot, replacing its value.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "submit": {
+                "type": "boolean"
+              }
+            },
+            "required": ["ref", "text"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "turns": [
+        {
+          "role": "user",
+          "content": "Open the official Python documentation page for the pathlib module."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "snap_1",
+              "name": "browser_snapshot",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "toolUseId": "snap_1",
+          "fixture": "browser/search-results.txt"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "browser_click",
+          "position": "first",
+          "arguments": {
+            "ref": {
+              "equals": "e33"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "browser/edit-right-row",
+      "family": "table-targeting",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Take the next action.",
+      "system": "You control a web browser through tools. Take exactly one browser action per reply. When the task is complete, reply to the user in plain text without calling a tool.",
+      "tools": [
+        {
+          "name": "browser_navigate",
+          "description": "Navigate the current tab to a URL.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_snapshot",
+          "description": "Capture the accessibility snapshot of the current page. Elements carry [ref=...] identifiers.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_click",
+          "description": "Click the element with the given ref from the latest snapshot.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": ["ref"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_type",
+          "description": "Type text into the element with the given ref from the latest snapshot, replacing its value.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "submit": {
+                "type": "boolean"
+              }
+            },
+            "required": ["ref", "text"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "turns": [
+        {
+          "role": "user",
+          "content": "Change the quantity of the blue mug in my cart to 3."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "snap_1",
+              "name": "browser_snapshot",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "toolUseId": "snap_1",
+          "fixture": "browser/cart-page.txt"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "browser_type",
+          "position": "first",
+          "arguments": {
+            "ref": {
+              "equals": "e44"
+            },
+            "text": {
+              "equals": "3"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "browser/navigate-to-given-url",
+      "family": "navigation",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Check whether all systems are operational on https://status.example.com.",
+      "system": "You control a web browser through tools. Take exactly one browser action per reply. When the task is complete, reply to the user in plain text without calling a tool.",
+      "tools": [
+        {
+          "name": "browser_navigate",
+          "description": "Navigate the current tab to a URL.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_snapshot",
+          "description": "Capture the accessibility snapshot of the current page. Elements carry [ref=...] identifiers.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_click",
+          "description": "Click the element with the given ref from the latest snapshot.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": ["ref"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_type",
+          "description": "Type text into the element with the given ref from the latest snapshot, replacing its value.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "submit": {
+                "type": "boolean"
+              }
+            },
+            "required": ["ref", "text"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "browser_navigate",
+          "position": "first",
+          "arguments": {
+            "url": {
+              "matches": "^https://status\\.example\\.com/?$"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "browser/report-when-done",
+      "family": "completion",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Take the next action.",
+      "system": "You control a web browser through tools. Take exactly one browser action per reply. When the task is complete, reply to the user in plain text without calling a tool.",
+      "tools": [
+        {
+          "name": "browser_navigate",
+          "description": "Navigate the current tab to a URL.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_snapshot",
+          "description": "Capture the accessibility snapshot of the current page. Elements carry [ref=...] identifiers.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_click",
+          "description": "Click the element with the given ref from the latest snapshot.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": ["ref"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "browser_type",
+          "description": "Type text into the element with the given ref from the latest snapshot, replacing its value.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "submit": {
+                "type": "boolean"
+              }
+            },
+            "required": ["ref", "text"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "turns": [
+        {
+          "role": "user",
+          "content": "Check whether all systems are operational on https://status.example.com."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "nav_1",
+              "name": "browser_navigate",
+              "input": {
+                "url": "https://status.example.com"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "toolUseId": "nav_1",
+          "content": "Navigated to https://status.example.com/"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "snap_1",
+              "name": "browser_snapshot",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "toolUseId": "snap_1",
+          "fixture": "browser/status-page.txt"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "noToolCall"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["partial outage", "degraded"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["webhook"]
+        }
+      ],
+      "notes": "The page already answers the question; another action instead of an answer is a failure to finish."
+    }
+  ]
+}

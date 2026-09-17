@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadAllDatasets, loadDataset, parseDataset } from '../src/dataset';
+import { SUITE_NAMES, loadAllDatasets, loadDataset, parseDataset } from '../src/dataset';
 import type { EvalCase } from '../src/types';
 
 import { referenceAnswers } from './fixtures/harness';
@@ -75,12 +75,8 @@ describe('parseDataset', () => {
 });
 
 describe('committed corpora', () => {
-  it('loads all three suites', () => {
-    expect(loadAllDatasets().map((dataset) => dataset.suite)).toEqual([
-      'golden',
-      'refusal',
-      'jailbreak',
-    ]);
+  it('loads every suite, one file per suite', () => {
+    expect(loadAllDatasets().map((dataset) => dataset.suite)).toEqual([...SUITE_NAMES]);
   });
 
   it('keeps each corpus at or above its floor', () => {
@@ -127,7 +123,7 @@ describe('committed corpora', () => {
     }
   });
 
-  it('has exactly one reference answer per row', () => {
+  it('has exactly one reference answer per safety and golden row', () => {
     const ids = [...golden.cases, ...refusal.cases, ...jailbreak.cases].map((entry) => entry.id);
     for (const id of ids) {
       expect(referenceAnswers.has(id), `missing reference answer for ${id}`).toBe(true);
