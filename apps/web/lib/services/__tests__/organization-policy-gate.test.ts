@@ -10,6 +10,7 @@ import {
   resolveSecretHandlingPolicy,
   resolveZeroDataRetentionPolicy,
 } from '../organization-policy-gate';
+import { ErrorCode } from '@/lib/errors';
 import { clearIpAllowListCacheForTests } from '../organization-ip-allow-list-cache';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -41,6 +42,12 @@ function policyRow(overrides: Record<string, unknown> = {}) {
 }
 
 const NO_OPEN_INVOICE: [] = [];
+
+const ACCOUNT_CONTROL_UNAVAILABLE = {
+  code: ErrorCode.SERVICE_UNAVAILABLE,
+  statusCode: 503,
+  message: expect.stringContaining('contact your workspace administrator'),
+};
 
 function overdueContractRow(daysPastDue: number) {
   return [
@@ -449,24 +456,67 @@ describe('resolveMfaPolicy', () => {
     expect(result.policy?.requireMfa).toBe(true);
   });
 
-  it('treats an organization whose policy cannot be read as ungoverned', async () => {
+  it('denies an organization member whose policy cannot be read after one retry', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'))
       .mockRejectedValueOnce(new Error('connection reset'));
+
+    await expect(resolveMfaPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
+    expect(h.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('binds the policy when a transient read failure succeeds on retry', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce([policyRow({ metadata: { requireMfa: true } })]);
 
     const result = await resolveMfaPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ policy: null, organizationId: null });
+    expect(result.organizationId).toBe(ORGANIZATION_ID);
+    expect(result.policy?.requireMfa).toBe(true);
   });
 
-  it('still binds a second membership when the first organization cannot be read', async () => {
+  it('denies when a member organization cannot be read even though another does not require mfa', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([
         { organization_id: SECOND_ORGANIZATION_ID },
         { organization_id: ORGANIZATION_ID },
       ])
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce([policyRow({ metadata: { requireMfa: false } })]);
+
+    await expect(resolveMfaPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
+  });
+
+  it('denies when the governing organizations cannot be resolved', async () => {
+    const h = harness();
+    h.query
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    await expect(resolveMfaPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
+  });
+
+  it('still binds a second membership that requires mfa when the first organization cannot be read', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([
+        { organization_id: SECOND_ORGANIZATION_ID },
+        { organization_id: ORGANIZATION_ID },
+      ])
+      .mockRejectedValueOnce(new Error('connection reset'))
       .mockRejectedValueOnce(new Error('connection reset'))
       .mockResolvedValueOnce([policyRow({ metadata: { requireMfa: true } })]);
 
@@ -524,6 +574,7 @@ describe('resolveZeroDataRetentionPolicy', () => {
 describe('resolveIpAllowListPolicy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
     clearIpAllowListCacheForTests();
   });
 
@@ -574,15 +625,82 @@ describe('resolveIpAllowListPolicy', () => {
     expect(h.query).toHaveBeenCalledTimes(3);
   });
 
-  it('fails open (nothing governed) when the policy read fails', async () => {
+  it('denies an organization member when the policy read fails after one retry and no allow list is known', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'))
       .mockRejectedValueOnce(new Error('connection reset'));
+
+    await expect(resolveIpAllowListPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
+    expect(h.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('binds the allow list when a transient read failure succeeds on retry', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })]);
 
     const result = await resolveIpAllowListPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ governed: [] });
+    expect(result).toEqual({
+      governed: [{ organizationId: ORGANIZATION_ID, cidrs: ['203.0.113.0/24'] }],
+    });
+  });
+
+  it('denies when the governing organizations cannot be resolved', async () => {
+    const h = harness();
+    h.query
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    await expect(resolveIpAllowListPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
+  });
+
+  it('keeps enforcing the last known allow list when a refresh after expiry fails', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-16T00:00:00.000Z'));
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })])
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    await resolveIpAllowListPolicy(h.db, 'user-1');
+    vi.setSystemTime(new Date('2026-09-16T00:01:00.000Z'));
+    const refreshed = await resolveIpAllowListPolicy(h.db, 'user-1');
+
+    expect(refreshed).toEqual({
+      governed: [{ organizationId: ORGANIZATION_ID, cidrs: ['203.0.113.0/24'] }],
+    });
+    expect(h.query).toHaveBeenCalledTimes(5);
+  });
+
+  it('denies once the last known allow list is too old to stand in for a failed refresh', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-16T00:00:00.000Z'));
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ metadata: { ipAllowList: ['203.0.113.0/24'] } })])
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockRejectedValueOnce(new Error('connection reset'));
+
+    await resolveIpAllowListPolicy(h.db, 'user-1');
+    vi.setSystemTime(new Date('2026-09-16T01:00:00.000Z'));
+
+    await expect(resolveIpAllowListPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
   });
 
   it('reports every membership so a second workspace cannot dilute the first', async () => {
