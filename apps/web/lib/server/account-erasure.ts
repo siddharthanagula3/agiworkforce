@@ -17,6 +17,8 @@ import {
 import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
 
 export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }> = [
+  { table: 'retrieval_chunks', column: 'user_id' },
+  { table: 'retrieval_documents', column: 'user_id' },
   { table: 'web_conversations', column: 'user_id' },
   { table: 'web_artifacts', column: 'user_id' },
   { table: 'web_artifact_index', column: 'user_id' },
@@ -172,6 +174,14 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   credit_settlement_jobs: 'In-flight money movement; dropping a pending job loses a settlement.',
   beta_invites: 'created_by is invite provenance for invitees who still hold the code.',
   sso_connections: 'created_by is organization configuration, not personal content.',
+  organization_roles:
+    'created_by is organization configuration (0200): a custom role outlives the member who defined it.',
+  organization_member_roles:
+    'Cascades from organization_members (0200). Grants this user issued to other members keep granted_by_user_id as provenance.',
+  organization_group_roles:
+    'A directory group grant is organization configuration (0200); granted_by_user_id is provenance, not personal content.',
+  organization_group_managers:
+    'Cascades from organization_members (0200). Delegations this user issued keep granted_by_user_id as provenance.',
   organizations:
     'Deleting an organization because its creator left would erase every other member. Ownership transfer is a separate flow.',
   support_agent_presence: 'Support-staff roster, not customer data.',
