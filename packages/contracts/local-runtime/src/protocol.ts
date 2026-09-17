@@ -1,5 +1,6 @@
 import type { BrowserPairingState } from './browser-bridge';
 import type { DeveloperSessionEvent } from './developer-sessions';
+import type { RemoteControlState } from './remote-control';
 import type { DesktopCapability, PermissionRequest, PermissionScope } from './capabilities';
 
 export const DESKTOP_RUNTIME_CHANNEL = 'agi:desktop-runtime';
@@ -36,8 +37,7 @@ export interface DesktopRuntimeRequest {
 }
 
 export type DesktopRuntimeResponse<T = unknown> =
-  | { ok: true; value: T }
-  | { ok: false; error: DesktopRuntimeErrorShape };
+  { ok: true; value: T } | { ok: false; error: DesktopRuntimeErrorShape };
 
 export function runtimeFailure(
   code: DesktopRuntimeErrorCode,
@@ -85,4 +85,5 @@ export type DesktopRuntimeEvent =
   | { kind: 'shell-output'; runId: string; stream: 'stdout' | 'stderr'; chunk: string }
   | { kind: 'browser-pairing-changed'; state: BrowserPairingState }
   | { kind: 'local-chat-delta'; runId: string; channel: 'text' | 'thinking'; delta: string }
-  | { kind: 'developer-session'; rootId: string; event: DeveloperSessionEvent };
+  | { kind: 'developer-session'; rootId: string; event: DeveloperSessionEvent }
+  | { kind: 'remote-control-changed'; state: RemoteControlState };

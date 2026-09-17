@@ -83,6 +83,7 @@ import { ErrorBoundary } from './features/error-handling';
 import { TooltipProvider } from './ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { initializeCoworkDispatchRuntime } from './services/coworkDispatch';
+import { initializeDeviceRegistryHeartbeat } from './services/deviceRegistryHeartbeat';
 import { initializeWebAuth, cloudAccountAuth } from './services/cloudAccountAuth';
 import {
   canUseDesktopCloudCodeExecution,
@@ -657,6 +658,7 @@ const DesktopShell = () => {
         initializeRuntimeActivityEventListeners(),
       );
       registerCleanup(initCloudSyncScheduler());
+      registerCleanup(initializeDeviceRegistryHeartbeat());
     }
 
     if (isTauri) {

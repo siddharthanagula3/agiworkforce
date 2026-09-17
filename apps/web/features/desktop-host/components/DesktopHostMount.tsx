@@ -3,6 +3,7 @@
 import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import { useDesktopAccount } from '../hooks/use-desktop-account';
 import { useDesktopDeepLinks } from '../hooks/use-desktop-deep-links';
+import { useDeviceHeartbeat } from '../hooks/use-device-heartbeat';
 import { useDesktopExternalLinks } from '../hooks/use-desktop-external-links';
 import { useHostCommands } from '../hooks/use-host-commands';
 import { useWindowZoom } from '../hooks/use-window-zoom';
@@ -11,6 +12,7 @@ import { DesktopTitleStrip } from './DesktopTitleStrip';
 
 function DesktopHostBehaviour({ host }: { host: HostBridge }) {
   useDesktopAccount(host);
+  useDeviceHeartbeat(host);
   useDesktopDeepLinks();
   useDesktopExternalLinks(host);
   useHostCommands(host);

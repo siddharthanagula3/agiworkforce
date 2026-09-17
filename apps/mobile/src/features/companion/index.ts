@@ -1,4 +1,6 @@
 export * from './components/AgentDashboard';
+export * from './components/CodeSessionsCard';
+export * from './components/CodeSessionView';
 export * from './components/CompanionDemoWalkthrough';
 export * from './components/ConnectionStateViews';
 export * from './components/DesktopInfoCard';

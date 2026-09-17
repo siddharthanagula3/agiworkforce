@@ -6,6 +6,7 @@ import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPan
 import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
 import {
   BrowserPairingSection,
+  RemoteControlSection,
   LocalAccessSection,
   useLocalModeHost,
 } from '@/features/desktop-host';
@@ -79,6 +80,7 @@ export function CapabilitiesSection() {
 
       {localModeHost ? <LocalAccessSection /> : null}
       <BrowserPairingSection />
+      <RemoteControlSection />
 
       <ToolApprovalDefaultsPanel />
 

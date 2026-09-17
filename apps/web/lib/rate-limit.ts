@@ -108,6 +108,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 push-token updates per minute (mirrors api-gateway limiter)
     failClosed: false,
   },
+  'device-heartbeat': {
+    limit: 30,
+    window: '1 m',
+    failClosed: false,
+  },
   'web-push': {
     limit: 10,
     window: '1 m', // 10 browser registrations per minute, one browser only ever needs a few

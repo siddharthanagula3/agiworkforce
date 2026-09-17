@@ -754,7 +754,9 @@ pub async fn login_agiworkforce() -> Result<()> {
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| AGIWORKFORCE_API_BASE.to_string());
     let entry = crate::oauth::device_code_login(&base).await?;
-    save_auth_entry(AGIWORKFORCE_AUTH_KEY, entry)
+    save_auth_entry(AGIWORKFORCE_AUTH_KEY, entry)?;
+    crate::device_registry::send_heartbeat().await;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]

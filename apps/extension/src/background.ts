@@ -186,6 +186,7 @@ import { readConsoleEntries } from './features/browser-tools/consoleCapture';
 import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
 import { readNetworkEntries } from './features/browser-tools/networkCapture';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
+import { sendChromeHeartbeatIfDue } from './features/cloud-bridge/deviceHeartbeat';
 import {
   isCurrentManagedCloudOperation,
   managedCloudOwnerKey,
@@ -5404,6 +5405,10 @@ for (const retired of RETIRED_ALARM_NAMES) {
 
 watchCloudMirroringEnabled();
 void settleMaintenanceAlarm();
+void sendChromeHeartbeatIfDue();
+chrome.runtime.onConnect.addListener(() => {
+  void sendChromeHeartbeatIfDue();
+});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === MAINTENANCE_ALARM) {

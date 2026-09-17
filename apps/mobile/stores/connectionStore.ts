@@ -39,6 +39,10 @@ import { notifyCompanionMessage } from '@/services/companionNotifications';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useDispatchTaskStore } from './dispatchTaskStore';
+import {
+  ingestRemoteCodeControl,
+  useRemoteCodeStore,
+} from '@/src/features/companion/remote-code/store';
 import type {
   ControlReceiptEvent,
   ControlReceiptOutcome,
@@ -683,6 +687,12 @@ function handleControlMessageInner(payload: unknown): void {
       if (event) useDispatchTaskStore.getState().applyStatus(event);
       break;
     }
+    case 'code.sessions':
+    case 'code.session.snapshot':
+    case 'code.session.event': {
+      ingestRemoteCodeControl(action, normalizedPayload);
+      break;
+    }
     case 'control.receipt': {
       const receipt = parseControlReceipt(normalizedPayload);
       if (receipt) controlAckTracker.resolve(receipt.requestId, receipt.outcome);
@@ -1208,6 +1218,7 @@ export const useConnectionStore = create<ConnectionState>()(
         });
         useAgentStore.getState().setAgents([]);
         useDispatchTaskStore.getState().reset();
+        useRemoteCodeStore.getState().reset();
       },
 
       sendControl: async (action: string, payload?: unknown): Promise<boolean> => {

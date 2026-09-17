@@ -695,6 +695,11 @@
       "file": "apps/web/lib/services/domain-retention-service.ts",
       "migration": 205,
       "reason": "per-domain retention reads organization_domain_retention_policies and writes organization_domain_retention_sweeps, which 0205 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0205 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0205 is applied."
+    },
+    {
+      "file": "apps/web/app/api/settings/devices/route.ts",
+      "migration": 187,
+      "reason": "the only organization_id this route reads is device_registrations.organization_id from 0207, which the registry query degrades past while the table is missing; device_refresh_tokens is read for family_id, device_id, revoked_at, used_at and expires_at, none of which 0187 adds."
     }
   ]
 }

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AgentDashboard } from '@/src/features/companion/components/AgentDashboard';
+import { CodeSessionsCard } from './CodeSessionsCard';
 import { DispatchTaskComposer } from '@/src/features/companion/components/DispatchTaskComposer';
 import { useThemeColors } from '@/src/ui/theme';
 import { RemoteWorkspaceBoundaryNotice } from './RemoteWorkspaceBoundaryNotice';
@@ -68,6 +69,11 @@ export function DesktopInfoCard({
 
       <SingleDesktopSessionNotice />
       <RemoteWorkspaceBoundaryNotice />
+
+      {Array.isArray(desktopMetadata?.capabilities) &&
+      desktopMetadata.capabilities.includes('code-sessions') ? (
+        <CodeSessionsCard />
+      ) : null}
 
       <DispatchTaskComposer />
 
