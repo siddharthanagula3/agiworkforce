@@ -138,6 +138,10 @@
       "reason": "mcp_app_payloads and mcp_task_bindings had row-level security disabled and no grants at all for the app_rls role, so a scoped statement was refused outright; the grants, row-level security and policies now exist as draft migration 0173 (NOT YET APPLIED in production) and this file can move to getUserScopedDb once it is applied"
     },
     {
+      "path": "apps/web/lib/feature-flags/flag-store.ts",
+      "reason": "platform flag configuration read and written by the operator console; the override read is constrained to the caller's already-verified user id and active workspace id"
+    },
+    {
       "path": "apps/web/lib/github-app.ts",
       "reason": "shared by the GitHub webhook, verified by HMAC signature with no Clerk session, and the OAuth install routes, so not every caller has a session to bind"
     },
@@ -180,6 +184,10 @@
     {
       "path": "apps/web/lib/services/free-trial-service.ts",
       "reason": "every statement already runs under RLS through createClaimedUserScopedDb bound to the reservation owner, which needs a schema-owner pool to SET ROLE app_rls on; getNeonDb here is that pool, not an unscoped read"
+    },
+    {
+      "path": "apps/web/lib/services/model-rollout/rollout-evaluation-service.ts",
+      "reason": "hourly rollout cron aggregate over every cohort; the managed_usage_requests join only prices a trace row already keyed by that user"
     },
     {
       "path": "apps/web/lib/services/org-entitlements.ts",

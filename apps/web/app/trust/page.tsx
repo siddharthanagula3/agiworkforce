@@ -58,7 +58,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 76 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 80 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -151,7 +151,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 124 of 229 database-backed hosted API route files. Counted against the 229 route files that reach the database; the other 90 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 105 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-17.',
+      'Partial: 127 of 238 database-backed hosted API route files. Counted against the 238 route files that reach the database; the other 95 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 111 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-17.',
   },
   {
     label: 'Authentication and CSRF',
@@ -316,6 +316,16 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-17',
+                        value:
+                          'Re-measured after the background job queue, the scheduler policies and event triggers shipped. Three tables joined the enumerated erasure list in that change: the background jobs filed against an account, the event triggers it owns, and the delivery record of every event those triggers considered. Triggers and their deliveries are exported; queued jobs are withheld as transient plumbing, because what a job produces is exported in the section it belongs to. Nine hosted routes arrived with it, so the row-level-isolation count moved from 124 to 127 of 238 database-backed routes and the owner-connection remainder from 105 to 111: the three trigger routes read as the caller, while the four provider receivers, the admin dead-letter console and the drain cron resolve their subject from a signed payload or a scheduler credential and so connect as the owner.',
+                      },
+                      {
+                        label: '2026-09-17',
+                        value:
+                          'Re-measured after rollout feature flags and the routing decision trace shipped. The enumerated erasure list grew from 76 user-scoped tables to 80, the routing decision trace among them: it records which model answered a request and how that turn ended, it is deleted with the account, and it is withheld from the export because it describes this product\u2019s routing and provider economics rather than anything the account wrote. The row-level-isolation count is now 127 of 238 database-backed routes, the owner-connection remainder 111, and 95 hosted routes touch no database, five of them the new operator and scheduled rollout routes, which read the database through services rather than in the route file. Each figure is derived from the deciding source by a test, not maintained by hand.',
+                      },
                       {
                         label: '2026-09-17',
                         value:

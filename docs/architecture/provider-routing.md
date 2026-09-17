@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Provider/platform
-Last updated: 2026-09-06
+Last updated: 2026-09-17
 
 This matrix is the product contract for routing and UI labels. It records what AGI may claim in Local/BYOK/Managed modes. Provider SDK details can change; surfaces must read capability metadata instead of hardcoding provider assumptions.
 
@@ -101,3 +101,40 @@ runs the stage; `0`, `false` or `off` restores the authored order everywhere in
 one edit. Each resolution carries the decision inputs on
 `taskFamilyDecision`: the family, the floor band, every candidate with its
 route and expected microUSD, and the slot and route that were taken.
+
+## Rollout: observed health, region, canary, shadow and the decision trace
+
+Every rollout stage is on by default and withdrawn by a kill switch, because a
+stage whose inputs are absent is already a no-op: a route nothing has been
+observed about carries no penalty, a slot that declares no canary serves its
+promoted model, and a slot that declares no shadow mirrors nothing.
+`AGI_ROUTING_OBSERVED_HEALTH`, `AGI_ROUTING_CANARY` and `AGI_ROUTING_SHADOW` are
+the operator switches, and the `routing.observed_health`, `routing.canary` and
+`routing.shadow` feature flags are the same switches without a deploy.
+
+Observed health now reaches the serving path with the capability the request
+actually carries. `capabilitiesInUse` is derived from the turn, tools or a
+structured response format, the capability-health store is read for the routes
+the first pass named, and only a recorded loss triggers a second resolution, so
+a turn with no tools and a fleet with no recorded loss costs nothing.
+
+Region is an admission input, not a ranking one. `region` is the residency
+region this deployment processes in, read from the catalog's own governance
+record for managed cloud, and a route whose transport publishes a region list
+without it is refused. A transport that publishes nothing is admitted: an
+unpublished region is an evidence gap rather than a known violation, and the
+caller that must be strict about that gap says so with `excludedRouteHosts`.
+
+Canary membership is the request-id hash against the slot's `trafficFraction`
+unless a `routing.canary.<slot>` flag exists, in which case that flag's
+targeting and percentage ramp decide the cohort. The shadow half runs after the
+served answer: the mirrored request is metered as platform cost, recorded under
+the shadow scope, capped per slot per day, and its answer is discarded.
+
+Every decision is persisted as a structured trace in `routing_decision_traces`
+(0212), completed with the turn's outcome, latency and cost, and deleted on a
+bounded window. The hourly `/api/cron/evaluate-model-rollout` compares each
+canary and shadow cohort with the promoted model serving the same slot in the
+same window, records the result in `model_rollout_benchmarks` per lifecycle
+stage, and pages on call through `pageOnCall` when the candidate is worse on
+quality, latency or cost.

@@ -197,7 +197,7 @@ describe('schedule service persistence', () => {
     const [sql, params] = query.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/schedule_type/i);
     expect(sql).toMatch(/next_execution_at/i);
-    expect(sql).not.toMatch(/recurrence|time_of_day|is_active|next_run_at/i);
+    expect(sql).not.toMatch(/\brecurrence\b|time_of_day|is_active|next_run_at/i);
     expect(params).toContain('0 12 * * *');
     expect(params).toContain('2026-07-15T12:00:00.000Z');
   });
@@ -735,7 +735,7 @@ describe('schedule service persistence', () => {
     );
 
     const [, params] = query.mock.calls[2] as [string, unknown[]];
-    expect(params.slice(3)).toEqual([null, 'completed', false]);
+    expect(params.slice(3, 6)).toEqual([null, 'completed', false]);
   });
 });
 

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-13
+Last updated: 2026-09-17
 
 ## Monorepo Shape
 
@@ -122,6 +122,25 @@ Enterprise readiness now spans:
 - docs under `docs/compliance`.
 
 Enterprise managed compute remains gated on metering, fraud, refund, chargeback, provider terms, and audit/export controls.
+
+## Rollout Feature Flags
+
+One flag store and one evaluator serve every surface:
+
+- `feature_flag_definitions` (0211) holds the definition: variants, an ordered
+  rule list targeting user, workspace, role, plan, region, country, surface,
+  client version and a stable percentage bucket, a kill switch, an expiry and a
+  version.
+- `feature_flags` (0016, extended by 0211) holds per-user and per-workspace
+  overrides, which outrank the rules and lose only to the kill switch.
+- `apps/web/lib/feature-flags` evaluates them; `/api/me` returns the evaluated
+  flags in `feature_flags` beside the computed keys, with the variant of each in
+  `feature_flag_variants`, and the `routing.` namespace stays server-side.
+- `/api/admin/feature-flags` and the operator console's flags tab are the only
+  write path, and every change is an audit event.
+
+Flags are rollout, not policy: what a workspace is allowed to do stays in the
+workspace policy layers, and a flag only decides who has received a change yet.
 
 ## Verification
 

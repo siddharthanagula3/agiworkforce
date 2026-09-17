@@ -95,6 +95,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/drain-background-jobs",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/page-security-anomalies",
       "schedule": "*/30 * * * *"
     },
@@ -117,6 +121,10 @@
     {
       "path": "/api/cron/enforce-billing-collection",
       "schedule": "20 5 * * *"
+    },
+    {
+      "path": "/api/cron/evaluate-model-rollout",
+      "schedule": "5 * * * *"
     }
   ]
 }

@@ -14,6 +14,8 @@ import { logger } from '@/lib/logger';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { getProviderDefaultModel, getTaskModelForProvider } from '@agiworkforce/types';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
+import { ingestTriggerEvent } from '@/lib/triggers/trigger-ingest';
+import { toGitHubTriggerEvent } from '@/lib/triggers/github-events';
 import { routeGitHubWebhookEvent } from './webhook-router';
 import { recordDeliveryOnce } from './delivery-dedup';
 import { escapeUntrustedPrDiff } from './pr-diff-prompt';
@@ -102,6 +104,36 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         'Duplicate GitHub webhook delivery acknowledged without reprocessing',
       );
       return NextResponse.json({ received: true, duplicate: true });
+    }
+  }
+
+  if (routedEvent.kind === 'automation-event') {
+    const triggerEvent = toGitHubTriggerEvent({
+      event: routedEvent.event,
+      action: routedEvent.action,
+      deliveryId: request.headers.get('x-github-delivery') ?? `${routedEvent.event}:${Date.now()}`,
+      payload: routedEvent.payload,
+    });
+    if (!triggerEvent) {
+      return NextResponse.json({ received: true, event: routedEvent.event, matched: 0 });
+    }
+    try {
+      const outcomes = await ingestTriggerEvent(getNeonDb(), triggerEvent);
+      return NextResponse.json({
+        received: true,
+        event: triggerEvent.type,
+        matched: outcomes.length,
+        queued: outcomes.filter((outcome) => outcome.outcome === 'enqueued').length,
+      });
+    } catch (error) {
+      logger.error(
+        { error, event: triggerEvent.type },
+        'GitHub automation event could not be ingested',
+      );
+      return NextResponse.json(
+        { error: 'Webhook processing failed' },
+        { status: 500, headers: { 'Retry-After': '10' } },
+      );
     }
   }
 

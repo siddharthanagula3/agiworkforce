@@ -65,11 +65,10 @@ import { modelRegistry } from '@agiworkforce/model-registry';
 import type { RoutingTaskType } from '@agiworkforce/types';
 
 import type { IntrinsicCapability, RoutingProfile } from './auto';
+import { routingStageEnabled } from './routing-stages';
 import type { TaskFamily } from './task-family';
 
 export const TASK_FAMILY_STAGE_ENV = 'AGI_ROUTING_TASK_FAMILY_STAGE';
-
-const TASK_FAMILY_STAGE_KILL_VALUES: ReadonlySet<string> = new Set(['0', 'false', 'off']);
 
 /**
  * The stage is ON unless an operator turns it off.
@@ -79,12 +78,7 @@ const TASK_FAMILY_STAGE_KILL_VALUES: ReadonlySet<string> = new Set(['0', 'false'
  * order across every surface in one edit.
  */
 export function taskFamilyRoutingStageEnabled(): boolean {
-  if (typeof process === 'undefined') return true;
-  const raw = process.env?.[TASK_FAMILY_STAGE_ENV];
-  if (raw === undefined) return true;
-  const normalized = raw.trim().toLowerCase();
-  if (normalized.length === 0) return true;
-  return !TASK_FAMILY_STAGE_KILL_VALUES.has(normalized);
+  return routingStageEnabled(TASK_FAMILY_STAGE_ENV);
 }
 
 export const MICRO_USD_PER_CENT = 10_000;

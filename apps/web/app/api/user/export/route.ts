@@ -687,6 +687,36 @@ const gatewayChatMessageExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+const eventTriggerExportSchema = z.object({
+  id: z.string(),
+  task_id: z.string(),
+  name: z.string(),
+  source: z.string(),
+  event_types: z.array(z.string()),
+  source_account: z.string().nullable(),
+  conditions: z.unknown().nullable(),
+  debounce_seconds: z.number(),
+  max_attempts: z.number(),
+  is_enabled: z.boolean(),
+  verification_status: z.string(),
+  verified_at: timestampSchema.nullable(),
+  last_fired_at: timestampSchema.nullable(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const eventTriggerDeliveryExportSchema = z.object({
+  id: z.string(),
+  trigger_id: z.string(),
+  source: z.string(),
+  event_type: z.string(),
+  delivery_id: z.string(),
+  outcome: z.string(),
+  detail: z.string().nullable(),
+  run_id: z.string().nullable(),
+  received_at: timestampSchema,
+});
+
 const conversationBranchExportSchema = z.object({
   id: z.string(),
   source_conversation_id: z.string(),
@@ -1031,6 +1061,29 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     rowLimit: EXPORT_ROW_LIMIT,
   },
   {
+    section: 'event_triggers',
+    table: 'event_triggers',
+    sql: `select id, task_id, name, source, event_types, source_account, conditions,
+                 debounce_seconds, max_attempts, is_enabled, verification_status, verified_at,
+                 last_fired_at, created_at, updated_at
+          from event_triggers
+          where user_id = $1
+          order by created_at asc`,
+    schema: eventTriggerExportSchema,
+  },
+  {
+    section: 'event_trigger_deliveries',
+    table: 'event_trigger_events',
+    sql: `select id, trigger_id, source, event_type, delivery_id, outcome, detail, run_id,
+                 received_at
+          from event_trigger_events
+          where user_id = $1
+          order by received_at desc
+          limit 1000`,
+    schema: eventTriggerDeliveryExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
     section: 'conversation_branches',
     table: 'conversation_branches',
     sql: `select id, source_conversation_id, target_conversation_id, branch_point_message_id,
@@ -1314,10 +1367,14 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     'Transient cache in front of a connector call (0147 names it a stateless cache); nothing is held here that is not read back from the connector.',
   web_artifact_index:
     'Derived lookup rebuilt from web_artifacts, which is exported in full alongside every version.',
+  routing_decision_traces:
+    "Operational telemetry about which model answered each request and how the router chose it, kept for rollout alerting for a bounded window. It records this product's routing policy and provider economics rather than anything the subject wrote; the models that answered the subject's turns are exported with the conversations themselves.",
   retrieval_documents:
     'Search index state derived from chats, project files, library files, artifacts, research reports and developer sessions, each exported in full in its own section.',
   retrieval_chunks:
     'Passages and embeddings cut from those same exported sources for search; an embedding is a numeric derivative of text the export already contains.',
+  background_jobs:
+    'Background work still queued or recently finished for this account, such as the notification a scheduled run owes you or an upload cleanup. It is transient plumbing that carries no content of its own: what the work produces is exported in the section it belongs to, and a job that has done its work is deleted on its queue retention.',
 };
 
 const MEDIA_DOWNLOAD_FIELD = 'download_url';

@@ -17,6 +17,7 @@ import {
   type RouteHealthSnapshot,
   type RoutingRuntimeState,
 } from './runtime-state';
+import { routingStageEnabled } from './routing-stages';
 import type { TaskFamily } from './task-family';
 import {
   expectedMicroUsdFromCents,
@@ -143,6 +144,7 @@ export interface RoutingRegistryView {
   runtimeProfiles: Record<string, RegistryRuntimeProfile>;
   capabilities: Record<string, RegistryCapabilities>;
   limits: Record<string, { contextTokens?: number }>;
+  governance?: Record<string, { residencyRegions?: readonly string[] | null }>;
   policies: { auto: AutoPolicy };
 }
 
@@ -204,6 +206,17 @@ export interface AutoRoutingRequest {
    * several hosts at the same price.
    */
   excludedRouteHosts?: ReadonlySet<string>;
+  /**
+   * The residency region this request must be processed in, such as `us`.
+   *
+   * Admission against what each transport publishes in the catalog's provider
+   * governance: a route whose transport documents a region list without this
+   * one is refused. A transport that publishes nothing is not refused, because
+   * an unpublished region is an evidence gap rather than a known violation, and
+   * the caller that must be strict about that gap says so with
+   * `excludedRouteHosts`.
+   */
+  region?: string | null;
   capabilityDocument?: EffectiveCapabilityDocument | null;
   capabilityRequirements?: readonly CapabilityRequirement[];
   fallbackToAutoForCapabilityMismatch?: boolean;
@@ -283,6 +296,21 @@ export interface AutoRoutingRequest {
    */
   requestId?: string | null;
   enableCanary?: boolean;
+  /**
+   * Canary cohort membership decided outside the router, by slot id.
+   *
+   * A slot named here takes its answer from the caller, which is how a feature
+   * flag's targeting and percentage ramp drive a rollout. A slot not named keeps
+   * the request-id hash against the catalog's `trafficFraction`, so a flag that
+   * does not exist changes nothing.
+   */
+  canaryCohorts?: Readonly<Record<string, boolean>>;
+  /**
+   * Shadow mirroring, independent of serving a canary. Absent, it follows
+   * `enableCanary` when that is given and the stage default otherwise, so a
+   * caller that turns the rollout stage off turns both halves off.
+   */
+  enableShadow?: boolean;
   /**
    * How many requests each slot has already mirrored today, by slot id.
    *
@@ -667,19 +695,21 @@ const MAX_FALLBACK_ROUTES = 4;
 const MAX_SAME_MODEL_FALLBACKS_BEFORE_SUBSTITUTION = 2;
 
 export const OBSERVED_HEALTH_ENV = 'AGI_ROUTING_OBSERVED_HEALTH';
-const OBSERVED_HEALTH_ENABLED_VALUE = '1';
 
 export function observedHealthRankingEnabled(): boolean {
-  if (typeof process === 'undefined') return false;
-  return process.env?.[OBSERVED_HEALTH_ENV] === OBSERVED_HEALTH_ENABLED_VALUE;
+  return routingStageEnabled(OBSERVED_HEALTH_ENV);
 }
 
 export const CANARY_ENV = 'AGI_ROUTING_CANARY';
-const CANARY_ENABLED_VALUE = '1';
 
 export function canaryRoutingEnabled(): boolean {
-  if (typeof process === 'undefined') return false;
-  return process.env?.[CANARY_ENV] === CANARY_ENABLED_VALUE;
+  return routingStageEnabled(CANARY_ENV);
+}
+
+export const SHADOW_ENV = 'AGI_ROUTING_SHADOW';
+
+export function shadowMirroringEnabled(): boolean {
+  return routingStageEnabled(SHADOW_ENV);
 }
 
 const FNV_OFFSET_BASIS = 2_166_136_261;
@@ -714,8 +744,11 @@ function canarySelectsRequest(
   slot: AutoSlotPolicy,
   request: AutoRoutingRequest,
   enabled: boolean,
+  slotId?: string,
 ): boolean {
   if (!enabled || slot.canary === undefined) return false;
+  const cohort = slotId === undefined ? undefined : request.canaryCohorts?.[slotId];
+  if (cohort !== undefined) return cohort;
   const requestId = request.requestId;
   if (typeof requestId !== 'string' || requestId.length === 0) return false;
   return canaryBucket(requestId) < slot.canary.trafficFraction;
@@ -947,6 +980,10 @@ function routeAdmissionRejections(
   const reasons: string[] = [];
   if (request.excludedRouteHosts?.has(route.provider)) {
     reasons.push(`route ${routeId} dispatches through an excluded transport`);
+  }
+  const residencyRegions = registry.governance?.[route.provider]?.residencyRegions;
+  if (request.region && residencyRegions && !residencyRegions.includes(request.region)) {
+    reasons.push(`route ${routeId} does not process requests in region ${request.region}`);
   }
   if (request.organizationPolicy) {
     // Both provider identities: the VENDOR that owns the model and the
@@ -1617,6 +1654,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     reason: SelectedAutoRoute['reason'];
   }[] = [];
   const canaryEnabled = request.enableCanary ?? canaryRoutingEnabled();
+  const shadowEnabled = request.enableShadow ?? request.enableCanary ?? shadowMirroringEnabled();
   const selectSlot = (
     modelKey: string,
     eligibility: EligibilityResult,
@@ -1648,7 +1686,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       fallbacks,
       taskFamilyDecision,
       slotId !== undefined && slot !== undefined
-        ? shadowMirror(slotId, slot, task, request, canaryEnabled)
+        ? shadowMirror(slotId, slot, task, request, shadowEnabled)
         : undefined,
       slotId,
     );
@@ -1664,7 +1702,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
   const canarySelection = (slotId: string): SelectedAutoRoute | undefined => {
     const slot = policy.slots[slotId];
     if (!slot?.canary) return undefined;
-    if (!canarySelectsRequest(slot, request, canaryEnabled)) return undefined;
+    if (!canarySelectsRequest(slot, request, canaryEnabled, slotId)) return undefined;
     const eligibility = evaluateEligibility(slot.canary.modelKey, task, request);
     if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) return undefined;
     if (!isAffordable(slot.canary.modelKey, request)) return undefined;

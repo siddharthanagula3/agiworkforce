@@ -159,8 +159,14 @@ describe('POST /api/github/webhook', () => {
     expect(json.error).toMatch(/invalid signature/i);
   });
 
-  it('returns 200 immediately for non-issue_comment events without processing', async () => {
-    const pushPayload = { ref: 'refs/heads/main', commits: [] };
+  it('acknowledges a repository event without reviewing anything inline', async () => {
+    // No automation trigger listens to this repository, so the ingest matches nothing.
+    mockDbQuery.mockResolvedValue([]);
+    const pushPayload = {
+      ref: 'refs/heads/main',
+      commits: [],
+      repository: { full_name: 'agi/workforce' },
+    };
     const body = JSON.stringify(pushPayload);
     const request = new NextRequest('http://localhost/api/github/webhook', {
       method: 'POST',
@@ -174,9 +180,44 @@ describe('POST /api/github/webhook', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(200);
-    const json = (await response.json()) as { received: boolean };
+    const json = (await response.json()) as { received: boolean; matched: number };
     expect(json.received).toBe(true);
+    expect(json.matched).toBe(0);
 
+    expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('refuses a repository event with no repository to route it by', async () => {
+    const body = JSON.stringify({ ref: 'refs/heads/main', commits: [] });
+    const request = new NextRequest('http://localhost/api/github/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hub-signature-256': signPayload(body, SECRET),
+        'x-github-event': 'push',
+      },
+      body,
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('ignores an event nothing subscribes to', async () => {
+    const body = JSON.stringify({ action: 'opened', repository: { full_name: 'agi/workforce' } });
+    const request = new NextRequest('http://localhost/api/github/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hub-signature-256': signPayload(body, SECRET),
+        'x-github-event': 'issues',
+      },
+      body,
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
     expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
   });
 

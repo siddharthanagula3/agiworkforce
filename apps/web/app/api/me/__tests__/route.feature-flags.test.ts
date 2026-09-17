@@ -1,0 +1,173 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
+
+vi.mock('server-only', () => ({}));
+
+const { mockGetClerkAuthUser, mockNeonQuery, mockGetSubscription, flagMocks } = vi.hoisted(() => ({
+  mockGetClerkAuthUser: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockGetSubscription: vi.fn(),
+  flagMocks: {
+    getActiveFlagDefinitions: vi.fn(),
+    getSubjectOverrides: vi.fn(),
+    resolveOrgMembership: vi.fn(),
+  },
+}));
+
+vi.mock('@/lib/feature-flags/flag-store', () => ({
+  getActiveFlagDefinitions: (...args: unknown[]) => flagMocks.getActiveFlagDefinitions(...args),
+  getSubjectOverrides: (...args: unknown[]) => flagMocks.getSubjectOverrides(...args),
+}));
+
+vi.mock('@/lib/services/org-sharing-service', () => ({
+  resolveOrgMembership: (...args: unknown[]) => flagMocks.resolveOrgMembership(...args),
+}));
+
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/csrf', () => ({
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/web-search/web-search-tool', () => ({
+  webSearchBackendConfigured: vi.fn(() => true),
+}));
+
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: mockGetClerkAuthUser,
+}));
+
+vi.mock('@clerk/nextjs/server', () => ({
+  clerkClient: vi.fn().mockResolvedValue({
+    users: {
+      getUser: vi.fn().mockResolvedValue({
+        fullName: 'Contract Tester',
+        firstName: 'Contract',
+        lastName: 'Tester',
+        username: 'contract',
+        primaryEmailAddress: { emailAddress: 'contract@example.com' },
+      }),
+    },
+  }),
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+  })),
+}));
+
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: mockGetSubscription },
+}));
+
+import { GET } from '../route';
+
+const WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
+
+function flag(key: string, rules: unknown[], overrides: Record<string, unknown> = {}) {
+  return {
+    key,
+    description: '',
+    killSwitch: false,
+    variants: ['on', 'off', 'treatment'],
+    defaultVariant: 'off',
+    rules,
+    expiresAt: null,
+    archivedAt: null,
+    version: 1,
+    createdAt: '2026-09-17T00:00:00.000Z',
+    updatedAt: '2026-09-17T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeGetRequest(headers: Record<string, string> = {}) {
+  return new Request('http://localhost:3000/api/me?surface=desktop', {
+    method: 'GET',
+    headers,
+  }) as never;
+}
+
+describe('GET /api/me, evaluated rollout flags', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_flags_1', email: 'f@example.com' });
+    mockNeonQuery.mockResolvedValue([]);
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'max', status: 'active' });
+    flagMocks.resolveOrgMembership.mockResolvedValue({
+      organizationId: WORKSPACE_ID,
+      role: 'admin',
+    });
+    flagMocks.getSubjectOverrides.mockResolvedValue([]);
+  });
+
+  it('adds evaluated flags beside the existing keys without changing their shape', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      flag('composer.voice', [
+        {
+          id: 'targeted',
+          conditions: {
+            workspaceIds: [WORKSPACE_ID],
+            roles: ['admin'],
+            plans: ['max'],
+            surfaces: ['desktop'],
+            countries: ['DE'],
+            regions: ['us'],
+            clientVersion: { min: '3.1' },
+          },
+          bucketBy: 'user',
+          variant: 'treatment',
+        },
+      ]),
+      flag('composer.other', []),
+      flag('routing.canary', [{ id: 'all', conditions: {}, bucketBy: 'user', variant: 'on' }]),
+    ]);
+
+    const response = await GET(
+      makeGetRequest({ 'x-vercel-ip-country': 'de', 'x-agi-client-version': '3.2.0' }),
+    );
+    const parsed = MeResponseSchema.safeParse(await response.json());
+    expect(parsed.error).toBeUndefined();
+    if (!parsed.success) return;
+    expect(parsed.data.feature_flags).toMatchObject({
+      advanced_model_access: true,
+      'composer.voice': true,
+      'composer.other': false,
+    });
+    expect(parsed.data.feature_flags).not.toHaveProperty('routing.canary');
+    expect(parsed.data.feature_flag_variants).toEqual({
+      'composer.voice': 'treatment',
+      'composer.other': 'off',
+    });
+  });
+
+  it('does not let a flag named like a computed key override the computed value', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      flag('code_execution', [{ id: 'all', conditions: {}, bucketBy: 'user', variant: 'on' }]),
+    ]);
+    mockGetSubscription.mockResolvedValue(null);
+    const response = await GET(makeGetRequest());
+    const body = await response.json();
+    expect(body.feature_flags.advanced_model_access).toBe(false);
+    expect(typeof body.feature_flags.code_execution).toBe('boolean');
+  });
+
+  it('serves the existing keys when the flag store has nothing to evaluate', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([]);
+    flagMocks.resolveOrgMembership.mockRejectedValue(new Error('membership read failed'));
+    const response = await GET(makeGetRequest());
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(Object.keys(body.feature_flags).sort()).toEqual(
+      ['advanced_model_access', 'code_execution', 'generic_web_search'].sort(),
+    );
+    expect(body.feature_flag_variants).toEqual({});
+  });
+});

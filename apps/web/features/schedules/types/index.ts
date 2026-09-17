@@ -4,6 +4,9 @@ import {
   getModelMetadataById,
 } from '@agiworkforce/types';
 import type {
+  ManagedCloudScheduleCondition,
+  ManagedCloudScheduleDaypart,
+  ManagedCloudScheduleMissedExecutionPolicy,
   ManagedCloudScheduleRecurrence,
   ManagedCloudScheduleRun,
   ManagedCloudScheduleTask,
@@ -19,6 +22,53 @@ export type ScheduleTask = ManagedCloudScheduleTask;
 export type ScheduleRun = ManagedCloudScheduleRun;
 
 export type IntervalUnit = 'minutes' | 'hours' | 'days';
+
+export type DaypartPreset = 'any' | 'business' | 'mornings' | 'evenings' | 'weekends';
+
+export const DAYPART_PRESETS: ReadonlyArray<{
+  value: DaypartPreset;
+  label: string;
+  windows: ManagedCloudScheduleDaypart[];
+}> = [
+  { value: 'any', label: 'Any time', windows: [] },
+  {
+    value: 'business',
+    label: 'Business hours (Mon to Fri, 09:00 to 17:00)',
+    windows: [{ days: [1, 2, 3, 4, 5], start: '09:00', end: '17:00' }],
+  },
+  {
+    value: 'mornings',
+    label: 'Mornings (every day, 06:00 to 12:00)',
+    windows: [{ days: [0, 1, 2, 3, 4, 5, 6], start: '06:00', end: '12:00' }],
+  },
+  {
+    value: 'evenings',
+    label: 'Evenings (every day, 18:00 to 23:00)',
+    windows: [{ days: [0, 1, 2, 3, 4, 5, 6], start: '18:00', end: '23:00' }],
+  },
+  {
+    value: 'weekends',
+    label: 'Weekends (Sat and Sun, 09:00 to 21:00)',
+    windows: [{ days: [0, 6], start: '09:00', end: '21:00' }],
+  },
+];
+
+export function daypartsForPreset(preset: DaypartPreset): ManagedCloudScheduleDaypart[] | null {
+  const match = DAYPART_PRESETS.find((entry) => entry.value === preset);
+  return match && match.windows.length > 0 ? match.windows : null;
+}
+
+export function presetForDayparts(
+  dayparts: readonly ManagedCloudScheduleDaypart[] | null | undefined,
+): DaypartPreset {
+  if (!dayparts || dayparts.length === 0) return 'any';
+  const encoded = JSON.stringify(dayparts);
+  return (
+    DAYPART_PRESETS.find(
+      (entry) => entry.windows.length > 0 && JSON.stringify(entry.windows) === encoded,
+    )?.value ?? 'any'
+  );
+}
 
 export interface ScheduleDraft {
   name: string;
@@ -38,6 +88,12 @@ export interface ScheduleDraft {
   expiresLocal: string;
   maxExecutions: string;
   projectId: string | null;
+  recurrenceRule: string;
+  daypartPreset: DaypartPreset;
+  retryMaxAttempts: string;
+  retryBackoffMinutes: string;
+  missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicy;
+  conditionUrl: string;
 }
 
 export interface ScheduleMutation {
@@ -57,6 +113,12 @@ export interface ScheduleMutation {
   expiresAt: string | null;
   maxExecutions: number | null;
   projectId: string | null;
+  recurrenceRule: string | null;
+  dayparts: ManagedCloudScheduleDaypart[] | null;
+  retryMaxAttempts: number;
+  retryBackoffSeconds: number;
+  missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicy;
+  condition: ManagedCloudScheduleCondition | null;
 }
 
 export type ScheduleFormErrors = Partial<Record<keyof ScheduleDraft | 'form', string>>;
@@ -126,16 +188,26 @@ export function recurrenceLabel(recurrence: ProductRecurrence): string {
     monthly: 'Monthly',
     custom: 'Custom Cron',
     interval: 'Interval',
+    rrule: 'Recurrence Rule',
+    event: 'On An Event',
   };
   return labels[recurrence];
 }
 
 export function taskRecurrence(task: ScheduleTask): ProductRecurrence {
   const stored = task.metadata?.['productRecurrence'];
-  if (['once', 'daily', 'weekly', 'monthly', 'custom', 'interval'].includes(String(stored))) {
+  if (
+    ['once', 'daily', 'weekly', 'monthly', 'custom', 'interval', 'rrule', 'event'].includes(
+      String(stored),
+    )
+  ) {
     return stored as ProductRecurrence;
   }
   return task.scheduleType === 'cron' ? 'custom' : task.scheduleType;
+}
+
+export function scheduleConditionUrl(task: ScheduleTask): string {
+  return task.condition?.url ?? '';
 }
 
 export function scheduleResultText(run: ScheduleRun): string | null {

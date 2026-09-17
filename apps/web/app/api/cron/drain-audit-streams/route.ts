@@ -5,25 +5,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { enqueueJob } from '@/lib/jobs/job-service';
 import {
-  drainAuditDestination,
   hasActiveAuditStreamDestinations,
   listStreamingOrganizations,
-  type DrainResult,
 } from '@/lib/services/audit-streaming-service';
 
 export const runtime = 'nodejs';
 
-/** Bounded per run so one crowded minute cannot exceed the function timeout. */
+/** Bounded per run so one crowded minute cannot queue an unbounded fan-out. */
 const MAX_DESTINATIONS_PER_RUN = 25;
 
+/** One delivery job per destination per sweep, whatever this run is retried. */
+const SWEEP_BUCKET_MS = 30 * 60 * 1000;
+
 /**
- * Delivers new audit events to each workspace's SIEM.
+ * Queues a delivery of new audit events to each workspace's SIEM.
  *
- * Drained here rather than written inline on the audit path: delivering during
- * an audited action would couple every policy change to a customer endpoint
- * being up, and an unreachable SIEM must never stop the thing it is meant to
- * record.
+ * Queued rather than written inline on the audit path: delivering during an
+ * audited action would couple every policy change to a customer endpoint being
+ * up, and an unreachable SIEM must never stop the thing it is meant to record.
+ * The job model (0208) owns the retry, the backoff and the dead letter, so a
+ * destination that fails is retried on its own schedule instead of inside this
+ * run's budget.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!verifyCronRequest(request)) {
@@ -35,11 +39,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (hasActiveDestinations === false) {
     return NextResponse.json({
       destinationsConsidered: 0,
-      destinationsDrained: 0,
+      destinationsQueued: 0,
+      destinationsAlreadyQueued: 0,
       destinationsDeferred: 0,
-      eventsDelivered: 0,
       failed: 0,
-      skipped: 0,
       skippedDatabase: true,
     });
   }
@@ -55,32 +58,33 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const scheduled = organizationIds.slice(0, MAX_DESTINATIONS_PER_RUN);
-  const results: DrainResult[] = [];
+  const bucket = Math.floor(Date.now() / SWEEP_BUCKET_MS);
+  let queued = 0;
+  let alreadyQueued = 0;
+  let failed = 0;
 
-  // Sequential: each delivery is an outbound request to a third party, and
-  // fanning them out would let one slow endpoint's timeout overlap with every
-  // other workspace's.
   for (const organizationId of scheduled) {
     try {
-      results.push(await drainAuditDestination(db, organizationId));
-    } catch (error) {
-      logger.error({ error, organizationId }, 'Audit stream drain threw for one destination');
-      results.push({
+      const job = await enqueueJob(db, {
+        kind: 'webhooks.audit-stream-delivery',
         organizationId,
-        delivered: 0,
-        status: 'failed',
-        error: error instanceof Error ? error.message : String(error),
+        idempotencyKey: `audit-stream:${organizationId}:${bucket}`,
+        payload: { organizationId },
       });
+      if (job.created) queued += 1;
+      else alreadyQueued += 1;
+    } catch (error) {
+      failed += 1;
+      logger.error({ error, organizationId }, 'Audit stream delivery could not be queued');
     }
   }
 
   const summary = {
     destinationsConsidered: organizationIds.length,
-    destinationsDrained: scheduled.length,
+    destinationsQueued: queued,
+    destinationsAlreadyQueued: alreadyQueued,
     destinationsDeferred: organizationIds.length - scheduled.length,
-    eventsDelivered: results.reduce((sum, r) => sum + r.delivered, 0),
-    failed: results.filter((r) => r.status === 'failed').length,
-    skipped: results.filter((r) => r.status === 'skipped').length,
+    failed,
   };
 
   // Deferral is normal for one busy run and a compliance problem if it
@@ -90,6 +94,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (summary.destinationsDeferred > 0) {
     logger.warn(summary, 'Audit stream drain deferred destinations · raise the per-run cap');
   }
-  logger.info(summary, 'Audit stream drain completed');
+  logger.info(summary, 'Audit stream deliveries queued');
   return NextResponse.json(summary);
 }

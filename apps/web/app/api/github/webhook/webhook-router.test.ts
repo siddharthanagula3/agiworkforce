@@ -59,11 +59,59 @@ describe('routeGitHubWebhookEvent', () => {
   });
 
   it('explicitly ignores syntactically valid unsupported events', () => {
-    expect(routeGitHubWebhookEvent('push', { ref: 'refs/heads/main' })).toEqual({
+    expect(routeGitHubWebhookEvent('deployment_status', { deployment: {} })).toEqual({
       kind: 'ignored',
-      event: 'push',
+      event: 'deployment_status',
       action: null,
       reason: 'unsupported-event',
+    });
+  });
+
+  it('routes repository and CI events an automation trigger can fire on', () => {
+    const repository = { full_name: 'agi/workforce' };
+    expect(routeGitHubWebhookEvent('push', { ref: 'refs/heads/main', repository })).toMatchObject({
+      kind: 'automation-event',
+      event: 'push',
+      action: null,
+    });
+    expect(routeGitHubWebhookEvent('pull_request', { action: 'opened', repository })).toMatchObject(
+      { kind: 'automation-event', event: 'pull_request', action: 'opened' },
+    );
+    expect(
+      routeGitHubWebhookEvent('workflow_run', { action: 'completed', repository }),
+    ).toMatchObject({ kind: 'automation-event', event: 'workflow_run' });
+    expect(routeGitHubWebhookEvent('check_run', { action: 'completed', repository })).toMatchObject(
+      {
+        kind: 'automation-event',
+        event: 'check_run',
+      },
+    );
+  });
+
+  it('ignores an action on those events that nobody can subscribe to', () => {
+    expect(
+      routeGitHubWebhookEvent('pull_request', {
+        action: 'labeled',
+        repository: { full_name: 'agi/workforce' },
+      }),
+    ).toEqual({
+      kind: 'ignored',
+      event: 'pull_request',
+      action: 'labeled',
+      reason: 'unsupported-action',
+    });
+    expect(
+      routeGitHubWebhookEvent('check_run', {
+        action: 'created',
+        repository: { full_name: 'agi/workforce' },
+      }),
+    ).toMatchObject({ kind: 'ignored', reason: 'unsupported-action' });
+  });
+
+  it('rejects an automation event with no repository to route by', () => {
+    expect(routeGitHubWebhookEvent('push', { ref: 'refs/heads/main' })).toEqual({
+      kind: 'invalid',
+      reason: 'invalid-payload',
     });
   });
 });

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   listStreamingOrganizations: vi.fn(),
   drainAuditDestination: vi.fn(),
   hasActiveAuditStreamDestinations: vi.fn(),
+  enqueueJob: vi.fn(),
 }));
 
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
@@ -17,6 +18,7 @@ vi.mock('@/lib/services/audit-streaming-service', () => ({
   drainAuditDestination: mocks.drainAuditDestination,
   hasActiveAuditStreamDestinations: mocks.hasActiveAuditStreamDestinations,
 }));
+vi.mock('@/lib/jobs/job-service', () => ({ enqueueJob: mocks.enqueueJob }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -32,6 +34,7 @@ beforeEach(() => {
   mocks.verifyCronRequest.mockReturnValue(true);
   mocks.getNeonDb.mockReturnValue({});
   mocks.listStreamingOrganizations.mockResolvedValue([]);
+  mocks.enqueueJob.mockResolvedValue({ id: 'job-1', status: 'queued', created: true });
 });
 
 describe('GET /api/cron/drain-audit-streams', () => {
@@ -58,25 +61,53 @@ describe('GET /api/cron/drain-audit-streams', () => {
     expect(mocks.listStreamingOrganizations).not.toHaveBeenCalled();
   });
 
-  it('queries Postgres when the redis flag reports active destinations', async () => {
+  it('queues one delivery job per destination instead of delivering inline', async () => {
     mocks.hasActiveAuditStreamDestinations.mockResolvedValue(true);
     mocks.listStreamingOrganizations.mockResolvedValue(['org-1']);
-    mocks.drainAuditDestination.mockResolvedValue({
-      organizationId: 'org-1',
-      delivered: 3,
-      status: 'delivered',
-      error: null,
-    });
 
     const response = await GET(req());
 
     expect(response.status).toBe(200);
     expect(mocks.getNeonDb).toHaveBeenCalled();
-    expect(mocks.listStreamingOrganizations).toHaveBeenCalled();
+    expect(mocks.drainAuditDestination).not.toHaveBeenCalled();
+    expect(mocks.enqueueJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        kind: 'webhooks.audit-stream-delivery',
+        organizationId: 'org-1',
+        idempotencyKey: expect.stringContaining('audit-stream:org-1:'),
+      }),
+    );
     await expect(response.json()).resolves.toMatchObject({
       destinationsConsidered: 1,
-      eventsDelivered: 3,
+      destinationsQueued: 1,
     });
+  });
+
+  it('counts a destination whose job is already queued rather than queuing a second', async () => {
+    mocks.hasActiveAuditStreamDestinations.mockResolvedValue(true);
+    mocks.listStreamingOrganizations.mockResolvedValue(['org-1']);
+    mocks.enqueueJob.mockResolvedValue({ id: 'job-1', status: 'queued', created: false });
+
+    const response = await GET(req());
+
+    await expect(response.json()).resolves.toMatchObject({
+      destinationsQueued: 0,
+      destinationsAlreadyQueued: 1,
+    });
+  });
+
+  it('reports a destination whose job could not be queued without failing the sweep', async () => {
+    mocks.hasActiveAuditStreamDestinations.mockResolvedValue(true);
+    mocks.listStreamingOrganizations.mockResolvedValue(['org-1', 'org-2']);
+    mocks.enqueueJob
+      .mockRejectedValueOnce(new Error('queue unavailable'))
+      .mockResolvedValueOnce({ id: 'job-2', status: 'queued', created: true });
+
+    const response = await GET(req());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ failed: 1, destinationsQueued: 1 });
   });
 
   it('falls through to Postgres when the flag check cannot answer', async () => {

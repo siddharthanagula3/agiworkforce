@@ -66,17 +66,20 @@ and safe to leave unset: each one falls back to a documented default in code,
 and an unparseable value keeps that default rather than disabling the thing it
 tunes. `apps/web/.env.example` carries the same list with its defaults.
 
-Three are boolean stage flags, **off unless set to exactly `1`**:
+Four are boolean stage flags, **on unless the value is `0`, `false` or `off`**.
+Each stage is inert without its inputs, so the default changes no decision on
+its own:
 
-- `AGI_ROUTING_TASK_FAMILY_STAGE` gates the task-family ordering stage. Off is
-  the honest default: turning it on changes which model a request lands on, and
-  the shadow-mode evidence that would justify that change (a CPST baseline per
-  family, a measured router decision latency, a written list of shadow/live
-  disagreements) does not exist yet. See
+- `AGI_ROUTING_TASK_FAMILY_STAGE` gates the task-family ordering stage. See
   `docs/architecture/execution-plan-contract.md` Section 5.
 - `AGI_ROUTING_OBSERVED_HEALTH` gates observed-health ranking, which reorders
-  already-admitted routes by measured failure rate and time to first token.
-- `AGI_ROUTING_CANARY` gates shadow mirroring and canary serving.
+  already-admitted routes by measured failure rate and time to first token. A
+  route with no observations carries no penalty.
+- `AGI_ROUTING_CANARY` gates canary serving. A request is selected by the hash
+  of its request id against the slot's authored fraction, or by the caller's
+  `canaryCohorts` when a flag decides the cohort instead.
+- `AGI_ROUTING_SHADOW` gates shadow mirroring, which returns a mirror target the
+  caller dispatches out of band and never serves.
 
 The rest are windows and thresholds for `route-health-store.ts` and
 `capability-health.ts`, one group per scope, all documented at their

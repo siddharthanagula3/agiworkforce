@@ -44,6 +44,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 const mockRecordRouteOutcome = vi.fn(async (..._args: unknown[]) => undefined);
 const mockRecordServedRouteAffinity = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  recordShadowRouteOutcome: vi.fn(async () => undefined),
   getCredentialCooldownSnapshot: vi.fn(async () => ({})),
   providerOfRouteId: (routeId: string) => routeId.split('/')[0],
   observeFreeLaneSettlement: vi.fn(),

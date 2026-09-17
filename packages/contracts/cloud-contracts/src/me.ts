@@ -1,6 +1,8 @@
-
 import { z } from 'zod';
 import { EffectiveCapabilityDocumentSchema } from './capability-handshake';
+
+export const CLIENT_VERSION_HEADER = 'x-agi-client-version';
+export const ME_CLIENT_VERSION_PARAM = 'client_version';
 
 export const MeSubscriptionSourceSchema = z.enum(['none', 'stripe', 'apple', 'google', 'manual']);
 
@@ -45,6 +47,7 @@ export const MeResponseSchema = z.object({
   updated_at: z.number(),
   plan: MePlanSchema,
   feature_flags: MeFeatureFlagsSchema,
+  feature_flag_variants: z.record(z.string(), z.string()).optional(),
   routing_preferences: MeRoutingPreferencesSchema,
   capability_handshake: EffectiveCapabilityDocumentSchema.optional(),
 });

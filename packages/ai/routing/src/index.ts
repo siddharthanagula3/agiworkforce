@@ -46,10 +46,15 @@ export {
   previewAutoRoute,
   resolveAutoRoute,
   resolveTierMaximumProfile,
+  shadowMirroringEnabled,
   unhonouredCapabilityPenalty,
   CANARY_ENV,
   OBSERVED_HEALTH_ENV,
+  SHADOW_ENV,
 } from './auto';
+export { routingStageEnabled } from './routing-stages';
+export { buildRoutingDecisionTrace, ROUTING_TRACE_SCHEMA_VERSION } from './routing-trace';
+export type { RoutingCohort, RoutingDecisionTrace, RoutingTraceRoute } from './routing-trace';
 export type {
   AutoRoutePreview,
   RoutePreviewCandidate,

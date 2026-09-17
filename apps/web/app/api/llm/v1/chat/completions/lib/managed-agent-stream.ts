@@ -33,6 +33,7 @@ import {
   type PersistedTurnSource,
 } from './assistant-turn-sources';
 import { buildPersistedTurnResearch, type PersistedTurnResearch } from './assistant-turn-research';
+import { enqueueJob } from '@/lib/jobs/job-service';
 import {
   recordResearchReportSettledCost,
   type PersistedResearchReport,
@@ -266,8 +267,21 @@ export function buildManagedAgentStream(
     } catch (error) {
       logger.warn(
         { error, requestId: input.processed.requestId },
-        'Settled research cost could not be recorded on the report',
+        'Settled research cost could not be recorded on the report; queued for retry',
       );
+      try {
+        await enqueueJob(input.runJournal.db, {
+          kind: 'research.settle-report-cost',
+          userId: input.runJournal.userId,
+          idempotencyKey: `research-cost:${input.processed.requestId}`.slice(0, 255),
+          payload: { requestId: input.processed.requestId, settledCostMicrousd },
+        });
+      } catch (queueError) {
+        logger.error(
+          { error: queueError, requestId: input.processed.requestId },
+          'Settled research cost could neither be recorded nor queued',
+        );
+      }
     }
   };
 

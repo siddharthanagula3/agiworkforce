@@ -21,6 +21,8 @@ import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { captureWorkerFailure } from '@/lib/observability/error-capture';
 import { withSpan } from '@/lib/observability/span';
 import {
+  NoFurtherOccurrenceError,
+  SWEEP_INTERVAL_MS,
   assertDeliverableCadence,
   buildCronExpression,
   getNextExecutionAt,
@@ -28,14 +30,41 @@ import {
   type ProductRecurrence,
   type ScheduleTiming,
 } from '@/lib/schedules/schedule-time';
+import { normalizeDayparts, type Daypart } from '@/lib/schedules/dayparts';
+import { normalizeRecurrenceRule, parseRecurrenceRule } from '@/lib/schedules/recurrence-rule';
+import {
+  normalizeScheduleCondition,
+  type ScheduleCondition,
+  type ScheduleConditionState,
+} from '@/lib/schedules/schedule-condition';
+import { enqueueJob } from '@/lib/jobs/job-service';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { executeScheduledAgent } from './scheduled-agent-executor';
-import { notifyScheduleCompleted } from './schedule-notification-service';
+import { evaluateScheduleCondition } from './schedule-condition-service';
 
 const DEFAULT_LEASE_SECONDS = 45;
 const MAX_BATCH_SIZE = 100;
 const MAX_PAGE_SIZE = 100;
 const MAX_ERROR_LENGTH = 2_000;
 const SCHEDULE_WORKER_NAME = 'scheduled-task';
+const MISSED_EXECUTION_GRACE_MS = 2 * SWEEP_INTERVAL_MS;
+const MAX_RETRY_ATTEMPTS = 5;
+const MIN_RETRY_BACKOFF_SECONDS = 60;
+const MAX_RETRY_BACKOFF_SECONDS = 86_400;
+const DEFAULT_RETRY_BACKOFF_SECONDS = 300;
+const SCHEDULE_TYPES = ['cron', 'once', 'interval', 'rrule', 'event'] as const;
+const PRODUCT_RECURRENCES = [
+  'once',
+  'daily',
+  'weekly',
+  'monthly',
+  'custom',
+  'interval',
+  'rrule',
+  'event',
+] as const;
+
+export type MissedExecutionPolicy = 'run_once' | 'skip';
 
 export type ScheduleRunStatus = ManagedCloudScheduleRun['status'];
 export type ScheduleTriggerSource = ManagedCloudScheduleRun['triggerSource'];
@@ -90,6 +119,12 @@ export interface ScheduleInput {
   maxExecutions?: number | null;
   notificationSettings?: unknown;
   projectId?: string | null;
+  recurrenceRule?: string | null;
+  dayparts?: unknown;
+  retryMaxAttempts?: number;
+  retryBackoffSeconds?: number;
+  missedExecutionPolicy?: MissedExecutionPolicy;
+  condition?: unknown;
 }
 
 export type ScheduleUpdateInput = Partial<ScheduleInput>;
@@ -102,6 +137,8 @@ export interface ClaimedScheduleRun {
   scheduledFor: string;
   triggerSource?: ScheduleTriggerSource;
   startedAt?: string;
+  attemptCount?: number;
+  dueAt?: string;
   scope: ClaimedUserScope;
   task: ScheduleTask;
 }
@@ -149,6 +186,15 @@ interface TaskRow extends Record<string, unknown> {
   metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  recurrence_rule?: string | null;
+  dayparts?: Daypart[] | null;
+  retry_max_attempts?: number | null;
+  retry_backoff_seconds?: number | null;
+  retry_attempt?: number | null;
+  retry_scheduled_for?: string | null;
+  missed_execution_policy?: string | null;
+  condition?: ScheduleCondition | null;
+  condition_state?: ScheduleConditionState | null;
 }
 
 interface RunRow extends Record<string, unknown> {
@@ -172,6 +218,8 @@ type ClaimRow = TaskRow & {
   run_started_at: string;
   scheduled_for: string;
   trigger_source: ScheduleTriggerSource;
+  run_attempt_count?: number | null;
+  due_at?: string | null;
 };
 
 function asTaskStatus(value: string): ScheduleTask['status'] {
@@ -198,7 +246,7 @@ function asTriggerSource(value: string): ScheduleTriggerSource {
 export function mapScheduleTask(row: TaskRow): ScheduleTask {
   const scheduleType = row.schedule_type;
   const actionType = row.action_type;
-  if (!['cron', 'once', 'interval'].includes(scheduleType)) {
+  if (!(SCHEDULE_TYPES as readonly string[]).includes(scheduleType)) {
     throw new Error(`Invalid schedule type: ${scheduleType}`);
   }
   if (!['agent', 'workflow', 'notification', 'command'].includes(actionType)) {
@@ -230,6 +278,14 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
     metadata: row.metadata,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    recurrenceRule: row.recurrence_rule ?? null,
+    dayparts: row.dayparts ?? null,
+    retryMaxAttempts: Number(row.retry_max_attempts ?? 0),
+    retryBackoffSeconds: Number(row.retry_backoff_seconds ?? DEFAULT_RETRY_BACKOFF_SECONDS),
+    retryAttempt: Number(row.retry_attempt ?? 0),
+    missedExecutionPolicy: row.missed_execution_policy === 'skip' ? 'skip' : 'run_once',
+    condition: row.condition ?? null,
+    conditionState: row.condition_state ?? null,
   };
 }
 
@@ -257,6 +313,8 @@ function mapClaim(row: ClaimRow): ClaimedScheduleRun {
     scheduledFor: row.scheduled_for,
     triggerSource: row.trigger_source,
     startedAt: row.run_started_at,
+    attemptCount: Number(row.run_attempt_count ?? 1),
+    ...(row.due_at ? { dueAt: new Date(row.due_at).toISOString() } : {}),
     scope: { userId: row.user_id, organizationId: row.organization_id ?? null },
     task: mapScheduleTask(row),
   };
@@ -295,6 +353,12 @@ function normalizeModel(model: string | null | undefined): string {
 }
 
 interface ValidatedScheduleDefinition {
+  recurrenceRule: string | null;
+  dayparts: Daypart[] | null;
+  retryMaxAttempts: number;
+  retryBackoffSeconds: number;
+  missedExecutionPolicy: MissedExecutionPolicy;
+  condition: ScheduleCondition | null;
   name: string;
   description: string | null;
   prompt: string;
@@ -331,6 +395,12 @@ const SCHEDULE_INPUT_KEYS = new Set([
   'maxExecutions',
   'notificationSettings',
   'projectId',
+  'recurrenceRule',
+  'dayparts',
+  'retryMaxAttempts',
+  'retryBackoffSeconds',
+  'missedExecutionPolicy',
+  'condition',
 ]);
 
 function validateScheduleInput(
@@ -363,11 +433,7 @@ function validateScheduleInput(
     if (input.isActive !== undefined && typeof input.isActive !== 'boolean') {
       throw new ScheduleValidationError('isActive must be a boolean');
     }
-    if (
-      !['once', 'daily', 'weekly', 'monthly', 'custom', 'interval'].includes(
-        String(input.recurrence),
-      )
-    ) {
+    if (!(PRODUCT_RECURRENCES as readonly string[]).includes(String(input.recurrence))) {
       throw new ScheduleValidationError('recurrence is invalid');
     }
 
@@ -376,7 +442,7 @@ function validateScheduleInput(
     if (expiresAt && expiresAt <= now) {
       throw new ScheduleValidationError('expiresAt must be in the future');
     }
-    const maxExecutions = input.maxExecutions ?? null;
+    let maxExecutions = input.maxExecutions ?? null;
     if (
       maxExecutions !== null &&
       (!Number.isInteger(maxExecutions) || maxExecutions < 1 || maxExecutions > 1_000_000)
@@ -384,12 +450,60 @@ function validateScheduleInput(
       throw new ScheduleValidationError('maxExecutions must be an integer from 1 to 1,000,000');
     }
 
+    const retryMaxAttempts = input.retryMaxAttempts ?? 0;
+    if (
+      !Number.isInteger(retryMaxAttempts) ||
+      retryMaxAttempts < 0 ||
+      retryMaxAttempts > MAX_RETRY_ATTEMPTS
+    ) {
+      throw new ScheduleValidationError(
+        `retryMaxAttempts must be an integer from 0 to ${MAX_RETRY_ATTEMPTS}`,
+      );
+    }
+    const retryBackoffSeconds = input.retryBackoffSeconds ?? DEFAULT_RETRY_BACKOFF_SECONDS;
+    if (
+      !Number.isInteger(retryBackoffSeconds) ||
+      retryBackoffSeconds < MIN_RETRY_BACKOFF_SECONDS ||
+      retryBackoffSeconds > MAX_RETRY_BACKOFF_SECONDS
+    ) {
+      throw new ScheduleValidationError(
+        'retryBackoffSeconds must be between one minute and one day',
+      );
+    }
+    const missedExecutionPolicy = input.missedExecutionPolicy ?? 'run_once';
+    if (missedExecutionPolicy !== 'run_once' && missedExecutionPolicy !== 'skip') {
+      throw new ScheduleValidationError('missedExecutionPolicy must be run_once or skip');
+    }
+    const dayparts = normalizeDayparts(input.dayparts);
+    const condition = normalizeScheduleCondition(input.condition);
+
     let scheduleType: ScheduleTask['scheduleType'];
     let cronExpression: string | null = null;
     let executeAt: string | null = null;
     let intervalMs: number | null = null;
+    let recurrenceRule: string | null = null;
     let timing: ScheduleTiming;
-    if (input.recurrence === 'once') {
+    if (input.recurrence === 'event') {
+      scheduleType = 'event';
+      if (dayparts) throw new ScheduleValidationError('Dayparts apply only to clock schedules');
+      if (condition) {
+        throw new ScheduleValidationError(
+          'Event-triggered tasks filter with trigger conditions, not a condition watch',
+        );
+      }
+      timing = { scheduleType, timezone };
+    } else if (input.recurrence === 'rrule') {
+      scheduleType = 'rrule';
+      recurrenceRule = normalizeRecurrenceRule(input.recurrenceRule ?? '', timezone, now);
+      const count = parseRecurrenceRule(recurrenceRule, timezone).count;
+      if (count !== null) {
+        if (maxExecutions !== null && maxExecutions !== count) {
+          throw new ScheduleValidationError('COUNT in the rule and maxExecutions disagree');
+        }
+        maxExecutions = count;
+      }
+      timing = { scheduleType, recurrenceRule, timezone, dayparts };
+    } else if (input.recurrence === 'once') {
       scheduleType = 'once';
       const date = validDate(input.scheduledAt, 'scheduledAt');
       if (!date) throw new ScheduleValidationError('scheduledAt is required for a one-time task');
@@ -398,7 +512,7 @@ function validateScheduleInput(
     } else if (input.recurrence === 'interval') {
       scheduleType = 'interval';
       intervalMs = input.intervalMs ?? null;
-      timing = { scheduleType, intervalMs, timezone };
+      timing = { scheduleType, intervalMs, timezone, dayparts };
     } else {
       scheduleType = 'cron';
       cronExpression = buildCronExpression({
@@ -408,18 +522,30 @@ function validateScheduleInput(
         dayOfMonth: input.dayOfMonth,
         cronExpression: input.cronExpression,
       });
-      timing = { scheduleType, cronExpression, timezone };
+      timing = { scheduleType, cronExpression, timezone, dayparts };
+    }
+    if (scheduleType === 'once' && dayparts) {
+      throw new ScheduleValidationError('Dayparts apply only to recurring schedules');
+    }
+    if (scheduleType !== 'rrule' && input.recurrenceRule) {
+      throw new ScheduleValidationError('recurrenceRule is only used with the rrule recurrence');
     }
 
     if (enforceCadence) assertDeliverableCadence(timing, now);
 
     const isEnabled = input.isActive !== false;
-    const firstExecutionAt = getNextExecutionAt(timing, now, now);
-    if (expiresAt && firstExecutionAt >= expiresAt) {
+    const firstExecutionAt = scheduleType === 'event' ? null : getNextExecutionAt(timing, now, now);
+    if (expiresAt && firstExecutionAt && firstExecutionAt >= expiresAt) {
       throw new ScheduleValidationError('Schedule expiration must be after its first occurrence');
     }
-    const nextExecutionAt = isEnabled ? firstExecutionAt.toISOString() : null;
+    const nextExecutionAt = isEnabled && firstExecutionAt ? firstExecutionAt.toISOString() : null;
     return {
+      recurrenceRule,
+      dayparts,
+      retryMaxAttempts,
+      retryBackoffSeconds,
+      missedExecutionPolicy,
+      condition,
       name,
       description,
       prompt,
@@ -565,12 +691,14 @@ export async function createSchedule(
        user_id, name, description, schedule_type, cron_expression, execute_at,
        interval_ms, timezone, is_enabled, expires_at, max_executions,
        action_type, action_config, prompt, model, status, next_execution_at, metadata,
-       project_id
+       project_id, recurrence_rule, dayparts, retry_max_attempts, retry_backoff_seconds,
+       missed_execution_policy, condition
      ) values (
        $1, $2, $3, $4, $5, $6,
        $7, $8, $9, $10, $11,
        'agent', null, $12, $13, $14, $15, $16::jsonb,
-       $17
+       $17, $18, $19::jsonb, $20, $21,
+       $22, $23::jsonb
      ) returning *`,
     [
       userId,
@@ -590,6 +718,12 @@ export async function createSchedule(
       definition.nextExecutionAt,
       JSON.stringify(definition.metadata),
       definition.projectId,
+      definition.recurrenceRule,
+      definition.dayparts ? JSON.stringify(definition.dayparts) : null,
+      definition.retryMaxAttempts,
+      definition.retryBackoffSeconds,
+      definition.missedExecutionPolicy,
+      definition.condition ? JSON.stringify(definition.condition) : null,
     ],
   );
   if (!row) throw new Error('Schedule insert returned no row');
@@ -598,7 +732,7 @@ export async function createSchedule(
 
 function recurrenceFromTask(task: ScheduleTask): ProductRecurrence {
   const stored = task.metadata?.['productRecurrence'];
-  if (['once', 'daily', 'weekly', 'monthly', 'custom', 'interval'].includes(String(stored))) {
+  if ((PRODUCT_RECURRENCES as readonly string[]).includes(String(stored))) {
     return stored as ProductRecurrence;
   }
   return task.scheduleType === 'cron' ? 'custom' : task.scheduleType;
@@ -630,6 +764,12 @@ function inputFromTask(task: ScheduleTask): ScheduleInput {
     expiresAt: task.expiresAt,
     maxExecutions: task.maxExecutions,
     projectId: task.projectId ?? null,
+    recurrenceRule: task.recurrenceRule ?? null,
+    dayparts: task.dayparts ?? null,
+    retryMaxAttempts: task.retryMaxAttempts ?? 0,
+    retryBackoffSeconds: task.retryBackoffSeconds ?? DEFAULT_RETRY_BACKOFF_SECONDS,
+    missedExecutionPolicy: task.missedExecutionPolicy ?? 'run_once',
+    condition: task.condition ?? null,
   };
 }
 
@@ -656,19 +796,31 @@ export async function updateSchedule(
       definition.cronExpression !== current.cronExpression ||
       definition.executeAt !== current.executeAt ||
       definition.intervalMs !== current.intervalMs ||
+      definition.recurrenceRule !== (current.recurrenceRule ?? null) ||
+      JSON.stringify(definition.dayparts) !== JSON.stringify(current.dayparts ?? null) ||
       definition.timezone !== current.timezone;
     if (timingChanged) {
-      assertDeliverableCadence(
-        {
-          scheduleType: definition.scheduleType,
-          cronExpression: definition.cronExpression,
-          executeAt: definition.executeAt,
-          intervalMs: definition.intervalMs,
-          timezone: definition.timezone,
-        },
-        validationNow,
+      validation(() =>
+        assertDeliverableCadence(
+          {
+            scheduleType: definition.scheduleType,
+            cronExpression: definition.cronExpression,
+            executeAt: definition.executeAt,
+            intervalMs: definition.intervalMs,
+            recurrenceRule: definition.recurrenceRule,
+            dayparts: definition.dayparts,
+            timezone: definition.timezone,
+          },
+          validationNow,
+        ),
       );
     }
+    const retryPolicyChanged =
+      definition.retryMaxAttempts !== (current.retryMaxAttempts ?? 0) ||
+      definition.retryBackoffSeconds !==
+        (current.retryBackoffSeconds ?? DEFAULT_RETRY_BACKOFF_SECONDS);
+    const conditionChanged =
+      JSON.stringify(definition.condition) !== JSON.stringify(current.condition ?? null);
     const activationChanged =
       Object.hasOwn(patch, 'isActive') && patch.isActive !== current.isEnabled;
     if (!timingChanged && !activationChanged) {
@@ -691,7 +843,12 @@ export async function updateSchedule(
            execute_at = $7, interval_ms = $8, timezone = $9, is_enabled = $10,
            expires_at = $11, max_executions = $12, prompt = $13, model = $14,
            status = $15, next_execution_at = $16, metadata = $17::jsonb,
-           project_id = $18,
+           project_id = $18, recurrence_rule = $19, dayparts = $20::jsonb,
+           retry_max_attempts = $21, retry_backoff_seconds = $22,
+           missed_execution_policy = $23, condition = $24::jsonb,
+           retry_attempt = case when $25::boolean then 0 else least(retry_attempt, $21) end,
+           retry_scheduled_for = case when $25::boolean then null else retry_scheduled_for end,
+           condition_state = case when $26::boolean then null else condition_state end,
            last_error = null, updated_at = now()
        where id = $1 and user_id = $2
        returning *`,
@@ -714,6 +871,14 @@ export async function updateSchedule(
         definition.nextExecutionAt,
         JSON.stringify(definition.metadata),
         definition.projectId,
+        definition.recurrenceRule,
+        definition.dayparts ? JSON.stringify(definition.dayparts) : null,
+        definition.retryMaxAttempts,
+        definition.retryBackoffSeconds,
+        definition.missedExecutionPolicy,
+        definition.condition ? JSON.stringify(definition.condition) : null,
+        timingChanged || retryPolicyChanged || activationChanged,
+        conditionChanged,
       ],
     );
     if (!row) throw new ScheduleNotFoundError();
@@ -743,16 +908,26 @@ export async function setScheduleEnabled(
       if (expiresAt && expiresAt <= now) {
         throw new ScheduleConflictError('Schedule has expired');
       }
-      nextExecutionAt = validation(() =>
-        getNextExecutionAt(scheduleTiming(current), now, now).toISOString(),
-      );
-      if (expiresAt && new Date(nextExecutionAt) >= expiresAt) {
-        throw new ScheduleConflictError('Schedule expiration is before its next occurrence');
+      if (current.scheduleType !== 'event') {
+        let computed: string;
+        try {
+          computed = getNextExecutionAt(scheduleTiming(current), now, now).toISOString();
+        } catch (error) {
+          if (error instanceof NoFurtherOccurrenceError) {
+            throw new ScheduleConflictError('Schedule has no further occurrence');
+          }
+          throw new ScheduleValidationError(error instanceof Error ? error.message : String(error));
+        }
+        nextExecutionAt = computed;
+        if (expiresAt && new Date(computed) >= expiresAt) {
+          throw new ScheduleConflictError('Schedule expiration is before its next occurrence');
+        }
       }
     }
     const [row] = await tx.query<TaskRow>(
       `update scheduled_tasks
        set is_enabled = $3, status = $4, next_execution_at = $5,
+           retry_attempt = 0, retry_scheduled_for = null,
            last_error = null, updated_at = now()
        where id = $1 and user_id = $2
        returning *`,
@@ -809,13 +984,15 @@ export async function claimDueScheduleRuns(
        where task.id = expired_candidates.id
        returning task.id
      ), due as (
-       select id, next_execution_at as scheduled_for
+       select id, next_execution_at as due_at,
+              coalesce(retry_scheduled_for, next_execution_at) as scheduled_for,
+              retry_attempt as due_retry_attempt
        from scheduled_tasks
        where is_enabled = true
          and status = 'active'
          and next_execution_at <= now()
          and (expires_at is null or expires_at > now())
-         and (max_executions is null or execution_count < max_executions)
+         and (max_executions is null or execution_count < max_executions or retry_attempt > 0)
        order by next_execution_at asc, id asc
        for update skip locked
        limit $1
@@ -823,26 +1000,29 @@ export async function claimDueScheduleRuns(
        update scheduled_tasks as task
        set next_execution_at = null,
            last_executed_at = now(),
-           execution_count = task.execution_count + 1,
+           execution_count = task.execution_count
+             + case when due.due_retry_attempt = 0 then 1 else 0 end,
            updated_at = now()
        from due
        where task.id = due.id
-       returning task.*, due.scheduled_for
+       returning task.*, due.scheduled_for, due.due_at, due.due_retry_attempt
      ), inserted as (
        insert into scheduled_task_runs (
          task_id, status, trigger_source, scheduled_for, idempotency_key,
          lease_expires_at, attempt_count
        )
        select id, 'running', 'schedule', scheduled_for,
-              'schedule:' || scheduled_for::text,
-              now() + make_interval(secs => $2), 1
+              'schedule:' || scheduled_for::text
+                || case when due_retry_attempt > 0 then ':retry:' || due_retry_attempt::text else '' end,
+              now() + make_interval(secs => $2), due_retry_attempt + 1
        from claimed
        on conflict (task_id, idempotency_key) do nothing
-       returning id, task_id, trigger_source, started_at
+       returning id, task_id, trigger_source, started_at, attempt_count
      )
      select claimed.*, inserted.id as run_id,
             inserted.started_at as run_started_at,
-            inserted.trigger_source
+            inserted.trigger_source,
+            inserted.attempt_count as run_attempt_count
      from claimed
      join inserted on inserted.task_id = claimed.id
      order by claimed.scheduled_for asc, claimed.id asc`,
@@ -889,6 +1069,43 @@ export async function createManualScheduleRun(
   input: { userId: string; taskId: string; idempotencyKey: string; leaseSeconds?: number },
 ): Promise<{ claim: ClaimedScheduleRun; replay: boolean; run: ScheduleRun }> {
   validateIdempotencyKey(input.idempotencyKey);
+  return createOnDemandScheduleRun(db, { ...input, triggerSource: 'manual' });
+}
+
+export function createEventTriggeredScheduleRun(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    taskId: string;
+    eventId: string;
+    attempt: number;
+    leaseSeconds?: number;
+  },
+): Promise<{ claim: ClaimedScheduleRun; replay: boolean; run: ScheduleRun }> {
+  return createOnDemandScheduleRun(db, {
+    userId: input.userId,
+    taskId: input.taskId,
+    idempotencyKey: `${input.eventId}:${Math.max(1, Math.trunc(input.attempt))}`,
+    leaseSeconds: input.leaseSeconds,
+    triggerSource: 'webhook',
+  });
+}
+
+const ON_DEMAND_KEY_PREFIX: Record<'manual' | 'webhook', string> = {
+  manual: 'manual:',
+  webhook: 'event:',
+};
+
+async function createOnDemandScheduleRun(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    taskId: string;
+    idempotencyKey: string;
+    leaseSeconds?: number;
+    triggerSource: 'manual' | 'webhook';
+  },
+): Promise<{ claim: ClaimedScheduleRun; replay: boolean; run: ScheduleRun }> {
   const leaseSeconds = clampInteger(input.leaseSeconds ?? DEFAULT_LEASE_SECONDS, 5, 300);
 
   return db.transaction(async (tx) => {
@@ -900,7 +1117,7 @@ export async function createManualScheduleRun(
     );
     if (!taskRow) throw new ScheduleNotFoundError();
     const task = mapScheduleTask(taskRow);
-    const idempotencyKey = `manual:${input.idempotencyKey}`;
+    const idempotencyKey = `${ON_DEMAND_KEY_PREFIX[input.triggerSource]}${input.idempotencyKey}`;
     const [existingRun] = await tx.query<RunRow>(
       `select * from scheduled_task_runs
        where task_id = $1 and idempotency_key = $2
@@ -913,7 +1130,7 @@ export async function createManualScheduleRun(
         claim: {
           runId: run.id,
           scheduledFor: run.scheduledFor ?? run.startedAt,
-          triggerSource: 'manual',
+          triggerSource: input.triggerSource,
           startedAt: run.startedAt,
           scope: {
             userId: taskRow.user_id,
@@ -940,12 +1157,12 @@ export async function createManualScheduleRun(
          task_id, status, trigger_source, scheduled_for, idempotency_key,
          lease_expires_at, attempt_count
        ) values (
-         $1, 'running', 'manual', now(), $2,
+         $1, 'running', $4, now(), $2,
          now() + make_interval(secs => $3), 1
        ) returning *`,
-      [input.taskId, idempotencyKey, leaseSeconds],
+      [input.taskId, idempotencyKey, leaseSeconds, input.triggerSource],
     );
-    if (!runRow) throw new Error('Manual schedule run insert returned no row');
+    if (!runRow) throw new Error('On-demand schedule run insert returned no row');
     await tx.execute(
       `update scheduled_tasks
        set execution_count = execution_count + 1,
@@ -962,7 +1179,7 @@ export async function createManualScheduleRun(
       claim: {
         runId: run.id,
         scheduledFor: run.scheduledFor ?? run.startedAt,
-        triggerSource: 'manual',
+        triggerSource: input.triggerSource,
         startedAt: run.startedAt,
         scope: {
           userId: taskRow.user_id,
@@ -982,8 +1199,15 @@ function scheduleTiming(task: ScheduleTask): ScheduleTiming {
     cronExpression: task.cronExpression,
     executeAt: task.executeAt,
     intervalMs: task.intervalMs,
+    recurrenceRule: task.recurrenceRule ?? null,
+    dayparts: task.dayparts ?? null,
     timezone: task.timezone,
   };
+}
+
+export function retryDelaySeconds(backoffSeconds: number, retriesSpent: number): number {
+  const exponent = Math.max(0, Math.min(10, retriesSpent));
+  return Math.min(MAX_RETRY_BACKOFF_SECONDS, backoffSeconds * 2 ** exponent);
 }
 
 function boundedError(error: string | null | undefined): string | null {
@@ -1040,7 +1264,27 @@ export async function finalizeScheduleRun(
     let nextExecutionAt: string | null = currentTask.nextExecutionAt;
     let nextStatus: ScheduleTask['status'] = currentTask.status;
     let nextEnabled = currentTask.isEnabled;
-    if (
+    let retryAttempt = 0;
+    let retryScheduledFor: string | null = null;
+    const scheduled = (claim.triggerSource ?? 'schedule') === 'schedule';
+    const retriesSpent = Math.max(0, (claim.attemptCount ?? 1) - 1);
+    const retryable =
+      scheduled &&
+      (outcome.status === 'failed' || outcome.status === 'timeout') &&
+      retriesSpent < (currentTask.retryMaxAttempts ?? 0) &&
+      !(currentTask.expiresAt && outcome.completedAt >= new Date(currentTask.expiresAt));
+    if (retryable) {
+      retryAttempt = retriesSpent + 1;
+      retryScheduledFor = claim.scheduledFor;
+      nextExecutionAt = new Date(
+        outcome.completedAt.getTime() +
+          retryDelaySeconds(
+            currentTask.retryBackoffSeconds ?? DEFAULT_RETRY_BACKOFF_SECONDS,
+            retriesSpent,
+          ) *
+            1_000,
+      ).toISOString();
+    } else if (
       currentTask.maxExecutions !== null &&
       currentTask.executionCount >= currentTask.maxExecutions
     ) {
@@ -1057,12 +1301,22 @@ export async function finalizeScheduleRun(
         nextStatus = 'completed';
         nextEnabled = false;
       } else {
-        const next = getNextExecutionAt(
-          scheduleTiming(currentTask),
-          new Date(claim.scheduledFor),
-          outcome.completedAt,
-        );
-        if (currentTask.expiresAt && next >= new Date(currentTask.expiresAt)) {
+        let next: Date | null;
+        try {
+          next = getNextExecutionAt(
+            scheduleTiming(currentTask),
+            new Date(claim.scheduledFor),
+            outcome.completedAt,
+          );
+        } catch (error) {
+          if (!(error instanceof NoFurtherOccurrenceError)) throw error;
+          next = null;
+        }
+        if (next === null) {
+          nextExecutionAt = null;
+          nextStatus = 'completed';
+          nextEnabled = false;
+        } else if (currentTask.expiresAt && next >= new Date(currentTask.expiresAt)) {
           nextExecutionAt = null;
           nextStatus = 'expired';
           nextEnabled = false;
@@ -1082,8 +1336,10 @@ export async function finalizeScheduleRun(
            end,
            status = case when status = 'active' then $5 else status end,
            is_enabled = case when status = 'active' then $6 else is_enabled end,
+           retry_attempt = case when $9::boolean then $7 else retry_attempt end,
+           retry_scheduled_for = case when $9::boolean then $8::timestamptz else retry_scheduled_for end,
            updated_at = now()
-       where id = $1
+       where id = $1 and user_id = $10
        returning id`,
       [
         claim.task.id,
@@ -1092,6 +1348,10 @@ export async function finalizeScheduleRun(
         nextExecutionAt,
         nextStatus,
         nextEnabled,
+        retryAttempt,
+        retryScheduledFor,
+        scheduled,
+        claim.task.userId,
       ],
     );
     return mapScheduleRun(runRow);
@@ -1107,17 +1367,25 @@ async function announceScheduleRun(
   claim: ClaimedScheduleRun,
   status: ScheduleRunStatus,
 ): Promise<void> {
-  if (status === 'running') return;
+  if (status === 'running' || status === 'cancelled') return;
   try {
-    await notifyScheduleCompleted(db, {
+    await enqueueJob(db, {
+      kind: 'notifications.schedule-completed',
       userId: claim.task.userId,
-      taskId: claim.task.id,
-      taskName: claim.task.name,
-      status,
-      runId: claim.runId,
+      organizationId: claim.scope.organizationId,
+      idempotencyKey: `schedule-run:${claim.runId}`,
+      payload: {
+        taskId: claim.task.id,
+        taskName: claim.task.name,
+        status,
+        runId: claim.runId,
+      },
     });
   } catch (error) {
-    logger.warn({ error, taskId: claim.task.id }, 'Schedule completion notification failed');
+    logger.warn(
+      { error, taskId: claim.task.id },
+      'Schedule completion notification was not queued',
+    );
   }
 }
 
@@ -1145,6 +1413,88 @@ export function processClaimedScheduleRun(
       return run;
     },
   );
+}
+
+export interface MissedExecution {
+  policy: MissedExecutionPolicy;
+  scheduledFor: string;
+  detectedAt: string;
+  lateByMs: number;
+}
+
+export function detectMissedExecution(
+  claim: ClaimedScheduleRun,
+  now: Date,
+): MissedExecution | null {
+  if ((claim.triggerSource ?? 'schedule') !== 'schedule') return null;
+  if ((claim.attemptCount ?? 1) > 1) return null;
+  const dueAt = new Date(claim.dueAt ?? claim.scheduledFor);
+  if (!Number.isFinite(dueAt.getTime())) return null;
+  const lateByMs = now.getTime() - dueAt.getTime();
+  if (lateByMs <= MISSED_EXECUTION_GRACE_MS) return null;
+  return {
+    policy: claim.task.missedExecutionPolicy ?? 'run_once',
+    scheduledFor: dueAt.toISOString(),
+    detectedAt: now.toISOString(),
+    lateByMs,
+  };
+}
+
+async function auditMissedExecution(
+  claim: ClaimedScheduleRun,
+  missed: MissedExecution,
+): Promise<void> {
+  await recordAuditEvent({
+    userId: claim.task.userId,
+    organizationId: claim.scope.organizationId,
+    eventType: 'schedule_missed_execution',
+    outcome: missed.policy === 'skip' ? 'failure' : 'success',
+    severity: 'warning',
+    surface: 'web',
+    detail: {
+      resourceType: 'scheduled_task',
+      resourceId: claim.task.id,
+      resourceName: claim.task.name,
+      source: missed.policy,
+    },
+  });
+}
+
+/**
+ * A claim spends one of the task's allowed executions. An occurrence that never
+ * ran, because it was skipped as missed or its condition did not hold, gives
+ * that allowance back: a watch that checks every 15 minutes would otherwise
+ * exhaust maxExecutions without the task ever having run.
+ */
+async function releaseExecutionSlot(db: DatabaseAdapter, claim: ClaimedScheduleRun): Promise<void> {
+  if ((claim.triggerSource ?? 'schedule') !== 'schedule') return;
+  if ((claim.attemptCount ?? 1) > 1) return;
+  await db.execute(
+    `update scheduled_tasks
+        set execution_count = greatest(execution_count - 1, 0), updated_at = now()
+      where id = $1 and user_id = $2`,
+    [claim.task.id, claim.task.userId],
+  );
+}
+
+async function checkScheduleCondition(
+  db: DatabaseAdapter,
+  claim: ClaimedScheduleRun,
+  signal: AbortSignal,
+  now: Date,
+): Promise<ScheduleConditionState | null> {
+  const condition = claim.task.condition;
+  if (!condition || (claim.triggerSource ?? 'schedule') !== 'schedule') return null;
+  const state = await evaluateScheduleCondition(condition, claim.task.conditionState ?? null, {
+    now,
+    signal,
+  });
+  await db.execute(
+    `update scheduled_tasks set condition_state = $2::jsonb, updated_at = now()
+     where id = $1 and user_id = $3`,
+    [claim.task.id, JSON.stringify(state), claim.task.userId],
+  );
+  return state;
 }
 
 async function runClaimedSchedule(
@@ -1181,10 +1531,41 @@ async function runClaimedSchedule(
     if (claim.scope.userId !== claim.task.userId) {
       throw new Error('Scheduled claim owner does not match its task owner');
     }
-    const result = await Promise.race([
+    const missedExecution = detectMissedExecution(claim, now());
+    if (missedExecution) {
+      await auditMissedExecution(claim, missedExecution);
+      if (missedExecution.policy === 'skip') {
+        await releaseExecutionSlot(db, claim);
+        return await finalizeScheduleRun(db, claim, {
+          status: 'cancelled',
+          result: { missedExecution, skipped: true },
+          error: `Skipped the occurrence scheduled for ${missedExecution.scheduledFor}: it was missed by more than the grace period`,
+          completedAt: now(),
+        });
+      }
+    }
+    const conditionCheck = await checkScheduleCondition(db, claim, signal, now());
+    if (conditionCheck && !conditionCheck.met) {
+      await releaseExecutionSlot(db, claim);
+      return await finalizeScheduleRun(db, claim, {
+        status: 'cancelled',
+        result: { conditionWatch: conditionCheck, skipped: true },
+        error: `Condition not met: ${conditionCheck.detail}`,
+        completedAt: now(),
+      });
+    }
+    const executed = await Promise.race([
       execute(claim.task, signal, claim.runId, { ...claim.scope, db }),
       aborted,
     ]);
+    const result =
+      missedExecution || conditionCheck
+        ? {
+            ...executed,
+            ...(missedExecution ? { missedExecution } : {}),
+            ...(conditionCheck ? { conditionWatch: conditionCheck } : {}),
+          }
+        : executed;
     const run = await finalizeScheduleRun(db, claim, {
       status: 'success',
       result,

@@ -62,6 +62,12 @@ const payload: ScheduleMutation = {
   expiresAt: null,
   maxExecutions: null,
   projectId: null,
+  recurrenceRule: null,
+  dayparts: null,
+  retryMaxAttempts: 0,
+  retryBackoffSeconds: 300,
+  missedExecutionPolicy: 'run_once',
+  condition: null,
 };
 
 function response(body: unknown, init: ResponseInit = {}) {

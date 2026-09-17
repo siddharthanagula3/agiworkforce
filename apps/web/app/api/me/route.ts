@@ -35,6 +35,12 @@ import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-bill
 import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
 import { getIdentityUser } from '@/lib/server/identity';
 import { provisionEnterpriseSignIn } from '@/lib/server/sso/jit-provisioning';
+import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  buildFlagSubject,
+  evaluateFlagsForSubject,
+} from '@/lib/feature-flags/flag-evaluation-service';
+import { clientVisibleFlags } from '@/lib/feature-flags/routing-flags';
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 
@@ -106,18 +112,38 @@ async function handleGetMe(request: NextRequest) {
 
     const effectiveTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
 
-    const feature_flags = {
-      advanced_model_access: canAccessManualModelSelection(effectiveTier),
-      code_execution: e2bCutoverEnabled(),
-      generic_web_search: webSearchBackendConfigured(),
-    };
-
     const requestedSurface = new URL(request.url).searchParams.get('surface');
     const surface: SyncedAppSurface = (SYNCED_APP_SURFACES as readonly string[]).includes(
       requestedSurface ?? '',
     )
       ? (requestedSurface as SyncedAppSurface)
       : 'web';
+
+    const membership = await resolveOrgMembership(db, userId).catch((membershipError: unknown) => {
+      logger.warn(
+        { userId, error: membershipError },
+        'Active workspace unreadable; flags evaluate without workspace targeting',
+      );
+      return null;
+    });
+    const rolloutFlags = clientVisibleFlags(
+      await evaluateFlagsForSubject(
+        buildFlagSubject(request, {
+          userId,
+          workspaceId: membership?.organizationId ?? null,
+          role: membership?.role ?? null,
+          plan: effectiveTier,
+          surface,
+        }),
+      ),
+    );
+
+    const feature_flags = {
+      ...rolloutFlags.enabled,
+      advanced_model_access: canAccessManualModelSelection(effectiveTier),
+      code_execution: e2bCutoverEnabled(),
+      generic_web_search: webSearchBackendConfigured(),
+    };
 
     const capability_handshake = buildMeCapabilityHandshake({
       userId,
@@ -155,6 +181,7 @@ async function handleGetMe(request: NextRequest) {
       updated_at: Date.now() / 1000,
       plan,
       feature_flags,
+      feature_flag_variants: rolloutFlags.variants,
       routing_preferences,
       capability_handshake: toWireCapabilityHandshake(capability_handshake),
     };

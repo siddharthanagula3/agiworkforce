@@ -31,6 +31,7 @@ import {
   markManagedUsageClientDelivered,
 } from '@/lib/services/managed-usage-request-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 
 export async function buildNonStreamResponse(
   request: NextRequest,
@@ -217,6 +218,7 @@ export async function buildNonStreamResponse(
       { class: 'success', outputTokens: llmResponse.completionTokens },
       Date.now(),
     );
+    persistRoutingDecisionOutcome({ requestId, kind: 'served', outcome: 'succeeded' });
     if (processed.conversationId) {
       const routePricing = getRoutePricing(routeId);
       void recordServedRouteAffinity({
@@ -391,6 +393,13 @@ export function buildUpstreamErrorResponse(
     },
     context === 'streaming' ? 'Streaming request failed' : 'LLM request failed',
   );
+
+  persistRoutingDecisionOutcome({
+    requestId,
+    kind: 'served',
+    outcome: 'failed',
+    errorCode: classified.code,
+  });
 
   try {
     const outcomeClass = routeOutcomeClassForError(error, classified);
