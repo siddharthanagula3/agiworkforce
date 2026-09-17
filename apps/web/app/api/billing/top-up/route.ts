@@ -21,6 +21,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
+import { isPolicyUnavailable } from '@/lib/services/organization-policy-evaluator';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
@@ -77,7 +78,9 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     request,
   );
   if (!billingGate.allowed) {
-    throw createError.conflict(billingGate.reason);
+    throw isPolicyUnavailable(billingGate)
+      ? createError.serviceUnavailable(billingGate.reason)
+      : createError.conflict(billingGate.reason);
   }
 
   const parsed = TopUpRequestSchema.safeParse(await request.json().catch(() => null));

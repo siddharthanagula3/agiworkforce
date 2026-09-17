@@ -43,6 +43,8 @@ function policyRow(overrides: Record<string, unknown> = {}) {
 
 const NO_OPEN_INVOICE: [] = [];
 
+const CONNECTION_RESET = new Error('connection reset');
+
 const ACCOUNT_CONTROL_UNAVAILABLE = {
   code: ErrorCode.SERVICE_UNAVAILABLE,
   statusCode: 503,
@@ -134,7 +136,8 @@ describe('evaluateActiveWorkspacePolicy', () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([]) // no active workspace selected
-      .mockRejectedValueOnce(new Error('connection reset'));
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
       resource: 'managed_compute',
@@ -151,7 +154,8 @@ describe('evaluateActiveWorkspacePolicy', () => {
     h.query
       .mockResolvedValueOnce([]) // no active workspace selected
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
-      .mockRejectedValueOnce(new Error('connection reset'));
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
       resource: 'managed_compute',
@@ -256,21 +260,169 @@ describe('evaluateActiveWorkspacePolicy', () => {
     expect(decision.code).toBe('surface_sync_disabled');
   });
 
-  it('treats a policy read failure as ungoverned so a database fault is not shown as a policy denial', async () => {
+  it('denies managed compute when the policy cannot be read after one retry', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
       .mockResolvedValueOnce(NO_OPEN_INVOICE)
-      .mockRejectedValueOnce(new Error('connection reset'));
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
       resource: 'managed_compute',
       surface: 'web',
     });
 
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('workspace_policy_unavailable');
+    expect(decision.reason).toContain('contact your workspace administrator');
+    expect(decision.reason).not.toContain('connection reset');
+    expect(decision.organizationId).toBe(ORGANIZATION_ID);
+    expect(h.query).toHaveBeenCalledTimes(4);
+  });
+
+  it('denies external sharing when the policy cannot be read after one retry', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'external_sharing',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('workspace_policy_unavailable');
+  });
+
+  it('binds the policy when a transient policy read failure succeeds on retry', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockResolvedValueOnce([policyRow({ allow_managed_compute: false })]);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('managed_compute_disabled');
+  });
+
+  it('denies when the active workspace cannot be resolved after one retry', async () => {
+    const h = harness();
+    h.query.mockRejectedValueOnce(CONNECTION_RESET).mockRejectedValueOnce(CONNECTION_RESET);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('workspace_policy_unavailable');
+    expect(decision.organizationId).toBeNull();
+  });
+
+  it('denies a workspace selector the caller is not a member of instead of treating it as personal scope', async () => {
+    const h = harness();
+    const request = { headers: new Headers({ 'x-agi-organization-id': ORGANIZATION_ID }) };
+    h.query.mockResolvedValue([]);
+
+    const decision = await evaluateActiveWorkspacePolicy(
+      h.db,
+      'user-1',
+      { resource: 'managed_compute', surface: 'web' },
+      request,
+    );
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('workspace_not_accessible');
+  });
+
+  it('denies an invalid workspace selector instead of treating it as personal scope', async () => {
+    const h = harness();
+    const request = { headers: new Headers({ 'x-agi-organization-id': 'not-a-workspace' }) };
+
+    const decision = await evaluateActiveWorkspacePolicy(
+      h.db,
+      'user-1',
+      { resource: 'managed_compute', surface: 'web' },
+      request,
+    );
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('workspace_not_accessible');
+    expect(h.query).not.toHaveBeenCalled();
+  });
+
+  it('decides a credit top-up on the billing hold alone when the policy cannot be read', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(overdueContractRow(61))
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'credit_topup',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('billing_past_due');
+  });
+
+  it('allows a credit top-up with no billing hold when only the policy cannot be read', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'credit_topup',
+    });
+
     expect(decision.allowed).toBe(true);
     expect(decision.code).toBe('unscoped');
+  });
+
+  it('denies a seat purchase when the billing hold cannot be read after one retry', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'seat_purchase',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('workspace_policy_unavailable');
+    expect(decision.reason).toContain('billing status');
     expect(decision.organizationId).toBe(ORGANIZATION_ID);
+  });
+
+  it('denies a personal-scope credit top-up when the funding organization cannot be resolved', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([]) // no active workspace selected
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
+      resource: 'credit_topup',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('workspace_policy_unavailable');
+    expect(decision.organizationId).toBeNull();
   });
 
   it('forwards the request so an explicit workspace header selects the governing policy', async () => {
@@ -353,11 +505,12 @@ describe('evaluateActiveWorkspacePolicy', () => {
     expect(decision.allowed).toBe(true);
   });
 
-  it('fails open on a collection state read failure, treating the workspace as not on billing hold', async () => {
+  it('leaves managed compute to the policy when the collection state cannot be read after one retry', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
-      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET)
       .mockResolvedValueOnce([]); // no policy row
 
     const decision = await evaluateActiveWorkspacePolicy(h.db, 'user-1', {
@@ -402,24 +555,54 @@ describe('resolveSecretHandlingPolicy', () => {
     expect(result).toEqual({ mode: 'block', organizationId: ORGANIZATION_ID });
   });
 
-  it('falls back to the organization default when the policy read fails', async () => {
+  it('applies the strictest mode when the policy cannot be read after one retry', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
-      .mockRejectedValueOnce(new Error('connection reset'));
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
 
     const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ mode: 'redact', organizationId: ORGANIZATION_ID });
+    expect(result).toEqual({ mode: 'block', organizationId: ORGANIZATION_ID });
+    expect(h.query).toHaveBeenCalledTimes(3);
   });
 
-  it('falls back to warn when the governing organizations cannot be resolved', async () => {
+  it('applies the strictest mode when the governing organizations cannot be resolved after one retry', async () => {
     const h = harness();
-    h.query.mockRejectedValueOnce(new Error('connection reset'));
+    h.query.mockRejectedValueOnce(CONNECTION_RESET).mockRejectedValueOnce(CONNECTION_RESET);
 
     const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ mode: 'warn', organizationId: null });
+    expect(result).toEqual({ mode: 'block', organizationId: null });
+  });
+
+  it('lets an unreadable membership outrank a readable warn policy', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([
+        { organization_id: SECOND_ORGANIZATION_ID },
+        { organization_id: ORGANIZATION_ID },
+      ])
+      .mockResolvedValueOnce([policyRow({ metadata: { secretHandling: 'warn' } })])
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ mode: 'block', organizationId: ORGANIZATION_ID });
+  });
+
+  it('binds the saved mode when a transient read failure succeeds on retry', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockResolvedValueOnce([policyRow({ metadata: { secretHandling: 'warn' } })]);
+
+    const result = await resolveSecretHandlingPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ mode: 'warn', organizationId: ORGANIZATION_ID });
   });
 });
 
@@ -559,15 +742,70 @@ describe('resolveZeroDataRetentionPolicy', () => {
     expect(result).toEqual({ required: true, organizationId: ORGANIZATION_ID });
   });
 
-  it('fails open (unrequired) when the policy read fails', async () => {
+  it('denies when the policy cannot be read after one retry', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
-      .mockRejectedValueOnce(new Error('connection reset'));
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    await expect(resolveZeroDataRetentionPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
+    expect(h.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('denies when the governing organizations cannot be resolved after one retry', async () => {
+    const h = harness();
+    h.query.mockRejectedValueOnce(CONNECTION_RESET).mockRejectedValueOnce(CONNECTION_RESET);
+
+    await expect(resolveZeroDataRetentionPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
+  });
+
+  it('denies when a membership cannot be read even though another does not require it', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([
+        { organization_id: SECOND_ORGANIZATION_ID },
+        { organization_id: ORGANIZATION_ID },
+      ])
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockResolvedValueOnce([policyRow({ metadata: { zeroDataRetentionOnly: false } })]);
+
+    await expect(resolveZeroDataRetentionPolicy(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
+  });
+
+  it('still requires retention when a second membership requires it and the first cannot be read', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([
+        { organization_id: SECOND_ORGANIZATION_ID },
+        { organization_id: ORGANIZATION_ID },
+      ])
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockResolvedValueOnce([policyRow({ metadata: { zeroDataRetentionOnly: true } })]);
 
     const result = await resolveZeroDataRetentionPolicy(h.db, 'user-1');
 
-    expect(result).toEqual({ required: false, organizationId: null });
+    expect(result).toEqual({ required: true, organizationId: ORGANIZATION_ID });
+  });
+
+  it('binds the requirement when a transient read failure succeeds on retry', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockResolvedValueOnce([policyRow({ metadata: { zeroDataRetentionOnly: true } })]);
+
+    const result = await resolveZeroDataRetentionPolicy(h.db, 'user-1');
+
+    expect(result).toEqual({ required: true, organizationId: ORGANIZATION_ID });
   });
 });
 
