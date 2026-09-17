@@ -189,7 +189,11 @@ describe('ResearchActivity plan approval', () => {
 
     expect(screen.getByText('alpha query')).toBeInTheDocument();
     await userEvent.click(screen.getByTestId('research-plan-start'));
-    expect(onPlanDecision).toHaveBeenCalledWith('start');
+    expect(onPlanDecision).toHaveBeenCalledWith('start', {
+      files: false,
+      allowDomains: [],
+      denyDomains: [],
+    });
 
     await userEvent.click(screen.getByTestId('research-plan-cancel'));
     expect(onPlanDecision).toHaveBeenCalledWith('cancel');

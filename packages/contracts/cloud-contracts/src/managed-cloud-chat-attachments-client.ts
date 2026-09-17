@@ -21,8 +21,19 @@ export interface ManagedCloudChatAttachmentsClientConfig {
   uploadFetchImpl?: typeof globalThis.fetch;
 }
 
+export interface ManagedCloudChatAttachmentUploadOptions {
+  signal?: AbortSignal;
+  /** The conversation receiving the files, when it has already been created. */
+  conversationId?: string;
+  /** The composer is in Temporary Chat, so the upload is not a Library file. */
+  temporary?: boolean;
+}
+
 export interface ManagedCloudChatAttachmentsClient {
-  upload(files: File[], options?: { signal?: AbortSignal }): Promise<ManagedCloudChatAttachment[]>;
+  upload(
+    files: File[],
+    options?: ManagedCloudChatAttachmentUploadOptions,
+  ): Promise<ManagedCloudChatAttachment[]>;
 }
 
 export class ManagedCloudChatAttachmentHttpError extends Error {
@@ -93,7 +104,7 @@ export function createManagedCloudChatAttachmentsClient(
 
   return {
     async upload(files, options = {}) {
-      const { signal } = options;
+      const { signal, conversationId, temporary } = options;
       assertNotAborted(signal);
       if (files.length > MAX_CHAT_ATTACHMENT_COUNT) {
         throw new Error(`Attach at most ${MAX_CHAT_ATTACHMENT_COUNT} files per message.`);
@@ -154,6 +165,8 @@ export function createManagedCloudChatAttachmentsClient(
           fileName: file.name,
           mimeType,
           byteCount: file.size,
+          ...(conversationId ? { conversationId } : {}),
+          ...(temporary ? { temporary } : {}),
         });
         const completionResponse = await post(
           MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,

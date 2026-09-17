@@ -212,6 +212,10 @@ const conversationExportSchema = z.object({
   model: z.string().nullable(),
   project_id: z.string().nullable(),
   pinned: z.boolean(),
+  // The unsent composer text (0219). It is the subject's own words held on
+  // their row, so an export that omitted it would show every message they sent
+  // and none of the one they were still writing.
+  draft: z.string().nullable(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
   deleted_at: nullableTimestampSchema,
@@ -717,6 +721,14 @@ const eventTriggerDeliveryExportSchema = z.object({
   received_at: timestampSchema,
 });
 
+const productAnalyticsEventExportSchema = z.object({
+  event_name: z.string(),
+  surface: z.string(),
+  outcome: z.string().nullable(),
+  properties: z.unknown(),
+  occurred_at: timestampSchema,
+});
+
 const conversationBranchExportSchema = z.object({
   id: z.string(),
   source_conversation_id: z.string(),
@@ -1081,6 +1093,17 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           order by received_at desc
           limit 1000`,
     schema: eventTriggerDeliveryExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'product_analytics_events',
+    table: 'product_analytics_events',
+    sql: `select event_name, surface, outcome, properties, occurred_at
+          from product_analytics_events
+          where user_id = $1
+          order by occurred_at desc
+          limit 1000`,
+    schema: productAnalyticsEventExportSchema,
     rowLimit: EXPORT_ROW_LIMIT,
   },
   {
@@ -1625,7 +1648,7 @@ async function collectUserData(
   const conversations = await queryExportRowsAcrossWorkspaces({
     scopedDbFor,
     workspaces,
-    sql: `select id, title, model, project_id, pinned, created_at, updated_at, deleted_at
+    sql: `select id, title, model, project_id, pinned, draft, created_at, updated_at, deleted_at
           from web_conversations
           where user_id = $1
           order by created_at asc`,
@@ -1746,7 +1769,7 @@ async function collectUserData(
     scopedDbFor,
     workspaces,
     sql: `select id, kind, mime_type, byte_size, storage_url, prompt, provider, model,
-                 width, height, source_surface, created_at, deleted_at
+                 width, height, source_surface, temporary_chat, created_at, deleted_at
           from public.media_assets
           where user_id = $1
           order by created_at asc`,

@@ -11,6 +11,7 @@ import type {
 import { ComposerEditor } from '@agiworkforce/unified-chat/composer-editor';
 import type {
   ComposerAttachmentPasteDecision,
+  ComposerCodePaste,
   ComposerEditorHandle,
   ComposerMentionConfig,
 } from '@agiworkforce/unified-chat/composer-editor';
@@ -94,6 +95,7 @@ export interface ComposerInputProps {
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>;
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
   onPasteDecision: (decision: ComposerAttachmentPasteDecision) => void;
+  onPasteCode: (paste: ComposerCodePaste) => void;
   onDropFiles: (files: readonly File[]) => void;
   onSubmit: () => void;
   onFocusChange: (focused: boolean) => void;
@@ -157,6 +159,7 @@ function ComposerRichEditor({
   value,
   onTextChange,
   onPasteDecision,
+  onPasteCode,
   onDropFiles,
   onSubmit,
   onFocusChange,
@@ -215,6 +218,7 @@ function ComposerRichEditor({
       onSubmit={onSubmit}
       onFocusChange={onFocusChange}
       onPasteDecision={onPasteDecision}
+      onPasteCode={onPasteCode}
       onDropFiles={onDropFiles}
       isSlashMenuActive={isSlashMenuActive}
       onSlashMenuKey={onSlashMenuKey}

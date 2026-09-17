@@ -9,6 +9,7 @@ import {
 } from '../api/analytics';
 import { useAppModeStore } from '../stores/appModeStore';
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
+import { trackDesktopProductEvent } from './productAnalytics';
 import {
   AnalyticsConfig,
   AnalyticsEvent,
@@ -150,6 +151,8 @@ class AnalyticsService {
     if (!this.config.enabled) {
       return;
     }
+
+    trackDesktopProductEvent(eventName);
 
     const sanitizedProperties = this.sanitizeProperties(properties);
 

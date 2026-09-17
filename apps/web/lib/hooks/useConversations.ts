@@ -522,6 +522,15 @@ export function useConversations(): UseConversationsReturn {
         const loadedConversation = toWebConversation(loadedConversationWire);
         upsertConversation(loadedConversation);
 
+        // A draft this device has not seen belongs in the composer: it was
+        // typed on another machine, or before a reload here. A draft already
+        // parked locally wins, because it is what the person in front of this
+        // composer typed most recently.
+        const serverDraft = loadedConversationWire.draft?.trim() ?? '';
+        if (serverDraft && !useChatStore.getState().getDraftContent(id)) {
+          useChatStore.getState().setDraftContent(serverDraft, id);
+        }
+
         const messages: Message[] = loadedMessageWires.map((m) => {
           const metadata = readLoadedMessageMetadata(m.metadata);
           const resumesVideo =

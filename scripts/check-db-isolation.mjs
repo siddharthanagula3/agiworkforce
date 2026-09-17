@@ -389,6 +389,21 @@ const ALLOWLIST = [
       "single user's data",
   },
   {
+    match: /features\/admin\/services\/product-metrics\.ts$/,
+    tables: ['subscriptions', 'product_analytics_events'],
+    reason:
+      'imported by app/api/admin/product-metrics/route.ts, which calls requirePlatformAdmin() ' +
+      'before the read, and by the daily rollup cron, which admits only the scheduler ' +
+      'credential. All three statements are deliberately platform-wide: the paid count, the ' +
+      'plan mix behind ARR, and the cancellations behind churn are figures about the ' +
+      'business, and constraining any of them by owner would report an operator their own ' +
+      'subscription instead. The event-stream statements are the same shape: the active-user ' +
+      'counts, the cohort retention and the quality rates are distinct-user counts and ratios ' +
+      'over every account, and the retention purge deletes by age across the whole stream. No ' +
+      'row leaves the aggregate: the response carries counts and summed microUSD per metric, ' +
+      'never a user id',
+  },
+  {
     match: /features\/admin\/services\/economics-summary\.ts$/,
     tables: ['subscriptions', 'credit_transactions'],
     reason:

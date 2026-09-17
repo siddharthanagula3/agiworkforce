@@ -1,0 +1,9 @@
+{
+  "_description": "API routes with no structured logging, and console calls inside routes. Measured at a committed revision, never against a dirty tree. These counts only shrink. A new route imports the logger or wraps its handler in withErrorHandler; the remaining few predate the rule and are a bounded debt, not an allowlist.",
+  "_measuredAt": "fc62f20d4f17aadd8169b95c3d499dcbcfab45a4. Every count was taken on a clean checkout of that commit with this lane applied and nothing else, so no other lane's uncommitted work is baked in; each number sits exactly at its ceiling with no headroom.",
+  "_routesScanned": 334,
+  "maxFindings": {
+    "unlogged-route": 16,
+    "console-in-route": 7
+  }
+}

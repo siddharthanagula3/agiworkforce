@@ -88,6 +88,7 @@ describe('GET /api/projects · shared projects', () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
+      writableProjectIds: [],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockRlsQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
@@ -103,6 +104,7 @@ describe('GET /api/projects · shared projects', () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
+      writableProjectIds: [],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockRlsQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
@@ -131,6 +133,7 @@ describe('GET /api/projects · shared projects', () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
+      writableProjectIds: [],
     });
     mockRlsQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
 
@@ -144,6 +147,7 @@ describe('GET /api/projects · shared projects', () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
+      writableProjectIds: [],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockRlsQuery.mockResolvedValue([
@@ -168,6 +172,7 @@ describe('GET /api/projects/[id] · shared project detail', () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
+      writableProjectIds: [],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockRlsQuery
@@ -194,6 +199,7 @@ describe('GET /api/projects/[id] · shared project detail', () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
+      writableProjectIds: [],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockRlsQuery.mockResolvedValue([]);
@@ -230,6 +236,7 @@ describe('the payload says which projects the caller may write', () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
+      writableProjectIds: [],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockRlsQuery.mockResolvedValue([
@@ -250,6 +257,7 @@ describe('the payload says which projects the caller may write', () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
+      writableProjectIds: [],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockRlsQuery

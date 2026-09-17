@@ -99,6 +99,26 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
 
 export type ResearchPlanDecision = 'start' | 'cancel';
 
+/**
+ * What the reader chose the run may read, taken at the moment they press Start
+ * (§24 File sources, Domain restrictions). The server enforces both: the domain
+ * list gates every source at ingestion, and files are searched only when asked
+ * for, so an unanswered control changes nothing about the run.
+ */
+export interface ResearchPlanOptions {
+  files: boolean;
+  allowDomains: string[];
+  denyDomains: string[];
+}
+
+const DOMAIN_SEPARATOR = /[\s,;]+/;
+
+export function parseResearchDomainList(value: string): string[] {
+  return Array.from(new Set(value.split(DOMAIN_SEPARATOR).map((part) => part.trim()))).filter(
+    (part) => part.length > 0,
+  );
+}
+
 interface ResearchActivityProps {
   research: MessageResearchState;
   isStreaming: boolean;
@@ -108,7 +128,7 @@ interface ResearchActivityProps {
    * Answer a paused run's plan. Absent when the surface cannot send, so a
    * plan that cannot be started shows no Start button.
    */
-  onPlanDecision?: (decision: ResearchPlanDecision) => void;
+  onPlanDecision?: (decision: ResearchPlanDecision, options?: ResearchPlanOptions) => void;
 }
 
 export function ResearchActivity({
@@ -168,6 +188,10 @@ export function ResearchActivity({
     counts.unshift(`round ${research.iteration} of ${research.maxIterations}`);
   }
 
+  const [useMyFiles, setUseMyFiles] = useState(false);
+  const [allowDomains, setAllowDomains] = useState('');
+  const [denyDomains, setDenyDomains] = useState('');
+
   const steps = research.steps ?? [];
   const awaitingApproval = research.phase === 'awaiting_approval';
   const canRetry = Boolean(onRetry) && (failed || interrupted);
@@ -213,7 +237,13 @@ export function ResearchActivity({
             <>
               <button
                 type="button"
-                onClick={() => onPlanDecision?.('start')}
+                onClick={() =>
+                  onPlanDecision?.('start', {
+                    files: useMyFiles,
+                    allowDomains: parseResearchDomainList(allowDomains),
+                    denyDomains: parseResearchDomainList(denyDomains),
+                  })
+                }
                 disabled={isRetrying}
                 className={cn(
                   'inline-flex items-center gap-1 min-h-6 rounded-md bg-primary px-2 py-0.5',
@@ -265,10 +295,56 @@ export function ResearchActivity({
         </span>
       </div>
 
+      {canDecide && (
+        <div
+          className={cn(
+            'flex flex-col gap-2 border border-t-0 border-border/30 bg-muted/10 px-3 py-2 text-xs',
+            steps.length === 0 && 'rounded-b-lg',
+          )}
+          data-testid="research-plan-sources"
+        >
+          <label className="flex items-center gap-2 text-muted-foreground">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-[hsl(var(--primary))]"
+              checked={useMyFiles}
+              onChange={(event) => setUseMyFiles(event.target.checked)}
+              data-testid="research-plan-use-files"
+            />
+            Also search my saved files, chats and reports
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-muted-foreground">
+              Only these sites
+              <input
+                type="text"
+                value={allowDomains}
+                onChange={(event) => setAllowDomains(event.target.value)}
+                placeholder="nature.com, who.int"
+                className="min-h-7 w-full rounded-md border border-border/40 bg-background px-2 py-1 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="research-plan-allow-domains"
+              />
+            </label>
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-muted-foreground">
+              Never these sites
+              <input
+                type="text"
+                value={denyDomains}
+                onChange={(event) => setDenyDomains(event.target.value)}
+                placeholder="example.com"
+                className="min-h-7 w-full rounded-md border border-border/40 bg-background px-2 py-1 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="research-plan-deny-domains"
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
       {steps.length > 0 && (
         <ol
           className={cn(
             'space-y-0 rounded-b-lg border border-t-0 px-3 py-2 text-xs',
+            canDecide && 'border-t',
             failed ? 'border-destructive/30 bg-destructive/5' : 'border-border/30 bg-muted/10',
           )}
           aria-label="Research plan"

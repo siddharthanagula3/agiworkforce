@@ -28,7 +28,7 @@ const ShareSchema = z.object({}).strict();
 const MemberAccessSchema = z
   .object({
     userId: z.string().trim().min(1).max(255),
-    access: z.enum(['read', 'none', 'inherit']),
+    access: z.enum(['read', 'write', 'none', 'inherit']),
   })
   .strict();
 

@@ -43,7 +43,9 @@ import {
   loadUserConnectorToolCatalog,
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
-import { runResearchLoop } from './lib/research-loop';
+import { extractUserQuery, runResearchLoop } from './lib/research-loop';
+import { createResearchDomainPolicy } from './lib/research-sources';
+import { searchResearchFileSources } from '@/lib/services/research-file-source-service';
 import {
   saveResearchReport,
   type PersistedResearchReport,
@@ -100,6 +102,7 @@ import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-t
 import {
   loadConnectorToolPermissions,
   withDisabledConnectorIds,
+  withoutStandingApprovals,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
 } from './lib/connector-tool-permissions';
 import { admitConversationTurn } from './lib/conversation-turn-admission';
@@ -521,6 +524,22 @@ async function dispatchChatCompletions(
         onResilienceObservation: recordResilienceObservation,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
+      // §24 sources. The domain policy is built here, once, from what the user
+      // chose on the plan card; the loop applies it at ingestion. The file
+      // search runs before the loop so a failing index degrades to a web-only
+      // run rather than failing the turn.
+      const researchDomainPolicy = createResearchDomainPolicy({
+        allow: processed.researchSources?.allowDomains,
+        deny: processed.researchSources?.denyDomains,
+      });
+      const researchFileSources = processed.researchSources?.files
+        ? await searchResearchFileSources(runDb, {
+            userId,
+            organizationId: processed.organizationId ?? null,
+            query: extractUserQuery(processed.llmRequest.messages),
+          })
+        : [];
+
       // The report is the turn's durable half; holding the row the loop just
       // stored lets the assistant message carry the same activity rather than
       // depending on a client save that a research turn's metadata can fail.
@@ -571,6 +590,8 @@ async function dispatchChatCompletions(
           // A first attempt shows its plan and waits for Start; the approved
           // plan the client sends back IS that decision, so it searches at once.
           requirePlanApproval: (processed.researchResume?.approvedSteps.length ?? 0) === 0,
+          domainPolicy: researchDomainPolicy,
+          fileSources: researchFileSources,
           isCancellationRequested: () =>
             isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
           // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
@@ -677,7 +698,9 @@ async function dispatchChatCompletions(
     // verdicts. Neither replaces the other -- a connector can be off for one
     // chat while its saved permission stays Allow everywhere else.
     const turnConnectorPermissions = withDisabledConnectorIds(
-      connectorPermissions,
+      processed.conversationIsTemporary
+        ? withoutStandingApprovals(connectorPermissions)
+        : connectorPermissions,
       new Set(processed.chatRequest.disabled_connector_ids),
     );
     // GOV-7: the connector-tool ceiling is now the caller's PLAN ceiling, not a

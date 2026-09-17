@@ -32,6 +32,7 @@ export const ManagedCloudProjectSchema = z.object({
   accentColor: ProjectAccentColorSchema.nullable().optional(),
   importedFrom: ProjectImportSourceSchema.nullable().optional(),
   isOrgShared: z.boolean().optional(),
+  sharedAccess: z.enum(['read', 'write']).nullable().optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 });

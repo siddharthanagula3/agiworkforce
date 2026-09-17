@@ -82,7 +82,9 @@ const ROW_LABEL_MEMORY = 'Memory';
 const ROW_LABEL_TEMPORARY = 'Temporary chat';
 const ROW_LABEL_TEMPORARY_SAVING = 'Temporary chat · saving…';
 export const TEMPORARY_CHAT_RETENTION_NOTE =
-  "Won't be saved to your history and skips memory for this turn.";
+  "Won't be saved to your history and skips memory. Files you attach stay out of your " +
+  'Library, and a connector asks before every call even where you saved Always allow. ' +
+  'A connector call still reaches that service, which keeps its own record.';
 const ROW_LABEL_MANAGE_CONNECTORS = 'Manage in Settings';
 const ROW_LABEL_BROWSE_CONNECTORS = 'Browse connectors';
 const ROW_LABEL_ADD_CUSTOM_CONNECTOR = 'Add custom connector';

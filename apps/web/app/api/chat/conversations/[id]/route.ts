@@ -26,6 +26,16 @@ import {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const PG_UNDEFINED_COLUMN = '42703';
+
+function isUndefinedColumn(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: string }).code === PG_UNDEFINED_COLUMN
+  );
+}
+
 const DELETE_CONVERSATION_SQL = `
   update web_conversations
      set deleted_at = now(), updated_at = now()
@@ -76,9 +86,13 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 100, 1), 500);
   const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
-  const [versionedConversation] = await db.query<VersionedConversationRow>(
-    `
-      select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+  // The draft columns arrive with 0219. Until it is applied the same read has
+  // to work without them, or every conversation stops opening the moment this
+  // ships ahead of the migration.
+  const conversationSelect = (withDraft: boolean): string => `
+      select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id,${
+        withDraft ? ' draft, draft_updated_at,' : ''
+      } created_at, updated_at,
         server_version::text as server_version,
         ${CONVERSATION_WORK_MODE_SELECT}
       from web_conversations
@@ -87,9 +101,22 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
         and organization_id is not distinct from $3
         and deleted_at is null
       limit 1
-    `,
-    [id, userId, organizationId],
-  );
+    `;
+  let versionedConversation: VersionedConversationRow | undefined;
+  try {
+    [versionedConversation] = await db.query<VersionedConversationRow>(conversationSelect(true), [
+      id,
+      userId,
+      organizationId,
+    ]);
+  } catch (error) {
+    if (!isUndefinedColumn(error)) throw error;
+    [versionedConversation] = await db.query<VersionedConversationRow>(conversationSelect(false), [
+      id,
+      userId,
+      organizationId,
+    ]);
+  }
 
   if (!versionedConversation) {
     throw createError.notFound('Conversation not found');
@@ -162,6 +189,40 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
+
+  /**
+   * A draft is written on its own statement, never as part of the conversation
+   * update: it must not move `updated_at` (which orders the sidebar) or
+   * `server_version` (which guards real edits), and it arrives on every
+   * debounce while someone is typing. A temporary chat refuses it outright,
+   * for the reason its transcript is not stored either.
+   */
+  if (Object.prototype.hasOwnProperty.call(body, 'draft')) {
+    const draft = body['draft'];
+    let saved: { id: string } | undefined;
+    let stored = true;
+    try {
+      [saved] = await db.query<{ id: string }>(
+        `update web_conversations
+            set draft = case when is_temporary then null else $3::text end,
+                draft_updated_at = case when is_temporary then null else now() end
+          where id = $1
+            and user_id = $2
+            and organization_id is not distinct from $4
+            and deleted_at is null
+          returning id`,
+        [id, userId, draft && draft.length > 0 ? draft : null, organizationId],
+      );
+    } catch (error) {
+      // Until 0219 is applied there is nowhere to put a draft. The composer's
+      // own copy is already parked, so the honest answer is that this one was
+      // not stored, not a 500 on every keystroke.
+      if (!isUndefinedColumn(error)) throw error;
+      stored = false;
+    }
+    if (stored && !saved) throw createError.notFound('Conversation not found');
+    if (Object.keys(body).length === 1) return NextResponse.json({ saved: stored });
+  }
 
   const updates: Record<string, unknown> = {};
   if (body['title']) updates['title'] = body['title'];

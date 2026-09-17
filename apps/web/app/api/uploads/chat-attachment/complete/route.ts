@@ -17,7 +17,11 @@ import {
 import { scanUploadBytes } from '@/lib/security/upload-scan';
 import { matchDenylistedUpload, recordModerationEvent } from '@/lib/moderation';
 import { logger } from '@/lib/logger';
-import { getMediaAssetByStoragePathname, insertMediaAsset } from '@/lib/server/media-assets';
+import {
+  getMediaAssetByContentHash,
+  getMediaAssetByStoragePathname,
+  insertMediaAsset,
+} from '@/lib/server/media-assets';
 import { sealedChatAttachmentPathname } from '@/lib/server/media-storage';
 import {
   isChatImageMimeType,
@@ -27,13 +31,54 @@ import {
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { SYNCED_APP_SURFACES, type SyncedAppSurface } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  resolveProductAnalyticsSurface,
+  trackProductAnalyticsEvent,
+} from '@/lib/server/product-analytics';
 
 const CompleteChatAttachmentSchema = z.object({
   storageKey: z.string().min(1).max(600),
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(255),
   byteCount: z.number().int().positive().max(MAX_CHAT_ATTACHMENT_BYTES),
+  conversationId: z.string().min(1).max(200).optional(),
+  temporary: z.boolean().optional(),
 });
+
+/**
+ * Temporary Chat's file policy (§18): an attachment that arrives in a temporary
+ * chat is not a Library file and is purged with the chat.
+ *
+ * The conversation's own `is_temporary` decides it whenever the chat exists.
+ * The client's flag is the fallback for the first upload into a chat that has
+ * no row yet, and it is safe to trust in that direction only: it can shorten
+ * what is kept, never extend it, so a client that lies about being temporary
+ * costs its own user a Library entry and reaches nothing else.
+ */
+async function isTemporaryChatUpload(
+  db: Pick<DatabaseAdapter, 'query'>,
+  userId: string,
+  input: { conversationId?: string | undefined; temporary?: boolean | undefined },
+): Promise<boolean> {
+  if (!input.conversationId) return input.temporary === true;
+  try {
+    const [row] = await db.query<{ is_temporary: boolean }>(
+      `select is_temporary
+         from web_conversations
+        where id = $1 and user_id = $2 and deleted_at is null
+        limit 1`,
+      [input.conversationId, userId],
+    );
+    return row ? row.is_temporary : input.temporary === true;
+  } catch (error) {
+    logger.warn(
+      { err: error, userId, conversationId: input.conversationId },
+      '[uploads] temporary-chat lookup failed; honouring the declared flag',
+    );
+    return input.temporary === true;
+  }
+}
 
 async function purgeRejectedUpload(userId: string, storageKey: string): Promise<void> {
   try {
@@ -70,6 +115,10 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid request body');
   }
   const { storageKey, fileName, mimeType, byteCount } = parsed.data;
+  const temporaryChat = await isTemporaryChatUpload(db, userId, {
+    conversationId: parsed.data.conversationId,
+    temporary: parsed.data.temporary,
+  });
   const expectedPrefix = `chat-attachments/${userId}/`;
   if (
     !storageKey.startsWith(expectedPrefix) ||
@@ -87,8 +136,8 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
 
   const scannedKey = sealedChatAttachmentPathname(storageKey);
   const existing =
-    (await getMediaAssetByStoragePathname(userId, scannedKey, organizationId, db)) ??
-    (await getMediaAssetByStoragePathname(userId, storageKey, organizationId, db));
+    (await getMediaAssetByStoragePathname(userId, scannedKey, organizationId, db, temporaryChat)) ??
+    (await getMediaAssetByStoragePathname(userId, storageKey, organizationId, db, temporaryChat));
   if (existing) {
     return NextResponse.json({
       attachment: {
@@ -141,8 +190,42 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const duplicate = await getMediaAssetByContentHash(
+    userId,
+    hashMatch.sha256,
+    organizationId,
+    db,
+    temporaryChat,
+  );
+  if (duplicate) {
+    await purgeRejectedUpload(userId, storageKey);
+    logger.info(
+      { userId, byteCount: object.data.byteLength },
+      '[uploads] reused an attachment already held for these bytes; the copy was not stored',
+    );
+    return NextResponse.json({
+      attachment: {
+        id: duplicate.id,
+        name: String(duplicate.metadata['filename'] ?? fileName),
+        mimeType: duplicate.mimeType,
+        byteCount: duplicate.byteSize ?? object.data.byteLength,
+        type: isChatImageMimeType(duplicate.mimeType) ? 'image' : 'file',
+        url: `/api/files/${duplicate.id}`,
+      },
+    });
+  }
+
   const scan = await scanUploadBytes(object.data, mimeType);
   if (!scan.ok) {
+    trackProductAnalyticsEvent(
+      { userId, organizationId },
+      {
+        name: 'file_processed',
+        surface: resolveProductAnalyticsSurface(request),
+        outcome: 'failed',
+        properties: { errorCode: 'content_inspection' },
+      },
+    );
     logger.warn(
       { userId, storageKey, fileName, findings: scan.findings },
       '[uploads] rejected an attachment that failed content inspection',
@@ -183,7 +266,9 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
       byteSize: object.data.byteLength,
       storageUrl: scannedKey,
       storagePathname: scannedKey,
+      contentSha256: hashMatch.sha256,
       sourceSurface,
+      temporaryChat,
       metadata: {
         filename: fileName,
         origin: 'upload',
@@ -197,6 +282,16 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
   if (!id) {
     throw createError.internal('Chat attachment storage is not provisioned');
   }
+
+  const analyticsSurface = resolveProductAnalyticsSurface(request);
+  trackProductAnalyticsEvent(
+    { userId, organizationId },
+    { name: 'file_uploaded', surface: analyticsSurface },
+  );
+  trackProductAnalyticsEvent(
+    { userId, organizationId },
+    { name: 'file_processed', surface: analyticsSurface, outcome: 'succeeded' },
+  );
 
   return NextResponse.json({
     attachment: {

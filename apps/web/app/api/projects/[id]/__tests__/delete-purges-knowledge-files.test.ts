@@ -45,6 +45,9 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
 }));
 vi.mock('@/lib/services/org-sharing-service', () => ({
   resolveSharedProjectScope: vi.fn(async () => null),
+  // The route asks this before it lets a non-owner write; a delete is owner-only,
+  // so the answer here is the owner the fixture already is.
+  resolveProjectWriteAccess: vi.fn(async () => 'owner'),
 }));
 
 import { DELETE } from '@/app/api/projects/[id]/route';

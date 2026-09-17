@@ -6,6 +6,11 @@ export type ComposerCaretPosition = 'start' | 'end';
 
 export type ComposerAttachmentPasteDecision = Exclude<ComposerPasteDecision, { kind: 'text' }>;
 
+export interface ComposerCodePaste {
+  text: string;
+  language: string;
+}
+
 export interface ComposerMentionAttributes {
   id: string;
   label?: string | null;
@@ -57,6 +62,7 @@ export interface ComposerEditorProps {
   onSubmit?: () => void;
   onFocusChange?: (focused: boolean) => void;
   onPasteDecision?: (decision: ComposerAttachmentPasteDecision) => void;
+  onPasteCode?: (paste: ComposerCodePaste) => void;
   onDropFiles?: (files: readonly File[]) => void;
   isSlashMenuActive?: () => boolean;
   onSlashMenuKey?: (key: string) => boolean;

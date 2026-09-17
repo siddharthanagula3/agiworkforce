@@ -4,7 +4,7 @@ import { EditorState, TextSelection } from '@tiptap/pm/state';
 import { Fragment, Slice } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/core';
 import { cn } from '../lib/utils';
-import { decideComposerPaste, filesFromDataTransfer } from '../lib/largePaste';
+import { decideComposerPaste, filesFromDataTransfer, pastedCodeFence } from '../lib/largePaste';
 import { createComposerExtensions } from './extensions';
 import { COMPOSER_PROGRAMMATIC_META } from './extensions/max-length';
 import { SEND_ON_ENTER } from './extensions/submit-keymap';
@@ -82,6 +82,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
     propsRef.current = props;
 
     const [isEmpty, setIsEmpty] = useState(true);
+    const editorInstanceRef = useRef<Editor | null>(null);
 
     const { ariaLabel, ariaDescribedBy, placeholder, disabled = false, className } = props;
 
@@ -119,8 +120,15 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
           const decision = decideComposerPaste(event.clipboardData, {
             existingFileNames: current.existingFileNames ?? [],
           });
-          if (decision.kind === TEXT_PASTE) return false;
-          current.onPasteDecision?.(decision);
+          if (decision.kind !== TEXT_PASTE) {
+            current.onPasteDecision?.(decision);
+            return true;
+          }
+          const fenced = pastedCodeFence(event.clipboardData);
+          const instance = editorInstanceRef.current;
+          if (!fenced || !instance) return false;
+          insertPlainText(instance, fenced.text);
+          current.onPasteCode?.(fenced);
           return true;
         },
         handleDrop: (_view: unknown, event: DragEvent) => {
@@ -139,7 +147,10 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
         editorProps,
         immediatelyRender: false,
         editable: !disabled,
-        onCreate: ({ editor: instance }) => setIsEmpty(instance.isEmpty),
+        onCreate: ({ editor: instance }) => {
+          editorInstanceRef.current = instance;
+          setIsEmpty(instance.isEmpty);
+        },
         onUpdate: ({ editor: instance }) => {
           setIsEmpty(instance.isEmpty);
           propsRef.current.onTextChange?.(composerText(instance));

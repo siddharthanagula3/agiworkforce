@@ -2,6 +2,7 @@ import 'server-only';
 import { getNeonDb } from './server/neon-db';
 import { logger } from './logger';
 import { getKeyValueStore } from './server/key-value';
+import { trackAuditedProductEvent } from './server/product-analytics';
 
 /**
  * Counts writes to `security_audit_logs` since the last anomaly check, so the
@@ -503,6 +504,15 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
   } catch (err) {
     logger.error({ error: err, eventType }, 'Failed to record audit event');
   }
+
+  trackAuditedProductEvent({
+    userId: event.userId,
+    organizationId: event.organizationId ?? null,
+    eventType,
+    surface: event.surface ?? null,
+    outcome,
+    detail,
+  });
 
   if (!event.organizationId) return;
 

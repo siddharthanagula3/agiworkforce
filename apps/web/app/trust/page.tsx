@@ -58,7 +58,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 80 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 81 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -151,7 +151,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 127 of 238 database-backed hosted API route files. Counted against the 238 route files that reach the database; the other 95 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 111 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-17.',
+      'Partial: 127 of 239 database-backed hosted API route files. Counted against the 239 route files that reach the database; the other 97 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 112 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-17.',
   },
   {
     label: 'Authentication and CSRF',
@@ -316,6 +316,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-17',
+                        value:
+                          'Re-measured after the product analytics event stream shipped. One table joined the enumerated erasure list, taking it from 80 to 81: the product events an account produces, which record that something happened and on which client, never what was written, are collected only while the account\u2019s consent ledger grants the product analytics purpose, are deleted with the account, and are included in the export because they are a record of what the account did. Three hosted routes arrived with it. The consent-gated ingest resolves its subject from the session and writes as the owner, so the row-level-isolation count stays at 127 while the database-backed total moved from 238 to 239 and the owner-connection remainder from 111 to 112; the operator metrics read and the daily rollup cron reach the database through services rather than in the route file, so the routes excluded from both sides moved from 95 to 97.',
+                      },
                       {
                         label: '2026-09-17',
                         value:

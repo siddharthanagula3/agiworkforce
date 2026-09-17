@@ -138,6 +138,14 @@ export const ManagedCloudChatAttachmentCompleteRequestSchema = z.object({
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(255),
   byteCount: z.number().int().positive().max(MAX_CHAT_ATTACHMENT_BYTES),
+  /**
+   * The conversation the file is being attached to, when it already exists.
+   * The server reads its own `is_temporary` from this rather than trusting
+   * `temporary`, which only covers a chat that has not been created yet.
+   */
+  conversationId: z.string().min(1).max(200).optional(),
+  /** The composer is in Temporary Chat. Only ever shortens what is kept. */
+  temporary: z.boolean().optional(),
 });
 
 export const ManagedCloudChatAttachmentSchema = z.object({

@@ -163,6 +163,7 @@ import {
   type WebCloudRolloutInputs,
 } from '@/lib/services/model-rollout/rollout-routing-inputs';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
+import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
 import { scheduleShadowDispatch } from '@/lib/services/model-rollout/shadow-dispatch-service';
 import { ROUTE_LANES, type FreeLanePlan, type RouteLane } from '@/lib/services/free-lane/plan';
 import {
@@ -363,6 +364,18 @@ export const ChatCompletionRequestSchema = z
     /** Per-chat Memory override. False skips memory injection and memory writes for this turn. */
     memory_enabled: z.boolean().optional(),
     research: z.boolean().optional(),
+    /**
+     * What a research run may read (§24). `files` opens the account's own
+     * indexed documents as a source; `domains` restricts which sites the run
+     * may cite, and is enforced at ingestion rather than by the prompt.
+     */
+    research_sources: z
+      .object({
+        files: z.boolean().optional(),
+        allow_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
+        deny_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
+      })
+      .optional(),
     research_resume: z
       .object({
         sources: z
@@ -876,6 +889,12 @@ export type ProcessedRequest = {
     /** The plan the user pressed Start on after the approval pause. */
     approvedSteps: ResearchStep[];
   };
+  /** §24: the sources and site restriction this research run was given. */
+  researchSources?: {
+    files: boolean;
+    allowDomains: string[];
+    denyDomains: string[];
+  };
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
   contextTrim?: ContextTrimResult | null;
@@ -1202,15 +1221,10 @@ export function isUnreportedToolAssistedTurn(request: ChatCompletionRequest): bo
   return Boolean(request.research || request.work_mode === 'agiwork');
 }
 
+export const RESEARCH_SYSTEM_PROMPT_ID = 'research.system';
+
 // Exported so it can be unit-tested without importing the full processRequest stack.
-export const RESEARCH_SYSTEM_PROMPT =
-  'You are in deep research mode. Your job is to produce a thorough, well-structured report.' +
-  ' Search the web using several distinct, targeted queries that cover different angles of the topic.' +
-  ' Cross-reference multiple sources before drawing conclusions.' +
-  ' Inline-cite every factual claim with a bracketed number, e.g. [1], matched to a numbered Sources list at the end.' +
-  ' Structure the report with a brief executive summary, clearly labeled sections, and a Sources list.' +
-  ' Use plain language; avoid jargon where simpler terms work just as well.' +
-  ' Do not pad the report with filler sentences; every paragraph must add new information.';
+export const RESEARCH_SYSTEM_PROMPT = resolvePromptText(RESEARCH_SYSTEM_PROMPT_ID);
 
 const NO_DYNAMIC_SYSTEM_MESSAGE_REFS: ReadonlySet<object> = new Set();
 
@@ -1264,16 +1278,30 @@ export function researchModeAllowed(
   return chatRequest.research === true && modelSupportsResearch(caps, contextWindow);
 }
 
+/**
+ * The manifest prompts this turn will send, stamped so a cost or rollout
+ * question can separate a prompt change from a model change.
+ */
+export function turnPromptStamps(
+  chatRequest: ChatCompletionRequest,
+  promptVariants: Readonly<Record<string, number>>,
+): string[] {
+  return chatRequest.research === true
+    ? promptStampsFor([RESEARCH_SYSTEM_PROMPT_ID], { variants: promptVariants })
+    : [];
+}
+
 export function applyResearchMode(
   chatRequest: ChatCompletionRequest,
   dynamicSystemMessageRefs: ReadonlySet<object> = NO_DYNAMIC_SYSTEM_MESSAGE_REFS,
+  promptVariants: Readonly<Record<string, number>> = {},
 ): void {
   chatRequest.web_search = true;
   chatRequest.web_fetch = true;
   applyStaticSystemDirective(
     chatRequest,
     dynamicSystemMessageRefs,
-    RESEARCH_SYSTEM_PROMPT,
+    resolvePromptText(RESEARCH_SYSTEM_PROMPT_ID, { variants: promptVariants }),
     (existing, directive) => `${directive}\n\n${existing}`,
   );
 }
@@ -2590,7 +2618,7 @@ export async function processRequest(
           db: scoped.db,
           userId,
           chatRequest,
-          isTemporary: false,
+          isTemporary: conversationIsTemporary,
           projectId: conversationProjectId,
           organizationId: scoped.organizationId,
         }),
@@ -2999,6 +3027,7 @@ export async function processRequest(
     surface: chatSurface,
     kind: 'served',
     flagVariants: rolloutInputs.flagVariants,
+    promptIds: turnPromptStamps(chatRequest, rolloutInputs.promptVariants),
   });
 
   if (routeDecision.status === 'unavailable') {
@@ -3196,7 +3225,7 @@ export async function processRequest(
     getModelMetadataById(chatRequest.model)?.contextWindow,
   );
   if (researchMode) {
-    applyResearchMode(chatRequest, dynamicSystemMessageRefs);
+    applyResearchMode(chatRequest, dynamicSystemMessageRefs, rolloutInputs.promptVariants);
   }
   // The user asked for Deep Research and the routed model cannot do it, so the
   // research loop will not run. Previously this was silent: the toggle stayed
@@ -4182,6 +4211,15 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     researchMode,
+    ...(researchMode && chatRequest.research_sources
+      ? {
+          researchSources: {
+            files: chatRequest.research_sources.files === true,
+            allowDomains: chatRequest.research_sources.allow_domains ?? [],
+            denyDomains: chatRequest.research_sources.deny_domains ?? [],
+          },
+        }
+      : {}),
     ...(researchMode && chatRequest.research_resume
       ? {
           researchResume: {

@@ -161,6 +161,21 @@ function normalizeInput(
   };
 }
 
+const FORK_TITLE_SUFFIX = ' (copy)';
+const FORK_TITLE_NUMBERED = /^(.*) \(copy(?: (\d+))?\)$/;
+
+/**
+ * Forking a copy again gives "copy 2", not "(copy) (copy)". The panel lists
+ * artifacts by title, so a chain of nested suffixes is what a reader would have
+ * to tell apart.
+ */
+function forkedArtifactTitle(title: string): string {
+  const match = FORK_TITLE_NUMBERED.exec(title);
+  if (!match) return `${title}${FORK_TITLE_SUFFIX}`;
+  const next = Number(match[2] ?? '1') + 1;
+  return `${match[1]} (copy ${next})`;
+}
+
 function artifactsContentEqual(a: ArtifactInput, b: ArtifactInput): boolean {
   return (
     a.title === b.title &&
@@ -423,6 +438,7 @@ type ArtifactsStoreReturn = {
   getArtifactVersions: (id: string) => SharedArtifact[];
   resolveArtifactConflict: (id: string, keep: 'mine' | 'theirs') => boolean;
   restoreArtifactVersion: (id: string, versionIndex: number) => boolean;
+  forkArtifact: (id: string, content?: string) => string | null;
   applyCloudArtifactDeltas: (deltas: ReadonlyArray<ArtifactWireDelta>) => void;
   collectArtifactPushBatch: () => ArtifactSyncPushItem[];
   applyArtifactPushResult: (result: ChatSyncPushResponse) => void;
@@ -624,6 +640,41 @@ const actions = {
     _cloudArtifacts = _cloudArtifacts.filter((artifact) => artifact.id !== id);
     notifyArtifactSubscribers();
     return true;
+  },
+
+  /**
+   * A separate artifact that starts from what this one says now (§23 Fork).
+   *
+   * The copy takes a new id and an empty version history, so editing it never
+   * writes a version onto the original and restoring the original never
+   * reaches the copy. `content` lets the caller fork the version on screen
+   * rather than the latest, which is the case a reader forking an older
+   * version is actually in.
+   */
+  forkArtifact(id: string, content?: string): string | null {
+    const source = _sharedArtifactStore.getState().artifacts.find((a) => a.id === id);
+    if (!source) return null;
+    const side = getSideEntry(id);
+    const forkId = crypto.randomUUID();
+    const forked: ArtifactInput = {
+      id: forkId,
+      type: source.type as ArtifactData['type'],
+      title: forkedArtifactTitle(source.title || 'Untitled'),
+      language: source.language ?? (source.type as string),
+      content: content ?? source.content,
+      messageId: source.messageId ?? '',
+      ...(source.conversationId ? { conversationId: source.conversationId } : {}),
+      ...(side.computeSession ? { computeSession: side.computeSession } : {}),
+      ...(side.artifactManifest ? { artifactManifest: side.artifactManifest } : {}),
+    };
+    const normalized = normalizeInput(forked);
+    setSideEntry(forkId, {
+      ...(normalized.computeSession ? { computeSession: normalized.computeSession } : {}),
+      ...(normalized.artifactManifest ? { artifactManifest: normalized.artifactManifest } : {}),
+    });
+    _sharedArtifactStore.getState().upsertArtifact(toSharedArtifact(normalized));
+    _sharedArtifactStore.getState().selectArtifact(forkId);
+    return forkId;
   },
 
   restoreArtifactVersion(id: string, versionIndex: number): boolean {

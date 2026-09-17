@@ -241,6 +241,7 @@ export {
   deviceStepScope,
   encodeDesktopHostDeclaration,
   isDeviceStepTool,
+  isScreenDeviceStep,
   offeredDeviceStepTools,
   parseDesktopHostDeclaration,
   planDeviceStep,

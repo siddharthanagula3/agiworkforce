@@ -2,6 +2,7 @@
   "suite": "tools",
   "version": 1,
   "passThreshold": 1,
+  "promptId": "tool.url_fetch_description",
   "requires": ["functionCalling"],
   "cases": [
     {

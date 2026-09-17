@@ -1,0 +1,31 @@
+{
+  "_description": "Per-package line coverage floors, and how many projects still declare none. Each floor was measured by running that package with coverage and set a point or two below the result, so it holds today and cannot be lowered tomorrow. The unfloored count only shrinks: a package joining the projects list brings a floor with it, and the rest are a named debt rather than an open-ended exemption.",
+  "_measuredAt": "fc62f20d4f17aadd8169b95c3d499dcbcfab45a4. Every count was taken on a clean checkout of that commit with this lane applied and nothing else, so no other lane's uncommitted work is baked in; each number sits exactly at its ceiling with no headroom. The ten floors were measured by running each package with coverage in this change.",
+  "rootFloor": 75,
+  "maxUnfloored": 13,
+  "floors": {
+    "apps/extension": null,
+    "apps/extension-vscode": null,
+    "apps/web": null,
+    "services/signaling-server": null,
+    "packages/ai/provider-runtime": null,
+    "packages/ai/routing": 95,
+    "packages/ai/search": 95,
+    "packages/client/client-runtime": null,
+    "packages/client/sync": 92,
+    "packages/contracts/cloud-contracts": null,
+    "packages/contracts/compliance": 86,
+    "packages/contracts/licensing": 87,
+    "packages/contracts/trust-boundaries": 100,
+    "packages/contracts/types": 84,
+    "packages/guardian/core": 96,
+    "packages/guardian/github": null,
+    "packages/platform/artifacts": null,
+    "packages/platform/data-layer": null,
+    "packages/platform/utils": 66,
+    "packages/ui/icons": 100,
+    "packages/ui/ui": null,
+    "packages/ui/unified-chat": null,
+    "tools/evals": null
+  }
+}

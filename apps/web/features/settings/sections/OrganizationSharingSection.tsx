@@ -151,7 +151,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<FolderGit2 size={14} aria-hidden />}
       title="Shared projects"
-      description="Members can open a shared project and read its instructions and knowledge files. Only the owner can edit or delete it, and conversations stay private to each member."
+      description="Members can open a shared project and read its instructions and knowledge files. Give someone Can edit and they can also change its name, instructions, appearance and sources; archiving and deleting stay with the owner, and conversations stay private to each member."
     >
       {overview.canManageSharing ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -196,6 +196,9 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                 .map((grant) => grant.userId),
             );
             const visibleTo = overview.members.filter((member) => !denied.has(member.userId));
+            const editorCount = project.memberGrants.filter(
+              (grant) => grant.access === 'write',
+            ).length;
             return (
               <li
                 key={project.projectId}
@@ -218,7 +221,8 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                   <div>
                     <div style={{ fontSize: 13, color: 'var(--text-1)' }}>{project.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                      Read-only · visible to {visibleTo.length} of {overview.members.length} members
+                      Visible to {visibleTo.length} of {overview.members.length} members ·{' '}
+                      {editorCount === 0 ? 'read-only' : `${editorCount} can edit`}
                     </div>
                   </div>
                   {overview.canManageSharing ? (
@@ -244,7 +248,12 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                   <div style={{ display: 'grid', gap: 4 }}>
                     {overview.members.map((member) => {
                       const grant = project.memberGrants.find((g) => g.userId === member.userId);
-                      const value = grant?.access === 'none' ? 'none' : 'read';
+                      const value =
+                        grant?.access === 'none'
+                          ? 'none'
+                          : grant?.access === 'write'
+                            ? 'write'
+                            : 'read';
                       const controlId = `access-${project.projectId}-${member.userId}`;
                       return (
                         <div
@@ -266,11 +275,17 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                               setAccess.mutate({
                                 projectId: project.projectId,
                                 userId: member.userId,
-                                access: event.target.value === 'none' ? 'none' : 'inherit',
+                                access:
+                                  event.target.value === 'none'
+                                    ? 'none'
+                                    : event.target.value === 'write'
+                                      ? 'write'
+                                      : 'inherit',
                               })
                             }
                           >
                             <option value="read">Can view</option>
+                            <option value="write">Can edit</option>
                             <option value="none">No access</option>
                           </select>
                         </div>

@@ -71,6 +71,7 @@ const CHECK_KINDS = [
   'language',
 ] as const;
 const MODULE_NAME = /^[a-z][a-z0-9-]*\.mjs$/u;
+const PROMPT_ID = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/u;
 const TOOL_NAME = /^[a-zA-Z0-9_-]{1,64}$/u;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -503,6 +504,10 @@ export function parseDataset(raw: unknown): EvalDataset {
   }
   const requires = raw['requires'];
   const maxOutputTokens = raw['maxOutputTokens'];
+  const promptId = raw['promptId'];
+  if (promptId !== undefined && (typeof promptId !== 'string' || !PROMPT_ID.test(promptId))) {
+    fail(suite, 'promptId must be a dotted lower-case prompt manifest id');
+  }
 
   const suiteName = suite as SuiteName;
   const cases = rawCases.map((entry, index) => parseCase(entry, suiteName, index));
@@ -517,6 +522,7 @@ export function parseDataset(raw: unknown): EvalDataset {
     suite: suiteName,
     version,
     passThreshold,
+    ...(promptId === undefined ? {} : { promptId: promptId as string }),
     ...(requires === undefined ? {} : { requires: readStringArray(requires, `${suite}.requires`) }),
     ...(maxOutputTokens === undefined
       ? {}
@@ -560,4 +566,27 @@ export function loadDatasets(suites: readonly SuiteName[]): readonly EvalDataset
 
 export function loadAllDatasets(): readonly EvalDataset[] {
   return loadDatasets(SUITE_NAMES);
+}
+
+/**
+ * Every corpus that measures `promptId`, so a prompt version change can be run
+ * against the suites that cover it without anyone remembering which they are.
+ */
+export function datasetsForPrompt(
+  promptId: string,
+  datasets: readonly EvalDataset[] = loadAllDatasets(),
+): readonly EvalDataset[] {
+  return datasets.filter((dataset) => dataset.promptId === promptId);
+}
+
+export function promptIdsUnderEval(
+  datasets: readonly EvalDataset[] = loadAllDatasets(),
+): readonly string[] {
+  return [
+    ...new Set(
+      datasets
+        .map((dataset) => dataset.promptId)
+        .filter((promptId): promptId is string => promptId !== undefined),
+    ),
+  ].sort();
 }

@@ -1,0 +1,9 @@
+{
+  "_description": "Test doubles reachable from a production path. Measured at a committed revision, never against a dirty tree. These counts only shrink: a shipped path that answers from a fake is a feature that does not exist, and the ratchet exists so the remaining ones are paid down rather than joined. The whole mock-import allowance is apps/desktop/src/lib/tauri-mock.ts, the desktop invoke bridge, which every api/ module imports. It is not a mock at runtime (it refuses fixtures outside test and desktop-ui-dev) but its name says it is; renaming it touches 187 files across a surface this lane does not own, so the count is pinned here until that rename lands and must not grow in the meantime.",
+  "_measuredAt": "fc62f20d4f17aadd8169b95c3d499dcbcfab45a4. Every count was taken on a clean checkout of that commit with this lane applied and nothing else, so no other lane's uncommitted work is baked in; each number sits exactly at its ceiling with no headroom. The web half of mock-import was one import of apps/web/lib/tauri-mock.ts, a shim that calls the real API or refuses; it is renamed to tauri-bridge.ts in the same change, so the ceiling is 187 rather than the 188 a bare HEAD scan reports.",
+  "maxFindings": {
+    "mock-import": 187,
+    "test-double-api": 0,
+    "stub-return": 0
+  }
+}

@@ -51,7 +51,14 @@ describe('0090 shared project knowledge is read-only for org members', () => {
     );
   });
 
-  it('is the last migration to touch this table POLICIES, so its grants win', () => {
+  /**
+   * A later migration may widen these policies, but only deliberately. Each
+   * entry is a reviewed decision recorded here so a future widening has to be
+   * argued for in a diff rather than landing as a quiet `create policy`.
+   */
+  const REVIEWED_LATER_POLICY_CHANGES = ['0217_shared_project_editor_write.sql'];
+
+  it('is the last unreviewed migration to touch this table POLICIES, so its grants win', () => {
     const laterPolicyChanges = readdirSync(neonDir)
       .filter((f) => /^\d{4}_.*\.sql$/.test(f))
       .filter((f) => Number.parseInt(f.slice(0, 4), 10) > 90)
@@ -60,8 +67,25 @@ describe('0090 shared project knowledge is read-only for org members', () => {
         return /(create|alter|drop)\s+policy\s+(if\s+exists\s+)?\w+\s+on\s+(public\.)?project_knowledge_files\b/i.test(
           sqlText,
         );
-      });
+      })
+      .filter((f) => !REVIEWED_LATER_POLICY_CHANGES.includes(f));
 
     expect(laterPolicyChanges).toEqual([]);
+  });
+
+  it('keeps every reviewed widening gated on an explicit per-member write grant', () => {
+    for (const file of REVIEWED_LATER_POLICY_CHANGES) {
+      const later = readMigration(file);
+      const knowledgePolicies = later
+        .split('create policy')
+        .filter((chunk) => /on public\.project_knowledge_files/i.test(chunk));
+
+      expect(knowledgePolicies.length).toBeGreaterThan(0);
+      for (const policy of knowledgePolicies) {
+        expect(policy).toContain('organization_project_access');
+        expect(policy).toMatch(/a\.access = 'write'/);
+        expect(policy).not.toMatch(/for\s+all/i);
+      }
+    }
   });
 });

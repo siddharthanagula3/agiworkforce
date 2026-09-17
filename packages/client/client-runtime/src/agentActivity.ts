@@ -7,6 +7,7 @@ import type {
   AgentEventToolCategory,
   AgentTaskState,
 } from '@agiworkforce/types';
+import { isScreenDeviceStep } from '@agiworkforce/local-runtime-contract';
 
 export type AgentActivityRunStatus =
   | 'running'
@@ -783,7 +784,10 @@ function applyAgentEvent(
             id,
             toolCallId: event.toolCallId,
             name: event.toolName,
-            category: 'other',
+            // A step that acts on the screen is computer use, and the timeline
+            // draws it as such; a file or shell step is not, and was drawn with
+            // the same blank icon while this said 'other' for both.
+            category: isScreenDeviceStep(event.toolName) ? 'computer-use' : 'other',
             summary: event.summary,
             input: event.input,
             status: 'awaiting-device',

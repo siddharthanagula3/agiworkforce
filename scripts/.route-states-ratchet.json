@@ -1,0 +1,9 @@
+{
+  "_description": "Data-fetching routes that render no loading, empty or error state. Measured at a committed revision, never against a dirty tree. These counts only shrink: a new route must ship all three states, and closing an old gap lowers the ceiling for everyone after you.",
+  "_measuredAt": "fc62f20d4f17aadd8169b95c3d499dcbcfab45a4. Every count was taken on a clean checkout of that commit with this lane applied and nothing else, so no other lane's uncommitted work is baked in; each number sits exactly at its ceiling with no headroom.",
+  "maxMissing": {
+    "loading": 25,
+    "empty": 21,
+    "error": 8
+  }
+}

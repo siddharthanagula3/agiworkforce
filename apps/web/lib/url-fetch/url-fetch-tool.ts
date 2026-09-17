@@ -1,4 +1,5 @@
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
+import { resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
   assertResolvedPublicHostname,
   EgressPolicyError,
@@ -6,6 +7,8 @@ import {
 } from '@/lib/egress-policy';
 
 export const URL_FETCH_TOOL = 'url_fetch';
+
+export const URL_FETCH_TOOL_PROMPT_ID = 'tool.url_fetch_description';
 
 export function isUrlFetchTool(name: string): boolean {
   return name === URL_FETCH_TOOL;
@@ -70,11 +73,7 @@ export function urlFetchToolDef(): {
     type: 'function',
     function: {
       name: URL_FETCH_TOOL,
-      description:
-        'Fetch a public web page (http/https URL) and return its extracted text content. ' +
-        'Use when the user provides a URL or when you need the contents of a specific page. ' +
-        'Supports HTML, plain text, Markdown, and JSON pages; binary content is not supported. ' +
-        'Only fetch URLs that appear in the conversation or in prior tool results.',
+      description: resolvePromptText(URL_FETCH_TOOL_PROMPT_ID),
       parameters: {
         type: 'object',
         properties: {

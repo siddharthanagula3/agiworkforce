@@ -42,6 +42,7 @@ import {
   toLocalChatMessages,
 } from '@features/chat/lib/local-turn';
 import { logger } from '@shared/lib/logger';
+import { trackProductEvent } from '@shared/lib/product-analytics';
 import {
   getModelMetadataById,
   getModelReasoning,
@@ -191,6 +192,12 @@ interface SendMessageOptions {
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
   research?: boolean;
+  /** §24: what this research run may read, chosen on the plan card. */
+  researchSources?: {
+    files?: boolean;
+    allowDomains?: string[];
+    denyDomains?: string[];
+  };
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
     steps: ResearchStep[];
@@ -1115,6 +1122,9 @@ async function driveDeviceSteps(
         status: outcome.isError ? 'failed' : 'completed',
         result: outcome.content,
         ...(outcome.isError ? { error: outcome.content } : {}),
+        ...(outcome.image
+          ? { resultImage: `data:${outcome.image.mimeType};base64,${outcome.image.base64}` }
+          : {}),
       },
       ctx.conversationId,
     );
@@ -2564,8 +2574,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
 
           const citationBlock = parsed.choices?.[0]?.delta?.[WEB_SEARCH_CITATION_DELTA_KEY] as
-            | Partial<WebSearchCitationDeltaWire>
-            | undefined;
+            Partial<WebSearchCitationDeltaWire> | undefined;
           if (typeof citationBlock?.url === 'string' && typeof citationBlock.title === 'string') {
             appendMarkerOrderedCitation(citationBlock.url, citationBlock.title);
           }
@@ -2608,8 +2617,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           ) {
             const errorCode =
               ((searchResultsBlock.content as Record<string, unknown>)['error_code'] as
-                | string
-                | undefined) || 'unknown_error';
+                string | undefined) || 'unknown_error';
             finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
             upsertNativeWebSearchEntry({
               status: 'failed',
@@ -2917,6 +2925,7 @@ export function useChatStream(): UseChatStreamReturn {
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
       if (!content.trim() && !options.attachments?.length) return false;
+      if (options.regenerateParentMessageId) trackProductEvent('response_regenerated');
 
       let conversationId = options.conversationId || useChatStore.getState().activeConversationId;
       if (!conversationId) {
@@ -3257,6 +3266,18 @@ export function useChatStream(): UseChatStreamReturn {
               web_search: options.webSearch || options.research || undefined,
               web_fetch: options.webFetch || undefined,
               research: options.research || undefined,
+              research_sources:
+                options.research && options.researchSources
+                  ? {
+                      ...(options.researchSources.files ? { files: true } : {}),
+                      ...(options.researchSources.allowDomains?.length
+                        ? { allow_domains: options.researchSources.allowDomains }
+                        : {}),
+                      ...(options.researchSources.denyDomains?.length
+                        ? { deny_domains: options.researchSources.denyDomains }
+                        : {}),
+                    }
+                  : undefined,
               research_resume:
                 options.research && options.researchResume
                   ? {
@@ -3713,6 +3734,7 @@ export function useChatStream(): UseChatStreamReturn {
       const activeRun = activeRunsRef.current.get(targetConversationId);
       activeRunsRef.current.delete(targetConversationId);
       abortConversation(targetConversationId);
+      trackProductEvent('generation_stopped');
 
       if (activeRun) {
         const client = createManagedCloudAgentRunClient({

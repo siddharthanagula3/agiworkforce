@@ -70,6 +70,13 @@ import {
 } from '@/lib/deadline-policy';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import { executeUrlFetch, fenceFetchedPage, isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
+import {
+  researchDomainAllowed,
+  researchDomainDirective,
+  researchFileSourcesPrompt,
+  type ResearchDomainPolicy,
+  type ResearchFileSource,
+} from './research-sources';
 import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
 import {
   enrichWebSearchResultTitles,
@@ -152,12 +159,7 @@ const CONTINUE_MARKER = 'CONTINUE_RESEARCH';
 export const DROP_MARKER = 'DROP';
 
 export type ResearchPhase =
-  | 'planning'
-  | 'awaiting_approval'
-  | 'searching'
-  | 'synthesizing'
-  | 'complete'
-  | 'error';
+  'planning' | 'awaiting_approval' | 'searching' | 'synthesizing' | 'complete' | 'error';
 
 /** Planned search queries the planning turn may commit to. */
 const PLAN_MIN_STEPS = 3;
@@ -248,6 +250,18 @@ export interface ResearchLoopOptions {
    * holds no server-side session.
    */
   requirePlanApproval?: boolean;
+  /**
+   * §24 Domain restrictions: the sites this run may read. Applied to every
+   * source the aggregator would keep and to url_fetch before it makes a
+   * request, so an ignored directive still cannot widen the run.
+   */
+  domainPolicy?: ResearchDomainPolicy | null;
+  /**
+   * §24 File sources: the account's own indexed documents, searched for this
+   * question. Injected rather than imported so the loop keeps no database
+   * handle of its own, the same reason `persistReport` is injected.
+   */
+  fileSources?: readonly ResearchFileSource[];
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -518,9 +532,17 @@ export interface ResearchSourceEntry {
 export class SourceAggregator {
   private readonly byUrl = new Map<string, ResearchSourceEntry>();
 
+  /**
+   * Every source the run keeps passes through `add`, so the domain policy is
+   * enforced here rather than at each call site: a result from a refused domain
+   * never reaches the citation list, the synthesis prompt, or the saved report.
+   */
+  constructor(private readonly domainPolicy: ResearchDomainPolicy | null = null) {}
+
   add(entry: { url?: unknown; title?: unknown; snippet?: unknown; date?: unknown }): boolean {
     const url = typeof entry.url === 'string' ? entry.url.trim() : '';
     if (!url) return false;
+    if (!url.startsWith('/') && !researchDomainAllowed(this.domainPolicy, url)) return false;
     const key = normalizeSourceUrlKey(url);
     const existing = this.byUrl.get(key);
     if (existing) {
@@ -905,6 +927,7 @@ function gatheringDirective(
   canFetch: boolean,
   runtimeSearch: boolean,
   plannedQueries: string[] = [],
+  domainPolicy: ResearchDomainPolicy | null = null,
 ): string {
   const planned =
     plannedQueries.length > 0
@@ -940,6 +963,7 @@ function gatheringDirective(
     fetchNote +
     sourceNote +
     dropNote +
+    researchDomainDirective(domainPolicy) +
     ' Reply ONLY with concise research notes: key facts found, with the source they came from.' +
     ` Do not write the report yet. End your reply with the single line ${READY_MARKER} if you have enough material to write a thorough report, or ${CONTINUE_MARKER} if another round of searching is needed.`
   );
@@ -1200,7 +1224,8 @@ export async function* runResearchLoop(
     }
   }
 
-  const sources = new SourceAggregator();
+  const domainPolicy = options.domainPolicy ?? null;
+  const sources = new SourceAggregator(domainPolicy);
   let totalSearches = 0;
   let totalFetches = 0;
   let iteration = 0;
@@ -1383,6 +1408,17 @@ export async function* runResearchLoop(
     stream: true,
   };
   const messages: ProcessedRequest['llmRequest']['messages'] = [...baseRequest.messages];
+
+  // §24 File sources. Seeded before planning so the plan already knows what the
+  // account holds, and added to the aggregator so the report cites a saved file
+  // by the same numbers it cites a web page.
+  const fileSourcesPrompt = researchFileSourcesPrompt(options.fileSources ?? []);
+  if (fileSourcesPrompt) {
+    messages.unshift({ role: 'system', content: fileSourcesPrompt });
+    for (const fileSource of options.fileSources ?? []) {
+      sources.add({ url: fileSource.url, title: fileSource.title, snippet: fileSource.snippet });
+    }
+  }
 
   const status = (phase: ResearchPhase, label: string): Uint8Array =>
     encoder.encode(
@@ -1659,6 +1695,16 @@ export async function* runResearchLoop(
         );
         isError = true;
         yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
+      } else if (!researchDomainAllowed(domainPolicy, String(call.args?.['url'] ?? ''))) {
+        content = await applyToolResultSecretPolicy(
+          _billing.userId,
+          call.name,
+          'That page is outside the sites this research run was restricted to; it was not read.' +
+            ' Continue with sites the restriction allows.',
+        );
+        isError = true;
+        yield encoder.encode(loopToolStatusEvent(call.name, 'failed', responseModel));
+        yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
       } else {
         totalFetches += 1;
         roundCounts.fetches += 1;
@@ -1874,6 +1920,7 @@ export async function* runResearchLoop(
               plan
                 .filter((step) => roundStepIds.includes(step.id) && step.id.startsWith('plan-'))
                 .map((step) => step.description),
+              domainPolicy,
             ),
           },
         ];

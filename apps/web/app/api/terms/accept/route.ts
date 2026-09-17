@@ -7,6 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CURRENT_TERMS_VERSION, recordTermsAcceptance } from '@/lib/server/terms';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 
 const AcceptTermsSchema = z.object({
   surface: z.enum(['web-signup', 'web-login']),
@@ -41,6 +42,9 @@ async function handleAcceptTerms(request: NextRequest) {
 
   try {
     const acceptance = await recordTermsAcceptance(userId, parsed.data.surface);
+    if (parsed.data.surface === 'web-signup') {
+      trackProductAnalyticsEvent({ userId }, { name: 'signup', surface: 'web' });
+    }
     return NextResponse.json({
       version: acceptance.version,
       acceptedAt: acceptance.acceptedAt,

@@ -435,6 +435,13 @@ export interface MessageToolEntry {
   summary?: string;
   /** Which machine a device step is waiting on, for the surfaces that are not it. */
   deviceName?: string;
+  /**
+   * The picture a screen step returned, as a data URL. Held only here, on the
+   * machine that captured it: it travels to the model as the step's result and
+   * is never persisted with the transcript, so a reload shows the step without
+   * it rather than a stale image of someone's desktop.
+   */
+  resultImage?: string;
 }
 
 export interface Message {

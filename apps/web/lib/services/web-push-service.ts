@@ -11,9 +11,11 @@ import {
 } from 'node:crypto';
 
 import { logger } from '@/lib/logger';
+import { recordNotificationDeliveries } from '@/lib/services/infrastructure-cost';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { PushDeliveryResult, PushMessage } from './push-notification-service';
 
+const WEB_PUSH_PROVIDER = 'web_push';
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_CONCURRENT_SENDS = 10;
 const NOTIFICATION_TTL_SECONDS = 3_600;
@@ -376,5 +378,6 @@ export async function sendWebPushToUser(
   }
 
   await pruneSubscriptions(gone);
+  recordNotificationDeliveries({ userId, provider: WEB_PUSH_PROVIDER, deliveries: sent });
   return { sent, invalidated: gone.length };
 }

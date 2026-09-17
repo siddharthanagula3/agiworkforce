@@ -12,6 +12,12 @@ export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
 export const MANAGED_CLOUD_ORGANIZATION_HEADER = 'x-agi-organization-id';
 export const MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE = 'personal';
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
+
+/**
+ * A draft is unsent text, so it is capped well below a message: the composer
+ * turns anything longer into an attachment before it could reach this.
+ */
+export const MANAGED_CLOUD_MAX_DRAFT_LENGTH = 20_000;
 export const MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH = 32_000;
 
 export function managedCloudMetadataLength(value: unknown): number {
@@ -72,6 +78,9 @@ export const ManagedCloudConversationWireSchema = z.object({
   // conversation row: the mode a task was started in is what the badge names,
   // and a later turn switched to Chat must not erase it.
   work_mode: CloudAgentWorkModeSchema.nullable().optional(),
+  /** The unsent composer text, so another device finds the message in progress. */
+  draft: z.string().nullable().optional(),
+  draft_updated_at: z.string().nullable().optional(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),
 });
@@ -125,6 +134,13 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),
   isTemporary: z.boolean().optional(),
+  /**
+   * The unsent composer text for this conversation. Written on its own path,
+   * so saving one neither reorders the sidebar nor bumps the conversation's
+   * version; `draftUpdatedAt` is the clock two devices settle on.
+   */
+  draft: z.string().max(MANAGED_CLOUD_MAX_DRAFT_LENGTH).nullable().optional(),
+  draftUpdatedAt: z.string().datetime().optional(),
   // Three-way, matching resolveParentId in the messages route's thread lib:
   // absent leaves the recorded leaf alone, a uuid names the variant being read,
   // and an explicit null returns the conversation to its linear reading, the

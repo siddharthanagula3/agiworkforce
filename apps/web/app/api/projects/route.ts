@@ -21,6 +21,10 @@ import {
   replaceProjectConversationMembership,
 } from '@/lib/services/project-membership-service';
 import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
+import {
+  resolveProductAnalyticsSurface,
+  trackProductAnalyticsEvent,
+} from '@/lib/server/product-analytics';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -204,6 +208,11 @@ async function handleCreateProject(request: NextRequest) {
     logger.error({ error, userId }, 'Failed to create project');
     throw createError.internal('Failed to create project');
   }
+
+  trackProductAnalyticsEvent(
+    { userId, organizationId },
+    { name: 'project_created', surface: resolveProductAnalyticsSurface(request) },
+  );
 
   return NextResponse.json({ project: mapProjectRow(rowData) }, { status: 201 });
 }

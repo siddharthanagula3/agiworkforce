@@ -1,0 +1,12 @@
+{
+  "_description": "API routes no test names, and page routes no e2e spec visits. Measured at a committed revision, never against a dirty tree. These counts only shrink: a new route ships with a test, and the routes below predate the rule.",
+  "_measuredAt": "fc62f20d4f17aadd8169b95c3d499dcbcfab45a4. Every count was taken on a clean checkout of that commit with this lane applied and nothing else, so no other lane's uncommitted work is baked in; each number sits exactly at its ceiling with no headroom.",
+  "_scanned": {
+    "apiRoutes": 334,
+    "pageRoutes": 167
+  },
+  "maxFindings": {
+    "untested-api-route": 38,
+    "unspecced-page-route": 12
+  }
+}

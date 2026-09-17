@@ -174,6 +174,12 @@ export interface ToolEntry {
   error?: string;
   result?: string;
   statusPhrase?: string;
+  /**
+   * The picture a screen step returned, as a data URL. Written by the machine
+   * that captured it and never persisted, so it is present for the run that
+   * took it and absent everywhere else.
+   */
+  resultImage?: string;
 }
 
 interface ToolTimelineProps {

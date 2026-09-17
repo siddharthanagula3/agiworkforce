@@ -166,6 +166,13 @@ export interface EvalDataset {
   readonly suite: SuiteName;
   readonly version: number;
   readonly passThreshold: number;
+  /**
+   * The product prompt this corpus measures, as `id` in the web app's prompt
+   * manifest. Declaring it is what lets a prompt change be evaluated rather
+   * than merely reviewed: the suite that covers a prompt is findable from the
+   * prompt's own id.
+   */
+  readonly promptId?: string;
   readonly requires?: readonly string[];
   readonly maxOutputTokens?: number;
   readonly cases: readonly EvalCase[];
@@ -246,6 +253,7 @@ export interface SkippedCase {
 export interface SuiteReport {
   readonly suite: SuiteName;
   readonly version: number;
+  readonly promptId?: string;
   readonly threshold: number;
   readonly total: number;
   readonly passed: number;

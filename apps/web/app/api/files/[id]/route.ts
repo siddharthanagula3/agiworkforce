@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { recordEgressBytes } from '@/lib/services/infrastructure-cost';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -13,6 +14,10 @@ import {
 } from '@/lib/server/media-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
+import {
+  resolveProductAnalyticsSurface,
+  trackProductAnalyticsEvent,
+} from '@/lib/server/product-analytics';
 import {
   aiGeneratedHeaders,
   hasAiGeneratedProvenance,
@@ -79,6 +84,15 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     throw createError.notFound('File not found');
   }
 
+  trackProductAnalyticsEvent(
+    { userId },
+    {
+      name: 'library_item_opened',
+      surface: resolveProductAnalyticsSurface(request),
+      properties: { kind: asset.kind },
+    },
+  );
+
   const isPdfPreview = new URL(request.url).searchParams.get('preview') === 'pdf';
   if (isPdfPreview && asset.mimeType.toLowerCase() !== 'application/pdf') {
     throw createError.notFound('PDF preview not available');
@@ -127,6 +141,12 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     const streamed = await streamStoredMedia(asset.storagePathname, range ?? undefined);
     if (!streamed) throw createError.notFound('Video bytes are not available');
     const expectedLength = range ? range.end - range.start + 1 : asset.byteSize;
+    recordEgressBytes({
+      userId,
+      bytes: expectedLength,
+      surface: resolveProductAnalyticsSurface(request),
+      provider: 'object_storage',
+    });
     const expectedContentRange = range
       ? `bytes ${range.start}-${range.end}/${asset.byteSize}`
       : undefined;
@@ -171,6 +191,12 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
   });
 
   const body = new Uint8Array(object.data);
+  recordEgressBytes({
+    userId,
+    bytes: body.byteLength,
+    surface: resolveProductAnalyticsSurface(request),
+    provider: 'object_storage',
+  });
   return new NextResponse(body, {
     status: 200,
     headers: {

@@ -2,6 +2,7 @@
   "suite": "research",
   "version": 1,
   "passThreshold": 1,
+  "promptId": "research.system",
   "cases": [
     {
       "id": "research/grounded-summary",

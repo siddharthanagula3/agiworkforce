@@ -26,11 +26,27 @@ export const RATE_CARD_FEATURES = [
   'sandbox_vcpu_second',
   'sandbox_gib_second',
   'computer_use_request',
+  'object_storage_gib_month',
+  'database_compute_second',
+  'vector_query_request',
+  'notification_delivery_request',
+  'email_message_request',
+  'network_egress_gib',
+  'work_compute_minute',
+  'code_compute_minute',
+  'browser_session_minute',
 ] as const;
 
 export type RateCardFeature = (typeof RATE_CARD_FEATURES)[number];
 
-export const RATE_CARD_UNITS = ['request', 'image', 'second', 'minute'] as const;
+export const RATE_CARD_UNITS = [
+  'request',
+  'image',
+  'second',
+  'minute',
+  'gibibyte',
+  'gibibyte_month',
+] as const;
 export type RateCardUnit = (typeof RATE_CARD_UNITS)[number];
 
 /**
@@ -38,8 +54,13 @@ export type RateCardUnit = (typeof RATE_CARD_UNITS)[number];
  * `derived_from_model` means the row carries a reference figure only and the
  * live amount comes from the model catalogue's per-unit pricing for whichever
  * model served the call.
+ * `deployment_metered` means this repository publishes no per-unit rate at all:
+ * the number is whatever the deployment's infrastructure vendors bill it, read
+ * from the row's override env var. A row on this basis prices nothing until
+ * that variable is set, which is the honest state for a cost the code cannot
+ * know.
  */
-export const RATE_CARD_BASES = ['rate_card', 'derived_from_model'] as const;
+export const RATE_CARD_BASES = ['rate_card', 'derived_from_model', 'deployment_metered'] as const;
 export type RateCardBasis = (typeof RATE_CARD_BASES)[number];
 
 /**
@@ -68,6 +89,30 @@ export interface RateCardEntry {
 }
 
 const CATALOGUE_SOURCE = 'packages/contracts/types/src/models.json';
+
+const DEPLOYMENT_METERED_SOURCE =
+  'deployment-metered: this repository publishes no per-unit rate; the deployment supplies it through the row override env var';
+
+/**
+ * An infrastructure cost the platform buys for itself rather than from a model
+ * provider: bytes at rest, database compute, a vector query, a delivered
+ * notification or email, egress, and the compute behind a Work or Code run.
+ * None of them is charged to the customer as a line item, and none of them has
+ * a rate this repository can state, so the row exists to be summed once the
+ * deployment sets its override rather than to publish a number.
+ */
+function infrastructureRate(unit: RateCardUnit): RateCardEntry {
+  return {
+    unit,
+    customerMicrousd: null,
+    customerBasis: 'deployment_metered',
+    providerCogsMicrousd: null,
+    providerCogsBasis: 'deployment_metered',
+    includedInPlans: 'no_plan',
+    source: DEPLOYMENT_METERED_SOURCE,
+    verifiedOn: '2026-09-17',
+  };
+}
 
 export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>> = {
   web_search_perplexity: {
@@ -194,11 +239,29 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
     source: CATALOGUE_SOURCE,
     verifiedOn: '2026-09-10',
   },
+  object_storage_gib_month: infrastructureRate('gibibyte_month'),
+  database_compute_second: infrastructureRate('second'),
+  vector_query_request: infrastructureRate('request'),
+  notification_delivery_request: infrastructureRate('request'),
+  email_message_request: infrastructureRate('request'),
+  network_egress_gib: infrastructureRate('gibibyte'),
+  work_compute_minute: infrastructureRate('minute'),
+  code_compute_minute: infrastructureRate('minute'),
+  browser_session_minute: infrastructureRate('minute'),
 };
 
 export const RATE_CARD_PROVIDER_COGS_ENV = {
   web_search_perplexity: 'AGI_PERPLEXITY_SEARCH_MICROUSD_PER_CALL',
   web_search_grounding: 'AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL',
+  object_storage_gib_month: 'AGI_OBJECT_STORAGE_MICROUSD_PER_GIB_MONTH',
+  database_compute_second: 'AGI_DATABASE_COMPUTE_MICROUSD_PER_SECOND',
+  vector_query_request: 'AGI_VECTOR_QUERY_MICROUSD_PER_REQUEST',
+  notification_delivery_request: 'AGI_NOTIFICATION_MICROUSD_PER_DELIVERY',
+  email_message_request: 'AGI_EMAIL_MICROUSD_PER_MESSAGE',
+  network_egress_gib: 'AGI_EGRESS_MICROUSD_PER_GIB',
+  work_compute_minute: 'AGI_WORK_COMPUTE_MICROUSD_PER_MINUTE',
+  code_compute_minute: 'AGI_CODE_COMPUTE_MICROUSD_PER_MINUTE',
+  browser_session_minute: 'AGI_BROWSER_MICROUSD_PER_MINUTE',
 } as const satisfies Partial<Record<RateCardFeature, string>>;
 
 function providerCogsEnvName(feature: RateCardFeature): string | undefined {

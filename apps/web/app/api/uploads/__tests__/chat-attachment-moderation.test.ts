@@ -9,6 +9,7 @@ const {
   mockDeletePrivateObject,
   mockInsertMediaAsset,
   mockGetMediaAssetByStoragePathname,
+  mockGetMediaAssetByContentHash,
   loggerMock,
   StoredObjectTooLargeError,
 } = vi.hoisted(() => {
@@ -29,6 +30,7 @@ const {
     mockDeletePrivateObject: vi.fn(),
     mockInsertMediaAsset: vi.fn(),
     mockGetMediaAssetByStoragePathname: vi.fn(),
+    mockGetMediaAssetByContentHash: vi.fn(),
     loggerMock: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
     StoredObjectTooLargeError,
   };
@@ -57,6 +59,7 @@ vi.mock('@/lib/server/object-storage', () => ({
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: mockInsertMediaAsset,
   getMediaAssetByStoragePathname: mockGetMediaAssetByStoragePathname,
+  getMediaAssetByContentHash: mockGetMediaAssetByContentHash,
 }));
 
 import { POST } from '@/app/api/uploads/chat-attachment/complete/route';
@@ -91,6 +94,7 @@ beforeEach(() => {
     organizationId: ORGANIZATION_ID,
   });
   mockGetMediaAssetByStoragePathname.mockResolvedValue(null);
+  mockGetMediaAssetByContentHash.mockResolvedValue(null);
   mockGetBoundedPrivateObject.mockResolvedValue({
     data: PNG_BYTES,
     contentType: 'image/png',
@@ -120,6 +124,7 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
       STORAGE_KEY,
       ORGANIZATION_ID,
       SCOPED_DB,
+      false,
     );
     expect(mockInsertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: ORGANIZATION_ID }),
@@ -209,5 +214,55 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
 
     expect(response.status).toBe(200);
     expect(mockInsertMediaAsset).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/uploads/chat-attachment/complete · content deduplication', () => {
+  it('reuses the asset it already holds for these bytes, storing and billing nothing twice', async () => {
+    mockGetMediaAssetByContentHash.mockResolvedValue({
+      id: 'asset-existing',
+      userId: 'user-abc',
+      kind: 'image',
+      mimeType: 'image/png',
+      byteSize: PNG_BYTES.byteLength,
+      storageUrl: `${STORAGE_KEY}.scanned`,
+      storagePathname: `${STORAGE_KEY}.scanned`,
+      metadata: { filename: 'already-here.png' },
+      deletedAt: null,
+    });
+
+    const response = await POST(completeRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      attachment: {
+        id: 'asset-existing',
+        name: 'already-here.png',
+        mimeType: 'image/png',
+        byteCount: PNG_BYTES.byteLength,
+        type: 'image',
+        url: '/api/files/asset-existing',
+      },
+    });
+    expect(mockInsertMediaAsset).not.toHaveBeenCalled();
+    expect(mockCopyPrivateObjectIfUnchanged).not.toHaveBeenCalled();
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
+  });
+
+  it('records the digest on a first upload, so the next copy is recognised', async () => {
+    const response = await POST(completeRequest());
+
+    expect(response.status).toBe(200);
+    expect(mockInsertMediaAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ contentSha256: expect.stringMatching(/^[0-9a-f]{64}$/) }),
+      SCOPED_DB,
+    );
+    expect(mockGetMediaAssetByContentHash).toHaveBeenCalledWith(
+      'user-abc',
+      expect.stringMatching(/^[0-9a-f]{64}$/),
+      ORGANIZATION_ID,
+      SCOPED_DB,
+      false,
+    );
   });
 });

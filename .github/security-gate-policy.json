@@ -1,5 +1,5 @@
 {
-  "description": "Single registry of every dependency and static-analysis gate in CI, the severity each one blocks at, and every exclusion from those gates. scripts/check-security-gates.mjs fails the build when CI and this file disagree.",
+  "description": "Single registry of every dependency and static-analysis gate in CI, the severity each one blocks at, and every exclusion from those gates. scripts/check-security-gates.mjs fails the build when CI and this file disagree. A gate whose step runs a chain rather than the tool directly names the chain step and says so in its tool field; what this registry guarantees is that the named step exists in the blocking workflow and is not continue-on-error, which holds either way.",
   "workflow": ".github/workflows/ci.yml",
   "gates": [
     {
@@ -40,8 +40,8 @@
     {
       "id": "secret-scan",
       "job": "repo-guards",
-      "step": "Secret scan (CRIT-017)",
-      "tool": "scripts/check-secrets.mjs",
+      "step": "LLM and repo operability checks",
+      "tool": "scripts/check-secrets.mjs, reached through pnpm check:llm-operability",
       "blocksAt": "any-credential-shape"
     }
   ],

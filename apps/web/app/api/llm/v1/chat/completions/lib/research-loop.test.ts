@@ -55,6 +55,7 @@ import {
   parseDroppedPlanSteps,
   type ResearchRunReport,
 } from './research-loop';
+import { createResearchDomainPolicy } from './research-sources';
 import { saveResearchReport } from '@/lib/services/research-report-service';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
@@ -257,6 +258,24 @@ describe('SourceAggregator', () => {
     );
     expect(agg.add({ url: 'https://example.com/report?page=2', title: 'Page two' })).toBe(true);
     expect(agg.size).toBe(2);
+  });
+
+  it('drops a source the run\u2019s domain restriction refuses, so it never reaches a citation', () => {
+    const agg = new SourceAggregator(
+      createResearchDomainPolicy({ allow: ['nature.com'], deny: ['blogs.nature.com'] }),
+    );
+
+    expect(agg.add({ url: 'https://www.nature.com/articles/x', title: 'Allowed' })).toBe(true);
+    expect(agg.add({ url: 'https://blogs.nature.com/x', title: 'Denied subdomain' })).toBe(false);
+    expect(agg.add({ url: 'https://elsewhere.example/x', title: 'Outside' })).toBe(false);
+    expect(agg.size).toBe(1);
+    expect(agg.toPromptList()).not.toContain('elsewhere.example');
+  });
+
+  it('keeps an in-app file source, which has no domain to restrict', () => {
+    const agg = new SourceAggregator(createResearchDomainPolicy({ allow: ['nature.com'] }));
+
+    expect(agg.add({ url: '/api/files/abc', title: 'My saved notes' })).toBe(true);
   });
 });
 

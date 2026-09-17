@@ -24,6 +24,7 @@ vi.mock('./ArtifactPreview', () => ({
 }));
 
 vi.mock('@/lib/client/csrf', () => ({
+  getCsrfToken: vi.fn(async () => 'test-token'),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
     ...(headers as Record<string, string>),
     'x-csrf-token': 'test-token',
