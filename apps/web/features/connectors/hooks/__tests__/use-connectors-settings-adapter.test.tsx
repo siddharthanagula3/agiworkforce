@@ -9,6 +9,7 @@ const directoryOptions = vi.hoisted(() => ({
 
 vi.mock('@/features/directory', () => ({
   CONNECTOR_REAUTHORIZATION_COPY: 'Reconnect this connector.',
+  CONNECTOR_NOT_RESPONDING_COPY: 'Not responding to recent requests.',
   useDirectoryAdapter: (options: Record<string, unknown>) => {
     directoryOptions.current = options;
     return { loadSection: vi.fn() };
@@ -62,7 +63,7 @@ const SELF_ADDED_ROW = {
   createdAt: '2026-09-05T00:00:00.000Z',
 };
 
-function stubFetch(customRows: unknown[]) {
+function stubFetch(customRows: unknown[], connectedBody: unknown = CONNECTED_BODY) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: unknown) => {
@@ -71,7 +72,7 @@ function stubFetch(customRows: unknown[]) {
         ? { connectors: customRows }
         : url.includes('/api/github/installations')
           ? { installations: [] }
-          : CONNECTED_BODY;
+          : connectedBody;
       return { ok: true, status: 200, json: async () => body };
     }),
   );
@@ -121,6 +122,63 @@ describe('duplicate tiles', () => {
     }[];
     expect(connected.map((c) => c.connectorId)).toContain('io.sentry/mcp');
     expect(connected.some((c) => c.connectorId.endsWith(LINKED_ROW.id))).toBe(false);
+  });
+});
+
+describe('a connector that has stopped answering', () => {
+  it('warns on the row rather than leaving it reading as connected', async () => {
+    stubFetch([], {
+      connectors: [
+        {
+          connectorId: 'io.sentry/mcp',
+          connectedAt: '2026-09-05T00:00:00.000Z',
+          needsReauthorization: false,
+          health: 'not-responding',
+        },
+      ],
+      available: [],
+    });
+    renderAdapter();
+
+    await waitFor(() => {
+      expect(directoryOptions.current?.['connectedConnectors']).toBeDefined();
+    });
+
+    const connected = directoryOptions.current?.['connectedConnectors'] as {
+      connectorId: string;
+      status?: string;
+      warningLabel?: string;
+    }[];
+    const row = connected.find((c) => c.connectorId === 'io.sentry/mcp');
+    expect(row?.status).toBe('warning');
+    expect(row?.warningLabel).toBe('Not responding to recent requests.');
+  });
+
+  it('keeps the reconnect warning ahead of it, because an expired grant is the actionable cause', async () => {
+    stubFetch([], {
+      connectors: [
+        {
+          connectorId: 'io.sentry/mcp',
+          connectedAt: '2026-09-05T00:00:00.000Z',
+          needsReauthorization: true,
+          health: 'not-responding',
+        },
+      ],
+      available: [],
+    });
+    renderAdapter();
+
+    await waitFor(() => {
+      expect(directoryOptions.current?.['connectedConnectors']).toBeDefined();
+    });
+
+    const connected = directoryOptions.current?.['connectedConnectors'] as {
+      connectorId: string;
+      warningLabel?: string;
+    }[];
+    expect(connected.find((c) => c.connectorId === 'io.sentry/mcp')?.warningLabel).toBe(
+      'Reconnect this connector.',
+    );
   });
 });
 

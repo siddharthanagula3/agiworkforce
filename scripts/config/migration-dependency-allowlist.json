@@ -337,6 +337,16 @@
       "reason": "0219 adds web_conversations.draft, which the personal export includes because an unsent message is the subject's own words; the deploy runbook applies 0219 before this code reaches production, and export is a batch path that must not ship ahead of its own schema."
     },
     {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 222,
+      "reason": "0222 adds the support queue priority, the contracted support tier and the collected diagnostics to support_handoff_sessions and support_tickets; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0222 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0222 is applied, and until it is the statement names columns that do not exist."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 223,
+      "reason": "the personal data export includes connector_call_events rows; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0223 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0223 is applied."
+    },
+    {
       "file": "apps/web/app/api/web-push/route.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -485,6 +495,11 @@
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 213,
       "reason": "account erasure deletes the product_analytics_events rows 0213 files against the subject; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 223,
+      "reason": "account erasure names connector_call_events so the export inventory has to answer for it; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0223 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0223 is applied."
     },
     {
       "file": "apps/web/lib/server/admin-api-keys.ts",
@@ -732,6 +747,11 @@
       "reason": "the cost ledger writes the cache_hit and avoided_cost_microusd accounting columns 0215 adds to provider_cost_events; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0215 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0215 is applied."
     },
     {
+      "file": "apps/web/lib/services/connector-call-log-service.ts",
+      "migration": 223,
+      "reason": "the connector call log writes and reads connector_call_events, the table 0223 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0223 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0223 is applied."
+    },
+    {
       "file": "apps/web/lib/services/conversation-branch-service.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -950,6 +970,21 @@
       "file": "apps/web/lib/services/web-push-service.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/support/handoff/priority.ts",
+      "migration": 163,
+      "reason": "0163 creates organization_billing_contracts, whose support_tier this reads to decide escalation queue order; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0163 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0163 is applied, and until it is the select names a table that does not exist."
+    },
+    {
+      "file": "apps/web/lib/support/handoff/store.ts",
+      "migration": 222,
+      "reason": "0222 adds the support queue priority, the contracted support tier and the collected diagnostics to support_handoff_sessions and support_tickets; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0222 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0222 is applied, and until it is the statement names columns that do not exist."
+    },
+    {
+      "file": "apps/web/lib/support/tickets/store.ts",
+      "migration": 222,
+      "reason": "0222 adds the support queue priority, the contracted support tier and the collected diagnostics to support_handoff_sessions and support_tickets; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0222 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0222 is applied, and until it is the statement names columns that do not exist."
     },
     {
       "file": "apps/web/lib/triggers/trigger-fire.ts",

@@ -231,6 +231,21 @@ describe('per-domain retention sweep', () => {
     });
   });
 
+  it('sweeps research reports by the workspace member who owns them, never a legal hold', async () => {
+    const { db, calls } = fakeDb(() => []);
+    await createDomainSweepers().research.sweepBatch(db, {
+      organizationId: ORG,
+      cutoff: NOW.toISOString(),
+      heldUserIds: ['held-user'],
+      limit: 1,
+    });
+
+    const sql = calls.map((call) => call.sql).join('\n');
+    expect(sql).toMatch(/delete from public\.research_reports/);
+    expect(sql).toMatch(/organization_members/);
+    expect(sql).toMatch(/not \(t\.user_id = any\(\$3::text\[\]\)\)/);
+  });
+
   it('stops after a short batch instead of looping to the ceiling', async () => {
     let batches = 0;
     const { db } = fakeDb((sql) => {

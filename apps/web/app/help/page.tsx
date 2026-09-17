@@ -4,6 +4,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
+import { HelpSearch } from '@/features/support/components/HelpSearch';
 import {
   BYOK_SURFACES,
   DESKTOP_LOCAL_RUNTIMES,
@@ -38,6 +39,15 @@ export default function HelpPage() {
         />
 
         <FactLine facts={HERO_FACTS} />
+
+        <Section id="search" labelledBy="agi-help-search-title" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-help-search-title">
+              Search everything we have written.
+            </h2>
+            <HelpSearch />
+          </Stack>
+        </Section>
 
         <Section id="common" labelledBy="agi-help-common-title" rule>
           <Stack gap="loose">

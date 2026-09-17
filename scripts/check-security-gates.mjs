@@ -35,11 +35,22 @@ export function parseDenyAdvisoryIgnores(denyToml) {
   return ignores;
 }
 
-export function checkSecurityGates({ policy, workflow, denyToml }) {
+export function checkSecurityGates({ policy, workflow, denyToml, workflows = {} }) {
   const failures = [];
 
+  // A gate may name its own workflow: the container, IaC and DAST scanners need
+  // Docker and a booted application, so they cannot live in the pull-request
+  // workflow. Without this the registry could only describe one file, and a gate
+  // moved out of it would silently stop being registered anywhere.
+  const workflowFor = (gate) => (gate.workflow ? workflows[gate.workflow] : workflow);
+
   for (const gate of policy.gates ?? []) {
-    const step = findStep(workflow, gate.job, gate.step);
+    const gateWorkflow = workflowFor(gate);
+    if (!gateWorkflow) {
+      failures.push(`gate ${gate.id} names workflow ${gate.workflow}, which was not loaded`);
+      continue;
+    }
+    const step = findStep(gateWorkflow, gate.job, gate.step);
     if (!step) {
       failures.push(`gate ${gate.id} is registered but job ${gate.job} has no step "${gate.step}"`);
       continue;
@@ -104,7 +115,16 @@ function main() {
   const workflow = parse(fs.readFileSync(path.join(root, policy.workflow), 'utf8'));
   const denyToml = fs.readFileSync(path.join(root, DENY_PATH), 'utf8');
 
-  const failures = checkSecurityGates({ policy, workflow, denyToml });
+  const workflows = {};
+  for (const relativePath of new Set(
+    (policy.gates ?? []).map((gate) => gate.workflow).filter(Boolean),
+  )) {
+    const absolute = path.join(root, relativePath);
+    if (!fs.existsSync(absolute)) continue;
+    workflows[relativePath] = parse(fs.readFileSync(absolute, 'utf8'));
+  }
+
+  const failures = checkSecurityGates({ policy, workflow, denyToml, workflows });
   for (const entry of policy.exclusions ?? []) {
     if (entry.kind === 'allowlist-file' && !fs.existsSync(path.join(root, entry.path))) {
       failures.push(`exclusion ${entry.id} points at a missing allowlist: ${entry.path}`);

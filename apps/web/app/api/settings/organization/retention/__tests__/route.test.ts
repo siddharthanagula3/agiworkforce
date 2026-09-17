@@ -37,6 +37,8 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: vi.fn(async () => ({ plan: 'enterprise', canManageTeam: true })),
 }));
 
+import { RETENTION_DOMAINS } from '@agiworkforce/types';
+
 import { GET, PUT } from '../route';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -79,7 +81,7 @@ describe('/api/settings/organization/retention', () => {
 
     expect(res.status).toBe(200);
     expect(body.canManageRetention).toBe(true);
-    expect(body.policies).toHaveLength(8);
+    expect(body.policies).toHaveLength(RETENTION_DOMAINS.length);
     expect(body.policies.find((p: { domain: string }) => p.domain === 'files')).toMatchObject({
       retentionDays: 30,
       enforced: true,

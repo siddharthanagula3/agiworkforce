@@ -38,6 +38,7 @@ import {
   resolveConnectorHealth,
   type ConnectorHealth,
 } from '@/lib/connectors/catalog';
+import { readConnectorsNotResponding } from '@/lib/services/connector-call-log-service';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 import {
@@ -265,13 +266,24 @@ async function handleGetConnectors(request: NextRequest) {
 
   const available = getAvailableConnectorIds();
   const availableSet = new Set(available);
+  // Observed from this account's own recent calls. A log that cannot be read
+  // leaves every connector on its configuration-derived state rather than
+  // failing the panel, which is the same trade the pending list makes below.
+  const notResponding = await readConnectorsNotResponding(db, userId).catch(
+    () => new Set<string>(),
+  );
+  const isDown = (entry: ConnectorEntry): boolean =>
+    notResponding.has(entry.connectorId) ||
+    (entry.toolConnectorId !== undefined && notResponding.has(entry.toolConnectorId));
   const withHealth: ConnectorEntry[] = connectors.map((entry) =>
     entry.source === 'custom'
       ? {
           ...entry,
           health: (entry.needsReauthorization === true
             ? 'needs-reauthorization'
-            : 'connected') as ConnectorHealth,
+            : isDown(entry)
+              ? 'not-responding'
+              : 'connected') as ConnectorHealth,
         }
       : {
           ...entry,
@@ -280,6 +292,7 @@ async function handleGetConnectors(request: NextRequest) {
             available: availableSet.has(entry.connectorId) || entry.directoryId !== undefined,
             connected: true,
             needsReauthorization: entry.needsReauthorization === true,
+            notResponding: isDown(entry),
           }),
         },
   );
