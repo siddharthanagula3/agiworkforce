@@ -8,6 +8,7 @@ import {
   loadKeyRing,
   openEnvelope,
   resolveTenantKeyRing,
+  resolveTenantKeyRingAsync,
   sealEnvelope,
   type KeyProvider,
 } from './envelope';
@@ -15,7 +16,7 @@ import {
 const KEY_ONE = '11'.repeat(32);
 const KEY_TWO = '22'.repeat(32);
 
-function fakeUnwrap(wrapped: string): Buffer {
+async function fakeUnwrap(wrapped: string): Promise<Buffer> {
   return createHash('sha256').update(wrapped).digest();
 }
 
@@ -49,11 +50,11 @@ describe('default env provider parity', () => {
 });
 
 describe('KMS-backed provider stub', () => {
-  it('round-trips a secret through an injected unwrap function', () => {
+  it('round-trips a secret through an injected unwrap function', async () => {
     const provider = createKmsKeyProvider(fakeUnwrap);
     const env = { WRAPPED_KEY: 'arn:aws:kms:key/active' };
 
-    const ring = provider.resolveKeyRing('WRAPPED_KEY', { env });
+    const ring = await provider.resolveKeyRing('WRAPPED_KEY', { env });
 
     expect(ring.provider).toBe('kms');
     expect(ring.active.material).toHaveLength(32);
@@ -61,14 +62,14 @@ describe('KMS-backed provider stub', () => {
     expect(openEnvelope(ring, sealed, 'hex-triple').plaintext).toBe('kms secret');
   });
 
-  it('resolves retired entries through the same unwrap function and stays ring-aware', () => {
+  it('resolves retired entries through the same unwrap function and stays ring-aware', async () => {
     const provider = createKmsKeyProvider(fakeUnwrap);
-    const oldRing = provider.resolveKeyRing('WRAPPED_KEY', {
+    const oldRing = await provider.resolveKeyRing('WRAPPED_KEY', {
       env: { WRAPPED_KEY: 'arn:key/v1' },
     });
     const sealedUnderOld = sealEnvelope(oldRing, 'still readable', 'hex-triple');
 
-    const rotatedRing = provider.resolveKeyRing('WRAPPED_KEY', {
+    const rotatedRing = await provider.resolveKeyRing('WRAPPED_KEY', {
       env: {
         WRAPPED_KEY: 'arn:key/v2',
         WRAPPED_KEY_ID: '2',
@@ -81,11 +82,85 @@ describe('KMS-backed provider stub', () => {
     );
   });
 
-  it('refuses an unwrap result of the wrong length instead of building a broken key', () => {
-    const provider = createKmsKeyProvider(() => Buffer.from('too-short'));
-    expect(() =>
+  it('refuses an unwrap result of the wrong length instead of building a broken key', async () => {
+    const provider = createKmsKeyProvider(async () => Buffer.from('too-short'));
+    await expect(
       provider.resolveKeyRing('WRAPPED_KEY', { env: { WRAPPED_KEY: 'arn:key/v1' } }),
-    ).toThrow(/unwrap must yield 32 bytes/);
+    ).rejects.toThrow(/unwrap must yield 32 bytes/);
+  });
+
+  it('calls the customer KMS once per wrapped key inside the cache window', async () => {
+    let calls = 0;
+    let clock = 0;
+    const provider = createKmsKeyProvider(
+      async (wrapped) => {
+        calls += 1;
+        return createHash('sha256').update(wrapped).digest();
+      },
+      { cacheTtlMs: 1_000, now: () => clock },
+    );
+    const env = { WRAPPED_KEY: 'arn:key/v1' };
+
+    await provider.resolveKeyRing('WRAPPED_KEY', { env });
+    await provider.resolveKeyRing('WRAPPED_KEY', { env });
+    expect(calls).toBe(1);
+
+    clock = 1_001;
+    await provider.resolveKeyRing('WRAPPED_KEY', { env });
+    expect(calls).toBe(2);
+  });
+
+  it('shares one unwrap between concurrent resolutions instead of racing the KMS', async () => {
+    let calls = 0;
+    const provider = createKmsKeyProvider(async (wrapped) => {
+      calls += 1;
+      await Promise.resolve();
+      return createHash('sha256').update(wrapped).digest();
+    });
+    const env = { WRAPPED_KEY: 'arn:key/v1' };
+
+    await Promise.all([
+      provider.resolveKeyRing('WRAPPED_KEY', { env }),
+      provider.resolveKeyRing('WRAPPED_KEY', { env }),
+      provider.resolveKeyRing('WRAPPED_KEY', { env }),
+    ]);
+
+    expect(calls).toBe(1);
+  });
+
+  it('does not cache a KMS failure: the next call reaches the customer again', async () => {
+    let calls = 0;
+    const provider = createKmsKeyProvider(async (wrapped) => {
+      calls += 1;
+      if (calls === 1) throw new Error('kms unreachable');
+      return createHash('sha256').update(wrapped).digest();
+    });
+    const env = { WRAPPED_KEY: 'arn:key/v1' };
+
+    await expect(provider.resolveKeyRing('WRAPPED_KEY', { env })).rejects.toThrow(
+      /kms unreachable/,
+    );
+    const ring = await provider.resolveKeyRing('WRAPPED_KEY', { env });
+    expect(ring.active.material).toHaveLength(32);
+    expect(calls).toBe(2);
+  });
+
+  it('derives a per-tenant ring from the unwrapped key without a second unwrap', async () => {
+    let calls = 0;
+    const provider = createKmsKeyProvider(async (wrapped) => {
+      calls += 1;
+      return createHash('sha256').update(wrapped).digest();
+    });
+    const env = { WRAPPED_KEY: 'arn:key/v1' };
+
+    const orgA = await resolveTenantKeyRingAsync(provider, 'WRAPPED_KEY', 'org-a', { env });
+    const orgB = await resolveTenantKeyRingAsync(provider, 'WRAPPED_KEY', 'org-b', { env });
+
+    expect(calls).toBe(1);
+    expect(orgA.active.material.equals(orgB.active.material)).toBe(false);
+    const sealed = sealEnvelope(orgA, 'org-a secret', 'hex-triple');
+    expect(openEnvelope(orgA, sealed, 'hex-triple').plaintext).toBe('org-a secret');
+    expect(() => openEnvelope(orgB, sealed, 'hex-triple')).toThrow();
   });
 });
 
