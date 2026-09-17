@@ -72,6 +72,10 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'retrieval_documents', column: 'organization_id' },
   { table: 'organization_billing_contracts', column: 'organization_id' },
   { table: 'organization_billing_invoices', column: 'organization_id' },
+  { table: 'feature_flags', column: 'organization_id' },
+  { table: 'event_trigger_events', column: 'organization_id' },
+  { table: 'event_triggers', column: 'organization_id' },
+  { table: 'background_jobs', column: 'organization_id' },
 ];
 
 /**
@@ -114,6 +118,8 @@ export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
     'organization_id is ON DELETE SET NULL (0207_device_registrations). The registration belongs to the member’s device, not to the workspace it last reported from: decommissioning a workspace demotes the binding to personal rather than unregistering the member’s own machine.',
   device_refresh_tokens:
     'organization_id is ON DELETE SET NULL (0187_device_refresh_token_workspace_binding). The credential belongs to the member, not to the workspace it was paired in: decommissioning a workspace demotes the binding to personal rather than signing the member’s device out of their own account.',
+  routing_decision_traces:
+    'organization_id is ON DELETE SET NULL (0212_routing_decision_traces). The trace records which model this product routed a request to and how that turn ended, which is platform routing telemetry rather than workspace content; the workspace reference is detached and the row retires on the routing-trace retention window that deletes every trace.',
 };
 
 const PG_UNDEFINED_TABLE = '42P01';

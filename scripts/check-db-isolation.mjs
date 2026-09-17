@@ -567,6 +567,14 @@ const ALLOWLIST = [
       'exactly the columns the invite flow needs (id, email, display_name, avatar_url) to add ' +
       'the target as a member, nothing else',
   },
+  {
+    match: /lib\/jobs\/job-service\.ts$/,
+    tables: ['background_jobs'],
+    reason:
+      'the background job worker claims, retries, reaps and prunes jobs across every tenant by ' +
+      'design, fairness is the round-robin over tenant_key; it is reached only from the drain ' +
+      'cron and the requirePlatformAdmin dead-letter routes, never with a request subject',
+  },
 ];
 
 const CROSS_TENANT_TABLES = new Map([
@@ -595,6 +603,14 @@ const CROSS_TENANT_TABLES = new Map([
     'cogs_adjustments',
     'the non-provider half of the same ledger, processing fees, refunds, chargebacks, discounts ' +
       'and goodwill. Same shape and same reason as `provider_cost_events` above.',
+  ],
+  [
+    'routing_decision_traces',
+    'operational telemetry about which model the router chose and how that turn ended. Its ' +
+      '`user_id` and `organization_id` are attribution that account erasure deletes and a ' +
+      'workspace deletion nulls (0212); every read is the platform-wide cohort aggregate in the ' +
+      'rollout cron and the operator console, so there is no tenant to scope a read to, and no ' +
+      'user-facing path selects from it.',
   ],
 ]);
 

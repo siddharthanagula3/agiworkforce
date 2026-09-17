@@ -4,8 +4,9 @@ import { useEffect } from 'react';
 import { Button, Input, Label, Switch, Textarea } from '@agiworkforce/ui';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
+import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import type { IntervalUnit, ScheduleDraft, ScheduleFormErrors } from '../types';
-import { AVAILABLE_MODELS, DAYS_OF_WEEK } from '../types';
+import { AVAILABLE_MODELS, DAYPART_PRESETS, DAYS_OF_WEEK } from '../types';
 
 interface ScheduleFormProps {
   draft: ScheduleDraft;
@@ -30,6 +31,7 @@ const FIELD_ORDER: (keyof ScheduleDraft)[] = [
   'daysOfWeek',
   'dayOfMonth',
   'cronExpression',
+  'recurrenceRule',
   'timezone',
   'expiresLocal',
   'maxExecutions',
@@ -219,6 +221,8 @@ export function ScheduleForm({
               <option value="monthly">Monthly</option>
               <option value="interval">Interval</option>
               <option value="custom">Custom Cron</option>
+              <option value="rrule">Recurrence Rule</option>
+              <option value="event">When An Event Happens</option>
             </select>
             <FieldError field="recurrence" errors={errors} />
           </div>
@@ -382,6 +386,41 @@ export function ScheduleForm({
           </div>
         )}
 
+        {draft.recurrence === 'rrule' && (
+          <div className="space-y-2">
+            <Label htmlFor={fieldId('recurrenceRule')}>Recurrence Rule</Label>
+            <Textarea
+              id={fieldId('recurrenceRule')}
+              name="recurrenceRule"
+              autoComplete="off"
+              spellCheck={false}
+              rows={3}
+              value={draft.recurrenceRule}
+              onChange={(event) => set({ recurrenceRule: event.target.value })}
+              placeholder="FREQ=MONTHLY;BYDAY=-1FR;BYHOUR=17;BYMINUTE=0"
+              className="font-mono"
+              aria-invalid={Boolean(errors.recurrenceRule)}
+              aria-describedby={describedBy('recurrenceRule', errors, 'schedule-rrule-helper')}
+            />
+            <p id="schedule-rrule-helper" className="text-xs text-muted-foreground">
+              An iCalendar rule (RFC 5545). FREQ is HOURLY, DAILY, WEEKLY or MONTHLY, with INTERVAL,
+              BYDAY, BYMONTHDAY, BYMONTH, BYHOUR, BYMINUTE, COUNT and UNTIL. A rule without DTSTART
+              starts from now in the time zone below.
+              {draft.recurrenceRule.trim()
+                ? ` Reads as: ${describeRecurrenceRule(draft.recurrenceRule, draft.timezone)}.`
+                : ''}
+            </p>
+            <FieldError field="recurrenceRule" errors={errors} />
+          </div>
+        )}
+
+        {draft.recurrence === 'event' && (
+          <p className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
+            This task has no clock schedule. It runs when a trigger fires it, which you add from the
+            schedule once it is saved.
+          </p>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor={fieldId('timezone')}>IANA Time Zone</Label>
           <Input
@@ -400,6 +439,145 @@ export function ScheduleForm({
           </p>
           <FieldError field="timezone" errors={errors} />
         </div>
+
+        {draft.recurrence !== 'event' && (
+          <details className="rounded-xl border border-border/70 bg-muted/20 p-4">
+            <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              When It May Run, And What Happens If It Fails
+            </summary>
+            <div className="mt-4 space-y-4">
+              {draft.recurrence !== 'once' && (
+                <div className="space-y-2">
+                  <Label htmlFor={fieldId('daypartPreset')}>Only Run During</Label>
+                  <select
+                    id={fieldId('daypartPreset')}
+                    name="daypartPreset"
+                    autoComplete="off"
+                    className={nativeSelectClass}
+                    value={draft.daypartPreset}
+                    onChange={(event) =>
+                      set({ daypartPreset: event.target.value as ScheduleDraft['daypartPreset'] })
+                    }
+                    aria-describedby="schedule-daypart-helper"
+                  >
+                    {DAYPART_PRESETS.map((preset) => (
+                      <option key={preset.value} value={preset.value}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p id="schedule-daypart-helper" className="text-xs text-muted-foreground">
+                    An occurrence outside the window is not run late; it moves to the next
+                    occurrence inside it, in the time zone above.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor={fieldId('retryMaxAttempts')}>Retries After A Failed Run</Label>
+                  <Input
+                    id={fieldId('retryMaxAttempts')}
+                    name="retryMaxAttempts"
+                    type="number"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    min={0}
+                    max={5}
+                    step={1}
+                    value={draft.retryMaxAttempts}
+                    onChange={(event) => set({ retryMaxAttempts: event.target.value })}
+                    aria-invalid={Boolean(errors.retryMaxAttempts)}
+                    aria-describedby={describedBy(
+                      'retryMaxAttempts',
+                      errors,
+                      'schedule-retry-helper',
+                    )}
+                  />
+                  <FieldError field="retryMaxAttempts" errors={errors} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={fieldId('retryBackoffMinutes')}>
+                    First Retry After (Minutes)
+                  </Label>
+                  <Input
+                    id={fieldId('retryBackoffMinutes')}
+                    name="retryBackoffMinutes"
+                    type="number"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    min={1}
+                    max={1440}
+                    step={1}
+                    value={draft.retryBackoffMinutes}
+                    onChange={(event) => set({ retryBackoffMinutes: event.target.value })}
+                    aria-invalid={Boolean(errors.retryBackoffMinutes)}
+                    aria-describedby={describedBy(
+                      'retryBackoffMinutes',
+                      errors,
+                      'schedule-retry-helper',
+                    )}
+                  />
+                  <FieldError field="retryBackoffMinutes" errors={errors} />
+                </div>
+              </div>
+              <p id="schedule-retry-helper" className="text-xs text-muted-foreground">
+                A failed or timed-out run is tried again after this wait, doubling each time, before
+                the schedule moves on to its next occurrence.
+              </p>
+
+              <div className="space-y-2">
+                <Label htmlFor={fieldId('missedExecutionPolicy')}>If A Run Is Missed</Label>
+                <select
+                  id={fieldId('missedExecutionPolicy')}
+                  name="missedExecutionPolicy"
+                  autoComplete="off"
+                  className={nativeSelectClass}
+                  value={draft.missedExecutionPolicy}
+                  onChange={(event) =>
+                    set({
+                      missedExecutionPolicy: event.target
+                        .value as ScheduleDraft['missedExecutionPolicy'],
+                    })
+                  }
+                  aria-describedby="schedule-missed-helper"
+                >
+                  <option value="run_once">Run it once, late</option>
+                  <option value="skip">Skip it and wait for the next occurrence</option>
+                </select>
+                <p id="schedule-missed-helper" className="text-xs text-muted-foreground">
+                  A missed occurrence is recorded on the run history and written to the audit log
+                  either way.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={fieldId('conditionUrl')}>Only Run When This Page Changes</Label>
+                <Input
+                  id={fieldId('conditionUrl')}
+                  name="conditionUrl"
+                  type="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={draft.conditionUrl}
+                  onChange={(event) => set({ conditionUrl: event.target.value })}
+                  placeholder="https://example.com/status.json"
+                  aria-invalid={Boolean(errors.conditionUrl)}
+                  aria-describedby={describedBy(
+                    'conditionUrl',
+                    errors,
+                    'schedule-condition-helper',
+                  )}
+                />
+                <p id="schedule-condition-helper" className="text-xs text-muted-foreground">
+                  Optional. The page is read at each occurrence and the run happens only when its
+                  contents differ from the last check. The first check records the baseline.
+                </p>
+                <FieldError field="conditionUrl" errors={errors} />
+              </div>
+            </div>
+          </details>
+        )}
 
         <details className="rounded-xl border border-border/70 bg-muted/20 p-4">
           <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

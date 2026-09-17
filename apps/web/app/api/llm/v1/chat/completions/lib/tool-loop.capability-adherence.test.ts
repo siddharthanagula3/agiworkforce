@@ -13,6 +13,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  recordShadowRouteOutcome: vi.fn(async () => undefined),
   getCredentialCooldownSnapshot: vi.fn(async () => ({})),
   providerOfRouteId: (routeId: string) => routeId.split('/')[0],
   recordRouteOutcome: vi.fn(async () => undefined),
@@ -25,6 +26,8 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
 
 const mockRecordCapabilityObservation = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('@/lib/services/free-lane/capability-health-service', () => ({
+  STRUCTURED_OUTPUT_CAPABILITY: 'structuredOutput',
+  getUnhonouredCapabilities: vi.fn(async () => ({})),
   recordCapabilityObservation: (...args: unknown[]) => mockRecordCapabilityObservation(...args),
   TOOL_CALLING_CAPABILITY: 'functionCalling',
 }));

@@ -32,8 +32,61 @@ export const ManagedCloudScheduleRecurrenceSchema = z.enum([
   'monthly',
   'custom',
   'interval',
+  'rrule',
+  'event',
 ]);
 export type ManagedCloudScheduleRecurrence = z.infer<typeof ManagedCloudScheduleRecurrenceSchema>;
+
+export const ManagedCloudScheduleDaypartSchema = z.object({
+  days: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+  start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+  end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+});
+export type ManagedCloudScheduleDaypart = z.infer<typeof ManagedCloudScheduleDaypartSchema>;
+
+export const ManagedCloudScheduleMissedExecutionPolicySchema = z.enum(['run_once', 'skip']);
+export type ManagedCloudScheduleMissedExecutionPolicy = z.infer<
+  typeof ManagedCloudScheduleMissedExecutionPolicySchema
+>;
+
+export const ManagedCloudScheduleFieldConditionSchema = z.object({
+  field: z.string().min(1).max(400),
+  operator: z.enum([
+    'equals',
+    'not_equals',
+    'contains',
+    'not_contains',
+    'starts_with',
+    'in',
+    'exists',
+    'not_exists',
+    'greater_than',
+    'less_than',
+  ]),
+  value: z
+    .union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))])
+    .optional(),
+});
+export type ManagedCloudScheduleFieldCondition = z.infer<
+  typeof ManagedCloudScheduleFieldConditionSchema
+>;
+
+export const ManagedCloudScheduleConditionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('url_changed'), url: z.string().url().max(2_000) }),
+  z.object({
+    kind: z.literal('url_matches'),
+    url: z.string().url().max(2_000),
+    conditions: z.array(ManagedCloudScheduleFieldConditionSchema).min(1).max(10),
+  }),
+]);
+export type ManagedCloudScheduleCondition = z.infer<typeof ManagedCloudScheduleConditionSchema>;
+
+export const ManagedCloudScheduleConditionStateSchema = z.object({
+  checkedAt: z.string(),
+  met: z.boolean(),
+  detail: z.string(),
+  contentSha256: z.string().nullable().optional(),
+});
 
 export const ManagedCloudScheduleMutationSchema = z.object({
   name: z.string().trim().min(1).max(500),
@@ -52,6 +105,12 @@ export const ManagedCloudScheduleMutationSchema = z.object({
   expiresAt: z.string().datetime().nullable(),
   maxExecutions: z.number().int().min(1).max(1_000_000).nullable(),
   projectId: z.string().trim().min(1).nullable().optional(),
+  recurrenceRule: z.string().trim().min(1).max(512).nullable().optional(),
+  dayparts: z.array(ManagedCloudScheduleDaypartSchema).max(7).nullable().optional(),
+  retryMaxAttempts: z.number().int().min(0).max(5).optional(),
+  retryBackoffSeconds: z.number().int().min(60).max(86_400).optional(),
+  missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicySchema.optional(),
+  condition: ManagedCloudScheduleConditionSchema.nullable().optional(),
 });
 export type ManagedCloudScheduleMutation = z.infer<typeof ManagedCloudScheduleMutationSchema>;
 
@@ -60,7 +119,7 @@ export const ManagedCloudScheduleTaskSchema = z.object({
   userId: z.string().min(1),
   name: z.string(),
   description: z.string().nullable(),
-  scheduleType: z.enum(['cron', 'once', 'interval']),
+  scheduleType: z.enum(['cron', 'once', 'interval', 'rrule', 'event']),
   cronExpression: z.string().nullable(),
   executeAt: z.string().nullable(),
   intervalMs: z.number().int().nullable(),
@@ -81,6 +140,14 @@ export const ManagedCloudScheduleTaskSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   projectId: z.string().nullable().optional(),
+  recurrenceRule: z.string().nullable().optional(),
+  dayparts: z.array(ManagedCloudScheduleDaypartSchema).nullable().optional(),
+  retryMaxAttempts: z.number().int().nonnegative().optional(),
+  retryBackoffSeconds: z.number().int().positive().optional(),
+  retryAttempt: z.number().int().nonnegative().optional(),
+  missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicySchema.optional(),
+  condition: ManagedCloudScheduleConditionSchema.nullable().optional(),
+  conditionState: ManagedCloudScheduleConditionStateSchema.nullable().optional(),
 });
 export type ManagedCloudScheduleTask = z.infer<typeof ManagedCloudScheduleTaskSchema>;
 

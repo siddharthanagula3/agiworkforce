@@ -2,27 +2,14 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { enqueueJob } from '@/lib/jobs/job-service';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import {
-  closeErasureTombstone,
-  eraseProfileRow,
-  eraseUserAccountData,
-  openErasureTombstone,
-} from '@/lib/server/account-erasure';
-import { getIdentityProvider } from '@/lib/server/identity';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const MAX_ACCOUNTS_PER_RUN = 100;
-
-/**
- * Stop claiming new accounts with this much of the invocation left, so the run
- * finishes the account it is on and reports honest counts instead of being
- * killed mid-erasure.
- */
-const SWEEP_BUDGET_MS = 240_000;
 
 const MAX_TOMBSTONE_SWEEPS_PER_RUN = 5;
 
@@ -41,21 +28,8 @@ function isMissingTable(error: unknown): boolean {
   return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE;
 }
 
-async function deleteProviderIdentity(
-  userId: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    await getIdentityProvider().deleteUser(userId);
-    return { ok: true };
-  } catch (deleteError) {
-    const message = deleteError instanceof Error ? deleteError.message : String(deleteError);
-    if (/not\s*found|404/i.test(message)) return { ok: true };
-    return { ok: false, error: message };
-  }
-}
-
 const DUE_ACCOUNTS_BY_SCHEDULE = `
-  select id
+  select id, deletion_scheduled_for
     from public.profiles
    where deletion_scheduled_for is not null
      and deletion_scheduled_for <= now()
@@ -78,7 +52,7 @@ const DUE_ACCOUNTS_BY_SCHEDULE = `
  * first.
  */
 const DUE_ACCOUNTS_BY_ATTEMPT = `
-  select profile.id
+  select profile.id, profile.deletion_scheduled_for
     from public.profiles as profile
     left join public.erasure_tombstones as tombstone on tombstone.user_id = profile.id
    where profile.deletion_scheduled_for is not null
@@ -87,16 +61,36 @@ const DUE_ACCOUNTS_BY_ATTEMPT = `
    limit ${MAX_ACCOUNTS_PER_RUN}
 `;
 
-async function listDueAccounts(db: ReturnType<typeof getNeonDb>): Promise<Array<{ id: string }>> {
+interface DueAccount {
+  id: string;
+  deletion_scheduled_for: string | Date | null;
+}
+
+async function listDueAccounts(db: ReturnType<typeof getNeonDb>): Promise<DueAccount[]> {
   try {
-    return await db.query<{ id: string }>(DUE_ACCOUNTS_BY_ATTEMPT, []);
+    return await db.query<DueAccount>(DUE_ACCOUNTS_BY_ATTEMPT, []);
   } catch (error) {
     if (!isMissingTable(error)) throw error;
     logger.warn('public.erasure_tombstones is not provisioned; the due queue cannot rotate');
-    return db.query<{ id: string }>(DUE_ACCOUNTS_BY_SCHEDULE, []);
+    return db.query<DueAccount>(DUE_ACCOUNTS_BY_SCHEDULE, []);
   }
 }
 
+function scheduleStamp(value: string | Date | null): string {
+  if (!value) return 'unscheduled';
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : 'unscheduled';
+}
+
+/**
+ * Queues the erasure of every account whose deletion is due, and the re-erasure
+ * of every tombstoned subject whose rows came back.
+ *
+ * The sweep only decides what is due; the erasure itself runs as a background
+ * job (0208) so a subject whose deletion fails is retried with backoff and ends
+ * up in the dead-letter list with the stage that refused, instead of silently
+ * holding the head of a fixed per-run budget.
+ */
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized cron request');
@@ -105,9 +99,7 @@ export async function GET(request: NextRequest) {
 
   const db = getNeonDb();
 
-  const startedAtMs = Date.now();
-
-  let due: Array<{ id: string }> = [];
+  let due: DueAccount[] = [];
   let deletionColumnsProvisioned = true;
   try {
     due = await listDueAccounts(db);
@@ -124,65 +116,26 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  let purged = 0;
+  let queued = 0;
+  let alreadyQueued = 0;
   let failed = 0;
-  let deferred = 0;
   const handled = new Set<string>();
 
-  for (const { id: userId } of due) {
-    if (Date.now() - startedAtMs > SWEEP_BUDGET_MS) {
-      deferred = due.length - handled.size;
-      logger.warn(
-        { deferred, purged, failed },
-        'Deleted account purge ran out of budget · remaining accounts roll to the next run',
-      );
-      break;
-    }
-    handled.add(userId);
+  for (const account of due.slice(0, MAX_ACCOUNTS_PER_RUN)) {
+    handled.add(account.id);
     try {
-      const tombstone = await openErasureTombstone(userId);
-      if (!tombstone.recorded && !tombstone.skipped) {
-        failed++;
-        logger.error(
-          { userId, error: tombstone.error },
-          'Erasure tombstone could not be written; leaving the account scheduled for a retry',
-        );
-        continue;
-      }
-
-      const report = await eraseUserAccountData(userId, { retainProfile: true });
-      if (!report.complete) {
-        failed++;
-        logger.error(
-          { userId, report },
-          'Account erasure incomplete; leaving the account scheduled for a retry',
-        );
-        continue;
-      }
-
-      const settled = await closeErasureTombstone(userId);
-      if (!settled.recorded && !settled.skipped) {
-        logger.warn(
-          { userId, error: settled.error },
-          'Erasure tombstone left open; the sweep will settle it',
-        );
-      }
-
-      const identity = await deleteProviderIdentity(userId);
-      if (!identity.ok) {
-        failed++;
-        logger.error({ userId, error: identity.error }, 'Clerk account deletion failed');
-        continue;
-      }
-
-      await eraseProfileRow(userId);
-      purged++;
-      logger.info({ userId }, 'Scheduled account deletion completed');
+      const job = await enqueueJob(db, {
+        kind: 'data-deletion.scheduled-account-erasure',
+        idempotencyKey: `account-erasure:${account.id}:${scheduleStamp(account.deletion_scheduled_for)}`,
+        payload: { subjectUserId: account.id, mode: 'scheduled' },
+      });
+      if (job.created) queued += 1;
+      else alreadyQueued += 1;
     } catch (error) {
-      failed++;
+      failed += 1;
       logger.error(
-        { userId, error: error instanceof Error ? error.message : String(error) },
-        'Scheduled account deletion failed',
+        { userId: account.id, error: error instanceof Error ? error.message : String(error) },
+        'Scheduled account erasure could not be queued',
       );
     }
   }
@@ -220,65 +173,41 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const resweepBucket = new Date().toISOString().slice(0, 10);
+  let resweepsQueued = 0;
   let resurrected = 0;
-  let reErased = 0;
-  let reErasureFailed = 0;
 
   for (const { user_id: userId, profile_present: profilePresent } of tombstones) {
     if (handled.has(userId)) continue;
-    if (Date.now() - startedAtMs > SWEEP_BUDGET_MS) break;
-    if (profilePresent) resurrected++;
+    if (profilePresent) resurrected += 1;
     try {
-      const tombstone = await openErasureTombstone(userId);
-      if (!tombstone.recorded) {
-        reErasureFailed++;
-        logger.error({ userId, error: tombstone.error }, 'Erasure tombstone could not be advanced');
-        continue;
-      }
-
-      const report = await eraseUserAccountData(userId, { retainProfile: true });
-      if (!report.complete) {
-        reErasureFailed++;
-        logger.error({ userId, report }, 'Tombstoned account could not be fully re-erased');
-        continue;
-      }
-      await closeErasureTombstone(userId);
-
-      if (profilePresent) {
-        const identity = await deleteProviderIdentity(userId);
-        if (!identity.ok) {
-          reErasureFailed++;
-          logger.error(
-            { userId, error: identity.error },
-            'Resurrected account re-erased but its identity could not be deleted; keeping the profile row for a retry',
-          );
-          continue;
-        }
-        await eraseProfileRow(userId);
-        logger.warn({ userId }, 'Resurrected account re-erased from the suppression list');
-      }
-      reErased++;
+      const job = await enqueueJob(db, {
+        kind: 'data-deletion.scheduled-account-erasure',
+        idempotencyKey: `account-reerasure:${userId}:${resweepBucket}`,
+        payload: { subjectUserId: userId, mode: 'resweep' },
+      });
+      if (job.created) resweepsQueued += 1;
     } catch (error) {
-      reErasureFailed++;
+      failed += 1;
       logger.error(
         { userId, error: error instanceof Error ? error.message : String(error) },
-        'Tombstoned account re-erasure failed',
+        'Tombstoned account re-erasure could not be queued',
       );
     }
   }
 
   return NextResponse.json({
     message: deletionColumnsProvisioned
-      ? 'Deleted account purge completed'
+      ? 'Deleted account erasures queued'
       : 'Account deletion columns are not provisioned',
     candidates: due.length,
-    purged,
+    queued,
+    alreadyQueued,
     failed,
-    deferred,
+    deferred: Math.max(0, due.length - MAX_ACCOUNTS_PER_RUN),
     sweepAvailable,
     tombstoneCandidates: tombstones.length,
     resurrected,
-    reErased,
-    reErasureFailed,
+    resweepsQueued,
   });
 }

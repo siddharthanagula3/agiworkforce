@@ -24,16 +24,20 @@ afterEach(() => {
   delete process.env[OBSERVED_HEALTH_ENV];
 });
 
-describe('observed-health flag', () => {
-  it('is off unless the documented env name is set', () => {
-    expect(observedHealthRankingEnabled()).toBe(false);
+describe('observed-health stage', () => {
+  it('is on by default, with no environment opt-in', () => {
+    expect(observedHealthRankingEnabled()).toBe(true);
   });
 
-  it('is on for the enabled value only', () => {
+  it('is withdrawn by the kill switch values only', () => {
+    for (const value of ['0', 'false', 'off', ' OFF ']) {
+      process.env[OBSERVED_HEALTH_ENV] = value;
+      expect(observedHealthRankingEnabled()).toBe(false);
+    }
     process.env[OBSERVED_HEALTH_ENV] = '1';
     expect(observedHealthRankingEnabled()).toBe(true);
-    process.env[OBSERVED_HEALTH_ENV] = 'true';
-    expect(observedHealthRankingEnabled()).toBe(false);
+    process.env[OBSERVED_HEALTH_ENV] = '';
+    expect(observedHealthRankingEnabled()).toBe(true);
   });
 });
 

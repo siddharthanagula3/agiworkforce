@@ -115,6 +115,12 @@ describe('schedule form contract', () => {
         expiresAt: null,
         maxExecutions: 20,
         projectId: null,
+        recurrenceRule: null,
+        dayparts: null,
+        retryMaxAttempts: 0,
+        retryBackoffSeconds: 300,
+        missedExecutionPolicy: 'run_once',
+        condition: null,
       },
     });
     expect(JSON.stringify(result)).not.toContain('notification');

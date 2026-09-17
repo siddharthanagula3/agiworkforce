@@ -708,6 +708,14 @@ export async function recordRouteOutcome(
   await store.recordOutcome('provider', providerOfRouteId(routeId), { class: 'success' }, nowMs);
 }
 
+export async function recordShadowRouteOutcome(
+  routeId: string,
+  outcome: RouteOutcome,
+  nowMs: number = Date.now(),
+): Promise<void> {
+  await routeHealthStore().recordOutcome('shadow', routeId, outcome, nowMs);
+}
+
 export async function recordCredentialOutcome(
   credentialId: string,
   outcome: RouteOutcome,

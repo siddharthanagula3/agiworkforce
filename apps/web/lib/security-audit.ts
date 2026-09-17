@@ -294,7 +294,14 @@ export type AuditEventType =
   | 'admin_api_key_revoked'
   | 'ediscovery_export'
   | 'dlp_content_blocked'
-  | 'device_renamed';
+  | 'device_renamed'
+  | 'schedule_missed_execution'
+  | 'event_trigger_created'
+  | 'event_trigger_updated'
+  | 'event_trigger_deleted'
+  | 'background_job_retried'
+  | 'feature_flag_changed'
+  | 'feature_flag_override_changed';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
@@ -332,6 +339,7 @@ export interface AuditEventDetail {
   durationMs?: number;
   keyVersion?: string;
   version?: string;
+  variant?: string;
 }
 
 export interface AuditEvent {
@@ -378,6 +386,7 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'durationMs',
   'keyVersion',
   'version',
+  'variant',
 ]);
 
 const SECRET_KEY_NAME_RE =
@@ -623,6 +632,17 @@ function inferResourceType(eventType: AuditEventType): string {
       return 'legal_hold';
     case 'dlp_content_blocked':
       return 'dlp';
+    case 'feature_flag_changed':
+    case 'feature_flag_override_changed':
+      return 'feature_flag';
+    case 'schedule_missed_execution':
+      return 'scheduled_task';
+    case 'event_trigger_created':
+    case 'event_trigger_updated':
+    case 'event_trigger_deleted':
+      return 'event_trigger';
+    case 'background_job_retried':
+      return 'background_job';
     default:
       return 'unknown';
   }

@@ -134,6 +134,7 @@ import {
   isCredentialUnfunded,
   isRoutePolicyExcluded,
   observedRouteHealthFromSnapshots,
+  buildRoutingDecisionTrace,
   resolveAutoRoute,
   taskFamilyRoutingStageEnabled,
 } from '@agiworkforce/routing';
@@ -156,6 +157,13 @@ import {
   type ServedRouteAffinity,
 } from '@/lib/services/free-lane/runtime-state-service';
 import { freeLaneObserves, resolveFreeLaneMode } from '@/lib/services/free-lane/mode';
+import {
+  resolveWebCloudRolloutInputs,
+  resolveWithObservedCapabilities,
+  type WebCloudRolloutInputs,
+} from '@/lib/services/model-rollout/rollout-routing-inputs';
+import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
+import { scheduleShadowDispatch } from '@/lib/services/model-rollout/shadow-dispatch-service';
 import { ROUTE_LANES, type FreeLanePlan, type RouteLane } from '@/lib/services/free-lane/plan';
 import {
   FREE_LANE_SELECTION,
@@ -1640,6 +1648,7 @@ export function buildWebCloudAutoRoutingRequest(
    * an oversight rather than a decision.
    */
   userRoutingPreferences?: UserRoutingPreferences | null,
+  rollout?: WebCloudRolloutInputs,
 ): AutoRoutingRequest {
   const gatewayFlagHarnessIds = admittedHarnessIds();
   return {
@@ -1681,6 +1690,20 @@ export function buildWebCloudAutoRoutingRequest(
     ...(organizationPolicy ? { organizationPolicy } : {}),
     ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
     excludedRouteHosts: EXCLUDED_ROUTE_HOSTS,
+    ...(rollout
+      ? {
+          requestId: rollout.requestId,
+          region: rollout.region,
+          capabilitiesInUse: rollout.capabilitiesInUse,
+          shadowRequestsToday: rollout.shadowRequestsToday,
+          ...(rollout.enableObservedHealthRanking !== undefined
+            ? { enableObservedHealthRanking: rollout.enableObservedHealthRanking }
+            : {}),
+          ...(rollout.enableCanary !== undefined ? { enableCanary: rollout.enableCanary } : {}),
+          ...(rollout.enableShadow !== undefined ? { enableShadow: rollout.enableShadow } : {}),
+          ...(rollout.canaryCohorts ? { canaryCohorts: rollout.canaryCohorts } : {}),
+        }
+      : {}),
   };
 }
 
@@ -1706,6 +1729,7 @@ export function resolveWebCloudModelRoute(
   zeroDataRetentionProviders?: ReadonlySet<string>,
   organizationPolicy?: ModelAccessPolicy | null,
   userRoutingPreferences?: UserRoutingPreferences | null,
+  rollout?: WebCloudRolloutInputs,
 ) {
   return resolveAutoRoute(
     buildWebCloudAutoRoutingRequest(
@@ -1720,6 +1744,7 @@ export function resolveWebCloudModelRoute(
       zeroDataRetentionProviders,
       organizationPolicy,
       userRoutingPreferences,
+      rollout,
     ),
   );
 }
@@ -2856,6 +2881,7 @@ export async function processRequest(
     zeroDataRetentionPolicy,
     workspaceModelPolicy,
     userRoutingPreferences,
+    rolloutInputs,
   ] = await timePhase(CHAT_TURN_PHASE.routeSelection, () =>
     Promise.all([
       resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
@@ -2867,30 +2893,51 @@ export async function processRequest(
       // Joins the block rather than adding a round trip of its own: it is
       // needed at exactly the same moment as the three beside it.
       scopedDbPromise.then((scoped) => resolveUserRoutingPreferences(scoped.db, userId)),
+      scopedDbPromise.then((scoped) =>
+        resolveWebCloudRolloutInputs({
+          request,
+          subject: {
+            userId,
+            workspaceId: scoped.organizationId,
+            role: null,
+            plan: subscription.plan_tier,
+            surface: chatSurface,
+          },
+          requestId,
+          conversationId: chatRequest.conversation_id ?? null,
+          signals: chatRequest,
+          nowMs: routeResolutionNowMs,
+        }),
+      ),
     ]),
   );
   const availableProviderIds = listAvailableManagedProviderIds();
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
 
-  const baseRouteDecision = resolveWebCloudModelRoute(
-    routeSelection,
-    subscription.plan_tier,
-    resolvedTaskType,
-    routeUsage,
-    undefined,
-    {
-      ...baseRouteHealthState,
-      ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
-      ...(routeAffinity?.modelKey ? { currentModelKey: routeAffinity.modelKey } : {}),
-      ...(routeAffinity?.taskType ? { previousTaskType: routeAffinity.taskType } : {}),
-    },
-    availableProviderIds,
-    zeroDataRetentionOnly,
-    zeroDataRetentionProviders,
-    workspaceModelPolicy,
-    userRoutingPreferences,
-  );
+  const { decision: baseRouteDecision, routingRequest: baseRoutingRequest } =
+    await resolveWithObservedCapabilities(
+      buildWebCloudAutoRoutingRequest(
+        routeSelection,
+        subscription.plan_tier,
+        resolvedTaskType,
+        routeUsage,
+        undefined,
+        {
+          ...baseRouteHealthState,
+          ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
+          ...(routeAffinity?.modelKey ? { currentModelKey: routeAffinity.modelKey } : {}),
+          ...(routeAffinity?.taskType ? { previousTaskType: routeAffinity.taskType } : {}),
+        },
+        availableProviderIds,
+        zeroDataRetentionOnly,
+        zeroDataRetentionProviders,
+        workspaceModelPolicy,
+        userRoutingPreferences,
+        rolloutInputs,
+      ),
+      routeResolutionNowMs,
+    );
 
   // The free lane is a stage OVER this resolver's output, so it re-runs the same
   // admission for the economy alias and ranks what that admits. Paid tiers never
@@ -2918,6 +2965,7 @@ export async function processRequest(
         zeroDataRetentionProviders,
         workspaceModelPolicy,
         userRoutingPreferences,
+        rolloutInputs,
       )
     : null;
   const freeLaneNowMs = Date.now();
@@ -2942,6 +2990,16 @@ export async function processRequest(
   const freeLanePlan = freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.plan : null;
   const routeDecision: AutoRouteDecision =
     freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.routeDecision : baseRouteDecision;
+  const routingTrace = buildRoutingDecisionTrace(baseRoutingRequest, routeDecision);
+  persistRoutingDecision({
+    trace: routingTrace,
+    requestId,
+    userId,
+    organizationId: (await scopedDbPromise).organizationId,
+    surface: chatSurface,
+    kind: 'served',
+    flagVariants: rolloutInputs.flagVariants,
+  });
 
   if (routeDecision.status === 'unavailable') {
     const explicitRefusal = isAutoModeModelId(requestedModel)
@@ -4057,6 +4115,20 @@ export async function processRequest(
   // cannot leave the lane. The trial path stays rotation-free as before.
   const failoverRoutes =
     freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks);
+
+  if (routeDecision.shadow) {
+    scheduleShadowDispatch({
+      shadow: routeDecision.shadow,
+      servedTrace: routingTrace,
+      requestId,
+      userId,
+      organizationId,
+      surface: chatSurface,
+      messages: llmRequest.messages,
+      maxTokens: llmRequest.max_tokens,
+      flagVariants: rolloutInputs.flagVariants,
+    });
+  }
 
   return {
     ok: true,

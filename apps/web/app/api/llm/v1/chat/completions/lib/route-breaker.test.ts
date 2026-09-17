@@ -19,6 +19,7 @@ const mockGetCredentialCooldownSnapshot = vi.fn();
 const mockRecordCredentialOutcome = vi.fn();
 
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  recordShadowRouteOutcome: vi.fn(async () => undefined),
   getRouteHealthSnapshot: (...args: unknown[]) => mockGetRouteHealthSnapshot(...args),
   getCredentialHealthSnapshot: (...args: unknown[]) => mockGetCredentialHealthSnapshot(...args),
   getCredentialCooldownSnapshot: (...args: unknown[]) => mockGetCredentialCooldownSnapshot(...args),

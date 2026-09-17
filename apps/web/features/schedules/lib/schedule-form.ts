@@ -6,6 +6,7 @@ import {
   validateTimeZone,
   type ProductRecurrence,
 } from '@/lib/schedules/schedule-time';
+import { normalizeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import type {
   IntervalUnit,
   ScheduleDraft,
@@ -13,7 +14,7 @@ import type {
   ScheduleMutation,
   ScheduleTask,
 } from '../types';
-import { taskRecurrence } from '../types';
+import { daypartsForPreset, presetForDayparts, taskRecurrence } from '../types';
 
 const MIN_INTERVAL_MS = 60_000;
 const MAX_INTERVAL_MS = 365 * 24 * 60 * 60 * 1_000;
@@ -44,6 +45,12 @@ export const INITIAL_SCHEDULE_DRAFT: ScheduleDraft = {
   expiresLocal: '',
   maxExecutions: '',
   projectId: null,
+  recurrenceRule: '',
+  daypartPreset: 'any',
+  retryMaxAttempts: '0',
+  retryBackoffMinutes: '5',
+  missedExecutionPolicy: 'run_once',
+  conditionUrl: '',
 };
 
 export function createInitialScheduleDraft(): ScheduleDraft {
@@ -224,6 +231,12 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
     expiresLocal: isoToZonedLocalInput(task.expiresAt, task.timezone),
     maxExecutions: task.maxExecutions === null ? '' : String(task.maxExecutions),
     projectId: task.projectId ?? null,
+    recurrenceRule: task.recurrenceRule ?? '',
+    daypartPreset: presetForDayparts(task.dayparts),
+    retryMaxAttempts: String(task.retryMaxAttempts ?? 0),
+    retryBackoffMinutes: String(Math.round((task.retryBackoffSeconds ?? 300) / 60)),
+    missedExecutionPolicy: task.missedExecutionPolicy ?? 'run_once',
+    conditionUrl: task.condition?.url ?? '',
   };
 }
 
@@ -250,8 +263,7 @@ function addError(errors: ScheduleFormErrors, field: keyof ScheduleFormErrors, m
 }
 
 export type ScheduleValidationResult =
-  | { ok: true; payload: ScheduleMutation }
-  | { ok: false; errors: ScheduleFormErrors };
+  { ok: true; payload: ScheduleMutation } | { ok: false; errors: ScheduleFormErrors };
 
 interface ScheduleValidationOptions {
   /**
@@ -292,6 +304,34 @@ export function validateAndBuildScheduleRequest(
   let expiresAt: string | null = null;
   let intervalMs: number | null = null;
   let cronExpression: string | null = null;
+  let recurrenceRule: string | null = null;
+  const dayparts =
+    draft.recurrence === 'once' || draft.recurrence === 'event'
+      ? null
+      : daypartsForPreset(draft.daypartPreset);
+  const retryMaxAttempts = Number(draft.retryMaxAttempts || '0');
+  if (!Number.isInteger(retryMaxAttempts) || retryMaxAttempts < 0 || retryMaxAttempts > 5) {
+    addError(errors, 'retryMaxAttempts', 'Use a whole number of retries from 0 to 5.');
+  }
+  const retryBackoffMinutes = Number(draft.retryBackoffMinutes || '5');
+  if (
+    !Number.isInteger(retryBackoffMinutes) ||
+    retryBackoffMinutes < 1 ||
+    retryBackoffMinutes > 1_440
+  ) {
+    addError(errors, 'retryBackoffMinutes', 'Wait between 1 minute and 24 hours before a retry.');
+  }
+  const conditionUrl = draft.conditionUrl.trim();
+  let condition: ScheduleMutation['condition'] = null;
+  if (conditionUrl && draft.recurrence !== 'event') {
+    try {
+      const parsed = new URL(conditionUrl);
+      if (parsed.protocol !== 'https:') throw new Error('https only');
+      condition = { kind: 'url_changed', url: parsed.toString() };
+    } catch {
+      addError(errors, 'conditionUrl', 'Enter an https address to watch, or leave it empty.');
+    }
+  }
   const timeOfDay = draft.timeOfDay;
   const daysOfWeek = [...new Set(draft.daysOfWeek)].sort((a, b) => a - b);
 
@@ -309,7 +349,23 @@ export function validateAndBuildScheduleRequest(
     }
   }
 
-  if (draft.recurrence === 'once') {
+  if (draft.recurrence === 'event') {
+    // An event-only task has no clock schedule; its triggers decide when it runs.
+  } else if (draft.recurrence === 'rrule') {
+    try {
+      recurrenceRule = normalizeRecurrenceRule(draft.recurrenceRule, draft.timezone, now);
+      assertDeliverableCadence(
+        { scheduleType: 'rrule', recurrenceRule, timezone: draft.timezone, dayparts },
+        now,
+      );
+    } catch (error) {
+      addError(
+        errors,
+        'recurrenceRule',
+        error instanceof Error ? error.message : 'Enter a valid recurrence rule.',
+      );
+    }
+  } else if (draft.recurrence === 'once') {
     if (!draft.scheduledLocal) {
       addError(errors, 'scheduledLocal', 'Choose when this task should run.');
     } else if (!errors.timezone) {
@@ -365,7 +421,7 @@ export function validateAndBuildScheduleRequest(
       // Agree with the server's cadence floor here rather than letting the user
       // submit and receive a 400 they had no way to anticipate.
       assertDeliverableCadence(
-        { scheduleType: 'cron', cronExpression, timezone: draft.timezone },
+        { scheduleType: 'cron', cronExpression, timezone: draft.timezone, dayparts },
         new Date(),
       );
     } catch (error) {
@@ -415,6 +471,13 @@ export function validateAndBuildScheduleRequest(
       expiresAt,
       maxExecutions,
       projectId: draft.projectId,
+      recurrenceRule,
+      dayparts,
+      retryMaxAttempts,
+      retryBackoffSeconds: retryBackoffMinutes * 60,
+      missedExecutionPolicy:
+        draft.recurrence === 'event' ? 'run_once' : draft.missedExecutionPolicy,
+      condition,
     },
   };
 }

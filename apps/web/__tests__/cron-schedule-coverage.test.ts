@@ -69,10 +69,18 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     not on the next daily accounting sweep. index-retrieval-documents
   //     makes a new upload or chat searchable and citable in project
   //     answers within minutes of the change, which a daily index cannot.
+  //     drain-background-jobs is the cadence every queued promise inherits:
+  //     the notification and email a finished scheduled run owes its user, the
+  //     SIEM delivery, and the agent run an event trigger promises to start
+  //     "when it happens" rather than tomorrow.
   //
   //   monitoring, a check that exists to catch a problem before a customer
   //     does. health-probe and page-security-anomalies exist to page someone,
-  //     and a daily page is not a page. These are capped at
+  //     and a daily page is not a page. evaluate-model-rollout is the same
+  //     kind of check: it compares each canary and shadow cohort with the
+  //     promoted model it may replace and pages on a quality, latency or cost
+  //     regression, so a daily page would leave a worse model answering real
+  //     traffic for up to a day before anyone was told. These are capped at
   //     MONITORING_MIN_INTERVAL_MINUTES rather than left unbounded, so a
   //     future "every minute" change still fails this test.
   //
@@ -86,8 +94,13 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/reap-agent-runs',
     '/api/cron/recover-reservations',
     '/api/cron/index-retrieval-documents',
+    '/api/cron/drain-background-jobs',
   ]);
-  const MONITORING_CRONS = new Set(['/api/cron/health-probe', '/api/cron/page-security-anomalies']);
+  const MONITORING_CRONS = new Set([
+    '/api/cron/health-probe',
+    '/api/cron/page-security-anomalies',
+    '/api/cron/evaluate-model-rollout',
+  ]);
   const MONITORING_MIN_INTERVAL_MINUTES = 10;
 
   function isSubDaily(schedule: string): boolean {
@@ -105,6 +118,9 @@ describe('cron routes and vercel.json schedules agree', () => {
     if (minute === '*') return 1;
     const hourStep = hour?.match(/^\*\/(\d+)$/);
     if (hourStep) return Number(hourStep[1]) * 60;
+    // A fixed minute of every hour runs once an hour. Reading it as 0 would
+    // have measured an hourly schedule as more frequent than every minute.
+    if (hour === '*' && /^\d+$/.test(minute)) return 60;
     return 0;
   }
 

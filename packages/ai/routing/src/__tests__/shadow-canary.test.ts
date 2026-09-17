@@ -298,3 +298,169 @@ describe('shadow mirroring', () => {
     expect(decision.shadow?.modelKey).toBe(SHADOW_MODEL_KEY);
   });
 });
+
+describe('flag-driven canary cohorts', () => {
+  it('serves the canary to a request the cohort includes, whatever its hash', async () => {
+    const decision = await resolve({
+      requestId: OUTSIDE_ID,
+      enableCanary: true,
+      canaryCohorts: { [SLOT_ID]: true },
+    });
+    expect(decision).toMatchObject({ modelKey: CANARY_MODEL_KEY, reason: 'canary' });
+  });
+
+  it('keeps a request the cohort excludes on the promoted model, whatever its hash', async () => {
+    const decision = await resolve({
+      requestId: INSIDE_ID,
+      enableCanary: true,
+      canaryCohorts: { [SLOT_ID]: false },
+    });
+    expect(decision).toMatchObject({ modelKey: PROMOTED_MODEL_KEY });
+  });
+
+  it('never lets a cohort serve a canary while the stage is off', async () => {
+    const decision = await resolve({
+      requestId: INSIDE_ID,
+      enableCanary: false,
+      canaryCohorts: { [SLOT_ID]: true },
+    });
+    expect(decision).toMatchObject({ modelKey: PROMOTED_MODEL_KEY });
+  });
+});
+
+describe('rollout stage defaults', () => {
+  it('serves canaries and mirrors by default, with no environment opt-in', async () => {
+    const decision = await resolve({ requestId: INSIDE_ID });
+    if (decision.status !== 'selected') throw new Error('expected a selected route');
+    expect(decision.reason).toBe('canary');
+    expect(decision.shadow?.modelKey).toBe(SHADOW_MODEL_KEY);
+  });
+
+  it('withdraws both halves when the operator kill switch names off', async () => {
+    process.env['AGI_ROUTING_CANARY'] = 'off';
+    process.env['AGI_ROUTING_SHADOW'] = 'off';
+    try {
+      const decision = await resolve({ requestId: INSIDE_ID });
+      expect(decision).toMatchObject({ modelKey: PROMOTED_MODEL_KEY });
+      expect(decision).not.toHaveProperty('shadow');
+    } finally {
+      delete process.env['AGI_ROUTING_CANARY'];
+      delete process.env['AGI_ROUTING_SHADOW'];
+    }
+  });
+
+  it('mirrors without serving a canary when only the shadow half is enabled', async () => {
+    const decision = await resolve({
+      requestId: INSIDE_ID,
+      enableCanary: false,
+      enableShadow: true,
+    });
+    if (decision.status !== 'selected') throw new Error('expected a selected route');
+    expect(decision.modelKey).toBe(PROMOTED_MODEL_KEY);
+    expect(decision.shadow?.modelKey).toBe(SHADOW_MODEL_KEY);
+  });
+});
+
+describe('routing decision trace', () => {
+  it('records the slot, cohort and shadow of a canary decision', async () => {
+    const request = {
+      selection: ALIAS_ID,
+      taskType: TASK_TYPE,
+      subscriptionTier: SUBSCRIPTION_TIER,
+      trustMode: TRUST_MODE,
+      enableTaskFamilyStage: false,
+      requestId: INSIDE_ID,
+      enableCanary: true,
+      region: 'us',
+      capabilitiesInUse: ['functionCalling' as const],
+    };
+    const decision = await resolve(request);
+    const { buildRoutingDecisionTrace } = await import('../routing-trace');
+    const trace = buildRoutingDecisionTrace(request, decision);
+    expect(trace).toMatchObject({
+      requestId: INSIDE_ID,
+      status: 'selected',
+      reason: 'canary',
+      modelKey: CANARY_MODEL_KEY,
+      slotId: SLOT_ID,
+      cohort: 'canary',
+      region: 'us',
+      shadow: { slotId: SLOT_ID, modelKey: SHADOW_MODEL_KEY },
+      stages: { canary: true, shadow: true, taskFamily: false },
+      inputs: { capabilitiesInUse: ['functionCalling'] },
+    });
+  });
+
+  it('records the promoted side of the same slot as the control cohort', async () => {
+    const request = {
+      selection: ALIAS_ID,
+      taskType: TASK_TYPE,
+      subscriptionTier: SUBSCRIPTION_TIER,
+      trustMode: TRUST_MODE,
+      enableTaskFamilyStage: false,
+      requestId: OUTSIDE_ID,
+      enableCanary: true,
+    };
+    const decision = await resolve(request);
+    const { buildRoutingDecisionTrace } = await import('../routing-trace');
+    expect(buildRoutingDecisionTrace(request, decision)).toMatchObject({
+      modelKey: PROMOTED_MODEL_KEY,
+      slotId: SLOT_ID,
+      cohort: 'control',
+    });
+  });
+
+  it('records the refusal reasons of an unavailable decision', async () => {
+    const request = {
+      selection: 'no-such-model',
+      taskType: TASK_TYPE,
+      trustMode: TRUST_MODE,
+    };
+    const decision = await resolve(request);
+    const { buildRoutingDecisionTrace } = await import('../routing-trace');
+    const trace = buildRoutingDecisionTrace(request, decision);
+    expect(trace).toMatchObject({ status: 'unavailable', code: 'unknown_selection', cohort: null });
+    expect(trace.reasons.length).toBeGreaterThan(0);
+  });
+});
+
+describe('region admission', () => {
+  it('refuses a transport whose published residency excludes the region', async () => {
+    const decision = await resolve({ selection: CANARY_MODEL_KEY, region: 'eu' }, (registry) => {
+      registry.governance = { ...registry.governance, [PROVIDER]: { residencyRegions: ['us'] } };
+    });
+    expect(decision).toMatchObject({ status: 'unavailable', code: 'explicit_model_ineligible' });
+    if (decision.status !== 'unavailable') throw new Error('expected a refusal');
+    expect(decision.reasons.join(' ')).toContain('does not process requests in region eu');
+  });
+
+  it('admits a transport that publishes the region', async () => {
+    const decision = await resolve(
+      { requestId: INSIDE_ID, enableCanary: true, region: 'us' },
+      (registry) => {
+        registry.governance = { ...registry.governance, [PROVIDER]: { residencyRegions: ['us'] } };
+      },
+    );
+    expect(decision).toMatchObject({ modelKey: CANARY_MODEL_KEY });
+  });
+
+  it('admits a transport that publishes nothing, an evidence gap rather than a violation', async () => {
+    const decision = await resolve(
+      { requestId: INSIDE_ID, enableCanary: true, region: 'eu' },
+      (registry) => {
+        registry.governance = { ...registry.governance, [PROVIDER]: { residencyRegions: null } };
+      },
+    );
+    expect(decision).toMatchObject({ modelKey: CANARY_MODEL_KEY });
+  });
+
+  it('pulls a canary back to its promoted sibling when only the canary is out of region', async () => {
+    const decision = await resolve(
+      { requestId: INSIDE_ID, enableCanary: true, region: 'eu' },
+      (registry) => {
+        registry.governance = { ...registry.governance, [PROVIDER]: { residencyRegions: ['us'] } };
+      },
+    );
+    expect(decision).toMatchObject({ modelKey: PROMOTED_MODEL_KEY });
+  });
+});

@@ -108,6 +108,14 @@ const ADMIN_CONTROLS: ReadonlyArray<{
     external: true,
   },
   {
+    name: 'Background jobs',
+    href: '/operator#jobs',
+    service: 'GET/POST /api/admin/background-jobs',
+    detail:
+      'Queue depth and concurrency for notifications, email, SIEM deliveries, scheduled erasures, uploads and event triggers, with the dead-letter list and the reason each job gave up.',
+    external: true,
+  },
+  {
     name: 'Directory sync (SCIM 2.0)',
     href: '/admin/directory-sync',
     service: '/api/admin/directory-sync',
