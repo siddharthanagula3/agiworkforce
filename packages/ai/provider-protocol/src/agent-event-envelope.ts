@@ -119,7 +119,11 @@ export function agentEventToStreamChunk(event: AgentEvent): StreamChunk | null {
       return { type: 'stop', reason: AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK[event.reason] };
     case 'lifecycle':
     case 'progress-update':
+    case 'tool-execution-queued':
     case 'tool-execution-start':
+    case 'command-started':
+    case 'file-changed':
+    case 'turn-diff':
     case 'tool-execution-end':
     case 'source-list':
     case 'approval-requested':

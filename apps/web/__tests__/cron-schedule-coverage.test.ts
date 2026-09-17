@@ -69,6 +69,9 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     not on the next daily accounting sweep. index-retrieval-documents
   //     makes a new upload or chat searchable and citable in project
   //     answers within minutes of the change, which a daily index cannot.
+  //     replicate-object-backups sets the recovery point we publish: whatever
+  //     gap this cron leaves is the window of uploads a restore would lose, so
+  //     a daily copy would publish a recovery point of a day.
   //     drain-background-jobs is the cadence every queued promise inherits:
   //     the notification and email a finished scheduled run owes its user, the
   //     SIEM delivery, and the agent run an event trigger promises to start
@@ -95,11 +98,13 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/recover-reservations',
     '/api/cron/index-retrieval-documents',
     '/api/cron/drain-background-jobs',
+    '/api/cron/replicate-object-backups',
   ]);
   const MONITORING_CRONS = new Set([
     '/api/cron/health-probe',
     '/api/cron/page-security-anomalies',
     '/api/cron/evaluate-model-rollout',
+    '/api/cron/evaluate-slo-burn',
   ]);
   const MONITORING_MIN_INTERVAL_MINUTES = 10;
 
@@ -121,6 +126,19 @@ describe('cron routes and vercel.json schedules agree', () => {
     // A fixed minute of every hour runs once an hour. Reading it as 0 would
     // have measured an hourly schedule as more frequent than every minute.
     if (hour === '*' && /^\d+$/.test(minute)) return 60;
+    // A list of minutes within every hour runs on the smallest gap between two
+    // of them, wrapping across the hour boundary: `5,35 * * * *` is every 30
+    // minutes, not every minute and not never.
+    if (hour === '*' && /^\d+(?:,\d+)+$/.test(minute)) {
+      const minutes = minute
+        .split(',')
+        .map(Number)
+        .sort((left, right) => left - right);
+      const gaps = minutes.map((value, index) =>
+        index === 0 ? value + 60 - minutes[minutes.length - 1]! : value - minutes[index - 1]!,
+      );
+      return Math.min(...gaps);
+    }
     return 0;
   }
 

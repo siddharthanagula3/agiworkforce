@@ -291,6 +291,27 @@ describe('remote control of a developer session', () => {
     });
   });
 
+  it('sends the phone the diff the runtime states, not one scraped from tool output', async () => {
+    const controller = createCodeRemoteController(deps);
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+    sent = [];
+
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-diff',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      unifiedDiff: GIT_DIFF,
+      paths: ['src/retry.ts'],
+    });
+
+    expect(lastEvent('diff')).toMatchObject({
+      diff: { path: 'src/retry.ts', truncated: false },
+    });
+  });
+
   it('sends nothing for a session no phone is attached to', async () => {
     const controller = createCodeRemoteController(deps);
     await controller.handleSessionEvent('root-1', {

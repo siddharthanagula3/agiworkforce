@@ -338,6 +338,11 @@ pub enum ThreadStatus {
     AwaitingApproval,
     Archived,
     Failed,
+    /// A state this build does not know. Never produced by this crate; every
+    /// client maps a status it cannot name onto this instead of rejecting the
+    /// whole payload, which is what would drop a usable thread list because
+    /// one newer thread in it is in a state this build predates.
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -347,6 +352,9 @@ pub enum DeveloperSessionSource {
     Cli,
     Vscode,
     Desktop,
+    /// A surface this build does not know, on the same terms as
+    /// [`ThreadStatus::Unknown`].
+    Unknown,
 }
 
 /// Durable trust boundary for a developer session.

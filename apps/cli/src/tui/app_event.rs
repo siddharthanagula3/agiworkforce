@@ -41,6 +41,12 @@ pub enum TuiAppEvent {
     AgentDelta {
         text: String,
     },
+    ToolQueued {
+        call_id: String,
+        name: String,
+        position: usize,
+        queue_depth: usize,
+    },
     ToolStarted {
         call_id: String,
         name: String,

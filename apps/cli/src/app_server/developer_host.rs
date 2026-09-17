@@ -1,7 +1,9 @@
 use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
 use agiworkforce_protocol::agent_events::{
-    AgentEvent, AgentEventArtifactProduced, AgentEventProgressStatus, AgentEventProgressUpdate,
-    AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
+    AgentEvent, AgentEventArtifactProduced, AgentEventCommandStarted, AgentEventFileChangeKind,
+    AgentEventFileChanged, AgentEventProgressStatus, AgentEventProgressUpdate,
+    AgentEventToolExecutionEnd, AgentEventToolExecutionQueued, AgentEventToolExecutionStart,
+    AgentEventTurnDiff,
 };
 use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
@@ -2121,6 +2123,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         AgentEventProgressStatus::Failed,
                     )
                 };
+            if let Some(diff) = turn_diff(&task_activity) {
+                emit_agent_event(
+                    &task_thread_id,
+                    &task_turn_id,
+                    &task_event_sequence,
+                    &task_notifications,
+                    AgentEvent::TurnDiff(diff),
+                );
+            }
             if work_started {
                 emit_agent_event(
                     &task_thread_id,
@@ -3034,18 +3045,48 @@ fn tool_event_callback(
     activity: SharedSessionActivity,
 ) -> Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync> {
     Arc::new(move |event| {
-        let generated = match &event {
+        let (generated, changed) = match &event {
             crate::tui::app_event::TuiAppEvent::ToolCompleted {
                 call_id,
                 status: crate::tui::app_event::ToolStatus::Succeeded,
                 ..
-            } => generated_artifacts(&activity, call_id),
-            _ => Vec::new(),
+            } => (
+                generated_artifacts(&activity, call_id),
+                changed_files(&activity, call_id),
+            ),
+            _ => (Vec::new(), Vec::new()),
+        };
+        let started_command = match &event {
+            crate::tui::app_event::TuiAppEvent::ToolStarted {
+                call_id,
+                name,
+                input,
+                ..
+            } => command_started(call_id, name, input),
+            _ => None,
         };
         let Some(event) = map_tool_event(event) else {
             return;
         };
         emit_agent_event(&thread_id, &turn_id, &sequence, &notifications, event);
+        if let Some(command) = started_command {
+            emit_agent_event(
+                &thread_id,
+                &turn_id,
+                &sequence,
+                &notifications,
+                AgentEvent::CommandStarted(command),
+            );
+        }
+        for change in changed {
+            emit_agent_event(
+                &thread_id,
+                &turn_id,
+                &sequence,
+                &notifications,
+                AgentEvent::FileChanged(change),
+            );
+        }
         for artifact in generated {
             emit_agent_event(
                 &thread_id,
@@ -3056,6 +3097,62 @@ fn tool_event_callback(
             );
         }
     })
+}
+
+/// The command line a shell tool is about to run, when this call is one. The
+/// input is already redacted by the emitter of `ToolStarted`.
+fn command_started(
+    call_id: &str,
+    name: &str,
+    input: &serde_json::Value,
+) -> Option<AgentEventCommandStarted> {
+    if crate::runtime::tool_catalog::tool_capability(name)
+        != agiworkforce_protocol::agent_events::AgentEventToolCategory::Shell
+    {
+        return None;
+    }
+    let command = input.get("command")?.as_str()?.to_string();
+    Some(AgentEventCommandStarted {
+        tool_call_id: call_id.to_string(),
+        command,
+        cwd: input
+            .get("cwd")
+            .and_then(|value| value.as_str())
+            .map(str::to_string),
+    })
+}
+
+/// The diff of everything this turn wrote, or `None` when it wrote nothing.
+fn turn_diff(activity: &SharedSessionActivity) -> Option<AgentEventTurnDiff> {
+    let mut activity = activity
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let (unified_diff, paths) = activity.take_turn_diff()?;
+    Some(AgentEventTurnDiff {
+        unified_diff,
+        paths,
+    })
+}
+
+/// Every file a finished tool call wrote, created or modified.
+fn changed_files(activity: &SharedSessionActivity, call_id: &str) -> Vec<AgentEventFileChanged> {
+    let activity = activity
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    activity
+        .file_changes()
+        .iter()
+        .rev()
+        .take_while(|change| change.tool_call_id == call_id)
+        .map(|change| AgentEventFileChanged {
+            tool_call_id: call_id.to_string(),
+            path: change.path.display().to_string(),
+            change: match change.kind {
+                ManagedSessionFileChangeKind::Created => AgentEventFileChangeKind::Created,
+                ManagedSessionFileChangeKind::Modified => AgentEventFileChangeKind::Modified,
+            },
+        })
+        .collect()
 }
 
 /// Files a finished tool call created, as artifacts a client can open.
@@ -3113,6 +3210,20 @@ fn map_tool_event(event: crate::tui::app_event::TuiAppEvent) -> Option<AgentEven
     use crate::tui::app_event::{ToolStatus, TuiAppEvent};
 
     match event {
+        TuiAppEvent::ToolQueued {
+            call_id,
+            name,
+            position,
+            queue_depth,
+        } => Some(AgentEvent::ToolExecutionQueued(
+            AgentEventToolExecutionQueued {
+                tool_call_id: call_id,
+                category: crate::runtime::tool_catalog::tool_capability(&name),
+                name,
+                position: position as u32,
+                queue_depth: queue_depth as u32,
+            },
+        )),
         TuiAppEvent::ToolStarted {
             call_id,
             name,
@@ -3430,6 +3541,7 @@ fn source_to_stored(source: DeveloperSessionSource) -> &'static str {
         DeveloperSessionSource::Cli => "cli",
         DeveloperSessionSource::Vscode => "vscode",
         DeveloperSessionSource::Desktop => "desktop",
+        DeveloperSessionSource::Unknown => "unknown",
     }
 }
 
@@ -4441,6 +4553,9 @@ mod tests {
 
         let ended = receiver.recv().await.expect("tool end");
         assert_eq!(ended.params["event"]["type"], "tool-execution-end");
+        let created = receiver.recv().await.expect("file change");
+        assert_eq!(created.params["event"]["type"], "file-changed");
+        assert_eq!(created.params["event"]["change"], "created");
         let artifact = receiver.recv().await.expect("artifact");
         assert_eq!(artifact.params["event"]["type"], "artifact-produced");
         assert_eq!(artifact.params["event"]["name"], "report.md");
@@ -4448,9 +4563,12 @@ mod tests {
         assert!(artifact.params["event"]["uri"]
             .as_str()
             .is_some_and(|uri| uri.starts_with("file://") && uri.ends_with("report.md")));
-        assert_eq!(artifact.params["sequence"], 1);
+        assert_eq!(artifact.params["sequence"], 2);
         let edited = receiver.recv().await.expect("second tool end");
         assert_eq!(edited.params["event"]["type"], "tool-execution-end");
+        let modified = receiver.recv().await.expect("second file change");
+        assert_eq!(modified.params["event"]["type"], "file-changed");
+        assert_eq!(modified.params["event"]["change"], "modified");
         assert!(
             receiver.try_recv().is_err(),
             "modifying a file that existed is not a generated artifact"
@@ -4526,6 +4644,117 @@ mod tests {
         assert_eq!(progress.params["event"]["type"], "progress-update");
         assert_eq!(tool.params["sequence"], 1);
         assert_eq!(tool.params["event"]["type"], "tool-execution-start");
+    }
+
+    #[tokio::test]
+    async fn a_queued_call_is_announced_before_it_starts() {
+        use crate::tui::app_event::TuiAppEvent;
+
+        let (notifications, mut receiver) = broadcast::channel(4);
+        tool_event_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            Arc::new(StdMutex::new(0)),
+            notifications,
+            Arc::default(),
+        )(TuiAppEvent::ToolQueued {
+            call_id: "tool-2".to_string(),
+            name: "run_command".to_string(),
+            position: 1,
+            queue_depth: 3,
+        });
+
+        let queued = receiver.recv().await.expect("queued notification");
+        assert_eq!(queued.params["event"]["type"], "tool-execution-queued");
+        assert_eq!(queued.params["event"]["toolCallId"], "tool-2");
+        assert_eq!(queued.params["event"]["position"], 1);
+        assert_eq!(queued.params["event"]["queueDepth"], 3);
+    }
+
+    #[tokio::test]
+    async fn a_shell_call_announces_the_command_it_is_about_to_run() {
+        use crate::tui::app_event::TuiAppEvent;
+
+        let (notifications, mut receiver) = broadcast::channel(4);
+        tool_event_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            Arc::new(StdMutex::new(0)),
+            notifications,
+            Arc::default(),
+        )(TuiAppEvent::ToolStarted {
+            call_id: "tool-3".to_string(),
+            name: "run_command".to_string(),
+            summary: "pnpm test".to_string(),
+            input: serde_json::json!({ "command": "pnpm test", "cwd": "/repo" }),
+        });
+
+        let started = receiver.recv().await.expect("tool start");
+        let command = receiver.recv().await.expect("command start");
+        assert_eq!(started.params["event"]["type"], "tool-execution-start");
+        assert_eq!(command.params["event"]["type"], "command-started");
+        assert_eq!(command.params["event"]["command"], "pnpm test");
+        assert_eq!(command.params["event"]["cwd"], "/repo");
+        assert!(
+            command.params["sequence"].as_u64() > started.params["sequence"].as_u64(),
+            "the command must follow the tool row it belongs to"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_finished_write_announces_the_file_it_changed_and_the_turn_its_diff() {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join("notes.md"), "before\n").expect("seed");
+        let activity: SharedSessionActivity = Arc::default();
+        {
+            let mut held = activity.lock().expect("activity");
+            held.tool_started(
+                "tool-4",
+                "write_file",
+                &serde_json::json!({ "path": "notes.md" }),
+                Some(workspace.path()),
+            );
+        }
+        std::fs::write(workspace.path().join("notes.md"), "after\n").expect("write");
+        {
+            let mut held = activity.lock().expect("activity");
+            held.tool_finished("tool-4", true);
+        }
+
+        let (notifications, mut receiver) = broadcast::channel(8);
+        tool_event_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            Arc::new(StdMutex::new(0)),
+            notifications,
+            activity.clone(),
+        )(TuiAppEvent::ToolCompleted {
+            call_id: "tool-4".to_string(),
+            name: "write_file".to_string(),
+            status: ToolStatus::Succeeded,
+            output: "ok".to_string(),
+            duration_ms: 3,
+        });
+
+        let _end = receiver.recv().await.expect("tool end");
+        let changed = receiver.recv().await.expect("file change");
+        assert_eq!(changed.params["event"]["type"], "file-changed");
+        assert_eq!(changed.params["event"]["change"], "modified");
+        assert!(changed.params["event"]["path"]
+            .as_str()
+            .expect("path")
+            .ends_with("notes.md"));
+
+        let diff = turn_diff(&activity).expect("the turn wrote a file, so it has a diff");
+        assert!(diff.unified_diff.contains("-before"));
+        assert!(diff.unified_diff.contains("+after"));
+        assert_eq!(diff.paths.len(), 1);
+        assert!(
+            turn_diff(&activity).is_none(),
+            "a taken diff must not be reported again by the next turn"
+        );
     }
 
     #[test]

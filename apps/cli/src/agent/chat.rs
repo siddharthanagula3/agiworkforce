@@ -2403,6 +2403,22 @@ impl TurnHost for TurnHostAdapter<'_> {
                     );
                 }
             }
+            TurnEvent::ToolQueued {
+                id,
+                name,
+                position,
+                queue_depth,
+            } => {
+                emit_tool_event(
+                    self.session.on_tool_event.as_ref(),
+                    crate::tui::app_event::TuiAppEvent::ToolQueued {
+                        call_id: id.clone(),
+                        name: name.clone(),
+                        position: *position,
+                        queue_depth: *queue_depth,
+                    },
+                );
+            }
             TurnEvent::ToolStarted { id, name, args, .. } => {
                 let workspace_root = self
                     .session

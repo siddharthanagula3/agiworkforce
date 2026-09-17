@@ -374,6 +374,12 @@ async fn single_sequential_tool_call() {
                 iteration: 0,
                 max: 25,
             },
+            TurnEvent::ToolQueued {
+                id: "t1".into(),
+                name: "read_file".into(),
+                position: 0,
+                queue_depth: 1,
+            },
             TurnEvent::ToolStarted {
                 id: "t1".into(),
                 name: "read_file".into(),
@@ -420,23 +426,108 @@ async fn parallel_read_only_batch_starts_all_then_finishes_all() {
             max: 25
         }
     );
+    // Every call of the iteration is queued before any of them starts.
     assert_eq!(
         events[1],
+        TurnEvent::ToolQueued {
+            id: "a".into(),
+            name: "grep_files".into(),
+            position: 0,
+            queue_depth: 2,
+        }
+    );
+    assert_eq!(
+        events[2],
+        TurnEvent::ToolQueued {
+            id: "b".into(),
+            name: "read_file".into(),
+            position: 1,
+            queue_depth: 2,
+        }
+    );
+    assert_eq!(
+        events[3],
         TurnEvent::ParallelBatchStarted {
             names: vec!["grep_files".into(), "read_file".into()],
         }
     );
     // Both starts precede both finishes (join_all semantics).
-    assert!(matches!(events[2], TurnEvent::ToolStarted { .. }));
-    assert!(matches!(events[3], TurnEvent::ToolStarted { .. }));
-    assert!(matches!(events[4], TurnEvent::ToolFinished { .. }));
-    assert!(matches!(events[5], TurnEvent::ToolFinished { .. }));
-    assert!(matches!(events[6], TurnEvent::TurnComplete { .. }));
+    assert!(matches!(events[4], TurnEvent::ToolStarted { .. }));
+    assert!(matches!(events[5], TurnEvent::ToolStarted { .. }));
+    assert!(matches!(events[6], TurnEvent::ToolFinished { .. }));
+    assert!(matches!(events[7], TurnEvent::ToolFinished { .. }));
+    assert!(matches!(events[8], TurnEvent::TurnComplete { .. }));
 
     // Parallel path forwards RAW output (no `seq:` transform prefix).
     assert_eq!(host.committed[0].len(), 2);
     assert_eq!(host.committed[0][0].content, "hits");
     assert_eq!(host.committed[0][1].content, "body");
+}
+
+#[tokio::test]
+async fn every_call_is_queued_in_the_order_the_engine_will_dispatch_it() {
+    // A surface showing what is waiting behind the running call needs the
+    // queue before dispatch, in dispatch order: task, then parallel, then
+    // sequential, which is not the order the model returned them in.
+    let mut host = ScriptedHost::new(vec![
+        completion(
+            "mixed",
+            vec![
+                tc("s1", "write_file"),
+                tc("p1", "read_file"),
+                tc("k1", "task"),
+            ],
+        ),
+        completion("end", vec![]),
+    ])
+    .class("task", ToolClass::Task)
+    .class("read_file", ToolClass::ConcurrentEligible)
+    .result("read_file", true, "P")
+    .result("write_file", true, "S");
+    host.task_blocks = vec![ResultBlock {
+        tool_use_id: "k1".into(),
+        content: "K".into(),
+        is_error: false,
+    }];
+
+    drive(&mut host, params(25, None)).await.unwrap();
+
+    let queued: Vec<(String, usize, usize)> = host
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            TurnEvent::ToolQueued {
+                id,
+                position,
+                queue_depth,
+                ..
+            } => Some((id.clone(), *position, *queue_depth)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        queued,
+        vec![
+            ("k1".to_string(), 0, 3),
+            ("p1".to_string(), 1, 3),
+            ("s1".to_string(), 2, 3),
+        ]
+    );
+
+    let first_start = host
+        .events
+        .iter()
+        .position(|event| matches!(event, TurnEvent::ToolStarted { .. }))
+        .expect("a call started");
+    let last_queued = host
+        .events
+        .iter()
+        .rposition(|event| matches!(event, TurnEvent::ToolQueued { .. }))
+        .expect("calls were queued");
+    assert!(
+        last_queued < first_start,
+        "the whole queue must be announced before the first call runs"
+    );
 }
 
 #[tokio::test]

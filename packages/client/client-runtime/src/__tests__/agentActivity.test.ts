@@ -56,6 +56,73 @@ describe('portable agent activity projection', () => {
     expect(JSON.stringify(canonical)).not.toContain('Starting AGI Work');
   });
 
+  it('shows a queued call as waiting, then its command, its writes and the turn diff', () => {
+    const start = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Starting',
+      startedAtMs: 900,
+    });
+
+    let state = applyAgentActivityEvent(
+      start,
+      envelope(0, {
+        type: 'tool-execution-queued',
+        toolCallId: 'call-1',
+        name: 'run_command',
+        category: 'shell',
+        position: 1,
+        queueDepth: 3,
+      }),
+    );
+    const queued = state.entries.find((entry) => entry.id === 'tool:call-1');
+    expect(isToolEntry(queued) && queued.status).toBe('pending');
+    expect(isToolEntry(queued) && queued.queue).toEqual({ position: 1, depth: 3 });
+
+    state = applyAgentActivityEvent(
+      state,
+      envelope(1, {
+        type: 'command-started',
+        toolCallId: 'call-1',
+        command: 'pnpm build',
+        cwd: '/repo',
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(2, {
+        type: 'file-changed',
+        toolCallId: 'call-1',
+        path: 'dist/index.js',
+        change: 'created',
+      }),
+    );
+    const ran = state.entries.find((entry) => entry.id === 'tool:call-1');
+    expect(isToolEntry(ran) && ran.command).toBe('pnpm build');
+    expect(isToolEntry(ran) && ran.commandCwd).toBe('/repo');
+    expect(isToolEntry(ran) && ran.files).toEqual([{ path: 'dist/index.js', change: 'created' }]);
+
+    state = applyAgentActivityEvent(
+      state,
+      envelope(3, { type: 'turn-diff', unifiedDiff: '+one', paths: ['dist/index.js'] }),
+    );
+    expect(state.turnDiff).toEqual({ unifiedDiff: '+one', paths: ['dist/index.js'] });
+  });
+
+  it('leaves a command or a write with no step of its own to attach to alone', () => {
+    const start = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Starting',
+      startedAtMs: 900,
+    });
+    const orphaned = applyAgentActivityEvent(
+      start,
+      envelope(0, { type: 'command-started', toolCallId: 'never-seen', command: 'rm -rf /' }),
+    );
+    expect(JSON.stringify(orphaned)).not.toContain('rm -rf /');
+  });
+
   it('does not treat a retry placeholder as a suppressible local placeholder', () => {
     const retrying = startAgentActivityLocally({
       sessionId: 'session-1',

@@ -27,13 +27,14 @@ mod task_registry;
 mod web;
 
 use bash::execute_run_command;
+pub(crate) use common::generate_simple_diff;
 pub(crate) use common::COMMAND_TIMEOUT;
 use common::{describe_command, print_tool_status, truncate_output_with_save};
 #[cfg(test)]
 use common::{
-    format_size, generate_simple_diff, is_dangerous_command, tool_size_cap, truncate_by_lines,
-    truncate_line, MAX_FILE_LINES, MAX_LINE_LENGTH, MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES,
-    TRUNCATION_HEAD_LINES, TRUNCATION_TAIL_LINES,
+    format_size, is_dangerous_command, tool_size_cap, truncate_by_lines, truncate_line,
+    MAX_FILE_LINES, MAX_LINE_LENGTH, MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES, TRUNCATION_HEAD_LINES,
+    TRUNCATION_TAIL_LINES,
 };
 use dir_ops::{execute_glob, execute_grep_files, execute_list_directory, execute_search_files};
 use file_ops::{

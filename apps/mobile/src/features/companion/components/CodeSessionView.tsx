@@ -29,6 +29,12 @@ import { codeSessionStatusColor, codeSessionStatusLabel } from './CodeSessionsCa
 interface CodeSessionViewProps {
   rootId: string;
   threadId: string;
+  /**
+   * The approval a notification sent the reader here for. It is shown first
+   * and announced, so the one decision they were asked for is not somewhere
+   * down a list of everything else this session is waiting on.
+   */
+  focusApprovalId?: string;
 }
 
 function SectionTitle({ children }: { children: string }) {
@@ -37,7 +43,7 @@ function SectionTitle({ children }: { children: string }) {
   );
 }
 
-export function CodeSessionView({ rootId, threadId }: CodeSessionViewProps) {
+export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessionViewProps) {
   const colors = useThemeColors();
   const thread = useRemoteCodeStore(
     (state) => state.threads[remoteCodeThreadKey(rootId, threadId)] ?? null,
@@ -66,6 +72,13 @@ export function CodeSessionView({ rootId, threadId }: CodeSessionViewProps) {
   const trimmed = guidance.trim();
   const canSend =
     !sending && trimmed.length > 0 && trimmed.length <= REMOTE_CODE_LIMITS.guidanceLength;
+  const orderedApprovals =
+    focusApprovalId === undefined
+      ? thread.pendingApprovals
+      : [
+          ...thread.pendingApprovals.filter((a) => a.requestId === focusApprovalId),
+          ...thread.pendingApprovals.filter((a) => a.requestId !== focusApprovalId),
+        ];
   const generated = thread.fileChanges.filter((change) => change.kind === 'created');
   const modified = thread.fileChanges.filter((change) => change.kind === 'modified');
 
@@ -105,11 +118,16 @@ export function CodeSessionView({ rootId, threadId }: CodeSessionViewProps) {
         </Text>
       ) : null}
 
-      {thread.pendingApprovals.map((approval) => (
+      {orderedApprovals.map((approval) => (
         <Card key={approval.requestId} variant="elevated">
           <View className="flex-row items-center gap-2 mb-2">
             <ShieldAlert size={15} color={colors.agentWarning} />
-            <Text className="flex-1 text-sm font-medium text-white">{approval.summary}</Text>
+            <Text
+              className="flex-1 text-sm font-medium text-white"
+              accessibilityRole={approval.requestId === focusApprovalId ? 'alert' : undefined}
+            >
+              {approval.summary}
+            </Text>
           </View>
           {approval.detail ? (
             <Text variant="mono" className="mb-3 text-xs text-white/60">

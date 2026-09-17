@@ -1,7 +1,7 @@
 export type SessionSource = 'local' | 'cloud';
 
 /** Which surface started the session, as the protocol's `createdBy` reports it. */
-export type SessionOrigin = 'cli' | 'vscode' | 'desktop';
+export type SessionOrigin = 'cli' | 'vscode' | 'desktop' | 'unknown';
 
 export interface SessionRowInput {
   id: string;
@@ -35,6 +35,7 @@ const ORIGIN_LABELS: Record<SessionOrigin, string> = {
   cli: 'CLI',
   vscode: 'VS Code',
   desktop: 'Desktop',
+  unknown: 'Another surface',
 };
 
 function sourceLabelFor(input: SessionRowInput): string {

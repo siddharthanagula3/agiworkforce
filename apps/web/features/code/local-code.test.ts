@@ -265,8 +265,12 @@ describe('local code surface', () => {
           summary: 'Read README.md',
           output: '# QA',
           isError: false,
+          state: 'finished',
+          command: null,
+          files: [],
         },
       ],
+      diff: null,
       outcome: null,
       failure: null,
     });
@@ -277,6 +281,51 @@ describe('local code surface', () => {
       steps: [{ index: 0, toolName: 'read_file', label: 'Read README.md' }],
     });
     expect(items[3]).toMatchObject({ stopReason: null });
+  });
+
+  it('reads a queued call as waiting, a command as its command line, and lists what it wrote', () => {
+    const items = localTranscriptItems([], {
+      ...EMPTY_LOCAL_TURN,
+      turnId: 'turn-1',
+      prompt: 'build it',
+      tools: [
+        {
+          toolCallId: 'call-1',
+          name: 'run_command',
+          summary: 'pnpm build',
+          output: 'built',
+          isError: false,
+          state: 'running',
+          command: 'pnpm build --filter web',
+          files: [{ path: 'dist/index.js', change: 'created' }],
+        },
+        {
+          toolCallId: 'call-2',
+          name: 'write_file',
+          summary: 'write_file',
+          output: '',
+          isError: false,
+          state: 'queued',
+          command: null,
+          files: [],
+        },
+      ],
+      diff: { unifiedDiff: '--- a/x\n+++ b/x\n+one', paths: ['x'] },
+    });
+
+    const steps = items.find((item) => item.kind === 'steps');
+    expect(steps).toBeDefined();
+    if (steps?.kind !== 'steps') throw new Error('expected the live steps block');
+    expect(steps.steps[0]).toMatchObject({
+      label: 'pnpm build --filter web',
+      output: 'built\nCreated dist/index.js',
+    });
+    expect(steps.steps[1]?.label).toBe('Queued · write_file');
+    expect(steps.steps[2]).toMatchObject({
+      toolName: 'turn_diff',
+      label: 'Changed 1 file',
+      output: '--- a/x\n+++ b/x\n+one',
+    });
   });
 
   it('renders a failed turn as the sentence, not the CLI line', () => {
