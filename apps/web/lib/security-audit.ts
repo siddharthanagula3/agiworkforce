@@ -269,7 +269,23 @@ export type AuditEventType =
   | 'scim_group_provisioned'
   | 'scim_group_updated'
   | 'scim_group_deprovisioned'
-  | 'scim_group_role_mapping_changed';
+  | 'scim_group_role_mapping_changed'
+  | 'project_shared'
+  | 'project_unshared'
+  | 'project_member_access_changed'
+  | 'plugin_installed'
+  | 'plugin_removed'
+  | 'plugin_setting_changed'
+  | 'skill_installed'
+  | 'skill_uninstalled'
+  | 'remote_pairing_initiated'
+  | 'encryption_key_rotated'
+  | 'tool_executed'
+  | 'browser_action'
+  | 'computer_use_action'
+  | 'data_accessed'
+  | 'audit_destination_configured'
+  | 'audit_destination_deleted';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
@@ -303,6 +319,10 @@ export interface AuditEventDetail {
   held?: number;
   dryRun?: boolean;
   scope?: string;
+  enabled?: boolean;
+  durationMs?: number;
+  keyVersion?: string;
+  version?: string;
 }
 
 export interface AuditEvent {
@@ -345,6 +365,10 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'reason',
   'status',
   'isCurrent',
+  'enabled',
+  'durationMs',
+  'keyVersion',
+  'version',
 ]);
 
 const SECRET_KEY_NAME_RE =
@@ -551,6 +575,32 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'scim_group_deprovisioned':
     case 'scim_group_role_mapping_changed':
       return 'scim_group';
+    case 'project_shared':
+    case 'project_unshared':
+    case 'project_member_access_changed':
+      return 'project';
+    case 'plugin_installed':
+    case 'plugin_removed':
+    case 'plugin_setting_changed':
+      return 'plugin';
+    case 'skill_installed':
+    case 'skill_uninstalled':
+      return 'skill';
+    case 'remote_pairing_initiated':
+      return 'remote_pairing';
+    case 'encryption_key_rotated':
+      return 'encryption_key';
+    case 'tool_executed':
+      return 'tool';
+    case 'browser_action':
+      return 'browser';
+    case 'computer_use_action':
+      return 'computer_use';
+    case 'data_accessed':
+      return 'user_data';
+    case 'audit_destination_configured':
+    case 'audit_destination_deleted':
+      return 'audit_destination';
     default:
       return 'unknown';
   }

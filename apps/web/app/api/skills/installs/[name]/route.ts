@@ -17,6 +17,7 @@ import {
 } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
 export const runtime = 'nodejs';
 
@@ -57,6 +58,11 @@ async function handleUninstallSkill(
   }
 
   await setSkillInstallOverride(db, userId, skill.name, false);
+  await recordWorkspaceAuditEvent(db, request, {
+    userId,
+    eventType: 'skill_uninstalled',
+    detail: { resourceType: 'skill', resourceId: skill.name, source: 'managed_directory' },
+  });
   const installed = await resolveInstalledManagedSkillNames(
     db,
     userId,

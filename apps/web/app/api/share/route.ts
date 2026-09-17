@@ -12,6 +12,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { TEMPORARY_CHAT_SHARE_REFUSAL } from '@/lib/temporary-chat-policy';
 import {
   redactSecretsFromValue,
   SecretRedactionIncompleteError,
@@ -35,6 +36,7 @@ const MAX_SHARE_MESSAGES = 2_000;
 const MAX_SHARE_SERIALIZED_CHARS = 1_000_000;
 
 const CreateShareSchema = z.object({
+  conversation_id: z.string().uuid().optional(),
   title: z.string().min(1).max(200).default('Shared Session'),
   model_id: z.string().optional(),
   provider: z.string().optional(),
@@ -151,7 +153,30 @@ async function handleCreateShare(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error);
   }
-  const { title, model_id, provider, messages, expires_in_days: expiresInDays } = parsed.data;
+  const {
+    conversation_id: conversationId,
+    title,
+    model_id,
+    provider,
+    messages,
+    expires_in_days: expiresInDays,
+  } = parsed.data;
+
+  if (conversationId) {
+    const [conversation] = await db.query<{ is_temporary: boolean }>(
+      `select is_temporary
+         from web_conversations
+        where id = $1 and user_id = $2 and deleted_at is null
+        limit 1`,
+      [conversationId, userId],
+    );
+    if (!conversation) {
+      throw createError.notFound('Conversation not found');
+    }
+    if (conversation.is_temporary === true) {
+      throw createError.conflict(TEMPORARY_CHAT_SHARE_REFUSAL);
+    }
+  }
 
   const token = randomBytes(18).toString('base64url');
 

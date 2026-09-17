@@ -60,7 +60,7 @@ async function withAccountControlRetry<T>(read: () => Promise<T>): Promise<T> {
 }
 
 function accountControlUnavailable() {
-  return createError.serviceUnavailable(ACCOUNT_CONTROL_UNAVAILABLE_MESSAGE);
+  return createError.serviceUnavailable(ACCOUNT_CONTROL_UNAVAILABLE_MESSAGE).asUserSafe();
 }
 
 async function governingOrganizationIdsOrDeny(

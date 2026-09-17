@@ -10,6 +10,8 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
 const DEFAULT_TTL_SECONDS = 300;
@@ -113,6 +115,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { code, expiresAt, expiresIn, httpUrl, wsUrl, pairTokens } = payload.data;
 
   const peerToken = initiator === 'desktop' ? pairTokens.mobile : pairTokens.desktop;
+
+  await recordWorkspaceAuditEvent(getNeonDb(), request, {
+    userId,
+    eventType: 'remote_pairing_initiated',
+    detail: {
+      resourceType: 'remote_pairing',
+      ...(desktopId ? { resourceId: desktopId } : {}),
+      source: initiator,
+    },
+  });
 
   return NextResponse.json({
     code,

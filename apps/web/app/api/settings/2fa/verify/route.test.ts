@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   verifyTOTPCode: vi.fn(),
   recordAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
+  logAuthFailure: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -31,6 +32,7 @@ vi.mock('@/lib/crypto/totp-envelope', () => ({
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (event: Record<string, unknown>) => mocks.recordAuditEvent(event),
+  logAuthFailure: (...args: unknown[]) => mocks.logAuthFailure(...args),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
@@ -92,6 +94,19 @@ describe('POST /api/settings/2fa/verify', () => {
     await POST(request('000000')).catch(() => undefined);
 
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('records the refused code as a failed authentication for the account', async () => {
+    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+    mocks.verifyTOTPCode.mockResolvedValueOnce(false);
+
+    await POST(request('000000')).catch(() => undefined);
+
+    expect(mocks.logAuthFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      'invalid_totp_code',
+      'user-1',
+    );
   });
 
   it('writes no audit row when 2FA was already on', async () => {

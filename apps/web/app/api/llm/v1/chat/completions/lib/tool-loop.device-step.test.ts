@@ -26,6 +26,12 @@ vi.mock('@/lib/mcp-tool-executor', async () => {
   };
 });
 
+const mockRecordAuditEvent = vi.fn(async (_event: unknown) => undefined);
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: (event: unknown) => mockRecordAuditEvent(event),
+  BLOCK_APPEAL_PATH: '/support',
+}));
+
 import { runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 
@@ -134,6 +140,62 @@ describe('runToolLoop, device step boundary', () => {
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
     mockExecuteWebMcpTool.mockReset();
+    mockRecordAuditEvent.mockClear();
+  });
+
+  it('records each step handed to the device, and each refusal, in the audit trail', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream({ rootId: 'root-1', path: 'notes.md' }),
+    );
+    const processed = { ...makeProcessed(true), organizationId: 'org-1' } as ProcessedRequest;
+
+    await drain(
+      runToolLoop(processed, {
+        userId: 'user-1',
+        onDeviceCheckpoint: vi.fn(async () => undefined),
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        organizationId: 'org-1',
+        surface: 'desktop',
+        eventType: 'tool_executed',
+        outcome: 'success',
+        detail: expect.objectContaining({
+          resourceId: 'device_read_file',
+          status: 'sent_to_device',
+        }),
+      }),
+    );
+
+    mockRecordAuditEvent.mockClear();
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream({ rootId: 'root-elsewhere', path: 'notes.md' }),
+    );
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([chunk({ content: 'I cannot reach that folder.' }, 'stop')]),
+    );
+
+    await drain(
+      runToolLoop(processed, {
+        userId: 'user-1',
+        onDeviceCheckpoint: vi.fn(async () => undefined),
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'tool_executed',
+        outcome: 'denied',
+        detail: expect.objectContaining({ resourceId: 'device_read_file', status: 'blocked' }),
+      }),
+    );
   });
 
   it('pauses on a device call, checkpoints the binding, and runs nothing in the cloud', async () => {

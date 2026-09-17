@@ -233,6 +233,7 @@ import {
   acknowledgeProjectChatHandoff,
   readProjectChatHandoff,
 } from '@features/projects/lib/project-chat-handoff';
+import { takeStagedLibraryAttachments } from '@features/library/lib/library-chat-handoff';
 import {
   useMediaGeneration,
   MediaGenerationApiError,
@@ -950,6 +951,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [restoredAttachments, setRestoredAttachments] = useState<File[] | null>(null);
   const handleRestoredAttachmentsConsumed = useCallback(() => setRestoredAttachments(null), []);
+
+  useEffect(() => {
+    if (urlConversationId) return;
+    const staged = takeStagedLibraryAttachments();
+    if (staged) setRestoredAttachments(staged);
+  }, [urlConversationId]);
   const [isUserTyping, setIsUserTyping] = useState(false);
   const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
@@ -5447,6 +5454,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
         conversationTitle={activeConversationTitle}
+        conversationId={displayedConversationId}
       />
       <EnhancedExportDialog
         open={exportDialogOpen}

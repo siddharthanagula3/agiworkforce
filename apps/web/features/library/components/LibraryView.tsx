@@ -3,21 +3,63 @@
 import { useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
+import { toast } from 'sonner';
+import { publishArtifact } from '@agiworkforce/artifacts';
 import {
   LibraryView as SharedLibraryView,
+  artifactTypeForLibraryItem,
+  generatedFileFromLibraryItem,
   type LibraryFolder,
   type LibraryTransport,
   type SurfaceFilter,
 } from '@agiworkforce/unified-chat';
+import type { LibraryItem } from '@agiworkforce/cloud-contracts';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { exportDocument } from '@features/chat/services/document-export-service';
 import { uploadChatAttachments } from '@features/chat/services/chat-attachment-upload';
 import { CONTENT_OVERLAY_ROOT_ID } from '@shared/components/layout/WebAppShell';
+import { libraryItemToFile } from '@features/chat/components/Composer/ComposerFilesMenu';
+import { createWebCloudPublisher } from '@features/chat/components/artifacts/publishArtifactClient';
+import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
+import { stageLibraryItemForNewChat } from '../lib/library-chat-handoff';
 
 export { iconKindFor, generatedFileFromLibraryItem } from '@agiworkforce/unified-chat';
 
 const PROJECTS_PATH = '/chat/projects';
+const NEW_CHAT_PATH = '/chat';
 const PROJECT_LIST_ENDPOINT = '/api/projects';
+
+function publishableArtifactShape(item: LibraryItem): { type: string; language?: string } {
+  const type = artifactTypeForLibraryItem(item);
+  if (type === 'markdown') return { type: 'document', language: 'markdown' };
+  if (type === 'json') return { type: 'code', language: 'json' };
+  return { type };
+}
+
+async function shareLibraryArtifact(item: LibraryItem): Promise<void> {
+  const response = await fetch(item.uri, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const result = await publishArtifact({
+    artifact: {
+      id: item.id,
+      title: item.file_name,
+      content: await response.text(),
+      ...publishableArtifactShape(item),
+    },
+    privacyMode: 'managed',
+    surface: 'web',
+    originPrivacyMode: generatedFileFromLibraryItem(item).privacyMode,
+    cloudPublisher: createWebCloudPublisher(),
+  });
+  if (result.kind === 'unavailable') throw new Error(result.reason);
+  if (result.kind !== 'cloud') throw new Error('This artifact cannot be shared from the library.');
+  try {
+    await navigator.clipboard.writeText(result.shareUrl);
+    toast.success('Link copied');
+  } catch {
+    toast.success('Link created', { description: result.shareUrl });
+  }
+}
 
 function surfaceFromParam(value: string | null): SurfaceFilter {
   return value === 'artifact' || value === 'file' ? value : 'all';
@@ -106,15 +148,28 @@ export function LibraryView() {
       openPreview: (uri) => {
         window.open(uri, '_blank', 'noopener,noreferrer');
       },
-      // There is no handoff that carries an existing asset into a brand-new
-      // (non-project) chat, only the project-scoped one WebChatPage reads.
-      // This starts a real chat with the file named in the first message
-      // rather than a dead composer, but it is text, not a true attachment.
       askAboutFile: (item, message) => {
-        router.push(
-          `/chat?starterPrompt=${encodeURIComponent(`About ${item.file_name}: ${message}`)}`,
+        void stageLibraryItemForNewChat(item, { workMode: 'chat', draft: message }).then(
+          () => router.push(NEW_CHAT_PATH),
+          () => toast.error('That file could not be attached. Download it and attach it instead.'),
         );
       },
+      addToChat: async (item) => {
+        await stageLibraryItemForNewChat(item, { workMode: 'chat' });
+        router.push(NEW_CHAT_PATH);
+      },
+      addToWork: async (item) => {
+        await stageLibraryItemForNewChat(item, { workMode: 'agiwork' });
+        router.push(NEW_CHAT_PATH);
+      },
+      addToProject: async (item, folder) => {
+        await uploadProjectKnowledgeFile({
+          projectId: folder.id,
+          file: await libraryItemToFile(item),
+        });
+        toast.success(`Added to ${folder.name}`);
+      },
+      shareArtifact: shareLibraryArtifact,
       // 'excel' is deliberately absent: the export service builds PDF and DOCX
       // and there is no xlsx writer on web, so offering it would be a control
       // that fails after the user picks it.

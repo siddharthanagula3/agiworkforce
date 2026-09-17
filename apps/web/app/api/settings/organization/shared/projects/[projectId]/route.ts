@@ -9,6 +9,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   clearProjectMemberAccess,
   requireOrgAdmin,
@@ -74,6 +75,20 @@ async function handleShare(
     defaultAccess: 'read',
   });
 
+  await recordAuditEvent({
+    userId,
+    organizationId: membership.organizationId,
+    eventType: 'project_shared',
+    request,
+    detail: {
+      resourceType: 'project',
+      resourceId: shared.projectId,
+      resourceName: shared.name,
+      scope: shared.defaultAccess,
+      role: membership.role,
+    },
+  });
+
   return NextResponse.json({ sharedProject: shared }, { status: 200 });
 }
 
@@ -105,6 +120,21 @@ async function handleMemberAccess(
       parsedProjectId,
       parsed.data.userId,
     );
+    if (cleared) {
+      await recordAuditEvent({
+        userId,
+        organizationId: membership.organizationId,
+        eventType: 'project_member_access_changed',
+        request,
+        detail: {
+          resourceType: 'project',
+          resourceId: parsedProjectId,
+          targetUserId: parsed.data.userId,
+          scope: 'inherit',
+          role: membership.role,
+        },
+      });
+    }
     return NextResponse.json({ cleared });
   }
 
@@ -114,6 +144,20 @@ async function handleMemberAccess(
     targetUserId: parsed.data.userId,
     access: parsed.data.access,
     grantedByUserId: userId,
+  });
+
+  await recordAuditEvent({
+    userId,
+    organizationId: membership.organizationId,
+    eventType: 'project_member_access_changed',
+    request,
+    detail: {
+      resourceType: 'project',
+      resourceId: parsedProjectId,
+      targetUserId: grant.userId,
+      scope: grant.access,
+      role: membership.role,
+    },
   });
 
   return NextResponse.json({ grant });
@@ -139,6 +183,14 @@ async function handleUnshare(
   if (!removed) {
     throw createError.notFound('That project is not shared with your organization');
   }
+
+  await recordAuditEvent({
+    userId,
+    organizationId: membership.organizationId,
+    eventType: 'project_unshared',
+    request,
+    detail: { resourceType: 'project', resourceId: parsedProjectId, role: membership.role },
+  });
 
   return NextResponse.json({ success: true });
 }

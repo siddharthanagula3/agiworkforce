@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger';
 import { verifyTOTPCode } from '@/features/settings/services/user-preferences';
 import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
-import { recordAuditEvent } from '@/lib/security-audit';
+import { logAuthFailure, recordAuditEvent } from '@/lib/security-audit';
 
 interface TwoFactorRow {
   totp_secret_enc: string;
@@ -53,6 +53,7 @@ async function handleVerify2FA(request: NextRequest) {
 
   if (!valid) {
     logger.warn({ userId }, '2FA verify: invalid TOTP code');
+    await logAuthFailure(request, 'invalid_totp_code', userId);
     throw createError.unauthorized('Invalid TOTP code');
   }
 

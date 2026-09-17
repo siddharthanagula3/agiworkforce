@@ -32,6 +32,7 @@ import {
   AUDIT_STREAM_BATCH,
   AUDIT_STREAM_FAILURE_CEILING,
   deleteAuditDestination,
+  setAuditDestinationEnabled,
   drainAuditDestination,
   generateSigningSecret,
   hasActiveAuditStreamDestinations,
@@ -205,6 +206,28 @@ describe('audit stream active-org redis marker', () => {
 
     expect(redis.srem).toHaveBeenCalledWith(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, ORG);
     expect(redis.sadd).not.toHaveBeenCalled();
+  });
+
+  it('pauses a destination without minting a new secret, and clears the redis marker', async () => {
+    const redis = redisMock();
+    mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
+    const query = vi.fn(async () => [{ ...insertRow, enabled: false }]);
+    const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+
+    const destination = await setAuditDestinationEnabled(db, ORG, false);
+
+    expect(destination?.enabled).toBe(false);
+    const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).not.toMatch(/secret_hash/);
+    expect(params).toEqual([ORG, false]);
+    expect(redis.srem).toHaveBeenCalledWith(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, ORG);
+  });
+
+  it('answers null when there is no destination to pause', async () => {
+    mockGetKeyValueStore.mockReturnValue(null);
+    const db = { query: vi.fn(async () => []), execute: vi.fn() } as unknown as DatabaseAdapter;
+
+    await expect(setAuditDestinationEnabled(db, ORG, true)).resolves.toBeNull();
   });
 
   it('clears the organization from redis on delete', async () => {

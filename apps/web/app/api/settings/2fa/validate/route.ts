@@ -12,6 +12,7 @@ import { verifyTOTPStep, verifyBackupCode } from '@/features/settings/services/u
 import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
 import { claimTotpStep } from '@/lib/server/two-factor-replay';
+import { logAuthFailure } from '@/lib/security-audit';
 
 interface TwoFactorRow {
   totp_secret_enc: string;
@@ -50,6 +51,7 @@ async function handleValidateTOTP(request: NextRequest) {
   if (step !== null) {
     if (!(await claimTotpStep(db, userId, step))) {
       logger.warn({ userId }, '2FA validate: refused a replayed TOTP code');
+      await logAuthFailure(request, 'replayed_totp_code', userId);
       return NextResponse.json({ valid: false }, { status: 401 });
     }
     return NextResponse.json({ valid: true, used_backup_code: false });
@@ -74,6 +76,7 @@ async function handleValidateTOTP(request: NextRequest) {
     );
     if (!consumed.length) {
       logger.warn({ userId }, '2FA validate: backup code was already spent');
+      await logAuthFailure(request, 'spent_backup_code', userId);
       return NextResponse.json({ valid: false }, { status: 401 });
     }
     logger.info({ userId, remaining: consumed[0]?.remaining ?? 0 }, '2FA backup code used');
@@ -81,6 +84,7 @@ async function handleValidateTOTP(request: NextRequest) {
   }
 
   logger.warn({ userId }, '2FA validate: invalid code');
+  await logAuthFailure(request, 'invalid_two_factor_code', userId);
   return NextResponse.json({ valid: false }, { status: 401 });
 }
 

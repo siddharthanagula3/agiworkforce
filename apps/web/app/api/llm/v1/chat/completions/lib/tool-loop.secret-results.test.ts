@@ -222,6 +222,12 @@ describe('applyToolResultSecretPolicy', () => {
   });
 });
 
+function secretAuditEvents(): unknown[] {
+  return mocks.recordAuditEvent.mock.calls
+    .map((call) => call[0] as { eventType: string })
+    .filter((event) => event.eventType === 'secret_detected');
+}
+
 describe('runToolLoop, secret handling policy applied to tool results before they are pushed', () => {
   it('redacts a secret a connector returns before the follow-up provider call ever sees it', async () => {
     mocks.resolvePolicy.mockResolvedValue({ mode: 'redact', organizationId: ORGANIZATION_ID });
@@ -249,7 +255,20 @@ describe('runToolLoop, secret handling policy applied to tool results before the
     expect(toolMsg?.content).toContain('[REDACTED]');
     expect(output).not.toContain(STRIPE_KEY);
     expect(output).toContain('[REDACTED]');
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(secretAuditEvents()).toHaveLength(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        eventType: 'tool_executed',
+        outcome: 'success',
+        detail: expect.objectContaining({
+          resourceType: 'tool',
+          resourceId: CONNECTOR_TOOL,
+          status: 'completed',
+        }),
+      }),
+    );
+    expect(JSON.stringify(mocks.recordAuditEvent.mock.calls)).not.toContain(STRIPE_KEY);
   });
 
   it('drops a connector secret entirely under block mode, replacing it with a plain tool error in both the SSE event and the provider message', async () => {
@@ -284,7 +303,7 @@ describe('runToolLoop, secret handling policy applied to tool results before the
     };
     expect(event.outcome).toBe('denied');
     expect(event.detail['resourceId']).toBe(CONNECTOR_TOOL);
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(secretAuditEvents()).toHaveLength(1);
   });
 
   it('leaves both the SSE event and the provider-bound content alone under warn mode but still records the audit trail', async () => {
@@ -311,7 +330,7 @@ describe('runToolLoop, secret handling policy applied to tool results before the
     const toolMsg = secondRequestMessages().find((m) => m.role === 'tool');
     expect(toolMsg?.content).toContain(STRIPE_KEY);
     expect(output).toContain(STRIPE_KEY);
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(secretAuditEvents()).toHaveLength(1);
   });
 
   it('applies the same policy to a static permission-denied result, not only to live tool output', async () => {

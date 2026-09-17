@@ -167,13 +167,57 @@ describe('shared LibraryView', () => {
       expect(lastParams(transport).get('kind')).toBeNull();
 
       fireEvent.click(screen.getByRole('tab', { name: 'Images' }));
-      await waitFor(() => expect(lastParams(transport).get('kind')).toBe('image,video'));
+      await waitFor(() => expect(lastParams(transport).get('kind')).toBe('image'));
 
       fireEvent.click(screen.getByRole('tab', { name: 'Documents' }));
       await waitFor(() => expect(lastParams(transport).get('kind')).toBe('file'));
+      expect(lastParams(transport).get('surface')).toBe('file');
 
       fireEvent.click(screen.getByRole('tab', { name: 'All' }));
       await waitFor(() => expect(lastParams(transport).get('kind')).toBeNull());
+      expect(lastParams(transport).get('surface')).toBeNull();
+    });
+
+    it('gives videos their own tab instead of folding them into Images', async () => {
+      const transport = makeTransport();
+      render(<LibraryView transport={transport} />);
+      await waitFor(() => expect(transport.listPage).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Videos' }));
+      await waitFor(() => expect(lastParams(transport).get('kind')).toBe('video'));
+      expect(lastParams(transport).get('surface')).toBeNull();
+      expect(lastParams(transport).get('origin')).toBeNull();
+    });
+
+    it('filters to artifacts from a visible tab', async () => {
+      const transport = makeTransport();
+      render(<LibraryView transport={transport} />);
+      await waitFor(() => expect(transport.listPage).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
+      await waitFor(() => expect(lastParams(transport).get('surface')).toBe('artifact'));
+      expect(lastParams(transport).get('kind')).toBeNull();
+    });
+
+    it('filters to files the work produced, excluding uploads', async () => {
+      const transport = makeTransport();
+      render(<LibraryView transport={transport} />);
+      await waitFor(() => expect(transport.listPage).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Generated files' }));
+      await waitFor(() => expect(lastParams(transport).get('origin')).toBe('generated'));
+      expect(lastParams(transport).get('kind')).toBe('file');
+    });
+
+    it('opens on the Artifacts tab when the host preselects the artifact surface', async () => {
+      const transport = makeTransport();
+      render(<LibraryView transport={transport} initialSurface="artifact" />);
+      await waitFor(() => expect(transport.listPage).toHaveBeenCalled());
+
+      expect(screen.getByRole('tab', { name: 'Artifacts' }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      expect(lastParams(transport).get('surface')).toBe('artifact');
     });
 
     it('marks exactly one tab selected', async () => {
@@ -424,6 +468,146 @@ describe('shared LibraryView', () => {
 
       fireEvent.click(screen.getByRole('tab', { name: 'Documents' }));
       await waitFor(() => expect(screen.queryByTestId('library-folder-tile')).toBeNull());
+    });
+  });
+
+  describe('handing a file to chat, AGI Work and projects', () => {
+    it('offers no hand-off actions for a host that supplies none', async () => {
+      render(<LibraryView transport={makeTransport()} />);
+      await screen.findByText('quarterly-report.pdf');
+      openRowMenu('quarterly-report.pdf');
+
+      expect(screen.queryByRole('menuitem', { name: 'Add to chat' })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: 'Add to AGI Work' })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: 'Add to project' })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: 'Share link' })).toBeNull();
+    });
+
+    it('hands the item itself to the host for chat and for AGI Work', async () => {
+      const addToChat = vi.fn(async () => {});
+      const addToWork = vi.fn(async () => {});
+      render(<LibraryView transport={makeTransport({ addToChat, addToWork })} />);
+      await screen.findByText('quarterly-report.pdf');
+
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add to chat' }));
+      await waitFor(() => expect(addToChat).toHaveBeenCalledWith(ITEM));
+
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add to AGI Work' }));
+      await waitFor(() => expect(addToWork).toHaveBeenCalledWith(ITEM));
+    });
+
+    it('shows a failed hand-off on the row instead of dropping it', async () => {
+      const addToChat = vi.fn(async () => {
+        throw new Error('The file is no longer available');
+      });
+      render(<LibraryView transport={makeTransport({ addToChat })} />);
+      await screen.findByText('quarterly-report.pdf');
+
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add to chat' }));
+
+      expect(await screen.findByText('The file is no longer available')).toBeTruthy();
+    });
+
+    it('never offers hand-off actions from Recently deleted', async () => {
+      const transport = makeTransport({
+        addToChat: vi.fn(async () => {}),
+        addToWork: vi.fn(async () => {}),
+      });
+      render(<LibraryView transport={transport} />);
+      await screen.findByText('quarterly-report.pdf');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Recently deleted' }));
+      await waitFor(() => expect(lastParams(transport).get('deleted')).toBe('true'));
+      await screen.findByText('quarterly-report.pdf');
+      openRowMenu('quarterly-report.pdf');
+
+      expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeTruthy();
+      expect(screen.queryByRole('menuitem', { name: 'Add to chat' })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: 'Add to AGI Work' })).toBeNull();
+    });
+
+    it('adds the file to the project picked from the host folder list', async () => {
+      const addToProject = vi.fn(async () => {});
+      render(
+        <LibraryView
+          transport={makeTransport({ listFolders: async () => [FOLDER], addToProject })}
+        />,
+      );
+      await screen.findByTestId('library-folder-tile');
+
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add to project' }));
+      const picker = await screen.findByTestId('library-project-picker');
+      fireEvent.click(within(picker).getByRole('button', { name: /Runway model/ }));
+
+      await waitFor(() => expect(addToProject).toHaveBeenCalledWith(ITEM, FOLDER));
+      await waitFor(() => expect(screen.queryByTestId('library-project-picker')).toBeNull());
+    });
+
+    it('keeps the project picker open with the reason when adding fails', async () => {
+      const addToProject = vi.fn(async () => {
+        throw new Error('This file is already in the project as "quarterly-report.pdf".');
+      });
+      render(
+        <LibraryView
+          transport={makeTransport({ listFolders: async () => [FOLDER], addToProject })}
+        />,
+      );
+      await screen.findByTestId('library-folder-tile');
+
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add to project' }));
+      const picker = await screen.findByTestId('library-project-picker');
+      fireEvent.click(within(picker).getByRole('button', { name: /Runway model/ }));
+
+      expect(await screen.findByText(/already in the project/)).toBeTruthy();
+      expect(screen.getByTestId('library-project-picker')).toBeTruthy();
+    });
+
+    it('offers Add to project only when the host can list projects', async () => {
+      render(<LibraryView transport={makeTransport({ addToProject: vi.fn(async () => {}) })} />);
+      await screen.findByText('quarterly-report.pdf');
+      openRowMenu('quarterly-report.pdf');
+
+      expect(screen.queryByRole('menuitem', { name: 'Add to project' })).toBeNull();
+    });
+  });
+
+  describe('sharing an artifact from the library', () => {
+    const ARTIFACT = {
+      ...ITEM,
+      id: 'asset-artifact',
+      file_name: 'pricing.html',
+      mime_type: 'text/html',
+      surface: 'artifact',
+    };
+
+    it('asks before publishing and names who can open the link', async () => {
+      const shareArtifact = vi.fn(async () => {});
+      render(
+        <LibraryView transport={makeTransport({ listPage: pageOf([ARTIFACT]), shareArtifact })} />,
+      );
+      await screen.findByText('pricing.html');
+
+      openRowMenu('pricing.html');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Share link' }));
+
+      expect(await screen.findByText(/without signing in/)).toBeTruthy();
+      expect(shareArtifact).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+      await waitFor(() => expect(shareArtifact).toHaveBeenCalledWith(ARTIFACT));
+    });
+
+    it('offers no share link for a plain file', async () => {
+      render(<LibraryView transport={makeTransport({ shareArtifact: vi.fn(async () => {}) })} />);
+      await screen.findByText('quarterly-report.pdf');
+      openRowMenu('quarterly-report.pdf');
+
+      expect(screen.queryByRole('menuitem', { name: 'Share link' })).toBeNull();
     });
   });
 

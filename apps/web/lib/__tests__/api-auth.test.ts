@@ -327,6 +327,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     ).rejects.toMatchObject({ statusCode: 401 });
 
     expect(mockNeonQuery).toHaveBeenCalled();
+    expect(mockNeonExecute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO security_audit_logs'),
+      expect.arrayContaining(['auth_failed', JSON.stringify({ reason: 'invalid_api_key' })]),
+    );
   });
 
   it('rejects a too-short sk_live_ token before any DB lookup (parse-time rejection)', async () => {
@@ -495,6 +499,14 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       await expect(getClerkAuthUser(makeBearerRequest(token))).rejects.toMatchObject({
         statusCode: 401,
       });
+      expect(mockNeonExecute).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO security_audit_logs'),
+        expect.arrayContaining([
+          'device-user',
+          'auth_failed',
+          JSON.stringify({ reason: 'revoked_developer_token' }),
+        ]),
+      );
     });
 
     it('rejects a garbage Bearer token when there is no cookie session either', async () => {

@@ -21,6 +21,7 @@ import {
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
 export const runtime = 'nodejs';
 
@@ -75,6 +76,11 @@ async function handleInstallSkill(request: NextRequest) {
   }
 
   await setSkillInstallOverride(db, userId, skill.name, true);
+  await recordWorkspaceAuditEvent(db, request, {
+    userId,
+    eventType: 'skill_installed',
+    detail: { resourceType: 'skill', resourceId: skill.name, source: 'managed_directory' },
+  });
   const installed = await resolveInstalledManagedSkillNames(
     db,
     userId,

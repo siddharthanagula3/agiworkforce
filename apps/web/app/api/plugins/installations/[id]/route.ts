@@ -9,6 +9,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import {
   setWebPluginEnabled,
   uninstallWebPlugin,
@@ -47,8 +48,9 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
     );
   }
 
+  const db = getNeonDb();
   const installation = await setWebPluginEnabled(
-    getNeonDb(),
+    db,
     auth.userId,
     params.data.id,
     body.data.enabled,
@@ -59,6 +61,17 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
       { status: 404 },
     );
   }
+  await recordWorkspaceAuditEvent(db, request, {
+    userId: auth.userId,
+    eventType: 'plugin_setting_changed',
+    detail: {
+      resourceType: 'plugin',
+      resourceId: installation.pluginId,
+      enabled: installation.enabled,
+      changedKeys: ['enabled'],
+      source: 'registry',
+    },
+  });
   return NextResponse.json({ installation });
 }
 
@@ -73,13 +86,19 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
     );
   }
 
-  const removed = await uninstallWebPlugin(getNeonDb(), auth.userId, params.data.id);
+  const db = getNeonDb();
+  const removed = await uninstallWebPlugin(db, auth.userId, params.data.id);
   if (!removed) {
     return NextResponse.json(
       { error: { code: 'PLUGIN_NOT_INSTALLED', message: 'Plugin installation not found.' } },
       { status: 404 },
     );
   }
+  await recordWorkspaceAuditEvent(db, request, {
+    userId: auth.userId,
+    eventType: 'plugin_removed',
+    detail: { resourceType: 'plugin', resourceId: params.data.id, source: 'registry' },
+  });
   return new NextResponse(null, { status: 204 });
 }
 

@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { TEMPORARY_CHAT_SHARE_REFUSAL } from '@/lib/temporary-chat-policy';
 
 export type ShareExpiryDays = 1 | 7 | 30;
 
@@ -55,24 +56,38 @@ function readCreatedShare(value: unknown): ActiveConversationShare {
   };
 }
 
-export function useShareConversation(conversationTitle?: string, modelId?: string) {
+export function useShareConversation(
+  conversationTitle?: string,
+  modelId?: string,
+  conversationId?: string | null,
+) {
   const [isSharing, setIsSharing] = useState(false);
   const [activeShare, setActiveShare] = useState<ActiveConversationShare | null>(null);
   const [error, setError] = useState<string | null>(null);
   const messages = useChatStore((s) => s.messages);
+  const isTemporary = useChatStore((s) =>
+    conversationId
+      ? (s.conversations.find((c) => c.id === conversationId)?.isTemporary ?? false)
+      : false,
+  );
   const hasMessages = messages.length > 0;
 
   const share = useCallback(
     async (expiresInDays: ShareExpiryDays): Promise<boolean> => {
       if (isSharing) return false;
-      if (!hasMessages) {
+      if (!hasMessages || !conversationId) {
         setError('Add a message before creating a public link.');
+        return false;
+      }
+      if (isTemporary) {
+        setError(TEMPORARY_CHAT_SHARE_REFUSAL);
         return false;
       }
       setIsSharing(true);
       setError(null);
       try {
         const payload = {
+          conversation_id: conversationId,
           title: conversationTitle || 'Shared Session',
           model_id: modelId,
           expires_in_days: expiresInDays,
@@ -111,7 +126,7 @@ export function useShareConversation(conversationTitle?: string, modelId?: strin
         setIsSharing(false);
       }
     },
-    [conversationTitle, modelId, messages, isSharing, hasMessages],
+    [conversationTitle, modelId, conversationId, messages, isSharing, hasMessages, isTemporary],
   );
 
   const revoke = useCallback(async (): Promise<boolean> => {
@@ -179,6 +194,7 @@ export function useShareConversation(conversationTitle?: string, modelId?: strin
     setAudience,
     isSharing,
     hasMessages,
+    isTemporary,
     activeShare,
     error,
     clearError: () => setError(null),

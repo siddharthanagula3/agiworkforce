@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const createProject = vi.hoisted(() => vi.fn());
@@ -87,6 +87,52 @@ describe('CreateProjectDialog, templates', () => {
     await waitFor(() => expect(createProject).toHaveBeenCalled());
     const payload = createProject.mock.calls[0]![0] as Record<string, unknown>;
     expect(payload).not.toHaveProperty('instructions');
+    expect(payload).not.toHaveProperty('description');
+  });
+});
+
+async function settleNameAutofocus() {
+  const name = await screen.findByLabelText('Project name');
+  await act(() => new Promise((resolve) => setTimeout(resolve, 120)));
+  expect(name).toHaveFocus();
+}
+
+describe('CreateProjectDialog, description', () => {
+  it('sends the description the user wrote', async () => {
+    const user = userEvent.setup();
+    open();
+    await settleNameAutofocus();
+    await user.type(screen.getByLabelText('Project name'), 'Q3 plan');
+    await user.type(screen.getByLabelText('Description'), 'Pricing and launch work');
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
+
+    await waitFor(() => expect(createProject).toHaveBeenCalled());
+    const payload = createProject.mock.calls[0]![0] as Record<string, unknown>;
+    expect(payload['description']).toBe('Pricing and launch work');
+  });
+
+  it('prefers a typed description over the template one', async () => {
+    const user = userEvent.setup();
+    open();
+    await settleNameAutofocus();
+    await user.click(await screen.findByRole('button', { name: 'Research' }));
+    await user.type(screen.getByLabelText('Description'), 'Competitor pricing');
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
+
+    await waitFor(() => expect(createProject).toHaveBeenCalled());
+    const payload = createProject.mock.calls[0]![0] as Record<string, unknown>;
+    expect(payload['description']).toBe('Competitor pricing');
+  });
+
+  it('sends no description for a blank project left empty', async () => {
+    const user = userEvent.setup();
+    open();
+    await settleNameAutofocus();
+    await user.type(screen.getByLabelText('Project name'), 'Scratch');
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
+
+    await waitFor(() => expect(createProject).toHaveBeenCalled());
+    const payload = createProject.mock.calls[0]![0] as Record<string, unknown>;
     expect(payload).not.toHaveProperty('description');
   });
 });

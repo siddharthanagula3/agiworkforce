@@ -38,6 +38,7 @@ import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service
 import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
 export const runtime = 'nodejs';
 
@@ -163,6 +164,15 @@ async function handleCreateSkill(request: NextRequest) {
   }
 
   const created = await createUserSkill(db, userId, draft);
+  await recordWorkspaceAuditEvent(db, request, {
+    userId,
+    eventType: 'skill_installed',
+    detail: {
+      resourceType: 'skill',
+      resourceId: draft.name,
+      source: uploaded ? 'uploaded' : 'authored',
+    },
+  });
   return NextResponse.json({ skill: toUserSkillSummary(created) }, { status: 201 });
 }
 

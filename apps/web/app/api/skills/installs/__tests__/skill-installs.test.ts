@@ -9,12 +9,16 @@ const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
   getClerkAuthUser: vi.fn(),
   listEnabledPluginIds: vi.fn(),
+  recordWorkspaceAuditEvent: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
+vi.mock('@/lib/workspace-audit', () => ({
+  recordWorkspaceAuditEvent: mocks.recordWorkspaceAuditEvent,
+}));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mocks.listEnabledPluginIds,
 }));
@@ -126,6 +130,15 @@ describe('/api/skills/installs', () => {
     const body = (await installRes.json()) as { installed: string[] };
     expect(installRes.status).toBe(200);
     expect(body.installed).toContain('design-review');
+    expect(mocks.recordWorkspaceAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'user-1',
+        eventType: 'skill_installed',
+        detail: expect.objectContaining({ resourceId: 'design-review' }),
+      }),
+    );
   });
 
   it('DELETE uninstalls a skill and hides it from the resolved list', async () => {
@@ -135,11 +148,21 @@ describe('/api/skills/installs', () => {
     const body = (await res.json()) as { installed: string[] };
     expect(res.status).toBe(200);
     expect(body.installed).not.toContain('design-review');
+    expect(mocks.recordWorkspaceAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        eventType: 'skill_uninstalled',
+        detail: expect.objectContaining({ resourceId: 'design-review' }),
+      }),
+    );
   });
 
   it('POST rejects a plugin-owned skill name', async () => {
+    mocks.recordWorkspaceAuditEvent.mockClear();
     const res = await installSkill(postRequest({ name: 'literature-review' }));
     expect(res.status).toBe(409);
+    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
   });
 
   it('DELETE rejects a plugin-owned skill name', async () => {

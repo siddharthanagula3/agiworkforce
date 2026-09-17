@@ -1,11 +1,30 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 
-const { mockUseAuth, exportDocument, uploadChatAttachments, push } = vi.hoisted(() => ({
+const {
+  mockUseAuth,
+  exportDocument,
+  uploadChatAttachments,
+  push,
+  uploadProjectKnowledgeFile,
+  publish,
+  toastSuccess,
+} = vi.hoisted(() => ({
   mockUseAuth: vi.fn(() => ({ isSignedIn: true })),
   exportDocument: vi.fn(async () => {}),
   uploadChatAttachments: vi.fn(async () => []),
   push: vi.fn(),
+  uploadProjectKnowledgeFile: vi.fn(async () => ({})),
+  publish: vi.fn(async () => ({ shareUrl: 'https://agiworkforce.com/shared-artifact/abc' })),
+  toastSuccess: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } }));
+vi.mock('@features/projects/services/project-knowledge-upload', () => ({
+  uploadProjectKnowledgeFile,
+}));
+vi.mock('@features/chat/components/artifacts/publishArtifactClient', () => ({
+  createWebCloudPublisher: () => publish,
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -28,6 +47,8 @@ vi.mock('@features/chat/services/document-export-service', () => ({ exportDocume
 vi.mock('@features/chat/services/chat-attachment-upload', () => ({ uploadChatAttachments }));
 
 import { LibraryView, iconKindFor, generatedFileFromLibraryItem } from '../LibraryView';
+import { takeStagedLibraryAttachments } from '../../lib/library-chat-handoff';
+import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 
 function makeItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -129,7 +150,7 @@ describe('LibraryView', () => {
     await waitFor(() => expect(libraryCalls().length).toBeGreaterThan(0));
 
     fireEvent.click(screen.getByRole('tab', { name: 'Images' }));
-    await waitFor(() => expect(libraryCalls().at(-1)).toContain('kind=image%2Cvideo'));
+    await waitFor(() => expect(libraryCalls().at(-1)).toMatch(/kind=image(&|$)/));
 
     fireEvent.click(screen.getByRole('button', { name: 'Sort by Modified' }));
     fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Name' }));
@@ -331,5 +352,137 @@ describe('native artifact export', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
     expect(screen.queryByRole('button', { name: 'Export as Excel' })).toBeNull();
+  });
+});
+
+describe('library hand-off actions', () => {
+  const item = makeItem();
+
+  function stubAsset(items: unknown[], projects: unknown[] = []) {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse(projects);
+      if (url === item.uri || url.startsWith('/api/files/')) {
+        return {
+          ok: true,
+          status: 200,
+          blob: async () => new Blob(['%PDF'], { type: 'application/pdf' }),
+          text: async () => '<h1>Pricing</h1>',
+        } as Response;
+      }
+      return pageResponse(items);
+    });
+  }
+
+  afterEach(() => {
+    takeStagedLibraryAttachments();
+    uploadProjectKnowledgeFile.mockClear();
+    publish.mockClear();
+    toastSuccess.mockClear();
+  });
+
+  it('adds the stored file to a new chat as a real attachment', async () => {
+    stubAsset([item]);
+    render(<LibraryView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for report.pdf' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to chat' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/chat'));
+    const staged = takeStagedLibraryAttachments();
+    expect(staged).toHaveLength(1);
+    expect(staged?.[0]?.name).toBe('report.pdf');
+    expect(staged?.[0]?.type).toBe('application/pdf');
+    expect(useChatStore.getState().getComposerToggles(PENDING_CONVERSATION_KEY).workMode).toBe(
+      'chat',
+    );
+  });
+
+  it('adds the stored file to a new AGI Work session', async () => {
+    stubAsset([item]);
+    render(<LibraryView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for report.pdf' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to AGI Work' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/chat'));
+    expect(takeStagedLibraryAttachments()?.[0]?.name).toBe('report.pdf');
+    expect(useChatStore.getState().getComposerToggles(PENDING_CONVERSATION_KEY).workMode).toBe(
+      'agiwork',
+    );
+  });
+
+  it('uploads the stored bytes into the picked project as a project file', async () => {
+    stubAsset([item], [PROJECT]);
+    render(<LibraryView />);
+    await screen.findByTestId('library-folder-tile');
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for report.pdf' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to project' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Runway model/ }));
+
+    await waitFor(() => expect(uploadProjectKnowledgeFile).toHaveBeenCalledTimes(1));
+    const [input] = uploadProjectKnowledgeFile.mock.calls[0] as unknown as [
+      { projectId: string; file: File },
+    ];
+    expect(input.projectId).toBe('proj_abc123');
+    expect(input.file.name).toBe('report.pdf');
+    expect(toastSuccess).toHaveBeenCalledWith('Added to Runway model');
+  });
+
+  it('publishes an artifact from its stored content after confirmation', async () => {
+    const artifact = makeItem({
+      id: '55555555-5555-4555-8555-555555555555',
+      file_name: 'pricing.html',
+      mime_type: 'text/html',
+      surface: 'artifact',
+      uri: '/api/files/55555555-5555-4555-8555-555555555555',
+    });
+    stubAsset([artifact]);
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    render(<LibraryView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for pricing.html' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Share link' }));
+    expect(publish).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Create link' }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish).toHaveBeenCalledWith(
+      { id: artifact.id, title: 'pricing.html', content: '<h1>Pricing</h1>', type: 'html' },
+      'managed',
+    );
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('https://agiworkforce.com/shared-artifact/abc'),
+    );
+  });
+});
+
+describe('library share trust boundary', () => {
+  it('refuses to publish an artifact produced outside managed cloud', async () => {
+    const byokArtifact = makeItem({
+      id: '66666666-6666-4666-8666-666666666666',
+      file_name: 'notes.md',
+      mime_type: 'text/markdown',
+      surface: 'artifact',
+      provider: 'ollama',
+      model: null,
+      uri: '/api/files/66666666-6666-4666-8666-666666666666',
+    });
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse([]);
+      if (url === byokArtifact.uri) {
+        return { ok: true, status: 200, text: async () => '# Notes' } as Response;
+      }
+      return pageResponse([byokArtifact]);
+    });
+    publish.mockClear();
+
+    render(<LibraryView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for notes.md' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Share link' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Create link' }));
+
+    expect(await screen.findByText(/unavailable in this privacy mode/)).toBeInTheDocument();
+    expect(publish).not.toHaveBeenCalled();
   });
 });

@@ -169,9 +169,11 @@ async function handlePortal(request: NextRequest) {
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to verify subscription before opening billing portal');
-    throw createError.serviceUnavailable(
-      'Billing details could not be verified. No billing session was opened; please retry.',
-    );
+    throw createError
+      .serviceUnavailable(
+        'Billing details could not be verified. No billing session was opened; please retry.',
+      )
+      .asUserSafe();
   }
   const subscription = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(subscription);
@@ -190,9 +192,11 @@ async function handlePortal(request: NextRequest) {
         );
       } catch (error) {
         logger.error({ error, userId }, 'Failed to verify billing customer before portal lookup');
-        throw createError.serviceUnavailable(
-          'Billing customer details could not be verified. No billing session was opened; please retry.',
-        );
+        throw createError
+          .serviceUnavailable(
+            'Billing customer details could not be verified. No billing session was opened; please retry.',
+          )
+          .asUserSafe();
       }
       const profileData = profileRows[0] ?? null;
 
@@ -262,9 +266,11 @@ async function handlePortal(request: NextRequest) {
             { error, userId, customerId },
             'Failed to persist recovered Stripe customer before opening portal',
           );
-          throw createError.serviceUnavailable(
-            'The recovered billing account could not be linked safely. No billing session was opened; please retry.',
-          );
+          throw createError
+            .serviceUnavailable(
+              'The recovered billing account could not be linked safely. No billing session was opened; please retry.',
+            )
+            .asUserSafe();
         }
 
         logger.info(

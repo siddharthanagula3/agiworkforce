@@ -9,6 +9,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import {
   installWebPlugin,
   listPluginInstallations,
@@ -51,7 +52,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const installation = await installWebPlugin(getNeonDb(), userId, parsed.data.pluginId);
+  const db = getNeonDb();
+  const installation = await installWebPlugin(db, userId, parsed.data.pluginId);
   if (!installation) {
     return NextResponse.json(
       {
@@ -63,6 +65,16 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       { status: 409 },
     );
   }
+  await recordWorkspaceAuditEvent(db, request, {
+    userId,
+    eventType: 'plugin_installed',
+    detail: {
+      resourceType: 'plugin',
+      resourceId: installation.pluginId,
+      version: installation.installedVersion,
+      source: 'registry',
+    },
+  });
   return NextResponse.json({ installation }, { status: 201 });
 }
 
