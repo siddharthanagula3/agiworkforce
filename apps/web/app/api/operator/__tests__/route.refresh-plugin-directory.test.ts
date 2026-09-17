@@ -19,6 +19,7 @@ vi.mock('@/lib/security-audit', () => ({
     securityEvents.push(event);
   }),
   BLOCK_APPEAL_PATH: '/support',
+  logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
 }));
 

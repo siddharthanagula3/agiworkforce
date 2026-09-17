@@ -9,6 +9,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import {
   installMarketplaceEntry,
   listMarketplaceInstallations,
@@ -44,10 +45,27 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
-async function installFromDirectory(userId: string, pluginId: string): Promise<NextResponse> {
-  const result = await installDirectoryPlugin(getNeonDb(), userId, pluginId);
+async function installFromDirectory(
+  request: NextRequest,
+  userId: string,
+  pluginId: string,
+): Promise<NextResponse> {
+  const db = getNeonDb();
+  const result = await installDirectoryPlugin(db, userId, pluginId);
   switch (result.status) {
     case 'installed':
+      await recordWorkspaceAuditEvent(db, request, {
+        userId,
+        eventType: 'plugin_installed',
+        detail: {
+          resourceType: 'plugin',
+          resourceId: result.installation.id,
+          resourceName: result.installation.pluginKey,
+          version: result.installation.installedVersion,
+          count: result.skills.length,
+          source: 'directory',
+        },
+      });
       return NextResponse.json(
         { installation: result.installation, skills: result.skills },
         { status: 201 },
@@ -97,9 +115,12 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    if ('pluginId' in parsed.data) return await installFromDirectory(userId, parsed.data.pluginId);
+    if ('pluginId' in parsed.data) {
+      return await installFromDirectory(request, userId, parsed.data.pluginId);
+    }
 
-    const installation = await installMarketplaceEntry(getNeonDb(), userId, parsed.data.entryId);
+    const db = getNeonDb();
+    const installation = await installMarketplaceEntry(db, userId, parsed.data.entryId);
     if (!installation) {
       return NextResponse.json(
         {
@@ -111,6 +132,17 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
         { status: 409 },
       );
     }
+    await recordWorkspaceAuditEvent(db, request, {
+      userId,
+      eventType: 'plugin_installed',
+      detail: {
+        resourceType: 'plugin',
+        resourceId: installation.id,
+        resourceName: installation.pluginKey,
+        version: installation.installedVersion,
+        source: 'marketplace',
+      },
+    });
     return NextResponse.json({ installation }, { status: 201 });
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();

@@ -128,3 +128,12 @@ describe('formatErrorForChat', () => {
     expect(formatted).toContain('Ask a workspace admin');
   });
 });
+
+describe('AppError.asUserSafe', () => {
+  it('is off by default and marks the same instance', () => {
+    const error = createError.serviceUnavailable('Try again shortly.');
+    expect(error.userSafe).toBe(false);
+    expect(error.asUserSafe()).toBe(error);
+    expect(error.userSafe).toBe(true);
+  });
+});

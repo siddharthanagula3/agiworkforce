@@ -3,6 +3,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { logAuthFailure } from '@/lib/security-audit';
 import { setTenantScope } from '@/lib/observability/trace-context';
 import { assertMfaPolicy } from '@/lib/mfa-policy-gate';
 import { assertIpAllowList } from '@/lib/ip-allow-list-gate';
@@ -142,11 +143,14 @@ export async function assertAccountActive(userId: string): Promise<void> {
   );
 }
 
-async function verifyBearerToken(token: string): Promise<AuthResult | null> {
+async function verifyBearerToken(token: string, request: NextRequest): Promise<AuthResult | null> {
   const developerToken = verifyDeveloperTokenSignature(token);
   if (developerToken) {
     try {
-      if (await isDeveloperTokenRevoked(developerToken)) return null;
+      if (await isDeveloperTokenRevoked(developerToken)) {
+        await logAuthFailure(request, 'revoked_developer_token', developerToken.userId);
+        return null;
+      }
     } catch (error) {
       logger.error(
         { error, userId: developerToken.userId },
@@ -231,10 +235,11 @@ export async function getClerkAuthUser(
         await assertIpAllowList(result.userId, request);
         return { userId: result.userId };
       }
+      await logAuthFailure(request, 'invalid_api_key');
       throw createError.unauthorized();
     }
 
-    const result = await verifyBearerToken(token);
+    const result = await verifyBearerToken(token, request);
     if (result) {
       await assertAccountActive(result.userId);
       setTenantScope({ userId: result.userId });

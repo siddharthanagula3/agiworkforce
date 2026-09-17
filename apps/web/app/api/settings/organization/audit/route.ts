@@ -8,6 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   isOrgAdminRole,
   requireOrgMember,
@@ -99,6 +100,22 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     limit: q.limit ?? AUDIT_PAGE_SIZE_DEFAULT,
     ...(q.cursorAt && q.cursorId ? { cursor: { createdAt: q.cursorAt, id: q.cursorId } } : {}),
   });
+
+  if (!q.cursorAt) {
+    await recordAuditEvent({
+      userId,
+      organizationId: membership.organizationId,
+      eventType: 'data_accessed',
+      request,
+      detail: {
+        resourceType: 'audit_trail',
+        resourceId: membership.organizationId,
+        role: membership.role,
+        count: page.events.length,
+        changedKeys: Object.keys(filters),
+      },
+    });
+  }
 
   const payload: OrganizationAuditResponse = {
     organizationId: membership.organizationId,

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   verifyStep: vi.fn(),
   verifyBackup: vi.fn(),
+  logAuthFailure: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -29,6 +30,11 @@ vi.mock('@/features/settings/services/user-preferences', () => ({
 }));
 vi.mock('@/lib/crypto/totp-envelope', () => ({
   openTotpSecret: vi.fn(() => 'SECRET'),
+}));
+vi.mock('@/lib/security-audit', () => ({
+  logAuthFailure: (...args: unknown[]) => mocks.logAuthFailure(...args),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
 }));
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -77,6 +83,11 @@ describe('POST /api/settings/2fa/validate, TOTP replay', () => {
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ valid: false });
+    expect(mocks.logAuthFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      'replayed_totp_code',
+      'user-1',
+    );
   });
 });
 
@@ -118,6 +129,11 @@ describe('POST /api/settings/2fa/validate, backup codes', () => {
 
     expect(response.status).toBe(401);
     expect(mocks.query).toHaveBeenCalledOnce();
+    expect(mocks.logAuthFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      'invalid_two_factor_code',
+      'user-1',
+    );
   });
 
   it('exempts an organization owner from the mfa gate so validation stays reachable', async () => {

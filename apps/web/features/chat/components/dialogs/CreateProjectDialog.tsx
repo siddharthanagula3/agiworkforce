@@ -12,7 +12,9 @@ import {
   DialogTitle,
   Button,
   Input,
+  Textarea,
 } from '@agiworkforce/ui';
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { cn } from '@shared/lib/utils';
 import { useProjectStore } from '@features/projects/stores/project-store';
 import type { Project } from '@features/projects/stores/project-store';
@@ -34,6 +36,7 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
   const addProject = useProjectStore((s) => s.addProject);
 
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [templateId, setTemplateId] = useState('blank');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -45,6 +48,7 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
   useEffect(() => {
     if (open) {
       setName('');
+      setDescription('');
       setTemplateId('blank');
       setSubmitState('idle');
       setErrorMsg(null);
@@ -62,9 +66,10 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
 
     try {
       const template = getProjectTemplate(templateId);
+      const resolvedDescription = description.trim() || template?.description;
       const project: Project = await webManagedCloudProjects.createProject({
         name: trimmedName,
-        ...(template?.description ? { description: template.description } : {}),
+        ...(resolvedDescription ? { description: resolvedDescription } : {}),
         ...(template?.instructions ? { instructions: template.instructions } : {}),
       });
 
@@ -80,7 +85,16 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
       setErrorMsg(toUserMessage(err, 'Something went wrong. Please try again.'));
       setSubmitState('error');
     }
-  }, [addProject, canSubmit, onCreated, onOpenChange, router, trimmedName, templateId]);
+  }, [
+    addProject,
+    canSubmit,
+    description,
+    onCreated,
+    onOpenChange,
+    router,
+    trimmedName,
+    templateId,
+  ]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -169,6 +183,27 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
                 {errorMsg}
               </p>
             ) : null}
+          </div>
+
+          <div className="mt-4 space-y-1.5">
+            <Label
+              htmlFor="create-project-description"
+              className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+            >
+              Description
+            </Label>
+            <Textarea
+              id="create-project-description"
+              value={description}
+              placeholder={
+                getProjectTemplate(templateId)?.description || 'What are you trying to achieve?'
+              }
+              maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
+              rows={2}
+              disabled={submitState === 'submitting'}
+              onChange={(e) => setDescription(e.target.value)}
+              className="resize-y rounded-xl bg-muted/40"
+            />
           </div>
 
           {/* Template picker. Selecting one fills the name field if the user has

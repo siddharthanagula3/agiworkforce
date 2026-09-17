@@ -9,6 +9,7 @@ const {
   listPluginInstallationsMock,
   setWebPluginEnabledMock,
   uninstallWebPluginMock,
+  recordWorkspaceAuditEventMock,
 } = vi.hoisted(() => ({
   authUserMock: vi.fn(),
   csrfMock: vi.fn(),
@@ -18,6 +19,7 @@ const {
   listPluginInstallationsMock: vi.fn(),
   setWebPluginEnabledMock: vi.fn(),
   uninstallWebPluginMock: vi.fn(),
+  recordWorkspaceAuditEventMock: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -25,6 +27,9 @@ vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
+vi.mock('@/lib/workspace-audit', () => ({
+  recordWorkspaceAuditEvent: recordWorkspaceAuditEventMock,
+}));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   installWebPlugin: installWebPluginMock,
   listPluginInstallations: listPluginInstallationsMock,
@@ -111,6 +116,15 @@ describe('POST /api/plugins/installations (install)', () => {
     const body = await response.json();
     expect(body.installation).toEqual(INSTALLATION);
     expect(installWebPluginMock).toHaveBeenCalledWith(expect.anything(), 'user-1', 'research-pack');
+    expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'user-1',
+        eventType: 'plugin_installed',
+        detail: expect.objectContaining({ resourceId: 'research-pack', version: '1.0.0' }),
+      }),
+    );
   });
 
   it('rejects an invalid plugin id with 400 and never installs', async () => {
@@ -125,6 +139,7 @@ describe('POST /api/plugins/installations (install)', () => {
     const response = await POST(post({ pluginId: 'github-automation' }));
     expect(response.status).toBe(409);
     expect((await response.json()).error.code).toBe('PLUGIN_NOT_INSTALLABLE');
+    expect(recordWorkspaceAuditEventMock).not.toHaveBeenCalled();
   });
 
   it('returns the csrf response and never installs when the token is missing', async () => {
@@ -154,6 +169,14 @@ describe('PATCH /api/plugins/installations/[id] (enable/disable)', () => {
       'research-pack',
       false,
     );
+    expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        eventType: 'plugin_setting_changed',
+        detail: expect.objectContaining({ resourceId: 'research-pack', enabled: false }),
+      }),
+    );
   });
 
   it('404s when the plugin was never installed', async () => {
@@ -180,12 +203,22 @@ describe('DELETE /api/plugins/installations/[id] (uninstall)', () => {
       'user-1',
       'research-pack',
     );
+    expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'user-1',
+        eventType: 'plugin_removed',
+        detail: expect.objectContaining({ resourceId: 'research-pack' }),
+      }),
+    );
   });
 
   it('404s when nothing was installed to remove', async () => {
     uninstallWebPluginMock.mockResolvedValue(false);
     const response = await DELETE(del(), params('research-pack'));
     expect(response.status).toBe(404);
+    expect(recordWorkspaceAuditEventMock).not.toHaveBeenCalled();
     expect((await response.json()).error.code).toBe('PLUGIN_NOT_INSTALLED');
   });
 

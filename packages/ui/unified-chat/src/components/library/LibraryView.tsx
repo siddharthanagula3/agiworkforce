@@ -11,12 +11,16 @@ import {
 import { createPortal } from 'react-dom';
 import { toUserMessageWithStatus } from '../../lib/network-error';
 import {
+  Briefcase,
   ChevronDown,
   ChevronRight,
   Download,
   Folder,
+  FolderPlus,
   LayoutGrid,
+  Link2,
   List,
+  MessageSquarePlus,
   Mic,
   MoreHorizontal,
   Play,
@@ -37,11 +41,23 @@ import {
   LIBRARY_DEFAULT_PAGE_SIZE,
   LIBRARY_DEFAULT_SORT,
   type LibraryItem,
+  type LibraryKind,
+  type LibraryOrigin,
   type LibrarySort,
 } from '@agiworkforce/cloud-contracts';
 import { generatedFileTrustBoundary } from '../MessageGeneratedFiles';
 import { ArtifactRenderer, type NativeExportFormat } from '../ArtifactRenderer';
-import { Button, Spinner, useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Spinner,
+  useConfirmAction,
+  useMenuKeyboard,
+} from '@agiworkforce/ui';
 import {
   type ArtifactType,
   type GeneratedFile,
@@ -51,7 +67,7 @@ import {
 import { FileKindIcon } from './FileKindIcon';
 
 export type SurfaceFilter = 'all' | 'artifact' | 'file';
-export type LibraryTab = 'all' | 'images' | 'documents';
+export type LibraryTab = 'all' | 'images' | 'videos' | 'documents' | 'artifacts' | 'generated';
 export type LibraryViewMode = 'grid' | 'list';
 
 export interface LibraryFolder {
@@ -64,14 +80,32 @@ export interface LibraryFolder {
 const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'images', label: 'Images' },
+  { id: 'videos', label: 'Videos' },
   { id: 'documents', label: 'Documents' },
+  { id: 'artifacts', label: 'Artifacts' },
+  { id: 'generated', label: 'Generated files' },
 ];
 
-const KIND_PARAM_BY_TAB: Readonly<Record<LibraryTab, string | null>> = {
-  all: null,
-  images: 'image,video',
-  documents: 'file',
+interface TabQuery {
+  kind?: LibraryKind;
+  surface?: Exclude<SurfaceFilter, 'all'>;
+  origin?: LibraryOrigin;
+}
+
+const QUERY_BY_TAB: Readonly<Record<LibraryTab, TabQuery>> = {
+  all: {},
+  images: { kind: 'image' },
+  videos: { kind: 'video' },
+  documents: { kind: 'file', surface: 'file' },
+  artifacts: { surface: 'artifact' },
+  generated: { kind: 'file', origin: 'generated' },
 };
+
+function initialTabFor(surface: SurfaceFilter): LibraryTab {
+  if (surface === 'artifact') return 'artifacts';
+  if (surface === 'file') return 'documents';
+  return 'all';
+}
 
 const SORT_OPTIONS: ReadonlyArray<{ id: LibrarySort; label: string }> = [
   { id: 'modified', label: 'Modified' },
@@ -231,6 +265,10 @@ export interface LibraryTransport {
     title: string,
   ) => Promise<void>;
   nativeExportFormats?: readonly NativeExportFormat[];
+  addToChat?: (item: LibraryItem) => Promise<void>;
+  addToWork?: (item: LibraryItem) => Promise<void>;
+  addToProject?: (item: LibraryItem, folder: LibraryFolder) => Promise<void>;
+  shareArtifact?: (item: LibraryItem) => Promise<void>;
 }
 
 interface PageState {
@@ -295,8 +333,7 @@ export function LibraryView({
 }: LibraryViewProps) {
   const { isSignedIn } = transport;
   const isAuthReady = transport.isAuthReady !== false;
-  const [surface] = useState<SurfaceFilter>(initialSurface);
-  const [tab, setTab] = useState<LibraryTab>('all');
+  const [tab, setTab] = useState<LibraryTab>(() => initialTabFor(initialSurface));
   const [sort, setSort] = useState<LibrarySort>(LIBRARY_DEFAULT_SORT);
   const [viewMode, setViewMode] = useState<LibraryViewMode>('grid');
   const [searchInput, setSearchInput] = useState(initialQuery);
@@ -316,6 +353,8 @@ export function LibraryView({
   const [openArtifactIds, setOpenArtifactIds] = useState<ReadonlySet<string>>(() => new Set());
   const [artifactSources, setArtifactSources] = useState<Record<string, ArtifactSource>>({});
   const [viewerItem, setViewerItem] = useState<LibraryItem | null>(null);
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [projectTarget, setProjectTarget] = useState<LibraryItem | null>(null);
   const requestSeq = useRef(0);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -342,14 +381,15 @@ export function LibraryView({
       params.set('limit', String(LIBRARY_DEFAULT_PAGE_SIZE));
       params.set('sort', sort);
       if (offset > 0) params.set('offset', String(offset));
-      if (surface !== 'all') params.set('surface', surface);
-      const kindParam = KIND_PARAM_BY_TAB[tab];
-      if (kindParam) params.set('kind', kindParam);
+      const tabQuery = QUERY_BY_TAB[tab];
+      if (tabQuery.surface) params.set('surface', tabQuery.surface);
+      if (tabQuery.kind) params.set('kind', tabQuery.kind);
+      if (tabQuery.origin) params.set('origin', tabQuery.origin);
       if (query) params.set('q', query);
       if (viewDeleted) params.set('deleted', 'true');
       return params;
     },
-    [surface, tab, sort, query, viewDeleted],
+    [tab, sort, query, viewDeleted],
   );
 
   const loadPage = useCallback(
@@ -488,6 +528,65 @@ export function LibraryView({
     [removeFromPage, setRowError],
   );
 
+  const runHostAction = useCallback(
+    async (item: LibraryItem, label: string, run: () => Promise<void>) => {
+      setRowError(item.id, null);
+      setBusyIds((current) => new Set(current).add(item.id));
+      try {
+        await run();
+        return true;
+      } catch (err) {
+        setRowError(item.id, toUserMessageWithStatus(err, `${label} failed.`));
+        return false;
+      } finally {
+        setBusyIds((current) => {
+          const next = new Set(current);
+          next.delete(item.id);
+          return next;
+        });
+      }
+    },
+    [setRowError],
+  );
+
+  const { addToChat, addToWork, addToProject, shareArtifact } = transport;
+
+  const handleAddToChat = useMemo(
+    () =>
+      addToChat
+        ? (item: LibraryItem) => void runHostAction(item, 'Add to chat', () => addToChat(item))
+        : undefined,
+    [addToChat, runHostAction],
+  );
+
+  const handleAddToWork = useMemo(
+    () =>
+      addToWork
+        ? (item: LibraryItem) => void runHostAction(item, 'Add to AGI Work', () => addToWork(item))
+        : undefined,
+    [addToWork, runHostAction],
+  );
+
+  const handleChooseProject = useMemo(
+    () => (addToProject && listFolders ? setProjectTarget : undefined),
+    [addToProject, listFolders],
+  );
+
+  const confirmShare = useMemo(
+    () =>
+      shareArtifact
+        ? (item: LibraryItem) =>
+            confirm({
+              title: `Create a public link to ${libraryItemDisplayName(item)}?`,
+              description:
+                'Anyone with the link can open this artifact without signing in, including anyone they forward it to. You can withdraw the link later, but a copy someone already saved stays with them.',
+              confirmLabel: 'Create link',
+              onConfirm: () => runHostAction(item, 'Share', () => shareArtifact(item)),
+            })
+        : undefined,
+    [confirm, runHostAction, shareArtifact],
+  );
+
   const handleRestore = useCallback(
     (id: string) => runMutation(id, 'Restore', () => transport.restoreItem(id)),
     [runMutation, transport],
@@ -603,15 +702,29 @@ export function LibraryView({
     return sortFolders(matched, sort);
   }, [folders, tab, viewDeleted, query, sort]);
 
-  const rowActions = useMemo(
+  const rowActions = useMemo<RowActions>(
     () => ({
       onOpen: openItem,
       onDownload: handleDownload,
       onDelete: confirmDelete,
       onRestore: handleRestore,
       onPermanentDelete: confirmPermanentDelete,
+      onAddToChat: handleAddToChat,
+      onAddToWork: handleAddToWork,
+      onAddToProject: handleChooseProject,
+      onShare: confirmShare,
     }),
-    [openItem, handleDownload, confirmDelete, handleRestore, confirmPermanentDelete],
+    [
+      openItem,
+      handleDownload,
+      confirmDelete,
+      handleRestore,
+      confirmPermanentDelete,
+      handleAddToChat,
+      handleAddToWork,
+      handleChooseProject,
+      confirmShare,
+    ],
   );
 
   const isBusy = !isAuthReady || (isSignedIn && (!hasResolvedPage || loading));
@@ -627,6 +740,7 @@ export function LibraryView({
     items: page.items,
     folders: visibleFolders,
     unavailableIds,
+    busyIds,
     rowErrors,
     viewDeleted,
     actions: rowActions,
@@ -643,6 +757,17 @@ export function LibraryView({
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5" data-testid="library-view">
       {confirmDialog}
+      {projectTarget && addToProject ? (
+        <AddToProjectDialog
+          item={projectTarget}
+          folders={folders}
+          onClose={() => setProjectTarget(null)}
+          onAdd={async (folder) => {
+            await addToProject(projectTarget, folder);
+            setProjectTarget(null);
+          }}
+        />
+      ) : null}
       {viewerItem ? (
         <FileViewerOverlay
           item={viewerItem}
@@ -698,7 +823,11 @@ export function LibraryView({
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div role="tablist" aria-label="Filter the library" className="flex items-center gap-1">
+          <div
+            role="tablist"
+            aria-label="Filter the library"
+            className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1"
+          >
             {TABS.map((entry) => (
               <button
                 key={entry.id}
@@ -708,8 +837,8 @@ export function LibraryView({
                 onClick={() => setTab(entry.id)}
                 className={
                   tab === entry.id
-                    ? 'min-h-9 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-hover)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)]'
-                    : 'min-h-9 rounded-[var(--chat-radius-md)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
+                    ? 'min-h-9 shrink-0 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-hover)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)]'
+                    : 'min-h-9 shrink-0 rounded-[var(--chat-radius-md)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
                 }
               >
                 {entry.label}
@@ -1033,12 +1162,17 @@ interface RowActions {
   onDelete: (item: LibraryItem) => void;
   onRestore: (id: string) => Promise<void>;
   onPermanentDelete: (item: LibraryItem) => void;
+  onAddToChat?: (item: LibraryItem) => void;
+  onAddToWork?: (item: LibraryItem) => void;
+  onAddToProject?: (item: LibraryItem) => void;
+  onShare?: (item: LibraryItem) => void;
 }
 
 interface LibraryListProps {
   items: readonly LibraryItem[];
   folders: readonly LibraryFolder[];
   unavailableIds: ReadonlySet<string>;
+  busyIds: ReadonlySet<string>;
   rowErrors: Record<string, string>;
   viewDeleted: boolean;
   actions: RowActions;
@@ -1139,6 +1273,7 @@ function LibraryGrid(props: LibraryListProps) {
               <ItemMenu
                 item={item}
                 viewDeleted={props.viewDeleted}
+                busy={props.busyIds.has(item.id)}
                 actions={props.actions}
                 triggerClassName={MENU_TRIGGER_OVERLAY_CLASS}
               />
@@ -1301,6 +1436,7 @@ function LibraryList(props: LibraryListProps) {
                       <ItemMenu
                         item={item}
                         viewDeleted={props.viewDeleted}
+                        busy={props.busyIds.has(item.id)}
                         actions={props.actions}
                       />
                     </div>
@@ -1360,11 +1496,13 @@ function useDismissOnOutsideClick(
 function ItemMenu({
   item,
   viewDeleted,
+  busy,
   actions,
   triggerClassName = MENU_TRIGGER_CLASS,
 }: {
   item: LibraryItem;
   viewDeleted: boolean;
+  busy: boolean;
   actions: RowActions;
   triggerClassName?: string;
 }) {
@@ -1389,11 +1527,17 @@ function ItemMenu({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-busy={busy || undefined}
+        disabled={busy}
         onClick={() => setOpen((current) => !current)}
         aria-label={`Actions for ${item.file_name}`}
         className={triggerClassName}
       >
-        <MoreHorizontal className="h-4 w-4" aria-hidden />
+        {busy ? (
+          <Spinner size="sm" className="h-4 w-4" />
+        ) : (
+          <MoreHorizontal className="h-4 w-4" aria-hidden />
+        )}
       </button>
       {open ? (
         <div
@@ -1413,15 +1557,61 @@ function ItemMenu({
               Restore
             </button>
           ) : (
-            <button
-              type="button"
-              role="menuitem"
-              className={MENU_ITEM_CLASS}
-              onClick={choose(() => void actions.onDownload(item))}
-            >
-              <Upload className="h-4 w-4 rotate-180" aria-hidden />
-              Download
-            </button>
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className={MENU_ITEM_CLASS}
+                onClick={choose(() => void actions.onDownload(item))}
+              >
+                <Upload className="h-4 w-4 rotate-180" aria-hidden />
+                Download
+              </button>
+              {actions.onAddToChat ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={MENU_ITEM_CLASS}
+                  onClick={choose(() => actions.onAddToChat?.(item))}
+                >
+                  <MessageSquarePlus className="h-4 w-4" aria-hidden />
+                  Add to chat
+                </button>
+              ) : null}
+              {actions.onAddToWork ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={MENU_ITEM_CLASS}
+                  onClick={choose(() => actions.onAddToWork?.(item))}
+                >
+                  <Briefcase className="h-4 w-4" aria-hidden />
+                  Add to AGI Work
+                </button>
+              ) : null}
+              {actions.onAddToProject ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={MENU_ITEM_CLASS}
+                  onClick={choose(() => actions.onAddToProject?.(item))}
+                >
+                  <FolderPlus className="h-4 w-4" aria-hidden />
+                  Add to project
+                </button>
+              ) : null}
+              {actions.onShare && item.surface === 'artifact' ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={MENU_ITEM_CLASS}
+                  onClick={choose(() => actions.onShare?.(item))}
+                >
+                  <Link2 className="h-4 w-4" aria-hidden />
+                  Share link
+                </button>
+              ) : null}
+            </>
           )}
           <button
             type="button"
@@ -1437,6 +1627,85 @@ function ItemMenu({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function AddToProjectDialog({
+  item,
+  folders,
+  onClose,
+  onAdd,
+}: {
+  item: LibraryItem;
+  folders: readonly LibraryFolder[];
+  onClose: () => void;
+  onAdd: (folder: LibraryFolder) => Promise<void>;
+}) {
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const sorted = useMemo(() => sortFolders(folders, 'name'), [folders]);
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next && pendingId === null) onClose();
+      }}
+    >
+      <DialogContent className="w-[min(94vw,26rem)]">
+        <DialogHeader>
+          <DialogTitle>Add to project</DialogTitle>
+          <DialogDescription>
+            {`${libraryItemDisplayName(item)} becomes a project file, so every chat in that project can use it.`}
+          </DialogDescription>
+        </DialogHeader>
+        {sorted.length === 0 ? (
+          <p
+            data-testid="library-project-picker-empty"
+            className="text-sm text-[var(--chat-text-muted)]"
+          >
+            You have no projects yet. Create one first, then add this file to it.
+          </p>
+        ) : (
+          <ul
+            data-testid="library-project-picker"
+            className="flex max-h-72 flex-col gap-1 overflow-y-auto"
+          >
+            {sorted.map((folder) => (
+              <li key={folder.id}>
+                <button
+                  type="button"
+                  disabled={pendingId !== null}
+                  onClick={async () => {
+                    setPendingId(folder.id);
+                    setError(null);
+                    try {
+                      await onAdd(folder);
+                    } catch (err) {
+                      setError(toUserMessageWithStatus(err, 'That file could not be added.'));
+                      setPendingId(null);
+                    }
+                  }}
+                  className={MENU_ITEM_CLASS}
+                >
+                  {pendingId === folder.id ? (
+                    <Spinner size="sm" className="h-4 w-4" />
+                  ) : (
+                    <Folder className="h-4 w-4 text-[var(--chat-text-secondary)]" aria-hidden />
+                  )}
+                  <span className="truncate">{folder.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {error ? (
+          <p role="alert" className="text-sm text-[var(--chat-destructive-text)]">
+            {error}
+          </p>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 

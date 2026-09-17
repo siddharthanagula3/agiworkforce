@@ -40,6 +40,8 @@ function extractRetryAfterHint(errorMessage: string): string | null {
  * ```
  */
 export class AppError extends Error {
+  userSafe = false;
+
   constructor(
     public code: ErrorCodeValue,
     message: string,
@@ -62,6 +64,16 @@ export class AppError extends Error {
 
   isClientSafe(): boolean {
     return this.statusCode < 500;
+  }
+
+  /**
+   * Marks the message as written for the reader, so an API error boundary
+   * delivers it instead of the generic text for the status. Only for
+   * messages that carry no internal detail.
+   */
+  asUserSafe(): this {
+    this.userSafe = true;
+    return this;
   }
 }
 

@@ -118,6 +118,34 @@ describe('GET /api/settings/organization/audit', () => {
     expect(body.organizationId).toBe(ORG);
     expect(body.events).toHaveLength(1);
     expect(body.events[0].action).toBe('admin_policy_changed');
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        organizationId: ORG,
+        eventType: 'data_accessed',
+        detail: expect.objectContaining({ resourceType: 'audit_trail', count: 1 }),
+      }),
+    );
+  });
+
+  it('records the first page read only, so paging does not multiply the access record', async () => {
+    bind({ role: 'admin' });
+
+    await GET(
+      req(
+        `/api/settings/organization/audit?cursorAt=2026-08-23T00:00:00.000Z&cursorId=${EVENT_ID}`,
+      ) as never,
+    );
+
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('records no access when the reader is refused', async () => {
+    bind({ role: 'member' });
+
+    await GET(req('/api/settings/organization/audit') as never);
+
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('rejects a range whose start is after its end', async () => {

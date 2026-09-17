@@ -20,6 +20,7 @@ import { webManagedCloudProjects } from '@/features/projects/services/managed-cl
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import type { Project } from '@features/projects/stores/project-store';
 import { toUserMessage } from '@/lib/user-error-message';
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 
 export interface ProjectSettingsDialogProps {
   open: boolean;
@@ -44,6 +45,7 @@ export function ProjectSettingsDialog({
   onDuplicated,
 }: ProjectSettingsDialogProps) {
   const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(project.description ?? '');
   const [instructions, setInstructions] = useState(project.instructions ?? '');
   const [usesGlobalMemory, setUsesGlobalMemory] = useState(project.usesGlobalMemory !== false);
   const [isSaving, setIsSaving] = useState(false);
@@ -51,9 +53,16 @@ export function ProjectSettingsDialog({
 
   useEffect(() => {
     setName(project.name);
+    setDescription(project.description ?? '');
     setInstructions(project.instructions ?? '');
     setUsesGlobalMemory(project.usesGlobalMemory !== false);
-  }, [project.id, project.name, project.instructions, project.usesGlobalMemory]);
+  }, [
+    project.id,
+    project.name,
+    project.description,
+    project.instructions,
+    project.usesGlobalMemory,
+  ]);
 
   const [isDuplicating, setIsDuplicating] = useState(false);
 
@@ -92,6 +101,7 @@ export function ProjectSettingsDialog({
       toast.error('Project name is required');
       return;
     }
+    const trimmedDescription = description.trim();
     const updates = {
       name: name.trim(),
       instructions: instructions.trim() || undefined,
@@ -99,9 +109,12 @@ export function ProjectSettingsDialog({
     };
     setIsSaving(true);
     try {
-      await webManagedCloudProjects.updateProject(project.id, updates);
+      await webManagedCloudProjects.updateProject(project.id, {
+        ...updates,
+        description: trimmedDescription || null,
+      });
 
-      onUpdate(project.id, updates);
+      onUpdate(project.id, { ...updates, description: trimmedDescription || undefined });
       toast.success('Project updated');
       onOpenChange(false);
     } catch (error) {
@@ -178,6 +191,24 @@ export function ProjectSettingsDialog({
                   }}
                 />
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="ps-description"
+                className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+              >
+                Description
+              </Label>
+              <Textarea
+                id="ps-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What is this project for?"
+                maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
+                rows={2}
+                className="resize-y rounded-xl bg-muted/40"
+              />
             </div>
 
             {/* Instructions */}

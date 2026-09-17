@@ -115,6 +115,24 @@ export async function reencryptTarget({
   return outcome;
 }
 
+export async function recordKeyRotationAudit({ client, name, target, keyVersion, outcome }) {
+  const details = {
+    resourceType: 'encryption_key',
+    resource_type: 'encryption_key',
+    resourceId: name,
+    resource_id: name,
+    resourceName: target.table,
+    keyVersion,
+    count: outcome.rewritten,
+    source: 'scripts/reencrypt.mjs',
+  };
+  await client.query(
+    `insert into security_audit_logs (user_id, event_type, severity, ip_address, user_agent, endpoint, details)
+     values (null, $1, $2, null, null, null, $3)`,
+    ['encryption_key_rotated', 'warning', JSON.stringify(details)],
+  );
+}
+
 export function assertFormatSupported(names, format) {
   if (format !== 'versioned') return;
   for (const name of names) {
@@ -175,6 +193,15 @@ async function main(argv) {
       apply: args.apply,
       format: args.format,
     });
+    if (args.apply) {
+      await recordKeyRotationAudit({
+        client,
+        name,
+        target,
+        keyVersion: ring.active.id,
+        outcome,
+      });
+    }
     console.log(
       `${args.apply ? 'rotated' : 'would rotate'} ${name} -> key ${ring.active.id}: ` +
         `scanned=${outcome.scanned} rewritten=${outcome.rewritten} ` +
