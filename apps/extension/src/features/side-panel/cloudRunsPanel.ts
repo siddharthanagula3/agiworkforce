@@ -344,12 +344,17 @@ type StatusOrigin = 'progress' | 'load' | 'action';
 
 const RUN_STATE_TONES: Record<CloudAgentRun['state'], RunStateTone> = {
   queued: 'active',
+  planning: 'active',
   running: 'active',
+  resuming: 'active',
   awaiting_input: 'attention',
+  awaiting_approval: 'attention',
   ready_for_review: 'attention',
   paused: 'attention',
   completed: 'success',
+  partial: 'attention',
   failed: 'danger',
+  timed_out: 'danger',
   cancelled: 'muted',
   archived: 'muted',
 };

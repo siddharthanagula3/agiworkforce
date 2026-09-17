@@ -94,6 +94,36 @@ const STATUS_CONFIG: Record<
     bgColor: 'bg-slate-400/10',
     label: 'Archived',
   },
+  planning: {
+    icon: Loader2,
+    color: 'text-blue-400',
+    bgColor: 'bg-blue-400/10',
+    label: 'Planning',
+  },
+  awaiting_approval: {
+    icon: AlertCircle,
+    color: 'text-orange-400',
+    bgColor: 'bg-orange-400/10',
+    label: 'Waiting for approval',
+  },
+  resuming: {
+    icon: Loader2,
+    color: 'text-blue-400',
+    bgColor: 'bg-blue-400/10',
+    label: 'Resuming',
+  },
+  partial: {
+    icon: AlertCircle,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-400/10',
+    label: 'Partially completed',
+  },
+  timed_out: {
+    icon: XCircle,
+    color: 'text-red-400',
+    bgColor: 'bg-red-400/10',
+    label: 'Timed out',
+  },
 };
 
 function TaskRow({ task }: { task: AgentTask }) {

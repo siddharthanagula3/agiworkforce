@@ -20,7 +20,14 @@ interface CloudRunStateFace {
  */
 const CLOUD_RUN_STATE_FACES: Record<CloudRunState, CloudRunStateFace> = {
   queued: { label: AGENT_TASK_STATE_LABELS.queued, icon: 'clock', settled: false },
+  planning: { label: AGENT_TASK_STATE_LABELS.planning, icon: 'loading~spin', settled: false },
   running: { label: AGENT_TASK_STATE_LABELS.running, icon: 'loading~spin', settled: false },
+  resuming: { label: AGENT_TASK_STATE_LABELS.resuming, icon: 'loading~spin', settled: false },
+  awaiting_approval: {
+    label: AGENT_TASK_STATE_LABELS.awaiting_approval,
+    icon: 'shield',
+    settled: false,
+  },
   awaiting_input: {
     label: AGENT_TASK_STATE_LABELS.awaiting_input,
     icon: 'question',
@@ -33,7 +40,9 @@ const CLOUD_RUN_STATE_FACES: Record<CloudRunState, CloudRunStateFace> = {
     settled: true,
   },
   completed: { label: AGENT_TASK_STATE_LABELS.completed, icon: 'pass', settled: true },
+  partial: { label: AGENT_TASK_STATE_LABELS.partial, icon: 'warning', settled: true },
   failed: { label: AGENT_TASK_STATE_LABELS.failed, icon: 'error', settled: true },
+  timed_out: { label: AGENT_TASK_STATE_LABELS.timed_out, icon: 'watch', settled: true },
   cancelled: { label: AGENT_TASK_STATE_LABELS.cancelled, icon: 'circle-slash', settled: true },
   archived: { label: AGENT_TASK_STATE_LABELS.archived, icon: 'archive', settled: true },
 };
