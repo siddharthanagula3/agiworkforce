@@ -208,9 +208,10 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
     class="flex flex-wrap items-center gap-1.5"
   >
     <span
-      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] font-medium border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-[12px] font-medium text-[var(--success-text)]"
       data-stays-local="true"
       data-testid="project-header-privacy-chip"
+      data-trust-boundary="local"
     >
       <svg
         aria-hidden="true"
@@ -242,11 +243,14 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
       </span>
     </span>
     <span
-      class="inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5"
+      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-[12px] font-medium text-[var(--success-text)]"
       data-provider-mode="Local"
       data-testid="project-header-provider-chip"
+      data-trust-boundary="local"
     >
-      Local
+      <span>
+        Local
+      </span>
     </span>
   </div>
   <div
