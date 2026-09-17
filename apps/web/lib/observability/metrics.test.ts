@@ -10,8 +10,10 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   METRIC_NAME,
+  recordBrowserTask,
   recordFailure,
   recordHttpRequest,
+  recordNotificationDelivery,
   recordSpanMetrics,
   recordToolOutcome,
 } from './metrics';
@@ -124,5 +126,58 @@ describe('tool outcome metrics', () => {
     recordFailure('worker', 'sk-live-abcdefghijklmnopqrstuvwxyz');
     const [point] = await points(METRIC_NAME.failures);
     expect(point?.attributes['error.type']).toBe('[redacted]');
+  });
+});
+
+describe('browser health metrics', () => {
+  it('counts a browser task by status and surface', async () => {
+    recordBrowserTask({ status: 'handed_off', surface: 'chrome-extension' });
+    recordBrowserTask({ status: 'completed', surface: 'chrome-extension' });
+    recordBrowserTask({ status: 'failed', surface: 'chrome-extension', errorType: 'browser' });
+
+    const tasks = await points(METRIC_NAME.browserTasks);
+    expect(countWhere(tasks, { 'agi.browser.status': 'handed_off' })).toBe(1);
+    expect(countWhere(tasks, { 'agi.surface': 'chrome-extension' })).toBe(3);
+    const failures = await points(METRIC_NAME.failures);
+    expect(countWhere(failures, { 'agi.failure.kind': 'browser' })).toBe(1);
+  });
+
+  it('does not count a handed-off task as a failure', async () => {
+    recordBrowserTask({ status: 'handed_off', surface: 'web' });
+    expect(await points(METRIC_NAME.failures)).toHaveLength(0);
+  });
+});
+
+describe('notification delivery metrics', () => {
+  it('counts delivered and failed attempts per channel', async () => {
+    recordNotificationDelivery({ channel: 'email', outcome: 'delivered' });
+    recordNotificationDelivery({ channel: 'email', outcome: 'failed', reason: 'timeout' });
+    recordNotificationDelivery({ channel: 'push_expo', outcome: 'delivered', count: 4 });
+
+    const deliveries = await points(METRIC_NAME.notificationDeliveries);
+    expect(
+      countWhere(deliveries, {
+        'agi.notification.channel': 'email',
+        'agi.notification.outcome': 'delivered',
+      }),
+    ).toBe(1);
+    expect(
+      countWhere(deliveries, {
+        'agi.notification.channel': 'push_expo',
+        'agi.notification.outcome': 'delivered',
+      }),
+    ).toBe(4);
+    const failures = await points(METRIC_NAME.failures);
+    expect(countWhere(failures, { 'agi.failure.kind': 'notification' })).toBe(1);
+  });
+
+  it('records nothing for a batch with no recipients, so the ratio is not diluted', async () => {
+    recordNotificationDelivery({ channel: 'push_web', outcome: 'delivered', count: 0 });
+    expect(await points(METRIC_NAME.notificationDeliveries)).toHaveLength(0);
+  });
+
+  it('does not count an unconfigured transport as a failed delivery', async () => {
+    recordNotificationDelivery({ channel: 'email', outcome: 'not_configured' });
+    expect(await points(METRIC_NAME.failures)).toHaveLength(0);
   });
 });

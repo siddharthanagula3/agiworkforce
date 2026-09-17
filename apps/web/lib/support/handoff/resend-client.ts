@@ -1,17 +1,14 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
+import { recordNotificationDelivery } from '@/lib/observability/metrics';
 import { getHandoffConfig, isValidEmail } from './config';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export type SendEmailFailureReason =
-  | 'not_configured'
-  | 'invalid_recipient'
-  | 'rejected'
-  | 'timeout'
-  | 'network';
+  'not_configured' | 'invalid_recipient' | 'rejected' | 'timeout' | 'network';
 
 export type SendEmailResult =
   | { delivered: true; providerMessageId: string | null }
@@ -80,6 +77,20 @@ async function postOnce(
 export async function sendTransactionalEmail(
   input: TransactionalEmailInput,
 ): Promise<SendEmailResult> {
+  const result = await postTransactionalEmail(input);
+  recordNotificationDelivery({
+    channel: 'email',
+    outcome: result.delivered
+      ? 'delivered'
+      : result.reason === 'not_configured'
+        ? 'not_configured'
+        : 'failed',
+    ...(result.delivered ? {} : { reason: result.reason }),
+  });
+  return result;
+}
+
+async function postTransactionalEmail(input: TransactionalEmailInput): Promise<SendEmailResult> {
   const apiKey = process.env['RESEND_API_KEY']?.trim() || null;
   if (!apiKey || !isValidEmail(input.from)) {
     return {

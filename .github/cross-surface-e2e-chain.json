@@ -1,0 +1,203 @@
+{
+  "description": "The §110 cross-surface chain: one ordered list of steps, the surface that performs each one, and either the command that runs it or the reason it cannot run yet. scripts/check-cross-version-matrix.mjs fails when a step is missing from this file, when a covered step names a spec that is not there, or when a blocked step does not name what would unblock it. scripts/run-cross-surface-chain.mjs executes it.",
+  "checklist": "docs/work/enterprise-master-build-checklist-2026-09-16.md",
+  "workflow": ".github/workflows/cross-version-compatibility.yml",
+  "tenant": {
+    "id": "QA_ENTERPRISE_TENANT_ID",
+    "token": "QA_ENTERPRISE_TENANT_TOKEN",
+    "state": "absent",
+    "unblockedBy": "Founder action F14: create the QA enterprise tenant and put its id and a service token in the repository secrets named above. Every step below runs against that tenant and against nothing else, because the chain writes conversations, projects, files and schedules that must not land in a real workspace."
+  },
+  "surfaces": {
+    "web": {
+      "harness": "playwright",
+      "drivable": true
+    },
+    "mobile": {
+      "harness": "detox",
+      "drivable": true
+    },
+    "desktop": {
+      "harness": "wdio",
+      "drivable": true
+    },
+    "cli": {
+      "harness": "cargo-test",
+      "drivable": true
+    },
+    "vscode": {
+      "harness": "vscode-dev-host",
+      "drivable": false,
+      "why": "the extension host needs a display and a signed-in CLI; no CI job drives it today"
+    },
+    "chrome": {
+      "harness": "chrome-headless",
+      "drivable": false,
+      "why": "the extension is unpublished and its native-messaging bridge is installed from source per machine"
+    }
+  },
+  "steps": [
+    {
+      "order": 1,
+      "row": 1769,
+      "id": "start-chat-web",
+      "title": "Start Chat on Web",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 2,
+      "row": 1770,
+      "id": "continue-mobile",
+      "title": "Continue Mobile",
+      "surface": "mobile",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 3,
+      "row": 1771,
+      "id": "continue-desktop",
+      "title": "Continue Desktop",
+      "surface": "desktop",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 4,
+      "row": 1772,
+      "id": "project-sync",
+      "title": "Project sync",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 5,
+      "row": 1773,
+      "id": "file-upload",
+      "title": "File upload",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 6,
+      "row": 1774,
+      "id": "library",
+      "title": "Library",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 7,
+      "row": 1775,
+      "id": "research",
+      "title": "Research",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 8,
+      "row": 1776,
+      "id": "work",
+      "title": "Work",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 9,
+      "row": 1777,
+      "id": "schedule",
+      "title": "Schedule",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 10,
+      "row": 1778,
+      "id": "connector",
+      "title": "Connector",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 11,
+      "row": 1779,
+      "id": "start-agi-code-desktop",
+      "title": "Start AGI Code Desktop",
+      "surface": "desktop",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 12,
+      "row": 1780,
+      "id": "continue-cli",
+      "title": "Continue CLI",
+      "surface": "cli",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 13,
+      "row": 1781,
+      "id": "continue-vscode",
+      "title": "Continue VS Code",
+      "surface": "vscode",
+      "status": "blocked",
+      "blockedBy": ["tenant", "surface"]
+    },
+    {
+      "order": 14,
+      "row": 1782,
+      "id": "attach-mobile-remote",
+      "title": "Attach Mobile Remote",
+      "surface": "mobile",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 15,
+      "row": 1783,
+      "id": "approve-remotely",
+      "title": "Approve remotely",
+      "surface": "mobile",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 16,
+      "row": 1784,
+      "id": "browser-verification",
+      "title": "Browser verification",
+      "surface": "chrome",
+      "status": "blocked",
+      "blockedBy": ["tenant", "surface"]
+    },
+    {
+      "order": 17,
+      "row": 1785,
+      "id": "generated-file",
+      "title": "Generated file",
+      "surface": "desktop",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    },
+    {
+      "order": 18,
+      "row": 1786,
+      "id": "save-to-library",
+      "title": "Save to Library",
+      "surface": "web",
+      "status": "blocked",
+      "blockedBy": ["tenant"]
+    }
+  ]
+}

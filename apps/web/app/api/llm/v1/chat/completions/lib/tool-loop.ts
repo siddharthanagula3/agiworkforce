@@ -52,7 +52,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
-import { recordToolOutcome } from '@/lib/observability/metrics';
+import { recordBrowserTask, recordToolOutcome } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
 import {
   classifyError,
@@ -2574,6 +2574,9 @@ export async function* runToolLoop(
       durationMs,
       remote: isDeviceStepTool(toolName),
     });
+    if (isBrowserCommand(toolName)) {
+      recordBrowserTask({ status, surface: processed.chatSurface, errorType: category });
+    }
     return recordToolCallAudit({
       userId: options.userId,
       organizationId: processed.organizationId,
