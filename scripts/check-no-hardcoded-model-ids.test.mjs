@@ -15,6 +15,7 @@ import {
   scanModelIdFiles,
 } from './check-no-hardcoded-model-ids.mjs';
 import { getLocalModelCatalog } from '../packages/platform/local-llm/src/catalog.ts';
+import { initSandboxRepository, sandboxGit } from './lib/sandbox-git.mjs';
 
 const curation = JSON.parse(
   readFileSync(
@@ -551,8 +552,8 @@ test('repository discovery includes tracked and untracked files but honors git i
     'untracked.ts': 'export const untracked = true;\n',
     'ignored.ts': 'export const ignored = true;\n',
   });
-  execFileSync('git', ['init', '--quiet'], { cwd: sandbox });
-  execFileSync('git', ['add', '.gitignore', 'tracked.ts'], { cwd: sandbox });
+  initSandboxRepository(sandbox);
+  sandboxGit(sandbox, ['add', '.gitignore', 'tracked.ts']);
 
   const relativeFiles = discoverRepositoryFiles(sandbox).map((file) =>
     path.relative(sandbox, file),
