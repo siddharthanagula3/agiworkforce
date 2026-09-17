@@ -11,9 +11,11 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { PathRefused } from '../runtime/pathGuard';
 import { cancelShellRun, runShellCommand, type ShellStreamChunk } from '../runtime/shellService';
+import { detectShellSandbox, type ShellSandbox } from '../runtime/shellSandbox';
 
 let sandbox: string;
 let root: WorkspaceRoot;
+let hostSandbox: ShellSandbox;
 
 const allowEverything: ShellPolicy = { allow: ['node', 'printf', 'sh'], deny: [] };
 
@@ -36,12 +38,15 @@ function run(
     command,
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     policy: options.policy ?? allowEverything,
-    approve: vi.fn().mockResolvedValue(options.approve ?? false),
+    sandbox: hostSandbox,
+    network: 'deny',
+    approve: vi.fn().mockResolvedValue(options.approve ?? hostSandbox.backend === 'none'),
     emit: (chunk) => chunks.push(chunk),
   });
 }
 
 beforeAll(async () => {
+  hostSandbox = await detectShellSandbox();
   sandbox = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-shell-')));
   await fs.mkdir(path.join(sandbox, 'inner'), { recursive: true });
   await fs.writeFile(path.join(sandbox, 'marker.txt'), 'present\n');
@@ -111,6 +116,8 @@ describe('runShellCommand', () => {
         relativePath: '',
         command: 'node -e "1"',
         policy: { allow: [], deny: ['node'] },
+        sandbox: hostSandbox,
+        network: 'deny',
         approve,
         emit: () => undefined,
       }),
@@ -127,6 +134,8 @@ describe('runShellCommand', () => {
         relativePath: '',
         command: 'node -e "1"',
         policy: EMPTY_SHELL_POLICY,
+        sandbox: hostSandbox,
+        network: 'deny',
         approve,
         emit: () => undefined,
       }),
@@ -142,7 +151,8 @@ describe('runShellCommand', () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it('does not ask again for an allow-listed program', async () => {
+  it('does not ask again for an allow-listed program when a sandbox is available', async (context) => {
+    if (hostSandbox.backend === 'none') context.skip();
     const approve = vi.fn();
     const result = await runShellCommand({
       runId: randomUUID(),
@@ -150,6 +160,8 @@ describe('runShellCommand', () => {
       relativePath: '',
       command: 'node -e "console.log(1)"',
       policy: allowEverything,
+      sandbox: hostSandbox,
+      network: 'deny',
       approve,
       emit: () => undefined,
     });

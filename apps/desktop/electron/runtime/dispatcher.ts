@@ -15,7 +15,6 @@ import {
   type LocalModelSnapshot,
   type PermissionScope,
   type ShellPolicy,
-  type ShellPolicyVerdict,
   type WorkspaceRoot,
   type WorkspaceSnapshot,
 } from '@agiworkforce/local-runtime-contract';
@@ -65,7 +64,8 @@ import {
 } from './localInferenceService';
 import { readLocalModelSettings, writeLocalModelSettings } from './localModelSettingsStore';
 import { readClipboard } from './clipboardService';
-import { cancelShellRun, runShellCommand } from './shellService';
+import { cancelShellRun, runShellCommand, type ShellApprovalRequest } from './shellService';
+import { detectShellSandbox, type ShellSandbox } from './shellSandbox';
 import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
 import {
   createDirectory,
@@ -395,26 +395,42 @@ function emitRuntimeEvent(window: BrowserWindow | null, event: unknown): void {
   window.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, event);
 }
 
+let detectedShellSandbox: Promise<ShellSandbox> | null = null;
+
+function shellSandbox(): Promise<ShellSandbox> {
+  detectedShellSandbox ??= detectShellSandbox();
+  return detectedShellSandbox;
+}
+
 /**
  * The second gate on a local command, quoting it verbatim so the text the user
  * approves is the text that is spawned.
  */
 async function approveShellCommand(
   window: BrowserWindow | null,
-  verdict: ShellPolicyVerdict,
-  command: string,
-  cwd: string,
+  { verdict, command, cwd, sandboxed }: ShellApprovalRequest,
 ): Promise<boolean> {
-  const options = {
-    type: 'warning' as const,
-    buttons: ['Cancel', 'Run once'],
-    defaultId: 0,
-    cancelId: 0,
-    title: 'Run a local command?',
-    message: `Run ${verdict.program} in ${cwd}?`,
-    detail: `${command}\n\nThis starts a real program with your account. Add ${verdict.program} to the allowed list in Settings if you want it to run without asking.`,
-    noLink: true,
-  };
+  const options = sandboxed
+    ? {
+        type: 'warning' as const,
+        buttons: ['Cancel', 'Run once'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Run a local command?',
+        message: `Run ${verdict.program} in ${cwd}?`,
+        detail: `${command}\n\nThis starts a real program with your account, inside a sandbox that lets it change files only in this folder and blocks network access. Add ${verdict.program} to the allowed list in Settings if you want it to run without asking.`,
+        noLink: true,
+      }
+    : {
+        type: 'warning' as const,
+        buttons: ['Cancel', 'Run without a sandbox'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Run without a sandbox?',
+        message: `Run ${verdict.program} in ${cwd} with no sandbox?`,
+        detail: `${command}\n\nThis computer has no sandbox for local commands, so ${verdict.program} would run with your full account. It can read, change or delete any file you can reach, including files outside this folder, and send data over the network. What it changes cannot be undone from here. You are asked every time, even for allowed programs.`,
+        noLink: true,
+      };
   const result = window
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options);
@@ -623,7 +639,9 @@ async function execute(
         command: requireString(args, 'command'),
         ...(timeoutMs === undefined ? {} : { timeoutMs }),
         policy: readShellPolicy(),
-        approve: (verdict, command, cwd) => approveShellCommand(window, verdict, command, cwd),
+        sandbox: await shellSandbox(),
+        network: 'deny',
+        approve: (request) => approveShellCommand(window, request),
         emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
       });
     }
