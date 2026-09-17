@@ -158,6 +158,31 @@ describe('cloud agent workflow starter', () => {
     );
   });
 
+  it('traces the enqueue with the durable job id and the run it serves', async () => {
+    const { logger } = await import('@/lib/logger');
+    workflowMocks.buildInput.mockReturnValue({ version: 1 });
+    workflowMocks.start.mockResolvedValue({
+      runId: 'wrun_traced',
+      getReadable: vi.fn(() => new ReadableStream<Uint8Array>()),
+      cancel: vi.fn(),
+    });
+    workflowMocks.attach.mockResolvedValue(undefined);
+
+    await startCloudAgentWorkflowExecution(baseInput());
+
+    const record = vi
+      .mocked(logger.info)
+      .mock.calls.map((call) => call[0] as unknown as Record<string, unknown>)
+      .find((entry) => entry['span_name'] === 'workflow.enqueue');
+    expect(record).toMatchObject({
+      span_kind: 'producer',
+      'messaging.destination.name': 'cloud-agent-turn',
+      'messaging.message.id': 'wrun_traced',
+      'agi.run.id': RUN_ID,
+      'agi.turn.id': 'agi.chat.web.send.turn-1',
+    });
+  });
+
   it('cancels a started workflow when the durable attachment fails', async () => {
     const workflowRun = {
       runId: 'wrun_123',

@@ -1,10 +1,14 @@
 import 'server-only';
 
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
+import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
+import { recordFailure } from '@/lib/observability/metrics';
 import { withSpan, type ActiveSpan } from '@/lib/observability/span';
 import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 import { computeAnthropicCacheConfig } from './canonical-request';
 import type { ProcessedRequest } from './request-processor';
+
+const MODEL_FAILURE_UNKNOWN_CODE = 'unknown';
 
 export function buildAnthropicAdapter(processed: ProcessedRequest): ProviderAdapter {
   const cacheConfig = computeAnthropicCacheConfig(processed);
@@ -85,7 +89,7 @@ export async function startProviderStream(
       kind: 'client',
       domain: 'model',
       attributes: {
-        'gen_ai.request.model': chatRequest.model,
+        [OBSERVABILITY_ATTRIBUTE.requestModel]: chatRequest.model,
         'gen_ai.request.tool_count': chatRequest.tools?.length ?? 0,
         'gen_ai.request.stream': true,
       },
@@ -103,9 +107,17 @@ async function startProviderStreamInner(
 ): Promise<AsyncIterable<StreamChunk>> {
   const iterator = adapter.stream(chatRequest, signal)[Symbol.asyncIterator]();
   const first = await iterator.next();
+  if (!first.done && first.value.type === 'response-meta') {
+    span.setAttributes({
+      [OBSERVABILITY_ATTRIBUTE.providerRequestId]: first.value.id,
+      [OBSERVABILITY_ATTRIBUTE.responseModel]: first.value.model,
+      [OBSERVABILITY_ATTRIBUTE.providerName]: first.value.provider,
+    });
+  }
   if (!first.done && first.value.type === 'error') {
     const mapped = mapError(first.value);
     span.setAttributes({ 'gen_ai.response.error_code': first.value.code ?? 'unknown' });
+    recordFailure('model', first.value.code ?? MODEL_FAILURE_UNKNOWN_CODE);
     const status = first.value.code ? Number(first.value.code) : Number.NaN;
     if (Number.isInteger(status) && status >= 100 && status <= 599) {
       (mapped as Error & { status?: number }).status = status;
