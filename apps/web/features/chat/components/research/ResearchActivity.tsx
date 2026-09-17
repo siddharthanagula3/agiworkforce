@@ -306,7 +306,7 @@ export function ResearchActivity({
           <label className="flex items-center gap-2 text-muted-foreground">
             <input
               type="checkbox"
-              className="h-3.5 w-3.5 accent-[hsl(var(--primary))]"
+              className="h-3.5 w-3.5"
               checked={useMyFiles}
               onChange={(event) => setUseMyFiles(event.target.checked)}
               data-testid="research-plan-use-files"
