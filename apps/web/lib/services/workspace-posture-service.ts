@@ -3,6 +3,12 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { getEffectiveOrganizationPolicy } from '@/lib/services/organization-policy-service';
+import {
+  readOrganizationKeyStatus,
+  type OrganizationKeyStatus,
+} from '@/lib/server/organization-encryption-keys';
+import { readOrganizationRegion, type OrganizationRegionState } from '@/lib/server/data-region';
+import { DATA_REGIONS, DEFAULT_DATA_REGION } from '@agiworkforce/compliance';
 
 /**
  * Whether a signal's value actually binds at runtime.
@@ -151,6 +157,8 @@ export async function readWorkspacePosture(
     connectorPolicyRows,
     modelPolicyRows,
     policy,
+    keyStatus,
+    regionState,
   ] = await Promise.all([
     db.query<OrgRow>(
       'select name, licensed_seats, seats_consumed from public.organizations where id = $1 limit 1',
@@ -263,6 +271,8 @@ export async function readWorkspacePosture(
       [organizationId],
     ),
     getEffectiveOrganizationPolicy(db, organizationId),
+    readOrganizationKeyStatus(db, organizationId),
+    readOrganizationRegion(db, organizationId),
   ]);
 
   const org = orgRows[0] ?? null;
@@ -577,6 +587,11 @@ export async function readWorkspacePosture(
       ],
     },
     {
+      id: 'residency-and-keys',
+      title: 'Residency and keys',
+      signals: [encryptionKeySignal(keyStatus), dataRegionSignal(regionState)],
+    },
+    {
       id: 'audit',
       title: 'Audit',
       signals: [
@@ -675,6 +690,132 @@ export async function readWorkspacePosture(
       verifiedDomainCount: verifiedDomains.length,
       syncErrors,
     }),
+  };
+}
+
+/**
+ * The key row says which key opens this workspace's data and whether it can be
+ * reached. `unavailable` is the one that matters: the product refuses rather
+ * than falling back to the platform key, so an administrator has to be able to
+ * see that refusal here rather than discover it as a failed request.
+ */
+function encryptionKeySignal(keyStatus: OrganizationKeyStatus): PostureSignal {
+  const { availability } = keyStatus;
+  const rotated = keyStatus.lastRotatedAt
+    ? ` Last rotated ${new Date(keyStatus.lastRotatedAt).toUTCString()}.`
+    : '';
+
+  if (availability.state === 'platform_unconfigured') {
+    return {
+      id: 'encryption-key',
+      label: 'Encryption key',
+      value: 'Not configured',
+      state: 'off',
+      enforcement: 'unconfigured',
+      detail:
+        'No platform key ring is configured for this deployment, so nothing that needs one can ' +
+        'be sealed or opened for this workspace. This is a deployment fault, not a workspace ' +
+        'setting.',
+      href: '/workspace/data',
+    };
+  }
+
+  if (availability.state === 'platform_derived') {
+    return {
+      id: 'encryption-key',
+      label: 'Encryption key',
+      value: 'Platform key, derived per workspace',
+      state: 'ok',
+      enforcement: 'enforced',
+      detail:
+        'Secrets for this workspace are sealed under a key derived from the platform root for ' +
+        'this workspace alone, so one workspace’s ciphertext does not open under another’s. ' +
+        'Bringing your own key in your own KMS is not offered yet; do not represent this ' +
+        'workspace as holding its own key.',
+      href: '/workspace/data',
+    };
+  }
+
+  if (availability.state === 'revoked') {
+    return {
+      id: 'encryption-key',
+      label: 'Encryption key',
+      value: 'Revoked by this workspace',
+      state: 'attention',
+      enforcement: 'enforced',
+      detail:
+        'This workspace withdrew its customer-managed key. Anything sealed under it stays ' +
+        'sealed and requests that need it are refused; nothing falls back to a platform key. ' +
+        `Restore the key in your KMS and reactivate it to read that data again.${rotated}`,
+      href: '/workspace/data',
+    };
+  }
+
+  if (availability.state === 'unavailable') {
+    return {
+      id: 'encryption-key',
+      label: 'Encryption key',
+      value: 'Customer-managed, unreachable',
+      state: 'attention',
+      enforcement: 'enforced',
+      detail:
+        `The key this workspace manages in its own ${availability.descriptor.provider} could ` +
+        `not be used: ${availability.reason}. Requests needing it are refused rather than ` +
+        `served with a platform key.${rotated}`,
+      href: '/workspace/data',
+    };
+  }
+
+  return {
+    id: 'encryption-key',
+    label: 'Encryption key',
+    value: `Customer-managed (${availability.descriptor.provider})`,
+    state: 'ok',
+    enforcement: 'enforced',
+    detail:
+      'The key that wraps this workspace’s data key lives in your own KMS and is never held ' +
+      `here. Version ${availability.keyVersion}, in ${availability.descriptor.region}. ` +
+      `Revoking our grant on it ends our ability to read your data.${rotated}`,
+    href: '/workspace/data',
+  };
+}
+
+function dataRegionSignal(regionState: OrganizationRegionState): PostureSignal {
+  const definition = DATA_REGIONS[regionState.effective];
+  const pending = regionState.requested
+    ? ` A move to ${DATA_REGIONS[regionState.requested].label} is requested and not complete; ` +
+      'data is still in the region named above until the copy is verified and cut over.'
+    : '';
+
+  if (!regionState.provisioned) {
+    return {
+      id: 'data-region',
+      label: 'Data region',
+      value: `${definition.label}, not provisioned`,
+      state: 'attention',
+      enforcement: 'enforced',
+      detail:
+        `This workspace is pinned to ${definition.label}, which this deployment cannot serve ` +
+        `(${regionState.missing.join(', ')} unset). Requests are refused rather than served ` +
+        `from another region.${pending}`,
+      href: '/workspace/data',
+    };
+  }
+
+  return {
+    id: 'data-region',
+    label: 'Data region',
+    value: definition.label,
+    state: 'ok',
+    enforcement: regionState.effective === DEFAULT_DATA_REGION ? 'stated' : 'enforced',
+    detail:
+      regionState.effective === DEFAULT_DATA_REGION
+        ? 'Rows, objects, logs and keys are in the home region because it is the only region ' +
+          'provisioned, not because this workspace chose it. Treat it as where the data is, ' +
+          `not as a residency commitment.${pending}`
+        : `Rows, objects, logs, keys and inference for this workspace are pinned to ` +
+          `${definition.jurisdiction}. A request that cannot be served there is refused.${pending}`,
+    href: '/workspace/data',
   };
 }
 

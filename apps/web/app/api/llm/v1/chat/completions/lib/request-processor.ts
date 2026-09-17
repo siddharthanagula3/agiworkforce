@@ -7,7 +7,11 @@ import type {
   ResolvedWorkspaceControls,
   WorkspaceFeature,
 } from '@agiworkforce/types';
-import { NON_US_VENDOR_TRANSPORTS } from '@agiworkforce/compliance';
+import {
+  DATA_REGIONS,
+  NON_US_VENDOR_TRANSPORTS,
+  excludedTransportsFor,
+} from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
 import { AgiWorkGoalSchema } from './agiwork-plan';
@@ -1620,8 +1624,17 @@ const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
  *
  * A model the user names is still served, through a permitted host: they chose
  * a model, not a datacentre.
+ *
+ * This is the home region's answer, which `DATA_REGIONS.us` states as an
+ * exclusion set in `@agiworkforce/compliance`. A region that pins processing
+ * inside its own territory states an ALLOW set instead, because a transport
+ * whose processing location is unpublished cannot be assumed to sit inside it;
+ * no such region is provisioned, so nothing selects one here yet.
  */
-const EXCLUDED_ROUTE_HOSTS: ReadonlySet<string> = new Set(NON_US_VENDOR_TRANSPORTS);
+const EXCLUDED_ROUTE_HOSTS: ReadonlySet<string> = excludedTransportsFor(
+  { mode: DATA_REGIONS.us.inferenceRouteSetMode, transports: new Set(NON_US_VENDOR_TRANSPORTS) },
+  NON_US_VENDOR_TRANSPORTS,
+);
 
 export function buildWebCloudAutoRoutingRequest(
   model: string,

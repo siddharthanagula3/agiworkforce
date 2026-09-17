@@ -49,6 +49,29 @@ export {
 } from './transport-residency';
 
 export {
+  DATA_REGIONS,
+  DATA_REGION_IDS,
+  DEFAULT_DATA_REGION,
+  DataRegionUnavailableError,
+  configuredDataRegions,
+  dataRegionEnvName,
+  dataRegionEnvNames,
+  excludedTransportsFor,
+  inferenceRouteSetAdmits,
+  isDataRegionId,
+  normaliseDataRegion,
+  resolveDataRegion,
+  selectDataRegion,
+  type DataRegionDefinition,
+  type DataRegionFacet,
+  type DataRegionId,
+  type DataRegionResolution,
+  type DataRegionRuntime,
+  type InferenceRouteSet,
+  type InferenceRouteSetMode,
+} from './data-residency';
+
+export {
   Article50DisclosureRequiredError,
   ChineseHqProviderNotOptedInError,
   assertLlmGate,

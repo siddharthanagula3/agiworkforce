@@ -82,22 +82,28 @@ function assertUniqueKeyIds(envName: string, keys: EnvelopeKey[]): void {
   }
 }
 
-function parseKeyRingEntries(
+interface RawKeyEntry {
+  id: string;
+  raw: string;
+  label: string;
+}
+
+function parseRawKeyRing(
   envName: string,
   env: Record<string, string | undefined>,
-  decodeMaterial: (raw: string, label: string) => Buffer,
-): KeyRing {
+): { active: RawKeyEntry; retired: RawKeyEntry[] } {
   const activeRaw = env[envName];
   if (!activeRaw) {
     throw new Error(`${envName} is not set; cannot build a key ring`);
   }
 
-  const active: EnvelopeKey = {
+  const active: RawKeyEntry = {
     id: assertKeyId(env[`${envName}_ID`] ?? '1', `${envName}_ID`),
-    material: decodeMaterial(activeRaw, envName),
+    raw: activeRaw,
+    label: envName,
   };
 
-  const retired: EnvelopeKey[] = [];
+  const retired: RawKeyEntry[] = [];
   const retiredRaw = env[`${envName}_RETIRED`]?.trim();
   if (retiredRaw) {
     for (const entry of retiredRaw.split(',')) {
@@ -109,13 +115,33 @@ function parseKeyRingEntries(
       }
       retired.push({
         id: assertKeyId(trimmed.slice(0, separator), `${envName}_RETIRED id`),
-        material: decodeMaterial(trimmed.slice(separator + 1), `${envName}_RETIRED entry`),
+        raw: trimmed.slice(separator + 1),
+        label: `${envName}_RETIRED entry`,
       });
     }
   }
 
-  assertUniqueKeyIds(envName, [active, ...retired]);
+  assertUniqueKeyIds(envName, [active, ...retired].map(toIdOnlyKey));
   return { active, retired };
+}
+
+function toIdOnlyKey(entry: RawKeyEntry): EnvelopeKey {
+  return { id: entry.id, material: Buffer.alloc(0) };
+}
+
+function parseKeyRingEntries(
+  envName: string,
+  env: Record<string, string | undefined>,
+  decodeMaterial: (raw: string, label: string) => Buffer,
+): KeyRing {
+  const { active, retired } = parseRawKeyRing(envName, env);
+  return {
+    active: { id: active.id, material: decodeMaterial(active.raw, active.label) },
+    retired: retired.map((entry) => ({
+      id: entry.id,
+      material: decodeMaterial(entry.raw, entry.label),
+    })),
+  };
 }
 
 function hkdfDeriveTenantKey(key: EnvelopeKey, organizationId: string): EnvelopeKey {
@@ -137,22 +163,78 @@ export const envKeyProvider: KeyProvider = {
   deriveTenantKey: hkdfDeriveTenantKey,
 };
 
-export type KmsUnwrapFn = (wrappedKeyMaterial: string) => Buffer;
+/**
+ * Unwrapping a wrapped data key is a network call to the customer's KMS, so it
+ * is asynchronous and it is slow. Every envelope opened on a request would
+ * otherwise be a round trip to another vendor's control plane, which is both a
+ * latency floor nobody would accept and an availability dependency on a service
+ * this product does not run.
+ */
+export type KmsUnwrapFn = (wrappedKeyMaterial: string) => Promise<Buffer>;
 
-export function createKmsKeyProvider(unwrap: KmsUnwrapFn): KeyProvider {
-  const decodeMaterial = (wrapped: string, label: string): Buffer => {
-    const material = unwrap(wrapped);
+export interface AsyncKeyProvider {
+  readonly name: string;
+  resolveKeyRing(envName: string, options?: LoadKeyRingOptions): Promise<ProvidedKeyRing>;
+  deriveTenantKey?(key: EnvelopeKey, organizationId: string): EnvelopeKey;
+}
+
+export interface KmsKeyProviderOptions {
+  /**
+   * How long an unwrapped data key may be reused. Bounded, not permanent: a key
+   * the customer revokes has to stop working here without a redeploy, and this
+   * window is how long that takes at worst.
+   */
+  cacheTtlMs?: number;
+  now?: () => number;
+}
+
+const DEFAULT_KMS_CACHE_TTL_MS = 5 * 60_000;
+
+export function createKmsKeyProvider(
+  unwrap: KmsUnwrapFn,
+  options: KmsKeyProviderOptions = {},
+): AsyncKeyProvider {
+  const ttlMs = options.cacheTtlMs ?? DEFAULT_KMS_CACHE_TTL_MS;
+  const now = options.now ?? Date.now;
+  const cache = new Map<string, { expiresAt: number; material: Promise<Buffer> }>();
+
+  async function unwrapOnce(wrapped: string, label: string): Promise<Buffer> {
+    const material = await unwrap(wrapped);
     if (material.length !== KEY_LENGTH) {
       throw new Error(`${label} unwrap must yield ${KEY_LENGTH} bytes, got ${material.length}`);
     }
     return material;
-  };
+  }
+
+  function decodeMaterial(wrapped: string, label: string): Promise<Buffer> {
+    const cached = cache.get(wrapped);
+    if (cached && cached.expiresAt > now()) return cached.material;
+    const material = unwrapOnce(wrapped, label);
+    // Parked before the first await so concurrent opens share one KMS call; a
+    // rejection is evicted so a transient KMS failure is not cached as one.
+    cache.set(wrapped, { expiresAt: now() + ttlMs, material });
+    material.catch(() => {
+      if (cache.get(wrapped)?.material === material) cache.delete(wrapped);
+    });
+    return material;
+  }
+
   return {
     name: 'kms',
-    resolveKeyRing(envName, options = {}) {
-      const env = options.env ?? process.env;
-      const ring = parseKeyRingEntries(envName, env, decodeMaterial);
-      return { ...ring, provider: 'kms' };
+    async resolveKeyRing(envName, options = {}) {
+      const { active, retired } = parseRawKeyRing(envName, options.env ?? process.env);
+      const [activeMaterial, ...retiredMaterial] = await Promise.all([
+        decodeMaterial(active.raw, active.label),
+        ...retired.map((entry) => decodeMaterial(entry.raw, entry.label)),
+      ]);
+      return {
+        active: { id: active.id, material: activeMaterial as Buffer },
+        retired: retired.map((entry, index) => ({
+          id: entry.id,
+          material: retiredMaterial[index] as Buffer,
+        })),
+        provider: 'kms',
+      };
     },
     deriveTenantKey: hkdfDeriveTenantKey,
   };
@@ -172,6 +254,30 @@ export function resolveTenantKeyRing(
   return {
     active: derive(ring.active, organizationId),
     retired: ring.retired.map((key) => derive(key, organizationId)),
+  };
+}
+
+export async function resolveTenantKeyRingAsync(
+  provider: AsyncKeyProvider,
+  envName: string,
+  organizationId: string,
+  options?: LoadKeyRingOptions,
+): Promise<KeyRing> {
+  if (!provider.deriveTenantKey) {
+    throw new Error(`Key provider "${provider.name}" does not support per-tenant derivation`);
+  }
+  const ring = await provider.resolveKeyRing(envName, options);
+  const derive = provider.deriveTenantKey;
+  return {
+    active: derive(ring.active, organizationId),
+    retired: ring.retired.map((key) => derive(key, organizationId)),
+  };
+}
+
+export function deriveTenantKeyRing(ring: KeyRing, organizationId: string): KeyRing {
+  return {
+    active: hkdfDeriveTenantKey(ring.active, organizationId),
+    retired: ring.retired.map((key) => hkdfDeriveTenantKey(key, organizationId)),
   };
 }
 
