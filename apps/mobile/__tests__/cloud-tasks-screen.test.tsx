@@ -60,6 +60,7 @@ jest.mock('../lib/mmkv', () => ({
 import {
   CloudTasksScreen,
   ALL_CLOUD_RUN_STATES,
+  cloudRunFilterStates,
   DEFAULT_CLOUD_RUN_FILTER,
   CLOUD_TASK_LIST_POLL_INTERVAL_MS,
   useCloudTaskStore,
@@ -223,7 +224,7 @@ describe('Mobile Cloud tasks screen', () => {
 
     await waitFor(() =>
       expect(mockListRuns).toHaveBeenLastCalledWith(
-        expect.objectContaining({ states: ['awaiting_input', 'paused'] }),
+        expect.objectContaining({ states: cloudRunFilterStates('blocked') }),
       ),
     );
   });
