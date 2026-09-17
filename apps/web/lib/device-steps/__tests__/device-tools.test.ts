@@ -32,6 +32,20 @@ describe('device tool offering', () => {
     expect(deviceStepToolDefs({ ...DECLARATION, capabilities: ['microphone'] })).toEqual([]);
   });
 
+  it('lets a screenshot name the display it captures', () => {
+    const screenshot = deviceStepToolDefs({
+      ...DECLARATION,
+      capabilities: ['computer.use'],
+      roots: [],
+    }).find((tool) => tool.function.name === 'device_screenshot');
+    const properties = screenshot?.function.parameters['properties'] as Record<
+      string,
+      { type?: string }
+    >;
+    expect(properties['display']?.type).toBe('integer');
+    expect(screenshot?.function.parameters['required']).toEqual([]);
+  });
+
   it('binds the folder choice to the granted roots', () => {
     const read = deviceStepToolDefs(DECLARATION).find(
       (tool) => tool.function.name === 'device_read_file',

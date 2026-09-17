@@ -1477,6 +1477,31 @@ pub fn app_permissions_active_window() -> Option<crate::automation::computer_use
 }
 
 #[tauri::command]
+pub fn computer_use_list_displays() -> Result<Vec<crate::automation::screen::ScreenInfo>, String> {
+    crate::automation::screen::list_displays().map_err(|e| format!("Failed to list displays: {e}"))
+}
+
+#[tauri::command]
+pub fn computer_use_set_target_display(
+    display_id: Option<u32>,
+) -> Result<crate::automation::screen::ScreenInfo, String> {
+    crate::automation::computer_use::control::set_target_display(display_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn computer_use_take_over() -> crate::automation::computer_use::ControlState {
+    tracing::info!("User took over screen control from the agent");
+    crate::automation::computer_use::control::take_over()
+}
+
+#[tauri::command]
+pub fn computer_use_hand_back() -> crate::automation::computer_use::ControlState {
+    tracing::info!("User handed screen control back to the agent");
+    crate::automation::computer_use::control::hand_back()
+}
+
+#[tauri::command]
 pub async fn computer_use_stop_session(
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
     session_id: String,

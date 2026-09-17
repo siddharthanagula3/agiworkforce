@@ -105,7 +105,8 @@ pub fn action_class(action: &ComputerUseAction) -> ToolActionClass {
         | ComputerUseAction::Paste
         | ComputerUseAction::SelectAll
         | ComputerUseAction::Undo
-        | ComputerUseAction::Redo => ToolActionClass::Write,
+        | ComputerUseAction::Redo
+        | ComputerUseAction::RespondToDialog { .. } => ToolActionClass::Write,
         _ => ToolActionClass::Execute,
     }
 }

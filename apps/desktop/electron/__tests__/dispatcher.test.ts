@@ -19,6 +19,8 @@ const requestPermission = vi.fn<() => Promise<PermissionState>>();
 const consumeSingleUse = vi.fn();
 const revokePermission = vi.fn();
 const stopComputerUseHelper = vi.fn();
+const takeOverComputerUse = vi.fn(() => ({ takenOver: true }));
+const captureScreen = vi.fn();
 const runShellCommand = vi.fn();
 const cancelShellRun = vi.fn();
 const readShellPolicy = vi.fn();
@@ -50,7 +52,7 @@ vi.mock('../runtime/permissionManager', () => ({
 vi.mock('../runtime/computerUseService', () => ({
   ComputerUseRefused: class extends Error {},
   captureRegion: vi.fn(),
-  captureScreen: vi.fn(),
+  captureScreen,
   clickPointer: vi.fn(),
   computerUseAvailability: () => ({ supported: true }),
   dragPointer: vi.fn(),
@@ -58,6 +60,7 @@ vi.mock('../runtime/computerUseService', () => ({
   pressKey: vi.fn(),
   scrollPointer: vi.fn(),
   stopComputerUseHelper,
+  takeOverComputerUse,
   typeText: vi.fn(),
   waitFor: vi.fn(),
 }));
@@ -467,5 +470,44 @@ describe('stopping screen control', () => {
     await dispatch(window, 'computer_stop', {});
 
     expect(revokePermission).toHaveBeenCalledWith('computer.use', { kind: 'global' });
+  });
+});
+
+describe('screen control across displays and takeover', () => {
+  beforeEach(() => {
+    captureScreen.mockClear();
+    requestPermission.mockClear();
+    takeOverComputerUse.mockClear();
+    getPermissionState.mockReturnValue('granted');
+  });
+
+  it('captures the display the step names, and the remembered one when it names none', async () => {
+    await dispatch(window, 'computer_screenshot', { display: 7 });
+    await dispatch(window, 'computer_screenshot', {});
+
+    expect(captureScreen.mock.calls).toEqual([[7], [undefined]]);
+  });
+
+  it('refuses a display id that is not a number', async () => {
+    const result = await dispatch(window, 'computer_screenshot', { display: 'second' });
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    expect(captureScreen).not.toHaveBeenCalled();
+  });
+
+  it('takes over without asking for permission first', async () => {
+    getPermissionState.mockReturnValue('prompt');
+
+    const result = await dispatch(window, 'computer_take_over', {});
+
+    expect(result.ok).toBe(true);
+    expect(takeOverComputerUse).toHaveBeenCalledOnce();
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('leaves handing control back to the native menu, not the page', async () => {
+    const result = await dispatch(window, 'computer_hand_back', {});
+
+    expect(result.ok).toBe(false);
   });
 });

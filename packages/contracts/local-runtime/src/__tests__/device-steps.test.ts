@@ -4,6 +4,8 @@ import {
   DEVICE_STEP_TOOLS,
   DeviceStepRefused,
   MAX_DEVICE_COORDINATE,
+  describeDeviceDisplays,
+  describeDeviceStep,
   offeredDeviceStepTools,
   planDeviceStep,
   type DesktopHostDeclaration,
@@ -109,5 +111,52 @@ describe('screen step arguments', () => {
     expect(() => planDeviceStep('device_read_file', { path: 'a.md' }, roots)).toThrow(
       DeviceStepRefused,
     );
+  });
+});
+
+describe('screenshots across displays', () => {
+  it('passes a named display through and leaves it out when none is named', () => {
+    expect(planDeviceStep('device_screenshot', { display: 2 }, [])).toEqual({
+      tool: 'device_screenshot',
+      display: 2,
+    });
+    expect(planDeviceStep('device_screenshot', {}, [])).toEqual({ tool: 'device_screenshot' });
+  });
+
+  it('refuses a display that is not a whole non-negative number', () => {
+    for (const bad of ['2', -1, Number.NaN]) {
+      expect(() => planDeviceStep('device_screenshot', { display: bad }, [])).toThrow(
+        DeviceStepRefused,
+      );
+    }
+  });
+
+  it('names the display in the approval text', () => {
+    expect(describeDeviceStep({ tool: 'device_screenshot', display: 4 }, [])).toContain(
+      'display 4',
+    );
+  });
+
+  it('lists the other displays only when there is more than one', () => {
+    const main = {
+      id: 1,
+      name: 'Built-in',
+      width: 1512,
+      height: 982,
+      scaleFactor: 2,
+      primary: true,
+    };
+    const side = {
+      id: 4,
+      name: 'Studio',
+      width: 2560,
+      height: 1440,
+      scaleFactor: 1,
+      primary: false,
+    };
+    expect(describeDeviceDisplays([main], 1)).toBe('');
+    const text = describeDeviceDisplays([main, side], 4);
+    expect(text).toContain('display 4 "Studio" 2560x1440 at 1x, captured');
+    expect(text).toContain('primary');
   });
 });

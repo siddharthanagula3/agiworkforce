@@ -3,7 +3,7 @@ use xcap::Monitor;
 
 use super::xcap_lock::lock_xcap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ScreenInfo {
     pub id: u32,
     pub x: i32,

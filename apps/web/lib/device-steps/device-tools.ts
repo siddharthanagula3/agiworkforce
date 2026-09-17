@@ -2,6 +2,7 @@ import {
   DEVICE_STEP_DEFINITIONS,
   MAX_DEVICE_CLICK_COUNT,
   MAX_DEVICE_COORDINATE,
+  MAX_DEVICE_DISPLAY_ID,
   MAX_DEVICE_SCROLL_DELTA,
   MAX_DEVICE_TYPE_LENGTH,
   MAX_DEVICE_WAIT_MS,
@@ -100,7 +101,19 @@ function parametersFor(
         required: ['rootId', 'command'],
       };
     case 'device_screenshot':
-      return { type: 'object', properties: {}, required: [] };
+      return {
+        type: 'object',
+        properties: {
+          display: {
+            type: 'integer',
+            minimum: 0,
+            maximum: MAX_DEVICE_DISPLAY_ID,
+            description:
+              'Id of the display to capture, from the displays a previous screenshot listed. Omit to capture the screen the last screenshot showed, or the one under the pointer.',
+          },
+        },
+        required: [],
+      };
     case 'device_zoom':
       return {
         type: 'object',

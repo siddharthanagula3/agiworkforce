@@ -17,7 +17,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
-use crate::automation::screen::capture_primary_screen;
+use crate::automation::screen::capture_display;
 
 use super::types::{ComputerUseAction, ComputerUseTask, TaskOutcome, TaskProgress};
 use super::window_manager::{ActiveWindow, WindowCoordinator};
@@ -479,7 +479,8 @@ impl ComputerUseSession {
 
     /// Captures a screenshot and stores it according to config.
     fn capture_screenshot(&self, suffix: &str) -> Result<Option<ScreenshotRef>> {
-        let captured = capture_primary_screen().context("Failed to capture screenshot")?;
+        let captured = capture_display(super::control::target_display())
+            .context("Failed to capture screenshot")?;
 
         if self.config.persist_screenshots {
             if let Some(ref dir) = self.config.screenshot_dir {

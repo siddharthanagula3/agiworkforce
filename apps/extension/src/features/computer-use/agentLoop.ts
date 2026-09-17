@@ -22,30 +22,19 @@ import {
 import { formatNetworkEntries, readNetworkEntries } from '../browser-tools/networkCapture';
 import { startPageWatch, stopPageWatch } from '../browser-tools/pageWatch';
 import { formatDownloadRecord, startBrowserToolDownload } from '../browser-tools/downloads';
-
-/**
- * Actions that need a person even when the run is autonomous.
- *
- * "Ask before acting" is a preference about routine steps, clicking and typing
- * and scrolling, and turning it off used to remove the approval hook outright,
- * so a download went ahead with nobody asked. A file written to the user's
- * machine is not a routine step, and it is the one action here that outlives
- * the run and the tab.
- *
- * The floor lives in the loop rather than in the caller that builds the hook,
- * because a caller that forgets is exactly how it went missing.
- */
-export const ALWAYS_ASK_TOOLS: ReadonlySet<string> = new Set(['download_file']);
-
-export const ALWAYS_ASK_REFUSAL =
-  'Downloading a file always needs approval, and this run has no way to ask. Start the run from the side panel to approve it.';
+import {
+  alwaysAskRefusal,
+  approvalRequirement,
+  type ActionApprovalRequirement,
+} from './approvalPolicy';
 
 export interface AgentLoopOptions {
   maxSteps?: number;
   onBeforeAction?: (
     toolName: string,
     args: Record<string, unknown>,
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
+    requirement: ActionApprovalRequirement,
   ) => Promise<boolean> | boolean;
   onProgress?: (step: AgentLoopStep) => void;
   onUsageUpdate?: (usage: AgentLoopUsage) => void;
@@ -506,6 +495,19 @@ export async function runAgentLoop(
  */
 export const APPROVAL_TIMEOUT_MS = 30_000;
 
+export async function resolveApprovalRequirement(
+  tabId: number,
+  toolName: string,
+  args: Record<string, unknown>,
+  options: AgentLoopOptions = {},
+): Promise<ActionApprovalRequirement> {
+  const pageUrl = await runOwnedOperation(options, () => getTabUrl(tabId));
+  const index = args['index'];
+  const targetSignature =
+    typeof index === 'number' ? (cdp.resolveIndexedElement(tabId, index)?.signature ?? null) : null;
+  return approvalRequirement({ toolName, args, pageUrl, targetSignature });
+}
+
 async function dispatchToolCall(
   tabId: number,
   toolCall: ToolCall,
@@ -528,8 +530,9 @@ async function dispatchToolCall(
     toolArgs: args,
   });
 
-  if (ALWAYS_ASK_TOOLS.has(toolName) && options.onBeforeAction === undefined) {
-    const refusal = ALWAYS_ASK_REFUSAL;
+  const requirement = await resolveApprovalRequirement(tabId, toolName, args, options);
+  if (requirement.alwaysAsk && options.onBeforeAction === undefined) {
+    const refusal = alwaysAskRefusal(requirement);
     await assertRunOwnership(options);
     options.onProgress?.({ kind: 'tool_result', stepNumber, toolName, toolResult: refusal });
     return { role: 'tool', content: refusal, tool_call_id: toolCall.id, name: toolName };
@@ -567,9 +570,7 @@ async function dispatchToolCall(
           onAbort();
           return;
         }
-        const approval = options.signal
-          ? options.onBeforeAction?.(toolName, args, options.signal)
-          : options.onBeforeAction?.(toolName, args);
+        const approval = options.onBeforeAction?.(toolName, args, options.signal, requirement);
         Promise.resolve(approval).then((decision) => finish(decision === true), fail);
       });
       await assertRunOwnership(options);

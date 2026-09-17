@@ -52,6 +52,7 @@ import {
   pressKey,
   scrollPointer,
   stopComputerUseHelper,
+  takeOverComputerUse,
   typeText,
   waitFor,
 } from './computerUseService';
@@ -686,8 +687,10 @@ async function execute(
       return readLocalModelSettings();
     case 'local_model_settings_write':
       return writeLocalModelSettings(requireLocalSettings(args));
-    case 'computer_screenshot':
-      return captureScreen();
+    case 'computer_screenshot': {
+      const display = optionalNumber(args, 'display');
+      return captureScreen(display);
+    }
     case 'computer_zoom':
       return captureRegion(requireRegion(args));
     case 'computer_move':
@@ -721,6 +724,8 @@ async function execute(
       return waitFor(optionalNumberOr(args, 'ms', 500));
     case 'computer_stop':
       return stopComputerUse();
+    case 'computer_take_over':
+      return takeOverComputerUse();
     case 'device_host_declaration':
       return declareDeviceHost();
     case 'developer_runtime_status':
