@@ -16,6 +16,8 @@ import {
   X,
 } from 'lucide-react';
 import { describeCronCadence } from '@/lib/schedules/schedule-time';
+import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
+import ScheduleTriggersPanel from './ScheduleTriggersPanel';
 import { cn } from '@shared/utils/cn';
 import { formatRelativeTime } from '@shared/utils/format';
 import type { ScheduleTask } from '../types';
@@ -66,6 +68,12 @@ function scheduleTiming(schedule: ScheduleTask): string {
   const recurrence = taskRecurrence(schedule);
   const metadata = schedule.metadata ?? {};
   const time = typeof metadata['timeOfDay'] === 'string' ? metadata['timeOfDay'] : null;
+  if (recurrence === 'event') return 'When a trigger fires it';
+  if (recurrence === 'rrule') {
+    return schedule.recurrenceRule
+      ? describeRecurrenceRule(schedule.recurrenceRule, schedule.timezone)
+      : 'Custom rule';
+  }
   if (recurrence === 'once') return formatDateTime(schedule.executeAt, schedule.timezone);
   if (recurrence === 'interval' && schedule.intervalMs) {
     const minutes = schedule.intervalMs / 60_000;
@@ -420,6 +428,7 @@ export function ScheduleCard({
               onRetry={() => onRetryHistory(schedule)}
               onLoadMore={() => onLoadMoreHistory(schedule)}
             />
+            <ScheduleTriggersPanel scheduleId={schedule.id} scheduleName={schedule.name} />
           </section>
         )}
       </CardContent>

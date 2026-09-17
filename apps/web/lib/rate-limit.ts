@@ -387,6 +387,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 100 webhook events per minute per IP (generous for real Stripe traffic)
     failClosed: false, // Allow webhooks through if Redis fails - business critical
   },
+  'trigger-webhook': {
+    limit: 300,
+    window: '1 m', // 300 provider events per minute per IP across Slack, Gmail, Calendar and connectors
+    failClosed: false, // A dead Redis must not stop a provider's push; the signature check still gates it
+  },
   'settings-org': {
     limit: 60,
     window: '1 m',

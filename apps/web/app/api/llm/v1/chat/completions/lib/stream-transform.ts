@@ -43,6 +43,7 @@ import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 import { compactionUsageFields } from './context-window';
 import { withSseHeartbeat } from './sse-heartbeat';
+import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import {
   collectGeneratedFileRefs,
   persistGeneratedFiles,
@@ -274,6 +275,13 @@ function recordDirectRouteSuccess(input: {
       },
       Date.now(),
     );
+    persistRoutingDecisionOutcome({
+      requestId: input.processed.requestId,
+      kind: 'served',
+      outcome: 'succeeded',
+      ttftMs: input.ttftMs,
+      durationMs: input.durationMs,
+    });
     if (!input.processed.conversationId) return;
     const routePricing = getRoutePricing(routeId);
     void recordServedRouteAffinity({
@@ -486,8 +494,7 @@ export async function buildStreamResponse(
                   activeBlockTypes.set(event.index, 'web_fetch_tool_result');
                 }
                 const fetchResult = event.content_block.content as
-                  | { type?: string; url?: unknown; error_code?: unknown }
-                  | undefined;
+                  { type?: string; url?: unknown; error_code?: unknown } | undefined;
                 const isFetchError = fetchResult?.type === 'web_fetch_tool_result_error';
                 const fetchContent = isFetchError
                   ? `Web fetch failed: ${

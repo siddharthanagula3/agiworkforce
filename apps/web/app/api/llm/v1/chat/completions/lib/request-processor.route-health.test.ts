@@ -26,6 +26,7 @@ const mockGetCredentialCooldownSnapshot = vi.fn(
     ({}) as Record<string, RouteHealthSnapshot>,
 );
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  recordShadowRouteOutcome: vi.fn(async () => undefined),
   getRouteHealthSnapshot: (routeIds: readonly string[], nowMs: number) =>
     mockGetRouteHealthSnapshot(routeIds, nowMs),
   getCredentialCooldownSnapshot: (credentialIds: readonly string[], nowMs: number) =>
@@ -35,7 +36,11 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   getFreeLaneRuntimeState: vi.fn(async () => ({})),
 }));
 
-import { resolveRouteHealthRuntimeState, resolveWebCloudModelRoute } from './request-processor';
+import {
+  buildWebCloudAutoRoutingRequest,
+  resolveRouteHealthRuntimeState,
+  resolveWebCloudModelRoute,
+} from './request-processor';
 
 const ANTHROPIC_DEFAULT_MODEL_ID = requireProviderDefaultModel('anthropic');
 const anthropicPremiumModel = getModelsForProvider('anthropic').find(
@@ -273,5 +278,64 @@ describe('resolveRouteHealthRuntimeState · candidate route ids', () => {
     const resolved = await resolveRouteHealthRuntimeState(ANTHROPIC_DEFAULT_MODEL_ID, Date.now());
 
     expect(resolved.unfundedRouteIds.size).toBe(0);
+  });
+});
+
+describe('rollout inputs on the managed routing request', () => {
+  const ROLLOUT = {
+    region: 'us',
+    requestId: 'conversation-7',
+    capabilitiesInUse: ['functionCalling'] as const,
+    enableCanary: false,
+    enableShadow: true,
+    enableObservedHealthRanking: true,
+    canaryCohorts: { general_fast: true },
+    shadowRequestsToday: { general_fast: 3 },
+    flagVariants: { 'routing.canary.general_fast': 'on' },
+  };
+
+  it('carries the region, cohort, capability and shadow count the resolver acts on', () => {
+    const request = buildWebCloudAutoRoutingRequest(
+      'auto',
+      'pro',
+      'simple_chat',
+      ZERO_COST_USAGE,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ROLLOUT,
+    );
+
+    expect(request).toMatchObject({
+      region: 'us',
+      requestId: 'conversation-7',
+      capabilitiesInUse: ['functionCalling'],
+      enableCanary: false,
+      enableShadow: true,
+      enableObservedHealthRanking: true,
+      canaryCohorts: { general_fast: true },
+      shadowRequestsToday: { general_fast: 3 },
+    });
+  });
+
+  it('leaves every rollout input absent when the caller supplies none', () => {
+    const request = buildWebCloudAutoRoutingRequest('auto', 'pro', 'simple_chat', ZERO_COST_USAGE);
+
+    for (const key of [
+      'region',
+      'requestId',
+      'capabilitiesInUse',
+      'enableCanary',
+      'enableShadow',
+      'enableObservedHealthRanking',
+      'canaryCohorts',
+      'shadowRequestsToday',
+    ]) {
+      expect(request).not.toHaveProperty(key);
+    }
   });
 });

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { resolveMobileIapProduct } from '@/lib/server/mobile-iap-catalog';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { verifyGooglePubSubPushIdentity } from '@/lib/server/google-pubsub-push-identity';
 import {
   hashMobileIapPurchaseToken,
   verifyGooglePlayLifecyclePurchase,
@@ -39,25 +39,18 @@ const DeveloperNotificationSchema = z
   .passthrough();
 
 async function requireGooglePubSubIdentity(request: NextRequest): Promise<void> {
-  const audience = process.env['GOOGLE_PLAY_PUBSUB_AUDIENCE']?.trim();
-  const expectedEmail = process.env['GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL']?.trim();
-  const authorization = request.headers.get('authorization');
-  const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!audience || !expectedEmail) {
+  const identity = await verifyGooglePubSubPushIdentity(request.headers.get('authorization'), {
+    audience: process.env['GOOGLE_PLAY_PUBSUB_AUDIENCE'],
+    serviceAccountEmail: process.env['GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL'],
+  });
+  if (identity.ok) return;
+  if (identity.reason === 'not_configured') {
     throw createError.serviceUnavailable('Google Play notifications are not configured.');
   }
-  if (!token) throw createError.unauthorized('Google Pub/Sub identity is required.');
-
-  let payload;
-  try {
-    const ticket = await new OAuth2Client().verifyIdToken({ idToken: token, audience });
-    payload = ticket.getPayload();
-  } catch {
-    throw createError.unauthorized('Google Pub/Sub identity could not be verified.');
-  }
-  if (payload?.email !== expectedEmail || payload.email_verified !== true) {
+  if (identity.reason === 'not_authorized') {
     throw createError.forbidden('Google Pub/Sub identity is not authorized.');
   }
+  throw createError.unauthorized('Google Pub/Sub identity could not be verified.');
 }
 
 async function handleGoogleNotification(request: NextRequest): Promise<NextResponse> {

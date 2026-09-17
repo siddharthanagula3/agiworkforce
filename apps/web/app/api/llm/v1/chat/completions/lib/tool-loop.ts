@@ -244,6 +244,7 @@ import {
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
 import { policyAutoApprovesTool } from './tool-approval-policy';
+import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import {
   DEFAULT_TOOL_APPROVAL_POLICY,
   type ToolApprovalPolicy,
@@ -2263,18 +2264,27 @@ function recordProviderStepSuccess(input: {
     const lastObservation = observations?.[observations.length - 1];
     const routeId =
       lastObservation?.routeId ?? providerStepRouteId(input.attemptProcessed, input.attemptRequest);
+    const ttftMs =
+      input.firstProviderLineAtMs !== undefined
+        ? input.firstProviderLineAtMs - input.attemptStartedAtMs
+        : undefined;
     void recordRouteOutcome(
       routeId,
       {
         class: 'success',
-        ...(input.firstProviderLineAtMs !== undefined
-          ? { ttftMs: input.firstProviderLineAtMs - input.attemptStartedAtMs }
-          : {}),
+        ...(ttftMs !== undefined ? { ttftMs } : {}),
         durationMs: input.nowMs - input.attemptStartedAtMs,
         outputTokens: input.result.usage.outputTokens,
       },
       input.nowMs,
     );
+    persistRoutingDecisionOutcome({
+      requestId: input.processed.requestId,
+      kind: 'served',
+      outcome: 'succeeded',
+      ttftMs: ttftMs ?? null,
+      durationMs: input.nowMs - input.attemptStartedAtMs,
+    });
     if (!input.processed.conversationId) return routeId;
     const routePricing = getRoutePricing(routeId);
     void recordServedRouteAffinity({
@@ -2302,6 +2312,12 @@ function recordProviderStepFailure(input: {
   nowMs: number;
 }): void {
   try {
+    persistRoutingDecisionOutcome({
+      requestId: input.attemptProcessed.requestId,
+      kind: 'served',
+      outcome: 'failed',
+      errorCode: input.classified.code,
+    });
     const outcomeClass = routeOutcomeClassForError(input.err, input.classified);
     if (!outcomeClass) return;
     void recordRouteOutcome(

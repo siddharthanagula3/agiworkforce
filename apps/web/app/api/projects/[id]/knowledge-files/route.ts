@@ -18,6 +18,7 @@ import {
   ProjectKnowledgeExtractionError,
 } from '@/lib/server/project-knowledge-extraction';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import { enqueueJob } from '@/lib/jobs/job-service';
 import {
   deleteProjectKnowledgeObject,
   sealProjectKnowledgeObject,
@@ -89,6 +90,7 @@ async function dispatchKnowledgeIndexing(
 }
 
 async function purgeUploadedKnowledgeObject(
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
   userId: string,
   projectId: string,
   storageUri: string,
@@ -100,8 +102,21 @@ async function purgeUploadedKnowledgeObject(
   } catch (deleteError) {
     logger.error(
       { err: deleteError, userId, projectId, objectKey },
-      '[knowledge-files] CRITICAL: could not delete an uploaded object from storage',
+      '[knowledge-files] could not delete an uploaded object from storage; queued for retry',
     );
+    try {
+      await enqueueJob(db, {
+        kind: 'file-processing.purge-upload-object',
+        userId,
+        idempotencyKey: `purge-upload:${objectKey}`.slice(0, 255),
+        payload: { objectKey, projectId },
+      });
+    } catch (queueError) {
+      logger.error(
+        { err: queueError, userId, projectId, objectKey },
+        '[knowledge-files] CRITICAL: an uploaded object is neither deleted nor queued for deletion',
+      );
+    }
   }
 }
 
@@ -420,7 +435,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
           },
           '[knowledge-files] rejected a project source that failed content inspection',
         );
-        await purgeUploadedKnowledgeObject(userId, projectId, storageUri);
+        await purgeUploadedKnowledgeObject(db, userId, projectId, storageUri);
         recordModerationEvent({
           surface: 'upload',
           action: 'block',
@@ -450,7 +465,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     key: extraction.objectKey,
     etag: extraction.etag,
   });
-  await purgeUploadedKnowledgeObject(userId, projectId, extraction.objectKey);
+  await purgeUploadedKnowledgeObject(db, userId, projectId, extraction.objectKey);
   if (!sealedKey) {
     logger.warn(
       { userId, projectId, objectKey: extraction.objectKey, hadEtag: Boolean(extraction.etag) },

@@ -1,3 +1,6 @@
+import { isWithinDayparts, nextDaypartStart, type Daypart } from './dayparts';
+import { nextRecurrenceOccurrence, parseRecurrenceRule } from './recurrence-rule';
+
 const MIN_INTERVAL_MS = 60_000;
 const MAX_INTERVAL_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_CRON_LENGTH = 256;
@@ -21,14 +24,26 @@ export interface ParsedCronExpression {
 }
 
 export interface ScheduleTiming {
-  scheduleType: 'cron' | 'once' | 'interval';
+  scheduleType: 'cron' | 'once' | 'interval' | 'rrule' | 'event';
   cronExpression?: string | null;
   executeAt?: string | null;
   intervalMs?: number | null;
+  recurrenceRule?: string | null;
+  dayparts?: readonly Daypart[] | null;
   timezone: string;
 }
 
-export type ProductRecurrence = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'interval';
+export type ProductRecurrence =
+  'once' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'interval' | 'rrule' | 'event';
+
+export class NoFurtherOccurrenceError extends Error {
+  constructor(message = 'Schedule has no further occurrence') {
+    super(message);
+    this.name = 'NoFurtherOccurrenceError';
+  }
+}
+
+const MAX_DAYPART_OCCURRENCE_STEPS = 2_000;
 
 export interface CronFormInput {
   recurrence: Exclude<ProductRecurrence, 'once' | 'interval'>;
@@ -265,10 +280,17 @@ function nextCronOccurrence(expression: string, timezone: string, after: Date): 
   throw new Error('Cron expression has no occurrence within the supported horizon');
 }
 
-export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Date = after): Date {
-  assertFiniteDate(after, 'after');
-  assertFiniteDate(now, 'now');
-  validateTimeZone(timing.timezone);
+function nextRuleOccurrence(timing: ScheduleTiming, after: Date): Date {
+  const rule = parseRecurrenceRule(timing.recurrenceRule ?? '', timing.timezone);
+  const next = nextRecurrenceOccurrence(rule, timing.timezone, after);
+  if (!next) throw new NoFurtherOccurrenceError('Recurrence rule has no further occurrence');
+  return next;
+}
+
+function baseNextExecutionAt(timing: ScheduleTiming, after: Date, now: Date): Date {
+  if (timing.scheduleType === 'event') {
+    throw new NoFurtherOccurrenceError('Event-triggered tasks run only when an event fires them');
+  }
 
   if (timing.scheduleType === 'once') {
     const executeAt = new Date(timing.executeAt ?? '');
@@ -294,10 +316,39 @@ export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Dat
     return new Date(timestamp);
   }
 
+  const searchAfter = after > now ? after : now;
+  if (timing.scheduleType === 'rrule') return nextRuleOccurrence(timing, searchAfter);
+
   const expression = timing.cronExpression?.trim();
   if (!expression) throw new Error('Cron schedule requires cronExpression');
-  const searchAfter = after > now ? after : now;
   return nextCronOccurrence(expression, timing.timezone, searchAfter);
+}
+
+export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Date = after): Date {
+  assertFiniteDate(after, 'after');
+  assertFiniteDate(now, 'now');
+  validateTimeZone(timing.timezone);
+
+  let candidate = baseNextExecutionAt(timing, after, now);
+  const dayparts = timing.dayparts;
+  if (!dayparts || dayparts.length === 0) return candidate;
+  if (timing.scheduleType === 'once') {
+    throw new Error('Dayparts apply only to recurring schedules');
+  }
+
+  for (let step = 0; step < MAX_DAYPART_OCCURRENCE_STEPS; step += 1) {
+    if (isWithinDayparts(candidate, timing.timezone, dayparts)) return candidate;
+    if (timing.scheduleType === 'interval') {
+      const start = nextDaypartStart(candidate, timing.timezone, dayparts);
+      if (!start) break;
+      return start;
+    }
+    candidate =
+      timing.scheduleType === 'rrule'
+        ? nextRuleOccurrence(timing, candidate)
+        : nextCronOccurrence(timing.cronExpression?.trim() ?? '', timing.timezone, candidate);
+  }
+  throw new NoFurtherOccurrenceError('No occurrence falls inside the chosen dayparts');
 }
 
 export const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
@@ -308,7 +359,11 @@ function localWallClockMs(parts: LocalDateParts): number {
   return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
 }
 
-function tightestCronGapMs(expression: string, timezone: string, from: Date): number | null {
+function tightestGapMs(
+  nextOccurrence: (after: Date) => Date,
+  timezone: string,
+  from: Date,
+): number | null {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: validateTimeZone(timezone),
     year: 'numeric',
@@ -318,13 +373,19 @@ function tightestCronGapMs(expression: string, timezone: string, from: Date): nu
     minute: '2-digit',
     hourCycle: 'h23',
   });
-  let previous = nextCronOccurrence(expression, timezone, from);
+  let previous: Date;
+  try {
+    previous = nextOccurrence(from);
+  } catch (error) {
+    if (error instanceof NoFurtherOccurrenceError) return null;
+    throw error;
+  }
   let previousLocal = localParts(formatter, previous);
   let tightest: number | null = null;
   for (let index = 1; index < CADENCE_SAMPLE_OCCURRENCES; index += 1) {
     let next: Date;
     try {
-      next = nextCronOccurrence(expression, timezone, previous);
+      next = nextOccurrence(previous);
     } catch {
       break;
     }
@@ -416,7 +477,7 @@ export function describeCronCadence(expression: string): string {
 }
 
 export function assertDeliverableCadence(timing: ScheduleTiming, now: Date): void {
-  if (timing.scheduleType === 'once') return;
+  if (timing.scheduleType === 'once' || timing.scheduleType === 'event') return;
 
   const { cadence, minimum } = describeSweepCadence();
 
@@ -430,9 +491,23 @@ export function assertDeliverableCadence(timing: ScheduleTiming, now: Date): voi
     return;
   }
 
+  if (timing.scheduleType === 'rrule') {
+    const gap = tightestGapMs((after) => nextRuleOccurrence(timing, after), timing.timezone, now);
+    if (gap !== null && gap < SWEEP_INTERVAL_MS) {
+      throw new Error(
+        `Scheduled tasks are swept ${cadence}, so a recurrence rule cannot fire more often than that`,
+      );
+    }
+    return;
+  }
+
   const expression = timing.cronExpression?.trim();
   if (!expression) return;
-  const gap = tightestCronGapMs(expression, timing.timezone, now);
+  const gap = tightestGapMs(
+    (after) => nextCronOccurrence(expression, timing.timezone, after),
+    timing.timezone,
+    now,
+  );
   if (gap !== null && gap < SWEEP_INTERVAL_MS) {
     throw new Error(
       `Scheduled tasks are swept ${cadence}, so a cron expression cannot fire more often than that`,

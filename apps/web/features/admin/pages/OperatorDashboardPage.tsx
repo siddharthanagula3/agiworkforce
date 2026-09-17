@@ -9,11 +9,14 @@ import type {
 import { useConfirm } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import BackgroundJobsPanel from '../components/BackgroundJobsPanel';
 import ContentTakedownPanel from '../components/ContentTakedownPanel';
 import EconomicsSummaryPanel from '../components/EconomicsSummaryPanel';
 import OperatorCostsPanel from '../components/OperatorCostsPanel';
 import PrivacyRequestsPanel from '../components/PrivacyRequestsPanel';
 import RouteEconomicsPanel from '../components/RouteEconomicsPanel';
+import FeatureFlagsPanel from '../components/FeatureFlagsPanel';
+import ModelRolloutPanel from '../components/ModelRolloutPanel';
 import RoutingHealthPanel from '../components/RoutingHealthPanel';
 import ServiceHealthPanel from '../components/ServiceHealthPanel';
 import { SupportHandoffQueuePanel } from '@/features/support/components/SupportHandoffQueuePanel';
@@ -25,12 +28,15 @@ const TABS = [
   'users',
   'costs',
   'routing',
+  'rollout',
+  'flags',
   'services',
   'routes',
   'economics',
   'content',
   'privacy',
   'support',
+  'jobs',
 ] as const;
 
 type Tab = (typeof TABS)[number];
@@ -411,6 +417,10 @@ export function OperatorDashboardPage() {
 
       {tab === 'routing' ? <RoutingHealthPanel /> : null}
 
+      {tab === 'rollout' ? <ModelRolloutPanel /> : null}
+
+      {tab === 'flags' ? <FeatureFlagsPanel /> : null}
+
       {tab === 'services' ? <ServiceHealthPanel /> : null}
 
       {tab === 'routes' ? <RouteEconomicsPanel /> : null}
@@ -422,6 +432,8 @@ export function OperatorDashboardPage() {
       {tab === 'privacy' ? <PrivacyRequestsPanel /> : null}
 
       {tab === 'support' ? <SupportHandoffQueuePanel /> : null}
+
+      {tab === 'jobs' ? <BackgroundJobsPanel /> : null}
 
       {tab === 'users' ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">

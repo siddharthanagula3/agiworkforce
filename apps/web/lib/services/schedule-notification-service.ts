@@ -9,7 +9,7 @@ import { recordNotification } from './notification-service';
 export const SCHEDULE_PUSH_PREFERENCE_KEY = 'mobilePushScheduleDone';
 export const SCHEDULE_EMAIL_PREFERENCE_KEY = 'emailScheduleDone';
 
-async function loadSchedulePreferences(
+export async function loadSchedulePreferences(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<{ push: boolean; email: boolean; email_address: string | null }> {
@@ -56,7 +56,9 @@ export interface ScheduleCompletionNotice {
 export async function notifyScheduleCompleted(
   db: DatabaseAdapter,
   notice: ScheduleCompletionNotice,
+  options: { email?: boolean } = {},
 ): Promise<{ pushed: boolean; emailed: boolean }> {
+  const includeEmail = options.email ?? true;
   const none = { pushed: false, emailed: false };
   try {
     if (notice.status === 'cancelled') return none;
@@ -78,7 +80,8 @@ export async function notifyScheduleCompleted(
       dedupeKey: notice.runId ? `schedule-run:${notice.runId}` : null,
     });
 
-    const preferences = await loadSchedulePreferences(db, notice.userId);
+    const loaded = await loadSchedulePreferences(db, notice.userId);
+    const preferences = { ...loaded, email: includeEmail && loaded.email };
     if (!preferences.push && !preferences.email) return none;
 
     const [pushResult, emailResult] = await Promise.all([
