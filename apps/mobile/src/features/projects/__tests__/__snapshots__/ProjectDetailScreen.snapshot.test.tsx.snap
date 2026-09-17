@@ -99,7 +99,7 @@ exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a mana
     }
   >
     <View
-      accessibilityLabel="Privacy: Managed"
+      accessibilityLabel="Privacy: Managed Cloud"
       style={
         {
           "alignItems": "center",
@@ -129,7 +129,7 @@ exports[`ProjectDetailScreen, unit snapshots locks ProjectHeader tree for a mana
           }
         }
       >
-        Managed
+        Managed Cloud
       </Text>
     </View>
     <View

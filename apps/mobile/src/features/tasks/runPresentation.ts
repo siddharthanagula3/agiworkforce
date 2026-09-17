@@ -14,12 +14,24 @@ export const ALL_CLOUD_RUN_STATES: readonly AgentTaskState[] = AgentTaskStateSch
 
 export const CLOUD_RUN_FILTERS = [
   { key: 'all', label: 'All', states: ALL_CLOUD_RUN_STATES },
-  { key: 'blocked', label: 'Needs you', states: ['awaiting_input', 'paused'] },
-  { key: 'running', label: 'Running', states: ['queued', 'running'] },
+  {
+    key: 'blocked',
+    label: 'Needs you',
+    states: ['awaiting_input', 'awaiting_approval', 'paused'],
+  },
+  { key: 'running', label: 'Running', states: ['queued', 'planning', 'running', 'resuming'] },
   {
     key: 'finished',
     label: 'Finished',
-    states: ['ready_for_review', 'completed', 'failed', 'cancelled', 'archived'],
+    states: [
+      'ready_for_review',
+      'completed',
+      'partial',
+      'failed',
+      'timed_out',
+      'cancelled',
+      'archived',
+    ],
   },
 ] as const satisfies ReadonlyArray<{
   key: string;

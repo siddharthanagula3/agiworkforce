@@ -97,6 +97,12 @@ function formatRecurrence(schedule: Schedule): string {
       }
       return `Every ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
     }
+    case 'rrule':
+      return schedule.recurrenceRule
+        ? `Rule: ${schedule.recurrenceRule}`
+        : `Custom rule at ${time}`;
+    case 'event':
+      return 'When an event fires';
     default:
       return time;
   }
