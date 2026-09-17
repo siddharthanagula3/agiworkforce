@@ -82,6 +82,12 @@ export const PRIVACY_MODE_DISPLAY = {
   },
 } as const satisfies Readonly<Record<PrivacyMode, TrustBoundaryDisplayCopy>>;
 
+export const PRIVACY_MODE_USAGE_IMPLICATION = {
+  local: 'Local runs use this device and spend no AGI credits.',
+  byok: 'BYOK requests are billed by the provider on your own key and spend no AGI credits.',
+  managed: 'Managed requests spend credits from your AGI plan.',
+} as const satisfies Readonly<Record<PrivacyMode, string>>;
+
 export const PROVIDER_MODE_DISPLAY = {
   Local: {
     label: 'Local',
@@ -227,6 +233,10 @@ export function formatPrivacyModeLabel(mode: PrivacyMode): string {
   return getPrivacyModeDisplay(mode).label;
 }
 
+export function formatPrivacyModeUsageImplication(mode: PrivacyMode): string {
+  return PRIVACY_MODE_USAGE_IMPLICATION[mode];
+}
+
 export function formatProviderModeLabel(mode: ProviderMode): string {
   return getProviderModeDisplay(mode).label;
 }
@@ -296,13 +306,7 @@ export interface ChatIntent {
 }
 
 export type ConnectorConnectionStatus =
-  | 'unsupported'
-  | 'unavailable'
-  | 'available'
-  | 'needs_auth'
-  | 'connected'
-  | 'disabled'
-  | 'failed';
+  'unsupported' | 'unavailable' | 'available' | 'needs_auth' | 'connected' | 'disabled' | 'failed';
 
 export interface ConnectorStatusSnapshot {
   connectorId: string;
@@ -324,13 +328,7 @@ export type PermissionDecision =
   | 'deny';
 
 export type SuiteToolEventStatus =
-  | 'queued'
-  | 'approval_needed'
-  | 'running'
-  | 'progress'
-  | 'result'
-  | 'error'
-  | 'cancelled';
+  'queued' | 'approval_needed' | 'running' | 'progress' | 'result' | 'error' | 'cancelled';
 
 export interface SuiteToolEvent {
   id: string;
@@ -421,12 +419,7 @@ export interface LegacyWebSyncEvent {
 }
 
 export type DeveloperSessionKind =
-  | 'cli'
-  | 'ide'
-  | 'browser'
-  | 'code_review'
-  | 'automation'
-  | 'subagent';
+  'cli' | 'ide' | 'browser' | 'code_review' | 'automation' | 'subagent';
 
 export interface DeveloperSession {
   id: string;
@@ -557,12 +550,7 @@ export interface ProjectInstructions {
 }
 
 export type ComputeSessionStatus =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'expired'
-  | 'deleted';
+  'queued' | 'running' | 'completed' | 'failed' | 'expired' | 'deleted';
 
 export interface ComputeSession {
   id: string;
@@ -874,8 +862,7 @@ export function summarizeGeneratedFileBundle(
   const providerMode =
     generatedFile?.providerMode ?? artifactManifest?.providerMode ?? computeSession?.providerMode;
   const status = (computeSession?.status ?? input.fallbackStatus ?? 'unknown') as
-    | ComputeSessionStatus
-    | 'unknown';
+    ComputeSessionStatus | 'unknown';
   const sourceSurface = generatedFile?.sourceSurface ?? computeSession?.sourceSurface;
   const primaryUri = generatedFile?.uri ?? input.fallbackUri ?? undefined;
   const previewUri = generatedFile?.previewDerivatives[0]?.uri;
@@ -1056,12 +1043,7 @@ export function assertGeneratedFileTrustBoundary(input: GeneratedFileTrustBounda
 }
 
 export type RemoteControlSessionStatus =
-  | 'pairing'
-  | 'connected'
-  | 'paused'
-  | 'revoked'
-  | 'expired'
-  | 'failed';
+  'pairing' | 'connected' | 'paused' | 'revoked' | 'expired' | 'failed';
 
 export interface RemoteControlSession {
   id: string;
@@ -1385,11 +1367,7 @@ export interface DeveloperSessionFork {
 }
 
 export type DeveloperSessionReplayStatus =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface DeveloperSessionReplayRequest {
   id: string;

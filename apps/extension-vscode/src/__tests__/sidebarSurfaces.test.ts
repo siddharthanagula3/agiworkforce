@@ -172,6 +172,47 @@ describe('the CLI capability adapter', () => {
     vi.restoreAllMocks();
   });
 
+  it('does not call a family the handshake says this CLI does not offer', async () => {
+    const listSkills = vi.fn(async () => ({ skills: [{ name: 'deploy' }] }));
+    const listHooks = vi.fn(async () => ({ hooks: [{ name: 'pre-commit' }] }));
+    const adapter = new CliCapabilityAdapter(
+      poolWith({
+        initialize: async () => ({ capabilities: { skills: false, hooks: true } }),
+        listSkills,
+        listHooks,
+      }),
+    );
+
+    await expect(adapter.listEntries('skills')).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'The AGI CLI for this workspace does not offer skills.',
+    });
+    expect(listSkills).not.toHaveBeenCalled();
+    await expect(adapter.listEntries('hooks')).resolves.toEqual({
+      status: 'ok',
+      value: [{ label: 'pre-commit' }],
+    });
+    expect(listHooks).toHaveBeenCalledOnce();
+  });
+
+  it('reports a failed handshake instead of calling the family', async () => {
+    const listPlugins = vi.fn(async () => ({ plugins: [] }));
+    const adapter = new CliCapabilityAdapter(
+      poolWith({
+        initialize: async () => {
+          throw new Error('AGI CLI exited');
+        },
+        listPlugins,
+      }),
+    );
+
+    await expect(adapter.listEntries('plugins')).resolves.toEqual({
+      status: 'failed',
+      reason: 'AGI CLI exited',
+    });
+    expect(listPlugins).not.toHaveBeenCalled();
+  });
+
   it('reports the CLI requirement instead of an empty list on protocol 7', async () => {
     const adapter = new CliCapabilityAdapter(poolWith({}));
 

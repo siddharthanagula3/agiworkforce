@@ -1,3 +1,4 @@
+use agiworkforce_protocol::agent_events::AGENT_EVENT_SCHEMA_VERSION;
 use agiworkforce_protocol::developer_session::{
     method, AccountLoginResponse, AccountLoginWaitParams, AccountLoginWaitResponse,
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
@@ -5,13 +6,14 @@ use agiworkforce_protocol::developer_session::{
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, HookListResponse, InitializeParams, InitializeResponse,
     LocalModelListResponse, McpLoginParams, McpLoginResponse, McpServerListResponse,
-    ModelListParams, PluginListResponse, PluginSetEnabledParams, SettingsReadResponse,
-    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    ModelListParams, PluginListResponse, PluginSetEnabledParams, ProtocolVersionUnsupportedData,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
     SlashCommandRunResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
     ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
     TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
-    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -693,13 +695,28 @@ impl DeveloperSessionProcessor {
                     .map(u32::to_string)
                     .collect::<Vec<_>>()
                     .join(", ");
-                return AppServerResponse::failure(
+                let upgrade = if requested < MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION {
+                    "upgrade the client"
+                } else {
+                    "upgrade the AGI CLI"
+                };
+                let mut refusal = AppServerResponse::failure(
                     request.id,
-                    -32005,
+                    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
                     format!(
-                        "Client requested developer-session protocol {requested}; this server speaks {supported}"
+                        "Client requested developer-session protocol {requested}; this server speaks {supported}; {upgrade}"
                     ),
                 );
+                if let Some(error) = refusal.error.as_mut() {
+                    error.data = serde_json::to_value(ProtocolVersionUnsupportedData {
+                        requested_protocol_version: requested,
+                        supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS
+                            .to_vec(),
+                        minimum_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+                    })
+                    .ok();
+                }
+                return refusal;
             }
         };
 
@@ -716,6 +733,8 @@ impl DeveloperSessionProcessor {
                 },
                 protocol_version: negotiated,
                 capabilities: self.capabilities.clone(),
+                agent_event_schema_version: Some(AGENT_EVENT_SCHEMA_VERSION),
+                minimum_protocol_version: Some(MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION),
             },
         )
     }

@@ -43,6 +43,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session initialize params graph");
     agiworkforce_protocol::developer_session::InitializeResponse::export_all_to(dir)
         .expect("export developer-session initialize graph");
+    agiworkforce_protocol::developer_session::ProtocolVersionUnsupportedData::export_all_to(dir)
+        .expect("export developer-session version refusal graph");
     agiworkforce_protocol::developer_session::ThreadStartParams::export_all_to(dir)
         .expect("export developer-session thread start params graph");
     agiworkforce_protocol::developer_session::ThreadStartResponse::export_all_to(dir)

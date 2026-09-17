@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LocalToByokHandoffPreview } from '@agiworkforce/utils';
+import { PRIVACY_MODE_USAGE_IMPLICATION } from '@agiworkforce/types';
 import { LocalByokHandoffDialog } from '../LocalByokHandoffDialog';
 
 afterEach(cleanup);
@@ -54,6 +55,29 @@ describe('LocalByokHandoffDialog target labelling', () => {
 
     expect(screen.getByText('Review BYOK fork')).toBeTruthy();
   });
+
+  it.each([
+    ['byok', PRIVACY_MODE_USAGE_IMPLICATION.byok, PRIVACY_MODE_USAGE_IMPLICATION.managed],
+    ['managed', PRIVACY_MODE_USAGE_IMPLICATION.managed, PRIVACY_MODE_USAGE_IMPLICATION.byok],
+  ] as const)(
+    'states what a %s crossing costs before the user confirms',
+    (target, shown, hidden) => {
+      render(
+        <LocalByokHandoffDialog
+          open
+          onOpenChange={vi.fn()}
+          preview={preview()}
+          isBuilding={false}
+          onConfirm={vi.fn()}
+          target={target}
+        />,
+      );
+
+      const description = screen.getByRole('dialog').querySelector('p');
+      expect(description?.textContent).toContain(shown);
+      expect(description?.textContent).not.toContain(hidden);
+    },
+  );
 
   it('names Managed Cloud, not BYOK, when the target is managed', () => {
     render(

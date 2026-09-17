@@ -13,6 +13,8 @@ import {
   formatProviderModeLabel,
   getChatExecutionModeDisplay,
   getPrivacyModeDisplay,
+  formatPrivacyModeUsageImplication,
+  PRIVACY_MODE_USAGE_IMPLICATION,
   getProviderModeDisplay,
   isDeveloperSessionSurface,
   isSyncedAppSurface,
@@ -181,6 +183,17 @@ describe('suite contracts, trust boundaries', () => {
     }
 
     expect(PRIVACY_MODE_DISPLAY.byok.shortLabel).toBe('BYOK');
+  });
+
+  it('states the usage implication of every trust boundary, not only Managed', () => {
+    for (const privacyMode of PRIVACY_MODES) {
+      expect(formatPrivacyModeUsageImplication(privacyMode)).toBe(
+        PRIVACY_MODE_USAGE_IMPLICATION[privacyMode],
+      );
+    }
+    expect(formatPrivacyModeUsageImplication('local')).toContain('no AGI credits');
+    expect(formatPrivacyModeUsageImplication('byok')).toContain('no AGI credits');
+    expect(formatPrivacyModeUsageImplication('managed')).toContain('credits from your AGI plan');
   });
 
   it('locks provider execution labels to their privacy boundaries', () => {
