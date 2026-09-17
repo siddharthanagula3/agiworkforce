@@ -168,7 +168,9 @@ test.describe('background task continuation', () => {
 
     const reopened = await context.newPage();
     await reopened.goto('/tasks', { waitUntil: 'domcontentloaded' });
-    await expect(reopened.getByRole('heading', { name: 'Tasks' })).toBeVisible({ timeout: 20_000 });
+    await expect(reopened.getByRole('heading', { name: 'Work history' })).toBeVisible({
+      timeout: 20_000,
+    });
 
     const listResponsePromise = reopened.waitForResponse(
       (response) =>

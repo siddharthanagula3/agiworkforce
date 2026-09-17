@@ -50,7 +50,7 @@ vi.mock('react-i18next', () => ({
         'emptyChat.greetNight': `It's late-night, ${params?.['name'] ?? 'there'}`,
         'emptyChat.modeLabel': 'Local Mode',
         'emptyChat.cloudSyncAction': 'Cloud Sync',
-        'emptyChat.cloudSyncAria': 'Set up Cloud Managed sync',
+        'emptyChat.cloudSyncAria': 'Set up Managed Cloud sync',
         'capModal.title': 'Usage limit reached',
         'capModal.subtitle': 'Switch model or wait for reset.',
         'capModal.dismiss': 'Dismiss',

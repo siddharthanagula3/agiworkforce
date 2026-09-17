@@ -1,8 +1,9 @@
 'use client';
 
-import { Check, ChevronDown, Plus, Search } from 'lucide-react';
+import { Check, ChevronDown, Plus } from 'lucide-react';
 
 import { cn } from '../cn';
+import { SearchInput } from '../primitives/SearchInput';
 import { Switch } from '../primitives/Switch';
 import { Menu, MenuItem, MenuSeparator } from '../sidebar/Menu';
 import {
@@ -80,23 +81,12 @@ export function DirectoryToolbar({
   const activeFilterCount = countActiveFilters(menuSelection);
   return (
     <div className="flex flex-col gap-3">
-      <div className="relative">
-        <Search
-          aria-hidden
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-        />
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
-          aria-label={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
-          className={cn(
-            'h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground',
-            DIRECTORY_FOCUS_RING,
-          )}
-        />
-      </div>
+      <SearchInput
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        placeholder={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
+        aria-label={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         {sourcesHeading ? (

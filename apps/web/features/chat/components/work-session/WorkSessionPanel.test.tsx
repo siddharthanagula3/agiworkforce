@@ -193,7 +193,7 @@ describe('WorkSessionPanel', () => {
 
     render(<WorkSessionPanel messages={workMessages()} open onClose={vi.fn()} agiWork />);
 
-    expect(screen.getByRole('complementary', { name: 'AGI Work task dock' })).toBeVisible();
+    expect(screen.getByRole('complementary', { name: 'AGI Work session dock' })).toBeVisible();
     expect(screen.getByText('Sources')).toBeVisible();
     expect(screen.getByText('Outputs')).toBeVisible();
     expect(screen.getByText('Context')).toBeVisible();
@@ -216,7 +216,7 @@ describe('WorkSessionPanel', () => {
 
     expect(screen.getByText('Progress')).toBeVisible();
     expect(screen.getByText(/Worked for/)).toBeVisible();
-    const steps = screen.getByRole('list', { name: 'task steps' });
+    const steps = screen.getByRole('list', { name: 'session steps' });
     expect(steps).toBeVisible();
     expect(screen.getByText('Plan the report')).toBeVisible();
   });
@@ -245,10 +245,10 @@ describe('WorkSessionPanel', () => {
 
     render(<WorkSessionPanel messages={idle} open onClose={vi.fn()} agiWork />);
 
-    expect(screen.getByText('Files created during this task appear here')).toBeVisible();
+    expect(screen.getByText('Files created during this session appear here')).toBeVisible();
     expect(screen.getByText('No connectors used yet')).toBeVisible();
     expect(screen.getByText(/Working for/)).toBeVisible();
-    expect(screen.getByText('Steps appear here once the task plans its work')).toBeVisible();
+    expect(screen.getByText('Steps appear here once the session plans its work')).toBeVisible();
   });
 
   it('offers a way back to the artifacts half of the shared slot', () => {
@@ -281,7 +281,7 @@ describe('WorkSessionPanel', () => {
     const { unmount } = render(
       <WorkSessionPanel messages={workMessages()} open onClose={onClose} agiWork />,
     );
-    expect(screen.getByRole('button', { name: 'Close AGI Work task dock' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Close AGI Work session dock' })).toHaveFocus();
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledOnce();

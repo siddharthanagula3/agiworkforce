@@ -68,7 +68,7 @@ export function RemoteApprovalCard({ approval }: RemoteApprovalCardProps) {
     setError(null);
     try {
       await resolveApproval(approval, 'reject', {
-        reason: 'Denied by user via Mobile Companion panel',
+        reason: 'Denied by user via Remote panel',
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not deny this action.');

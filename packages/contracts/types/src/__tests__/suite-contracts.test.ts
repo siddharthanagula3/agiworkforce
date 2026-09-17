@@ -174,7 +174,7 @@ describe('suite contracts, trust boundaries', () => {
     const expectedPrivacyLabels: Record<PrivacyMode, string> = {
       local: 'Local',
       byok: 'BYOK',
-      managed: 'Managed',
+      managed: 'Managed Cloud',
     };
 
     for (const privacyMode of PRIVACY_MODES) {
@@ -183,6 +183,7 @@ describe('suite contracts, trust boundaries', () => {
     }
 
     expect(PRIVACY_MODE_DISPLAY.byok.shortLabel).toBe('BYOK');
+    expect(PRIVACY_MODE_DISPLAY.managed.shortLabel).toBe('Managed');
   });
 
   it('states the usage implication of every trust boundary, not only Managed', () => {
@@ -218,7 +219,7 @@ describe('suite contracts, trust boundaries', () => {
   it('locks chat execution modes to privacy and provider defaults', () => {
     expect(formatChatExecutionModeLabel('local_only')).toBe('Local Mode + Local LLMs');
     expect(formatChatExecutionModeLabel('byok')).toBe('Local Mode + BYOK');
-    expect(formatChatExecutionModeLabel('cloud_managed')).toBe('Cloud Managed');
+    expect(formatChatExecutionModeLabel('cloud_managed')).toBe('Managed Cloud');
 
     expect(chatExecutionModeToPrivacyMode('local_only')).toBe('local');
     expect(chatExecutionModeToProviderMode('local_only')).toBe('Local');

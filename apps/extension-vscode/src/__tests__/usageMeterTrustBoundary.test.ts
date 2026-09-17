@@ -241,7 +241,7 @@ describe('usage meter trust boundary (SIX-02)', () => {
     const meter = lastMeter(harness.posted);
     expect(meter.source).not.toBe('unbounded');
     expect(meter.source).toBe('managed-plan');
-    expect(meter.usageLabel).toBe('Managed usage unavailable');
+    expect(meter.usageLabel).toBe('Managed Cloud usage unavailable');
   });
 
   it('adopts a model setting edited outside the webview before the next push', async () => {

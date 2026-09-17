@@ -195,7 +195,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(res.status).toBe(503);
     const json = (await res.json()) as { error: string; message: string };
     expect(json.error).toBe('knowledge_files_unavailable');
-    expect(json.message).toContain('Knowledge files require Cloud Managed');
+    expect(json.message).toContain('Knowledge files require Managed Cloud');
   });
 
   it('returns 201 with mapped file on valid input', async () => {

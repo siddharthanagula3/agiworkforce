@@ -51,7 +51,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   },
   {
     href: '/agent-permissions',
-    label: 'Agent permissions',
+    label: 'Approvals',
     body: 'What the agent may do without asking, what always requires approval, and how to revoke access.',
   },
   {

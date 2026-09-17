@@ -438,10 +438,7 @@ async function createTask(
     const taskId = await useAgentTaskStore.getState().submitGoal(request.prompt, {
       assertCurrent: () => {
         if (!isCurrentSession()) {
-          throw new DOMException(
-            'The Mobile Companion session ended before dispatch.',
-            'AbortError',
-          );
+          throw new DOMException('The Remote session ended before dispatch.', 'AbortError');
         }
       },
     });

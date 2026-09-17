@@ -3,7 +3,6 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { toUserMessage } from '../lib/network-error';
 import {
-  Search,
   Check,
   Settings2,
   UserCircle,
@@ -40,6 +39,7 @@ import { ConnectorLogo } from './ConnectorLogo';
 import { DirectoryPanel } from '../directory';
 import type { DirectoryAdapter } from '../directory';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../primitives/Dialog';
+import { SearchInput } from '../primitives/SearchInput';
 import { useConfirm } from '../primitives/ConfirmDialog';
 import {
   parseCustomMcpJsonConfig,
@@ -1023,23 +1023,14 @@ function ConnectorsPanel({
             ) : null}
             <div className="flex shrink-0 items-center gap-1.5">
               {connectors.length > 0 ? (
-                <div className="relative w-48">
-                  <Search
-                    className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <input
-                    type="search"
-                    aria-label="Search connectors"
-                    placeholder="Search connectors…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className={cn(
-                      'h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground',
-                      FOCUS_RING,
-                    )}
-                  />
-                </div>
+                <SearchInput
+                  size="sm"
+                  containerClassName="w-48"
+                  aria-label="Search connectors"
+                  placeholder="Search connectors…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               ) : null}
               <Menu
                 align="end"
@@ -1224,23 +1215,14 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 
       {/* Toolbar: search + Browse + New skill (capability-gated) */}
       <div className="flex items-center gap-1.5">
-        <div className="relative min-w-0 flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            aria-label="Search skills"
-            placeholder="Search skills…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={cn(
-              'h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground',
-              FOCUS_RING,
-            )}
-          />
-        </div>
+        <SearchInput
+          size="sm"
+          containerClassName="min-w-0 flex-1"
+          aria-label="Search skills"
+          placeholder="Search skills…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         {canAuthor && (
           <button
             type="button"
@@ -1463,23 +1445,14 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 
       {/* Toolbar: search + Browse + Add (capability-gated) */}
       <div className="flex items-center gap-1.5">
-        <div className="relative min-w-0 flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            aria-label="Search plugins"
-            placeholder="Search plugins…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={cn(
-              'h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground',
-              FOCUS_RING,
-            )}
-          />
-        </div>
+        <SearchInput
+          size="sm"
+          containerClassName="min-w-0 flex-1"
+          aria-label="Search plugins"
+          placeholder="Search plugins…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         {addItems.length > 0 && (
           <Menu
             align="end"
@@ -2060,23 +2033,14 @@ export function SettingsModal({
           </DialogDescription>
 
           {/* Search */}
-          <div className="relative mb-3 px-3">
-            <Search
-              className="pointer-events-none absolute left-6 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <input
-              type="search"
-              aria-label={t('modal.searchLabel', 'Search settings')}
-              placeholder={t('modal.searchPlaceholder', 'Search')}
-              value={navSearch}
-              onChange={(e) => setNavSearch(e.target.value)}
-              className={cn(
-                'h-8 w-full rounded-md border border-border/60 bg-muted/30 pl-7 pr-3 text-xs text-foreground placeholder:text-muted-foreground',
-                FOCUS_RING,
-              )}
-            />
-          </div>
+          <SearchInput
+            size="sm"
+            containerClassName="mx-3 mb-3"
+            aria-label={t('modal.searchLabel', 'Search settings')}
+            placeholder={t('modal.searchPlaceholder', 'Search')}
+            value={navSearch}
+            onChange={(e) => setNavSearch(e.target.value)}
+          />
 
           <div
             ref={navRef}

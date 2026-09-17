@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import {
@@ -24,11 +17,26 @@ import {
 } from 'lucide-react';
 import { ListChecks, MessageSquare, SquarePen, TerminalSquare } from '@agiworkforce/icons';
 import { cn } from '@shared/utils/cn';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@agiworkforce/ui';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  useCombobox,
+} from '@agiworkforce/ui';
 import { AVAILABLE_MODELS, useModelStore } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
 import { normalizeModelId, requireProviderDefaultModel } from '@agiworkforce/types';
-import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
+import {
+  PENDING_CONVERSATION_KEY,
+  useChatStore,
+  type Conversation,
+} from '@shared/stores/web-chat-store';
+import {
+  AGI_WORK_LABEL,
+  WORK_HISTORY_LABEL,
+  WORK_HISTORY_ROUTE,
+} from '@/features/chat/lib/agi-work';
 import { formatRelativeTime } from '@shared/utils/format';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
@@ -111,11 +119,16 @@ function useCommands(
       action: () => router.push('/chat'),
     },
     {
-      id: 'new-task',
-      title: 'New task',
+      id: 'new-agi-work',
+      title: `New ${AGI_WORK_LABEL}`,
       group: 'Quick actions',
       icon: ListChecks,
-      action: () => router.push('/agi-work'),
+      action: () => {
+        useChatStore
+          .getState()
+          .setComposerToggles({ workMode: 'agiwork' }, PENDING_CONVERSATION_KEY);
+        router.push('/chat');
+      },
     },
   ];
 
@@ -150,6 +163,13 @@ function useCommands(
       group: 'Actions',
       icon: TerminalSquare,
       action: () => router.push(CODE_ROUTES.root),
+    },
+    {
+      id: 'go-work-history',
+      title: WORK_HISTORY_LABEL,
+      group: 'Actions',
+      icon: ListChecks,
+      action: () => router.push(WORK_HISTORY_ROUTE),
     },
     {
       id: 'go-settings',
@@ -223,7 +243,6 @@ interface Props {
 
 export function CommandPalette({ open, onOpenChange }: Props) {
   const [query, setQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeSubMenu, setActiveSubMenu] = useState<ActiveSubMenu>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const currentModelId = useModelStore((state) => state.selectedModelId);
@@ -261,18 +280,6 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   const groups = useMemo(() => groupCommands(filtered), [filtered]);
 
-  useEffect(() => {
-    if (open) {
-      setQuery('');
-      setSelectedIndex(0);
-      setActiveSubMenu(null);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query, activeSubMenu]);
-
   const execute = useCallback(
     (cmd: CommandOption) => {
       if (cmd.hasSubMenu) {
@@ -286,35 +293,39 @@ export function CommandPalette({ open, onOpenChange }: Props) {
     [onOpenChange],
   );
 
-  const handleKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === 'Home') {
-        e.preventDefault();
-        setSelectedIndex(0);
-      } else if (e.key === 'End') {
-        e.preventDefault();
-        setSelectedIndex(filtered.length - 1);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        const cmd = filtered[selectedIndex];
-        if (cmd) execute(cmd);
-      } else if (e.key === 'Escape') {
-        if (activeSubMenu) {
-          setActiveSubMenu(null);
-          setQuery('');
-        } else {
-          onOpenChange(false);
-        }
-      }
-    },
-    [filtered, selectedIndex, execute, onOpenChange, activeSubMenu],
-  );
+  const handleEscape = useCallback(() => {
+    if (activeSubMenu) {
+      setActiveSubMenu(null);
+      setQuery('');
+    } else {
+      onOpenChange(false);
+    }
+  }, [activeSubMenu, onOpenChange]);
+
+  const {
+    setActiveIndex,
+    inputProps: comboboxInputProps,
+    getOptionProps,
+  } = useCombobox({
+    items: filtered,
+    listboxId: COMMAND_PALETTE_LISTBOX_ID,
+    expanded: open,
+    getOptionId: (cmd) => optionElementId(cmd.id),
+    onSelect: execute,
+    onEscape: handleEscape,
+  });
+
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      setActiveIndex(0);
+      setActiveSubMenu(null);
+    }
+  }, [open, setActiveIndex]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query, activeSubMenu, setActiveIndex]);
 
   const subMenuTitle = activeSubMenu === 'model' ? 'Switch AI Model' : null;
 
@@ -361,21 +372,13 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
             placeholder={activeSubMenu === 'model' ? 'Filter models…' : 'Search chats and actions'}
             name="command-palette-search"
             autoComplete="off"
             spellCheck={false}
             className="chat-quiet-field flex-1 text-foreground placeholder:text-muted-foreground text-sm"
             aria-label="Command palette search"
-            role="combobox"
-            aria-expanded={open}
-            aria-haspopup="listbox"
-            aria-autocomplete="list"
-            aria-controls={COMMAND_PALETTE_LISTBOX_ID}
-            aria-activedescendant={
-              filtered[selectedIndex] ? optionElementId(filtered[selectedIndex].id) : undefined
-            }
+            {...comboboxInputProps}
           />
           <button
             onClick={() => onOpenChange(false)}
@@ -403,17 +406,14 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                   {group}
                 </p>
                 {items.map((cmd) => {
-                  const idx = filtered.indexOf(cmd);
-                  const isSelected = idx === selectedIndex;
+                  const optionProps = getOptionProps(cmd);
+                  const isSelected = optionProps['aria-selected'];
                   const Icon = cmd.icon;
                   return (
                     <button
                       key={cmd.id}
-                      id={optionElementId(cmd.id)}
-                      role="option"
-                      aria-selected={isSelected}
+                      {...optionProps}
                       onClick={() => execute(cmd)}
-                      onMouseEnter={() => setSelectedIndex(idx)}
                       className={cn(
                         'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                         isSelected

@@ -6,8 +6,9 @@ import {
   ListChecks,
   Loader2,
   MessageSquare,
+  Pause,
+  Play,
   RotateCcw,
-  ShieldQuestion,
   X,
 } from 'lucide-react';
 import {
@@ -17,7 +18,7 @@ import {
   type ManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
-import { Button } from '@agiworkforce/ui';
+import { ApprovalCard, Button, SegmentedControl, Spinner } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { toUserMessageWithStatus } from '../../lib/network-error';
 import { getManagedModelPresentationLabel } from '../../lib/modelInfo';
@@ -30,6 +31,8 @@ import {
   isArchivableState,
   isCancellableState,
   isLiveTaskState,
+  isPausableState,
+  runWorkState,
   taskStateLabel,
   taskStateTone,
   workModeLabel,
@@ -53,10 +56,10 @@ const PAGE_SIZE = 25;
 
 const ARCHIVED_STATES: AgentTaskState[] = ['archived'];
 
-const FILTERS: Array<{ id: TaskFilter; label: string }> = [
-  { id: 'active', label: 'Active' },
-  { id: 'all', label: 'All' },
-  { id: 'archived', label: 'Archived' },
+const FILTERS: ReadonlyArray<{ value: TaskFilter; label: string }> = [
+  { value: 'active', label: 'Active' },
+  { value: 'all', label: 'All' },
+  { value: 'archived', label: 'Archived' },
 ];
 
 function statesForFilter(filter: TaskFilter): AgentTaskState[] | undefined {
@@ -174,6 +177,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [pausingId, setPausingId] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null);
   const [guidanceByRunId, setGuidanceByRunId] = useState<Record<string, string>>({});
@@ -294,6 +298,54 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
     [getClient, transport],
   );
 
+  const replaceRun = useCallback((updated: CloudAgentRun) => {
+    setRuns((prev) => prev.map((r) => (r.id === updated.id ? mergeRun(r, updated) : r)));
+    const openJournal = journalRef.current;
+    if (openJournal?.run.id === updated.id) {
+      const next = { ...openJournal, run: updated };
+      journalRef.current = next;
+      setJournal(next);
+    }
+  }, []);
+
+  const handlePause = useCallback(
+    async (runId: string) => {
+      setPausingId(runId);
+      try {
+        replaceRun(await getClient().pauseRun(runId));
+      } catch (err) {
+        console.error('[Tasks] Failed to pause task:', err);
+        transport.notifyError(
+          toUserMessageWithStatus(err, 'Could not pause the task. It is still working.'),
+        );
+      } finally {
+        setPausingId(null);
+      }
+    },
+    [getClient, replaceRun, transport],
+  );
+
+  const handleResume = useCallback(
+    async (runId: string) => {
+      setPausingId(runId);
+      try {
+        await getClient().resumePausedRun(runId);
+        await load(filter, null);
+        if (selectedRunId === runId) await loadJournal(runId);
+      } catch (err) {
+        console.error('[Tasks] Failed to resume task:', err);
+        transport.notifyError(
+          err instanceof Error && err.name === 'ManagedCloudAgentRunAlreadyResumingError'
+            ? 'Another device already resumed this task.'
+            : toUserMessageWithStatus(err, 'Could not resume the task. It is still paused.'),
+        );
+      } finally {
+        setPausingId(null);
+      }
+    },
+    [filter, getClient, load, loadJournal, selectedRunId, transport],
+  );
+
   const handleArchive = useCallback(
     async (run: CloudAgentRun, archived: boolean) => {
       const setArchived = transport.setRunArchived;
@@ -381,7 +433,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
 
   const selectedRun =
     journal?.run ?? runs.find((candidate) => candidate.id === selectedRunId) ?? null;
-  const autoRefreshing = selectedRun !== null && isLiveTaskState(selectedRun.state);
+  const autoRefreshing = selectedRun !== null && isLiveTaskState(runWorkState(selectedRun));
 
   useEffect(() => {
     if (!selectedRunId || !autoRefreshing || journalError || journalLoading) return;
@@ -403,35 +455,29 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
       <header className="mb-4 flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <ListChecks className="h-5 w-5 text-primary" />
-          <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium">Tasks</h1>
+          <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium">Work history</h1>
         </div>
-        <p className="text-sm text-muted-foreground">Your Cloud work runs</p>
+        <p className="text-sm text-muted-foreground">Your Managed Cloud work sessions</p>
       </header>
 
-      <div className="mb-4 flex items-center gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => {
-              setFilter(f.id);
-              setSelectedRunId(null);
-            }}
-            className={cn(
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              filter === f.id
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-muted-foreground hover:bg-accent',
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="mb-4"
+        aria-label="Filter work sessions"
+        options={FILTERS}
+        value={filter}
+        onValueChange={(next) => {
+          setFilter(next);
+          setSelectedRunId(null);
+        }}
+      />
 
       {loading ? (
-        <div role="status" className="flex flex-1 items-center justify-center py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
-          <span className="sr-only">Loading your tasks…</span>
+        <div className="flex flex-1 items-center justify-center py-16">
+          <Spinner
+            size="sm"
+            aria-label="Loading your work history…"
+            className="text-[var(--chat-loading-indicator)]"
+          />
         </div>
       ) : error ? (
         <div
@@ -449,7 +495,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             <ListChecks className="h-7 w-7 text-[var(--chat-accent-primary-text)]" />
           </div>
           <p className="text-base font-semibold text-foreground">
-            No {filter === 'all' ? '' : `${filter} `}tasks yet
+            No {filter === 'all' ? '' : `${filter} `}work sessions yet
           </p>
           <p className="max-w-sm text-sm text-muted-foreground">
             {filter === 'archived'
@@ -466,8 +512,11 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
         <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex min-w-0 flex-col gap-2">
             {runs.map((run) => {
-              const tone = taskStateTone(run.state);
-              const cancellable = isCancellableState(run.state);
+              const workState = runWorkState(run);
+              const tone = taskStateTone(workState);
+              const cancellable = isCancellableState(workState);
+              const pausable = isPausableState(workState);
+              const pauseRequested = pausable && Boolean(run.pauseRequestedAt);
               const selected = selectedRunId === run.id;
               const { title, isFallback } = runTitle(run);
               return (
@@ -503,7 +552,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <button
                       type="button"
-                      aria-label={`View details for ${title}, ${taskStateLabel(run.state)}`}
+                      aria-label={`View details for ${title}, ${taskStateLabel(workState)}`}
                       aria-pressed={selected}
                       className="min-w-0 flex-1 basis-full text-left sm:basis-auto"
                       onClick={() => setSelectedRunId(run.id)}
@@ -516,7 +565,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                             TASK_TONE_BADGE_CLASS[tone],
                           )}
                         >
-                          {taskStateLabel(run.state)}
+                          {pauseRequested ? 'Pausing' : taskStateLabel(workState)}
                         </span>
                       </span>
                       <span className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
@@ -555,6 +604,46 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           Open chat
                         </Button>
                       ) : null}
+                      {pausable ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          disabled={pausingId === run.id}
+                          onClick={() =>
+                            void (pauseRequested ? handleResume(run.id) : handlePause(run.id))
+                          }
+                        >
+                          {pausingId === run.id ? (
+                            <Spinner size="sm" aria-label="Updating task" />
+                          ) : pauseRequested ? (
+                            <>
+                              <Play className="mr-1 h-3.5 w-3.5" /> Keep working
+                            </>
+                          ) : (
+                            <>
+                              <Pause className="mr-1 h-3.5 w-3.5" /> Pause
+                            </>
+                          )}
+                        </Button>
+                      ) : null}
+                      {workState === 'paused' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          disabled={pausingId === run.id}
+                          onClick={() => void handleResume(run.id)}
+                        >
+                          {pausingId === run.id ? (
+                            <Spinner size="sm" aria-label="Resuming task" />
+                          ) : (
+                            <>
+                              <Play className="mr-1 h-3.5 w-3.5" /> Resume
+                            </>
+                          )}
+                        </Button>
+                      ) : null}
                       {cancellable ? (
                         <Button
                           variant="ghost"
@@ -589,7 +678,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           )}
                         </Button>
                       ) : null}
-                      {transport.setRunArchived && isArchivableState(run.state) ? (
+                      {transport.setRunArchived && isArchivableState(workState) ? (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -610,26 +699,27 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                   </div>
 
                   {run.state === 'awaiting_input' && run.pendingApproval ? (
-                    <div
+                    <ApprovalCard
                       data-testid={`task-pending-approval-${run.id}`}
-                      className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3"
+                      className="mt-3"
+                      title="Waiting for your approval"
+                      requests={run.pendingApproval.toolCalls.map((call) => ({
+                        id: call.toolCallId,
+                        name: call.name,
+                        detail: call.argsPreview,
+                      }))}
+                      approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
+                      denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
+                      onApprove={() => void handleApproval(run, 'approved')}
+                      onDeny={() => void handleApproval(run, 'rejected')}
+                      pending={resolvingApprovalId === run.id}
+                      meta={`asked ${formatDistanceToNow(
+                        new Date(run.pendingApproval.requestedAt),
+                        {
+                          addSuffix: true,
+                        },
+                      )}`}
                     >
-                      <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                        <ShieldQuestion className="h-3.5 w-3.5 text-amber-500" />
-                        Waiting for your approval
-                      </p>
-                      <ul className="mt-2 space-y-1.5">
-                        {run.pendingApproval.toolCalls.map((call) => (
-                          <li key={call.toolCallId} className="min-w-0">
-                            <span className="block truncate text-xs font-medium text-foreground">
-                              {call.name}
-                            </span>
-                            <span className="block truncate font-mono text-[12px] text-muted-foreground">
-                              {call.argsPreview}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
                       <textarea
                         data-testid={`task-approval-guidance-${run.id}`}
                         value={guidanceByRunId[run.id] ?? ''}
@@ -643,38 +733,10 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                         rows={2}
                         maxLength={TOOL_APPROVAL_GUIDANCE_MAX_LENGTH}
                         placeholder="Add guidance to steer this run (optional)"
-                        aria-label="Guidance for this task"
+                        aria-label="Guidance for this work session"
                         className="mt-2.5 w-full resize-none rounded-md border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground"
                       />
-                      <div className="mt-2.5 flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          className="h-7 px-2.5 text-xs"
-                          disabled={resolvingApprovalId === run.id}
-                          onClick={() => void handleApproval(run, 'approved')}
-                        >
-                          {resolvingApprovalId === run.id ? (
-                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                          ) : null}
-                          {TOOL_APPROVAL_ACTION_LABELS.approve}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2.5 text-xs"
-                          disabled={resolvingApprovalId === run.id}
-                          onClick={() => void handleApproval(run, 'rejected')}
-                        >
-                          {TOOL_APPROVAL_ACTION_LABELS.deny}
-                        </Button>
-                        <span className="text-[12px] text-muted-foreground">
-                          asked{' '}
-                          {formatDistanceToNow(new Date(run.pendingApproval.requestedAt), {
-                            addSuffix: true,
-                          })}
-                        </span>
-                      </div>
-                    </div>
+                    </ApprovalCard>
                   ) : null}
                 </div>
               );

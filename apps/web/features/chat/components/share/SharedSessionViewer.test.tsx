@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { getManagedModelPresentationLabel } from '@agiworkforce/unified-chat';
+
 import { SharedSessionViewer, type SharedSession } from './SharedSessionViewer';
 
 const BASE_SESSION: SharedSession = {
@@ -48,5 +50,24 @@ describe('SharedSessionViewer attachments', () => {
     );
 
     expect(screen.queryByText(/attachment omitted from shared snapshot/i)).toBeNull();
+  });
+});
+
+describe('SharedSessionViewer model identity', () => {
+  it('names the model through the shared ModelBadge', () => {
+    const modelId = 'fixture-shared-model';
+    const { container } = render(
+      <SharedSessionViewer session={{ ...BASE_SESSION, model_id: modelId }} token="tok123" />,
+    );
+
+    const badge = container.querySelector('[data-model-badge]');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toBe(getManagedModelPresentationLabel(modelId));
+  });
+
+  it('renders no model badge when the snapshot has no model', () => {
+    const { container } = render(<SharedSessionViewer session={BASE_SESSION} token="tok123" />);
+
+    expect(container.querySelector('[data-model-badge]')).toBeNull();
   });
 });

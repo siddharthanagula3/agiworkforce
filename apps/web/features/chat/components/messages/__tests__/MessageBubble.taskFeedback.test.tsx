@@ -62,27 +62,27 @@ describe('task feedback on an AGI Work reply', () => {
     useChatStore.setState({ workModeByConversation: { 'conv-1': 'agiwork' } });
     render(<MessageBubble message={taskReply()} />);
 
-    expect(screen.getByRole('button', { name: 'Task feedback' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Work feedback' })).toBeInTheDocument();
   });
 
   it('does not offer it on an ordinary chat reply', () => {
     render(<MessageBubble message={taskReply()} />);
 
-    expect(screen.queryByRole('button', { name: 'Task feedback' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Work feedback' })).toBeNull();
   });
 
   it('does not offer it when the turn has no run to name', () => {
     useChatStore.setState({ workModeByConversation: { 'conv-1': 'agiwork' } });
     render(<MessageBubble message={{ ...taskReply(), metadata: {} }} />);
 
-    expect(screen.queryByRole('button', { name: 'Task feedback' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Work feedback' })).toBeNull();
   });
 
   it('scopes the report to the run it came from', async () => {
     useChatStore.setState({ workModeByConversation: { 'conv-1': 'agiwork' } });
     render(<MessageBubble message={taskReply()} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Task feedback' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Work feedback' }));
     await userEvent.type(screen.getByLabelText('Details'), 'It skipped the second source.');
     await userEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
 

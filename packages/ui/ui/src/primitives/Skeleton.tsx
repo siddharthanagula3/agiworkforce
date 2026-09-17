@@ -11,13 +11,17 @@ interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
 function Skeleton({ className, animation = 'pulse', ...props }: SkeletonProps) {
   const animationClass = {
     pulse: 'animate-pulse',
-    wave: 'animate-shimmer bg-gradient-to-r from-muted via-muted/50 to-muted bg-[length:200%_100%]',
+    wave: 'animate-shimmer bg-gradient-to-r from-[var(--chat-loading-placeholder)] via-[var(--chat-surface-base)] to-[var(--chat-loading-placeholder)] bg-[length:200%_100%]',
     none: '',
   };
 
   return (
     <div
-      className={cn('rounded-md bg-muted', animationClass[animation], className)}
+      className={cn(
+        'rounded-md bg-[var(--chat-loading-placeholder)]',
+        animationClass[animation],
+        className,
+      )}
       aria-hidden="true"
       {...props}
     />

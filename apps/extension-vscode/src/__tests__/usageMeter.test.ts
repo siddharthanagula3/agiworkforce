@@ -131,6 +131,6 @@ describe('usageMeter', () => {
     expect(formatUsageMeterFallbackLabel('user-api-key')).toBe(
       'BYOK mode - no AGI-managed quota is active',
     );
-    expect(formatUsageMeterFallbackLabel('managed-plan')).toBe('Managed usage unavailable');
+    expect(formatUsageMeterFallbackLabel('managed-plan')).toBe('Managed Cloud usage unavailable');
   });
 });

@@ -381,7 +381,7 @@ export function TeamSection() {
               margin: '0 0 4px',
             }}
           >
-            Team
+            Workspace
           </h1>
           <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
             Create and manage your AGI workspace.
@@ -391,11 +391,11 @@ export function TeamSection() {
         {workspacePicker}
 
         {!access.canManageTeam ? (
-          <SectionCard title="Team administration">
+          <SectionCard title="Workspace administration">
             <div style={{ padding: 20 }}>
               <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>
-                Team administration requires a Team or Enterprise plan. Choose at least 2 Team seats
-                to create a workspace. Your current plan is {titleCase(access.plan)}.
+                Workspace administration requires a Team or Enterprise plan. Choose at least 2 Team
+                seats to create a workspace. Your current plan is {titleCase(access.plan)}.
               </p>
               <SettingsPageLink
                 href="/pricing#pricing-team-title"
@@ -472,7 +472,7 @@ export function TeamSection() {
             margin: '0 0 4px',
           }}
         >
-          Team
+          Workspace
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Manage workspace details and the AGI accounts with access.

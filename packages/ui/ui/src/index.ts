@@ -264,6 +264,20 @@ export {
   DataTable,
   createSortableHeader,
   ThemeToggle,
+  ApprovalCard,
+  type ApprovalCardProps,
+  type ApprovalCardRequest,
+  ModelBadge,
+  type ModelBadgeProps,
+  SearchInput,
+  searchInputVariants,
+  type SearchInputProps,
+  SegmentedControl,
+  type SegmentedControlOption,
+  type SegmentedControlProps,
+  TrustBadge,
+  type TrustBadgeBoundary,
+  type TrustBadgeProps,
 } from './primitives';
 export {
   Sidebar,
@@ -342,6 +356,13 @@ export {
 export { useConfirmAction } from './primitives/ConfirmAction';
 export type { ConfirmActionRequest } from './primitives/ConfirmAction';
 export { useMenuKeyboard } from './primitives/useMenuKeyboard';
+export {
+  useCombobox,
+  type ComboboxInputProps,
+  type ComboboxOptionProps,
+  type UseComboboxOptions,
+  type UseComboboxResult,
+} from './primitives/useCombobox';
 export { useDialogKeyboard } from './primitives/useDialogKeyboard';
 
 export {

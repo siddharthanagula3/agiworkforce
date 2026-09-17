@@ -76,7 +76,7 @@ export const PRIVACY_MODE_DISPLAY = {
     description: 'Uses the user-owned provider key; payloads go to that provider account.',
   },
   managed: {
-    label: 'Managed',
+    label: 'Managed Cloud',
     shortLabel: 'Managed',
     description: 'Uses AGI-managed provider access or hosted compute behind explicit consent.',
   },
@@ -132,7 +132,7 @@ export const CHAT_EXECUTION_MODE_DISPLAY = {
     description: 'Keeps the app local while requests go directly to the user-owned provider key.',
   },
   cloud_managed: {
-    label: 'Cloud Managed',
+    label: 'Managed Cloud',
     shortLabel: 'Managed',
     privacyMode: 'managed',
     defaultProviderMode: 'ManagedGateway',

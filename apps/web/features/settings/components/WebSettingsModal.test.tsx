@@ -748,6 +748,18 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(screen.getByText('Team settings content')).toBeTruthy();
   });
 
+  it('names the workspace section Workspace, the one term the workspace menu also uses', () => {
+    stubFetch();
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="team" />);
+
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    expect(within(nav).getByRole('button', { name: 'Workspace' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(nav).queryByRole('button', { name: 'Team' })).toBeNull();
+  });
+
   it('lists Memory as its own top-level nav entry, not nested under Capabilities', () => {
     stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);

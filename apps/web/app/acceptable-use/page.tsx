@@ -361,7 +361,7 @@ export default function AcceptableUsePage() {
                   </Prose>
                   <ButtonRow>
                     <Button href="/agent-permissions" variant="secondary">
-                      Agent permissions
+                      Approvals
                     </Button>
                     <Button href="/terms" variant="secondary">
                       Terms

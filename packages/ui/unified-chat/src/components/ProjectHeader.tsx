@@ -1,6 +1,10 @@
-import { KeyRound, Lock, Users } from 'lucide-react';
-import { resolveProjectIcon, hasKnownProjectIcon } from '@agiworkforce/ui';
-import type { ProjectAccentColor, ProjectHeaderPresentation } from '@agiworkforce/types';
+import { Users } from 'lucide-react';
+import { TrustBadge, resolveProjectIcon, hasKnownProjectIcon } from '@agiworkforce/ui';
+import {
+  providerModeToPrivacyMode,
+  type ProjectAccentColor,
+  type ProjectHeaderPresentation,
+} from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 
 export interface ProjectHeaderProps {
@@ -16,13 +20,6 @@ const ACCENT_BG: Record<ProjectAccentColor, string> = {
   rose: 'bg-rose-500/15 border-rose-500/30 text-rose-300',
   violet: 'bg-violet-500/15 border-violet-500/30 text-violet-300',
   zinc: 'bg-zinc-500/15 border-zinc-500/30 text-zinc-300',
-};
-
-const PROVIDER_CHIP: Record<string, string> = {
-  Local: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5',
-  DirectByok: 'border-amber-500/40 text-amber-300 bg-amber-500/5',
-  ManagedGateway: 'border-sky-500/40 text-sky-300 bg-sky-500/5',
-  ManagedNative: 'border-sky-500/40 text-sky-300 bg-sky-500/5',
 };
 
 function IconCircle({ presentation }: { presentation: ProjectHeaderPresentation }) {
@@ -44,37 +41,25 @@ function IconCircle({ presentation }: { presentation: ProjectHeaderPresentation 
 }
 
 function PrivacyChip({ presentation }: { presentation: ProjectHeaderPresentation }) {
-  const Icon = presentation.staysLocal ? Lock : KeyRound;
   return (
-    <span
+    <TrustBadge
       data-testid="project-header-privacy-chip"
       data-stays-local={presentation.staysLocal ? 'true' : 'false'}
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] font-medium',
-        presentation.staysLocal
-          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-          : 'border-zinc-500/40 bg-zinc-500/10 text-zinc-200',
-      )}
-    >
-      <Icon className="h-3 w-3" aria-hidden />
-      <span>{presentation.privacyLabel}</span>
-    </span>
+      boundary={presentation.privacyMode}
+      label={presentation.privacyLabel}
+    />
   );
 }
 
 function ProviderChip({ presentation }: { presentation: ProjectHeaderPresentation }) {
-  const tone = PROVIDER_CHIP[presentation.providerMode] ?? PROVIDER_CHIP['Local'];
   return (
-    <span
+    <TrustBadge
       data-testid="project-header-provider-chip"
       data-provider-mode={presentation.providerMode}
-      className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium',
-        tone,
-      )}
-    >
-      {presentation.providerLabel}
-    </span>
+      boundary={providerModeToPrivacyMode(presentation.providerMode)}
+      label={presentation.providerLabel}
+      showIcon={false}
+    />
   );
 }
 

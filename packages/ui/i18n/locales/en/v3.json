@@ -83,7 +83,7 @@
       "artifacts": "Artifacts",
       "code": "Code",
       "library": "Library",
-      "tasks": "Tasks",
+      "tasks": "Work",
       "customize": "Customize",
       "scheduled": "Schedules",
       "liveArtifacts": "Live artifacts",
@@ -110,7 +110,7 @@
     "fallbackName": "there",
     "modeLabel": "Local Mode",
     "cloudSyncAction": "Cloud Sync",
-    "cloudSyncAria": "Set up Cloud Managed sync",
+    "cloudSyncAria": "Set up Managed Cloud sync",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
