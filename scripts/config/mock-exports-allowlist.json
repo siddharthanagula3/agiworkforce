@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "reason": "Surfaces beyond apps/web were never scanned by this guard, so these factories accumulated unnoticed. The list may shrink, never grow: a mock that omits an export its subject imports fails at collection time with no assertion to point at.",
+  "entries": [
+    {
+      "file": "apps/desktop/src/__tests__/lib/cloudChatPersistence.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/api/__tests__/cloudAccountAdapters.boundary.test.ts",
+      "specifier": "../cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/api/__tests__/cloudAccountSettings.paths.test.ts",
+      "specifier": "../cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/api/__tests__/cloudAccountSettings.test.ts",
+      "specifier": "../cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/api/__tests__/cloudAccountSettings.workspaces.test.ts",
+      "specifier": "../cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/api/__tests__/cloudApi.authRace.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/api/__tests__/cloudConnectors.test.ts",
+      "specifier": "../cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/features/chat/__tests__/SearchModal.cloudBoundary.test.tsx",
+      "specifier": "../../../api/cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/features/chat/__tests__/SearchModal.cloudBoundary.test.tsx",
+      "specifier": "../../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/features/chat/__tests__/SearchModal.cloudBoundary.test.tsx",
+      "specifier": "../../../stores/auth"
+    },
+    {
+      "file": "apps/desktop/src/features/code/__tests__/FileTree.loadLoop.test.tsx",
+      "specifier": "../../../utils/ipc"
+    },
+    {
+      "file": "apps/desktop/src/features/onboarding/OnboardingWizard.cloudEntry.test.tsx",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/features/pricing/PlansModal.test.tsx",
+      "specifier": "../../lib/stripeCheckout"
+    },
+    {
+      "file": "apps/desktop/src/features/screen-capture/ScreenCaptureButton.test.tsx",
+      "specifier": "../../lib/tauri-mock"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/GAP-007-archived-chats.test.tsx",
+      "specifier": "../../../stores/appModeStore"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/GAP-007-archived-chats.test.tsx",
+      "specifier": "../../../stores/auth"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/Sidebar.cloudSignInFooter.test.tsx",
+      "specifier": "../../../stores/appModeStore"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/Sidebar.cloudSignInFooter.test.tsx",
+      "specifier": "../../../stores/auth"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/Sidebar.navParity.test.tsx",
+      "specifier": "../../../stores/appModeStore"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/Sidebar.navParity.test.tsx",
+      "specifier": "../../../stores/auth"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/Sidebar.notificationCenter.test.tsx",
+      "specifier": "../../../stores/appModeStore"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/Sidebar.notificationCenter.test.tsx",
+      "specifier": "../../../stores/auth"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/Sidebar.tasksBadge.test.tsx",
+      "specifier": "../../../stores/appModeStore"
+    },
+    {
+      "file": "apps/desktop/src/features/v3/__tests__/Sidebar.tasksBadge.test.tsx",
+      "specifier": "../../../stores/auth"
+    },
+    {
+      "file": "apps/desktop/src/features/voice/__tests__/useCloudVoiceController.test.ts",
+      "specifier": "../../../lib/tauri-mock"
+    },
+    {
+      "file": "apps/desktop/src/lib/__tests__/stripeCheckout.test.ts",
+      "specifier": "../../services/managedCloudBoundary"
+    },
+    {
+      "file": "apps/desktop/src/runtime/__tests__/CloudRuntime.test.ts",
+      "specifier": "../../api/cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/runtime/__tests__/WebRuntime.test.ts",
+      "specifier": "../../api/cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/services/__tests__/desktopCloudShares.test.ts",
+      "specifier": "../managedCloudBoundary"
+    },
+    {
+      "file": "apps/desktop/src/services/__tests__/desktopNativeSignIn.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/services/__tests__/deviceRegistryHeartbeat.test.ts",
+      "specifier": "../../api/cloudApi"
+    },
+    {
+      "file": "apps/desktop/src/stores/__tests__/appModeStore.desktopCloudGate.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/stores/__tests__/appModeStore.onboarding.test.ts",
+      "specifier": "../../lib/tauri-mock"
+    },
+    {
+      "file": "apps/desktop/src/stores/__tests__/appModeStore.streamingGuard.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/stores/__tests__/authSignOutBoundary.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/stores/__tests__/cloudBoundaryDegradation.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/stores/__tests__/cloudSessionPredicate.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/stores/__tests__/connectionStore.cloudBoundary.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/desktop/src/stores/__tests__/connectionStore.pairingSecret.test.ts",
+      "specifier": "../../lib/runtimeEnvironment"
+    },
+    {
+      "file": "apps/extension/__tests__/autofill-origin-gate.test.ts",
+      "specifier": "../src/webmcp"
+    }
+  ]
+}
