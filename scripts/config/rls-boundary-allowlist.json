@@ -42,6 +42,10 @@
       "reason": "cron sweep of expired temporary chats across every owner, runs with no request user"
     },
     {
+      "path": "apps/web/app/api/cron/replicate-object-backups/route.ts",
+      "reason": "scheduler-only backup replication gated by verifyCronRequest, it copies every tenant's stored objects by design and has no caller identity to scope to"
+    },
+    {
       "path": "apps/web/app/api/cron/reset-credits/route.ts",
       "reason": "cron route gated by verifyCronRequest against CRON_SECRET, sweeps every subscription due for reset"
     },
