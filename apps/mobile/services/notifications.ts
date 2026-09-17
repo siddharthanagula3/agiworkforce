@@ -8,7 +8,7 @@ import {
   nativeRouteForProductLink,
   productLinkWebFallbackUrl,
   readProductLink,
-} from '@/lib/productLinks';
+} from '@/src/features/notifications/productLinks';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
 import { notificationAllowed, vibrationAllowed } from './notificationGate';
 import {
