@@ -58,6 +58,18 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'managed_usage_requests', column: 'organization_id' },
   { table: 'usage_events', column: 'organization_id' },
   { table: 'search_history', column: 'organization_id' },
+  { table: 'organization_member_roles', column: 'organization_id' },
+  { table: 'organization_group_roles', column: 'organization_id' },
+  { table: 'organization_group_managers', column: 'organization_id' },
+  { table: 'organization_roles', column: 'organization_id' },
+  { table: 'organization_policy_overrides', column: 'organization_id' },
+  { table: 'organization_policy_revisions', column: 'organization_id' },
+  { table: 'organization_domain_retention_policies', column: 'organization_id' },
+  { table: 'organization_domain_retention_sweeps', column: 'organization_id' },
+  { table: 'organization_admin_api_keys', column: 'organization_id' },
+  { table: 'organization_spend_alerts', column: 'organization_id' },
+  { table: 'retrieval_chunks', column: 'organization_id' },
+  { table: 'retrieval_documents', column: 'organization_id' },
   { table: 'organization_billing_contracts', column: 'organization_id' },
   { table: 'organization_billing_invoices', column: 'organization_id' },
 ];
@@ -98,6 +110,8 @@ export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
     'organization_id is ON DELETE SET NULL (0053_projects_managed_cloud_contract). A member’s project demotes to Personal scope rather than being destroyed when the workspace is decommissioned; ownership stays with the member who created it.',
   video_generation_jobs:
     'organization_id is ON DELETE SET NULL (0105_durable_video_generation_jobs). A billed video job is a financial/asset record that must survive the workspace it ran in, the same reasoning account-erasure.ts applies to this table for an erased user.',
+  device_registrations:
+    'organization_id is ON DELETE SET NULL (0207_device_registrations). The registration belongs to the member’s device, not to the workspace it last reported from: decommissioning a workspace demotes the binding to personal rather than unregistering the member’s own machine.',
   device_refresh_tokens:
     'organization_id is ON DELETE SET NULL (0187_device_refresh_token_workspace_binding). The credential belongs to the member, not to the workspace it was paired in: decommissioning a workspace demotes the binding to personal rather than signing the member’s device out of their own account.',
 };
