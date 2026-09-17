@@ -58,11 +58,7 @@ export interface ShellPolicyVerdict {
   decision: ShellPolicyDecision;
   program: string;
   reason:
-    | 'always-refused'
-    | 'denied-by-policy'
-    | 'allowed-by-policy'
-    | 'not-listed'
-    | 'unparseable';
+    'always-refused' | 'denied-by-policy' | 'allowed-by-policy' | 'not-listed' | 'unparseable';
   message?: string;
 }
 
@@ -90,7 +86,8 @@ export interface ShellRunResult {
 }
 
 export class ShellCommandRefused extends Error {
-  readonly reason: ShellPolicyVerdict['reason'] | 'control-characters' | 'too-long';
+  readonly reason:
+    ShellPolicyVerdict['reason'] | 'control-characters' | 'too-long' | 'sandbox-unavailable';
   constructor(reason: ShellCommandRefused['reason'], message: string) {
     super(message);
     this.name = 'ShellCommandRefused';
