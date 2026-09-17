@@ -1,5 +1,8 @@
 'use client';
 
+// Ref types here name the element each primitive renders rather than deriving
+// it from vaul: under some installs that inference collapses to never, and a
+// ref typed never fails the build only where the dependency resolves that way.
 import * as React from 'react';
 import { Drawer as DrawerPrimitive } from 'vaul';
 import { cn } from '../cn';
@@ -21,7 +24,7 @@ const DrawerClose = DrawerPrimitive.Close;
 interface DrawerOverlayProps extends React.ComponentPropsWithoutRef<
   typeof DrawerPrimitive.Overlay
 > {
-  ref?: React.Ref<React.ElementRef<typeof DrawerPrimitive.Overlay>>;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 function DrawerOverlay({ className, ref, ...props }: DrawerOverlayProps) {
@@ -38,7 +41,7 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 interface DrawerContentProps extends React.ComponentPropsWithoutRef<
   typeof DrawerPrimitive.Content
 > {
-  ref?: React.Ref<React.ElementRef<typeof DrawerPrimitive.Content>>;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 function DrawerContent({ className, children, ref, ...props }: DrawerContentProps) {
@@ -72,7 +75,7 @@ function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 DrawerFooter.displayName = 'DrawerFooter';
 
 interface DrawerTitleProps extends React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title> {
-  ref?: React.Ref<React.ElementRef<typeof DrawerPrimitive.Title>>;
+  ref?: React.Ref<HTMLHeadingElement>;
 }
 
 function DrawerTitle({ className, ref, ...props }: DrawerTitleProps) {
@@ -89,7 +92,7 @@ DrawerTitle.displayName = DrawerPrimitive.Title.displayName;
 interface DrawerDescriptionProps extends React.ComponentPropsWithoutRef<
   typeof DrawerPrimitive.Description
 > {
-  ref?: React.Ref<React.ElementRef<typeof DrawerPrimitive.Description>>;
+  ref?: React.Ref<HTMLParagraphElement>;
 }
 
 function DrawerDescription({ className, ref, ...props }: DrawerDescriptionProps) {
