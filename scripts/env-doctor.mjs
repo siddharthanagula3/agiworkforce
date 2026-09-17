@@ -176,6 +176,7 @@ export const contracts = {
 };
 
 const platformProvidedKeys = new Set([
+  'CI',
   'COLORFGBG',
   'COLORTERM',
   'COLUMNS',
