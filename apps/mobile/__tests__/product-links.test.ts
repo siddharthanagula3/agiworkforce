@@ -6,7 +6,7 @@ import {
   nativeRouteForProductLink,
   productLinkWebFallbackUrl,
   readProductLink,
-} from '../lib/productLinks';
+} from '../src/features/notifications/productLinks';
 import { API_URL } from '../lib/constants';
 
 describe('product links on mobile', () => {
