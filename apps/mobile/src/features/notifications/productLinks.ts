@@ -5,8 +5,8 @@ import {
   type ProductLink,
   type ProductLinkTarget,
 } from '@agiworkforce/types';
-import { API_URL } from './constants';
-import { FEATURES, type FeatureKey } from './v1FeatureFlags';
+import { API_URL } from '@/lib/constants';
+import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 
 const NATIVE_DESTINATION: Record<ProductLinkTarget, { pathname: string; flag: FeatureKey | null }> =
   {
