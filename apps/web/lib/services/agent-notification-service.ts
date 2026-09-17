@@ -2,6 +2,8 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
+import type { NotificationSeverity } from '@/features/notifications/lib/notification-target';
+import { recordNotification } from './notification-service';
 import { sendPushToUser } from './push-notification-service';
 
 /**
@@ -17,10 +19,7 @@ import { sendPushToUser } from './push-notification-service';
 export const AGENT_PUSH_PREFERENCE_KEY = 'mobilePushAgentActivity';
 
 export type AgentRunNotificationEvent =
-  | 'approval_required'
-  | 'input_required'
-  | 'completed'
-  | 'failed';
+  'approval_required' | 'input_required' | 'completed' | 'failed';
 
 /**
  * `data.type` values `apps/mobile/services/notifications.ts` switches on. A
@@ -49,6 +48,15 @@ const MOBILE_ROUTE: Record<AgentRunNotificationEvent, string> = {
   completed: '/(app)/agents',
   failed: '/(app)/agents',
 };
+
+const FEED_SEVERITY: Record<AgentRunNotificationEvent, NotificationSeverity> = {
+  approval_required: 'warning',
+  input_required: 'warning',
+  completed: 'success',
+  failed: 'error',
+};
+
+const RESEARCH_MOBILE_ROUTE = '/(app)/reports';
 
 async function loadAgentPushPreference(db: DatabaseAdapter, userId: string): Promise<boolean> {
   try {
@@ -122,9 +130,19 @@ export async function notifyAgentRunEvent(
     // only the mobile transport. A browser is registered from the web settings
     // toggle and turned off from the same place, so it carries its own consent
     // and is not silenced by a preference set on a phone.
-    const toExpo = await loadAgentPushPreference(db, notice.userId);
-
     const { title, body } = describeAgentRunEvent(notice);
+    const terminal = notice.event === 'completed' || notice.event === 'failed';
+    await recordNotification(db, {
+      userId: notice.userId,
+      category: 'agent_run',
+      severity: FEED_SEVERITY[notice.event],
+      title,
+      message: body,
+      target: { kind: 'work', id: notice.runId },
+      dedupeKey: terminal ? `agent-run:${notice.runId}:${notice.event}` : null,
+    });
+
+    const toExpo = await loadAgentPushPreference(db, notice.userId);
     const result = await sendPushToUser(
       notice.userId,
       {
@@ -143,6 +161,64 @@ export async function notifyAgentRunEvent(
     return { pushed: (result?.sent ?? 0) > 0 };
   } catch (error) {
     logger.warn({ error, runId: notice.runId }, '[notifications] agent notify failed');
+    return none;
+  }
+}
+
+export interface ResearchReportNotice {
+  userId: string;
+  reportId: string;
+  requestId: string;
+  title: string;
+  status: string;
+  sourcesConsulted: number;
+}
+
+export async function notifyResearchReportSettled(
+  db: DatabaseAdapter,
+  notice: ResearchReportNotice,
+): Promise<{ recorded: boolean; pushed: boolean }> {
+  const none = { recorded: false, pushed: false };
+  if (notice.status !== 'completed' && notice.status !== 'failed') return none;
+  try {
+    const completed = notice.status === 'completed';
+    const label = shortLabel(notice.title) || 'Your research';
+    const title = completed ? 'Research report ready' : 'Research did not finish';
+    const body = completed
+      ? `“${label}” is ready, drawn from ${notice.sourcesConsulted} ${notice.sourcesConsulted === 1 ? 'source' : 'sources'}.`
+      : `“${label}” stopped before the report was written.`;
+
+    const { recorded } = await recordNotification(db, {
+      userId: notice.userId,
+      category: 'research',
+      severity: completed ? 'success' : 'error',
+      title,
+      message: body,
+      target: { kind: 'research', id: notice.reportId },
+      dedupeKey: `research:${notice.requestId}:${notice.status}`,
+    });
+    if (!recorded) return none;
+
+    const toExpo = await loadAgentPushPreference(db, notice.userId);
+    const result = await sendPushToUser(
+      notice.userId,
+      {
+        title,
+        body,
+        data: {
+          type: completed ? 'task_completed' : 'agent_failed',
+          priority: completed ? 'normal' : 'critical',
+          route: RESEARCH_MOBILE_ROUTE,
+          target: 'research',
+          targetId: notice.reportId,
+        },
+      },
+      { expo: toExpo, web: true },
+    ).catch(() => null);
+
+    return { recorded, pushed: (result?.sent ?? 0) > 0 };
+  } catch (error) {
+    logger.warn({ error, reportId: notice.reportId }, '[notifications] research notify failed');
     return none;
   }
 }

@@ -1,8 +1,14 @@
+import { PRODUCT_LINK_TARGETS } from '@agiworkforce/types';
 import type { DesktopRuntimeEvent, DesktopRuntimeResponse } from './protocol';
 
 export const DESKTOP_DEEP_LINK_SCHEME = 'agiworkforce-cloud';
 
-export const DESKTOP_DEEP_LINK_TARGETS = ['chat', 'project', 'settings'] as const;
+export const DESKTOP_DEEP_LINK_TARGETS = [
+  'chat',
+  'project',
+  'settings',
+  ...PRODUCT_LINK_TARGETS,
+] as const;
 
 export type DesktopDeepLinkTarget = (typeof DESKTOP_DEEP_LINK_TARGETS)[number];
 

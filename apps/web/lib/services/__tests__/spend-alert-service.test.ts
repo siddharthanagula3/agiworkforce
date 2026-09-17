@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(async () => undefined),
   sendSpendAlertEmail: vi.fn(async () => ({ delivered: true, providerMessageId: 'msg' })),
+  recordNotification: vi.fn(async () => ({ recorded: true })),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -15,6 +16,9 @@ vi.mock('@/lib/server/neon-db', () => ({
   },
 }));
 vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/services/notification-service', () => ({
+  recordNotification: mocks.recordNotification,
+}));
 vi.mock('@/lib/services/notification-email-service', () => ({
   sendSpendAlertEmail: mocks.sendSpendAlertEmail,
 }));
@@ -112,6 +116,25 @@ describe('dispatchSpendAlertIfDue', () => {
     ]);
   });
 
+  it('writes an in-app notice for every owner and admin, including one with no email on file', async () => {
+    const h = harness();
+    await dispatchSpendAlertIfDue(ORG, state({ overCap: true, enforcement: 'block' }), h.db);
+
+    const calls = mocks.recordNotification.mock.calls as unknown as Array<
+      [unknown, { userId: string; category: string; severity: string; dedupeKey: string }]
+    >;
+    expect(calls.map(([, notice]) => notice.userId).sort()).toEqual([
+      'admin-1',
+      'admin-2',
+      'owner-1',
+    ]);
+    expect(calls[0]![1]).toMatchObject({
+      category: 'billing',
+      severity: 'error',
+      dedupeKey: `spend-alert:${ORG}:2026-09-01:cap`,
+    });
+  });
+
   it('keys the send on workspace, month, kind and recipient so a retry cannot double-send', async () => {
     const h = harness();
     await dispatchSpendAlertIfDue(ORG, state({ overCap: true, enforcement: 'block' }), h.db);
@@ -130,6 +153,7 @@ describe('dispatchSpendAlertIfDue', () => {
     expect(outcome).toEqual({ dispatched: false, reason: 'already_sent' });
     expect(mocks.sendSpendAlertEmail).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.recordNotification).not.toHaveBeenCalled();
   });
 
   it('claims nothing when no crossing is due', async () => {

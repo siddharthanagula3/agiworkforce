@@ -18,8 +18,29 @@ import {
 } from '@/lib/connectors/oauth-registry';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import { refreshDiscoveredGrant } from '@/lib/connectors/mcp-discovery';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { recordNotification } from '@/lib/services/notification-service';
 
 const EXPIRY_SKEW_MS = 60_000;
+
+async function dropUnusableGrant(
+  userId: string,
+  connectorId: string,
+  provider: ConnectorOAuthProvider | null,
+): Promise<void> {
+  const revoked = await revokeConnectorOAuthGrant(userId, connectorId);
+  if (!revoked) return;
+  const name = provider?.displayName ?? connectorId;
+  await recordNotification(getNeonDb(), {
+    userId,
+    category: 'connector',
+    severity: 'warning',
+    title: `Reconnect ${name}`,
+    message: `The ${name} authorization expired or was revoked, so its tools stop working until you connect it again.`,
+    target: { kind: 'settings', id: 'connectors' },
+    dedupeKey: `connector-expired:${connectorId}:${new Date().toISOString().slice(0, 10)}`,
+  });
+}
 
 export type ConnectorAccessOutcome =
   | { status: 'ready'; accessToken: string; tokenType: string; grantedScopes: string[] }
@@ -78,7 +99,7 @@ export async function resolveConnectorAccessToken(
 
   const refreshToken = grant.refreshToken;
   if (!refreshToken) {
-    await revokeConnectorOAuthGrant(userId, connectorId);
+    await dropUnusableGrant(userId, connectorId, provider);
     return { status: 'reauthorization-required', reason: 'expired' };
   }
 
@@ -92,7 +113,7 @@ export async function resolveConnectorAccessToken(
     });
 
     if (outcome.status === 'authorization-server-changed') {
-      await revokeConnectorOAuthGrant(userId, connectorId);
+      await dropUnusableGrant(userId, connectorId, provider);
       return { status: 'reauthorization-required', reason: 'refresh-failed' };
     }
     if (outcome.status === 'failed') {
@@ -149,7 +170,7 @@ export async function resolveConnectorAccessToken(
       },
       '[connector-oauth] token refresh failed',
     );
-    if (isDead) await revokeConnectorOAuthGrant(userId, connectorId);
+    if (isDead) await dropUnusableGrant(userId, connectorId, provider);
     return { status: 'reauthorization-required', reason: 'refresh-failed' };
   }
 }

@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     revokeGrant: vi.fn(),
     refresh: vi.fn(),
     refreshDiscovered: vi.fn(),
+    record: vi.fn(),
     revokeAtProvider: vi.fn(),
     getProvider: vi.fn(),
     ConnectorOAuthTokenError,
@@ -60,6 +61,11 @@ vi.mock('@/lib/connectors/oauth-registry', () => ({
   getConnectorOAuthProvider: (...a: unknown[]) => mocks.getProvider(...a),
 }));
 
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ privileged: true }) }));
+vi.mock('@/lib/services/notification-service', () => ({
+  recordNotification: (...a: unknown[]) => mocks.record(...a),
+}));
+
 vi.mock('@/lib/connectors/mcp-discovery', () => ({
   refreshDiscoveredGrant: mocks.refreshDiscovered,
 }));
@@ -68,6 +74,7 @@ import { disconnectConnectorOAuthGrant, resolveConnectorAccessToken } from '../o
 
 const PROVIDER = {
   connectorId: 'linear',
+  displayName: 'Linear',
   tokenUrl: 'https://auth.example.com/token',
   revocationUrl: undefined as string | undefined,
 };
@@ -92,6 +99,7 @@ beforeEach(() => {
   mocks.getProvider.mockReturnValue(PROVIDER);
   mocks.revokeGrant.mockResolvedValue(true);
   mocks.updateTokens.mockResolvedValue(undefined);
+  mocks.record.mockResolvedValue({ recorded: true });
 });
 
 describe('resolveConnectorAccessToken', () => {
@@ -182,6 +190,26 @@ describe('resolveConnectorAccessToken', () => {
       resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
     ).resolves.toEqual({ status: 'reauthorization-required', reason: 'refresh-failed' });
     expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear');
+    expect(mocks.record).toHaveBeenCalledWith(
+      { privileged: true },
+      expect.objectContaining({
+        userId: 'u1',
+        category: 'connector',
+        title: 'Reconnect Linear',
+        target: { kind: 'settings', id: 'connectors' },
+        dedupeKey: expect.stringMatching(/^connector-expired:linear:\d{4}-\d{2}-\d{2}$/),
+      }),
+    );
+  });
+
+  it('tells the user nothing when the grant was already gone', async () => {
+    mocks.getGrant.mockResolvedValue(grant());
+    mocks.revokeGrant.mockResolvedValue(false);
+    mocks.refresh.mockRejectedValue(new MockTokenError('dead', 400, 'invalid_grant'));
+
+    await resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true });
+
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 
   it('KEEPS the grant when the refresh failed transiently', async () => {
@@ -192,6 +220,7 @@ describe('resolveConnectorAccessToken', () => {
       resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
     ).resolves.toEqual({ status: 'reauthorization-required', reason: 'refresh-failed' });
     expect(mocks.revokeGrant).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 
   it('asks for reconnection when the stored ciphertext cannot be decrypted', async () => {

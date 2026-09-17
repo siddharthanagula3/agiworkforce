@@ -9,6 +9,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendTransactionalEmail } from '@/lib/support/handoff/resend-client';
+import { recordNotification } from '@/lib/services/notification-service';
 import {
   deriveCollectionState,
   type CollectionStage,
@@ -49,6 +50,7 @@ interface ContractRow {
   collection_stage: CollectionStage;
   last_collection_notice_at: string | null;
   owner_email: string | null;
+  owner_user_id: string | null;
   committed_seats: number;
   stripe_subscription_id: string | null;
   stripe_customer_id: string | null;
@@ -74,7 +76,8 @@ async function loadEnterpriseContractsNeedingReview(db: DatabaseAdapter): Promis
             c.committed_seats,
             c.stripe_subscription_id,
             c.stripe_customer_id,
-            p.email as owner_email
+            p.email as owner_email,
+            o.owner_user_id
        from public.organization_billing_contracts c
        join public.organizations o on o.id = c.organization_id
        left join public.profiles p on p.id = o.owner_user_id
@@ -204,8 +207,19 @@ export async function enforceBillingCollection(
 
     let ownerNotified = false;
     if (changed && OWNER_NOTICE_STAGES.has(state.stage)) {
+      const content = ownerNoticeContent(state.stage, state.daysPastDue);
+      if (contract.owner_user_id) {
+        await recordNotification(db, {
+          userId: contract.owner_user_id,
+          category: 'billing',
+          severity: state.stage === 'read_only' ? 'error' : 'warning',
+          title: content.subject,
+          message: content.text,
+          target: { kind: 'settings', id: 'billing' },
+          dedupeKey: `billing-collection:${contract.organization_id}:${state.stage}:${nowIso.slice(0, 10)}`,
+        });
+      }
       if (contract.owner_email) {
-        const content = ownerNoticeContent(state.stage, state.daysPastDue);
         const sent = await sendTransactionalEmail({
           from: fromEmail,
           to: contract.owner_email,

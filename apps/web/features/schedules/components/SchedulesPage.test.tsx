@@ -117,6 +117,18 @@ describe('SchedulesPage', () => {
     expect(screen.queryByText('No Tools')).not.toBeInTheDocument();
   });
 
+  it('opens the run history of the schedule a notification link names', async () => {
+    const other: ScheduleTask = { ...schedule, id: 'schedule-2', name: 'Evening wrap' };
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    const api = createApi({ listSchedules: vi.fn(async () => page([other, schedule])) });
+
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} focusScheduleId={schedule.id} />);
+
+    await waitFor(() => expect(api.listRuns).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.listRuns).mock.calls[0]?.[0]).toBe(schedule.id);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
   it('moves the Managed Cloud model constraint into the create dialog as helper text', async () => {
     const api = createApi();
     const user = userEvent.setup();

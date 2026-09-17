@@ -16,6 +16,9 @@ vi.mock('@/lib/support/handoff/config', () => ({
 const sendTransactionalEmail = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/support/handoff/resend-client', () => ({ sendTransactionalEmail }));
 
+const recordNotification = vi.hoisted(() => vi.fn().mockResolvedValue({ recorded: true }));
+vi.mock('@/lib/services/notification-service', () => ({ recordNotification }));
+
 const dbQuery = vi.hoisted(() => vi.fn());
 const dbExecute = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@/lib/server/neon-db', () => ({
@@ -69,6 +72,7 @@ function contractRow(overrides: Record<string, unknown> = {}) {
     collection_stage: 'current',
     last_collection_notice_at: null,
     owner_email: 'owner@example.com',
+    owner_user_id: 'user_owner_1',
     committed_seats: 500,
     stripe_subscription_id: 'sub_ent_1',
     stripe_customer_id: 'cus_ent_1',
@@ -163,6 +167,24 @@ describe('enforceBillingCollection · owner notices', () => {
         expect.objectContaining({ to: 'owner@example.com' }),
       );
     }
+  });
+
+  it('puts the stage change in the owner’s in-app feed even with no email on file', async () => {
+    const { db } = makeDb([
+      contractRow({ oldest_open_invoice_due_at: daysAgoIso(100), owner_email: null }),
+    ]);
+
+    await enforceBillingCollection(db, NOW);
+
+    expect(recordNotification).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        userId: 'user_owner_1',
+        category: 'billing',
+        severity: 'error',
+        target: { kind: 'settings', id: 'billing' },
+      }),
+    );
   });
 
   it('does not email the owner while nothing changed', async () => {

@@ -2,18 +2,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetUserScopedDb, mockQuery, mockExecute, mockTransaction, mockAudit } =
-  vi.hoisted(() => ({
-    mockAuth: vi.fn(),
-    mockGetUserScopedDb: vi.fn(),
-    mockQuery: vi.fn(),
-    mockExecute: vi.fn(async () => 1),
-    mockTransaction: vi.fn(),
-    mockAudit: vi.fn(async () => {}),
-  }));
+const {
+  mockAuth,
+  mockGetUserScopedDb,
+  mockQuery,
+  mockExecute,
+  mockTransaction,
+  mockAudit,
+  mockNotifyDisconnected,
+} = vi.hoisted(() => ({
+  mockNotifyDisconnected: vi.fn(async () => undefined),
+  mockAuth: vi.fn(),
+  mockGetUserScopedDb: vi.fn(),
+  mockQuery: vi.fn(),
+  mockExecute: vi.fn(async () => 1),
+  mockTransaction: vi.fn(),
+  mockAudit: vi.fn(async () => {}),
+}));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...a: unknown[]) => mockGetUserScopedDb(...a),
+}));
+
+vi.mock('@/lib/services/account-activity-notifications', () => ({
+  notifyDeviceDisconnected: mockNotifyDisconnected,
+  notifyDeviceSignInApproved: vi.fn(async () => undefined),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: (...a: unknown[]) => mockAuth(...a) }));
@@ -216,5 +229,9 @@ describe('unlinking a device', () => {
       [DEVICE_ID, 'user-1'],
     );
     expect(mockAudit).toHaveBeenCalled();
+    expect(mockNotifyDisconnected).toHaveBeenCalledWith(
+      expect.objectContaining({ query: mockQuery }),
+      { userId: 'user-1', deviceId: DEVICE_ID, kind: 'desktop', name: 'Laptop' },
+    );
   });
 });
