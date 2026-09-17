@@ -15,7 +15,8 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 
-export type RecurrenceType = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'interval';
+export type RecurrenceType =
+  'once' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'interval' | 'rrule' | 'event';
 
 export interface Schedule {
   id: string;
@@ -23,6 +24,7 @@ export interface Schedule {
   prompt: string;
   model: string;
   recurrence: RecurrenceType;
+  recurrenceRule?: string;
   cronExpression?: string;
   scheduledAt: string | null;
   intervalMs?: number;
