@@ -1739,18 +1739,19 @@ export function useUnshareProjectFromOrganization(): UseMutationResult<unknown, 
 
 /**
  * Set one member's access to a shared project. `inherit` removes the override;
- * `none` is an explicit denial that the database itself honours.
+ * `none` is an explicit denial that the database itself honours; `write` is the
+ * editor grant the project routes read before allowing a non-owner to save.
  */
 export function useSetSharedProjectMemberAccess(): UseMutationResult<
   unknown,
   Error,
-  { projectId: string; userId: string; access: 'read' | 'none' | 'inherit' }
+  { projectId: string; userId: string; access: OrgMemberProjectAccess | 'inherit' }
 > {
   const queryClient: QueryClient = useQueryClient();
   return useMutation<
     unknown,
     Error,
-    { projectId: string; userId: string; access: 'read' | 'none' | 'inherit' }
+    { projectId: string; userId: string; access: OrgMemberProjectAccess | 'inherit' }
   >({
     mutationFn: ({ projectId, userId, access }) =>
       sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PATCH', {

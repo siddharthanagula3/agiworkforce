@@ -161,6 +161,7 @@ export interface Project {
    * renders them as editable is offering controls the server answers 404 to.
    */
   isOrgShared?: boolean;
+  sharedAccess?: 'read' | 'write' | null;
 }
 
 export type ArtifactType = SharedArtifactType;

@@ -160,7 +160,11 @@ import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { SourcesControl } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
-import { ResearchActivity, type ResearchPlanDecision } from '../research/ResearchActivity';
+import {
+  ResearchActivity,
+  type ResearchPlanDecision,
+  type ResearchPlanOptions,
+} from '../research/ResearchActivity';
 import {
   renumberCitationMarkersFromTrailingList,
   stripTrailingSourceList,
@@ -570,7 +574,11 @@ interface MessageBubbleProps {
    * Answer a Deep Research run paused for plan approval: start the searches the
    * plan lists, or drop the plan. Absent when the surface cannot send.
    */
-  onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
+  onResearchPlanDecision?: (
+    messageId: string,
+    decision: ResearchPlanDecision,
+    options?: ResearchPlanOptions,
+  ) => void;
   /** True while a research retry or approved start for THIS message is in flight. */
   isRetryingResearch?: boolean;
   onDelete?: (messageId: string) => void;
@@ -1492,6 +1500,18 @@ const MessageBubbleComponent = function MessageBubble({
   const voiceModeActive = useVoiceModeActive();
   const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
   const canonicalActivity = !isUser ? message.metadata?.agentActivity : undefined;
+  /**
+   * A screen step's picture lives on the tool entry this machine wrote, never
+   * on the run's event stream, so the timeline is handed a lookup rather than a
+   * field: a surface that did not take the shot has none to show.
+   */
+  const screenshotForToolCall = useCallback(
+    (toolCallId: string): string | undefined =>
+      message.metadata?.tools?.find(
+        (tool) => (tool.toolCallId ?? tool.id) === toolCallId && tool.resultImage,
+      )?.resultImage,
+    [message.metadata?.tools],
+  );
   const placeholderOnlyActivity =
     canonicalActivity !== undefined &&
     !isAgiWorkTurn &&
@@ -1676,8 +1696,10 @@ const MessageBubbleComponent = function MessageBubble({
               {...(onRetryResearch ? { onRetry: () => onRetryResearch(message.id) } : {})}
               {...(onResearchPlanDecision
                 ? {
-                    onPlanDecision: (decision: ResearchPlanDecision) =>
-                      onResearchPlanDecision(message.id, decision),
+                    onPlanDecision: (
+                      decision: ResearchPlanDecision,
+                      options?: ResearchPlanOptions,
+                    ) => onResearchPlanDecision(message.id, decision, options),
                   }
                 : {})}
             />
@@ -1711,6 +1733,7 @@ const MessageBubbleComponent = function MessageBubble({
               onResend={resolveToolApproval && onRegenerate ? handleResendTool : undefined}
               {...(turnFailureReason ? { failureReason: turnFailureReason } : {})}
               {...(turnFailureActions ? { failureActions: turnFailureActions } : {})}
+              screenshotFor={screenshotForToolCall}
               {...connectRetryHandler}
             />
           )}

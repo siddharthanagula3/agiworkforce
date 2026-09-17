@@ -20,6 +20,7 @@ export const USER_OWNED_TABLES = new Set([
   'managed_usage_requests',
   'managed_usage_request_extensions',
   'usage_events',
+  'product_analytics_events',
   'credit_transactions',
   'token_credits',
   'subscriptions',

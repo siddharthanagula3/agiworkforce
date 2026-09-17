@@ -38,6 +38,16 @@ export function isDeviceStepTool(name: string): name is DeviceStepTool {
 }
 
 /**
+ * Whether a step acts on the screen rather than on a granted folder. A
+ * transcript uses this to tell a computer-use step (a click, a keystroke, a
+ * screenshot) from a file step, which read as entirely different actions to
+ * the person watching them.
+ */
+export function isScreenDeviceStep(name: string): boolean {
+  return isDeviceStepTool(name) && DEVICE_STEP_DEFINITIONS[name].scope === 'screen';
+}
+
+/**
  * What a step is scoped to.
  *
  * A `workspace` step acts inside one folder the user granted and is refused

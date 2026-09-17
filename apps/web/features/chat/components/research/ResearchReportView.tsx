@@ -21,6 +21,7 @@ import {
   Download,
   ExternalLink,
   FileCode,
+  FolderPlus,
   Globe,
   List,
   SendHorizontal,
@@ -33,9 +34,22 @@ import {
   type Citation,
   type ResearchReport,
 } from '@agiworkforce/types';
-import { Button } from '@agiworkforce/ui';
-import { MarkdownContent } from '@agiworkforce/unified-chat';
-import { citationAnchorId, citedSourceNumbers, linkifyCitations } from '../../lib/citation-links';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@agiworkforce/ui';
+import { MarkdownContent, useChatProjectStore } from '@agiworkforce/unified-chat';
+import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
+import {
+  citationAnchorId,
+  citationRenderOutcome,
+  citedSourceNumbers,
+  linkifyCitations,
+} from '../../lib/citation-links';
+import { trackProductEvent } from '@shared/lib/product-analytics';
 import { cn } from '@shared/lib/utils';
 import type { DocumentFormat } from '../../types/message-metadata';
 import { documentExportService } from '../../services/document-export-service';
@@ -261,6 +275,10 @@ const EXPORT_FORMATS: Array<{ id: DocumentFormat; label: string }> = [
   { id: 'docx', label: 'Word' },
 ];
 
+async function defaultSaveReportToProject(projectId: string, file: File): Promise<void> {
+  await uploadProjectKnowledgeFile({ projectId, file });
+}
+
 interface ResearchReportViewProps {
   report: ResearchReport;
   /** Optional close affordance when the view is hosted in a panel. */
@@ -280,6 +298,12 @@ interface ResearchReportViewProps {
    * collect a question nothing could answer.
    */
   onAskFollowUp?: (prompt: string) => void;
+  /**
+   * Injected in tests; defaults to the project-sources upload the Library and
+   * the artifact panel already use, so a report saved into a project becomes
+   * one of that project's sources rather than a second kind of attachment.
+   */
+  saveToProject?: (projectId: string, file: File) => Promise<void>;
 }
 
 export function ResearchReportView({
@@ -288,11 +312,17 @@ export function ResearchReportView({
   exportService,
   onCreateArtifact,
   onAskFollowUp,
+  saveToProject,
 }: ResearchReportViewProps) {
   const [exportingFormat, setExportingFormat] = useState<DocumentFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [followUp, setFollowUp] = useState('');
+  const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedProjectName, setSavedProjectName] = useState<string | null>(null);
+  const projects = useChatProjectStore((s) => s.projects);
   const service = exportService ?? documentExportService;
+  const saveReport = saveToProject ?? defaultSaveReportToProject;
 
   const markdown = useMemo(() => researchReportToMarkdown(report), [report]);
   const headings = useMemo(() => extractMarkdownHeadings(report.content), [report.content]);
@@ -305,6 +335,11 @@ export function ResearchReportView({
     [report.citations.length, report.content],
   );
   const bodyRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const outcome = citationRenderOutcome(report.content, report.citations.length);
+    if (outcome) trackProductEvent('citation_rendered', { outcome });
+  }, [report.content, report.citations.length]);
 
   // The markdown renderer emits plain headings with no ids, so the anchors the
   // contents list needs are stamped onto the rendered nodes here, in document
@@ -344,6 +379,26 @@ export function ResearchReportView({
       }
     },
     [markdown, report, service],
+  );
+
+  const handleSaveToProject = useCallback(
+    async (project: { id: string; name: string }) => {
+      setSavingProjectId(project.id);
+      setSaveError(null);
+      setSavedProjectName(null);
+      try {
+        await saveReport(
+          project.id,
+          new File([markdown], `${researchReportFilename(report)}.md`, { type: 'text/markdown' }),
+        );
+        setSavedProjectName(project.name);
+      } catch (error) {
+        setSaveError(toUserMessage(error, 'That report could not be saved to the project'));
+      } finally {
+        setSavingProjectId(null);
+      }
+    },
+    [markdown, report, saveReport],
   );
 
   const askFollowUp = useCallback(() => {
@@ -390,6 +445,33 @@ export function ResearchReportView({
               Artifact
             </Button>
           )}
+          {projects.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  disabled={savingProjectId !== null}
+                  data-testid="research-report-save-to-project"
+                  aria-label="Save this report to a project"
+                >
+                  <FolderPlus className="h-3 w-3" aria-hidden="true" />
+                  {savingProjectId ? 'Saving…' : 'Project'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {projects.map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => void handleSaveToProject(project)}
+                  >
+                    {project.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {EXPORT_FORMATS.map((format) => (
             <Button
               key={format.id}
@@ -425,6 +507,25 @@ export function ResearchReportView({
           className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-xs text-danger"
         >
           {exportError}
+        </p>
+      )}
+
+      {saveError && (
+        <p
+          role="alert"
+          className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-xs text-danger"
+        >
+          {saveError}
+        </p>
+      )}
+
+      {savedProjectName && (
+        <p
+          role="status"
+          data-testid="research-report-saved-to-project"
+          className="border-b border-border/30 bg-muted/30 px-4 py-2 text-xs text-muted-foreground"
+        >
+          Saved to {savedProjectName}. It is one of that project&rsquo;s sources now.
         </p>
       )}
 

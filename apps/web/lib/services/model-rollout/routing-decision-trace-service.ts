@@ -3,6 +3,7 @@ import 'server-only';
 import type { RoutingDecisionTrace } from '@agiworkforce/routing';
 
 import { logger } from '@/lib/logger';
+import { normalizePromptStamps } from '@/lib/prompts/prompt-stamp';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 export type RoutingTraceKind = 'served' | 'shadow';
@@ -15,6 +16,8 @@ export interface RoutingDecisionRecord {
   surface: string;
   kind: RoutingTraceKind;
   flagVariants: Readonly<Record<string, string>>;
+  /** Prompt manifest stamps (`id@version`) in force for this decision. */
+  promptIds?: readonly string[];
 }
 
 export interface RoutingDecisionOutcome {
@@ -39,9 +42,9 @@ export async function recordRoutingDecision(record: RoutingDecisionRecord): Prom
     `insert into public.routing_decision_traces (
        request_id, user_id, organization_id, surface, kind, status, selection, task_type,
        reason, code, model_key, provider, route_id, slot_id, cohort, lifecycle_stage, region,
-       flag_variants, trace
+       flag_variants, trace, prompt_ids
      ) values ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-               $18::jsonb, $19::jsonb)
+               $18::jsonb, $19::jsonb, $20::text[])
      on conflict (request_id, kind) do nothing`,
     [
       record.requestId,
@@ -63,6 +66,7 @@ export async function recordRoutingDecision(record: RoutingDecisionRecord): Prom
       trace.region,
       JSON.stringify(record.flagVariants),
       JSON.stringify(trace),
+      normalizePromptStamps(record.promptIds),
     ],
   );
 }

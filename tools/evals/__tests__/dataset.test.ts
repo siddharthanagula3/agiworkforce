@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { SUITE_NAMES, loadAllDatasets, loadDataset, parseDataset } from '../src/dataset';
+import {
+  SUITE_NAMES,
+  datasetsForPrompt,
+  loadAllDatasets,
+  loadDataset,
+  parseDataset,
+  promptIdsUnderEval,
+} from '../src/dataset';
 import type { EvalCase } from '../src/types';
 
 import { referenceAnswers } from './fixtures/harness';
@@ -129,5 +136,40 @@ describe('committed corpora', () => {
       expect(referenceAnswers.has(id), `missing reference answer for ${id}`).toBe(true);
     }
     expect([...referenceAnswers.keys()].sort()).toEqual([...ids].sort());
+  });
+});
+
+describe('prompt linkage', () => {
+  it('names the prompt a corpus measures, and finds every corpus for a prompt', () => {
+    const datasets = loadAllDatasets();
+    const promptIds = promptIdsUnderEval(datasets);
+    expect(promptIds.length).toBeGreaterThan(0);
+    for (const promptId of promptIds) {
+      const covering = datasetsForPrompt(promptId, datasets);
+      expect(covering.length).toBeGreaterThan(0);
+      for (const dataset of covering) expect(dataset.promptId).toBe(promptId);
+    }
+    expect(datasetsForPrompt('nothing.measures_this', datasets)).toHaveLength(0);
+  });
+
+  it('refuses a corpus whose prompt id is not a manifest id', () => {
+    expect(() =>
+      parseDataset({
+        suite: 'golden',
+        version: 1,
+        passThreshold: 0.5,
+        promptId: 'Not A Prompt',
+        cases: [
+          {
+            id: 'golden/one',
+            family: 'f',
+            risk: 'low',
+            expected: 'answer',
+            prompt: 'q',
+            checks: [{ kind: 'includesAny', values: ['a'] }],
+          },
+        ],
+      }),
+    ).toThrow(/promptId/);
   });
 });

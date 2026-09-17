@@ -130,6 +130,10 @@
       "reason": "reached only from the platform-admin operator route, deliberately platform-wide aggregate reads across every tenant"
     },
     {
+      "path": "apps/web/features/admin/services/product-metrics.ts",
+      "reason": "reached from the platform-admin product-metrics route gated by requirePlatformAdmin and from the scheduler-credentialled daily rollup cron; the subscriptions and profiles reads are deliberately cross-tenant aggregates that return counts, cohort sizes and summed microUSD, never a row or a user id"
+    },
+    {
       "path": "apps/web/features/admin/services/service-health-metrics.ts",
       "reason": "reached only from the platform-admin service-health route gated by requirePlatformAdmin, the audit, checkpoint, device, queue and knowledge-file reads are deliberately cross-tenant aggregates that return counts, rates and latency percentiles, never a row or a user id"
     },
@@ -168,6 +172,10 @@
     {
       "path": "apps/web/lib/server/organization-erasure.ts",
       "reason": "organization erasure engine deletes across every org-owned table by the target organizationId, triggered only by the deletion cron"
+    },
+    {
+      "path": "apps/web/lib/server/product-analytics.ts",
+      "reason": "the event stream is written from service context on behalf of a subject the caller already proved (a settled cost event, an audit event, or an ingest request whose identity came from the session), and 0213 grants app_rls no privileges on the table, so no scoped connection could write it; every statement here carries `user_id = $1` for the subject it was handed, and the consent ledger is read before any of them run"
     },
     {
       "path": "apps/web/lib/server/security-log-retention.ts",

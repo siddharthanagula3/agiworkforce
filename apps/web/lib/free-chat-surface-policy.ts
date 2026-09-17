@@ -8,14 +8,7 @@ import {
 } from '@agiworkforce/types';
 
 export type CloudChatSurface =
-  | 'web'
-  | 'mobile'
-  | 'desktop'
-  | 'chrome'
-  | 'vscode'
-  | 'cli'
-  | 'api'
-  | 'unknown';
+  'web' | 'mobile' | 'desktop' | 'chrome' | 'vscode' | 'cli' | 'api' | 'unknown';
 
 const KNOWN_SURFACES = new Set<CloudChatSurface>([
   'web',
@@ -58,7 +51,7 @@ export function bindSurfaceFromClaims(
   return azp.startsWith('chrome-extension://') ? 'chrome' : 'web';
 }
 
-function readSurfaceHint(request: NextRequest): CloudChatSurface | null {
+export function readSurfaceHint(request: NextRequest): CloudChatSurface | null {
   if (request.headers.get('x-client')?.trim().toLowerCase() === 'vscode-extension') {
     return 'vscode';
   }

@@ -47,6 +47,10 @@ export interface InsertMediaAssetParams {
   sourceSurface?: string;
   metadata?: Record<string, unknown>;
   conversationId?: string;
+  /** SHA-256 of the stored bytes, so the same content is stored and billed once. */
+  contentSha256?: string;
+  /** Uploaded into a temporary chat: kept out of the Library, purged with the chat. */
+  temporaryChat?: boolean;
 }
 
 type MediaAssetQueryClient = Pick<DatabaseAdapter, 'query'>;
@@ -159,8 +163,8 @@ async function insertMediaAssetRow(
     `insert into public.media_assets
        (user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
         prompt, provider, model, width, height, source_surface, metadata,
-        conversation_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)
+        conversation_id, content_sha256, temporary_chat)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17)
      returning id`,
     [
       p.userId,
@@ -178,6 +182,8 @@ async function insertMediaAssetRow(
       p.sourceSurface ?? null,
       JSON.stringify(p.metadata ?? {}),
       p.conversationId ?? null,
+      p.contentSha256 ?? null,
+      p.temporaryChat ?? false,
     ],
   );
   return rows[0]?.id ?? null;
@@ -446,9 +452,11 @@ export async function listLibraryAssets(
       );
     }
 
+    // A file attached to a temporary chat is never a Library file (0218): the
+    // chat promised not to keep it, and the Library is the thing that keeps it.
     const lifecycleClause = opts.deleted
-      ? "and deleted_at is not null and deleted_at > now() - interval '30 days'"
-      : 'and deleted_at is null';
+      ? "and not temporary_chat and deleted_at is not null and deleted_at > now() - interval '30 days'"
+      : 'and not temporary_chat and deleted_at is null';
     const orderClause = opts.deleted
       ? DELETED_ORDER_CLAUSE
       : ORDER_CLAUSE_BY_SORT[opts.sort ?? LIBRARY_DEFAULT_SORT];
@@ -553,11 +561,59 @@ export async function getActiveWorkspaceMediaAssetById(
   }
 }
 
+/**
+ * The asset this uploader already holds for these exact bytes, if any.
+ *
+ * Scoped to the uploader and their active workspace: recognising a repeat
+ * across accounts would tell one user that another holds the same file, which
+ * is a disclosure the storage saving does not justify.
+ */
+export async function getMediaAssetByContentHash(
+  userId: string,
+  contentSha256: string,
+  organizationId: string | null,
+  db: MediaAssetQueryClient,
+  temporaryChat = false,
+): Promise<MediaAssetForServing | null> {
+  try {
+    const rows = await db.query<Record<string, unknown>>(
+      `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+              metadata, deleted_at
+         from public.media_assets
+        where user_id = $1
+          and organization_id is not distinct from $3::uuid
+          and content_sha256 = $2
+          and temporary_chat = $4
+          and deleted_at is null
+        order by created_at asc
+        limit 1`,
+      [userId, contentSha256, organizationId, temporaryChat],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: String(row['id']),
+      userId: String(row['user_id']),
+      kind: String(row['kind']),
+      mimeType: String(row['mime_type']),
+      byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+      storageUrl: String(row['storage_url']),
+      storagePathname: (row['storage_pathname'] as string | null) ?? null,
+      metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
+      deletedAt: null,
+    };
+  } catch (error) {
+    if (isSchemaNotReady(error)) return null;
+    throw error;
+  }
+}
+
 export async function getMediaAssetByStoragePathname(
   userId: string,
   storagePathname: string,
   organizationId: string | null,
   db: MediaAssetQueryClient,
+  temporaryChat = false,
 ): Promise<MediaAssetForServing | null> {
   try {
     const rows = await db.query<Record<string, unknown>>(
@@ -567,9 +623,10 @@ export async function getMediaAssetByStoragePathname(
         where user_id = $1
           and organization_id is not distinct from $3::uuid
           and storage_pathname = $2
+          and temporary_chat = $4
           and deleted_at is null
         limit 1`,
-      [userId, storagePathname, organizationId],
+      [userId, storagePathname, organizationId, temporaryChat],
     );
     const row = rows[0];
     if (!row) return null;

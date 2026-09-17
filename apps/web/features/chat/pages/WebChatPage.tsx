@@ -104,6 +104,7 @@ import { useBrowserReplyReadyPreference } from '../hooks/use-browser-reply-ready
 import { useStore as useZustandStore } from 'zustand';
 import { _sharedArtifactStore } from '../stores/artifacts-store';
 import { useConversationBranches } from '../hooks/use-conversation-branches';
+import { useConversationDraftSync } from '../hooks/use-conversation-draft-sync';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
@@ -185,7 +186,10 @@ import { hasWorkSession, taskDockRunKey } from '../components/work-session/taskD
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { ChatConversationBoundary } from '../components/ChatConversationBoundary';
-import type { ResearchPlanDecision } from '../components/research/ResearchActivity';
+import type {
+  ResearchPlanDecision,
+  ResearchPlanOptions,
+} from '../components/research/ResearchActivity';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import { toast } from 'sonner';
@@ -1277,6 +1281,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     updateConversation,
     setActiveConversation,
   } = useConversations();
+  useConversationDraftSync();
   const adoptPendingComposerToggles = useChatStore((s) => s.adoptPendingComposerToggles);
   const parkBlockedSend = useChatStore((s) => s.parkBlockedSend);
   const {
@@ -1769,7 +1774,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           : undefined;
 
         const resolvedAttachments = options.attachments?.length
-          ? await uploadChatAttachments(options.attachments)
+          ? await uploadChatAttachments(options.attachments, {
+              ...(existingConvId ? { conversationId: existingConvId } : {}),
+              temporary: temporaryIntent,
+            })
           : undefined;
 
         // AUDIT-FIX STR-22: `onTurnCommitted` fires as soon as the replacement
@@ -4352,7 +4360,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   );
 
   const handleResearchPlanDecision = useCallback(
-    async (id: string, decision: ResearchPlanDecision) => {
+    async (id: string, decision: ResearchPlanDecision, options?: ResearchPlanOptions) => {
       if (!displayedConversationId || isStreaming) return;
       const assistantMsg = displayedMessages.find((m) => m.id === id);
       const research = assistantMsg?.metadata?.research;
@@ -4400,6 +4408,16 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
               steps: completedResearchSteps(research.steps),
               approvedSteps: approved,
             },
+            ...(options &&
+            (options.files || options.allowDomains.length > 0 || options.denyDomains.length > 0)
+              ? {
+                  researchSources: {
+                    files: options.files,
+                    allowDomains: options.allowDomains,
+                    denyDomains: options.denyDomains,
+                  },
+                }
+              : {}),
             onTurnCommitted,
           }),
         );

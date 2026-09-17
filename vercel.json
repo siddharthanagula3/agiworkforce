@@ -125,6 +125,10 @@
     {
       "path": "/api/cron/evaluate-model-rollout",
       "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/cron/roll-up-product-metrics",
+      "schedule": "40 2 * * *"
     }
   ]
 }

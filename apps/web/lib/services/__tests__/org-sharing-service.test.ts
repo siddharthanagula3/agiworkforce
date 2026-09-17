@@ -21,6 +21,8 @@ import {
   isOrgAdminRole,
   listReadableSharedProjectIds,
   listSharedProjects,
+  listWritableSharedProjectIds,
+  resolveProjectWriteAccess,
   requireOrgMember,
   requireSharingManager,
   resolveOrgMembership,
@@ -199,19 +201,106 @@ describe('listReadableSharedProjectIds', () => {
   });
 });
 
+describe('listWritableSharedProjectIds', () => {
+  it('counts only an explicit per-member write grant, never the share default', async () => {
+    const { db, issued } = makeDb(() => [{ project_id: PROJECT }]);
+
+    expect(await listWritableSharedProjectIds(db, ORG, 'member-1')).toEqual([PROJECT]);
+    expect(issued[0]!.sql).toMatch(/a\.access = 'write'/);
+    expect(issued[0]!.sql).not.toMatch(/default_access/);
+    expect(issued[0]!.params).toEqual([ORG, 'member-1']);
+  });
+});
+
 describe('resolveSharedProjectScope', () => {
-  it('returns the caller’s org and readable ids', async () => {
+  it('returns the caller’s org, readable ids and the subset they may edit', async () => {
+    const { db } = makeDb((sql) => {
+      if (/organization_members/i.test(sql)) return [{ organization_id: ORG, role: 'member' }];
+      return /a\.access = 'write'/.test(sql) ? [] : [{ project_id: PROJECT }];
+    });
+    expect(await resolveSharedProjectScope(db, 'member-1')).toEqual({
+      organizationId: ORG,
+      projectIds: [PROJECT],
+      writableProjectIds: [],
+    });
+  });
+
+  it('carries the editor grant through', async () => {
     const { db } = makeDb((sql) =>
       /organization_members/i.test(sql)
         ? [{ organization_id: ORG, role: 'member' }]
         : [{ project_id: PROJECT }],
     );
-    expect(await resolveSharedProjectScope(db, 'member-1')).toEqual({
-      organizationId: ORG,
-      projectIds: [PROJECT],
-    });
+    expect((await resolveSharedProjectScope(db, 'member-1'))?.writableProjectIds).toEqual([
+      PROJECT,
+    ]);
+  });
+});
+
+describe('resolveProjectWriteAccess', () => {
+  it('calls the row’s own user the owner', async () => {
+    const { db } = makeDb(() => [{ id: PROJECT }]);
+
+    expect(
+      await resolveProjectWriteAccess(db, {
+        projectId: PROJECT,
+        userId: 'owner-1',
+        organizationId: ORG,
+      }),
+    ).toBe('owner');
   });
 
+  it('calls a member holding a write grant an editor', async () => {
+    const { db } = makeDb((sql) => {
+      if (/from user_projects/i.test(sql)) return [];
+      if (/organization_members/i.test(sql)) return [{ organization_id: ORG, role: 'member' }];
+      return [{ project_id: PROJECT }];
+    });
+
+    expect(
+      await resolveProjectWriteAccess(db, {
+        projectId: PROJECT,
+        userId: 'member-1',
+        organizationId: ORG,
+      }),
+    ).toBe('editor');
+  });
+
+  it('refuses a reader on a shared project', async () => {
+    const { db } = makeDb((sql) => {
+      if (/from user_projects/i.test(sql)) return [];
+      if (/organization_members/i.test(sql)) return [{ organization_id: ORG, role: 'member' }];
+      return /a\.access = 'write'/.test(sql) ? [] : [{ project_id: PROJECT }];
+    });
+
+    expect(
+      await resolveProjectWriteAccess(db, {
+        projectId: PROJECT,
+        userId: 'member-1',
+        organizationId: ORG,
+      }),
+    ).toBeNull();
+  });
+
+  it('refuses an editor grant issued in a different organization', async () => {
+    const { db } = makeDb((sql) => {
+      if (/from user_projects/i.test(sql)) return [];
+      if (/organization_members/i.test(sql))
+        return [{ organization_id: OTHER_ORG, role: 'member' }];
+      return [{ project_id: PROJECT }];
+    });
+
+    expect(
+      await resolveProjectWriteAccess(db, {
+        projectId: PROJECT,
+        userId: 'member-1',
+        organizationId: ORG,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('resolveSharedProjectScope failure modes', () => {
   it('returns null for a user in no organization, so project reads stay personal', async () => {
     const { db } = makeDb(() => []);
     expect(await resolveSharedProjectScope(db, 'solo-user')).toBeNull();

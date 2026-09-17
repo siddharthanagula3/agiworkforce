@@ -87,6 +87,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'beta_applications', column: 'user_id' },
   { table: 'feature_flags', column: 'user_id' },
   { table: 'routing_decision_traces', column: 'user_id' },
+  { table: 'product_analytics_events', column: 'user_id' },
   { table: 'usage_events', column: 'user_id' },
   { table: 'mobile_iap_transactions', column: 'user_id' },
   { table: 'mobile_iap_accounts', column: 'user_id' },

@@ -117,6 +117,8 @@ export * from './remote-code';
 
 export * from './workspace-analytics';
 
+export * from './product-analytics';
+
 export * from './enterprise';
 
 export * from './command-capabilities';

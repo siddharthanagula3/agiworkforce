@@ -292,6 +292,7 @@ describe('rollout inputs on the managed routing request', () => {
     canaryCohorts: { general_fast: true },
     shadowRequestsToday: { general_fast: 3 },
     flagVariants: { 'routing.canary.general_fast': 'on' },
+    promptVariants: {},
   };
 
   it('carries the region, cohort, capability and shadow count the resolver acts on', () => {

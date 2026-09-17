@@ -44,6 +44,7 @@ export interface MappedProject {
   createdAt: string;
   updatedAt: string;
   isOrgShared: boolean;
+  sharedAccess: 'read' | 'write' | null;
 }
 
 function asString(value: unknown): string | null {
@@ -137,5 +138,7 @@ export function mapProjectRow(row: Record<string, unknown>): MappedProject {
     createdAt: String(row['created_at'] ?? ''),
     updatedAt: String(row['updated_at'] ?? ''),
     isOrgShared: asBool(row['is_org_shared'], false),
+    sharedAccess:
+      row['shared_access'] === 'write' ? 'write' : row['shared_access'] === 'read' ? 'read' : null,
   };
 }

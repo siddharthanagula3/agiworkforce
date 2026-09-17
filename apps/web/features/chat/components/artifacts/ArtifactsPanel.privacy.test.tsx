@@ -8,8 +8,7 @@ import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 
 let capturedPublish:
-  | ((selection: { content: string; versionIndex: number }) => Promise<PublishResult>)
-  | undefined;
+  ((selection: { content: string; versionIndex: number }) => Promise<PublishResult>) | undefined;
 
 vi.mock('./ArtifactPreview', () => ({
   ArtifactPreview: (props: { publishArtifact?: () => Promise<PublishResult> }) => {
@@ -19,6 +18,7 @@ vi.mock('./ArtifactPreview', () => ({
 }));
 
 vi.mock('@/lib/client/csrf', () => ({
+  getCsrfToken: vi.fn(async () => 'test-token'),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
     ...(headers as Record<string, string>),
     'x-csrf-token': 'test-token',

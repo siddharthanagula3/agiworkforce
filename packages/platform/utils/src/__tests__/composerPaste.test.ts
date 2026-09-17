@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CODE_FENCE,
   LARGE_PASTE_THRESHOLD,
   dataTransferCarriesFiles,
   decideComposerPaste,
   filesFromDataTransfer,
+  looksLikePastedCode,
+  pastedCodeFence,
 } from '../composerPaste';
 
 type FakeItem = { kind: string; getAsFile: () => File | null };
@@ -96,5 +99,67 @@ describe('composer paste policy', () => {
     expect(dataTransferCarriesFiles(fakeTransfer({ types: ['text/plain', 'Files'] }))).toBe(true);
     expect(dataTransferCarriesFiles(fakeTransfer({ types: ['text/plain'] }))).toBe(false);
     expect(dataTransferCarriesFiles(undefined)).toBe(false);
+  });
+});
+
+describe('code paste', () => {
+  function codeTransfer(text: string, html = ''): DataTransfer {
+    return {
+      items: { length: 0 },
+      types: html ? ['text/plain', 'text/html'] : ['text/plain'],
+      getData: (type: string) => (type === 'text/html' ? html : type === 'text/plain' ? text : ''),
+    } as unknown as DataTransfer;
+  }
+
+  const source = ['export function add(a, b) {', '  return a + b;', '}'].join('\n');
+
+  it('wraps a multi-line source paste in a fence', () => {
+    const fenced = pastedCodeFence(codeTransfer(source));
+
+    expect(fenced).not.toBeNull();
+    expect(fenced?.text).toBe(`${CODE_FENCE}\n${source}\n${CODE_FENCE}`);
+  });
+
+  it('leaves prose alone', () => {
+    const prose = [
+      'We shipped the composer rewrite this week.',
+      'The next step is to measure how it behaves on a phone.',
+      'Nothing here is code, so nothing should be fenced.',
+    ].join('\n');
+
+    expect(pastedCodeFence(codeTransfer(prose))).toBeNull();
+    expect(looksLikePastedCode(prose)).toBe(false);
+  });
+
+  it('leaves a paste that already carries a fence alone', () => {
+    expect(pastedCodeFence(codeTransfer(`${CODE_FENCE}js\n${source}\n${CODE_FENCE}`))).toBeNull();
+  });
+
+  it('takes the language from a highlighted clipboard payload', () => {
+    const fenced = pastedCodeFence(
+      codeTransfer(source, '<pre><code class="language-typescript">…</code></pre>'),
+    );
+
+    expect(fenced?.language).toBe('typescript');
+    expect(fenced?.text.startsWith(`${CODE_FENCE}typescript\n`)).toBe(true);
+  });
+
+  it('takes the language from a shebang', () => {
+    const script = ['#!/usr/bin/env python3', 'import sys', 'print(sys.argv)'].join('\n');
+
+    expect(pastedCodeFence(codeTransfer(script))?.language).toBe('python');
+  });
+
+  it('fences a single line copied out of a code viewer', () => {
+    const one = 'const total = items.reduce((sum, item) => sum + item.price, 0);';
+
+    expect(pastedCodeFence(codeTransfer(one))).toBeNull();
+    expect(
+      pastedCodeFence(codeTransfer(one, '<pre class="highlight"><code>…</code></pre>')),
+    ).not.toBeNull();
+  });
+
+  it('defers to the large-paste attachment', () => {
+    expect(pastedCodeFence(codeTransfer(`${source}\n${'// pad\n'.repeat(2000)}`))).toBeNull();
   });
 });

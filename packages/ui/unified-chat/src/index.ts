@@ -240,12 +240,15 @@ export {
   type WritingStyle,
 } from './lib/writingStyle';
 export {
+  CODE_FENCE,
   LARGE_PASTE_THRESHOLD,
   decideComposerPaste,
   filesFromDataTransfer,
   isLargePaste,
   isPastedTextFileName,
   largePasteToFile,
+  looksLikePastedCode,
+  pastedCodeFence,
   pastedTextFileName,
 } from './lib/largePaste';
 export type { ComposerPasteDecision } from './lib/largePaste';

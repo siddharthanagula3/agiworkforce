@@ -37,17 +37,17 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     }
 
     case 'chat_stop_generation': {
-      console.warn('[tauri-mock] chat_stop_generation: use AbortController in web environment');
+      console.warn('[tauri-bridge] chat_stop_generation: use AbortController in web environment');
       return undefined as unknown as T;
     }
 
     case 'cancel_tool_execution': {
-      console.warn('[tauri-mock] cancel_tool_execution is a no-op in the web environment');
+      console.warn('[tauri-bridge] cancel_tool_execution is a no-op in the web environment');
       return undefined as unknown as T;
     }
 
     case 'error_report': {
-      console.error('[tauri-mock] error_report:', args?.['errorData'] ?? args);
+      console.error('[tauri-bridge] error_report:', args?.['errorData'] ?? args);
       return undefined as unknown as T;
     }
 

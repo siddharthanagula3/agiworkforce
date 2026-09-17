@@ -5,7 +5,9 @@
  * path the React composers already use.
  */
 export {
+  CODE_FENCE,
   LARGE_PASTE_THRESHOLD,
+  PASTED_HTML_MIME_TYPE,
   PASTED_TEXT_MIME_TYPE,
   dataTransferCarriesFiles,
   decideComposerPaste,
@@ -13,6 +15,8 @@ export {
   isLargePaste,
   isPastedTextFileName,
   largePasteToFile,
+  looksLikePastedCode,
+  pastedCodeFence,
   pastedTextFileName,
 } from '@agiworkforce/utils/composer-paste';
 export type { ComposerPasteDecision } from '@agiworkforce/utils/composer-paste';

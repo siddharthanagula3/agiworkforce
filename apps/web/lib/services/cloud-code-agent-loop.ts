@@ -17,6 +17,7 @@ import {
 } from '@/lib/deadline-policy';
 import { upstreamFailureCopy } from '@/app/api/llm/v1/chat/completions/lib/upstream-error-copy';
 import { logger } from '@/lib/logger';
+import { resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
   CLOUD_CODE_LIST_FILES_TOOL,
   CLOUD_CODE_READ_FILE_TOOL,
@@ -53,13 +54,7 @@ export function cloudCodeToolRetrySafety(toolName: string): CloudCodeRetrySafety
 }
 
 export type CloudCodeAgentStopReason =
-  | 'done'
-  | 'max_steps'
-  | 'timeout'
-  | 'cancelled'
-  | 'error'
-  | 'denied'
-  | 'awaiting_approval';
+  'done' | 'max_steps' | 'timeout' | 'cancelled' | 'error' | 'denied' | 'awaiting_approval';
 
 export interface CloudCodeToolInvocation {
   toolUseId: string;
@@ -166,21 +161,10 @@ export interface RunCloudCodeAgentTurnInput {
   now?: () => number;
 }
 
+export const CLOUD_CODE_AGENT_PROMPT_ID = 'agent.cloud_code_system';
+
 function buildSystemPrompt(input: RunCloudCodeAgentTurnInput): string {
-  const lines = [
-    'You are AGI Code, working inside an isolated cloud sandbox on the user behalf.',
-    '',
-    'How to work:',
-    '- Read before you write. Use read_file and list_files to ground every edit in the current contents.',
-    '- Prefer small, verifiable steps. After a change, run the project checks that already exist.',
-    '- Do not invent files, APIs, or commands you have not observed in this workspace.',
-    '- When you are done, stop calling tools and reply with a short summary of what changed and what you verified.',
-    '',
-    'Boundaries you cannot negotiate:',
-    '- Destructive, privileged, dependency-installing, and network commands pause for the user approval.',
-    '- Some commands are refused outright. If one is refused, do not attempt to reach the same effect another way.',
-    '- Everything happens in this sandbox. There is no access to the user machine.',
-  ];
+  const lines = [resolvePromptText(CLOUD_CODE_AGENT_PROMPT_ID)];
   if (input.repositoryUrl) lines.push('', `Repository: ${input.repositoryUrl}`);
   if (input.workspacePath) lines.push(`Workspace: ${input.workspacePath}`);
   return lines.join('\n');

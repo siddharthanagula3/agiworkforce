@@ -87,3 +87,41 @@ export function citedSourceNumbers(markdown: string): number[] {
 
   return [...found].sort((a, b) => a - b);
 }
+
+/**
+ * Whether every inline citation marker in a rendered report reached a source.
+ * A `[n]` naming a source the report does not carry stays plain text, which the
+ * reader sees as a citation that goes nowhere; counting those is what makes the
+ * §102 citation failure rate a measurement rather than an impression.
+ * `null` when the report cites nothing, so an uncited report is not counted as
+ * a success.
+ */
+export function citationRenderOutcome(
+  markdown: string,
+  citationCount: number,
+): 'succeeded' | 'failed' | null {
+  if (!markdown) return null;
+
+  let markers = 0;
+  let unresolved = 0;
+  let insideFence = false;
+
+  for (const line of markdown.split('\n')) {
+    if (FENCE.test(line)) {
+      insideFence = !insideFence;
+      continue;
+    }
+    if (insideFence) continue;
+    for (const part of splitInlineCode(line)) {
+      if (part.startsWith('`')) continue;
+      for (const match of part.matchAll(/(?<!\])\[(\d{1,3})\](?![([:])/g)) {
+        markers += 1;
+        const n = Number(match[1]);
+        if (!Number.isInteger(n) || n < 1 || n > citationCount) unresolved += 1;
+      }
+    }
+  }
+
+  if (markers === 0) return null;
+  return unresolved > 0 ? 'failed' : 'succeeded';
+}

@@ -1,3 +1,4 @@
+import { ErrorCode, type ErrorCodeValue } from '@agiworkforce/types';
 import {
   RetryStoppedError,
   classifyRetryError,
@@ -5,37 +6,13 @@ import {
   runWithRetryPolicy,
 } from '@agiworkforce/utils/retry-policy';
 
-export const ErrorCodes = {
-  NETWORK_ERROR: 'NETWORK_ERROR',
-  TIMEOUT: 'TIMEOUT',
-  RATE_LIMIT: 'RATE_LIMIT',
-
-  UNAUTHORIZED: 'UNAUTHORIZED',
-  FORBIDDEN: 'FORBIDDEN',
-
-  SERVER_ERROR: 'SERVER_ERROR',
-  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  NOT_FOUND: 'NOT_FOUND',
-  EMPLOYEE_NOT_FOUND: 'EMPLOYEE_NOT_FOUND',
-  PLAN_GENERATION_FAILED: 'PLAN_GENERATION_FAILED',
-  TASK_EXECUTION_FAILED: 'TASK_EXECUTION_FAILED',
-
-  API_KEY_ERROR: 'API_KEY_ERROR',
-  CONFIGURATION_ERROR: 'CONFIGURATION_ERROR',
-
-  PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
-
-  UNKNOWN: 'UNKNOWN',
-} as const;
-
-export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
+export { ErrorCode };
+export type { ErrorCodeValue };
 
 export class AppError extends Error {
   constructor(
     message: string,
-    public code: ErrorCode = ErrorCodes.UNKNOWN,
+    public code: ErrorCodeValue = ErrorCode.INTERNAL_ERROR,
     public statusCode: number = 500,
     public retryable: boolean = false,
     public userMessage?: string,
@@ -132,7 +109,10 @@ export function getTechnicalErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
-export function toAppError(error: unknown, defaultCode: ErrorCode = ErrorCodes.UNKNOWN): AppError {
+export function toAppError(
+  error: unknown,
+  defaultCode: ErrorCodeValue = ErrorCode.INTERNAL_ERROR,
+): AppError {
   if (error instanceof AppError) {
     return error;
   }
@@ -140,36 +120,36 @@ export function toAppError(error: unknown, defaultCode: ErrorCode = ErrorCodes.U
   const message = getTechnicalErrorMessage(error);
   const messageLower = message.toLowerCase();
 
-  let code = defaultCode;
+  let code: ErrorCodeValue = defaultCode;
   let statusCode = 500;
   let retryable = false;
 
   if (messageLower.includes('network') || messageLower.includes('failed to fetch')) {
-    code = ErrorCodes.NETWORK_ERROR;
+    code = ErrorCode.NETWORK_ERROR;
     statusCode = 0;
     retryable = true;
   } else if (messageLower.includes('timeout')) {
-    code = ErrorCodes.TIMEOUT;
+    code = ErrorCode.TIMEOUT;
     statusCode = 408;
     retryable = true;
   } else if (messageLower.includes('rate limit') || messageLower.includes('429')) {
-    code = ErrorCodes.RATE_LIMIT;
+    code = ErrorCode.RATE_LIMIT_EXCEEDED;
     statusCode = 429;
     retryable = true;
   } else if (messageLower.includes('unauthorized') || messageLower.includes('401')) {
-    code = ErrorCodes.UNAUTHORIZED;
+    code = ErrorCode.UNAUTHORIZED;
     statusCode = 401;
     retryable = false;
   } else if (messageLower.includes('forbidden') || messageLower.includes('403')) {
-    code = ErrorCodes.FORBIDDEN;
+    code = ErrorCode.FORBIDDEN;
     statusCode = 403;
     retryable = false;
   } else if (messageLower.includes('503')) {
-    code = ErrorCodes.SERVICE_UNAVAILABLE;
+    code = ErrorCode.SERVICE_UNAVAILABLE;
     statusCode = 503;
     retryable = true;
   } else if (messageLower.includes('500') || messageLower.includes('server error')) {
-    code = ErrorCodes.SERVER_ERROR;
+    code = ErrorCode.INTERNAL_ERROR;
     statusCode = 500;
     retryable = true;
   }
@@ -238,7 +218,7 @@ export async function fetchWithTimeout(
     if (error instanceof Error && error.name === 'AbortError') {
       throw new AppError(
         timeoutMessage,
-        ErrorCodes.TIMEOUT,
+        ErrorCode.TIMEOUT,
         408,
         true,
         'The request took too long to complete. Please try again.',
@@ -351,12 +331,12 @@ export function getRetryDelay(
 export function withErrorHandling<TArgs extends unknown[], TResult>(
   fn: (...args: TArgs) => Promise<TResult>,
   options?: {
-    defaultErrorCode?: ErrorCode;
+    defaultErrorCode?: ErrorCodeValue;
     onError?: (error: AppError) => void;
     rethrow?: boolean;
   },
 ): (...args: TArgs) => Promise<TResult> {
-  const { defaultErrorCode = ErrorCodes.UNKNOWN, onError, rethrow = true } = options || {};
+  const { defaultErrorCode = ErrorCode.INTERNAL_ERROR, onError, rethrow = true } = options || {};
 
   return async (...args: TArgs): Promise<TResult> => {
     try {
@@ -387,7 +367,7 @@ export function safeJsonParse<T>(
       success: false,
       error: new AppError(
         `Failed to parse JSON: ${getTechnicalErrorMessage(error)}`,
-        ErrorCodes.VALIDATION_ERROR,
+        ErrorCode.VALIDATION_ERROR,
         400,
         false,
         'Invalid data format received',

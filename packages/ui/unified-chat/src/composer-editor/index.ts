@@ -40,6 +40,7 @@ export type { ComposerSuggestionProps, ResolveComposerMentionMenu } from './sugg
 export type {
   ComposerAttachmentPasteDecision,
   ComposerCaretPosition,
+  ComposerCodePaste,
   ComposerEditorHandle,
   ComposerEditorProps,
   ComposerMentionAttributes,
