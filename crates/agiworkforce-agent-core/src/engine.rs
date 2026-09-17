@@ -9,13 +9,33 @@
 //! *when* each host step runs and emits [`TurnEvent`]s at the CLI's mutation
 //! points.
 
-use futures_util::future::join_all;
+use std::future::Future;
+
+use futures_util::future::{Either, join_all, select};
 
 use crate::{
-    Completion, DispatchMode, LoopControl, Prepared, PreparedCall, ResultBlock, RunawayTracker,
-    StreamEvent, ToolClass, TurnEvent, TurnHost, TurnOutcome, TurnParams, TurnPhase, UsageTotals,
-    hash_tool_call,
+    CancelFuture, Completion, DispatchMode, ExecResult, LoopControl, Prepared, PreparedCall,
+    ResultBlock, RunawayTracker, StreamEvent, ToolCancellation, ToolClass, TurnEvent, TurnHost,
+    TurnOutcome, TurnParams, TurnPhase, UsageTotals, hash_tool_call,
 };
+
+async fn run_cancellable<F>(
+    execution: F,
+    cancellation: Option<CancelFuture>,
+    tool_name: &str,
+) -> ExecResult
+where
+    F: Future<Output = ExecResult>,
+{
+    let Some(cancellation) = cancellation else {
+        return execution.await;
+    };
+    let execution = std::pin::pin!(execution);
+    match select(execution, cancellation).await {
+        Either::Left((result, _)) => result,
+        Either::Right((reason, _)) => reason.into_result(tool_name),
+    }
+}
 
 /// Zero-sized entry point matching the plan's `TurnEngine::run_turn(...)` sketch.
 /// See [`run_turn`] for the parameters; there is no per-instance state.
@@ -148,7 +168,12 @@ pub async fn run_turn(
 
             let futures = runnable
                 .iter()
-                .map(|p| host.parallel_future(p.clone()))
+                .map(|p| {
+                    let execution = host.parallel_future(p.clone());
+                    let cancellation = host.tool_cancellation(p, DispatchMode::Parallel);
+                    let name = p.name.clone();
+                    async move { run_cancellable(execution, cancellation, &name).await }
+                })
                 .collect::<Vec<_>>();
             let outcomes = join_all(futures).await;
 
@@ -171,6 +196,15 @@ pub async fn run_turn(
 
         // Sequential remainder (mutating / MCP / team / update_plan).
         for call in &other_calls {
+            if host.is_cancelled() {
+                let result = ToolCancellation::Cancelled.into_result(&call.name);
+                result_blocks.push(ResultBlock {
+                    tool_use_id: call.id.clone(),
+                    content: result.output,
+                    is_error: true,
+                });
+                continue;
+            }
             match host.prepare_tool(call, DispatchMode::Sequential).await {
                 Prepared::Proceed { args } => {
                     host.on_event(&TurnEvent::ToolStarted {
@@ -180,7 +214,20 @@ pub async fn run_turn(
                         mode: DispatchMode::Sequential,
                     });
                     let started = std::time::Instant::now();
-                    let result = host.execute_sequential_tool(call, args.clone()).await;
+                    let cancellation = host.tool_cancellation(
+                        &PreparedCall {
+                            id: call.id.clone(),
+                            name: call.name.clone(),
+                            args: args.clone(),
+                        },
+                        DispatchMode::Sequential,
+                    );
+                    let result = run_cancellable(
+                        host.execute_sequential_tool(call, args.clone()),
+                        cancellation,
+                        &call.name,
+                    )
+                    .await;
                     let duration_ms = started.elapsed().as_millis() as u64;
                     host.on_event(&TurnEvent::ToolFinished {
                         id: call.id.clone(),

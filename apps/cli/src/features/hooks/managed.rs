@@ -44,12 +44,34 @@ pub enum ManagedPluginPolicyState {
     Invalid(String),
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ManagedSandboxPolicy {
+    #[serde(default)]
+    pub forced: bool,
+    #[serde(default)]
+    pub scrub_environment: bool,
+    #[serde(default)]
+    pub sandbox_user_hooks: bool,
+    #[serde(default)]
+    pub sandbox_mcp_servers: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum ManagedSandboxPolicyState {
+    Absent,
+    Loaded(ManagedSandboxPolicy),
+    Invalid(String),
+}
+
 #[derive(Debug, Default, Deserialize)]
 struct ManagedSettingsDocument {
     #[serde(default)]
     hooks: Option<ManagedHookPolicy>,
     #[serde(default)]
     plugins: Option<ManagedPluginPolicy>,
+    #[serde(default)]
+    sandbox: Option<ManagedSandboxPolicy>,
 }
 
 fn read_managed_document(path: &Path) -> Result<Option<ManagedSettingsDocument>, String> {
@@ -78,6 +100,24 @@ pub fn load_managed_plugin_policy_from(path: &Path) -> ManagedPluginPolicyState 
         })) => ManagedPluginPolicyState::Loaded(policy),
         Ok(_) => ManagedPluginPolicyState::Absent,
         Err(error) => ManagedPluginPolicyState::Invalid(error),
+    }
+}
+
+pub fn load_managed_sandbox_policy() -> ManagedSandboxPolicyState {
+    match managed_settings_path() {
+        Some(path) => load_managed_sandbox_policy_from(&path),
+        None => ManagedSandboxPolicyState::Absent,
+    }
+}
+
+pub fn load_managed_sandbox_policy_from(path: &Path) -> ManagedSandboxPolicyState {
+    match read_managed_document(path) {
+        Ok(Some(ManagedSettingsDocument {
+            sandbox: Some(policy),
+            ..
+        })) => ManagedSandboxPolicyState::Loaded(policy),
+        Ok(_) => ManagedSandboxPolicyState::Absent,
+        Err(error) => ManagedSandboxPolicyState::Invalid(error),
     }
 }
 
@@ -339,6 +379,37 @@ mod tests {
         assert!(matches!(
             load_managed_plugin_policy_from(&path),
             ManagedPluginPolicyState::Invalid(_)
+        ));
+    }
+
+    #[test]
+    fn the_sandbox_section_loads_and_an_unreadable_one_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(MANAGED_SETTINGS_FILE);
+        assert!(matches!(
+            load_managed_sandbox_policy_from(&path),
+            ManagedSandboxPolicyState::Absent
+        ));
+        std::fs::write(
+            &path,
+            r#"{"sandbox":{"forced":true,"scrubEnvironment":true,"sandboxUserHooks":true}}"#,
+        )
+        .unwrap();
+        let ManagedSandboxPolicyState::Loaded(policy) = load_managed_sandbox_policy_from(&path)
+        else {
+            panic!("sandbox policy should load");
+        };
+        assert!(policy.forced && policy.scrub_environment && policy.sandbox_user_hooks);
+        assert!(!policy.sandbox_mcp_servers);
+        assert!(matches!(
+            load_managed_hook_policy_from(&path),
+            ManagedHookPolicyState::Absent
+        ));
+
+        std::fs::write(&path, r#"{"sandbox":{"forced":"always"}}"#).unwrap();
+        assert!(matches!(
+            load_managed_sandbox_policy_from(&path),
+            ManagedSandboxPolicyState::Invalid(_)
         ));
     }
 

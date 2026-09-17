@@ -40,6 +40,7 @@ function renderSection(overrides: Partial<LocalSessionsSectionProps> = {}) {
     onSelect: vi.fn(),
     onNewSession: vi.fn(),
     onAddFolder: vi.fn(),
+    onAddRepository: vi.fn(),
     ...overrides,
   };
   render(<LocalSessionsSection {...props} />);
@@ -64,6 +65,15 @@ describe('on this device', () => {
 
     expect(props.onNewSession).toHaveBeenCalledWith('root-1');
     expect(props.onAddFolder).toHaveBeenCalled();
+  });
+
+  it('offers a repository apart from a plain folder', async () => {
+    const props = renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add a repository' }));
+
+    expect(props.onAddRepository).toHaveBeenCalled();
+    expect(props.onAddFolder).not.toHaveBeenCalled();
   });
 
   it('says no folder is open yet when none is approved', () => {

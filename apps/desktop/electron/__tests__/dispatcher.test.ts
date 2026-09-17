@@ -27,6 +27,7 @@ const readShellPolicy = vi.fn();
 const writeShellPolicy = vi.fn();
 const openWithDefaultApplication = vi.fn();
 const revealInFileManager = vi.fn();
+const openInEditor = vi.fn();
 const readClipboard = vi.fn();
 const listLocalServers = vi.fn();
 const listLocalModels = vi.fn();
@@ -78,7 +79,11 @@ vi.mock('../runtime/workspaceStore', () => ({
 
 vi.mock('../runtime/shellService', () => ({ runShellCommand, cancelShellRun }));
 vi.mock('../runtime/shellPolicyStore', () => ({ readShellPolicy, writeShellPolicy }));
-vi.mock('../runtime/appsService', () => ({ openWithDefaultApplication, revealInFileManager }));
+vi.mock('../runtime/appsService', () => ({
+  openInEditor,
+  openWithDefaultApplication,
+  revealInFileManager,
+}));
 vi.mock('../runtime/clipboardService', () => ({ readClipboard }));
 vi.mock('../runtime/filesystemService', () => ({
   createDirectory: vi.fn(),
@@ -313,6 +318,25 @@ describe('dispatch, opening files', () => {
 
     const call = requestPermission.mock.calls[0] as unknown as unknown[];
     expect(call[1]).toBe('filesystem.read');
+  });
+
+  it('gates opening a folder in VS Code on application.control for that folder', async () => {
+    getPermissionState.mockReturnValue('prompt');
+    requestPermission.mockResolvedValue('granted');
+    openInEditor.mockResolvedValue({ path: '', opened: true });
+
+    const response = await dispatch(window, 'app_open_in_editor', { rootId: root.id });
+
+    const call = requestPermission.mock.calls[0] as unknown as unknown[];
+    expect(call[1]).toBe('application.control');
+    expect(scopeOf(call)).toEqual({ kind: 'workspace', target: root.path });
+    expect(openInEditor).toHaveBeenCalledWith(root);
+    expect(response).toMatchObject({ ok: true, value: { opened: true } });
+  });
+
+  it('refuses a picker kind it does not know before any dialog opens', async () => {
+    const response = await dispatch(window, 'workspace_pick_root', { kind: 'drive' });
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
   });
 
   it('still refuses a command it cannot classify', async () => {

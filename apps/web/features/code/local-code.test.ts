@@ -14,6 +14,7 @@ const LOCAL_MODEL = 'qa-runner/qa-local';
 const CONFIGURED_MODEL = 'qa-provider/qa-default';
 import {
   EMPTY_LOCAL_TURN,
+  detectTestCommand,
   localModelChoices,
   localFailureAction,
   localFolderChoice,
@@ -465,5 +466,33 @@ describe('the model a new local session starts on', () => {
         [],
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('the test command a folder declares', () => {
+  const scripts = (test: string) => JSON.stringify({ scripts: { test } });
+
+  it('runs the package test script with the package manager the lockfile names', () => {
+    expect(detectTestCommand(['package.json', 'pnpm-lock.yaml'], scripts('vitest'))).toBe(
+      'pnpm test',
+    );
+    expect(detectTestCommand(['package.json', 'yarn.lock'], scripts('jest'))).toBe('yarn test');
+    expect(detectTestCommand(['package.json', 'bun.lock'], scripts('bun test'))).toBe(
+      'bun run test',
+    );
+    expect(detectTestCommand(['package.json'], scripts('node --test'))).toBe('npm test');
+  });
+
+  it('ignores the placeholder npm writes and a manifest it cannot read', () => {
+    const placeholder = scripts('echo "Error: no test specified" && exit 1');
+    expect(detectTestCommand(['package.json'], placeholder)).toBeNull();
+    expect(detectTestCommand(['package.json', 'Cargo.toml'], '{not json')).toBe('cargo test');
+  });
+
+  it('falls back to the language toolchain the folder declares', () => {
+    expect(detectTestCommand(['Cargo.toml'], null)).toBe('cargo test');
+    expect(detectTestCommand(['go.mod'], null)).toBe('go test ./...');
+    expect(detectTestCommand(['pyproject.toml'], null)).toBe('pytest');
+    expect(detectTestCommand(['README.md'], null)).toBeNull();
   });
 });

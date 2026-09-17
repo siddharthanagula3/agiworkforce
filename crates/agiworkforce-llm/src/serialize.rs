@@ -846,6 +846,12 @@ mod tests {
             owner: "test-owner".to_string(),
             permission_class: "read_only".to_string(),
             diagnostic_tags: vec!["test".to_string()],
+            stable_id: format!("agiworkforce.tool.{name}"),
+            contract_version: 1,
+            capability: "filesystem".to_string(),
+            timeout_ms: Some(30_000),
+            result_schema: Some(serde_json::json!({ "type": "object" })),
+            error_schema: Some(serde_json::json!({ "type": "object" })),
         }
     }
 
@@ -886,6 +892,12 @@ mod tests {
             "is_concurrency_safe",
             "max_result_size_chars",
             "should_defer",
+            "stable_id",
+            "contract_version",
+            "capability",
+            "timeout_ms",
+            "result_schema",
+            "error_schema",
         ] {
             assert!(
                 !serialized.contains(local_key),

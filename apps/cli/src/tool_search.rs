@@ -266,6 +266,12 @@ mod tests {
             owner: "test".to_string(),
             permission_class: "mutating".to_string(),
             diagnostic_tags: vec!["test".to_string()],
+            stable_id: String::new(),
+            contract_version: 0,
+            capability: String::new(),
+            timeout_ms: None,
+            result_schema: None,
+            error_schema: None,
         }
     }
 
@@ -345,6 +351,12 @@ mod tests {
             owner: "test".to_string(),
             permission_class: "mutating".to_string(),
             diagnostic_tags: vec!["test".to_string()],
+            stable_id: String::new(),
+            contract_version: 0,
+            capability: String::new(),
+            timeout_ms: None,
+            result_schema: None,
+            error_schema: None,
         };
         let results = search_tool_schemas("select:apply_patch", &[tool], 10);
         assert_eq!(results.len(), 1);

@@ -2927,6 +2927,12 @@ pub async fn run_main() -> Result<()> {
     let effective_log_filter = init_tracing(cli.verbose, cli.debug.as_ref());
 
     sandbox::set_sandbox_disabled(cli.no_sandbox);
+    if cli.no_sandbox && sandbox::sandbox_settings().forced {
+        eprintln!(
+            "{} --no-sandbox is ignored: your organization requires the sandbox",
+            terminal_style::warning("note:")
+        );
+    }
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
     // `--no-session-persistence` is a privacy opt-out, so it has to be in force
     // before ANY session is constructed, including inside the subcommand arms
@@ -4567,7 +4573,7 @@ pub async fn run_main() -> Result<()> {
             effective_provider_override.map(str::to_string),
             effective_permission_mode,
             effective_auto_approve_plan,
-            cli.no_sandbox,
+            sandbox::sandbox_disabled(),
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),

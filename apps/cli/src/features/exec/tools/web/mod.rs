@@ -7,6 +7,31 @@ use anyhow::Result;
 use super::common::{print_tool_status, truncate_output_with_save, SCRIPT_RE, STYLE_RE};
 use super::ToolResult;
 
+const BLOCKED_HOSTS: &[&str] = &[
+    "169.254.169.254",
+    "metadata.google.internal",
+    "metadata.google",
+    "100.100.100.200",
+];
+
+/// Whether a fetch would leave the public internet for this machine, its
+/// network or a cloud metadata service.
+pub(crate) fn is_internal_fetch_target(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    let host = parsed.host_str().unwrap_or("");
+    let literal_host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    BLOCKED_HOSTS.contains(&host)
+        || host.eq_ignore_ascii_case("localhost")
+        || literal_host
+            .parse::<IpAddr>()
+            .is_ok_and(|ip| is_private_or_internal_ip(&ip))
+}
+
 pub(super) fn validate_fetch_url(url: &str) -> Result<(), String> {
     let parsed = match reqwest::Url::parse(url) {
         Ok(u) => u,
@@ -24,12 +49,6 @@ pub(super) fn validate_fetch_url(url: &str) -> Result<(), String> {
         .and_then(|h| h.strip_suffix(']'))
         .unwrap_or(host);
 
-    const BLOCKED_HOSTS: &[&str] = &[
-        "169.254.169.254",
-        "metadata.google.internal",
-        "metadata.google",
-        "100.100.100.200",
-    ];
     if BLOCKED_HOSTS.contains(&host) {
         return Err(format!("Blocked metadata service host: {}", host));
     }
@@ -93,6 +112,10 @@ fn embedded_ipv4(segments: &[u16; 8]) -> Option<std::net::Ipv4Addr> {
 
 /// Maximum redirect hops followed by `web_fetch`.
 const WEB_FETCH_MAX_REDIRECTS: usize = 5;
+const WEB_FETCH_HOP_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const WEB_FETCH_CALL_TIMEOUT: Duration =
+    Duration::from_secs(WEB_FETCH_HOP_TIMEOUT.as_secs() * (WEB_FETCH_MAX_REDIRECTS as u64 + 1));
+pub(crate) const WEB_SEARCH_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Maximum response bytes read per `web_fetch` hop. A hostile endpoint can
 /// otherwise stream until the process runs out of memory.
@@ -114,7 +137,7 @@ fn pinned_hop_client(
     addrs: &[std::net::SocketAddr],
 ) -> std::result::Result<reqwest::Client, String> {
     let mut builder = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
+        .timeout(WEB_FETCH_HOP_TIMEOUT)
         .redirect(reqwest::redirect::Policy::none());
     if !addrs.is_empty() {
         if let Some(host) = reqwest::Url::parse(url)
@@ -320,7 +343,7 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
             .header(&header_name, &header_value)
             .query(&[("q", query.as_str()), ("count", &_max_results.to_string())]),
     };
-    let resp = request.timeout(Duration::from_secs(15)).send().await;
+    let resp = request.timeout(WEB_SEARCH_TIMEOUT).send().await;
 
     match resp {
         Ok(r) => {
@@ -610,6 +633,23 @@ mod tests {
                 err.contains("Blocked private/internal IP"),
                 "expected {url} to be blocked by SSRF policy, got {err}"
             );
+        }
+    }
+
+    #[test]
+    fn internal_fetch_targets_are_loopback_private_link_local_and_metadata() {
+        for url in [
+            "http://127.0.0.1:8080/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://10.1.2.3/",
+            "http://localhost/",
+            "http://metadata.google.internal/",
+            "http://[::1]/",
+        ] {
+            assert!(is_internal_fetch_target(url), "{url}");
+        }
+        for url in ["https://docs.rs/", "http://1.1.1.1/", "not a url"] {
+            assert!(!is_internal_fetch_target(url), "{url}");
         }
     }
 
