@@ -66,7 +66,9 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     recover-reservations returns the quota a dead turn's reservation
   //     still holds, and the promise is the rolling limit itself: a user
   //     told they have reached it must get their allowance back in minutes,
-  //     not on the next daily accounting sweep.
+  //     not on the next daily accounting sweep. index-retrieval-documents
+  //     makes a new upload or chat searchable and citable in project
+  //     answers within minutes of the change, which a daily index cannot.
   //
   //   monitoring, a check that exists to catch a problem before a customer
   //     does. health-probe and page-security-anomalies exist to page someone,
@@ -83,6 +85,7 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/reap-code-turns',
     '/api/cron/reap-agent-runs',
     '/api/cron/recover-reservations',
+    '/api/cron/index-retrieval-documents',
   ]);
   const MONITORING_CRONS = new Set(['/api/cron/health-probe', '/api/cron/page-security-anomalies']);
   const MONITORING_MIN_INTERVAL_MINUTES = 10;
