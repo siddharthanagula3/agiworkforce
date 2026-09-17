@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('../../lib/runtimeEnvironment', () => ({
   isTauri: true,
+  isElectronHost: false,
   isTestEnvironment: true,
   isDesktopUiDevLocal: false,
   supportsLocalAppMode: true,

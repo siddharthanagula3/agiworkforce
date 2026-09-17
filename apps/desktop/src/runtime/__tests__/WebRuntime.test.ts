@@ -14,7 +14,10 @@ const getRun = vi.fn();
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
   cloudFetch: vi.fn(),
+  accountBoundCloudFetch: vi.fn(async () => new Response('{}', { status: 200 })),
+  getAuthHeaders: vi.fn(async () => ({ Authorization: 'Bearer desktop-cloud-token' })),
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
+  sendCloudApprovalResume: vi.fn(async () => undefined),
   listCloudConversations: vi.fn(),
   createCloudConversation: vi.fn(),
   getCloudConversation: (...args: unknown[]) => getCloudConversation(...args),

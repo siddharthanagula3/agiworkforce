@@ -108,9 +108,19 @@ vi.mock('../../api/cloudApi', () => ({
     }
   },
   cloudFetch: vi.fn(),
+  accountBoundCloudFetch: vi.fn(async () => new Response('{}', { status: 200 })),
   getAuthHeaders: vi.fn(async () => ({
     Authorization: 'Bearer desktop-cloud-token',
   })),
+  createCloudChatPersistenceClient: () => ({
+    saveMessage,
+    createConversation,
+    deleteConversation,
+    updateConversation,
+    listConversations,
+    getConversation,
+    deleteMessage,
+  }),
   generateCloudImage: (...args: unknown[]) => generateCloudImage(...args),
   generateCloudVideo: (...args: unknown[]) => generateCloudVideo(...args),
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),

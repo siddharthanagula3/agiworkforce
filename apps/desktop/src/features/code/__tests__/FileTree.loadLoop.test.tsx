@@ -6,6 +6,7 @@ import { FileTree } from '../FileTree';
 const invokeCalls: Array<{ command: string; args: Record<string, unknown> | undefined }> = [];
 
 vi.mock('../../../utils/ipc', () => ({
+  assertRegisteredCommand: vi.fn(),
   invoke: vi.fn(async (command: string, args?: Record<string, unknown>) => {
     invokeCalls.push({ command, args });
     if (command === 'dir_list') {

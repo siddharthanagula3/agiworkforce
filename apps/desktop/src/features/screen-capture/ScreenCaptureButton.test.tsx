@@ -21,6 +21,7 @@ vi.mock('../../hooks/useScreenCapture', () => ({
 
 vi.mock('../../lib/tauri-mock', () => ({
   isTauri: true,
+  invoke: vi.fn(async () => undefined),
 }));
 
 import { GLOBAL_SHORTCUTS, RENDERER_SHORTCUTS } from '../../constants/shortcuts';
