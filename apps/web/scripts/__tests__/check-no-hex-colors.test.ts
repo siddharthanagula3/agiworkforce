@@ -91,7 +91,19 @@ describe('check:no-hex-web', () => {
 
   it('is invoked by CI so a new literal cannot ship undetected', () => {
     const ci = readFileSync(join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    const rootPackage = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
 
-    expect(ci).toContain('check:no-hex-web');
+    // CI runs the operability chain rather than each guard as its own step, so
+    // the gate is real when either the workflow names this guard directly or
+    // the chain it runs contains it. Asserting only the literal step made this
+    // read as ungated the day those steps were folded into the chain.
+    const named = ci.includes('check:no-hex-web');
+    const viaChain =
+      ci.includes('check:llm-operability') &&
+      rootPackage.scripts['check:llm-operability']?.includes('check:no-hex-web') === true;
+
+    expect(named || viaChain).toBe(true);
   });
 });
