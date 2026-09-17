@@ -7,7 +7,13 @@ import type {
   DeviceMouseButton,
   DeviceStepRegion,
 } from '@agiworkforce/local-runtime-contract';
-import { frameHelperLines, readHelperReply } from './computerUseProtocol';
+import type { DeviceScreenDisplay } from '@agiworkforce/local-runtime-contract';
+import {
+  chooseCaptureDisplay,
+  describeDisplays,
+  frameHelperLines,
+  readHelperReply,
+} from './computerUseProtocol';
 
 /**
  * Desktop computer use: what is on the screen, and the mouse and keyboard.
@@ -35,10 +41,12 @@ export interface ScreenCapture {
   height: number;
   scaleFactor: number;
   displayName: string;
+  displayId: number;
+  displays: DeviceScreenDisplay[];
 }
 
 export class ComputerUseRefused extends Error {
-  readonly reason: 'unsupported' | 'permission' | 'failed';
+  readonly reason: 'unsupported' | 'permission' | 'failed' | 'paused';
 
   constructor(reason: ComputerUseRefused['reason'], message: string) {
     super(message);
@@ -150,6 +158,24 @@ function startHelper(): ChildProcessWithoutNullStreams | ComputerUseUnsupported 
   return child;
 }
 
+let takenOver = false;
+
+export function isComputerUseTakenOver(): boolean {
+  return takenOver;
+}
+
+export function takeOverComputerUse(): { takenOver: true } {
+  takenOver = true;
+  stopComputerUseHelper();
+  return { takenOver: true };
+}
+
+export function handBackComputerUse(): { takenOver: false } {
+  takenOver = false;
+  lastFrame = null;
+  return { takenOver: false };
+}
+
 export function stopComputerUseHelper(): void {
   helper?.kill();
   helper = null;
@@ -225,6 +251,12 @@ export function computerUseAvailability(prompt = false): ComputerUseAvailability
  * opens is the answer to something they just asked for.
  */
 function requireAvailable(): void {
+  if (takenOver) {
+    throw new ComputerUseRefused(
+      'paused',
+      'The user has taken over the screen. Do not try another screen step; tell them what you were about to do and wait for them to hand control back.',
+    );
+  }
   const availability = computerUseAvailability(true);
   if (!availability.supported) {
     throw new ComputerUseRefused(
@@ -234,14 +266,23 @@ function requireAvailable(): void {
   }
 }
 
-function targetDisplay(): Electron.Display {
-  if (lastFrame) {
-    const remembered = screen
-      .getAllDisplays()
-      .find((display) => display.id === lastFrame?.displayId);
-    if (remembered) return remembered;
+function targetDisplay(requestedId?: number): Electron.Display {
+  const chosen = chooseCaptureDisplay(screen.getAllDisplays(), {
+    ...(requestedId === undefined ? {} : { requestedId }),
+    rememberedId: lastFrame?.displayId ?? null,
+    fallback: screen.getDisplayNearestPoint(screen.getCursorScreenPoint()),
+  });
+  if ('unknownDisplay' in chosen) {
+    throw new ComputerUseRefused(
+      'failed',
+      `Display ${chosen.unknownDisplay} is not connected. Take a screenshot without a display to see the connected ones.`,
+    );
   }
-  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  return chosen;
+}
+
+function connectedDisplays(): DeviceScreenDisplay[] {
+  return describeDisplays(screen.getAllDisplays(), screen.getPrimaryDisplay().id);
 }
 
 function encode(image: Electron.NativeImage): {
@@ -273,9 +314,9 @@ async function captureDisplay(display: Electron.Display): Promise<Electron.Nativ
   return source.thumbnail;
 }
 
-export async function captureScreen(): Promise<ScreenCapture> {
+export async function captureScreen(displayId?: number): Promise<ScreenCapture> {
   requireAvailable();
-  const display = targetDisplay();
+  const display = targetDisplay(displayId);
   const full = await captureDisplay(display);
   const frameWidth = Math.min(display.size.width, MAX_FRAME_WIDTH);
   const resized =
@@ -295,6 +336,8 @@ export async function captureScreen(): Promise<ScreenCapture> {
     height: size.height,
     scaleFactor: display.scaleFactor,
     displayName: display.label || 'the main screen',
+    displayId: display.id,
+    displays: connectedDisplays(),
   };
 }
 
@@ -329,6 +372,8 @@ export async function captureRegion(region: DeviceStepRegion): Promise<ScreenCap
     height: size.height,
     scaleFactor: display.scaleFactor,
     displayName: display.label || 'the main screen',
+    displayId: display.id,
+    displays: connectedDisplays(),
   };
 }
 

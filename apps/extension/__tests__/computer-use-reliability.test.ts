@@ -756,7 +756,7 @@ describe('P2-5: approval gate, fail-CLOSED on timeout', () => {
       onBeforeAction: denyAll,
     });
 
-    expect(denyAll).toHaveBeenCalledWith('click', { index: 1 });
+    expect(denyAll).toHaveBeenCalledWith('click', { index: 1 }, undefined, { alwaysAsk: false });
 
     const secondBody = JSON.parse(
       (fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string,
@@ -781,7 +781,7 @@ describe('P2-5: approval gate, fail-CLOSED on timeout', () => {
       onBeforeAction: allowAll,
     });
 
-    expect(allowAll).toHaveBeenCalledWith('read_dom', {});
+    expect(allowAll).toHaveBeenCalledWith('read_dom', {}, undefined, { alwaysAsk: false });
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
       expect.anything(),
       'Runtime.evaluate',

@@ -3,10 +3,12 @@
 import {
   DesktopRuntimeError,
   MAX_DEVICE_STEP_RESULT_LENGTH,
+  describeDeviceDisplays,
   deviceStepCommand,
   getHostBridge,
   isDeviceStepTool,
   type DesktopHostDeclaration,
+  type DeviceScreenDisplay,
   type DeviceStepTool,
   type FileEntry,
   type FileStat,
@@ -39,6 +41,8 @@ interface ScreenCaptureResult {
   height: number;
   scaleFactor: number;
   displayName: string;
+  displayId?: number;
+  displays?: DeviceScreenDisplay[];
 }
 
 async function invokeDeviceCommand<T>(command: string, args: Record<string, unknown>): Promise<T> {
@@ -84,13 +88,21 @@ async function captureFor(
 ): Promise<DeviceStepOutcome> {
   const capture = await invokeDeviceCommand<ScreenCaptureResult>(
     deviceStepCommand(tool),
-    tool === 'device_zoom' ? { region: input['region'] } : {},
+    tool === 'device_zoom'
+      ? { region: input['region'] }
+      : typeof input['display'] === 'number'
+        ? { display: input['display'] }
+        : {},
   );
+  const displays =
+    tool === 'device_screenshot' && capture.displays && capture.displayId !== undefined
+      ? describeDeviceDisplays(capture.displays, capture.displayId)
+      : '';
   return {
     content:
       tool === 'device_zoom'
         ? `A ${capture.width} by ${capture.height} close-up of ${capture.displayName} follows. Its coordinates are the region asked for, not the whole screen.`
-        : `${capture.displayName} is ${capture.width} wide and ${capture.height} tall in the coordinates every other screen step uses. The picture follows.`,
+        : `${capture.displayName} is ${capture.width} wide and ${capture.height} tall in the coordinates every other screen step uses.${displays ? ` ${displays}` : ''} The picture follows.`,
     isError: false,
     image: { base64: capture.imageBase64, mimeType: capture.mimeType },
   };

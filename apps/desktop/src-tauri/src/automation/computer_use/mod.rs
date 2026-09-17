@@ -40,6 +40,7 @@ mod app_permissions;
 pub mod approval;
 pub mod confirmation;
 pub mod consent;
+pub mod control;
 mod observe_plan_act;
 mod safety;
 mod session;
@@ -61,6 +62,7 @@ pub use app_permissions::{
 pub use approval::{action_class, action_tool_name, approval_request};
 pub use confirmation::{ConfirmationOutcome, CONFIRMATION_TIMEOUT_SECS};
 pub use consent::{ComputerUseConsent, CONSENT_SETTINGS_KEY, CONSENT_VERSION};
+pub use control::{ControlState, DialogResponse};
 pub use observe_plan_act::{
     CompletionReason, ComputerUseAgent, ComputerUseConfig, ExecutionState, OpaLoopResult,
 };

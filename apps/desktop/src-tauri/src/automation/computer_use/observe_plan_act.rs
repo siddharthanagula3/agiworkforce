@@ -34,7 +34,7 @@ use crate::automation::action_router::{
 use crate::automation::input::{
     KeyboardSimulator, MouseButton as InputMouseButton, MouseSimulator,
 };
-use crate::automation::screen::{capture_primary_screen, list_displays, ScreenInfo};
+use crate::automation::screen::ScreenInfo;
 use crate::automation::AutomationService;
 use crate::core::llm::llm_router::LLMRouter;
 use crate::core::llm::{
@@ -839,6 +839,8 @@ Available actions:
 - {{"action": "drag", "from": {{"x": 100, "y": 100}}, "to": {{"x": 200, "y": 200}}}}
 - {{"action": "wait", "condition": {{"type": "duration", "ms": 1000}}}}
 - {{"action": "focus_window", "title": "Application Name"}}
+- {{"action": "choose_file", "path": "/Users/me/Documents/report.pdf"}}
+- {{"action": "respond_to_dialog", "response": "accept"}}
 - {{"action": "zoom", "region": {{"left": 100, "top": 200, "width": 50, "height": 30}}, "zoom_level": 4.0}}
 - {{"action": "read", "target": "the Total label"}}
 - {{"action": "navigate", "url": "https://example.com/pricing"}}
@@ -1195,6 +1197,27 @@ Only include actions you're confident will make progress."#,
 
                 Ok(ComputerUseAction::Wait { condition })
             }
+            "choose_file" => {
+                let path = value
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Missing path for choose_file"))?;
+                Ok(ComputerUseAction::ChooseFile {
+                    path: path.to_string(),
+                })
+            }
+            "respond_to_dialog" => {
+                let response = match value.get("response").and_then(|v| v.as_str()) {
+                    Some("accept") => super::control::DialogResponse::Accept,
+                    Some("cancel") => super::control::DialogResponse::Cancel,
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "respond_to_dialog needs response accept or cancel"
+                        ))
+                    }
+                };
+                Ok(ComputerUseAction::RespondToDialog { response })
+            }
             "focus_window" => {
                 let title = value
                     .get("title")
@@ -1235,6 +1258,7 @@ Only include actions you're confident will make progress."#,
 
     /// Executes a single action.
     async fn execute_action(&self, action: &ComputerUseAction) -> Result<()> {
+        super::control::ensure_agent_in_control()?;
         let primary_display = resolve_primary_display()?;
 
         match action {
@@ -1374,7 +1398,8 @@ Only include actions you're confident will make progress."#,
                 region: _,
                 save_path,
             } => {
-                let screenshot = capture_primary_screen()?;
+                let screenshot =
+                    crate::automation::screen::capture_display(super::control::target_display())?;
                 if let Some(path) = save_path {
                     screenshot.pixels.save(path)?;
                 }
@@ -1446,6 +1471,20 @@ Only include actions you're confident will make progress."#,
                     zoom_result.height,
                     zoom_result.image_base64.len(),
                 );
+            }
+            ComputerUseAction::ChooseFile { path } => {
+                let path = super::control::validate_picker_path(path)?;
+                super::action_executor::run_keystrokes(&super::control::file_picker_keystrokes(
+                    super::control::FilePickerPlatform::current(),
+                    path,
+                ))
+                .await?;
+            }
+            ComputerUseAction::RespondToDialog { response } => {
+                super::action_executor::run_keystrokes(&super::control::dialog_keystrokes(
+                    *response,
+                ))
+                .await?;
             }
         }
 
@@ -1577,15 +1616,7 @@ fn translate_capture_point(x: i32, y: i32, display: &ScreenInfo) -> (i32, i32) {
 }
 
 fn resolve_primary_display() -> Result<ScreenInfo> {
-    let displays = list_displays()?;
-    if let Some(primary) = displays.iter().find(|display| display.is_primary) {
-        return Ok(primary.clone());
-    }
-
-    displays
-        .into_iter()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("No display available for coordinate translation"))
+    super::control::resolve_target_display()
 }
 
 #[cfg(test)]

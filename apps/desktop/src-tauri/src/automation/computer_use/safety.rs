@@ -551,6 +551,24 @@ impl ComputerUseSafetyLayer {
 
             ComputerUseAction::FocusWindow { title } => self.evaluate_window_focus(title),
 
+            ComputerUseAction::ChooseFile { path } => {
+                match super::control::validate_picker_path(path) {
+                    Ok(path) => SafetyDecision::needs_confirmation(format!(
+                        "Choose {path} in a file dialog, which can upload it"
+                    )),
+                    Err(error) => SafetyDecision::block(SafetyReason::SandboxRestriction {
+                        action: error.to_string(),
+                    }),
+                }
+            }
+
+            ComputerUseAction::RespondToDialog { response } => match response {
+                super::control::DialogResponse::Accept => {
+                    SafetyDecision::needs_confirmation("Accept a system dialog")
+                }
+                super::control::DialogResponse::Cancel => SafetyDecision::allow(),
+            },
+
             // Safe actions - these don't modify state or interact with system
             ComputerUseAction::Scroll { .. }
             | ComputerUseAction::Wait { .. }
@@ -950,6 +968,32 @@ mod tests {
             button: super::super::types::MouseButton::Left,
         };
         assert!(!safety.evaluate_action(&action).allowed);
+    }
+
+    #[test]
+    fn choosing_a_file_or_accepting_a_dialog_always_asks() {
+        let safety = ComputerUseSafetyLayer::with_defaults();
+
+        let choose = ComputerUseAction::ChooseFile {
+            path: std::env::temp_dir().join("cv.pdf").display().to_string(),
+        };
+        let decision = safety.evaluate_action(&choose);
+        assert!(decision.allowed && decision.requires_confirmation);
+
+        let relative = ComputerUseAction::ChooseFile {
+            path: "cv.pdf".to_string(),
+        };
+        assert!(!safety.evaluate_action(&relative).allowed);
+
+        let accept = ComputerUseAction::RespondToDialog {
+            response: super::super::control::DialogResponse::Accept,
+        };
+        assert!(safety.evaluate_action(&accept).requires_confirmation);
+
+        let cancel = ComputerUseAction::RespondToDialog {
+            response: super::super::control::DialogResponse::Cancel,
+        };
+        assert!(!safety.evaluate_action(&cancel).requires_confirmation);
     }
 
     #[test]

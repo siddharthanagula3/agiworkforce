@@ -3,6 +3,7 @@
 //! This module defines all the fundamental types used throughout the Computer Use
 //! system, including actions, coordinates, screen elements, and task definitions.
 
+use super::control::DialogResponse;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -283,6 +284,12 @@ pub enum ComputerUseAction {
         #[serde(default = "default_capture_zoom")]
         capture_screenshot: bool,
     },
+
+    /// Type an absolute path into the open file dialog and confirm it.
+    ChooseFile { path: String },
+
+    /// Accept or cancel the frontmost dialog with its default keys.
+    RespondToDialog { response: DialogResponse },
 }
 
 fn default_typing_delay() -> u64 {
@@ -373,6 +380,13 @@ impl ComputerUseAction {
             ComputerUseAction::SelectAll => "Select all".to_string(),
             ComputerUseAction::Undo => "Undo".to_string(),
             ComputerUseAction::Redo => "Redo".to_string(),
+            ComputerUseAction::ChooseFile { path } => {
+                format!("Choose file in the open dialog: {}", path)
+            }
+            ComputerUseAction::RespondToDialog { response } => match response {
+                DialogResponse::Accept => "Accept the open dialog".to_string(),
+                DialogResponse::Cancel => "Cancel the open dialog".to_string(),
+            },
             ComputerUseAction::Zoom {
                 region, zoom_level, ..
             } => {
@@ -413,6 +427,8 @@ impl ComputerUseAction {
             ComputerUseAction::FocusWindow { .. } => 100,
             ComputerUseAction::LaunchApplication { .. } => 2000,
             ComputerUseAction::Zoom { .. } => 300, // Capture + scale + encode
+            ComputerUseAction::ChooseFile { .. } => 2000,
+            ComputerUseAction::RespondToDialog { .. } => 50,
         }
     }
 }

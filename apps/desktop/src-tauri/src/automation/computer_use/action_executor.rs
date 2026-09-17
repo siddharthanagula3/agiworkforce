@@ -10,8 +10,12 @@ use tokio::time::sleep;
 use crate::automation::input::{
     KeyboardSimulator, MouseButton as InputMouseButton, MouseSimulator,
 };
-use crate::automation::screen::{capture_primary_screen, list_displays, ScreenInfo};
+use crate::automation::screen::{capture_display, ScreenInfo};
 
+use super::control::{
+    dialog_keystrokes, ensure_agent_in_control, file_picker_keystrokes, target_display,
+    validate_picker_path, FilePickerPlatform, PickerKeystroke, PickerModifier,
+};
 use super::types::{
     ComputerUseAction, Coordinate, HotkeyModifier, MouseButton, ScrollDirection, WaitCondition,
 };
@@ -37,7 +41,8 @@ impl ActionExecutor {
     /// Returns `Ok(())` on success. For `Wait` conditions beyond `Duration`,
     /// falls back to sleeping for the condition's max duration.
     pub async fn execute(&self, action: &ComputerUseAction) -> Result<()> {
-        let primary_display = resolve_primary_display()?;
+        ensure_agent_in_control()?;
+        let primary_display = resolve_target_display()?;
 
         match action {
             ComputerUseAction::Click { x, y, button } => {
@@ -167,7 +172,7 @@ impl ActionExecutor {
                 region: _,
                 save_path,
             } => {
-                let screenshot = capture_primary_screen()?;
+                let screenshot = capture_display(target_display())?;
                 if let Some(path) = save_path {
                     screenshot.pixels.save(path)?;
                 }
@@ -238,10 +243,44 @@ impl ActionExecutor {
                     zoom_result.image_base64.len(),
                 );
             }
+            ComputerUseAction::ChooseFile { path } => {
+                let path = validate_picker_path(path)?;
+                run_keystrokes(&file_picker_keystrokes(FilePickerPlatform::current(), path))
+                    .await?;
+            }
+            ComputerUseAction::RespondToDialog { response } => {
+                run_keystrokes(&dialog_keystrokes(*response)).await?;
+            }
         }
 
         Ok(())
     }
+}
+
+pub async fn run_keystrokes(strokes: &[PickerKeystroke]) -> Result<()> {
+    let mut keyboard = KeyboardSimulator::new()?;
+    for stroke in strokes {
+        ensure_agent_in_control()?;
+        match stroke {
+            PickerKeystroke::Chord(modifiers, key) => {
+                let mods: Vec<enigo::Key> = modifiers
+                    .iter()
+                    .map(|modifier| match modifier {
+                        PickerModifier::Command => enigo::Key::Meta,
+                        PickerModifier::Control => enigo::Key::Control,
+                        PickerModifier::Shift => enigo::Key::Shift,
+                        PickerModifier::Alt => enigo::Key::Alt,
+                    })
+                    .collect();
+                keyboard.send_hotkey(&mods, enigo::Key::Unicode(*key))?;
+            }
+            PickerKeystroke::Text(text) => keyboard.send_text_with_delay(text, 5).await?,
+            PickerKeystroke::Enter => keyboard.tap_key(enigo::Key::Return)?,
+            PickerKeystroke::Escape => keyboard.tap_key(enigo::Key::Escape)?,
+            PickerKeystroke::Pause(ms) => sleep(Duration::from_millis(*ms)).await,
+        }
+    }
+    Ok(())
 }
 
 /// Parses a key name string into an enigo `Key`.
@@ -292,17 +331,8 @@ pub fn translate_capture_point(x: i32, y: i32, display: &ScreenInfo) -> (i32, i3
     (translated.x, translated.y)
 }
 
-/// Resolves the primary display for coordinate translation.
-pub fn resolve_primary_display() -> Result<ScreenInfo> {
-    let displays = list_displays()?;
-    if let Some(primary) = displays.iter().find(|display| display.is_primary) {
-        return Ok(primary.clone());
-    }
-
-    displays
-        .into_iter()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("No display available for coordinate translation"))
+pub fn resolve_target_display() -> Result<ScreenInfo> {
+    super::control::resolve_target_display()
 }
 
 #[cfg(test)]

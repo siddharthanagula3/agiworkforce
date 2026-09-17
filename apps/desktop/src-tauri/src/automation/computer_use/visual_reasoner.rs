@@ -14,7 +14,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::timeout;
 
-use crate::automation::screen::{capture_primary_screen, capture_region, CapturedImage};
+use crate::automation::screen::{capture_display, capture_region, CapturedImage};
 use crate::core::llm::llm_router::LLMRouter;
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
@@ -129,7 +129,8 @@ impl VisualReasoner {
         }
 
         // Capture new screenshot
-        let screenshot = capture_primary_screen().context("Failed to capture screen")?;
+        let screenshot = capture_display(super::control::target_display())
+            .context("Failed to capture screen")?;
 
         // Convert to optimized base64 for LLM
         let image_base64 = self.prepare_image_for_llm(&screenshot.pixels)?;
@@ -383,12 +384,12 @@ If not found:
         let start = Instant::now();
         let check_interval = Duration::from_millis(200);
 
-        let mut last_screenshot = capture_primary_screen()?.pixels;
+        let mut last_screenshot = capture_display(super::control::target_display())?.pixels;
 
         while start.elapsed() < timeout_duration {
             tokio::time::sleep(check_interval).await;
 
-            let current = capture_primary_screen()?.pixels;
+            let current = capture_display(super::control::target_display())?.pixels;
             let changes = self.detect_changes(&last_screenshot, &current);
 
             if !changes.has_changes {

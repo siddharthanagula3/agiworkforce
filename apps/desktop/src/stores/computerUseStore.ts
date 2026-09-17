@@ -217,8 +217,26 @@ export function formatOpaCompletionReason(reason: OpaCompletionReason): string {
   }
 }
 
+export interface DesktopDisplay {
+  id: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scale_factor: number;
+  is_primary: boolean;
+}
+
+interface ControlStatePayload {
+  taken_over: boolean;
+  target_display: number | null;
+}
+
 interface ComputerUseState {
   isActive: boolean;
+  takenOver: boolean;
+  displays: DesktopDisplay[];
+  targetDisplayId: number | null;
   sessionId: string | null;
   currentScreenshot: string | null;
   screenWidth: number | null;
@@ -240,6 +258,10 @@ interface ComputerUseState {
 
   startSession: () => Promise<void>;
   stopSession: () => Promise<void>;
+  takeOver: () => Promise<void>;
+  handBack: () => Promise<void>;
+  listDisplays: () => Promise<DesktopDisplay[]>;
+  setTargetDisplay: (displayId: number | null) => Promise<void>;
   captureScreen: () => Promise<void>;
   logAction: (action: DesktopComputerAction) => void;
   clearLog: () => void;
@@ -286,6 +308,9 @@ export const useComputerUseStore = create<ComputerUseState>()(
   devtools(
     immer((set, get) => ({
       isActive: false,
+      takenOver: false,
+      displays: [],
+      targetDisplayId: null,
       sessionId: null,
       currentScreenshot: null,
       screenWidth: null,
@@ -425,6 +450,97 @@ export const useComputerUseStore = create<ComputerUseState>()(
           'computerUse/stopSession',
         );
         if (stopFailure !== null) toast.error(stopFailure);
+      },
+
+      takeOver: async () => {
+        try {
+          const control = await invoke<ControlStatePayload>('computer_use_take_over');
+          set(
+            (state) => {
+              state.takenOver = control.taken_over;
+              state.error = null;
+            },
+            undefined,
+            'computerUse/takeOver',
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Screen control could not be taken over.';
+          set(
+            (state) => {
+              state.error = message;
+            },
+            undefined,
+            'computerUse/takeOver/error',
+          );
+          toast.error(message);
+        }
+      },
+
+      handBack: async () => {
+        try {
+          const control = await invoke<ControlStatePayload>('computer_use_hand_back');
+          set(
+            (state) => {
+              state.takenOver = control.taken_over;
+            },
+            undefined,
+            'computerUse/handBack',
+          );
+        } catch (error) {
+          set(
+            (state) => {
+              state.error = String(error);
+            },
+            undefined,
+            'computerUse/handBack/error',
+          );
+        }
+      },
+
+      listDisplays: async () => {
+        try {
+          const displays = await invoke<DesktopDisplay[]>('computer_use_list_displays');
+          set(
+            (state) => {
+              state.displays = displays;
+            },
+            undefined,
+            'computerUse/listDisplays',
+          );
+          return displays;
+        } catch (error) {
+          set(
+            (state) => {
+              state.error = String(error);
+            },
+            undefined,
+            'computerUse/listDisplays/error',
+          );
+          return [];
+        }
+      },
+
+      setTargetDisplay: async (displayId) => {
+        try {
+          await invoke<DesktopDisplay>('computer_use_set_target_display', { displayId });
+          set(
+            (state) => {
+              state.targetDisplayId = displayId;
+              state.error = null;
+            },
+            undefined,
+            'computerUse/setTargetDisplay',
+          );
+        } catch (error) {
+          set(
+            (state) => {
+              state.error = String(error);
+            },
+            undefined,
+            'computerUse/setTargetDisplay/error',
+          );
+        }
       },
 
       captureScreen: async () => {

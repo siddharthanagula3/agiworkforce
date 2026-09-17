@@ -27,6 +27,8 @@ function actions() {
     goForward: vi.fn(),
     setZoomLevel: vi.fn(),
     stepZoomLevel: vi.fn(),
+    takeOverScreen: vi.fn(),
+    handBackScreen: vi.fn(),
   };
 }
 
@@ -173,6 +175,16 @@ describe('the application menu', () => {
     for (const [menuLabel, itemLabel, id] of claimed) {
       expect(item(menu, menuLabel, itemLabel).accelerator).toBe(contractAccelerator(id));
     }
+  });
+
+  it('lets the user take the screen back from the agent and hand it back', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'File', 'Take Over Screen Control').click as () => void)();
+    (item(menu, 'File', 'Hand Back Screen Control').click as () => void)();
+
+    expect(spies.takeOverScreen).toHaveBeenCalledTimes(1);
+    expect(spies.handBackScreen).toHaveBeenCalledTimes(1);
   });
 
   it('closes a window from the Window menu on every platform', () => {

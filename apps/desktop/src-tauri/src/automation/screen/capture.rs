@@ -105,14 +105,25 @@ fn bitmap_extent(width: i32, height: i32) -> Result<BitmapExtent> {
 }
 
 pub fn capture_primary_screen() -> Result<CapturedImage> {
+    capture_display(None)
+}
+
+pub fn capture_display(display_id: Option<u32>) -> Result<CapturedImage> {
     let _xcap_lock = lock_xcap()?;
     let monitors = Monitor::all().context("Failed to enumerate displays")?;
-    let (screen_index, monitor) = monitors
-        .iter()
-        .enumerate()
-        .find(|(_, m)| m.is_primary())
-        .or_else(|| monitors.iter().enumerate().next())
-        .ok_or_else(|| anyhow!("No displays detected for capture"))?;
+    let (screen_index, monitor) = match display_id {
+        Some(id) => monitors
+            .iter()
+            .enumerate()
+            .find(|(index, _)| *index as u32 == id)
+            .ok_or_else(|| anyhow!("Display {id} is not connected"))?,
+        None => monitors
+            .iter()
+            .enumerate()
+            .find(|(_, m)| m.is_primary())
+            .or_else(|| monitors.iter().enumerate().next())
+            .ok_or_else(|| anyhow!("No displays detected for capture"))?,
+    };
 
     let image = monitor
         .capture_image()

@@ -30,6 +30,44 @@ describe('computerUseStore', () => {
     useAppModeStore.setState({ mode: 'local' });
   });
 
+  describe('takeover and display targeting', () => {
+    it('takes the screen over and hands it back through the host', async () => {
+      mockInvoke.mockResolvedValueOnce({ taken_over: true, target_display: null });
+      await useComputerUseStore.getState().takeOver();
+      expect(mockInvoke).toHaveBeenCalledWith('computer_use_take_over');
+      expect(useComputerUseStore.getState().takenOver).toBe(true);
+
+      mockInvoke.mockResolvedValueOnce({ taken_over: false, target_display: null });
+      await useComputerUseStore.getState().handBack();
+      expect(mockInvoke).toHaveBeenCalledWith('computer_use_hand_back');
+      expect(useComputerUseStore.getState().takenOver).toBe(false);
+    });
+
+    it('reports a takeover that did not happen instead of showing it as taken', async () => {
+      useComputerUseStore.setState({ takenOver: false });
+      mockInvoke.mockRejectedValueOnce(new Error('host unavailable'));
+
+      await useComputerUseStore.getState().takeOver();
+
+      expect(useComputerUseStore.getState().takenOver).toBe(false);
+      expect(toast.error).toHaveBeenCalledWith('host unavailable');
+    });
+
+    it('lists displays and targets the one chosen', async () => {
+      const displays = [
+        { id: 0, x: 0, y: 0, width: 3024, height: 1964, scale_factor: 2, is_primary: true },
+        { id: 1, x: 1512, y: 0, width: 2560, height: 1440, scale_factor: 1, is_primary: false },
+      ];
+      mockInvoke.mockResolvedValueOnce(displays);
+      await expect(useComputerUseStore.getState().listDisplays()).resolves.toEqual(displays);
+
+      mockInvoke.mockResolvedValueOnce(displays[1]);
+      await useComputerUseStore.getState().setTargetDisplay(1);
+      expect(mockInvoke).toHaveBeenCalledWith('computer_use_set_target_display', { displayId: 1 });
+      expect(useComputerUseStore.getState().targetDisplayId).toBe(1);
+    });
+  });
+
   describe('executeOpaTask trust boundary', () => {
     it('strips an explicit cloud provider in local mode and stays local_only', async () => {
       mockInvoke.mockResolvedValueOnce(successfulOpaResult);
