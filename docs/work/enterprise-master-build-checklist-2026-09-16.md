@@ -2318,7 +2318,7 @@ _§45: 11 of 16 done._
 - [x] Family
       <br>_`modelIdentity.family`, resolved from `model-families.json`_
 - [ ] Version - 🟡 Partial
-      <br>_no dedicated version field; encoded only inside the `key`/`providerModelId` string (e.g. `gpt-5.1`)_
+      <br>_no dedicated version field; encoded only inside the `key`/`providerModelId` string_
 - [x] Context
       <br>_`definitions.limits.contextTokens/maxInputTokens/maxOutputTokens`_
 - [x] Input modalities
