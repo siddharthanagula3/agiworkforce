@@ -287,7 +287,7 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
         keywords: ['profile', 'name', 'personalization', 'custom instructions', 'instructions'],
       },
       { key: 'account', label: 'Account', icon: UserRound },
-      { key: 'team', label: 'Team', icon: Users },
+      { key: 'team', label: 'Workspace', icon: Users },
       { key: 'privacy', label: 'Privacy', icon: Shield },
       { key: 'billing', label: 'Billing', icon: CreditCard },
       { key: 'usage', label: 'Usage', icon: Gauge },

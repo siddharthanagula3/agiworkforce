@@ -108,7 +108,7 @@ const LOCAL_NAV_STEPS: Array<{
   },
   {
     navId: 'tasks',
-    label: 'Tasks',
+    label: 'Work',
     expectTestId: 'desktop-agent-tasks',
     expectSelector: '[data-testid="desktop-agent-tasks"] #agent-task-goal',
   },

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import { ModelBadge } from '@agiworkforce/ui';
 import { getManagedModelPresentationLabel } from '@agiworkforce/unified-chat';
 
 interface ToolCall {
@@ -53,9 +54,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
             </h1>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
               {session.model_id && (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-                  {getManagedModelPresentationLabel(session.model_id)}
-                </span>
+                <ModelBadge label={getManagedModelPresentationLabel(session.model_id)} />
               )}
               <span>{session.total_messages} messages</span>
               <span>

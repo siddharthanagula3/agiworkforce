@@ -48,7 +48,7 @@ export function TasksPage() {
         store.setComposerToggles({ workMode: 'agiwork' }, PENDING_CONVERSATION_KEY);
         router.push('/chat');
         toast.success(
-          'Loaded this task’s goal into a new AGI Work chat. Review and send to re-run.',
+          'Loaded this session’s goal into a new AGI Work chat. Review and send to re-run.',
         );
       },
     }),

@@ -304,6 +304,39 @@ describe('voice mode tokens', () => {
   }
 });
 
+describe('loading tokens', () => {
+  // A spinner is non-text content that says something is happening, so it
+  // needs 3:1 against every surface it is drawn on. A skeleton fill is a
+  // placeholder shape and only has to read as distinct from the page.
+  for (const [theme, block] of [
+    ['light', chat.light],
+    ['dark', chat.dark],
+  ] as const) {
+    const indicator = colorToken(block, '--chat-loading-indicator');
+
+    it(`${theme}: --chat-loading-indicator on --chat-bg >= 3:1`, () => {
+      expect(contrastRatio(indicator, colorToken(block, '--chat-bg'))).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+    });
+
+    it(`${theme}: --chat-loading-indicator on --chat-surface-elevated >= 3:1`, () => {
+      expect(
+        contrastRatio(indicator, colorToken(block, '--chat-surface-elevated')),
+      ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+    });
+
+    it(`${theme}: --chat-loading-placeholder is distinguishable from --chat-bg`, () => {
+      expect(
+        contrastRatio(
+          colorToken(block, '--chat-loading-placeholder'),
+          colorToken(block, '--chat-bg'),
+        ),
+      ).toBeGreaterThan(1);
+    });
+  }
+});
+
 describe('every accent swatch pairs with a legible foreground', () => {
   // The accent is a user-selectable fill. White cleared the light swatches but
   // failed amber (2.97:1) and every dark swatch (2.54-3.20:1), so the paired
@@ -632,6 +665,8 @@ describe('the two emitters of the --chat-* contract agree', () => {
     '--chat-text-secondary': agiChatCssVars.light['--chat-text-secondary'],
     '--chat-text-muted': agiChatCssVars.light['--chat-text-muted'],
     '--chat-text-placeholder': agiChatCssVars.light['--chat-text-placeholder'],
+    '--chat-loading-placeholder': agiChatCssVars.light['--chat-loading-placeholder'],
+    '--chat-loading-indicator': agiChatCssVars.light['--chat-loading-indicator'],
   };
 
   for (const [name, fromTs] of Object.entries(sharedLightTokens)) {

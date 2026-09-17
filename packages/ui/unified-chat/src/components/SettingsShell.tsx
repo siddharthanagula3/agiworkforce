@@ -29,7 +29,7 @@ export const DEFAULT_SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = [
     render: () => (
       <SectionPlaceholder
         title="Capabilities"
-        body="Toggle features per Local Mode / BYOK / Cloud Managed. Web search, computer use, and artifacts are surfaced here so you can disable them per trust mode."
+        body="Toggle features per Local / BYOK / Managed Cloud. Web search, computer use, and artifacts are surfaced here so you can disable them per trust mode."
       />
     ),
   },

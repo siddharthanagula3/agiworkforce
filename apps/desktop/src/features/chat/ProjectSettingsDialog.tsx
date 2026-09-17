@@ -905,7 +905,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 <Label className="text-foreground">Default Privacy Mode</Label>
                 {isManagedCloud ? (
                   <div className="rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2">
-                    <p className="text-sm font-medium text-foreground">Cloud Managed</p>
+                    <p className="text-sm font-medium text-foreground">Managed Cloud</p>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
                       This project belongs to your Cloud workspace. Moving it into Local or BYOK
                       requires an explicit redacted handoff; it cannot be changed here silently.

@@ -436,4 +436,21 @@ describe('public marketing copy regressions', () => {
     for (const root of ['app', 'features', 'shared', 'lib', 'content']) walk(root);
     expect(offenders, 'managed cloud is open by default, not invite-only').toEqual([]);
   });
+
+  it('names the managed trust boundary Managed Cloud, not hosted or Cloud Managed', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(join(WEB_ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) {
+          if (!SKIPPED_SOURCE_DIRS.has(entry.name) && !entry.name.startsWith('.')) walk(rel);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry.name) || /\.(test|spec)\.tsx?$/.test(entry.name)) continue;
+        if (/hosted web trial|Cloud Managed/.test(readWebFile(rel))) offenders.push(rel);
+      }
+    };
+    for (const root of ['app', 'features', 'shared', 'lib', 'content']) walk(root);
+    expect(offenders).toEqual([]);
+  });
 });

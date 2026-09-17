@@ -12,7 +12,11 @@ import { Spinner } from '@agiworkforce/ui';
 export function ChatLoadingSkeleton() {
   return (
     <div aria-busy="true" className="fixed inset-0 flex items-center justify-center">
-      <Spinner size="lg" aria-label="Loading chat" className="text-muted-foreground" />
+      <Spinner
+        size="lg"
+        aria-label="Loading chat"
+        className="text-[var(--chat-loading-indicator)]"
+      />
     </div>
   );
 }

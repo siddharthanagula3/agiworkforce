@@ -35,6 +35,15 @@ export {
   SelectScrollDownButton,
 } from './Select';
 export { Spinner, spinnerVariants, type SpinnerProps } from './Spinner';
+export { ApprovalCard, type ApprovalCardProps, type ApprovalCardRequest } from './ApprovalCard';
+export { ModelBadge, type ModelBadgeProps } from './ModelBadge';
+export { SearchInput, searchInputVariants, type SearchInputProps } from './SearchInput';
+export {
+  SegmentedControl,
+  type SegmentedControlOption,
+  type SegmentedControlProps,
+} from './SegmentedControl';
+export { TrustBadge, type TrustBadgeBoundary, type TrustBadgeProps } from './TrustBadge';
 export { Textarea, type TextareaProps } from './Textarea';
 export { EmptyState } from './EmptyState';
 export { Badge, badgeVariants, type BadgeProps } from './Badge';

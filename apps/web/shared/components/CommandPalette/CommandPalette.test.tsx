@@ -28,9 +28,16 @@ vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'dark', setTheme: mockSetTheme }),
 }));
 
-const chatStoreState = vi.hoisted(() => ({ conversations: [] as unknown[] }));
+const chatStoreState = vi.hoisted(() => ({
+  conversations: [] as unknown[],
+  setComposerToggles: vi.fn(),
+}));
 vi.mock('@shared/stores/web-chat-store', () => ({
-  useChatStore: (selector: (state: typeof chatStoreState) => unknown) => selector(chatStoreState),
+  PENDING_CONVERSATION_KEY: '__new_conversation__',
+  useChatStore: Object.assign(
+    (selector: (state: typeof chatStoreState) => unknown) => selector(chatStoreState),
+    { getState: () => chatStoreState },
+  ),
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -240,6 +247,25 @@ describe('CommandPalette', () => {
       fireEvent.click(screen.getByText('Go to Settings'));
       expect(mockPush).toHaveBeenCalledWith('/settings/general');
       expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('reaches Work history, which has no rail entry by design', () => {
+      renderPalette();
+
+      fireEvent.click(screen.getByText('Work history'));
+      expect(mockPush).toHaveBeenCalledWith('/tasks');
+    });
+
+    it('starts AGI Work in the chat composer instead of opening the marketing page', () => {
+      renderPalette();
+
+      fireEvent.click(screen.getByText('New AGI Work'));
+      expect(chatStoreState.setComposerToggles).toHaveBeenCalledWith(
+        { workMode: 'agiwork' },
+        '__new_conversation__',
+      );
+      expect(mockPush).toHaveBeenCalledWith('/chat');
+      expect(mockPush).not.toHaveBeenCalledWith('/agi-work');
     });
   });
 

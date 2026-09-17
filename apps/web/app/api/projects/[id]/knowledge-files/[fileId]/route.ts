@@ -141,7 +141,7 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
       return NextResponse.json(
         {
           error: 'knowledge_files_unavailable',
-          message: 'Knowledge files require Cloud Managed (pending migration apply)',
+          message: 'Knowledge files require Managed Cloud (pending migration apply)',
         },
         { status: 503 },
       );

@@ -163,12 +163,29 @@ describe('a finished task can be shelved and brought back', () => {
         }}
       />,
     );
-    await screen.findByText('No active tasks yet');
+    await screen.findByText('No active work sessions yet');
 
     fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
 
-    expect(await screen.findByText('No archived tasks yet')).toBeTruthy();
+    expect(await screen.findByText('No archived work sessions yet')).toBeTruthy();
     expect(screen.getByText(/A finished task moves here when you archive it/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Start AGI Work' })).toBeNull();
+  });
+
+  it('is titled Work history and filters through one labelled segmented control', async () => {
+    render(
+      <TasksPage
+        transport={{
+          client: client([]),
+          openConversation: vi.fn(),
+          notifyError: vi.fn(),
+        }}
+      />,
+    );
+    await screen.findByText('No active work sessions yet');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Work history' })).toBeTruthy();
+    const filters = screen.getByRole('group', { name: 'Filter work sessions' });
+    expect(filters.querySelector('[aria-pressed="true"]')?.textContent).toBe('Active');
   });
 });
