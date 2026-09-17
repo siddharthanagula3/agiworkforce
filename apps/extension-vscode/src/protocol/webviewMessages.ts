@@ -44,10 +44,7 @@ const retryRuntime = z.object({ type: z.literal('retryRuntime') });
 const cancel = z.object({ type: z.literal('cancel') });
 const shareDiagnostics = z.object({ type: z.literal('shareDiagnostics') });
 const clearConversation = z.object({ type: z.literal('clearConversation') });
-const openActionSheet = z.object({
-  type: z.literal('openActionSheet'),
-  payload: z.object({ scope: z.literal('composer') }).optional(),
-});
+const openActionSheet = z.object({ type: z.literal('openActionSheet') });
 const openModePicker = z.object({ type: z.literal('openModePicker') });
 const openEffortPicker = z.object({ type: z.literal('openEffortPicker') });
 const dismissUsageMeter = z.object({ type: z.literal('dismissUsageMeter') });
