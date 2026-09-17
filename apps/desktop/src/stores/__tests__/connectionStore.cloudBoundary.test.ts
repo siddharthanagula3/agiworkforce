@@ -282,8 +282,7 @@ describe('Mobile Companion Managed Cloud boundary lifecycle', () => {
     const accountARequest = useConnectionStore.getState().requestPairingCode();
     await vi.waitFor(() => expect(mocks.accountBoundCloudFetch).toHaveBeenCalledOnce());
     const accountARequestInit = mocks.accountBoundCloudFetch.mock.calls[0]?.[1] as
-      | RequestInit
-      | undefined;
+      RequestInit | undefined;
 
     installCloudSession('account-b', 11);
     expect(accountARequestInit?.signal?.aborted).toBe(true);
