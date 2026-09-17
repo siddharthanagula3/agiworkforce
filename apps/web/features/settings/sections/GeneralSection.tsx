@@ -28,7 +28,7 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { settingsService } from '@/features/settings/services/user-preferences';
-import { IMAGE_ATTACHMENT_MIME_TYPES, MAX_AVATAR_BYTES } from '@agiworkforce/types';
+import { EFFORT_LABEL, IMAGE_ATTACHMENT_MIME_TYPES, MAX_AVATAR_BYTES } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
   WORK_DESCRIPTIONS,
@@ -732,10 +732,6 @@ function DefaultModelRow() {
 
 const EFFORT_LEVELS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-function effortLabel(level: EffortLevel): string {
-  return level === 'xhigh' ? 'Extra high' : level.charAt(0).toUpperCase() + level.slice(1);
-}
-
 /**
  * CAP-020. The composer's effort picker has always split levels by entitlement
  * (ComposerFooter, via splitEffortsByEntitlement) and this one offered all five
@@ -794,7 +790,7 @@ function ReasoningEffortRow() {
           const gated = gatedEfforts.has(level);
           return (
             <option key={level} value={level} disabled={gated}>
-              {gated ? `${effortLabel(level)}, not on your plan` : effortLabel(level)}
+              {gated ? `${EFFORT_LABEL[level]}, not on your plan` : EFFORT_LABEL[level]}
             </option>
           );
         })}

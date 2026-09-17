@@ -1,4 +1,3 @@
-
 export type Effort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export const EFFORT_LABEL: Readonly<Record<Effort, string>> = Object.freeze({
@@ -7,7 +6,7 @@ export const EFFORT_LABEL: Readonly<Record<Effort, string>> = Object.freeze({
   low: 'Low',
   medium: 'Medium',
   high: 'High',
-  xhigh: 'xHigh',
+  xhigh: 'Extra high',
   max: 'Max',
 });
 
@@ -20,4 +19,3 @@ export const ANTHROPIC_THINKING_BUDGET: Readonly<
   xhigh: 49152,
   max: 65536,
 });
-
