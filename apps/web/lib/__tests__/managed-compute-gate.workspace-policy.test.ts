@@ -120,12 +120,20 @@ describe('buildOrganizationPolicyGateResponse', () => {
     expect(statements.some((sql) => sql.includes('organization_admin_policies'))).toBe(false);
   });
 
-  it('passes through when the database is unreachable, so a fault is never shown as a denial', async () => {
+  it('refuses with a 503 when the database is unreachable, without leaking the fault', async () => {
     mockQuery.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    await expect(
-      buildOrganizationPolicyGateResponse('user-1', request() as never, DESCRIPTOR),
-    ).resolves.toBeNull();
+    const response = await buildOrganizationPolicyGateResponse(
+      'user-1',
+      request() as never,
+      DESCRIPTOR,
+    );
+
+    expect(response!.status).toBe(503);
+    const body = await response!.json();
+    expect(body.error.code).toBe('workspace_policy_unavailable');
+    expect(body.error.message).not.toContain('ECONNREFUSED');
+    expect(body.managed_compute.allowed).toBe(false);
   });
 
   it('carries the caller-supplied response headers onto the denial', async () => {

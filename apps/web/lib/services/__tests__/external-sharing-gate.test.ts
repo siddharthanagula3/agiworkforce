@@ -87,17 +87,24 @@ describe('buildExternalSharingGateResponse', () => {
     expect(body.error.message).toMatch(/already created are unaffected/i);
   });
 
-  it('does not turn a policy read failure into a refusal', async () => {
-    // An infrastructure fault is not an administrator's decision. Refusing here
-    // would break sharing for everyone the moment the policy table blips.
+  it('refuses with a 503 when the policy cannot be read, so a blip never publishes past a switched-off policy', async () => {
     bind({ policyThrows: true });
-    expect(await buildExternalSharingGateResponse('user-1', req())).toBeNull();
+    const res = await buildExternalSharingGateResponse('user-1', req());
+
+    expect(res?.status).toBe(503);
+    const body = (await res?.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('workspace_policy_unavailable');
+    expect(body.error.message).not.toMatch(/connection reset/i);
   });
 
-  it('does not throw when the database is unconfigured', async () => {
+  it('refuses with a 503 rather than throwing when the database is unconfigured', async () => {
     mockGetNeonDb.mockImplementation(() => {
       throw new Error('AGI_DATABASE_URL is not set');
     });
-    expect(await buildExternalSharingGateResponse('user-1', req())).toBeNull();
+    const res = await buildExternalSharingGateResponse('user-1', req());
+
+    expect(res?.status).toBe(503);
+    const body = (await res?.json()) as { error: { code: string; message: string } };
+    expect(body.error.message).not.toMatch(/AGI_DATABASE_URL/);
   });
 });

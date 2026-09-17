@@ -7,13 +7,14 @@ import {
   type AdminPolicy,
   type SecretHandlingMode,
 } from '@agiworkforce/types';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import {
   CURRENT_COLLECTION_STATE,
   readOrganizationCollectionState,
+  type CollectionState,
 } from '@/lib/services/enterprise-collection-state';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { resolveGoverningOrganizationIds } from '@/lib/services/governing-organizations';
@@ -25,14 +26,18 @@ import {
 import {
   evaluateBillingHold,
   evaluateOrganizationPolicy,
+  isPurchaseAsk,
   UNSCOPED_POLICY_DECISION,
+  WORKSPACE_BILLING_UNAVAILABLE_DECISION,
+  WORKSPACE_NOT_ACCESSIBLE_DECISION,
+  WORKSPACE_POLICY_UNAVAILABLE_DECISION,
   type PolicyAsk,
   type PolicyDecision,
 } from '@/lib/services/organization-policy-evaluator';
 
 const ACCOUNT_CONTROL_READ_ATTEMPTS = 2;
-const ACCOUNT_CONTROL_UNAVAILABLE_MESSAGE =
-  'We could not confirm your workspace security settings, so this request was stopped. Try again in a moment, and contact your workspace administrator if it keeps happening.';
+const ACCOUNT_CONTROL_UNAVAILABLE_MESSAGE = WORKSPACE_POLICY_UNAVAILABLE_DECISION.reason;
+const SECRET_HANDLING_MODE_WHEN_UNREADABLE: SecretHandlingMode = 'block';
 
 interface ScopedRequest {
   headers: { get(name: string): string | null };
@@ -40,61 +45,6 @@ interface ScopedRequest {
 
 export interface PolicyGateResult extends PolicyDecision {
   organizationId: string | null;
-}
-
-async function evaluateFundingOrganizationBillingHold(
-  db: DatabaseAdapter,
-  userId: string,
-  ask: PolicyAsk,
-): Promise<PolicyGateResult | null> {
-  let fundingOrganizationId: string | null;
-  try {
-    fundingOrganizationId = await resolveEnterpriseFundingOrganizationId(db, userId);
-  } catch (error) {
-    logger.error(
-      { error, userId, resource: ask.resource },
-      '[org-policy] funding organization lookup failed; billing hold treated as not applicable',
-    );
-    return null;
-  }
-  if (!fundingOrganizationId) return null;
-
-  let collectionState = CURRENT_COLLECTION_STATE;
-  try {
-    collectionState = await readOrganizationCollectionState(db, fundingOrganizationId);
-  } catch (error) {
-    logger.error(
-      { error, userId, organizationId: fundingOrganizationId, resource: ask.resource },
-      '[org-policy] collection state read failed; billing hold treated as not applicable',
-    );
-    return null;
-  }
-
-  const billingHold = evaluateBillingHold(ask, collectionState);
-  if (!billingHold) return null;
-
-  logger.info(
-    {
-      userId,
-      organizationId: fundingOrganizationId,
-      resource: ask.resource,
-      code: billingHold.code,
-    },
-    '[org-policy] personal-scope request denied by funding organization billing hold',
-  );
-  return { ...billingHold, organizationId: fundingOrganizationId };
-}
-
-async function governingOrganizationIds(
-  db: DatabaseAdapter,
-  userId: string,
-): Promise<readonly string[] | null> {
-  try {
-    return await resolveGoverningOrganizationIds(db, userId);
-  } catch (error) {
-    logger.warn({ error, userId }, '[org-policy] governing organizations could not be resolved');
-    return null;
-  }
 }
 
 async function withAccountControlRetry<T>(read: () => Promise<T>): Promise<T> {
@@ -129,6 +79,82 @@ async function governingOrganizationIdsOrDeny(
   }
 }
 
+function unavailableDecisionFor(ask: PolicyAsk): PolicyDecision {
+  return isPurchaseAsk(ask)
+    ? WORKSPACE_BILLING_UNAVAILABLE_DECISION
+    : WORKSPACE_POLICY_UNAVAILABLE_DECISION;
+}
+
+function billingHoldUnreadable(
+  error: unknown,
+  userId: string,
+  organizationId: string | null,
+  ask: PolicyAsk,
+): PolicyGateResult | null {
+  if (!isPurchaseAsk(ask)) {
+    logger.error(
+      { error, userId, organizationId, resource: ask.resource },
+      '[org-policy] billing state unreadable after retry; billing hold treated as not applicable',
+    );
+    return null;
+  }
+  logger.error(
+    { error, userId, organizationId, resource: ask.resource },
+    '[org-policy] billing state unreadable after retry; purchase denied',
+  );
+  return { ...WORKSPACE_BILLING_UNAVAILABLE_DECISION, organizationId };
+}
+
+function billingHoldOrUnscoped(
+  userId: string,
+  organizationId: string,
+  ask: PolicyAsk,
+  collectionState: CollectionState,
+): PolicyGateResult {
+  const billingHold = evaluateBillingHold(ask, collectionState);
+  if (!billingHold) return { ...UNSCOPED_POLICY_DECISION, organizationId };
+  logger.info(
+    { userId, organizationId, resource: ask.resource, code: billingHold.code },
+    '[org-policy] request denied by billing hold',
+  );
+  return { ...billingHold, organizationId };
+}
+
+async function evaluateFundingOrganizationBillingHold(
+  db: DatabaseAdapter,
+  userId: string,
+  ask: PolicyAsk,
+): Promise<PolicyGateResult | null> {
+  let fundingOrganizationId: string | null;
+  try {
+    fundingOrganizationId = await withAccountControlRetry(() =>
+      resolveEnterpriseFundingOrganizationId(db, userId),
+    );
+  } catch (error) {
+    return billingHoldUnreadable(error, userId, null, ask);
+  }
+  if (!fundingOrganizationId) return null;
+  const organizationId = fundingOrganizationId;
+
+  let collectionState = CURRENT_COLLECTION_STATE;
+  try {
+    collectionState = await withAccountControlRetry(() =>
+      readOrganizationCollectionState(db, organizationId),
+    );
+  } catch (error) {
+    return billingHoldUnreadable(error, userId, organizationId, ask);
+  }
+
+  const billingHold = evaluateBillingHold(ask, collectionState);
+  if (!billingHold) return null;
+
+  logger.info(
+    { userId, organizationId, resource: ask.resource, code: billingHold.code },
+    '[org-policy] personal-scope request denied by funding organization billing hold',
+  );
+  return { ...billingHold, organizationId };
+}
+
 /**
  * Resolves the caller's active workspace and asks the evaluator one question.
  *
@@ -139,10 +165,12 @@ async function governingOrganizationIdsOrDeny(
  * would switch off managed compute for every existing organization the moment
  * this shipped. Once an admin saves a policy, it binds.
  *
- * A failure to read the policy is logged and answered `unscoped` rather than
- * denied: this gate governs an administrator's product configuration, and a
- * transient database error must not look to a member like a policy decision.
- * Tenant isolation does not depend on this path, that is enforced by RLS.
+ * An unreadable workspace or policy is not absence of a policy. Each read is
+ * retried once and then denied as `workspace_policy_unavailable`, except that a
+ * purchase depends only on the billing hold and so survives an unreadable
+ * policy. An unreadable billing hold denies a purchase, and leaves any other
+ * request to the policy, because the hold is a contract control rather than a
+ * security one.
  *
  * Personal scope is unconstrained for policy, but not for an unpaid
  * enterprise contract: before answering `unscoped`, a resolved personal scope
@@ -156,61 +184,62 @@ export async function evaluateActiveWorkspacePolicy(
   ask: PolicyAsk,
   request?: ScopedRequest,
 ): Promise<PolicyGateResult> {
-  let organizationId: string | null = null;
-
+  let activeOrganizationId: string | null;
   try {
-    organizationId = await resolveActiveOrganizationId(db, userId, request);
+    activeOrganizationId = await withAccountControlRetry(() =>
+      resolveActiveOrganizationId(db, userId, request),
+    );
   } catch (error) {
-    logger.warn({ error, userId }, '[org-policy] active workspace could not be resolved');
-    return { ...UNSCOPED_POLICY_DECISION, organizationId: null };
+    if (isAppError(error) && error.statusCode < 500) {
+      logger.warn(
+        { error, userId, resource: ask.resource },
+        '[org-policy] selected workspace is not accessible; request denied',
+      );
+      return { ...WORKSPACE_NOT_ACCESSIBLE_DECISION, organizationId: null };
+    }
+    logger.error(
+      { error, userId, resource: ask.resource },
+      '[org-policy] active workspace could not be resolved after retry; request denied',
+    );
+    return { ...unavailableDecisionFor(ask), organizationId: null };
   }
 
-  if (!organizationId) {
+  if (!activeOrganizationId) {
     const fundingBillingHold = await evaluateFundingOrganizationBillingHold(db, userId, ask);
     if (fundingBillingHold) return fundingBillingHold;
     return { ...UNSCOPED_POLICY_DECISION, organizationId: null };
   }
+  const organizationId = activeOrganizationId;
 
   let collectionState = CURRENT_COLLECTION_STATE;
   try {
-    collectionState = await readOrganizationCollectionState(db, organizationId);
-  } catch (error) {
-    logger.error(
-      { error, userId, organizationId, resource: ask.resource },
-      '[org-policy] collection state read failed; billing hold treated as not applicable',
+    collectionState = await withAccountControlRetry(() =>
+      readOrganizationCollectionState(db, organizationId),
     );
+  } catch (error) {
+    const unreadable = billingHoldUnreadable(error, userId, organizationId, ask);
+    if (unreadable) return unreadable;
   }
 
-  let policy = null;
+  let policy: AdminPolicy | null;
   try {
-    policy = await readOrganizationPolicy(db, organizationId);
+    policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
   } catch (error) {
-    logger.error(
-      { error, userId, organizationId, resource: ask.resource },
-      '[org-policy] policy read failed; request treated as ungoverned',
-    );
-    const billingHold = evaluateBillingHold(ask, collectionState);
-    if (billingHold) {
-      logger.info(
-        { userId, organizationId, resource: ask.resource, code: billingHold.code },
-        '[org-policy] request denied by billing hold',
+    if (!isPurchaseAsk(ask)) {
+      logger.error(
+        { error, userId, organizationId, resource: ask.resource },
+        '[org-policy] policy read failed after retry; request denied',
       );
-      return { ...billingHold, organizationId };
+      return { ...WORKSPACE_POLICY_UNAVAILABLE_DECISION, organizationId };
     }
-    return { ...UNSCOPED_POLICY_DECISION, organizationId };
+    logger.warn(
+      { error, userId, organizationId, resource: ask.resource },
+      '[org-policy] policy read failed after retry; purchase decided on the billing hold',
+    );
+    return billingHoldOrUnscoped(userId, organizationId, ask, collectionState);
   }
 
-  if (!policy) {
-    const billingHold = evaluateBillingHold(ask, collectionState);
-    if (billingHold) {
-      logger.info(
-        { userId, organizationId, resource: ask.resource, code: billingHold.code },
-        '[org-policy] request denied by billing hold',
-      );
-      return { ...billingHold, organizationId };
-    }
-    return { ...UNSCOPED_POLICY_DECISION, organizationId };
-  }
+  if (!policy) return billingHoldOrUnscoped(userId, organizationId, ask, collectionState);
 
   const decision = evaluateOrganizationPolicy(policy, ask, collectionState);
 
@@ -233,8 +262,19 @@ export async function resolveSecretHandlingPolicy(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<SecretHandlingPolicyResult> {
-  const organizationIds = await governingOrganizationIds(db, userId);
-  if (!organizationIds || organizationIds.length === 0) {
+  let organizationIds: readonly string[];
+  try {
+    organizationIds = await withAccountControlRetry(() =>
+      resolveGoverningOrganizationIds(db, userId),
+    );
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      '[secret-handling] governing organizations could not be resolved after retry; strictest mode applied',
+    );
+    return { mode: SECRET_HANDLING_MODE_WHEN_UNREADABLE, organizationId: null };
+  }
+  if (organizationIds.length === 0) {
     return { mode: SECRET_HANDLING_MODE_DEFAULT.personal, organizationId: null };
   }
 
@@ -244,14 +284,16 @@ export async function resolveSecretHandlingPolicy(
   for (const organizationId of organizationIds) {
     let organizationMode: SecretHandlingMode;
     try {
-      const policy = await readOrganizationPolicy(db, organizationId);
+      const policy = await withAccountControlRetry(() =>
+        readOrganizationPolicy(db, organizationId),
+      );
       organizationMode = policy?.secretHandling ?? SECRET_HANDLING_MODE_DEFAULT.organization;
     } catch (error) {
       logger.error(
         { error, userId, organizationId },
-        '[secret-handling] policy read failed; falling back to the organization default',
+        '[secret-handling] policy read failed after retry; strictest mode applied',
       );
-      organizationMode = SECRET_HANDLING_MODE_DEFAULT.organization;
+      organizationMode = SECRET_HANDLING_MODE_WHEN_UNREADABLE;
     }
 
     if (mode === null || strictestSecretHandlingMode(mode, organizationMode) !== mode) {
@@ -317,25 +359,34 @@ export async function resolveZeroDataRetentionPolicy(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<ZeroDataRetentionPolicyResult> {
-  const organizationIds = await governingOrganizationIds(db, userId);
-  if (!organizationIds) return { required: false, organizationId: null };
+  const organizationIds = await governingOrganizationIdsOrDeny(db, userId, 'zero-data-retention');
 
   let firstGoverned: ZeroDataRetentionPolicyResult | null = null;
+  let unreadableOrganizationId: string | null = null;
 
   for (const organizationId of organizationIds) {
     let policy: AdminPolicy | null;
     try {
-      policy = await readOrganizationPolicy(db, organizationId);
+      policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
     } catch (error) {
       logger.error(
         { error, userId, organizationId },
-        '[zero-data-retention] policy read failed; organization treated as ungoverned',
+        '[zero-data-retention] policy read failed after retry',
       );
+      unreadableOrganizationId ??= organizationId;
       continue;
     }
 
     if (policy?.zeroDataRetentionOnly) return { required: true, organizationId };
     firstGoverned ??= { required: false, organizationId };
+  }
+
+  if (unreadableOrganizationId) {
+    logger.error(
+      { userId, organizationId: unreadableOrganizationId },
+      '[zero-data-retention] retention requirement unknown; request denied',
+    );
+    throw accountControlUnavailable();
   }
 
   return firstGoverned ?? { required: false, organizationId: null };

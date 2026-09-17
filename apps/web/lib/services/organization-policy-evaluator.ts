@@ -28,7 +28,9 @@ export type PolicyDecisionCode =
   | 'mfa_required'
   | 'spend_cap_exceeded'
   | 'billing_read_only'
-  | 'billing_past_due';
+  | 'billing_past_due'
+  | 'workspace_policy_unavailable'
+  | 'workspace_not_accessible';
 
 export interface PolicyObligation {
   type: 'local_to_byok_preview' | 'retention_days';
@@ -48,6 +50,38 @@ export const UNSCOPED_POLICY_DECISION: PolicyDecision = Object.freeze({
   reason: 'No workspace policy applies to this request.',
   obligations: [],
 });
+
+export const WORKSPACE_POLICY_UNAVAILABLE_DECISION: PolicyDecision = Object.freeze({
+  allowed: false,
+  code: 'workspace_policy_unavailable',
+  reason:
+    'We could not confirm your workspace security settings, so this request was stopped. Try again in a moment, and contact your workspace administrator if it keeps happening.',
+  obligations: [],
+});
+
+export const WORKSPACE_BILLING_UNAVAILABLE_DECISION: PolicyDecision = Object.freeze({
+  allowed: false,
+  code: 'workspace_policy_unavailable',
+  reason:
+    'We could not confirm your workspace billing status, so this purchase was stopped. Try again in a moment.',
+  obligations: [],
+});
+
+export const WORKSPACE_NOT_ACCESSIBLE_DECISION: PolicyDecision = Object.freeze({
+  allowed: false,
+  code: 'workspace_not_accessible',
+  reason:
+    'You are not a member of the selected workspace. Choose a workspace you belong to, then try again.',
+  obligations: [],
+});
+
+export function isPolicyUnavailable(decision: { code: string }): boolean {
+  return decision.code === 'workspace_policy_unavailable';
+}
+
+export function isPurchaseAsk(ask: PolicyAsk): boolean {
+  return ask.resource === 'credit_topup' || ask.resource === 'seat_purchase';
+}
 
 function obligationsFor(policy: AdminPolicy): PolicyObligation[] {
   return [
