@@ -190,6 +190,10 @@
       "reason": "the admin sharing console lists projects owned by other members, and the org shared read policy on user_projects hides one the admin own per-member override denies them; every other statement runs on the caller connection"
     },
     {
+      "path": "apps/web/lib/services/product-link-resolver.ts",
+      "reason": "a deep link names a row the caller's scoped read did not return; one existence-only probe by primary key, returning no column, is what tells an unauthorized link apart from a missing one, every content read runs on the caller connection"
+    },
+    {
       "path": "apps/web/lib/services/push-notification-service.ts",
       "reason": "invalidateTokens clears exact push tokens the provider reported unregistered, a device credential is not a user, every other export already carries user_id"
     },

@@ -1,4 +1,7 @@
 import { SETTINGS_NAV, type SettingsNavKey } from '@agiworkforce/ui';
+import { productLinkUrl, type ProductLinkTarget } from '@agiworkforce/types';
+import { WEB_APP_URL } from '../api/config';
+import { openExternalUrl } from '../utils/navigation';
 import { useChatStore } from '../stores/chat/chatStore';
 import { useProjectStore } from '../stores/projectStore';
 import {
@@ -28,6 +31,11 @@ function openProject(id: string): boolean {
   return true;
 }
 
+function openOnWeb(target: ProductLinkTarget, id: string): boolean {
+  void openExternalUrl(productLinkUrl(WEB_APP_URL, target, id));
+  return true;
+}
+
 function openSettingsTab(id: string): boolean {
   const tab = id as SettingsTab;
   const canonical = (LEGACY_TAB_MAP[tab] ?? tab) as SettingsNavKey;
@@ -52,6 +60,8 @@ export function routeDesktopDeepLink(url: string): boolean {
       return openProject(link.id);
     case 'settings':
       return openSettingsTab(link.id);
+    default:
+      return openOnWeb(link.target, link.id);
   }
 }
 

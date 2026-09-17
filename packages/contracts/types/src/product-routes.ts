@@ -21,6 +21,7 @@ export const PRODUCT_ROUTE_PREFIXES = [
   '/code',
   '/library',
   '/models',
+  '/open',
   '/schedules',
   '/tasks',
   '/settings',

@@ -54,6 +54,11 @@ jest.mock('../services/api', () => ({
   api: { post: jest.fn().mockResolvedValue(undefined), delete: jest.fn() },
 }));
 
+const mockOpenInAppBrowser = jest.fn().mockResolvedValue(true);
+jest.mock('@/lib/safeOpenURL', () => ({
+  openInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
+}));
+
 jest.mock('@/lib/deviceId', () => ({
   getDeviceId: jest.fn().mockResolvedValue('device-fake'),
 }));
@@ -161,6 +166,46 @@ describe('handleNotificationResponse, auth gate', () => {
       { type: 'agent_approval_needed', approvalId: 'approval-1' },
       AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER,
     );
+
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
+  });
+
+  it('opens the screen that holds a linked research report', () => {
+    setCurrentSession({
+      access_token: 't',
+      refresh_token: 'r',
+      expires_in: 3600,
+      expires_at: Date.now() / 1000 + 3600,
+      token_type: 'bearer',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    fireNotification({
+      type: 'task_completed',
+      route: '/(app)/companion',
+      target: 'research',
+      targetId: 'report-1',
+    });
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/(app)/reports');
+    expect(mockOpenInAppBrowser).not.toHaveBeenCalled();
+  });
+
+  it('ignores a product link naming a target this build does not know', () => {
+    setCurrentSession({
+      access_token: 't',
+      refresh_token: 'r',
+      expires_in: 3600,
+      expires_at: Date.now() / 1000 + 3600,
+      token_type: 'bearer',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    fireNotification({ type: 'companion_connected', target: 'invoice', targetId: 'inv-1' });
 
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
   });

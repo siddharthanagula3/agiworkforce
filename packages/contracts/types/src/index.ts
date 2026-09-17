@@ -197,3 +197,17 @@ export {
   type AuthRoutePrefix,
   type ProductRoutePrefix,
 } from './product-routes';
+
+export {
+  PRODUCT_LINK_PATH_PREFIX,
+  PRODUCT_LINK_TARGETS,
+  PRODUCT_LINK_UNAVAILABLE_STATES,
+  isProductLinkId,
+  isProductLinkTarget,
+  parseProductLinkPath,
+  productLinkPath,
+  productLinkUrl,
+  type ProductLink,
+  type ProductLinkTarget,
+  type ProductLinkUnavailableState,
+} from './product-links';

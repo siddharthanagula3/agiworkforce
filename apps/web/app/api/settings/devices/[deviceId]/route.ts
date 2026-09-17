@@ -8,6 +8,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { notifyDeviceDisconnected } from '@/lib/services/account-activity-notifications';
 import { resolveSessionsPrincipal } from '../../sessions/session-principal';
 import { isCredentialLinkMissing } from '../schema-state';
 
@@ -76,7 +77,12 @@ async function handleUnlink(
       userId,
     ]);
 
-    return { kind: device.kind, revokedCredentials: revoked.length, credentialsRevocable };
+    return {
+      kind: device.kind,
+      name: device.name,
+      revokedCredentials: revoked.length,
+      credentialsRevocable,
+    };
   });
 
   if (!result) {
@@ -87,6 +93,13 @@ async function handleUnlink(
     { userId, kind: result.kind, revokedCredentials: result.revokedCredentials },
     'Linked device unlinked',
   );
+
+  await notifyDeviceDisconnected(db, {
+    userId,
+    deviceId,
+    kind: result.kind,
+    name: result.name,
+  });
 
   await recordAuditEvent({
     userId,

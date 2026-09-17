@@ -90,11 +90,16 @@ function foldersFromProjectList(body: unknown): LibraryFolder[] {
   });
 }
 
+export const LIBRARY_ITEM_QUERY_PARAM = 'item';
+export const LIBRARY_QUERY_PARAM = 'q';
+
 export function LibraryView() {
   const { isLoaded, isSignedIn } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialSurface = surfaceFromParam(searchParams?.get('surface') ?? null);
+  const initialItemId = searchParams?.get(LIBRARY_ITEM_QUERY_PARAM) ?? null;
+  const initialQuery = searchParams?.get(LIBRARY_QUERY_PARAM) ?? '';
 
   const openFolder = useCallback(
     (folder: LibraryFolder) => router.push(`${PROJECTS_PATH}/${encodeURIComponent(folder.id)}`),
@@ -186,6 +191,8 @@ export function LibraryView() {
     <SharedLibraryView
       transport={transport}
       initialSurface={initialSurface}
+      initialItemId={initialItemId}
+      initialQuery={initialQuery}
       overlayContainerId={CONTENT_OVERLAY_ROOT_ID}
     />
   );
