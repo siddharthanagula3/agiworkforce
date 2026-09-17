@@ -28,6 +28,7 @@
     "customModel",
     "database",
     "design-system",
+    "developer-session-versioning",
     "dispatch",
     "enterprise",
     "errors",
@@ -111,5 +112,5 @@
     "tool-approval-resume",
     "tool-events"
   ],
-  "generatedProtocolTypeCount": 329
+  "generatedProtocolTypeCount": 330
 }
