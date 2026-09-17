@@ -1,0 +1,20 @@
+{
+  "$comment": [
+    "Allowlist for scripts/check-scan-findings.mjs, the gate over the scanners that run",
+    "outside the JS test suite: Trivy image and IaC scans, and the ZAP baseline, in",
+    ".github/workflows/security-scanning.yml.",
+    "",
+    "The grammar is the same as scripts/semgrep-allowlist.json on purpose. A finding at",
+    "or above the job's severity floor with no entry fails CI. An entry past its expiry",
+    "fails CI even though the finding still matches, so an acceptance cannot outlive the",
+    "triage that justified it. An entry that matches nothing fails CI as stale.",
+    "",
+    "\"scanner\" is \"trivy\" or \"zap\" and scopes the entry to one report, so a ZAP plugin",
+    "id can never excuse a Trivy CVE that happens to share its number. Omit \"locations\"",
+    "to accept a finding wherever it appears; each value is matched as a substring of the",
+    "finding's location, which is \"<target>:<package>@<version>\" for a Trivy",
+    "vulnerability, the scanned path for a misconfiguration, and the first instance URL",
+    "for a ZAP alert."
+  ],
+  "entries": []
+}

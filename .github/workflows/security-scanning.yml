@@ -1,0 +1,288 @@
+name: Security scanning
+
+# The three scanners that cannot run inside the JS test suite: infrastructure-as-code
+# configuration, built container images, and the running application. Every finding
+# at or above each job's severity floor is gated by scripts/check-scan-findings.mjs
+# against scripts/scan-allowlist.json, the same acceptance grammar the Semgrep gate
+# uses. .github/security-gate-policy.json registers each gate.
+#
+# No third-party GitHub Action appears here. The scanners run from pinned container
+# images instead, which keeps scripts/check-action-pins.sh satisfied without adding
+# an action whose repository could reach every CI secret.
+
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/web/Dockerfile'
+      - 'services/signaling-server/Dockerfile'
+      - 'services/signaling-server/package.json'
+      - '.github/workflows/**'
+      - 'scripts/check-scan-findings.mjs'
+      - 'scripts/scan-allowlist.json'
+      - 'pnpm-lock.yaml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-scanning-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Verified present on Docker Hub and ghcr.io on 2026-09-17. Bump deliberately:
+  # a scanner that silently follows a floating tag changes what CI blocks on
+  # without a commit to point at.
+  TRIVY_IMAGE: aquasec/trivy:0.74.0
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0
+
+jobs:
+  iac-scan:
+    name: IaC and Dockerfile configuration scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # --scanners misconfig covers Dockerfiles, Compose files, GitHub Actions
+      # workflows and Kubernetes manifests from one pass, so a deploy target
+      # added later is scanned without a second tool.
+      - name: Scan infrastructure configuration (Trivy config)
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --volume "$PWD:/repo:ro" \
+            --volume "$PWD/trivy-out:/out" \
+            --user "$(id -u):$(id -g)" \
+            "$TRIVY_IMAGE" config /repo \
+              --scanners misconfig \
+              --format json \
+              --output /out/iac.json \
+              --exit-code 0
+        env:
+          TRIVY_IMAGE: ${{ env.TRIVY_IMAGE }}
+
+      - name: IaC scan gate (unaccepted findings block the merge)
+        run: node scripts/check-scan-findings.mjs --format trivy --min-severity HIGH trivy-out/iac.json
+
+      - name: Upload IaC findings
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: trivy-iac-report
+          path: trivy-out/iac.json
+          if-no-files-found: warn
+
+  signaling-server-image-scan:
+    name: Container scan, signaling server image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Build the signaling server image
+        working-directory: services/signaling-server
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: docker build --tag agiworkforce-signaling-scan .
+
+      - name: Scan the signaling server image (Trivy image)
+        run: |
+          set -euo pipefail
+          mkdir -p trivy-out
+          docker run --rm \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
+            --volume "$PWD/trivy-out:/out" \
+            "$TRIVY_IMAGE" image agiworkforce-signaling-scan \
+              --scanners vuln,secret \
+              --ignore-unfixed \
+              --format json \
+              --output /out/signaling.json \
+              --exit-code 0
+
+      - name: Signaling server image gate (unaccepted findings block the merge)
+        run: node scripts/check-scan-findings.mjs --format trivy --min-severity HIGH trivy-out/signaling.json
+
+      - name: Upload signaling server findings
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: trivy-signaling-report
+          path: trivy-out/signaling.json
+          if-no-files-found: warn
+
+  web-image-scan-and-dast:
+    name: Container scan and DAST, web image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: agiworkforce_scan
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: changeme
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_scan"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SCAN_DATABASE_URL: postgres://postgres:changeme@localhost:5432/agiworkforce_scan
+      SCAN_APP_ORIGIN: http://127.0.0.1:3000
+      SCAN_IMAGE: agiworkforce-web-scan
+      SCAN_CONTAINER: agiworkforce-web-scan
+      # The same non-routable clerk-ci.invalid fixture the portability drill uses:
+      # a pk_test_ key turns every authenticated page into a handshake redirect to
+      # a host that does not resolve, which would make the whole crawl look broken.
+      SCAN_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply canonical Postgres migrations
+        env:
+          AGI_DATABASE_URL: ${{ env.SCAN_DATABASE_URL }}
+        run: pnpm db:migrate -- apply --target ci
+
+      - name: Build the web image
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: |
+          set -euo pipefail
+          docker build \
+            --network=host \
+            --file apps/web/Dockerfile \
+            --tag "$SCAN_IMAGE" \
+            --build-arg AGI_RELEASE_SHA="$GITHUB_SHA" \
+            --build-arg DATABASE_URL="$SCAN_DATABASE_URL" \
+            --build-arg NEXT_PUBLIC_APP_URL="$SCAN_APP_ORIGIN" \
+            --build-arg NEXT_PUBLIC_API_URL="$SCAN_APP_ORIGIN" \
+            --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$SCAN_CLERK_PUBLISHABLE_KEY" \
+            --build-arg NEXT_PUBLIC_AGI_BOT_PROTECTION=off \
+            .
+
+      - name: Scan the web image (Trivy image)
+        run: |
+          set -euo pipefail
+          mkdir -p trivy-out
+          docker run --rm \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
+            --volume "$PWD/trivy-out:/out" \
+            "$TRIVY_IMAGE" image "$SCAN_IMAGE" \
+              --scanners vuln,secret \
+              --ignore-unfixed \
+              --format json \
+              --output /out/web.json \
+              --exit-code 0
+
+      - name: Web image gate (unaccepted findings block the merge)
+        run: node scripts/check-scan-findings.mjs --format trivy --min-severity HIGH trivy-out/web.json
+
+      # The DAST target is the same image the container gate just scanned, run with
+      # every platform service replaced, so a finding is a property of the
+      # application and not of the hosting platform's edge.
+      - name: Start the web container
+        run: |
+          set -euo pipefail
+          docker run --detach --name "$SCAN_CONTAINER" \
+            --network=host \
+            --env NODE_ENV=production \
+            --env PORT=3000 \
+            --env AGI_DEPLOY_ENV=preview \
+            --env AGI_DEPLOY_REGION=scan \
+            --env AGI_ALLOW_INVALID_ENV=1 \
+            --env AGI_BOT_PROTECTION=off \
+            --env AGI_KV_PROVIDER=memory \
+            --env AGI_DATABASE_PROVIDER=postgres \
+            --env AGI_STORAGE_PROVIDER=memory \
+            --env DATABASE_URL="$SCAN_DATABASE_URL" \
+            --env AGI_DATABASE_URL="$SCAN_DATABASE_URL" \
+            --env NEXT_PUBLIC_APP_URL="$SCAN_APP_ORIGIN" \
+            --env NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$SCAN_CLERK_PUBLISHABLE_KEY" \
+            --env CLERK_SECRET_KEY=scan-clerk-secret-key \
+            --env CLERK_AUTHORIZED_PARTIES="$SCAN_APP_ORIGIN" \
+            "$SCAN_IMAGE"
+
+      - name: Wait for the web container to answer
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            if [ "$(docker inspect -f '{{.State.Running}}' "$SCAN_CONTAINER")" != "true" ]; then
+              echo "Container exited before it became ready"
+              exit 1
+            fi
+            if curl -fsS "$SCAN_APP_ORIGIN/api/health" > /dev/null 2>&1; then
+              echo "Container answered after $((attempt * 2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container never answered on $SCAN_APP_ORIGIN"
+          exit 1
+
+      - name: DAST baseline (OWASP ZAP)
+        run: |
+          set -euo pipefail
+          mkdir -p zap-out
+          chmod 777 zap-out
+          docker run --rm \
+            --network=host \
+            --volume "$PWD/zap-out:/zap/wrk" \
+            --volume "$PWD/.github/zap-baseline-rules.tsv:/zap/rules.tsv:ro" \
+            "$ZAP_IMAGE" zap-baseline.py \
+              -t "$SCAN_APP_ORIGIN" \
+              -c /zap/rules.tsv \
+              -J zap.json \
+              -r zap.html \
+              -m 5 \
+              -I || true
+
+      - name: DAST gate (unaccepted alerts block the merge)
+        run: node scripts/check-scan-findings.mjs --format zap --min-severity MEDIUM zap-out/zap.json
+
+      - name: Upload web scan findings
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: web-security-scan-reports
+          path: |
+            trivy-out/web.json
+            zap-out/zap.json
+            zap-out/zap.html
+          if-no-files-found: warn
+
+      - name: Report the container logs
+        if: always()
+        run: docker logs "$SCAN_CONTAINER" 2>&1 | tail -300 || true
+
+      - name: Stop the web container
+        if: always()
+        run: docker rm --force "$SCAN_CONTAINER" || true

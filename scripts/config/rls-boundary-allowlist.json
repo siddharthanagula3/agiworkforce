@@ -242,6 +242,10 @@
       "reason": "a handoff session is owned by an anonymous visitor and read by the staff console, agent_user_id is staff not a customer, spans every visitor by design"
     },
     {
+      "path": "apps/web/lib/support/tickets/store.ts",
+      "reason": "service context, following the access model 0089 states for the sibling handoff tables: no privilege is granted to app_rls and every statement here carries an explicit user_id predicate, including the reply insert and read, which are scoped through their ticket's owner rather than the reply's own author so a staff reply stays visible to the customer"
+    },
+    {
       "path": "apps/web/lib/user-connector-tools.ts",
       "reason": "three statements stay on the schema owner: the github_installations read, whose table's row-level security policy now exists as draft migration 0171 (NOT YET APPLIED in production) and can be scoped once it is applied, and the two organization shared connector reads, which join a connector row owned by another member; every caller-owned read runs on a claimed scope"
     }

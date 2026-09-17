@@ -776,6 +776,30 @@ requireNativeLanesAgree();
 
 requireNotIncludes('.github/workflows/ci.yml', '--filter web');
 
+// The scanners that cannot run inside the JS test suite. Each one must reach the
+// findings gate: a scanner whose report nobody reads is a job that reports green
+// over a file it never opened, which is the failure mode AGENTS.md §1 names.
+requireIncludes('.github/workflows/security-scanning.yml', '"$TRIVY_IMAGE" config /repo');
+requireIncludes('.github/workflows/security-scanning.yml', 'image agiworkforce-signaling-scan');
+requireIncludes('.github/workflows/security-scanning.yml', 'image "$SCAN_IMAGE"');
+requireIncludes('.github/workflows/security-scanning.yml', 'zap-baseline.py');
+for (const report of ['trivy-out/iac.json', 'trivy-out/signaling.json', 'trivy-out/web.json']) {
+  requireIncludes(
+    '.github/workflows/security-scanning.yml',
+    `node scripts/check-scan-findings.mjs --format trivy --min-severity HIGH ${report}`,
+  );
+}
+requireIncludes(
+  '.github/workflows/security-scanning.yml',
+  'node scripts/check-scan-findings.mjs --format zap --min-severity MEDIUM zap-out/zap.json',
+);
+// `|| true` on the ZAP step is what lets the gate read the report instead of the
+// scanner's own exit code. It must not spread to the gate steps themselves.
+requireNotIncludes(
+  '.github/workflows/security-scanning.yml',
+  'node scripts/check-scan-findings.mjs --format trivy --min-severity HIGH trivy-out/web.json || true',
+);
+
 const actionPins = spawnSync('bash', ['scripts/check-action-pins.sh'], {
   cwd: root,
   env: { ...process.env, VERIFY_ACTION_PIN_OBJECTS: '0' },

@@ -208,6 +208,7 @@ const ALLOWLIST = [
       'connector_oauth_grants',
       'device_pairings',
       'notifications',
+      'research_reports',
     ],
     functions: ['createDomainSweepers'],
     reason:

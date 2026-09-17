@@ -168,6 +168,10 @@ export const MARKETPLACE_REMOVE_UNSENT_COPY =
 export const RATE_LIMITED_COPY = 'Too many requests. Wait a minute and try again.';
 export const RATE_LIMITED_STATUS = 429;
 export const CONNECTOR_REAUTHORIZATION_COPY = 'Needs to be reconnected.';
+// Says what was observed, not why. The account's recent calls to this connector
+// all failed; whether the provider is down, rate limiting, or refusing this
+// workspace is something this side of the connection cannot tell.
+export const CONNECTOR_NOT_RESPONDING_COPY = 'Not responding to recent requests.';
 
 export const CSRF_HEADER = 'x-csrf-token';
 export const JSON_CONTENT_TYPE = 'application/json';

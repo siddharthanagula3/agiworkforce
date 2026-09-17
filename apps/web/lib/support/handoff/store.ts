@@ -1,7 +1,8 @@
-
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
+import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
+import type { HandoffPriority } from './priority';
 import type {
   HandoffAccountContext,
   HandoffAttemptedAction,
@@ -37,6 +38,9 @@ export interface HandoffSessionRow {
   email_sent_at: string | null;
   email_provider_message_id: string | null;
   email_error: string | null;
+  priority: HandoffPriority;
+  support_tier: string | null;
+  diagnostics: SupportDiagnostics | null;
   created_at: string;
 }
 
@@ -55,7 +59,8 @@ export interface FreshAgentRow extends AgentPresenceRow {
 const SESSION_COLUMNS = `id, reference_id, owner_user_id, owner_session_key, surface, reason,
   status, contact_email, summary, transcript, attempted_actions, citations, account_context,
   page_path, locale, agent_user_id, wait_expires_at, connected_at, last_activity_at, closed_at,
-  email_sent_at, email_provider_message_id, email_error, created_at`;
+  email_sent_at, email_provider_message_id, email_error, priority, support_tier, diagnostics,
+  created_at`;
 
 export async function listFreshOnlineAgents(heartbeatTtlSeconds: number): Promise<FreshAgentRow[]> {
   const db = getNeonDb();
@@ -116,6 +121,9 @@ export interface InsertSessionInput {
   pagePath: string | null;
   locale: string | null;
   waitExpiresAt: string | null;
+  priority: HandoffPriority;
+  supportTier: string | null;
+  diagnostics: SupportDiagnostics | null;
 }
 
 export async function insertHandoffSession(
@@ -126,9 +134,9 @@ export async function insertHandoffSession(
     `insert into public.support_handoff_sessions
        (reference_id, owner_user_id, owner_session_key, surface, reason, status, contact_email,
         summary, transcript, attempted_actions, citations, account_context, page_path, locale,
-        wait_expires_at)
+        wait_expires_at, priority, support_tier, diagnostics)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13,
-             $14, $15)
+             $14, $15, $16, $17, $18::jsonb)
      returning ${SESSION_COLUMNS}`,
     [
       input.referenceId,
@@ -146,6 +154,9 @@ export async function insertHandoffSession(
       input.pagePath,
       input.locale,
       input.waitExpiresAt,
+      input.priority,
+      input.supportTier,
+      input.diagnostics === null ? null : JSON.stringify(input.diagnostics),
     ],
   );
   return rows[0] ?? null;
@@ -247,7 +258,13 @@ export async function listWaitingQueue(limit: number): Promise<HandoffSessionRow
     `select ${SESSION_COLUMNS}
        from public.support_handoff_sessions
       where status = 'waiting' and wait_expires_at > now()
-      order by created_at asc
+      order by case priority
+                 when 'urgent' then 0
+                 when 'high' then 1
+                 when 'normal' then 2
+                 else 3
+               end asc,
+               created_at asc
       limit $1`,
     [limit],
   );

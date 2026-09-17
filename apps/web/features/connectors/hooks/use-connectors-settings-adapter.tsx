@@ -20,7 +20,11 @@ import {
 } from '@/features/connectors/hooks/use-connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
-import { CONNECTOR_REAUTHORIZATION_COPY, useDirectoryAdapter } from '@/features/directory';
+import {
+  CONNECTOR_NOT_RESPONDING_COPY,
+  CONNECTOR_REAUTHORIZATION_COPY,
+  useDirectoryAdapter,
+} from '@/features/directory';
 
 export const CONNECTOR_DETAIL_FOOTER_TESTID = 'connector-detail-footer';
 
@@ -83,6 +87,7 @@ const ConnectorsResponseSchema = z.object({
       connectorId: z.string().min(1),
       connectedAt: z.string().optional(),
       needsReauthorization: z.boolean().optional(),
+      health: z.string().min(1).optional(),
     }),
   ),
   available: z.array(z.string().min(1)).optional(),
@@ -115,6 +120,7 @@ type ParsedConnectorRow = {
   connectorId: string;
   connectedAt?: string;
   needsReauthorization?: boolean;
+  health?: string;
 };
 
 type ParsedCustomConnectorRow = {
@@ -154,6 +160,11 @@ function readConnectorResponse(value: unknown): {
     if (row['needsReauthorization'] !== undefined) {
       if (typeof row['needsReauthorization'] === 'boolean') {
         parsed.needsReauthorization = row['needsReauthorization'];
+      } else degraded = true;
+    }
+    if (row['health'] !== undefined) {
+      if (typeof row['health'] === 'string' && row['health'].length > 0) {
+        parsed.health = row['health'];
       } else degraded = true;
     }
     rows.push(parsed);
@@ -299,7 +310,7 @@ export function useConnectorsSettingsAdapter({
   directorySkillActions,
 }: ConnectorsSettingsAdapterParams): ConnectorsSettingsAdapterResult {
   const [connectedConnectors, setConnectedConnectors] = useState<
-    { connectorId: string; connectedAt?: string; needsReauthorization?: boolean }[]
+    { connectorId: string; connectedAt?: string; needsReauthorization?: boolean; health?: string }[]
   >([]);
   // OAuth grants the server reports as expired or revoked. `/api/connectors`
   // has always returned this per row; nothing outside the Connectors page read
@@ -497,7 +508,9 @@ export function useConnectorsSettingsAdapter({
         ...(c.connectedAt ? { connectedAt: c.connectedAt } : {}),
         ...(c.needsReauthorization
           ? { status: 'warning' as const, warningLabel: CONNECTOR_REAUTHORIZATION_COPY }
-          : {}),
+          : c.health === 'not-responding'
+            ? { status: 'warning' as const, warningLabel: CONNECTOR_NOT_RESPONDING_COPY }
+            : {}),
       }));
     if (githubInstallations.length > 0) {
       rows.push({ connectorId: 'github', connectedAt: githubInstallations[0]?.created_at });

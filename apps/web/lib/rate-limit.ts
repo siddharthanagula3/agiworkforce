@@ -609,6 +609,26 @@ export const rateLimitConfigs = {
     window: '1 h', // Authenticated in-app widget.
     failClosed: true,
   },
+  'support-tickets-read': {
+    limit: 120,
+    window: '1 h',
+    failClosed: true,
+  },
+  'support-tickets-write': {
+    limit: 20,
+    window: '1 h',
+    failClosed: true,
+  },
+  'help-search': {
+    limit: 60,
+    window: '1 m',
+    // Deterministic BM25 over a corpus already served as public pages: no model
+    // call, no per-request cost, and nothing it can return that the site does
+    // not already publish. Failing open keeps the help page usable when the
+    // limiter's backing store is down, which a lookup over public content can
+    // afford and a completion cannot.
+    failClosed: false,
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute

@@ -190,6 +190,17 @@ const deviceRegistrationExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const connectorCallEventExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  connector_id: z.string(),
+  tool_name: z.string(),
+  outcome: z.string(),
+  duration_ms: z.number().nullable(),
+  surface: z.string().nullable(),
+  occurred_at: timestampSchema,
+});
+
 const mobileDeviceExportSchema = z.object({
   id: z.string(),
   platform: z.string().nullable(),
@@ -1635,6 +1646,19 @@ async function collectUserData(
     ledger,
   });
   if (registeredDeviceRows.length > 0) exportData['device_registrations'] = registeredDeviceRows;
+
+  const connectorCallRows = await queryExportRows({
+    db,
+    sql: `select id, organization_id, connector_id, tool_name, outcome, duration_ms, surface,
+                 occurred_at
+          from connector_call_events where user_id = $1`,
+    values: [user.id],
+    schema: connectorCallEventExportSchema,
+    section: 'connector_call_events',
+    userId: user.id,
+    ledger,
+  });
+  if (connectorCallRows.length > 0) exportData['connector_call_events'] = connectorCallRows;
 
   const syncRows = await queryExportRows({
     db,

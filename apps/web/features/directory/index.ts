@@ -13,4 +13,4 @@ export {
   type SettingsDirectoryRoute,
   type SettingsRoute,
 } from './routing';
-export { CONNECTOR_REAUTHORIZATION_COPY } from './constants';
+export { CONNECTOR_NOT_RESPONDING_COPY, CONNECTOR_REAUTHORIZATION_COPY } from './constants';

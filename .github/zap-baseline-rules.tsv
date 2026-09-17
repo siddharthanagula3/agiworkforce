@@ -1,0 +1,10 @@
+# zap-baseline.py rule configuration for .github/workflows/security-scanning.yml
+#
+# Format: <plugin id><TAB>IGNORE|WARN|FAIL<TAB><comment>
+#
+# This file only decides what ZAP reports. It does not decide what blocks: the
+# merge gate is scripts/check-scan-findings.mjs against scripts/scan-allowlist.json,
+# which fails on every alert at or above MEDIUM that has no owner, expiry and
+# reason. Silencing an alert here instead of accepting it there hides it from that
+# review, so add a rule here only for an alert the scan cannot produce truthfully,
+# never for one that is merely inconvenient.

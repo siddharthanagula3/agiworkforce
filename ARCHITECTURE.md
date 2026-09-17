@@ -40,6 +40,38 @@ none is forced into another's framework conventions.
 | `apps/extension`        | Chrome MV3                                |
 | `apps/extension-vscode` | VS Code                                   |
 
+## The desktop is two shells over one renderer
+
+`apps/desktop` builds two applications, and confusing them is the single most
+expensive mistake made against this tree.
+
+| Shell    | Host                              | What it loads                                                     | Build                                       |
+| -------- | --------------------------------- | ----------------------------------------------------------------- | ------------------------------------------- |
+| Tauri    | `apps/desktop/src-tauri` (Rust)   | the Vite renderer in `apps/desktop/src`                            | `pnpm --filter @agiworkforce/desktop build` |
+| Electron | `apps/desktop/electron` (Node)    | the hosted web app by default, the same Vite renderer on opt-out   | `pnpm --filter @agiworkforce/desktop build:electron` |
+
+The Electron shell's renderer mode is decided by `apps/desktop/electron/config.ts`:
+`RENDERER_MODE` is `remote` unless `AGI_CLOUD_RENDERER=bundled` is set, so the
+window normally shows the deployed web app rather than `apps/desktop/src`. That
+is why a change to the Vite renderer can be invisible in the Electron build, and
+why a capability implemented as a Tauri command is not reachable from it.
+
+The two shells expose different bridges, and neither is a superset of the other:
+
+- Tauri: `apps/desktop/src` reaches Rust only through registered Tauri commands.
+  `apps/desktop/check-wiring.sh` fails both directions of drift, and
+  `apps/desktop/wiring-allowlist.json` records the exceptions.
+- Electron: `apps/desktop/electron/preload.ts` exposes one object,
+  `window.agiHost`, whose contract lives in
+  `apps/desktop/src/lib/tauri-electron/bridgeContract.ts`. Privileged work goes
+  through `apps/desktop/electron/runtime/dispatcher.ts`, which gates every call
+  on a capability grant from `apps/desktop/electron/runtime/permissionManager.ts`
+  and contains paths with `apps/desktop/electron/runtime/pathGuard.ts`. Remote
+  control lives beside it in `apps/desktop/electron/remote`.
+
+A capability is present in the product only when the shell that ships it can
+reach it. `apps/desktop/README.md` states which shell owns what today.
+
 ## Shared packages
 
 | Group                | Owns                                                                                           |

@@ -18,6 +18,9 @@ function row(overrides: Partial<HandoffSessionRow> = {}): HandoffSessionRow {
     status: 'emailed',
     contact_email: 'customer@example.com',
     summary: 'Invoice doubled; agent hard-abstained on billing.',
+    priority: 'normal',
+    support_tier: null,
+    diagnostics: null,
     transcript: [
       { role: 'user', content: 'Why did my invoice double?', at: '2026-08-05T10:00:00.000Z' },
       {

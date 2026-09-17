@@ -18,8 +18,19 @@ const policy = JSON.parse(
 const workflow = parse(fs.readFileSync(path.join(repositoryRoot, policy.workflow), 'utf8'));
 const denyToml = fs.readFileSync(path.join(repositoryRoot, 'deny.toml'), 'utf8');
 
+// Gates that name their own workflow, the scanners that need Docker and a booted
+// application, are loaded the same way the script loads them.
+const workflows = Object.fromEntries(
+  [...new Set((policy.gates ?? []).map((gate) => gate.workflow).filter(Boolean))].map(
+    (relativePath) => [
+      relativePath,
+      parse(fs.readFileSync(path.join(repositoryRoot, relativePath), 'utf8')),
+    ],
+  ),
+);
+
 test('every CI exclusion is registered with a reason, an owner, and a tracking id', () => {
-  assert.deepEqual(checkSecurityGates({ policy, workflow, denyToml }), []);
+  assert.deepEqual(checkSecurityGates({ policy, workflow, denyToml, workflows }), []);
 });
 
 test('the registry accounts for exactly the exclusions CI actually has', () => {
@@ -37,7 +48,7 @@ test('a new continue-on-error step nobody registered fails the build', () => {
     run: 'pnpm audit',
     'continue-on-error': true,
   });
-  const failures = checkSecurityGates({ policy, workflow: drifted, denyToml });
+  const failures = checkSecurityGates({ policy, workflow: drifted, denyToml, workflows });
   assert.deepEqual(failures, [
     'security step "Dependency audit (JS), quietly not blocking" is continue-on-error but is not registered in .github/security-gate-policy.json',
   ]);
@@ -49,7 +60,7 @@ test('turning a documented blocking gate into a warning fails the build', () => 
     (candidate) => candidate.name === 'Dependency audit (JS), high (blocking, FIX-043)',
   );
   step['continue-on-error'] = true;
-  const failures = checkSecurityGates({ policy, workflow: drifted, denyToml });
+  const failures = checkSecurityGates({ policy, workflow: drifted, denyToml, workflows });
   assert.ok(
     failures.some((message) =>
       message.includes('js-dependency-audit-high is registered as blocking'),
@@ -64,13 +75,13 @@ test('an exclusion left behind after the step starts blocking is reported as sta
       candidate.name === 'Dependency advisories (Rust), non-blocking warning-policy debt',
   );
   delete step['continue-on-error'];
-  const failures = checkSecurityGates({ policy, workflow: drifted, denyToml });
+  const failures = checkSecurityGates({ policy, workflow: drifted, denyToml, workflows });
   assert.ok(failures.some((message) => message.includes('is stale')));
 });
 
 test('an unregistered cargo-deny advisory ignore fails the build', () => {
   const drifted = `${denyToml}\n[advisories]\nignore = ["RUSTSEC-2000-0001"]\n`;
-  const failures = checkSecurityGates({ policy, workflow, denyToml: drifted });
+  const failures = checkSecurityGates({ policy, workflow, denyToml: drifted, workflows });
   assert.ok(failures.some((message) => message.includes('RUSTSEC-2000-0001')));
 });
 
