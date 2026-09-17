@@ -182,8 +182,11 @@ const platformProvidedKeys = new Set([
   'COLORFGBG',
   'COLORTERM',
   'COLUMNS',
+  'COMPUTERNAME',
   'EDITOR',
+  'GITHUB_SHA',
   'HOME',
+  'HOSTNAME',
   'NEXT_PHASE',
   'NEXT_RUNTIME',
   'NODE_ENV',
@@ -197,7 +200,6 @@ const platformProvidedKeys = new Set([
   'VERCEL_ENV',
   'VERCEL_GIT_COMMIT_SHA',
   'VERCEL_REGION',
-  'GITHUB_SHA',
 ]);
 
 const sourceScans = [

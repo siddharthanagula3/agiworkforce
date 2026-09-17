@@ -2,6 +2,11 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "file": "apps/web/app/api/admin/sso/[id]/route.ts",
+      "migration": 204,
+      "reason": "the SSO connection update writes the just-in-time provisioning switch and default role 0204 adds to sso_connections; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0204 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0204 is applied."
+    },
+    {
       "file": "apps/web/app/api/auth/device/refresh/route.ts",
       "migration": 187,
       "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
@@ -117,6 +122,11 @@
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
     },
     {
+      "file": "apps/web/app/api/memory/[id]/route.ts",
+      "migration": 203,
+      "reason": "the single-memory read and update return and set the expiry and superseded columns 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
+    },
+    {
       "file": "apps/web/app/api/memory/import/route.ts",
       "migration": 47,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -125,6 +135,11 @@
       "file": "apps/web/app/api/memory/route.ts",
       "migration": 47,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/memory/route.ts",
+      "migration": 203,
+      "reason": "the memory list filters out expired and superseded rows and returns the expiry column 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
     },
     {
       "file": "apps/web/app/api/memory/sync/route.ts",
@@ -150,6 +165,11 @@
       "file": "apps/web/app/api/settings/2fa/validate/route.ts",
       "migration": 154,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/app/api/settings/devices/route.ts",
+      "migration": 187,
+      "reason": "the only organization_id this route reads is device_registrations.organization_id from 0207, which the registry query degrades past while the table is missing; device_refresh_tokens is read for family_id, device_id, revoked_at, used_at and expires_at, none of which 0187 adds."
     },
     {
       "file": "apps/web/app/api/settings/organization/deletion/cancel/route.ts",
@@ -240,6 +260,11 @@
       "file": "apps/web/app/api/user/export/route.ts",
       "migration": 202,
       "reason": "the export names the retrieval index tables 0202 creates only to declare them withheld as derived data; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0202 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0202 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 203,
+      "reason": "the export reads expires_at of other tables, and the checker pairs that name with user_memories, which 0203 gives an expires_at column; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
     },
     {
       "file": "apps/web/app/api/web-push/route.ts",
@@ -333,8 +358,23 @@
     },
     {
       "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 200,
+      "reason": "the account erasure inventory classifies the permission grid tables 0200 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0200 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0200 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 202,
       "reason": "account erasure deletes the retrieval index rows 0202 creates for the subject; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0202 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0202 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 206,
+      "reason": "the erasure registry names organization_admin_api_keys only to classify its created_by column as workspace configuration and never queries the table; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/admin-api-keys.ts",
+      "migration": 206,
+      "reason": "workspace API keys are stored in and verified against organization_admin_api_keys, which 0206 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
     },
     {
       "file": "apps/web/lib/server/neon-chat.ts",
@@ -370,6 +410,11 @@
       "file": "apps/web/lib/server/spendable-credits.ts",
       "migration": 182,
       "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
+      "file": "apps/web/lib/server/sso/jit-provisioning.ts",
+      "migration": 204,
+      "reason": "first single sign-on provisioning reads jit_provisioning_enabled and jit_default_role, which 0204 adds to sso_connections; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0204 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0204 is applied."
     },
     {
       "file": "apps/web/lib/server/two-factor-replay.ts",
@@ -467,6 +512,16 @@
       "reason": "0187 binds a device credential to the workspace it was issued in so member removal revokes only that workspace's credentials; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
     },
     {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "migration": 59,
+      "reason": "the word archived here is the cloud_agent_runs state literal the Work sweep filters on, not the web_conversations.archived column 0059 adds; this service never reads or writes that column."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "migration": 205,
+      "reason": "per-domain retention reads organization_domain_retention_policies and writes organization_domain_retention_sweeps, which 0205 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0205 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0205 is applied."
+    },
+    {
       "file": "apps/web/lib/services/enterprise-billing-service.ts",
       "migration": 163,
       "reason": "the enterprise billing contract and invoice ledger is founder-gated; the deploy runbook applies migration 0163 before this code reaches production."
@@ -495,6 +550,11 @@
       "file": "apps/web/lib/services/managed-memory-context-service.ts",
       "migration": 164,
       "reason": "memory policy and context compaction are founder-gated; the deploy runbook applies migration 0164 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/managed-memory-context-service.ts",
+      "migration": 203,
+      "reason": "memory reads, the consolidating write and the expiry sweep use the expires_at, superseded_by and superseded_at columns 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
     },
     {
       "file": "apps/web/lib/services/managed-usage-request-service.ts",
@@ -642,64 +702,29 @@
       "reason": "names the category field of a notification object returned by /api/notifications, not the database column, and never queries the notifications table; the route that does is covered by its own entry."
     },
     {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "migration": 200,
-      "reason": "the account erasure inventory classifies the permission grid tables 0200 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0200 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0200 is applied."
+      "file": "apps/web/app/api/devices/heartbeat/route.ts",
+      "migration": 207,
+      "reason": "every surface's heartbeat upserts its device_registrations row; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0207 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0207 is applied."
     },
     {
-      "file": "apps/web/app/api/memory/[id]/route.ts",
-      "migration": 203,
-      "reason": "the single-memory read and update return and set the expiry and superseded columns 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
-    },
-    {
-      "file": "apps/web/app/api/memory/route.ts",
-      "migration": 203,
-      "reason": "the memory list filters out expired and superseded rows and returns the expiry column 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
-    },
-    {
-      "file": "apps/web/app/api/user/export/route.ts",
-      "migration": 203,
-      "reason": "the export reads expires_at of other tables, and the checker pairs that name with user_memories, which 0203 gives an expires_at column; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/managed-memory-context-service.ts",
-      "migration": 203,
-      "reason": "memory reads, the consolidating write and the expiry sweep use the expires_at, superseded_by and superseded_at columns 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
-    },
-    {
-      "file": "apps/web/app/api/admin/sso/[id]/route.ts",
-      "migration": 204,
-      "reason": "the SSO connection update writes the just-in-time provisioning switch and default role 0204 adds to sso_connections; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0204 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0204 is applied."
-    },
-    {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "migration": 206,
-      "reason": "the erasure registry names organization_admin_api_keys only to classify its created_by column as workspace configuration and never queries the table; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
-    },
-    {
-      "file": "apps/web/lib/server/admin-api-keys.ts",
-      "migration": 206,
-      "reason": "workspace API keys are stored in and verified against organization_admin_api_keys, which 0206 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
-    },
-    {
-      "file": "apps/web/lib/server/sso/jit-provisioning.ts",
-      "migration": 204,
-      "reason": "first single sign-on provisioning reads jit_provisioning_enabled and jit_default_role, which 0204 adds to sso_connections; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0204 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0204 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/domain-retention-service.ts",
-      "migration": 59,
-      "reason": "the word archived here is the cloud_agent_runs state literal the Work sweep filters on, not the web_conversations.archived column 0059 adds; this service never reads or writes that column."
-    },
-    {
-      "file": "apps/web/lib/services/domain-retention-service.ts",
-      "migration": 205,
-      "reason": "per-domain retention reads organization_domain_retention_policies and writes organization_domain_retention_sweeps, which 0205 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0205 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0205 is applied."
+      "file": "apps/web/app/api/settings/devices/[deviceId]/route.ts",
+      "migration": 207,
+      "reason": "rename and revoke read and write device_registrations; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0207 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0207 is applied."
     },
     {
       "file": "apps/web/app/api/settings/devices/route.ts",
-      "migration": 187,
-      "reason": "the only organization_id this route reads is device_registrations.organization_id from 0207, which the registry query degrades past while the table is missing; device_refresh_tokens is read for family_id, device_id, revoked_at, used_at and expires_at, none of which 0187 adds."
+      "migration": 207,
+      "reason": "the devices list unions device_registrations rows; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0207 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0207 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 207,
+      "reason": "the personal data export includes device_registrations rows; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0207 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0207 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 207,
+      "reason": "account erasure deletes device_registrations rows by user_id; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0207 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0207 is applied."
     }
   ]
 }
