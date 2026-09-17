@@ -57,6 +57,7 @@ function makeIdentityUser(role?: string) {
     twoFactorEnabled: false,
     createdAt: null,
     lastSignInAt: null,
+    enterpriseAccounts: [],
   };
 }
 

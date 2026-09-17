@@ -27,6 +27,19 @@ export async function resolveOrganizationPermissions(
   return new Set(permissions.filter(isOrganizationPermission));
 }
 
+export async function requireMemberPermission(
+  organizationId: string,
+  userId: string,
+  permission: OrganizationPermission,
+  deniedMessage: string,
+): Promise<ReadonlySet<OrganizationPermission>> {
+  const permissions = await resolveOrganizationPermissions(organizationId, userId);
+  if (!permissions.has(permission)) {
+    throw createError.forbidden(deniedMessage).asUserSafe();
+  }
+  return permissions;
+}
+
 export async function resolveOrganizationAccess(
   organizationId: string,
   userId: string,

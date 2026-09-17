@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
+
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   privilegedQuery: vi.fn(),
@@ -64,6 +71,7 @@ function destinationRow(over: Record<string, unknown> = {}) {
 }
 
 function bindRole(role: 'owner' | 'admin' | 'member' | 'viewer', stored = [destinationRow()]) {
+  permissionRole.value = role;
   mocks.query.mockImplementation(async (sql: string) => {
     const text = String(sql);
     if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG }];

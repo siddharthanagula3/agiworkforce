@@ -144,7 +144,26 @@ export type {
 export {
   AUTH_PROVIDER_IDS,
   DEFAULT_AUTH_PROVIDER_IDS,
+  PASSKEY_SIGN_IN_METHOD,
   parseAuthProviderIds,
+  passkeySignInEnabled,
   resolveAuthProviders,
 } from './authProviders';
 export type { AuthProvider, AuthProviderId } from './authProviders';
+export {
+  WORKSPACE_POLICY_POLL_INTERVAL_MS,
+  browserWorkspacePolicyEnvironment,
+  createWorkspacePolicyPoller,
+  disabledWorkspaceFeatures,
+  isWorkspaceFeatureEnabled,
+  localStorageWorkspacePolicyCache,
+  parseEffectiveWorkspacePolicy,
+} from './workspacePolicy';
+export type {
+  WorkspacePolicyCache,
+  WorkspacePolicyEnvironment,
+  WorkspacePolicyPoller,
+  WorkspacePolicyPollerOptions,
+  WorkspacePolicySnapshot,
+  WorkspacePolicySource,
+} from './workspacePolicy';

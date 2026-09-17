@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { ConsolePage } from '@/features/workspace-console/components/ConsolePage';
 import { WorkspaceAuditSection } from '@/features/settings/sections/WorkspaceAuditSection';
 import { WorkspaceAuditStreaming } from '@/features/workspace-console/components/WorkspaceAuditStreaming';
+import { WorkspaceApiKeys } from '@/features/workspace-console/components/WorkspaceApiKeys';
 
 export const metadata: Metadata = {
   title: 'Audit trail',
@@ -18,6 +19,7 @@ export default function WorkspaceAuditPage() {
       <div className="flex flex-col gap-6">
         <WorkspaceAuditSection />
         <WorkspaceAuditStreaming />
+        <WorkspaceApiKeys />
       </div>
     </ConsolePage>
   );

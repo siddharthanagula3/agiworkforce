@@ -8,6 +8,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+
+const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -21,7 +28,6 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/services/org-sharing-service', () => ({
   resolveOrgMembership: mocks.resolveOrgMembership,
   requireOrgMember: (membership: unknown) => membership,
-  isOrgAdminRole: (role: string) => role === 'owner' || role === 'admin',
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mocks.requireTeamAdminAccess,
@@ -42,6 +48,7 @@ beforeEach(() => {
 describe('GET /api/settings/organization/billing-contract', () => {
   it('refuses a member who is not an owner or admin', async () => {
     mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'member' });
+    permissionRole.value = 'member';
 
     const response = await GET(request());
 
@@ -51,6 +58,7 @@ describe('GET /api/settings/organization/billing-contract', () => {
 
   it('returns the contract with contacts and invoices, without Stripe identifiers', async () => {
     mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'owner' });
+    permissionRole.value = 'owner';
     mocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from public.organization_billing_contracts')) {
         return [
@@ -115,6 +123,7 @@ describe('GET /api/settings/organization/billing-contract', () => {
 
   it('answers with no contract for a workspace that has none', async () => {
     mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'admin' });
+    permissionRole.value = 'admin';
     mocks.query.mockResolvedValue([]);
 
     const response = await GET(request());

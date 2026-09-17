@@ -12,11 +12,9 @@ import { readJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import {
-  isOrgAdminRole,
-  requireOrgMember,
-  resolveOrgMembership,
-} from '@/lib/services/org-sharing-service';
+import { logAdminDataAccess } from '@/lib/server/admin-data-access';
+import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   createLegalHold,
@@ -53,11 +51,12 @@ async function requireAdmin(request: NextRequest) {
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
-  if (!isOrgAdminRole(membership.role)) {
-    throw createError.forbidden(
-      'Only an organization owner or admin can manage legal holds for this workspace.',
-    );
-  }
+  await requireMemberPermission(
+    membership.organizationId,
+    userId,
+    'content.govern',
+    'Your workspace role does not allow managing legal holds for this workspace.',
+  );
 
   return { db, userId, membership };
 }
@@ -66,13 +65,20 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, membership } = await requireAdmin(request);
+  const { db, userId, membership } = await requireAdmin(request);
 
   const [holds, sweeps] = await Promise.all([
     listLegalHolds(db, membership.organizationId, { includeReleased: true }),
     listRetentionSweeps(db, membership.organizationId),
   ]);
 
+  await logAdminDataAccess(request, {
+    userId,
+    organizationId: membership.organizationId,
+    role: membership.role,
+    resourceType: 'legal_hold',
+    count: holds.length,
+  });
   const payload: LegalHoldsResponse = {
     organizationId: membership.organizationId,
     currentUserRole: membership.role,

@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
+
 const {
   mockRlsQuery,
   mockRlsExecute,

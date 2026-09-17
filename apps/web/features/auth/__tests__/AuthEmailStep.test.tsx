@@ -89,4 +89,43 @@ describe('AuthEmailStep', () => {
 
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
   });
+
+  describe('passkey sign-in', () => {
+    function withPasskeySupport(supported: boolean) {
+      if (supported) {
+        Object.defineProperty(window, 'PublicKeyCredential', {
+          configurable: true,
+          value: function PublicKeyCredential() {},
+        });
+      } else {
+        Reflect.deleteProperty(window, 'PublicKeyCredential');
+      }
+    }
+
+    it('offers a passkey when it is configured and the browser supports it', async () => {
+      withPasskeySupport(true);
+      const onStartPasskey = vi.fn();
+      renderStep({ passkeySignIn: true, onStartPasskey });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Sign in with a passkey' }));
+
+      expect(onStartPasskey).toHaveBeenCalledTimes(1);
+      withPasskeySupport(false);
+    });
+
+    it('hides the passkey control when the deployment has not turned passkeys on', () => {
+      withPasskeySupport(true);
+      renderStep({ passkeySignIn: false, onStartPasskey: vi.fn() });
+
+      expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).toBeNull();
+      withPasskeySupport(false);
+    });
+
+    it('hides the passkey control in a browser without passkey support', () => {
+      withPasskeySupport(false);
+      renderStep({ passkeySignIn: true, onStartPasskey: vi.fn() });
+
+      expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).toBeNull();
+    });
+  });
 });

@@ -13,11 +13,11 @@ import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import {
-  isOrgAdminRole,
-  requireOrgMember,
-  resolveOrgMembership,
-} from '@/lib/services/org-sharing-service';
+  requireMemberPermission,
+  resolveOrganizationPermissions,
+} from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   diffModelPolicy,
@@ -110,12 +110,13 @@ function assertNoContradiction(input: z.infer<typeof PolicyPutSchema>): void {
 function present(
   organizationId: string,
   role: 'owner' | 'admin' | 'member' | 'viewer',
+  canManagePolicy: boolean,
   policy: OrganizationModelPolicy | null,
 ): ModelPolicyResponse {
   return {
     organizationId,
     configured: policy !== null,
-    canManagePolicy: isOrgAdminRole(role),
+    canManagePolicy,
     currentUserRole: role,
     policy: {
       allowedProviders: policy?.allowedProviders ?? [],
@@ -144,7 +145,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   const policy = await readModelPolicy(db, membership.organizationId);
-  return NextResponse.json(present(membership.organizationId, membership.role, policy));
+  const permissions = await resolveOrganizationPermissions(membership.organizationId, userId);
+  return NextResponse.json(
+    present(membership.organizationId, membership.role, permissions.has('policy.manage'), policy),
+  );
 }
 
 async function handlePut(request: NextRequest): Promise<NextResponse | Response> {
@@ -158,11 +162,12 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
-  if (!isOrgAdminRole(membership.role)) {
-    throw createError.forbidden(
-      'Only an organization owner or admin can change which models this workspace permits.',
-    );
-  }
+  const permissions = await requireMemberPermission(
+    membership.organizationId,
+    userId,
+    'policy.manage',
+    'Your workspace role does not allow changing which models this workspace permits.',
+  );
 
   const body = await readValidatedJsonBody(request, PolicyPutSchema, 'Invalid model policy');
   assertNoContradiction(body);
@@ -219,7 +224,9 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     },
   });
 
-  return NextResponse.json(present(membership.organizationId, membership.role, policy));
+  return NextResponse.json(
+    present(membership.organizationId, membership.role, permissions.has('policy.manage'), policy),
+  );
 }
 
 export const GET = withErrorHandler(handleGet);

@@ -167,6 +167,14 @@ describe('account and session reads', () => {
         twoFactorEnabled: true,
         createdAt: 10,
         lastSignInAt: 20,
+        enterpriseAccounts: [
+          {
+            active: true,
+            emailAddress: 'ada@b.test',
+            enterpriseConnection: { id: 'econ_1' },
+          },
+          { active: false, emailAddress: 'old@b.test', enterpriseConnection: null },
+        ],
       }),
     };
 
@@ -187,6 +195,10 @@ describe('account and session reads', () => {
       twoFactorEnabled: true,
       createdAt: 10,
       lastSignInAt: 20,
+      enterpriseAccounts: [
+        { connectionId: 'econ_1', emailAddress: 'ada@b.test', active: true },
+        { connectionId: null, emailAddress: 'old@b.test', active: false },
+      ],
     });
   });
 

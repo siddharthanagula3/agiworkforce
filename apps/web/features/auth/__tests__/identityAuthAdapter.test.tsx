@@ -17,6 +17,7 @@ const signInState = vi.hoisted(() => ({
     verifyBackupCode: vi.fn(),
   },
   sso: vi.fn(),
+  passkey: vi.fn(),
   finalize: vi.fn(),
   reset: vi.fn(),
 }));
@@ -74,6 +75,7 @@ beforeEach(() => {
     signInState.mfa.verifyPhoneCode,
     signInState.mfa.verifyBackupCode,
     signInState.sso,
+    signInState.passkey,
     signInState.finalize,
     signInState.reset,
     signUpState.create,
@@ -176,6 +178,30 @@ describe('identity auth adapter contract', () => {
       },
     });
     expect(decorated).toEqual([REDIRECTS.completeUrl]);
+  });
+
+  it('signs in with a discoverable passkey and finalises the session', async () => {
+    signInState.passkey.mockImplementation(async () => {
+      signInState.status = 'complete';
+      return ok;
+    });
+
+    const result = await client('login').current.signInWithPasskey();
+
+    expect(signInState.passkey).toHaveBeenCalledWith({ flow: 'discoverable' });
+    expect(signInState.finalize).toHaveBeenCalled();
+    expect(result).toEqual({ status: 'complete' });
+  });
+
+  it('says nothing when the person dismisses the passkey prompt', async () => {
+    signInState.passkey.mockResolvedValue({
+      error: { code: 'passkey_retrieval_cancelled', message: 'cancelled' },
+    });
+
+    const result = await client('login').current.signInWithPasskey();
+
+    expect(result).toEqual({ status: 'failed', message: '' });
+    expect(signInState.finalize).not.toHaveBeenCalled();
   });
 
   it('routes a second factor to the authenticator step', async () => {

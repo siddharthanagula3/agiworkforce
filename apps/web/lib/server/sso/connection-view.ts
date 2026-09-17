@@ -24,6 +24,8 @@ export const SSO_CONNECTION_SELECT_COLUMNS = [
   'domain_verification_token',
   'attribute_mapping',
   'is_active',
+  'jit_provisioning_enabled',
+  'jit_default_role',
   'created_by',
   'created_at',
   'updated_at',
@@ -48,6 +50,7 @@ export interface SSOConnectionView {
   oidcClientId: string | null;
   attributeMapping: Record<string, string>;
   isActive: boolean;
+  jitProvisioning: { enabled: boolean; defaultRole: 'member' | 'viewer' };
   status: SSOConnectionStatus;
   domainVerifiedAt: string | null;
   serviceProvider: {
@@ -89,6 +92,7 @@ export function toConnectionView(row: SSOConnectionRow): SSOConnectionView {
     oidcClientId: row.oidc_client_id,
     attributeMapping: row.attribute_mapping ?? {},
     isActive: row.is_active,
+    jitProvisioning: { enabled: row.jit_provisioning_enabled, defaultRole: row.jit_default_role },
     status: connectionStatus(row),
     domainVerifiedAt: row.domain_verified_at,
     serviceProvider: {

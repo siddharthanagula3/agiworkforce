@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
+
 const { mockQuery, mockExecute, mockTransaction, mockRequireTeamAdminAccess } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockExecute: vi.fn(),
@@ -93,6 +100,7 @@ function jsonRequest(url: string, method: string, body?: unknown) {
 
 describe('organization invitation lifecycle routes', () => {
   beforeEach(() => {
+    permissionRole.value = 'admin';
     vi.clearAllMocks();
     mockExecute.mockResolvedValue(0);
     mockRequireTeamAdminAccess.mockResolvedValue({
@@ -179,6 +187,7 @@ describe('organization invitation lifecycle routes', () => {
 
     it('refuses a plain member, so a seat cannot be spent by a non-admin', async () => {
       mockQuery.mockResolvedValueOnce([{ ...adminMembership, role: 'member' }]);
+      permissionRole.value = 'member';
 
       const response = await POST(
         jsonRequest('http://localhost:3000/api/settings/team/invitations', 'POST', {
