@@ -40,7 +40,10 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
 });
 
 import { CloudCodeConflictError } from '@/lib/services/cloud-code-session-service';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { GET } from './route';
+
+const db = createDatabaseAdapterFake();
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -56,7 +59,7 @@ beforeEach(() => {
   mockE2bReady.mockReturnValue(true);
   mockBetaEnabled.mockReturnValue(true);
   mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
-  mockGetUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1', organizationId: null });
+  mockGetUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
   mockReadChanges.mockResolvedValue({
     session: { id: SESSION_ID },
     base: 'origin/main',
@@ -77,7 +80,7 @@ describe('GET /api/code/sessions/[sessionId]/changes', () => {
       files: [{ path: 'src/app.ts', state: 'modified' }],
     });
     expect(mockReadChanges).toHaveBeenCalledWith(
-      {},
+      db,
       { userId: 'user-1', organizationId: null },
       SESSION_ID,
       'pro',

@@ -367,6 +367,7 @@ describe('Article 50(2), generated image provenance', () => {
       if (url.includes('api.openai.com')) {
         return { ok: true, json: async () => ({ data: [{ url: 'https://cdn.test/img.png' }] }) };
       }
+      if (!url.includes('cdn.test')) return databaseResponse();
       return {
         ok: true,
         headers: new Headers({ 'content-type': 'image/png' }),
@@ -450,10 +451,11 @@ describe('Article 50(2), the mark survives to the download', () => {
     assetMocks.insert.mockResolvedValue(ASSET_ID);
     assetMocks.insertMany.mockResolvedValue([ASSET_ID]);
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ b64_json: PNG_B64 }] }),
-    });
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) =>
+      isProviderCall([input])
+        ? { ok: true, json: async () => ({ data: [{ b64_json: PNG_B64 }] }) }
+        : databaseResponse(),
+    );
 
     await POST(authedRequest({ prompt: 'a cat' }));
     expect(assetMocks.insertMany.mock.calls[0]?.[0]?.[0]).toMatchObject({

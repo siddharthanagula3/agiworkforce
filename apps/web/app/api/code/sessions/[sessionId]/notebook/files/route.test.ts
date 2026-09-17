@@ -46,7 +46,10 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
 });
 
 import { CloudCodeValidationError } from '@/lib/services/cloud-code-session-service';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { GET, POST } from './route';
+
+const db = createDatabaseAdapterFake();
 
 const SESSION_ID = '22222222-2222-4222-8222-222222222222';
 const context = { params: Promise.resolve({ sessionId: SESSION_ID }) };
@@ -83,7 +86,7 @@ beforeEach(() => {
   mockRateLimit.mockResolvedValue(null);
   mockE2bReady.mockReturnValue(true);
   mockManagedComputeBeta.mockReturnValue(true);
-  mockGetUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1', organizationId: null });
+  mockGetUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
   mockListFiles.mockResolvedValue({ session: SESSION, files: [] });
   mockWriteFile.mockResolvedValue({
     session: SESSION,
@@ -96,7 +99,7 @@ describe('GET /notebook/files', () => {
     const response = await GET(getRequest(), context);
     expect(response.status).toBe(200);
     expect(mockListFiles).toHaveBeenCalledWith(
-      {},
+      db,
       { userId: 'user-1', organizationId: null },
       SESSION_ID,
       'pro',
@@ -122,7 +125,7 @@ describe('POST /notebook/files (upload)', () => {
 
     expect(response.status).toBe(200);
     expect(mockWriteFile).toHaveBeenCalledWith(
-      {},
+      db,
       { userId: 'user-1', organizationId: null },
       SESSION_ID,
       'data.csv',

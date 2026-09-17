@@ -26,8 +26,18 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({ userId: 'user-1', db: { query: vi.fn() } })),
+  getUserScopedDb: vi.fn(async () => {
+    const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+    return { userId: 'user-1', db: createDatabaseAdapterFake() };
+  }),
 }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  return {
+    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    getNeonDb: () => createDatabaseAdapterFake(),
+  };
+});
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: () => mocks.getSubscription() },
 }));

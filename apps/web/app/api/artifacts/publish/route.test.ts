@@ -19,6 +19,13 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: (...a: unknown[]) => mocks.r
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...a: unknown[]) => mocks.scopedDb(...a),
 }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  return {
+    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    getNeonDb: () => createDatabaseAdapterFake(),
+  };
+});
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),

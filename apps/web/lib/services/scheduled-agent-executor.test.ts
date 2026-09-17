@@ -79,6 +79,7 @@ import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-serv
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { executeScheduledAgent } from './scheduled-agent-executor';
 import type { ScheduleTask } from './schedule-service';
+import { createWorkspaceMemberDatabaseFake } from '@/test/database-adapter-fake';
 
 const task: ScheduleTask = {
   id: 'task-1',
@@ -107,11 +108,12 @@ const task: ScheduleTask = {
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
 
-const scopedDb = { query: vi.fn() } as never;
+const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
+const scopedDb = createWorkspaceMemberDatabaseFake(ORGANIZATION_ID);
 const executionScope = {
   db: scopedDb,
   userId: 'user-1',
-  organizationId: '11111111-1111-4111-8111-111111111111',
+  organizationId: ORGANIZATION_ID,
 };
 
 describe('scheduled managed agent executor', () => {

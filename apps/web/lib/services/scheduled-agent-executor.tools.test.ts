@@ -111,6 +111,7 @@ import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-serv
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { executeScheduledAgent } from './scheduled-agent-executor';
 import type { ScheduleTask } from './schedule-service';
+import { createWorkspaceMemberDatabaseFake } from '@/test/database-adapter-fake';
 
 function requireCatalogModel(predicate: (model: ModelMetadata) => boolean): ModelMetadata {
   const model = listCanonicalModels().find(predicate);
@@ -174,10 +175,11 @@ const task: ScheduleTask = {
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
 
+const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 const executionScope = {
-  db: { query: vi.fn() } as never,
+  db: createWorkspaceMemberDatabaseFake(ORGANIZATION_ID),
   userId: 'user-1',
-  organizationId: '11111111-1111-4111-8111-111111111111',
+  organizationId: ORGANIZATION_ID,
   budgetMs: 40_000,
 };
 
