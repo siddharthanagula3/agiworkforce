@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { WorkspaceFeature } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_ORGANIZATION_HEADER,
   MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
@@ -128,11 +129,21 @@ export async function evaluateManagedComputeWorkspaceAccess(
   userId: string,
   surface: PolicySurface,
   scope: ManagedComputeAccessScope,
+  feature?: WorkspaceFeature,
 ): Promise<ManagedComputeAccessDecision> {
   const ask: PolicyAsk = { resource: 'managed_compute', surface };
   const request =
     'request' in scope ? scope.request : scopedRequestForOrganization(scope.organizationId);
   const policyDecision = await evaluateActiveWorkspacePolicy(db, userId, ask, request);
+  if (policyDecision.allowed && feature) {
+    const featureDecision = await evaluateActiveWorkspacePolicy(
+      db,
+      userId,
+      { resource: 'feature', feature, surface },
+      request,
+    );
+    if (!featureDecision.allowed) return featureDecision;
+  }
   return withSpendLimit(db, policyDecision);
 }
 
@@ -142,6 +153,7 @@ export async function evaluateManagedComputeAccess(
   subscription: SubscriptionInfo | null,
   surface: PolicySurface,
   scope: ManagedComputeAccessScope,
+  feature?: WorkspaceFeature,
 ): Promise<ManagedComputeAccessDecision> {
   const subscriptionDecision = await evaluateManagedComputeSubscriptionAccess(
     db,
@@ -149,7 +161,7 @@ export async function evaluateManagedComputeAccess(
     subscription,
   );
   if (!subscriptionDecision.allowed) return subscriptionDecision;
-  return evaluateManagedComputeWorkspaceAccess(db, userId, surface, scope);
+  return evaluateManagedComputeWorkspaceAccess(db, userId, surface, scope, feature);
 }
 
 export function buildManagedComputeAccessGateResponse(

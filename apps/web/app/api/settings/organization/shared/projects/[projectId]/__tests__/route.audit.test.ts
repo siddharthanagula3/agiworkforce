@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(),
 }));
 
+vi.mock('@/lib/services/organization-permission-service', () => ({
+  resolveOrganizationPermissions: vi.fn(
+    async () => new Set(['content.read', 'content.share', 'sharing.manage']),
+  ),
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({

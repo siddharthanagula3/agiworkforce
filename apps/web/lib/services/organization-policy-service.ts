@@ -3,11 +3,18 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   DEFAULT_ENTERPRISE_ADMIN_POLICY,
+  DEFAULT_WORKSPACE_CONTROLS,
   SECRET_HANDLING_MODE_DEFAULT,
+  WORKSPACE_FEATURES,
+  isWorkspaceReasoningEffort,
   type AdminPolicy,
   type PrivacyMode,
   type SecretHandlingMode,
+  type SourceSurface,
   type SyncedAppSurface,
+  type WorkspaceControls,
+  type WorkspaceControlsLayer,
+  type WorkspaceFeature,
 } from '@agiworkforce/types';
 
 export type AdminPolicyInput = Omit<AdminPolicy, 'organizationId' | 'updatedAt'>;
@@ -43,6 +50,8 @@ interface AdminPolicyRow {
   allow_memory: boolean;
   metadata: Record<string, unknown> | null;
   updated_at: string;
+  revision?: number | string | null;
+  override_count?: number | string | null;
 }
 
 const POLICY_COLUMNS = `organization_id, default_privacy_mode, allowed_privacy_modes,
@@ -50,6 +59,24 @@ const POLICY_COLUMNS = `organization_id, default_privacy_mode, allowed_privacy_m
   allow_cli_cloud_sync, allow_vscode_cloud_sync, allow_chrome_cloud_sync,
   audit_export_enabled, retention_days, retention_enforced,
   external_sharing_enabled, allow_memory, metadata, updated_at`;
+
+const LAYERING_COLUMNS = `(select coalesce(max(r.revision), 0)
+     from public.organization_policy_revisions r
+    where r.organization_id = p.organization_id) as revision,
+  (select count(*)
+     from public.organization_policy_overrides o
+    where o.organization_id = p.organization_id) as override_count`;
+
+const SOURCE_SURFACES: readonly SourceSurface[] = [
+  'web',
+  'desktop',
+  'mobile',
+  'cli',
+  'vscode',
+  'chrome',
+];
+
+const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
 
 function toIso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -83,6 +110,74 @@ function readIpAllowList(metadata: Record<string, unknown> | null): readonly str
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
+function readCountries(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return [
+    ...new Set(
+      value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim().toUpperCase())
+        .filter((entry) => COUNTRY_CODE_PATTERN.test(entry)),
+    ),
+  ].sort();
+}
+
+function readSurfaces(value: unknown): readonly SourceSurface[] | null | undefined {
+  if (value === null) return null;
+  if (!Array.isArray(value)) return undefined;
+  return SOURCE_SURFACES.filter((surface) => value.includes(surface));
+}
+
+export function parseWorkspaceControlsLayer(value: unknown): WorkspaceControlsLayer {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const layer: WorkspaceControlsLayer = {};
+
+  const features = record['featureAccess'];
+  if (features && typeof features === 'object' && !Array.isArray(features)) {
+    const access: Partial<Record<WorkspaceFeature, boolean>> = {};
+    for (const feature of WORKSPACE_FEATURES) {
+      const enabled = (features as Record<string, unknown>)[feature];
+      if (typeof enabled === 'boolean') access[feature] = enabled;
+    }
+    layer.featureAccess = access;
+  }
+
+  const defaultModelId = record['defaultModelId'];
+  if (defaultModelId === null || (typeof defaultModelId === 'string' && defaultModelId.trim())) {
+    layer.defaultModelId = typeof defaultModelId === 'string' ? defaultModelId.trim() : null;
+  }
+
+  const effort = record['maxReasoningEffort'];
+  if (effort === null || isWorkspaceReasoningEffort(effort)) {
+    layer.maxReasoningEffort = effort;
+  }
+
+  const countries = readCountries(record['allowedCountries']);
+  if (countries !== undefined) layer.allowedCountries = countries;
+
+  const surfaces = readSurfaces(record['allowedSurfaces']);
+  if (surfaces !== undefined) layer.allowedSurfaces = surfaces;
+
+  return layer;
+}
+
+export function readWorkspaceControls(metadata: Record<string, unknown> | null): WorkspaceControls {
+  const layer = parseWorkspaceControlsLayer(metadata?.['controls']);
+  return {
+    featureAccess: { ...DEFAULT_WORKSPACE_CONTROLS.featureAccess, ...layer.featureAccess },
+    defaultModelId: layer.defaultModelId ?? null,
+    maxReasoningEffort: layer.maxReasoningEffort ?? null,
+    allowedCountries: layer.allowedCountries ?? [],
+    allowedSurfaces: layer.allowedSurfaces ?? null,
+  };
+}
+
+function toCount(value: number | string | null | undefined): number {
+  const parsed = typeof value === 'string' ? Number.parseInt(value, 10) : (value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
   return {
     organizationId: row.organization_id,
@@ -104,9 +199,15 @@ export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
     monthlySpendCapCents: readMonthlySpendCapCents(row.metadata),
     zeroDataRetentionOnly: readZeroDataRetentionOnly(row.metadata),
     ipAllowList: readIpAllowList(row.metadata),
+    controls: readWorkspaceControls(row.metadata),
     metadata: row.metadata ?? {},
+    revision: toCount(row.revision),
     updatedAt: toIso(row.updated_at),
   };
+}
+
+export function organizationPolicyHasOverrides(row: Pick<AdminPolicyRow, 'override_count'>) {
+  return toCount(row.override_count) > 0;
 }
 
 export function defaultAdminPolicyFor(organizationId: string): AdminPolicy {
@@ -118,6 +219,27 @@ export function defaultAdminPolicyFor(organizationId: string): AdminPolicy {
     metadata: {},
     updatedAt: new Date(0).toISOString(),
   };
+}
+
+export interface LayeredOrganizationPolicy {
+  policy: AdminPolicy;
+  hasOverrides: boolean;
+}
+
+export async function readLayeredOrganizationPolicy(
+  db: DatabaseAdapter,
+  organizationId: string,
+): Promise<LayeredOrganizationPolicy | null> {
+  const [row] = await db.query<AdminPolicyRow>(
+    `select ${POLICY_COLUMNS}, ${LAYERING_COLUMNS}
+       from public.organization_admin_policies p
+      where p.organization_id = $1
+      limit 1`,
+    [organizationId],
+  );
+  return row
+    ? { policy: formatAdminPolicy(row), hasOverrides: organizationPolicyHasOverrides(row) }
+    : null;
 }
 
 export async function readOrganizationPolicy(
@@ -132,6 +254,24 @@ export async function readOrganizationPolicy(
     [organizationId],
   );
   return row ? formatAdminPolicy(row) : null;
+}
+
+export async function readOrganizationPolicyRevision(
+  db: DatabaseAdapter,
+  organizationId: string,
+): Promise<{ revision: number; changedAt: string | null }> {
+  const [row] = await db.query<{ revision: number | string | null; changed_at: unknown }>(
+    `select revision, changed_at
+       from public.organization_policy_revisions
+      where organization_id = $1
+      order by revision desc
+      limit 1`,
+    [organizationId],
+  );
+  return {
+    revision: toCount(row?.revision),
+    changedAt: row?.changed_at ? toIso(row.changed_at) : null,
+  };
 }
 
 export async function getEffectiveOrganizationPolicy(
@@ -205,6 +345,7 @@ export async function upsertOrganizationPolicy(
         monthlySpendCapCents: input.monthlySpendCapCents,
         zeroDataRetentionOnly: input.zeroDataRetentionOnly,
         ipAllowList: input.ipAllowList,
+        controls: input.controls,
       }),
     ],
   );
@@ -239,6 +380,7 @@ export function diffAdminPolicy(
     'monthlySpendCapCents',
     'zeroDataRetentionOnly',
     'ipAllowList',
+    'controls',
   ];
 
   for (const key of keys) {

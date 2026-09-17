@@ -65,7 +65,7 @@ async function handleTransfer(request: NextRequest) {
         throw createError.forbidden('You are not a member of this organization');
       }
       if (requester.role !== 'owner') {
-        throw createError.forbidden('Only the current owner can transfer ownership');
+        throw createError.forbidden('Only the Primary Owner can transfer ownership').asUserSafe();
       }
 
       const [successor] = await tx.query<OrganizationMemberRow>(

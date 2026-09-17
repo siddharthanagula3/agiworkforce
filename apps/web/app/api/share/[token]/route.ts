@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getCurrentUserRlsDb, getUserScopedDb } from '@/lib/server/rls-db';
+import {
+  requireOrganizationPermission,
+  SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+} from '@/lib/services/organization-permission-service';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -185,6 +189,12 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     const target = await resolveSessionShareTarget(db, { userId, token });
 
     if (visibility === 'organization') {
+      await requireOrganizationPermission(
+        userId,
+        target.organizationId,
+        'content.share',
+        SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+      );
       await shareSessionWithOrganization(db, {
         organizationId: target.organizationId,
         sharedSessionId: target.sharedSessionId,

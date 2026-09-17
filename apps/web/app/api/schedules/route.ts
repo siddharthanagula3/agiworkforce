@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -78,6 +80,13 @@ async function handleCreateSchedule(request: NextRequest) {
 
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
+  const featureGate = await buildWorkspaceFeatureGateResponse(
+    userId,
+    request,
+    'schedules',
+    resolveCloudChatSurface(request),
+  );
+  if (featureGate) return featureGate;
   const body = await requestObject(request);
 
   try {

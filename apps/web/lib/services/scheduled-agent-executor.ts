@@ -389,6 +389,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     subscription,
     'api',
     { organizationId: scope.organizationId },
+    'schedules',
   );
   if (!accessDecision.allowed) {
     logger.info(

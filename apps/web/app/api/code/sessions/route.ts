@@ -193,6 +193,7 @@ async function handleCreate(request: NextRequest) {
     subscription,
     resolveCloudChatSurface(request),
     { request },
+    'code',
   );
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;

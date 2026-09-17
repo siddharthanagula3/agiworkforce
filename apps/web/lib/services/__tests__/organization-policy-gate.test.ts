@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   evaluateActiveWorkspacePolicy,
+  resolveEffectiveWorkspaceControls,
   resolveIpAllowListPolicy,
   resolveMfaPolicy,
   resolveSecretHandlingPolicy,
@@ -959,5 +960,213 @@ describe('resolveIpAllowListPolicy', () => {
         { organizationId: ORGANIZATION_ID, cidrs: ['203.0.113.0/24'] },
       ],
     });
+  });
+});
+
+describe('evaluateActiveWorkspacePolicy, feature controls and policy layers', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function governedPolicy(controls: Record<string, unknown>, overrideCount = 0) {
+    return policyRow({
+      allow_managed_compute: true,
+      allowed_privacy_modes: ['local', 'byok', 'managed'],
+      default_privacy_mode: 'managed',
+      metadata: { controls },
+      revision: 7,
+      override_count: overrideCount,
+    });
+  }
+
+  function overrideRow(subjectType: string, subjectId: string, layer: Record<string, unknown>) {
+    return {
+      id: `${subjectType}-${subjectId}`,
+      organization_id: ORGANIZATION_ID,
+      subject_type: subjectType,
+      subject_id: subjectId,
+      layer,
+      updated_at: '2026-09-17T00:00:00.000Z',
+    };
+  }
+
+  it('denies a feature the workspace turned off', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([governedPolicy({ featureAccess: { code: false } })]);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'feature',
+      feature: 'code',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('feature_disabled');
+    expect(decision.reason).toContain('Code');
+    expect(h.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('reads no overrides when the workspace has none, and allows a feature left on', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([governedPolicy({ featureAccess: { code: false } })]);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'feature',
+      feature: 'research',
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(h.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('lets a user exception re-enable a feature the workspace turned off', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([governedPolicy({ featureAccess: { code: false } }, 2)])
+      .mockResolvedValueOnce([
+        overrideRow('group', 'group-1', { featureAccess: { code: false } }),
+        overrideRow('user', 'member-1', { featureAccess: { code: true } }),
+      ]);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'feature',
+      feature: 'code',
+    });
+
+    expect(decision.allowed).toBe(true);
+    const [overrideSql, overrideParams] = h.query.mock.calls[3] as [string, unknown[]];
+    expect(overrideSql).toContain('organization_policy_overrides');
+    expect(overrideParams).toEqual([ORGANIZATION_ID, 'member-1']);
+  });
+
+  it('denies when the workspace has overrides that cannot be read, rather than ignoring them', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([governedPolicy({}, 1)])
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('workspace_policy_unavailable');
+  });
+
+  it('denies managed compute from a country the workspace does not allow, read from the edge header', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([governedPolicy({ allowedCountries: ['DE'] })]);
+    const request = {
+      headers: {
+        get: (name: string) => (name === 'x-vercel-ip-country' ? 'US' : null),
+      },
+    };
+
+    const decision = await evaluateActiveWorkspacePolicy(
+      h.db,
+      'member-1',
+      { resource: 'managed_compute', surface: 'web' },
+      request,
+    );
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('region_not_allowed');
+  });
+
+  it('denies a region-restricted request whose country is unknown', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([governedPolicy({ allowedCountries: ['DE'] })]);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'feature',
+      feature: 'work',
+    });
+
+    expect(decision.code).toBe('region_not_allowed');
+  });
+
+  it('denies a client surface a group override excludes', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([governedPolicy({}, 1)])
+      .mockResolvedValueOnce([overrideRow('group', 'group-1', { allowedSurfaces: ['desktop'] })]);
+
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'managed_compute',
+      surface: 'web',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('surface_not_allowed');
+  });
+});
+
+describe('resolveEffectiveWorkspaceControls', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('answers null for a personal-scope caller', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]);
+
+    await expect(resolveEffectiveWorkspaceControls(h.db, 'user-1')).resolves.toBeNull();
+  });
+
+  it('returns the layered controls and the revision a client polls', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([
+        policyRow({
+          metadata: { controls: { maxReasoningEffort: 'high' } },
+          revision: '12',
+          override_count: '1',
+        }),
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'o-1',
+          organization_id: ORGANIZATION_ID,
+          subject_type: 'user',
+          subject_id: 'user-1',
+          layer: { maxReasoningEffort: 'low' },
+          updated_at: '2026-09-17T00:00:00.000Z',
+        },
+      ]);
+
+    const effective = await resolveEffectiveWorkspaceControls(h.db, 'user-1');
+
+    expect(effective?.revision).toBe(12);
+    expect(effective?.controls.maxReasoningEffort).toBe('low');
+    expect(effective?.controls.appliedOverrideIds).toEqual(['o-1']);
+  });
+
+  it('fails closed when the policy cannot be read', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockRejectedValueOnce(CONNECTION_RESET)
+      .mockRejectedValueOnce(CONNECTION_RESET);
+
+    await expect(resolveEffectiveWorkspaceControls(h.db, 'user-1')).rejects.toMatchObject(
+      ACCOUNT_CONTROL_UNAVAILABLE,
+    );
   });
 });

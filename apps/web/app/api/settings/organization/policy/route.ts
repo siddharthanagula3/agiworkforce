@@ -11,11 +11,8 @@ import { createError } from '@/lib/errors';
 import { getClientIp, recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { readJsonBody } from '@/lib/read-json-body';
-import {
-  isOrgAdminRole,
-  requireOrgMember,
-  resolveOrgMembership,
-} from '@/lib/services/org-sharing-service';
+import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   diffAdminPolicy,
@@ -24,7 +21,8 @@ import {
   upsertOrganizationPolicy,
   type AdminPolicyInput,
 } from '@/lib/services/organization-policy-service';
-import type { AdminPolicy } from '@agiworkforce/types';
+import type { AdminPolicy, WorkspaceControls } from '@agiworkforce/types';
+import { ControlsPatchSchema } from './controls-schema';
 import { isIpAllowed, isValidCidr } from '@/lib/services/ip-allow-list';
 import { invalidateIpAllowListCache } from '@/lib/services/organization-ip-allow-list-cache';
 import { resolveMfaEnrolled } from '@/lib/mfa-policy-gate';
@@ -45,7 +43,6 @@ const SecretHandlingSchema = z.enum(['warn', 'redact', 'block']);
 const MAX_IP_ALLOW_LIST_ENTRIES = 100;
 const CidrSchema = z.string().refine(isValidCidr, 'Invalid IP address or CIDR block');
 const IpAllowListSchema = z.array(CidrSchema).max(MAX_IP_ALLOW_LIST_ENTRIES);
-
 const PolicyPatchSchema = z
   .object({
     defaultPrivacyMode: PrivacyModeSchema,
@@ -66,6 +63,7 @@ const PolicyPatchSchema = z
     monthlySpendCapCents: z.number().int().positive().nullable(),
     zeroDataRetentionOnly: z.boolean(),
     ipAllowList: IpAllowListSchema,
+    controls: ControlsPatchSchema,
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
@@ -82,6 +80,30 @@ export interface OrganizationPolicyResponse {
 
 function dedupe<T>(values: T[]): T[] {
   return [...new Set(values)];
+}
+
+function mergeControls(
+  current: WorkspaceControls,
+  patch: z.infer<typeof ControlsPatchSchema> | undefined,
+): WorkspaceControls {
+  if (!patch) return current;
+  return {
+    featureAccess: { ...current.featureAccess, ...patch.featureAccess },
+    defaultModelId:
+      patch.defaultModelId !== undefined ? patch.defaultModelId : current.defaultModelId,
+    maxReasoningEffort:
+      patch.maxReasoningEffort !== undefined
+        ? patch.maxReasoningEffort
+        : current.maxReasoningEffort,
+    allowedCountries:
+      patch.allowedCountries !== undefined
+        ? dedupe(patch.allowedCountries.map((code) => code.toUpperCase())).sort()
+        : current.allowedCountries,
+    allowedSurfaces:
+      patch.allowedSurfaces !== undefined
+        ? patch.allowedSurfaces && dedupe(patch.allowedSurfaces)
+        : current.allowedSurfaces,
+  };
 }
 
 /**
@@ -144,11 +166,12 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   const effective = await getEffectiveOrganizationPolicy(db, membership.organizationId);
+  const permissions = await resolveOrganizationPermissions(membership.organizationId, userId);
 
   const payload: OrganizationPolicyResponse = {
     organizationId: membership.organizationId,
     configured: effective.configured,
-    canManagePolicy: isOrgAdminRole(membership.role),
+    canManagePolicy: permissions.has('policy.manage'),
     currentUserRole: membership.role,
     policy: effective.policy,
   };
@@ -167,8 +190,11 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
-  if (!isOrgAdminRole(membership.role)) {
-    throw createError.forbidden('Only an organization owner or admin can change workspace policy.');
+  const permissions = await resolveOrganizationPermissions(membership.organizationId, userId);
+  if (!permissions.has('policy.manage')) {
+    throw createError
+      .forbidden('Your workspace role does not allow changing workspace policy.')
+      .asUserSafe();
   }
 
   const body = await readJsonBody(request);
@@ -209,6 +235,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     zeroDataRetentionOnly:
       parsed.data.zeroDataRetentionOnly ?? current.policy.zeroDataRetentionOnly,
     ipAllowList: parsed.data.ipAllowList ?? current.policy.ipAllowList,
+    controls: mergeControls(current.policy.controls, parsed.data.controls),
     metadata: current.policy.metadata ?? {},
   };
 

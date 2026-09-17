@@ -9,6 +9,7 @@ import {
   isOrgResourceLimitError,
 } from '@/lib/services/org-entitlements';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 
 export type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
 export type SharedProjectAccess = 'read' | 'write';
@@ -58,11 +59,18 @@ export function isOrgAdminRole(role: OrgRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
-export function requireOrgAdmin(membership: OrgMembership | null): OrgMembership {
-  if (!membership || !isOrgAdminRole(membership.role)) {
-    throw createError.forbidden('Only an organization owner or admin can change what is shared.');
+export async function requireSharingManager(
+  membership: OrgMembership | null,
+  userId: string,
+): Promise<OrgMembership> {
+  const member = requireOrgMember(membership);
+  const permissions = await resolveOrganizationPermissions(member.organizationId, userId);
+  if (!permissions.has('sharing.manage')) {
+    throw createError
+      .forbidden('Your workspace role does not allow changing what is shared.')
+      .asUserSafe();
   }
-  return membership;
+  return member;
 }
 
 export function requireOrgMember(membership: OrgMembership | null): OrgMembership {
