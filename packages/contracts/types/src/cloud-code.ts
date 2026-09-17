@@ -1,3 +1,5 @@
+import type { AgentTaskState } from './generated/protocol/AgentTaskState';
+
 export const CLOUD_CODE_NETWORK_ACCESS = ['none', 'trusted', 'full'] as const;
 export type CloudCodeNetworkAccess = (typeof CLOUD_CODE_NETWORK_ACCESS)[number];
 
@@ -102,6 +104,22 @@ export const CLOUD_CODE_AGENT_STOP_REASONS = [
   'awaiting_approval',
 ] as const;
 export type CloudCodeAgentStopReason = (typeof CLOUD_CODE_AGENT_STOP_REASONS)[number];
+
+export const CLOUD_CODE_STOP_REASON_AGENT_TASK_STATES: Readonly<
+  Record<CloudCodeAgentStopReason, AgentTaskState>
+> = Object.freeze({
+  done: 'ready_for_review',
+  max_steps: 'partial',
+  timeout: 'timed_out',
+  cancelled: 'cancelled',
+  error: 'failed',
+  denied: 'failed',
+  awaiting_approval: 'awaiting_approval',
+});
+
+export function agentTaskStateForStopReason(reason: CloudCodeAgentStopReason): AgentTaskState {
+  return CLOUD_CODE_STOP_REASON_AGENT_TASK_STATES[reason];
+}
 
 /**
  * One tool the agent ran, as the transcript shows it. `label` is the line the

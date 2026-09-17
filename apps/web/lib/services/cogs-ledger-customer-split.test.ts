@@ -193,3 +193,32 @@ describe('recordSettledProviderCost · attribution defaults', () => {
     expect(column(db, 'reasoning_tokens')).toBe(50);
   });
 });
+
+describe('recordProviderCostEvent · workload, project and session', () => {
+  it('writes the attribution into its own columns', async () => {
+    const db = fakeDb();
+    await recordProviderCostEvent(
+      {
+        ...SEARCH_EVENT,
+        userId: 'user-1',
+        workload: 'research',
+        projectId: 'project-1',
+        sessionId: 'conversation-1',
+      },
+      db as never,
+    );
+
+    expect(column(db, 'workload')).toBe('research');
+    expect(column(db, 'project_id')).toBe('project-1');
+    expect(column(db, 'session_id')).toBe('conversation-1');
+  });
+
+  it('leaves an unattributed event null rather than guessing', async () => {
+    const db = fakeDb();
+    await recordProviderCostEvent({ ...SEARCH_EVENT, userId: 'user-1' }, db as never);
+
+    expect(column(db, 'workload')).toBeNull();
+    expect(column(db, 'project_id')).toBeNull();
+    expect(column(db, 'session_id')).toBeNull();
+  });
+});

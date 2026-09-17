@@ -162,6 +162,7 @@ import { compactContextWindow } from './context-compaction';
 import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
 import type { AuthGateSuccess } from './auth-gate';
 import { resolveAuthenticatedSurface } from './request-surface';
+import { resolveChatWorkload } from '@/lib/billing/usage-attribution';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
@@ -444,8 +445,7 @@ export const ChatCompletionRequestSchema = z
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 
 export type ManagedSkillSelectionResult =
-  | { ok: true }
-  | { ok: false; code: 'skill_not_found'; message: string };
+  { ok: true } | { ok: false; code: 'skill_not_found'; message: string };
 
 type QuotaFeature = 'chat' | 'image' | 'video' | 'computer_use';
 
@@ -3664,6 +3664,11 @@ export async function processRequest(
           planTier: subscription.plan_tier,
           isFlagship: isFlagshipRequest,
           quotaFeature,
+          attribution: {
+            workload: resolveChatWorkload({ workMode: chatRequest.work_mode, quotaFeature }),
+            projectId: conversationProjectId,
+            sessionId: chatRequest.conversation_id ?? null,
+          },
         }),
       );
       estimatedCostMicrousd = estimateMicrousdOf(managedUsage);

@@ -1,13 +1,5 @@
 export type BillingPlanTier =
-  | 'local-only'
-  | 'byok'
-  | 'free'
-  | 'basic'
-  | 'pro'
-  | 'max'
-  | 'max_15x'
-  | 'team'
-  | 'enterprise';
+  'local-only' | 'byok' | 'free' | 'basic' | 'pro' | 'max' | 'max_15x' | 'team' | 'enterprise';
 export type BillingInterval = 'monthly' | 'yearly';
 
 export const SELF_SERVE_PAID_PLAN_TIERS = [
@@ -56,6 +48,7 @@ export interface BillingPlanPricing {
   monthlyPriceInr?: number;
   perSeat?: boolean;
   contractPriced?: true;
+  trialDays?: number;
 }
 
 export function isPerSeatBillingPlan(plan: string | null | undefined): boolean {
@@ -579,6 +572,13 @@ export function normalizeBillingPlanTier(value: string | null | undefined): Bill
 
 export function getBillingPlanPricing(plan: string | null | undefined): BillingPlanPricing {
   return BILLING_PLAN_PRICING[normalizeBillingPlanTier(plan)];
+}
+
+export function getPlanTrialDays(plan: string | null | undefined): number | null {
+  const trialDays = getBillingPlanPricing(plan).trialDays;
+  return typeof trialDays === 'number' && Number.isInteger(trialDays) && trialDays > 0
+    ? trialDays
+    : null;
 }
 
 export function isContractPricedPlan(plan: string | null | undefined): boolean {

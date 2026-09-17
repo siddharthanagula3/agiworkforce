@@ -132,9 +132,42 @@ describe('ProjectWorkPanel', () => {
     render(<ProjectWorkPanel projectId={PROJECT} projectName="Launch" />);
 
     const row = await screen.findByRole('button', { name: /Draft the brief/ });
-    expect(screen.getByText('Done')).toBeInTheDocument();
+    expect(screen.getByText('Completed')).toBeInTheDocument();
     row.click();
     expect(mocks.push).toHaveBeenCalledWith('/chat/conv-9');
+  });
+
+  it('labels a run by its finer Work state when the server reports one', async () => {
+    mocks.fetchImpl.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        runs: [
+          {
+            id: 'run-2',
+            userId: 'user-1',
+            requestId: 'req-2',
+            conversationId: 'conv-10',
+            conversationTitle: 'Survey pricing',
+            originSurface: 'web',
+            workMode: 'agiwork',
+            state: 'failed',
+            workState: 'timed_out',
+            provider: 'anthropic',
+            model: 'model-a',
+            lastEventSequence: 3,
+            cancellationRequestedAt: null,
+            completedAt: '2026-09-13T00:00:00.000Z',
+            createdAt: '2026-09-13T00:00:00.000Z',
+            updatedAt: '2026-09-13T00:00:00.000Z',
+          },
+        ],
+      }),
+    });
+
+    render(<ProjectWorkPanel projectId={PROJECT} projectName="Launch" />);
+
+    await screen.findByRole('button', { name: /Survey pricing/ });
+    expect(screen.getByText('Timed out')).toBeInTheDocument();
   });
 
   it('says so when the work list cannot be read, rather than claiming there is none', async () => {

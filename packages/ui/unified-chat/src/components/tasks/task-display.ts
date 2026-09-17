@@ -1,7 +1,13 @@
 import type { CloudAgentRun, CloudAgentWorkMode } from '@agiworkforce/cloud-contracts';
+import { agentTaskStateLabel } from '@agiworkforce/types';
 
 // The run-state enum isn't exported as a standalone type from cloud-contracts;
 export type AgentTaskState = CloudAgentRun['state'];
+
+/** The finer Work state when the server reports one, else the coarse state every server sends. */
+export function runWorkState(run: Pick<CloudAgentRun, 'state' | 'workState'>): AgentTaskState {
+  return run.workState ?? run.state;
+}
 
 export interface AgiWorkRerunGoal {
   goal: string;
@@ -32,28 +38,7 @@ export function formatTaskTokens(tokens: number): string {
 }
 
 export function taskStateLabel(state: AgentTaskState): string {
-  switch (state) {
-    case 'queued':
-      return 'Queued';
-    case 'running':
-      return 'Running';
-    case 'awaiting_input':
-      return 'Awaiting input';
-    case 'ready_for_review':
-      return 'Ready for review';
-    case 'completed':
-      return 'Completed';
-    case 'failed':
-      return 'Failed';
-    case 'cancelled':
-      return 'Cancelled';
-    case 'paused':
-      return 'Paused';
-    case 'archived':
-      return 'Archived';
-    default:
-      return state;
-  }
+  return agentTaskStateLabel(state);
 }
 
 export type TaskStateTone = 'active' | 'attention' | 'success' | 'danger' | 'muted';
@@ -61,15 +46,20 @@ export type TaskStateTone = 'active' | 'attention' | 'success' | 'danger' | 'mut
 export function taskStateTone(state: AgentTaskState): TaskStateTone {
   switch (state) {
     case 'queued':
+    case 'planning':
     case 'running':
+    case 'resuming':
       return 'active';
     case 'awaiting_input':
+    case 'awaiting_approval':
     case 'ready_for_review':
     case 'paused':
+    case 'partial':
       return 'attention';
     case 'completed':
       return 'success';
     case 'failed':
+    case 'timed_out':
       return 'danger';
     case 'cancelled':
     case 'archived':
@@ -100,15 +90,20 @@ export function isArchivableState(state: AgentTaskState): boolean {
   return (
     state === 'ready_for_review' ||
     state === 'completed' ||
+    state === 'partial' ||
     state === 'failed' ||
+    state === 'timed_out' ||
     state === 'cancelled'
   );
 }
 
 export function isCancellableState(state: AgentTaskState): boolean {
-  return (
-    state === 'queued' || state === 'running' || state === 'awaiting_input' || state === 'paused'
-  );
+  return isLiveTaskState(state);
+}
+
+/** A pause lands at the run's next step boundary, so only a run that is working can take one. */
+export function isPausableState(state: AgentTaskState): boolean {
+  return state === 'queued' || state === 'planning' || state === 'running' || state === 'resuming';
 }
 
 /**
@@ -123,6 +118,9 @@ export function isCancellableState(state: AgentTaskState): boolean {
  */
 export function isLiveTaskState(state: AgentTaskState): boolean {
   return (
-    state === 'queued' || state === 'running' || state === 'awaiting_input' || state === 'paused'
+    isPausableState(state) ||
+    state === 'awaiting_input' ||
+    state === 'awaiting_approval' ||
+    state === 'paused'
   );
 }

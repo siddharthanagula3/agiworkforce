@@ -16,6 +16,8 @@ import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
+import { IDEMPOTENCY_KEY_HEADER } from '@/lib/api-gateway-policy';
+import { BILLING_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -65,7 +67,9 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
   if (csrfError) return csrfError as NextResponse;
 
   if (!checkoutIsEnabled()) {
-    throw createError.serviceUnavailable('Top-up checkout is not available right now.');
+    throw createError
+      .serviceUnavailable('Top-up checkout is not available right now.')
+      .asUserSafe();
   }
 
   const rateLimitResponse = await withRateLimit(request, 'checkout');
@@ -79,7 +83,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
   );
   if (!billingGate.allowed) {
     throw isPolicyUnavailable(billingGate)
-      ? createError.serviceUnavailable(billingGate.reason)
+      ? createError.serviceUnavailable(billingGate.reason).asUserSafe()
       : createError.conflict(billingGate.reason);
   }
 
@@ -97,10 +101,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid top-up amount.');
   }
 
-  const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
-  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
-    throw createError.validation('Idempotency-Key must be 8-128 URL-safe characters.');
-  }
+  const idempotencyKey = request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim() ?? '';
 
   type BillingRow = Pick<
     SubscriptionRow,
@@ -200,7 +201,13 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ url: session.url, amountUsd, topUpUnits });
 }
 
-export const POST = withCorsRoute(withErrorHandler(handleTopUp));
+export const POST = withCorsRoute(
+  withErrorHandler(handleTopUp, {
+    idempotencyKey: 'required',
+    deadlineMs: BILLING_API_ROUTE_DEADLINE_MS,
+    circuit: 'billing.top-up',
+  }),
+);
 
 export async function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) || new NextResponse(null, { status: 204 });

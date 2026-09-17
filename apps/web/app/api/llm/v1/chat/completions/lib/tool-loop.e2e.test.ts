@@ -764,7 +764,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(activity[4]?.event).toMatchObject({
       type: 'task-state-changed',
       previousState: 'running',
-      state: 'failed',
+      state: 'timed_out',
     });
     expect(activity[5]?.event).toEqual({ type: 'stop', reason: 'error' });
   });

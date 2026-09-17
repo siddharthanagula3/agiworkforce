@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
+import { CONVERSATION_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
@@ -17,6 +18,11 @@ import {
 } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import {
+  preconditionFailedResponse,
+  readIfMatchVersion,
+  versionEtag,
+} from '@/lib/http-preconditions';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -47,6 +53,12 @@ const PENDING_REVOCATION_SQL = `
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+type VersionedConversationRow = ChatConversationRow & { server_version: string };
+
+function withoutVersion({ server_version, ...conversation }: VersionedConversationRow) {
+  return { conversation, version: server_version };
+}
+
 async function handleGetConversation(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -64,9 +76,10 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 100, 1), 500);
   const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
-  const [conversation] = await db.query<ChatConversationRow>(
+  const [versionedConversation] = await db.query<VersionedConversationRow>(
     `
       select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+        server_version::text as server_version,
         ${CONVERSATION_WORK_MODE_SELECT}
       from web_conversations
       where id = $1
@@ -78,9 +91,10 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
     [id, userId, organizationId],
   );
 
-  if (!conversation) {
+  if (!versionedConversation) {
     throw createError.notFound('Conversation not found');
   }
+  const { conversation, version } = withoutVersion(versionedConversation);
 
   try {
     const [messages, countRows] = await Promise.all([
@@ -103,7 +117,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
     const total = parseInt(countRows[0]?.total ?? '0', 10);
     const hasMore = offset + messages.length < total;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       conversation,
       messages: withIsoTimestamps(messages).map((message) =>
         ManagedCloudMessageWireSchema.parse(message),
@@ -111,6 +125,8 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
       total,
       hasMore,
     });
+    if (version) response.headers.set('etag', versionEtag(version));
+    return response;
   } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to fetch messages');
     throw createError.internal('Failed to fetch messages');
@@ -127,6 +143,12 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
+
+  const precondition = readIfMatchVersion(request);
+  if (precondition.kind === 'malformed') {
+    throw createError.validation('If-Match must be a conversation version from its ETag');
+  }
+  const expectedVersion = precondition.kind === 'version' ? precondition.version : null;
 
   let rawBody: unknown;
   try {
@@ -208,7 +230,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     }
   }
 
-  const [conversation] = await db.query<ChatConversationRow>(
+  const [updated] = await db.query<VersionedConversationRow>(
     `
       update web_conversations
       set
@@ -225,7 +247,9 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         and user_id = $2
         and organization_id is not distinct from $15
         and deleted_at is null
-      returning id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at
+        and ($19::bigint is null or server_version = $19::bigint)
+      returning id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+        server_version::text as server_version
     `,
     [
       id,
@@ -249,14 +273,41 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       // the conversation. Bumping the timestamp for it would reorder the
       // sidebar every time someone looked at the other answer.
       hasActiveLeafUpdate && Object.keys(updates).length === 1,
+      expectedVersion,
     ],
   );
 
-  if (!conversation) {
+  if (!updated) {
+    if (expectedVersion !== null) {
+      const [current] = await db.query<VersionedConversationRow>(
+        `
+          select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+            server_version::text as server_version
+          from web_conversations
+          where id = $1
+            and user_id = $2
+            and organization_id is not distinct from $3
+            and deleted_at is null
+          limit 1
+        `,
+        [id, userId, organizationId],
+      );
+      if (current) {
+        const latest = withoutVersion(current);
+        return preconditionFailedResponse(
+          'This conversation changed since you loaded it. Reload it and apply your change again.',
+          latest.conversation,
+          latest.version,
+        );
+      }
+    }
     throw createError.notFound('Conversation not found');
   }
 
-  return NextResponse.json({ conversation });
+  const { conversation, version } = withoutVersion(updated);
+  const response = NextResponse.json({ conversation });
+  if (version) response.headers.set('etag', versionEtag(version));
+  return response;
 }
 
 async function handleDeleteConversation(request: NextRequest, context: RouteContext) {
@@ -320,9 +371,14 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   return NextResponse.json({ success: true });
 }
 
-export const GET = withCorsRoute(withErrorHandler(handleGetConversation));
-export const PUT = withCorsRoute(withErrorHandler(handleUpdateConversation));
-export const DELETE = withCorsRoute(withErrorHandler(handleDeleteConversation));
+const GATEWAY_POLICY = {
+  deadlineMs: CONVERSATION_API_ROUTE_DEADLINE_MS,
+  circuit: 'chat.conversation',
+} as const;
+
+export const GET = withCorsRoute(withErrorHandler(handleGetConversation, GATEWAY_POLICY));
+export const PUT = withCorsRoute(withErrorHandler(handleUpdateConversation, GATEWAY_POLICY));
+export const DELETE = withCorsRoute(withErrorHandler(handleDeleteConversation, GATEWAY_POLICY));
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

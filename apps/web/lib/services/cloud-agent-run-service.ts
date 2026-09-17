@@ -3,6 +3,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  AGENT_EVENT_SCHEMA_VERSION,
   AgentEventEnvelopeSchema,
   AgentTaskStateSchema,
   CloudAgentRunSchema,
@@ -17,6 +18,9 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   INTERACTIVE_CARDS_METADATA_KEY,
+  TERMINAL_AGENT_TASK_STATES,
+  agentTaskStatesReadAs,
+  legacyAgentTaskState,
   type CloudWorkMode,
   type InteractiveCard,
 } from '@agiworkforce/types';
@@ -28,13 +32,9 @@ import { logger } from '@/lib/logger';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 import { notifyAgentRunEvent, type AgentRunNotice } from './agent-notification-service';
 
-const TERMINAL_STATES = new Set<AgentTaskState>([
-  'ready_for_review',
-  'completed',
-  'failed',
-  'cancelled',
-  'archived',
-]);
+const TERMINAL_STATE_VALUES: string[] = [...TERMINAL_AGENT_TASK_STATES];
+
+const PAUSABLE_STATE_VALUES: AgentTaskState[] = ['queued', 'planning', 'running', 'resuming'];
 
 interface CloudAgentRunRow extends Record<string, unknown> {
   id: string;
@@ -52,6 +52,7 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   model: string;
   last_event_sequence: number | string;
   cancellation_requested_at: string | Date | null;
+  pause_requested_at?: string | Date | null;
   completed_at: string | Date | null;
   created_at: string | Date;
   updated_at: string | Date;
@@ -91,6 +92,8 @@ const NOTIFIED_TERMINAL_EVENTS: Partial<Record<AgentTaskState, 'completed' | 'fa
   ready_for_review: 'completed',
   completed: 'completed',
   failed: 'failed',
+  partial: 'failed',
+  timed_out: 'failed',
 };
 
 /**
@@ -118,7 +121,7 @@ function terminalNoticeFor(input: {
   // No pre-update state means we cannot prove this call is the transition, so
   // stay silent rather than notify twice.
   if (!input.previousState) return null;
-  if (TERMINAL_STATES.has(input.previousState as AgentTaskState)) return null;
+  if (TERMINAL_AGENT_TASK_STATES.has(input.previousState as AgentTaskState)) return null;
   // An out-of-order envelope leaves the state where it was; only the write that
   // actually landed the terminal state owes the notice.
   if (input.currentState !== input.nextState) return null;
@@ -504,11 +507,20 @@ function mapSettledUsage(row: CloudAgentRunRow): CloudAgentRun['usage'] {
   };
 }
 
+function workStateOf(
+  row: CloudAgentRunRow,
+  pendingApproval: CloudAgentRun['pendingApproval'],
+): AgentTaskState {
+  const stored = AgentTaskStateSchema.parse(row.state);
+  return stored === 'awaiting_input' && pendingApproval ? 'awaiting_approval' : stored;
+}
+
 function mapRun(row: CloudAgentRunRow): CloudAgentRun {
   const pendingApproval = mapPendingApproval(row);
   const pendingInput = mapPendingInput(row);
   const pendingDeviceStep = mapPendingDeviceStep(row);
   const usage = mapSettledUsage(row);
+  const workState = workStateOf(row, pendingApproval);
   return CloudAgentRunSchema.parse({
     ...(pendingApproval ? { pendingApproval } : {}),
     ...(pendingInput ? { pendingInput } : {}),
@@ -522,11 +534,13 @@ function mapRun(row: CloudAgentRunRow): CloudAgentRun {
     ...(row.conversation_preview ? { conversationPreview: row.conversation_preview } : {}),
     originSurface: row.origin_surface,
     workMode: row.work_mode,
-    state: row.state,
+    state: legacyAgentTaskState(workState),
+    workState,
     provider: row.provider,
     model: row.model,
     lastEventSequence: Number(row.last_event_sequence),
     cancellationRequestedAt: toIsoTimestamp(row.cancellation_requested_at),
+    pauseRequestedAt: toIsoTimestamp(row.pause_requested_at ?? null),
     completedAt: toIsoTimestamp(row.completed_at),
     createdAt: toIsoTimestamp(row.created_at),
     updatedAt: toIsoTimestamp(row.updated_at),
@@ -560,7 +574,11 @@ function mapApprovalCheckpoint(row: CloudAgentApprovalCheckpointRow): CloudAgent
     completedSteps: z.coerce.number().int().nonnegative().parse(row.completed_steps),
     request,
     messages: z.array(CheckpointMessageSchema).parse(row.messages),
-    pendingToolCalls: z.array(PendingToolCallSchema).min(1).max(32).parse(row.pending_tool_calls),
+    pendingToolCalls: z
+      .array(PendingToolCallSchema)
+      .min(row.checkpoint_kind === 'pause' ? 0 : 1)
+      .max(32)
+      .parse(row.pending_tool_calls),
     state: CheckpointStateSchema.parse(row.state),
     leaseToken: z.string().uuid().nullable().parse(row.lease_token),
     leaseExpiresAt: z.string().datetime().nullable().parse(toIsoTimestamp(row.lease_expires_at)),
@@ -625,7 +643,7 @@ export async function findActiveCloudAgentRunForConversation(
     `select * from public.cloud_agent_runs
         where user_id = $1
           and conversation_id = $2
-          and state in ('running', 'queued')
+          and state in ('queued', 'planning', 'running', 'resuming')
           and cancellation_requested_at is null
           and ($3::text is null or request_id <> $3)
         order by created_at asc
@@ -779,8 +797,7 @@ async function appendCloudAgentEventsWithinTransaction(
               completed_at = case
                 when $4::text is null then runs.completed_at
                 when $5::bigint < runs.last_event_sequence then runs.completed_at
-                when $4::text in ('ready_for_review', 'completed', 'failed', 'cancelled', 'archived')
-                  then coalesce(runs.completed_at, now())
+                when $4::text = any($6::text[]) then coalesce(runs.completed_at, now())
                 else null
               end,
               updated_at = now()
@@ -793,6 +810,7 @@ async function appendCloudAgentEventsWithinTransaction(
       highestSequence,
       nextState ?? null,
       stateEnvelope?.sequence ?? highestSequence,
+      TERMINAL_STATE_VALUES,
     ],
   );
   const run = requireRun(rows);
@@ -813,7 +831,12 @@ export async function transitionCloudAgentRun(
   // The `previous` CTE locks the row and reads its pre-update snapshot, so a
   // repeated transition into the same terminal state, and, on the workflow
   // path, a settle that follows a journal write that already moved the run.
-  // notifies at most once.
+  // notifies at most once. A settle only knows the coarse outcome, so a run the
+  // journal already moved to a finer terminal state reading as that outcome
+  // keeps the finer one.
+  const finerTerminalStates = agentTaskStatesReadAs(input.state).filter(
+    (state) => state !== input.state && TERMINAL_AGENT_TASK_STATES.has(state),
+  );
   const rows = await db.query<CloudAgentRunRow>(
     `with previous as (
         select id, state from public.cloud_agent_runs
@@ -821,24 +844,27 @@ export async function transitionCloudAgentRun(
          for update
       )
       update public.cloud_agent_runs as runs
-        set state = $3,
+        set state = case when runs.state = any($5::text[]) then runs.state else $3 end,
             completed_at = case
-              when $3 in ('ready_for_review', 'completed', 'failed', 'cancelled', 'archived')
-                then coalesce(runs.completed_at, now())
+              when $3 = any($4::text[]) then coalesce(runs.completed_at, now())
               else null
+            end,
+            pause_requested_at = case
+              when $3 = any($4::text[]) then null
+              else runs.pause_requested_at
             end,
             updated_at = now()
       from previous
       where runs.id = previous.id and runs.user_id = $2
       returning runs.*, previous.state as previous_state`,
-    [input.runId, input.userId, input.state],
+    [input.runId, input.userId, input.state, TERMINAL_STATE_VALUES, finerTerminalStates],
   );
   const run = requireRun(rows);
 
   const notice = terminalNoticeFor({
     nextState: input.state,
     previousState: previousStateOf(rows[0]),
-    currentState: input.state,
+    currentState: rows[0]?.state ?? input.state,
   });
   if (notice) {
     await announceAgentRunEvent(db, { userId: input.userId, runId: input.runId, event: notice });
@@ -849,7 +875,9 @@ export async function transitionCloudAgentRun(
 export const ARCHIVABLE_TASK_STATES: ReadonlySet<AgentTaskState> = new Set<AgentTaskState>([
   'ready_for_review',
   'completed',
+  'partial',
   'failed',
+  'timed_out',
   'cancelled',
 ]);
 
@@ -995,6 +1023,19 @@ export async function isCloudAgentRunCancellationRequested(
   return row.cancellation_requested;
 }
 
+function withLegacyTaskStates(envelope: AgentEventEnvelope): AgentEventEnvelope {
+  if (envelope.event.type !== 'task-state-changed') return envelope;
+  const { previousState, ...event } = envelope.event;
+  return {
+    ...envelope,
+    event: {
+      ...event,
+      state: legacyAgentTaskState(event.state),
+      ...(previousState ? { previousState: legacyAgentTaskState(previousState) } : {}),
+    },
+  };
+}
+
 export async function getCloudAgentRun(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; afterSequence?: number; limit?: number },
@@ -1022,7 +1063,9 @@ export async function getCloudAgentRun(
       limit $4`,
     [input.runId, input.userId, afterSequence, limit],
   );
-  const events = eventRows.map((row) => AgentEventEnvelopeSchema.parse(row.envelope));
+  const events = eventRows.map((row) =>
+    withLegacyTaskStates(AgentEventEnvelopeSchema.parse(row.envelope)),
+  );
   return { run: mapRun(runRow), events };
 }
 
@@ -1044,7 +1087,12 @@ export async function listCloudAgentRuns(
     projectId?: string;
   },
 ): Promise<CloudAgentRunList> {
-  const states = z.array(AgentTaskStateSchema).min(1).max(9).parse(input.states);
+  const requestedStates = z
+    .array(AgentTaskStateSchema)
+    .min(1)
+    .max(AgentTaskStateSchema.options.length)
+    .parse(input.states);
+  const states = [...new Set(requestedStates.flatMap(agentTaskStatesReadAs))];
   const requestId = ManagedCloudAgentRunRequestIdSchema.optional().parse(input.requestId);
   const before = input.before
     ? z.object({ updatedAt: z.string().datetime(), id: z.string().uuid() }).parse(input.before)
@@ -1320,7 +1368,7 @@ export async function claimCloudAgentApprovalCheckpoint(
   return db.transaction(async (tx) => {
     const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
       `select * from public.cloud_agent_approval_checkpoints
-        where run_id = $1 and user_id = $2 and state = 'pending'
+        where run_id = $1 and user_id = $2 and checkpoint_kind = 'approval' and state = 'pending'
           and created_at > now() - make_interval(hours => $3)
         order by version desc
         limit 1
@@ -1330,7 +1378,7 @@ export async function claimCloudAgentApprovalCheckpoint(
     if (!rows[0]) {
       const expiredRows = await tx.query<{ id: string }>(
         `select id from public.cloud_agent_approval_checkpoints
-          where run_id = $1 and user_id = $2 and state = 'pending'
+          where run_id = $1 and user_id = $2 and checkpoint_kind = 'approval' and state = 'pending'
           limit 1`,
         [input.runId, input.userId],
       );
@@ -2051,6 +2099,323 @@ export function releaseCloudAgentDeviceCheckpoint(
   return releaseCloudAgentApprovalCheckpoint(db, input);
 }
 
+export class CloudAgentRunNotPausableError extends Error {
+  constructor(readonly state: string) {
+    super(`A ${state} task cannot be paused`);
+    this.name = 'CloudAgentRunNotPausableError';
+  }
+}
+
+export class CloudAgentRunNotPausedError extends Error {
+  constructor(readonly state: string) {
+    super(`A ${state} task is not paused`);
+    this.name = 'CloudAgentRunNotPausedError';
+  }
+}
+
+async function requireRunState(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRun> {
+  return mapRun(await readRunState(db, input));
+}
+
+/**
+ * Records the user's request. The executor honours it at its next step
+ * boundary, so a run between a provider call and its tool results is never cut
+ * mid-thought; until then the run stays active with `pauseRequestedAt` set.
+ */
+export async function requestCloudAgentRunPause(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRun> {
+  const rows = await db.query<CloudAgentRunRow>(
+    `update public.cloud_agent_runs
+        set pause_requested_at = coalesce(pause_requested_at, now()),
+            updated_at = now()
+      where id = $1 and user_id = $2
+        and state = any($3::text[])
+        and cancellation_requested_at is null
+      returning *`,
+    [input.runId, input.userId, PAUSABLE_STATE_VALUES],
+  );
+  if (rows[0]) return mapRun(rows[0]);
+  const run = await requireRunState(db, input);
+  throw new CloudAgentRunNotPausableError(run.workState ?? run.state);
+}
+
+export async function isCloudAgentRunPauseRequested(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<boolean> {
+  const rows = await db.query<{ pause_requested: boolean }>(
+    `select pause_requested_at is not null and cancellation_requested_at is null
+            as pause_requested
+       from public.cloud_agent_runs
+      where id = $1 and user_id = $2
+      limit 1`,
+    [input.runId, input.userId],
+  );
+  const row = rows[0];
+  if (!row) throw new CloudAgentRunNotFoundError();
+  return row.pause_requested;
+}
+
+/**
+ * A pause the executor has not reached yet is withdrawn rather than resumed:
+ * the run never stopped, so there is nothing to start again.
+ */
+export async function withdrawCloudAgentRunPauseRequest(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRun | null> {
+  const rows = await db.query<CloudAgentRunRow>(
+    `update public.cloud_agent_runs
+        set pause_requested_at = null, updated_at = now()
+      where id = $1 and user_id = $2
+        and state = any($3::text[])
+        and pause_requested_at is not null
+      returning *`,
+    [input.runId, input.userId, PAUSABLE_STATE_VALUES],
+  );
+  return rows[0] ? mapRun(rows[0]) : null;
+}
+
+/**
+ * Persist a user pause at a step boundary. Nothing is outstanding, so the
+ * checkpoint carries no tool calls, and the event boundary is exactly
+ * `task-state-changed:paused` then `lifecycle:paused`.
+ */
+export async function saveCloudAgentPauseCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    runId: string;
+    sessionId: string;
+    turnId: string;
+    nextEventSequence: number;
+    completedSteps: number;
+    request: Record<string, unknown>;
+    messages: unknown[];
+    events: unknown[];
+  },
+): Promise<CloudAgentApprovalCheckpoint> {
+  const request = z.record(z.string(), z.unknown()).parse(input.request);
+  const messages = z.array(CheckpointMessageSchema).parse(input.messages);
+  const nextEventSequence = z.number().int().nonnegative().parse(input.nextEventSequence);
+  const completedSteps = z.number().int().nonnegative().parse(input.completedSteps);
+  const events = z.array(AgentEventEnvelopeSchema).min(2).max(8).parse(input.events);
+  const hasContinuousEventCursor = events.every(
+    (event, index) =>
+      event.sessionId === input.sessionId &&
+      event.turnId === input.turnId &&
+      (index === 0 || event.sequence === events[index - 1]!.sequence + 1),
+  );
+  const pausedStateEvent = events.at(-2)?.event;
+  const pausedLifecycleEvent = events.at(-1)?.event;
+  if (
+    !hasContinuousEventCursor ||
+    events[events.length - 1]!.sequence + 1 !== nextEventSequence ||
+    pausedStateEvent?.type !== 'task-state-changed' ||
+    pausedStateEvent.state !== 'paused' ||
+    pausedLifecycleEvent?.type !== 'lifecycle' ||
+    pausedLifecycleEvent.phase !== 'paused'
+  ) {
+    throw new CloudAgentApprovalDecisionError(
+      'Pause checkpoint events do not form a complete pause boundary',
+    );
+  }
+
+  return db.transaction(async (tx) => {
+    const ownedRun = await tx.query<{ id: string }>(
+      `select id from public.cloud_agent_runs
+        where id = $1 and user_id = $2
+        for update`,
+      [input.runId, input.userId],
+    );
+    if (!ownedRun[0]) throw new CloudAgentRunNotFoundError();
+
+    await tx.query(
+      `update public.cloud_agent_approval_checkpoints
+          set state = 'resolved',
+              resolved_at = coalesce(resolved_at, now()),
+              lease_expires_at = null,
+              updated_at = now()
+        where run_id = $1 and user_id = $2 and state = 'resuming'`,
+      [input.runId, input.userId],
+    );
+
+    const versionRows = await tx.query<{ next_version: number | string }>(
+      `select coalesce(max(version), 0) + 1 as next_version
+         from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2`,
+      [input.runId, input.userId],
+    );
+    const version = z.coerce.number().int().positive().parse(versionRows[0]?.next_version);
+
+    const checkpointRows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `insert into public.cloud_agent_approval_checkpoints (
+         run_id, user_id, version, session_id, turn_id, next_event_sequence,
+         completed_steps, request, messages, pending_tool_calls, state, checkpoint_kind
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, '[]'::jsonb, 'pending', 'pause')
+       returning *`,
+      [
+        input.runId,
+        input.userId,
+        version,
+        input.sessionId,
+        input.turnId,
+        nextEventSequence,
+        completedSteps,
+        JSON.stringify(request),
+        JSON.stringify(messages),
+      ],
+    );
+
+    await appendCloudAgentEventsWithinTransaction(tx, {
+      userId: input.userId,
+      runId: input.runId,
+      envelopes: events,
+    });
+
+    await tx.query(
+      `update public.cloud_agent_runs
+          set state = 'paused', pause_requested_at = null, completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2`,
+      [input.runId, input.userId],
+    );
+    return requireApprovalCheckpoint(checkpointRows);
+  });
+}
+
+export interface ClaimedCloudAgentPauseCheckpoint {
+  checkpoint: CloudAgentApprovalCheckpoint;
+  leaseToken: string;
+}
+
+export async function claimCloudAgentPauseCheckpoint(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string; leaseSeconds?: number },
+): Promise<ClaimedCloudAgentPauseCheckpoint> {
+  const leaseSeconds = Math.min(86_400, Math.max(60, Math.trunc(input.leaseSeconds ?? 900)));
+  return db.transaction(async (tx) => {
+    const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `select * from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2 and checkpoint_kind = 'pause' and state = 'pending'
+        order by version desc
+        limit 1
+        for update`,
+      [input.runId, input.userId],
+    );
+    const checkpoint = requireApprovalCheckpoint(rows);
+    const leaseToken = randomUUID();
+    const claimedRows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `update public.cloud_agent_approval_checkpoints
+          set state = 'resuming',
+              lease_token = $3,
+              lease_expires_at = now() + make_interval(secs => $4),
+              updated_at = now()
+        where id = $1 and user_id = $2 and state = 'pending'
+        returning *`,
+      [checkpoint.id, input.userId, leaseToken, leaseSeconds],
+    );
+    const claimed = requireApprovalCheckpoint(
+      claimedRows,
+      new CloudAgentApprovalCheckpointConflictError(),
+    );
+    const resumedRuns = await tx.query<CloudAgentRunRow>(
+      `update public.cloud_agent_runs
+          set state = 'resuming', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2 and state = 'paused'
+          and cancellation_requested_at is null
+        returning *`,
+      [input.runId, input.userId],
+    );
+    if (!resumedRuns[0]) {
+      throw new CloudAgentApprovalCheckpointConflictError('Cloud agent run is no longer resumable');
+    }
+    if (!claimed.leaseToken) throw new CloudAgentApprovalCheckpointConflictError();
+    return { checkpoint: claimed, leaseToken: claimed.leaseToken };
+  });
+}
+
+export async function releaseCloudAgentPauseCheckpoint(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string; checkpointId: string; leaseToken: string },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `update public.cloud_agent_approval_checkpoints
+          set state = 'pending', lease_token = null, lease_expires_at = null, updated_at = now()
+        where id = $1 and user_id = $2 and lease_token = $3 and state = 'resuming'
+          and checkpoint_kind = 'pause'
+        returning *`,
+      [input.checkpointId, input.userId, input.leaseToken],
+    );
+    requireApprovalCheckpoint(
+      rows,
+      new CloudAgentApprovalCheckpointConflictError('Pause checkpoint lease is no longer active'),
+    );
+    await tx.query(
+      `update public.cloud_agent_runs
+          set state = 'paused', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2 and state = 'resuming'`,
+      [input.runId, input.userId],
+    );
+  });
+}
+
+/**
+ * No executor is running for a paused run, so nothing would ever read its
+ * cancellation request. The run is ended here instead, with the terminal event
+ * journaled at the cursor the pause recorded so a replaying client sees it.
+ */
+export async function cancelPausedCloudAgentRun(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRun> {
+  const run = await db.transaction(async (tx) => {
+    const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `update public.cloud_agent_approval_checkpoints
+          set state = 'failed', resolved_at = coalesce(resolved_at, now()), updated_at = now()
+        where run_id = $1 and user_id = $2 and checkpoint_kind = 'pause' and state = 'pending'
+        returning *`,
+      [input.runId, input.userId],
+    );
+    const checkpoint = rows[0];
+    if (!checkpoint) {
+      return requireRun(
+        await tx.query<CloudAgentRunRow>(
+          `select * from public.cloud_agent_runs where id = $1 and user_id = $2 limit 1`,
+          [input.runId, input.userId],
+        ),
+      );
+    }
+    const turnId = z.string().min(1).parse(checkpoint.turn_id);
+    const envelope = AgentEventEnvelopeSchema.parse({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: z.string().min(1).parse(checkpoint.session_id),
+      turnId,
+      sequence: z.coerce.number().int().nonnegative().parse(checkpoint.next_event_sequence),
+      emittedAtMs: Date.now(),
+      event: {
+        type: 'task-state-changed',
+        taskId: turnId,
+        state: 'cancelled',
+        previousState: 'paused',
+        summary: 'Agent work was cancelled while paused.',
+      },
+    });
+    const appended = await appendCloudAgentEventsWithinTransaction(tx, {
+      userId: input.userId,
+      runId: input.runId,
+      envelopes: [envelope],
+    });
+    return appended.run;
+  });
+  return run;
+}
+
 export function isCloudAgentRunTerminal(state: AgentTaskState): boolean {
-  return TERMINAL_STATES.has(state);
+  return TERMINAL_AGENT_TASK_STATES.has(state);
 }

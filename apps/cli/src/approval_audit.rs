@@ -75,29 +75,29 @@ fn append_entry(entry: &ApprovalAuditEntry) -> Result<()> {
     append_entry_at(&approval_log_path()?, entry)
 }
 
-fn append_entry_at(path: &Path, entry: &ApprovalAuditEntry) -> Result<()> {
+pub(crate) fn append_entry_at<T: Serialize>(path: &Path, entry: &T) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create approval audit dir {}", parent.display()))?;
+            .with_context(|| format!("failed to create audit dir {}", parent.display()))?;
     }
 
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
-        .with_context(|| format!("failed to open approval audit log {}", path.display()))?;
+        .with_context(|| format!("failed to open audit log {}", path.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
     }
 
-    let line = serde_json::to_string(entry).context("failed to serialize approval audit entry")?;
-    writeln!(file, "{line}").context("failed to write approval audit entry")?;
+    let line = serde_json::to_string(entry).context("failed to serialize audit entry")?;
+    writeln!(file, "{line}").context("failed to write audit entry")?;
     Ok(())
 }
 
-fn sanitize_field(raw: &str) -> String {
+pub(crate) fn sanitize_field(raw: &str) -> String {
     let stripped = sanitize_terminal_text(raw);
     let mut out: String = stripped
         .chars()

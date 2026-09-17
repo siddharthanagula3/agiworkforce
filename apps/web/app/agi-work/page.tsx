@@ -130,16 +130,31 @@ export default function AgiWorkPage() {
                     'The run exists before the model has done anything with it. Stop already works.',
                 },
                 {
+                  label: 'Planning',
+                  value: 'Writing the plan for a goal before any tool runs.',
+                },
+                {
                   label: 'Running',
                   value:
                     'Working through the plan; an open run re-reads its own journal every few seconds.',
                 },
                 {
-                  label: 'Awaiting input',
-                  value:
-                    'Blocked on you: either a tool call needs approval, or a connector asked for a field.',
+                  label: 'Waiting for input',
+                  value: 'Blocked on you: a connector asked for a field before it can continue.',
                 },
-                { label: 'Paused', value: 'Held but still live, and Stop still works on it.' },
+                {
+                  label: 'Waiting for approval',
+                  value: 'Blocked on you: a tool call needs your approval before it runs.',
+                },
+                {
+                  label: 'Paused',
+                  value:
+                    'You pressed Pause. The run stops after the step it is on, keeps its work, and Resume continues from there.',
+                },
+                {
+                  label: 'Resuming',
+                  value: 'Picking a paused run back up from the step where it stopped.',
+                },
                 {
                   label: 'Ready for review',
                   value:
@@ -150,8 +165,17 @@ export default function AgiWorkPage() {
                   value: 'Settled, and nothing further will ever be appended to it.',
                 },
                 {
+                  label: 'Partially completed',
+                  value:
+                    'Used every step it was allowed. The work so far is kept, and the rest is not done.',
+                },
+                {
                   label: 'Failed',
                   value: 'Stopped on an error, and the activity list shows the step it stopped on.',
+                },
+                {
+                  label: 'Timed out',
+                  value: 'Ran out of time before it finished; what it produced is kept.',
                 },
                 { label: 'Cancelled', value: 'You pressed Stop.' },
                 {

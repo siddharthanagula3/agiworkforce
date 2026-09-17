@@ -24,9 +24,11 @@ import {
 import { makeUserConnectorExecutor } from '@/lib/user-connector-tools';
 import {
   isCloudAgentRunCancellationRequested,
+  isCloudAgentRunPauseRequested,
   saveCloudAgentApprovalCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
+  saveCloudAgentPauseCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
 import { CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS } from '@/lib/deadline-policy';
@@ -346,6 +348,7 @@ export async function executeCloudAgentWorkflowInvocation(
   let nextInput: CloudAgentWorkflowInput | null = null;
   let approvalCheckpointSaved = false;
   let inputCheckpointSaved = false;
+  let pauseCheckpointSaved = false;
   let reportedFailure = false;
   let lastTaskState: AgentTaskState | undefined;
   const cancellation = new AbortController();
@@ -372,6 +375,7 @@ export async function executeCloudAgentWorkflowInvocation(
     initialEventSequence: input.continuation?.initialEventSequence,
     initialCompletedSteps: input.continuation?.initialCompletedSteps,
     invocationContinuation: input.continuation?.invocationContinuation,
+    resumedFromPause: input.continuation?.resumedFromPause,
     maxDurationMs: CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
     isCancellationRequested: async () => {
       const cancelled = await isCloudAgentRunCancellationRequested(db, {
@@ -423,6 +427,22 @@ export async function executeCloudAgentWorkflowInvocation(
     },
     onInvocationCheckpoint: async (checkpoint) => {
       nextInput = workflowContinuation(input, serving, checkpoint);
+    },
+    isPauseRequested: () =>
+      isCloudAgentRunPauseRequested(db, { userId: input.userId, runId: input.runId }),
+    onPauseCheckpoint: async (checkpoint) => {
+      await saveCloudAgentPauseCheckpoint(db, {
+        userId: input.userId,
+        runId: input.runId,
+        sessionId: checkpoint.sessionId,
+        turnId: checkpoint.turnId,
+        nextEventSequence: checkpoint.nextEventSequence,
+        completedSteps: checkpoint.completedSteps,
+        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        messages: checkpoint.messages,
+        events: checkpoint.events,
+      });
+      pauseCheckpointSaved = true;
     },
     onApprovalCheckpoint: async (checkpoint) => {
       await saveCloudAgentApprovalCheckpoint(db, {
@@ -505,8 +525,9 @@ export async function executeCloudAgentWorkflowInvocation(
 
   if (nextInput) return { kind: 'continue', input: nextInput };
 
-  const outcome: WorkflowTerminalOutcome =
-    approvalCheckpointSaved || inputCheckpointSaved
+  const outcome: WorkflowTerminalOutcome = pauseCheckpointSaved
+    ? 'paused'
+    : approvalCheckpointSaved || inputCheckpointSaved
       ? 'awaiting_input'
       : lastTaskState === 'cancelled'
         ? 'cancelled'

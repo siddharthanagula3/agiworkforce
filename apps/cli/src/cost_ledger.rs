@@ -134,6 +134,9 @@ pub struct CostLedger {
     pub by_model: HashMap<String, f64>,
     /// Turn count.
     pub turns: u32,
+    /// The share of `total_usd` spent by subagents this session spawned.
+    pub subagent_usd: f64,
+    pub subagent_runs: u32,
 }
 
 impl CostLedger {
@@ -169,11 +172,39 @@ impl CostLedger {
         self.turns += 1;
         delta
     }
+
+    /// Attribute a finished subagent's turn to this session. It is not one of
+    /// this session's own turns, so the turn counter does not move.
+    pub fn record_subagent_run(&mut self, model: &str, cost_usd: f64) -> f64 {
+        let cost = if cost_usd.is_finite() && cost_usd > 0.0 {
+            cost_usd
+        } else {
+            0.0
+        };
+        *self.by_model.entry(model.to_string()).or_insert(0.0) += cost;
+        self.total_usd += cost;
+        self.subagent_usd += cost;
+        self.subagent_runs += 1;
+        cost
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_subagent_run_adds_to_session_cost_without_counting_as_a_turn() {
+        let mut ledger = CostLedger::default();
+        ledger.record_subagent_run("subagent-model", 0.25);
+        ledger.record_subagent_run("subagent-model", f64::NAN);
+
+        assert_eq!(ledger.turns, 0);
+        assert_eq!(ledger.subagent_runs, 2);
+        assert!((ledger.total_usd - 0.25).abs() < f64::EPSILON);
+        assert!((ledger.subagent_usd - 0.25).abs() < f64::EPSILON);
+        assert!((ledger.by_model["subagent-model"] - 0.25).abs() < f64::EPSILON);
+    }
 
     fn first_paid_catalog_model() -> String {
         model_catalog::catalog()

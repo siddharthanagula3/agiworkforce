@@ -19,6 +19,13 @@ export const ToolApprovalResumeRequestSchema = z.object({
 });
 export type ToolApprovalResumeRequest = z.infer<typeof ToolApprovalResumeRequestSchema>;
 
+export const PausedRunResumeRequestSchema = z
+  .object({
+    guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
+  })
+  .strict();
+export type PausedRunResumeRequest = z.infer<typeof PausedRunResumeRequestSchema>;
+
 export const MAX_TOOL_INPUT_RESPONSES_SERIALIZED_LENGTH = 16_000;
 
 // One paused connector call's user-supplied responses to an MCP `input_required`

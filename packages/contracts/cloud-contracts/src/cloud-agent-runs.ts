@@ -114,11 +114,23 @@ export const CloudAgentRunSchema = z.object({
     .optional(),
   originSurface: CloudAgentOriginSurfaceSchema,
   workMode: CloudAgentWorkModeSchema,
+  /**
+   * Always one of the nine states every client release parses, so a client
+   * built before the finer Work states still reads the run.
+   */
   state: AgentTaskStateSchema,
+  /**
+   * The full Work state: `planning`, `awaiting_approval`, `resuming`, `partial`
+   * and `timed_out` where `state` reports their coarse neighbour. Optional
+   * because a server older than it sends none; read `state` then.
+   */
+  workState: AgentTaskStateSchema.optional(),
   provider: z.string().min(1),
   model: z.string().min(1),
   lastEventSequence: z.number().int().min(-1),
   cancellationRequestedAt: z.string().datetime().nullable(),
+  /** Set while a pause the user asked for waits for the run's next step boundary. */
+  pauseRequestedAt: z.string().datetime().nullable().optional(),
   completedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

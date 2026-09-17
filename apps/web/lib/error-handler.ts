@@ -5,6 +5,14 @@ import {
   ATTR_URL_PATH,
 } from '@opentelemetry/semantic-conventions';
 import { AppError, createError } from './errors';
+import {
+  API_CONTRACT_VERSION,
+  API_VERSION_RESPONSE_HEADER,
+  InboundCircuitOpenError,
+  assertInboundContract,
+  runUnderGatewayPolicy,
+  type ApiGatewayPolicy,
+} from './api-gateway-policy';
 import { logger } from './logger';
 import { redactAttributes, redactValue } from './observability/redact';
 import {
@@ -59,7 +67,7 @@ const SAFE_TO_EXPOSE_CODES = new Set<string>([
 ]);
 
 function safeErrorMessage(error: AppError): string {
-  if (SAFE_TO_EXPOSE_CODES.has(error.code)) {
+  if (error.userSafe || SAFE_TO_EXPOSE_CODES.has(error.code)) {
     return error.message;
   }
   return GENERIC_MESSAGES[error.statusCode] ?? 'Request failed';
@@ -193,8 +201,22 @@ function readHeader(source: unknown, name: string): string | null {
   }
 }
 
+function circuitOpenResponse(error: InboundCircuitOpenError, requestId: string): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'This service is recovering from errors. Try again shortly.',
+      },
+      requestId,
+    },
+    { status: 503, headers: { 'retry-after': String(error.retryAfterSeconds) } },
+  );
+}
+
 export function withErrorHandler<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse | Response>,
+  policy: ApiGatewayPolicy = {},
 ) {
   return async (...args: T): Promise<NextResponse | Response> => {
     const inbound = parseTraceparent(readHeader(args[0], 'traceparent'));
@@ -229,7 +251,8 @@ export function withErrorHandler<T extends unknown[]>(
             status = 'error';
             response = payloadTooLargeResponse(breach, requestId);
           } else {
-            response = await handler(...args);
+            assertInboundContract({ method, header: (name) => readHeader(args[0], name) }, policy);
+            response = await runUnderGatewayPolicy(policy, () => handler(...args));
           }
         } catch (error) {
           thrown = error;
@@ -240,7 +263,9 @@ export function withErrorHandler<T extends unknown[]>(
                   { declaredBytes: null, ceilingBytes: error.ceilingBytes },
                   requestId,
                 )
-              : handleError(error, requestId);
+              : error instanceof InboundCircuitOpenError
+                ? circuitOpenResponse(error, requestId)
+                : handleError(error, requestId);
         }
 
         const attributes = redactAttributes({
@@ -278,6 +303,7 @@ export function withErrorHandler<T extends unknown[]>(
         try {
           response.headers.set('x-request-id', requestId);
           response.headers.set('traceparent', formatTraceparent(context));
+          response.headers.set(API_VERSION_RESPONSE_HEADER, API_CONTRACT_VERSION);
         } catch (err) {
           void err;
         }

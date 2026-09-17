@@ -8,7 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { readJsonBody } from '@/lib/read-json-body';
+import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -29,11 +29,24 @@ import { getOperatorMappedConnectorIds } from '@/lib/user-connector-tools';
 
 export const runtime = 'nodejs';
 
+const PLUGIN_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+const MCP_HOST_PATTERN =
+  /^(\*\.)?(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+
 const PutSchema = z
   .object({
     allowedConnectors: z.array(z.string().min(1).max(200)).max(CONNECTOR_POLICY_LIST_LIMIT),
     blockedConnectors: z.array(z.string().min(1).max(200)).max(CONNECTOR_POLICY_LIST_LIMIT),
     allowCustomConnectors: z.boolean(),
+    allowedPlugins: z
+      .array(z.string().trim().regex(PLUGIN_KEY_PATTERN))
+      .max(CONNECTOR_POLICY_LIST_LIMIT),
+    blockedPlugins: z
+      .array(z.string().trim().regex(PLUGIN_KEY_PATTERN))
+      .max(CONNECTOR_POLICY_LIST_LIMIT),
+    allowedMcpHosts: z
+      .array(z.string().trim().regex(MCP_HOST_PATTERN))
+      .max(CONNECTOR_POLICY_LIST_LIMIT),
   })
   .strict();
 
@@ -46,6 +59,9 @@ export interface ConnectorPolicyResponse {
     allowedConnectors: string[];
     blockedConnectors: string[];
     allowCustomConnectors: boolean;
+    allowedPlugins: string[];
+    blockedPlugins: string[];
+    allowedMcpHosts: string[];
     updatedAt: string | null;
   };
   catalog: string[];
@@ -69,6 +85,9 @@ function present(
       allowedConnectors: policy?.allowedConnectors ?? [],
       blockedConnectors: policy?.blockedConnectors ?? [],
       allowCustomConnectors: policy?.allowCustomConnectors ?? true,
+      allowedPlugins: policy?.allowedPlugins ?? [],
+      blockedPlugins: policy?.blockedPlugins ?? [],
+      allowedMcpHosts: policy?.allowedMcpHosts ?? [],
       updatedAt: policy?.updatedAt ?? null,
     },
     // Derived from the operator connector map rather than a list written here,
@@ -107,21 +126,27 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     );
   }
 
-  const parsed = PutSchema.safeParse(await readJsonBody(request));
-  if (!parsed.success) {
-    throw createError.validation('Invalid connector policy', parsed.error.issues);
-  }
+  const body = await readValidatedJsonBody(request, PutSchema, 'Invalid connector policy');
 
   const input = {
-    allowedConnectors: dedupe(parsed.data.allowedConnectors),
-    blockedConnectors: dedupe(parsed.data.blockedConnectors),
-    allowCustomConnectors: parsed.data.allowCustomConnectors,
+    allowedConnectors: dedupe(body.allowedConnectors),
+    blockedConnectors: dedupe(body.blockedConnectors),
+    allowCustomConnectors: body.allowCustomConnectors,
+    allowedPlugins: dedupe(body.allowedPlugins),
+    blockedPlugins: dedupe(body.blockedPlugins),
+    allowedMcpHosts: dedupe(body.allowedMcpHosts),
   };
 
   const overlap = input.allowedConnectors.filter((id) => input.blockedConnectors.includes(id));
   if (overlap.length > 0) {
     throw createError.validation(
       `A connector cannot be both approved and blocked: ${overlap.join(', ')}.`,
+    );
+  }
+  const pluginOverlap = input.allowedPlugins.filter((id) => input.blockedPlugins.includes(id));
+  if (pluginOverlap.length > 0) {
+    throw createError.validation(
+      `A plugin cannot be both approved and blocked: ${pluginOverlap.join(', ')}.`,
     );
   }
 

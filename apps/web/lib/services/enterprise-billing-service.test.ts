@@ -322,7 +322,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
     const upsert = calls.find((call) =>
       call.sql.includes('insert into public.organization_billing_contracts'),
     );
-    expect(upsert!.params.slice(10)).toEqual([
+    expect(upsert!.params.slice(10, 18)).toEqual([
       500000,
       'price_overage_1',
       250000,
@@ -346,7 +346,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
     const upsert = calls.find((call) =>
       call.sql.includes('insert into public.organization_billing_contracts'),
     );
-    expect(upsert!.params.slice(10)).toEqual([null, null, null, null, null, null, null, false]);
+    expect(upsert!.params.slice(10, 18)).toEqual([null, null, null, null, null, null, null, false]);
     expect(upsert!.sql).toContain('coalesce($11::bigint, 0)');
     expect(upsert!.sql).toContain('organization_billing_contracts.included_usage_cents_per_period');
   });
@@ -412,7 +412,7 @@ describe('syncEnterpriseContractFromSubscription', () => {
     const upsert = calls.find((call) =>
       call.sql.includes('insert into public.organization_billing_contracts'),
     );
-    expect(upsert!.params.at(-2)).toBe(1_700_000_500);
+    expect(upsert!.params[16]).toBe(1_700_000_500);
     expect(upsert!.sql).toMatch(
       /organization_billing_contracts\.last_stripe_event_at\s*<=\s*to_timestamp\(\$17/u,
     );
@@ -779,5 +779,173 @@ describe('every nullable parameter used inside coalesce carries an explicit cast
     const allSql = [...contractCalls, ...invoiceCalls].map((call) => call.sql).join('\n---\n');
     const uncast = coalescedParameterCasts(allSql).filter((entry) => !entry.cast);
     expect(uncast).toEqual([]);
+  });
+});
+
+describe('enterprise contract contacts, payment terms and tax status', () => {
+  function contractDb() {
+    return makeDb((sql) => {
+      if (sql.includes('from subscriptions')) return [{ user_id: 'user_1' }];
+      if (sql.includes('from public.organizations')) return [{ id: 'org_1' }];
+      if (sql.includes('insert into public.organization_billing_contracts')) {
+        return [{ organization_id: 'org_1' }];
+      }
+      return [];
+    });
+  }
+
+  function stripeWithCustomer(customer: Partial<Stripe.Customer> | Error) {
+    return {
+      prices: { retrieve: vi.fn() },
+      invoices: { retrieve: vi.fn() },
+      customers: {
+        retrieve: vi.fn(async () => {
+          if (customer instanceof Error) throw customer;
+          return customer;
+        }),
+      },
+    } as unknown as Stripe;
+  }
+
+  function upsertParams(calls: Call[]): unknown[] {
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_contracts'),
+    );
+    expect(upsert).toBeDefined();
+    return upsert!.params;
+  }
+
+  it('syncs billing and procurement contacts and NET terms from the negotiated metadata', async () => {
+    const { db, calls } = contractDb();
+
+    await syncEnterpriseContractFromSubscription(
+      db,
+      stripeWithCustomer({ id: 'cus_ent_1', tax_exempt: 'exempt' }),
+      subscriptionFixture({
+        metadata: {
+          billing_contact_name: 'Accounts Payable',
+          billing_contact_email: 'AP@Example.com',
+          procurement_contact_name: 'Dana Buyer',
+          procurement_contact_email: 'buyer@example.com',
+          net_terms_days: '45',
+        },
+      }),
+    );
+
+    expect(upsertParams(calls).slice(18)).toEqual([
+      'Accounts Payable',
+      'ap@example.com',
+      'Dana Buyer',
+      'buyer@example.com',
+      45,
+      'exempt',
+    ]);
+  });
+
+  it('ignores a malformed contact email or out-of-range terms rather than storing them', async () => {
+    const { db, calls } = contractDb();
+
+    await syncEnterpriseContractFromSubscription(
+      db,
+      stripeWithCustomer({ id: 'cus_ent_1', tax_exempt: 'none' }),
+      subscriptionFixture({
+        metadata: { billing_contact_email: 'not-an-email', net_terms_days: '400' },
+      }),
+    );
+
+    const params = upsertParams(calls);
+    expect(params[19]).toBeNull();
+    expect(params[22]).toBeNull();
+    expect(loggerMocks.error).toHaveBeenCalled();
+  });
+
+  it('keeps the recorded tax status when the Stripe customer cannot be read', async () => {
+    const { db, calls } = contractDb();
+
+    await syncEnterpriseContractFromSubscription(
+      db,
+      stripeWithCustomer(new Error('stripe unavailable')),
+      subscriptionFixture(),
+    );
+
+    const upsert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_contracts'),
+    );
+    expect(upsert!.params[23]).toBeNull();
+    expect(upsert!.sql).toContain(
+      'tax_exempt_status = coalesce($24::text, organization_billing_contracts.tax_exempt_status)',
+    );
+  });
+
+  it('dates an automatically charged invoice from the contract NET terms', async () => {
+    const finalizedAt = 1_700_000_000;
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_open_1' }];
+      }
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1', payment_terms_days: 30 }];
+      }
+      return [];
+    });
+
+    await recordEnterpriseInvoiceEvent(
+      db,
+      invoiceFixture({
+        collection_method: 'charge_automatically',
+        due_date: null,
+        status_transitions: {
+          paid_at: null,
+          voided_at: null,
+          finalized_at: finalizedAt,
+          marked_uncollectible_at: null,
+        },
+      }),
+    );
+
+    const insert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_invoices'),
+    );
+    expect(insert!.params[12]).toBe(new Date((finalizedAt + 30 * 86_400) * 1000).toISOString());
+  });
+
+  it('keeps the invoice due date Stripe issued and flags a disagreement with the terms', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_open_1' }];
+      }
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1', payment_terms_days: 30 }];
+      }
+      return [];
+    });
+
+    await recordEnterpriseInvoiceEvent(
+      db,
+      invoiceFixture({
+        due_date: 1_700_000_000 + 60 * 86_400,
+        status_transitions: {
+          paid_at: null,
+          voided_at: null,
+          finalized_at: 1_700_000_000,
+          marked_uncollectible_at: null,
+        },
+      }),
+    );
+
+    const insert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_invoices'),
+    );
+    expect(insert!.params[12]).toBe(new Date((1_700_000_000 + 60 * 86_400) * 1000).toISOString());
+    expect(loggerMocks.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentTermsDays: 30 }),
+      expect.stringContaining('disagrees with the contract payment terms'),
+    );
   });
 });

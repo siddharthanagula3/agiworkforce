@@ -105,6 +105,7 @@ pub mod model_reachability;
 pub mod models_cache;
 pub mod oauth;
 pub mod onboarding;
+pub mod subagent_audit;
 // plugins lives at features::plugins::plugins; re-exported here so all
 // internal callers using `crate::plugins::*` continue to resolve unchanged.
 pub use features::plugins::plugins;
@@ -1276,6 +1277,21 @@ enum PluginSubcommand {
         /// Bypass integrity verification. AUDIT-FIX: H-16, prints a warning to stderr every install.
         #[arg(long)]
         unsafe_no_integrity: bool,
+        /// Install a plugin that carries no signature from a publisher in
+        /// `[plugins.trusted_publishers]`. A signature that fails to verify is never accepted.
+        #[arg(long)]
+        unsafe_allow_unsigned: bool,
+    },
+    /// Sign a plugin directory with a publisher's Ed25519 key.
+    Sign {
+        /// Plugin directory containing its manifest.
+        path: std::path::PathBuf,
+        /// Publisher name recorded in the signature.
+        #[arg(long)]
+        publisher: String,
+        /// File holding the base64 32-byte Ed25519 seed.
+        #[arg(long)]
+        key_file: std::path::PathBuf,
     },
 }
 
@@ -1395,6 +1411,9 @@ enum MarketplaceSubcommand {
         /// Installation scope (user, project, local).
         #[arg(long, default_value = "user")]
         scope: String,
+        /// Install a plugin that carries no trusted publisher signature.
+        #[arg(long)]
+        unsafe_allow_unsigned: bool,
     },
     /// Uninstall a plugin by name.
     Uninstall {
@@ -1403,8 +1422,12 @@ enum MarketplaceSubcommand {
     },
     /// List all installed marketplace plugins.
     List,
-    /// Update all git-installed plugins.
-    Update,
+    /// Update all git-installed plugins, refusing updates whose signature no longer verifies.
+    Update {
+        /// Accept updates that carry no trusted publisher signature.
+        #[arg(long)]
+        unsafe_allow_unsigned: bool,
+    },
 }
 
 type ManagedResumeSession = (runtime::session::ManagedSession, std::path::PathBuf);
@@ -3174,7 +3197,7 @@ pub async fn run_main() -> Result<()> {
                         .lock()
                         .map(|buf| buf.clone())
                         .unwrap_or_default();
-                    session.finalize_cancelled_turn(&partial);
+                    session.cancel_turn(&partial).await;
                     // The repair `finalize_cancelled_turn` just made lives only
                     // in memory, and the turn-end persist never runs on this
                     // path. Without this write the session file ends on a lone
@@ -3528,6 +3551,7 @@ pub async fn run_main() -> Result<()> {
                         name,
                         integrity,
                         unsafe_no_integrity,
+                        unsafe_allow_unsigned,
                     } => {
                         let pname =
                             match plugins::derive_plugin_install_name(source, name.as_deref()) {
@@ -3556,23 +3580,39 @@ pub async fn run_main() -> Result<()> {
                                 );
                             }
                             (None, true) => plugins::PluginIntegrity::UnsafeSkip,
-                            (None, false) => {
-                                anyhow::bail!(
-                                    "Refusing install: pass --integrity sha256:<hex> (or --unsafe-no-integrity)"
-                                );
-                            }
+                            (None, false) => plugins::PluginIntegrity::PublisherSignature,
+                        };
+                        let publishers =
+                            features::plugins::signature::TrustedPublishers::configured()
+                                .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
+                        let psignature = if *unsafe_allow_unsigned {
+                            plugins::PluginSignaturePolicy::UnsafeAllowUnsigned(publishers)
+                        } else {
+                            plugins::PluginSignaturePolicy::RequireTrustedPublisher(publishers)
                         };
                         match mgr.install(plugins::PluginInstallRequest {
                             source: psrc,
                             name: pname,
                             integrity: pintegrity,
+                            signature: psignature,
                         }) {
-                            plugins::PluginInstallOutcome::Installed { path, format } => {
+                            plugins::PluginInstallOutcome::Installed {
+                                path,
+                                format,
+                                publisher,
+                            } => {
                                 let fmt_tag = match format {
                                     Some(fmt) => format!(" ({} manifest)", fmt.short_tag()),
                                     None => String::new(),
                                 };
-                                println!("Installed to {}{}", path.display(), fmt_tag);
+                                let signed_by = match publisher {
+                                    Some(publisher) => format!(
+                                        ", signed by {}",
+                                        terminal_text::sanitize_terminal_text(&publisher)
+                                    ),
+                                    None => ", unsigned".to_string(),
+                                };
+                                println!("Installed to {}{}{}", path.display(), fmt_tag, signed_by);
                                 Ok(())
                             }
                             plugins::PluginInstallOutcome::AlreadyInstalled { path } => {
@@ -3585,6 +3625,26 @@ pub async fn run_main() -> Result<()> {
                                 anyhow::bail!("Failed: {}", error)
                             }
                         }
+                    }
+                    PluginSubcommand::Sign {
+                        path,
+                        publisher,
+                        key_file,
+                    } => {
+                        use features::plugins::signature;
+                        let seed = std::fs::read_to_string(key_file).with_context(|| {
+                            format!("failed to read signing key {}", key_file.display())
+                        })?;
+                        let key = signature::signing_key_from_seed_base64(&seed)
+                            .map_err(anyhow::Error::msg)?;
+                        let written = signature::sign_plugin(path, publisher, &key)
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Wrote {}", written.display());
+                        println!(
+                            "Publisher key for [plugins.trusted_publishers]: {}",
+                            signature::public_key_base64(&key)
+                        );
+                        Ok(())
                     }
                 }
             }
@@ -3834,8 +3894,20 @@ pub async fn run_main() -> Result<()> {
                         );
                         Ok(())
                     }
-                    MarketplaceSubcommand::Install { source, scope } => {
-                        mp.install(source, &home, scope).await?;
+                    MarketplaceSubcommand::Install {
+                        source,
+                        scope,
+                        unsafe_allow_unsigned,
+                    } => {
+                        let publishers =
+                            features::plugins::signature::TrustedPublishers::configured()
+                                .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
+                        let policy = if *unsafe_allow_unsigned {
+                            plugins::PluginSignaturePolicy::UnsafeAllowUnsigned(publishers)
+                        } else {
+                            plugins::PluginSignaturePolicy::RequireTrustedPublisher(publishers)
+                        };
+                        mp.install(source, &home, scope, &policy).await?;
                         Ok(())
                     }
                     MarketplaceSubcommand::Uninstall { name } => {
@@ -3847,8 +3919,18 @@ pub async fn run_main() -> Result<()> {
                         println!("{}", marketplace::format_installed(&registry));
                         Ok(())
                     }
-                    MarketplaceSubcommand::Update => {
-                        mp.update_all(&home).await?;
+                    MarketplaceSubcommand::Update {
+                        unsafe_allow_unsigned,
+                    } => {
+                        let publishers =
+                            features::plugins::signature::TrustedPublishers::configured()
+                                .map_err(|error| anyhow::anyhow!("Refusing update: {error}"))?;
+                        let policy = if *unsafe_allow_unsigned {
+                            plugins::PluginSignaturePolicy::UnsafeAllowUnsigned(publishers)
+                        } else {
+                            plugins::PluginSignaturePolicy::RequireTrustedPublisher(publishers)
+                        };
+                        mp.update_all(&home, &policy).await?;
                         Ok(())
                     }
                 }

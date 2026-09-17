@@ -356,7 +356,9 @@ describe('managed usage request service', () => {
 
     const settledUsage = vi
       .mocked(db.query)
-      .mock.calls.find(([sql]) => sql.includes('finalize_managed_usage_request_microusd'))?.[1]?.[6];
+      .mock.calls.find(([sql]) =>
+        sql.includes('finalize_managed_usage_request_microusd'),
+      )?.[1]?.[6];
     expect(JSON.parse(String(settledUsage))).toMatchObject({
       inputTokens: 10,
       outputTokens: 5,
@@ -512,6 +514,85 @@ describe('managed usage settlement feeds the COGS ledger', () => {
       taskRef: 'b'.repeat(64),
       usage: { operation: 'image', outputCount: 2, quotaFeature: 'image' },
     });
+  });
+
+  it('attributes the settled cost to its product area, project and session', async () => {
+    recordSettledProviderCost.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'completed',
+        operation_result: 'finalized',
+        settlement_status: 'succeeded',
+        actual_cost_microusd: 50000,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_2',
+      requestHash: 'c'.repeat(64),
+      leaseToken: 'lease-2',
+      estimatedCostCents: 10,
+      provider: 'openai',
+      model: 'fixture-chat-model',
+      attribution: {
+        workload: 'work',
+        projectId: '22222222-2222-4222-8222-222222222222',
+        sessionId: '33333333-3333-4333-8333-333333333333',
+      },
+      outcome: 'completed',
+      actualCostCents: 5,
+      usage: { operation: 'chat' },
+    });
+
+    expect(recordSettledProviderCost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workload: 'work',
+        projectId: '22222222-2222-4222-8222-222222222222',
+        sessionId: '33333333-3333-4333-8333-333333333333',
+        usage: expect.objectContaining({
+          workload: 'work',
+          projectId: '22222222-2222-4222-8222-222222222222',
+          sessionId: '33333333-3333-4333-8333-333333333333',
+        }),
+      }),
+    );
+    const persistedUsage = JSON.parse(
+      String((vi.mocked(db.query).mock.calls[0]?.[1] as unknown[])[6]),
+    ) as Record<string, unknown>;
+    expect(persistedUsage).toMatchObject({ workload: 'work', operation: 'chat' });
+  });
+
+  it('drops an attribution value that is not a known workload or a safe identifier', async () => {
+    recordSettledProviderCost.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'completed',
+        operation_result: 'finalized',
+        settlement_status: 'succeeded',
+        actual_cost_microusd: 50000,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_3',
+      requestHash: 'd'.repeat(64),
+      leaseToken: 'lease-3',
+      estimatedCostCents: 10,
+      provider: 'openai',
+      model: 'fixture-chat-model',
+      attribution: { workload: 'mining' as never, projectId: "x' or 1=1" },
+      outcome: 'completed',
+      actualCostCents: 5,
+      usage: { operation: 'chat' },
+    });
+
+    const args = recordSettledProviderCost.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(args).not.toHaveProperty('workload');
+    expect(args).not.toHaveProperty('projectId');
   });
 
   it('settles the delivered work late when a turn finishes after recovery reclaimed it', async () => {
