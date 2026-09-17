@@ -322,6 +322,16 @@
       "reason": "the personal data export includes the product analytics events 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
     },
     {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 218,
+      "reason": "0218 adds media_assets.temporary_chat, which the personal export reports so a subject can see why an upload of theirs is absent from their Library; the deploy runbook applies 0218 before this code reaches production, and export is a batch path that must not ship ahead of its own schema."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 219,
+      "reason": "0219 adds web_conversations.draft, which the personal export includes because an unsent message is the subject's own words; the deploy runbook applies 0219 before this code reaches production, and export is a batch path that must not ship ahead of its own schema."
+    },
+    {
       "file": "apps/web/app/api/web-push/route.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
