@@ -33,7 +33,10 @@ import { GET, POST } from '@/app/api/schedules/route';
 
 const tx = { query: vi.fn(), execute: vi.fn(async () => 0) };
 const db = { query: vi.fn(), transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
-const quotaDb = { query: vi.fn() };
+// The workspace feature gate reads the caller's workspace from the same Neon
+// pool as the quota check. This caller is a personal user with no workspace, so
+// every workspace lookup finds no row and the gate leaves the request unscoped.
+const quotaDb = { query: vi.fn(async () => [] as unknown[]) };
 const schedule = { id: 'task-1', userId: 'user-1', scheduleType: 'cron' };
 
 describe('/api/schedules', () => {
@@ -41,6 +44,7 @@ describe('/api/schedules', () => {
     vi.clearAllMocks();
     vi.mocked(getUserScopedDb).mockResolvedValue({ db, userId: 'user-1' } as never);
     vi.mocked(getNeonDb).mockReturnValue(quotaDb as never);
+    quotaDb.query.mockResolvedValue([]);
     vi.mocked(listSchedules).mockResolvedValue([schedule] as never);
     vi.mocked(createSchedule).mockResolvedValue(schedule as never);
     vi.mocked(assertScheduleQuota).mockResolvedValue(undefined);
