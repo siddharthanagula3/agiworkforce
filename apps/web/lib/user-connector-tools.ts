@@ -17,6 +17,7 @@ import type { InteractiveCard } from '@agiworkforce/types';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { inspectConnectorToolDefs } from '@/lib/security/mcp-tool-inspection';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { recordConnectorCall } from '@/lib/services/infrastructure-cost';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
@@ -2305,11 +2306,19 @@ export async function loadUserConnectorToolCatalog(
     // to every one of them rather than only to the chat picker.
     const governed = await applyConnectorPolicy(defs, organizationId, customServerIds, userId);
 
+    const inspected = inspectConnectorToolDefs(governed);
+    if (inspected.rejected.length > 0) {
+      logger.warn(
+        { userId, rejected: inspected.rejected },
+        '[user-connector] withheld connector tools whose definitions failed inspection',
+      );
+    }
+
     const isToolDenied = options.isToolDenied;
     const allowed = isToolDenied
-      ? governed.filter((def) => !isToolDenied(def.serverId, def.toolName))
-      : governed;
-    if (isToolDenied && allowed.length !== governed.length) {
+      ? inspected.allowed.filter((def) => !isToolDenied(def.serverId, def.toolName))
+      : inspected.allowed;
+    if (isToolDenied && allowed.length !== inspected.allowed.length) {
       logger.info(
         { userId, blocked: defs.length - allowed.length },
         '[user-connector] omitted blocked connector tools from the offered catalog',

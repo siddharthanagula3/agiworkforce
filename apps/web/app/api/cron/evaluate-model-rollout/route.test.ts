@@ -36,7 +36,7 @@ vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: (input: unknown) => mocks.sendSupportEmail(input),
 }));
 
-vi.mock('../health-probe/route', () => ({
+vi.mock('@/lib/server/incident/pager', () => ({
   pageOnCall: (severity: string, subject: string, text: string) =>
     mocks.pageOnCall(severity, subject, text),
 }));

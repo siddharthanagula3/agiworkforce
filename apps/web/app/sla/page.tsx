@@ -14,6 +14,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import { formatObjective, SLO_CATALOGUE } from '@/lib/server/slo/catalogue';
 
 export const metadata = buildMetadata({
   title: 'SLA',
@@ -29,10 +30,9 @@ const LAST_REVIEWED = new Date(`${POLICY_LAST_UPDATED.sla}T00:00:00Z`).toLocaleD
   timeZone: 'UTC',
 });
 
-const UPTIME: readonly LedgerRow[] = [
+const PLATFORM_UPTIME: readonly LedgerRow[] = [
   { label: 'Web (agiworkforce.com)', value: '99.9% target · monthly window' },
   { label: 'API gateway', value: '99.9% target · monthly window' },
-  { label: 'Authentication', value: '99.9% target · monthly window' },
   {
     label: 'Provider passthrough',
     value: "Inherits the provider's own SLA · not measured by us",
@@ -44,6 +44,14 @@ const UPTIME: readonly LedgerRow[] = [
     quiet: true,
   },
 ];
+
+const SERVICE_LEVELS: readonly LedgerRow[] = SLO_CATALOGUE.map((slo) => ({
+  label: slo.domain,
+  value: slo.source
+    ? `${formatObjective(slo.objective)} · ${slo.windowDays}-day window · measured from ${slo.source.table}`
+    : `${formatObjective(slo.objective)} · ${slo.windowDays}-day window · not measured: ${slo.missingInstrument ?? ''}`,
+  quiet: slo.source === null,
+}));
 
 const RESPONSE: readonly LedgerRow[] = [
   {
@@ -73,9 +81,9 @@ const NOT_YET: readonly LedgerRow[] = [
       'The uptime numbers above take effect only if and when a plan agreement says so. Until then they describe what we are building toward, and nothing on this page creates an uptime obligation. The support response commitments in the table above are current policy, not a future target.',
   },
   {
-    label: 'No measured history',
+    label: 'No published history',
     value:
-      'We do not publish historical uptime, and we have no incident archive. The live check on /status is a point-in-time signal covering three dependencies, not an availability record.',
+      'The measured objectives below are computed over a rolling window and shown on /status; nothing older than that window is published, and we have no incident archive. Three of the fourteen domains have no instrument yet, and the table says which and why rather than reporting a number we cannot stand behind.',
   },
   {
     label: 'Support routing is manual',
@@ -85,7 +93,7 @@ const NOT_YET: readonly LedgerRow[] = [
   {
     label: 'No 24/7 coverage',
     value:
-      'There is no on-call rotation and no round-the-clock coverage. We do not claim 24/7 support because a small team could not staff it honestly; response follows the business-hours and business-day targets above.',
+      'Alerts route through an on-call rotation with escalation, but the rotation is small and there is no round-the-clock coverage. We do not claim 24/7 support because a small team could not staff it honestly; response follows the business-hours and business-day targets above.',
   },
   {
     label: 'No recovery objectives',
@@ -131,7 +139,19 @@ export default function SlaPage() {
             <h2 className="agi-ds-h2" id="agi-sla-uptime-title">
               What we intend to commit to at general availability.
             </h2>
-            <Ledger caption="Planned uptime targets" rows={UPTIME} />
+            <Ledger caption="Planned uptime targets" rows={PLATFORM_UPTIME} />
+            <Prose>
+              Below each service level names the objective, the window it is computed over, and the
+              production table it is computed from. A domain with no instrument yet says so instead
+              of carrying a number. The list comes from the same file the burn-rate alerting reads,
+              so a target here and what is actually measured cannot drift apart. Current attainment
+              is on{' '}
+              <Link href="/status" className="agi-ds-link">
+                /status
+              </Link>
+              .
+            </Prose>
+            <Ledger caption="Service levels by domain" rows={SERVICE_LEVELS} />
           </Stack>
         </Section>
 

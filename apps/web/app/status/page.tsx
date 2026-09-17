@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -15,6 +17,8 @@ import {
   PageHero,
 } from '@/features/marketing/components/pages/surfaces/shared';
 import { getCachedHealthChecks, type HealthCheckResult } from '../../lib/server/health-check';
+import { getCachedSloAttainment, type SloAttainment } from '@/lib/server/slo/attainment';
+import { declaredOnlySlos, formatObjective } from '@/lib/server/slo/catalogue';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import { contactMailto } from '@/lib/legal-constants';
 
@@ -70,6 +74,33 @@ async function fetchHealth(): Promise<HealthSignal> {
   }
 }
 
+const ATTAINMENT_PERCENT = 100;
+const ATTAINMENT_DECIMALS = 2;
+const BUDGET_DECIMALS = 0;
+
+async function fetchAttainment(): Promise<SloAttainment[] | null> {
+  try {
+    return await getCachedSloAttainment();
+  } catch {
+    return null;
+  }
+}
+
+function attainmentValue(measured: SloAttainment): string {
+  const objective = `objective ${formatObjective(measured.objective)}`;
+  if (measured.attainment === null) {
+    return `No samples in the last ${measured.windowDays} days · ${objective}`;
+  }
+  const attained = (measured.attainment * ATTAINMENT_PERCENT).toFixed(ATTAINMENT_DECIMALS);
+  const budget =
+    measured.errorBudgetRemaining === null
+      ? 'no budget to spend'
+      : `${(measured.errorBudgetRemaining * ATTAINMENT_PERCENT).toFixed(BUDGET_DECIMALS)}% of the error budget left`;
+  const latency =
+    measured.latencyP95Ms === null ? '' : ` · 95th percentile ${measured.latencyP95Ms}ms`;
+  return `${attained}% of ${measured.samples.toLocaleString('en-GB')} events over ${measured.windowDays} days · ${objective} · ${budget}${latency}`;
+}
+
 const COVERED: { key: 'environment' | 'database' | 'stripe'; label: string; what: string }[] = [
   {
     key: 'environment',
@@ -105,6 +136,7 @@ const NOT_COVERED = [
 
 export default async function StatusPage() {
   const health = await fetchHealth();
+  const attainment = await fetchAttainment();
   const checks = health.checks;
   const checkedLabel = health.checkedAt
     ? new Date(health.checkedAt).toUTCString()
@@ -187,6 +219,52 @@ export default async function StatusPage() {
                   value: `${NOT_COVERED.join(' · ')}. A green signal above says nothing about any of these. If one of them is failing for you, the report channel below is the fastest path.`,
                 },
               ]}
+            />
+          </Stack>
+        </Section>
+
+        <Section id="service-levels" labelledBy="agi-status-slo-title" rule>
+          <Stack gap="loose">
+            <div>
+              <h2 className="agi-ds-h2" id="agi-status-slo-title">
+                Service levels, measured rather than declared.
+              </h2>
+              <Prose>
+                Each row is computed from production rows over a rolling window, not from a
+                hand-kept spreadsheet, and the objectives it is measured against are on{' '}
+                <Link href="/sla" className="agi-ds-link">
+                  /sla
+                </Link>
+                . When a domain burns its error budget fast enough to empty the month inside two
+                days, the same numbers page whoever is on call. A window with no events says so
+                rather than reporting a perfect score over nothing.
+              </Prose>
+            </div>
+            <Ledger
+              caption="Measured service levels"
+              rows={
+                attainment === null
+                  ? [
+                      {
+                        label: 'Attainment',
+                        value:
+                          'The attainment query did not return. That is a fault in this page, not a statement about the platform.',
+                        quiet: true,
+                      },
+                    ]
+                  : attainment.map((measured) => ({
+                      label: measured.domain,
+                      value: attainmentValue(measured),
+                    }))
+              }
+            />
+            <Ledger
+              caption="Domains with no instrument"
+              rows={declaredOnlySlos().map((slo) => ({
+                label: slo.domain,
+                value: `Not measured. ${slo.missingInstrument ?? ''}`,
+                quiet: true,
+              }))}
             />
           </Stack>
         </Section>

@@ -21,6 +21,7 @@ export const SERVER_RENDER_LOCALE = DEFAULT_LANGUAGE;
 
 export const RENDER_CACHE_TAGS = {
   statusHealth: 'status-health',
+  sloAttainment: 'slo-attainment',
   pluginCatalog: 'plugin-catalog',
   pluginEntry: (id: string) => `plugin-entry:${id}`,
 } as const;

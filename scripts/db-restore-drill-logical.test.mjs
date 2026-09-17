@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  MAX_SECONDS_ENV,
   PG_BIN_DIR_ENV,
   SCRATCH_PREFIX_ENV,
+  SEED_ENV,
   SOURCE_URL_ENV,
   TARGET_ADMIN_URL_ENV,
   loadConfigFromEnv,
@@ -37,11 +39,19 @@ function makeFakeClient(queryImpl, calls) {
   };
 }
 
-function makeDataQueryImpl({ counts, presentTables }) {
+function makeDataQueryImpl({ counts, presentTables, fingerprints = {} }) {
   return async (text, params) => {
     if (text.startsWith('select to_regclass')) {
       const table = params[0];
       return presentTables.has(table) ? [{ relation: table }] : [{ relation: null }];
+    }
+    if (text.includes('as fingerprint')) {
+      const table = text.slice(
+        text.indexOf('from (select r::text as row_text from ') +
+          'from (select r::text as row_text from '.length,
+      );
+      const name = table.slice(0, table.indexOf(' r)'));
+      return [{ fingerprint: fingerprints[name] ?? `rows:${counts[name] ?? 0}` }];
     }
     const table = text.slice(text.lastIndexOf('from ') + 'from '.length);
     return [{ count: counts[table] ?? 0 }];
@@ -62,6 +72,8 @@ function buildHarness({
   targetPresentTables,
   dumpExitCode,
   restoreExitCode,
+  sourceFingerprints,
+  targetFingerprints,
 }) {
   const adminCalls = [];
   const sourceCalls = [];
@@ -71,11 +83,19 @@ function buildHarness({
 
   const adminClient = makeFakeClient(async () => [], adminCalls);
   const sourceClient = makeFakeClient(
-    makeDataQueryImpl({ counts: sourceCounts, presentTables: new Set(CORE_TABLES) }),
+    makeDataQueryImpl({
+      counts: sourceCounts,
+      presentTables: new Set(CORE_TABLES),
+      fingerprints: sourceFingerprints,
+    }),
     sourceCalls,
   );
   const scratchClient = makeFakeClient(
-    makeDataQueryImpl({ counts: targetCounts, presentTables: targetPresentTables }),
+    makeDataQueryImpl({
+      counts: targetCounts,
+      presentTables: targetPresentTables,
+      fingerprints: targetFingerprints,
+    }),
     scratchCalls,
   );
 
@@ -342,4 +362,126 @@ test('runLogicalRestoreDrill requires a source url and a target admin url', asyn
     }),
     new RegExp(TARGET_ADMIN_URL_ENV),
   );
+});
+
+test('runLogicalRestoreDrill fails when a table restores the right number of different rows', async () => {
+  const counts = Object.fromEntries(CORE_TABLES.map((table) => [table, 7]));
+  counts[MIGRATION_LEDGER_TABLE] = 168;
+  const harness = buildHarness({
+    sourceCounts: counts,
+    targetCounts: counts,
+    targetPresentTables: new Set(CORE_TABLES),
+    sourceFingerprints: { [CORE_TABLES[0]]: 'aaaa' },
+    targetFingerprints: { [CORE_TABLES[0]]: 'bbbb' },
+  });
+
+  const report = await runLogicalRestoreDrill({
+    sourceUrl: SOURCE_URL,
+    targetAdminUrl: TARGET_ADMIN_URL,
+    createClient: harness.createClient,
+    spawnImpl: harness.spawnImpl,
+    removeFile: harness.removeFile,
+    now: () => 1000,
+    randomSuffix: () => 'abcd1234',
+  });
+
+  assert.equal(report.pass, false);
+  assert.equal(report.counts[CORE_TABLES[0]].match, true);
+  assert.equal(report.fingerprints[CORE_TABLES[0]].match, false);
+});
+
+test('runLogicalRestoreDrill refuses to seed fixture rows into a remote source', async () => {
+  const counts = Object.fromEntries(CORE_TABLES.map((table) => [table, 1]));
+  counts[MIGRATION_LEDGER_TABLE] = 168;
+  const harness = buildHarness({
+    sourceCounts: counts,
+    targetCounts: counts,
+    targetPresentTables: new Set(CORE_TABLES),
+  });
+
+  await assert.rejects(
+    runLogicalRestoreDrill({
+      sourceUrl: SOURCE_URL,
+      targetAdminUrl: TARGET_ADMIN_URL,
+      createClient: harness.createClient,
+      spawnImpl: harness.spawnImpl,
+      removeFile: harness.removeFile,
+      seed: true,
+    }),
+    /non-loopback source host/u,
+  );
+  assert.equal(harness.spawnCalls.length, 0);
+});
+
+test('runLogicalRestoreDrill seeds a loopback source before the dump', async () => {
+  const counts = Object.fromEntries(CORE_TABLES.map((table) => [table, 1]));
+  counts[MIGRATION_LEDGER_TABLE] = 168;
+  const localSource = 'postgresql://postgres:PLACEHOLDER@localhost:5432/agiworkforce_drill';
+  const adminCalls = [];
+  const sourceCalls = [];
+  const scratchCalls = [];
+  const spawnCalls = [];
+  const queryImpl = makeDataQueryImpl({ counts, presentTables: new Set(CORE_TABLES) });
+  const adminClient = makeFakeClient(async () => [], adminCalls);
+  const sourceClient = makeFakeClient(queryImpl, sourceCalls);
+  const scratchClient = makeFakeClient(queryImpl, scratchCalls);
+
+  const report = await runLogicalRestoreDrill({
+    sourceUrl: localSource,
+    targetAdminUrl: TARGET_ADMIN_URL,
+    createClient: (connectionString) => {
+      if (connectionString === TARGET_ADMIN_URL) return adminClient;
+      if (connectionString === localSource) return sourceClient;
+      return scratchClient;
+    },
+    spawnImpl: makeSpawnImpl({ calls: spawnCalls }),
+    removeFile: async () => {},
+    seed: true,
+  });
+
+  assert.equal(report.seeded, true);
+  assert.equal(report.pass, true);
+  assert.ok(
+    sourceCalls.some(
+      (call) => typeof call === 'object' && call.text.includes('insert into public.profiles'),
+    ),
+  );
+});
+
+test('runLogicalRestoreDrill fails a restore that took longer than its budget', async () => {
+  const counts = Object.fromEntries(CORE_TABLES.map((table) => [table, 1]));
+  counts[MIGRATION_LEDGER_TABLE] = 168;
+  const harness = buildHarness({
+    sourceCounts: counts,
+    targetCounts: counts,
+    targetPresentTables: new Set(CORE_TABLES),
+  });
+
+  const report = await runLogicalRestoreDrill({
+    sourceUrl: SOURCE_URL,
+    targetAdminUrl: TARGET_ADMIN_URL,
+    createClient: harness.createClient,
+    spawnImpl: harness.spawnImpl,
+    removeFile: harness.removeFile,
+    maxSeconds: 60,
+    clock: (() => {
+      let ticks = 0;
+      return () => (ticks++ === 0 ? 0 : 61_000);
+    })(),
+  });
+
+  assert.equal(report.withinBudget, false);
+  assert.equal(report.pass, false);
+});
+
+test('loadConfigFromEnv reads the seed switch and the restore budget', () => {
+  const base = {
+    [SOURCE_URL_ENV]: 'postgresql://a@h/db',
+    [TARGET_ADMIN_URL_ENV]: 'postgresql://b@h2/postgres',
+  };
+  assert.equal(loadConfigFromEnv(base).seed, false);
+  assert.equal(loadConfigFromEnv(base).maxSeconds, 900);
+  assert.equal(loadConfigFromEnv({ ...base, [SEED_ENV]: '1' }).seed, true);
+  assert.equal(loadConfigFromEnv({ ...base, [MAX_SECONDS_ENV]: '120' }).maxSeconds, 120);
+  assert.equal(loadConfigFromEnv({ ...base, [MAX_SECONDS_ENV]: 'nonsense' }).maxSeconds, 900);
 });

@@ -49,3 +49,16 @@ export {
 } from './adapters/s3';
 
 export { bindPresignedUpload, type BoundPresignUpload } from './presign';
+
+export {
+  createRetryingObjectStore,
+  isRetryableObjectStorageError,
+  resolveObjectStorageRetryPolicy,
+  DEFAULT_OBJECT_STORAGE_RETRY_POLICY,
+  OBJECT_STORAGE_RETRY_BASE_DELAY_MS_ENV,
+  OBJECT_STORAGE_RETRY_MAX_ATTEMPTS_ENV,
+  OBJECT_STORAGE_RETRY_MAX_DELAY_MS_ENV,
+  type ObjectStorageRetryObservation,
+  type ObjectStorageRetryPolicy,
+  type RetryingObjectStoreOptions,
+} from './retry';
