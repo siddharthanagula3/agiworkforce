@@ -16,14 +16,14 @@ provider and the extra file trace are all opt-in, and with none of them set
 
 ## What the drill replaces
 
-| Platform service       | Substitute in the drill                   |
-| ---------------------- | ----------------------------------------- |
-| Managed Postgres       | a `postgres:17-alpine` service container  |
-| Managed key-value      | `AGI_KV_PROVIDER=memory`                  |
-| Managed object storage | `AGI_STORAGE_PROVIDER=memory`             |
-| Bot protection         | `AGI_BOT_PROTECTION=off`                  |
-| Durable workflow world | the local world, in the app's own process |
-| Platform env backend   | the neutral `AGI_*` names below           |
+| Platform service       | Substitute in the drill                      |
+| ---------------------- | -------------------------------------------- |
+| Managed Postgres       | a `pgvector/pgvector:pg17` service container |
+| Managed key-value      | `AGI_KV_PROVIDER=memory`                     |
+| Managed object storage | `AGI_STORAGE_PROVIDER=memory`                |
+| Bot protection         | `AGI_BOT_PROTECTION=off`                     |
+| Durable workflow world | the local world, in the app's own process    |
+| Platform env backend   | the neutral `AGI_*` names below              |
 
 ## Hosting facts are read through one module
 
