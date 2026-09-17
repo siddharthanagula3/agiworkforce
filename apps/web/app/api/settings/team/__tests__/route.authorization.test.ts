@@ -7,6 +7,13 @@ import {
 
 vi.mock('server-only', () => ({}));
 
+const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+vi.mock('@/lib/services/organization-permission-service', async () =>
+  (
+    await import('@/lib/services/__tests__/organization-permission-service-mock')
+  ).organizationPermissionServiceMock(permissionRole),
+);
+
 const {
   mockRlsQuery,
   mockRlsExecute,
@@ -99,6 +106,7 @@ function request(body: unknown) {
 describe('POST /api/settings/team authorization invariants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    permissionRole.value = 'admin';
     mockRlsExecute.mockResolvedValue(0);
     mockRlsTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
@@ -139,6 +147,7 @@ describe('POST /api/settings/team authorization invariants', () => {
   });
 
   it('refuses a plain member who is not an admin', async () => {
+    permissionRole.value = 'member';
     mockRlsQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([
       {
         organization_id: ORG_A,
@@ -222,6 +231,7 @@ describe('POST /api/settings/team authorization invariants', () => {
 describe('GET /api/settings/team authorization invariants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    permissionRole.value = 'admin';
   });
 
   it('refuses a non-UUID organizationId before querying', async () => {

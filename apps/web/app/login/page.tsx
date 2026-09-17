@@ -1,6 +1,9 @@
 import { AuthFlow } from '@/features/auth/AuthFlow';
 import { AuthLayout } from '@/features/auth/AuthLayout';
-import { configuredAuthProviders } from '@/features/auth/authProviderConfig';
+import {
+  configuredAuthProviders,
+  configuredPasskeySignIn,
+} from '@/features/auth/authProviderConfig';
 import {
   buildLoginCompleteUrl,
   buildSignupUrl,
@@ -49,6 +52,7 @@ export default async function LoginPage({
       <AuthFlow
         mode="login"
         providers={configuredAuthProviders()}
+        passkeySignIn={configuredPasskeySignIn()}
         redirects={{
           completeUrl: buildLoginCompleteUrl(context),
           switchUrl: buildSignupUrl(context),

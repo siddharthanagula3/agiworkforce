@@ -66,6 +66,7 @@ function buildUser(input: FakeIdentityUserInput): IdentityUser {
     twoFactorEnabled: false,
     createdAt: null,
     lastSignInAt: null,
+    enterpriseAccounts: [],
     ...input,
   };
 }

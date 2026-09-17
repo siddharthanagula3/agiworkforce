@@ -182,6 +182,8 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
     'A directory group grant is organization configuration (0200); granted_by_user_id is provenance, not personal content.',
   organization_group_managers:
     'Cascades from organization_members (0200). Delegations this user issued keep granted_by_user_id as provenance.',
+  organization_admin_api_keys:
+    'created_by is organization configuration (0206): a workspace API key belongs to the workspace and outlives the admin who issued it.',
   organizations:
     'Deleting an organization because its creator left would erase every other member. Ownership transfer is a separate flow.',
   support_agent_presence: 'Support-staff roster, not customer data.',

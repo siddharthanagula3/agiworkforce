@@ -39,6 +39,12 @@ export interface IdentityRequestAuth {
 
 export type IdentityEmailVerification = 'verified' | 'unverified' | 'unknown';
 
+export interface IdentityEnterpriseAccount {
+  connectionId: string | null;
+  emailAddress: string;
+  active: boolean;
+}
+
 export interface IdentityUser {
   id: string;
   primaryEmail: string | null;
@@ -56,6 +62,7 @@ export interface IdentityUser {
   twoFactorEnabled: boolean;
   createdAt: number | null;
   lastSignInAt: number | null;
+  enterpriseAccounts: readonly IdentityEnterpriseAccount[];
 }
 
 export interface IdentitySessionActivity {

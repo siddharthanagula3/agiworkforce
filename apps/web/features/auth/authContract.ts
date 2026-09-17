@@ -46,6 +46,7 @@ export interface AuthClient {
   startPasswordReset: () => Promise<AuthResult>;
   startEmailCode: () => Promise<AuthResult>;
   startProvider: (provider: AuthProviderId) => Promise<AuthResult>;
+  signInWithPasskey: () => Promise<AuthResult>;
   restart: () => Promise<void>;
 }
 

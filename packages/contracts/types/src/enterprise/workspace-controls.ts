@@ -224,3 +224,12 @@ export function resolveWorkspaceControls(
     appliedOverrideIds: overrides.map((override) => override.id).sort(),
   };
 }
+
+export const WORKSPACE_POLICY_EFFECTIVE_PATH = '/api/settings/organization/policy/effective';
+
+export interface EffectiveWorkspacePolicyResponse {
+  organizationId: string | null;
+  governed: boolean;
+  revision: number;
+  controls: ResolvedWorkspaceControls | null;
+}

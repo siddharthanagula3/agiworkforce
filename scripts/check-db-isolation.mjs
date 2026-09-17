@@ -191,6 +191,23 @@ const ALLOWLIST = [
       'constrain by. createApiKey/listApiKeys/revokeApiKey stay policed.',
   },
   {
+    match: /lib\/services\/domain-retention-service\.ts$/,
+    tables: [
+      'user_projects',
+      'media_assets',
+      'connector_oauth_grants',
+      'device_pairings',
+      'notifications',
+    ],
+    functions: ['createDomainSweepers'],
+    reason:
+      'a per-workspace retention sweep run by cron with no request user to constrain by. Every ' +
+      'candidate set is bounded by the workspace (`organization_id = $1`, or a join on ' +
+      'organization_members for tables that carry no organization) and excludes members under ' +
+      'legal hold; the id-keyed deletes remove exactly the ids the same sweeper selected under ' +
+      'that scope after their stored objects were deleted.',
+  },
+  {
     match: /lib\/services\/cloud-agent-run-reaper\.ts$/,
     tables: ['cloud_agent_runs'],
     functions: ['reapOrphanedCloudAgentRuns'],

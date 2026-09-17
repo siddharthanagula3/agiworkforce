@@ -285,7 +285,15 @@ export type AuditEventType =
   | 'computer_use_action'
   | 'data_accessed'
   | 'audit_destination_configured'
-  | 'audit_destination_deleted';
+  | 'audit_destination_deleted'
+  | 'sso_jit_membership_granted'
+  | 'sso_jit_membership_refused'
+  | 'retention_policy_changed'
+  | 'domain_retention_sweep_completed'
+  | 'admin_api_key_created'
+  | 'admin_api_key_revoked'
+  | 'ediscovery_export'
+  | 'dlp_content_blocked';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
@@ -601,6 +609,19 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'audit_destination_configured':
     case 'audit_destination_deleted':
       return 'audit_destination';
+    case 'sso_jit_membership_granted':
+    case 'sso_jit_membership_refused':
+      return 'organization_member';
+    case 'retention_policy_changed':
+    case 'domain_retention_sweep_completed':
+      return 'organization_retention';
+    case 'admin_api_key_created':
+    case 'admin_api_key_revoked':
+      return 'admin_api_key';
+    case 'ediscovery_export':
+      return 'legal_hold';
+    case 'dlp_content_blocked':
+      return 'dlp';
     default:
       return 'unknown';
   }

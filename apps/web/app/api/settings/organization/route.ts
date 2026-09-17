@@ -1,4 +1,3 @@
-import { isOrganizationAdminRole } from '@agiworkforce/types';
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -28,6 +27,7 @@ import {
   resolveActiveOrganizationId,
 } from '@/lib/services/active-workspace-service';
 import { requireOrganizationOwner } from '@/lib/services/organization-membership-service';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   ORGANIZATION_DELETION_COOLING_PERIOD_DAYS,
@@ -410,9 +410,12 @@ async function handlePatch(request: NextRequest) {
 
   const access = await requireTeamAdminAccess(db, userId, membership.organization_id);
 
-  if (!isOrganizationAdminRole(membership.role)) {
-    throw createError.forbidden('Only owners and admins can update organization settings');
-  }
+  await requireMemberPermission(
+    membership.organization_id,
+    userId,
+    'workspace.settings',
+    'Your workspace role does not allow changing workspace settings.',
+  );
 
   const setClauses: string[] = ['updated_at = now()'];
   const params: unknown[] = [membership.organization_id];

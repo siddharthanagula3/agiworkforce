@@ -7,14 +7,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { createError } from '@/lib/errors';
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveComplianceCaller } from '@/lib/server/compliance-caller';
 import { recordAuditEvent } from '@/lib/security-audit';
-import {
-  isOrgAdminRole,
-  requireOrgMember,
-  resolveOrgMembership,
-} from '@/lib/services/org-sharing-service';
-import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   AUDIT_PAGE_SIZE_DEFAULT,
   AUDIT_PAGE_SIZE_MAX,
@@ -65,13 +59,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
-  await requireTeamAdminAccess(db, userId, membership.organizationId);
-
-  if (!isOrgAdminRole(membership.role)) {
-    throw createError.forbidden('Only an organization owner or admin can read the audit trail.');
-  }
+  const caller = await resolveComplianceCaller(
+    request,
+    'audit.read',
+    'Your workspace role does not allow reading the audit trail.',
+  );
+  const { db } = caller;
+  const userId = caller.actorUserId;
+  const membership = { organizationId: caller.organizationId, role: caller.role };
 
   const parsed = QuerySchema.safeParse(readParams(request));
   if (!parsed.success) {

@@ -87,6 +87,10 @@
       "schedule": "20 4 * * *"
     },
     {
+      "path": "/api/cron/enforce-domain-retention",
+      "schedule": "40 4 * * *"
+    },
+    {
       "path": "/api/cron/drain-audit-streams",
       "schedule": "*/30 * * * *"
     },

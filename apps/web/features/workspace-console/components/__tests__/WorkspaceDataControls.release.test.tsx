@@ -130,4 +130,12 @@ describe('releasing a legal hold asks first, and names what it costs', () => {
 
     expect(screen.queryByRole('button', { name: 'Release hold' })).toBeNull();
   });
+
+  it('offers an eDiscovery export of what the hold preserves', () => {
+    render(<WorkspaceDataControls />);
+
+    expect(
+      screen.getByRole('link', { name: 'Export records held by Acme litigation' }),
+    ).toHaveAttribute('href', `/api/settings/organization/legal-holds/${HOLD_ID}/export`);
+  });
 });

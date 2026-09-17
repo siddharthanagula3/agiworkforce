@@ -665,6 +665,36 @@
       "file": "apps/web/lib/services/managed-memory-context-service.ts",
       "migration": 203,
       "reason": "memory reads, the consolidating write and the expiry sweep use the expires_at, superseded_by and superseded_at columns 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
+    },
+    {
+      "file": "apps/web/app/api/admin/sso/[id]/route.ts",
+      "migration": 204,
+      "reason": "the SSO connection update writes the just-in-time provisioning switch and default role 0204 adds to sso_connections; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0204 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0204 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 206,
+      "reason": "the erasure registry names organization_admin_api_keys only to classify its created_by column as workspace configuration and never queries the table; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/admin-api-keys.ts",
+      "migration": 206,
+      "reason": "workspace API keys are stored in and verified against organization_admin_api_keys, which 0206 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/sso/jit-provisioning.ts",
+      "migration": 204,
+      "reason": "first single sign-on provisioning reads jit_provisioning_enabled and jit_default_role, which 0204 adds to sso_connections; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0204 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0204 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "migration": 59,
+      "reason": "the word archived here is the cloud_agent_runs state literal the Work sweep filters on, not the web_conversations.archived column 0059 adds; this service never reads or writes that column."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "migration": 205,
+      "reason": "per-domain retention reads organization_domain_retention_policies and writes organization_domain_retention_sweeps, which 0205 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0205 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0205 is applied."
     }
   ]
 }

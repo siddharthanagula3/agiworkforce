@@ -12,6 +12,8 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
+import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { TEMPORARY_CHAT_SHARE_REFUSAL } from '@/lib/temporary-chat-policy';
 import {
   redactSecretsFromValue,
@@ -176,6 +178,19 @@ async function handleCreateShare(request: NextRequest) {
     if (conversation.is_temporary === true) {
       throw createError.conflict(TEMPORARY_CHAT_SHARE_REFUSAL);
     }
+  }
+
+  const outbound = await inspectOutboundContent({
+    channel: 'share',
+    value: messages,
+    userId,
+    organizationId: null,
+    ...(conversationId ? { resourceId: conversationId } : {}),
+    auditUnblocked: false,
+    resolveMode: () => resolveSecretHandlingPolicy(db, userId),
+  });
+  if (outbound.action === 'blocked') {
+    throw createError.validation(outbound.message);
   }
 
   const token = randomBytes(18).toString('base64url');

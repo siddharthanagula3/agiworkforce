@@ -60,6 +60,7 @@ import {
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
+import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
@@ -106,6 +107,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const identitySignOut = useSignOut();
   const { user, logout, isLoading: isAuthLoading, initialized: isAuthInitialized } = useAuthStore();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
+  const disabledFeatures = useDisabledWorkspaceFeatures();
   const subscription = useBillingStore((s) => s.subscription);
   const isBillingLoading = useBillingStore((s) => s.isLoading);
   const isBillingInitialized = useBillingStore((s) => s.initialized);
@@ -337,9 +339,10 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         navigate: (href) => router.push(href),
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
+        disabledFeatures,
         translate: (key, fallback) => t(key, { defaultValue: fallback }),
       }),
-    [hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
+    [disabledFeatures, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   // ---- Account footer ----
@@ -477,7 +480,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     collapsedFooterSlot,
     getSessionHref: (session: SidebarSession) => `/chat/${encodeURIComponent(session.id)}`,
     onNewChat: handleNewChat,
-    onOpenCode: handleOpenCode,
+    onOpenCode: disabledFeatures.includes('code') ? undefined : handleOpenCode,
     onOpenSearch: handleOpenSearch,
     showUsageWidget: managedUsageSummary !== null,
     budgetPercent: managedBudgetPercent,

@@ -36,3 +36,11 @@ export function parseAuthProviderIds(configured?: string | null): readonly AuthP
 export function resolveAuthProviders(configured?: string | null): readonly AuthProvider[] {
   return parseAuthProviderIds(configured).map((id) => ({ id, label: AUTH_PROVIDER_LABELS[id] }));
 }
+
+export const PASSKEY_SIGN_IN_METHOD = 'passkey';
+
+export function passkeySignInEnabled(configured?: string | null): boolean {
+  return (configured ?? '')
+    .split(PROVIDER_LIST_SEPARATOR)
+    .some((entry) => entry.trim().toLowerCase() === PASSKEY_SIGN_IN_METHOD);
+}

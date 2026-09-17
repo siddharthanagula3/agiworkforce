@@ -5,6 +5,7 @@ import { useCallback, useMemo } from 'react';
 import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import { isAuthPath } from '@agiworkforce/types/product-routes';
 import { AUTH_LOGIN_PATH } from '@/features/auth/authRoutes';
+import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
 
 /**
  * The browser half of the identity port. Components take the session, the
@@ -107,4 +108,51 @@ export function useSignOut(): IdentitySignOut {
     },
     [signOut],
   );
+}
+
+export interface IdentityPasskey {
+  id: string;
+  name: string | null;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+}
+
+export interface IdentityPasskeysState {
+  isLoaded: boolean;
+  isSupported: boolean;
+  passkeys: readonly IdentityPasskey[];
+  create: () => Promise<void>;
+  remove: (passkeyId: string) => Promise<void>;
+}
+
+export function usePasskeys(): IdentityPasskeysState {
+  const { isLoaded, user } = useUser();
+  const passkeys = useMemo<IdentityPasskey[]>(
+    () =>
+      (user?.passkeys ?? []).map((passkey) => ({
+        id: passkey.id,
+        name: optional(passkey.name),
+        createdAt: passkey.createdAt,
+        lastUsedAt: passkey.lastUsedAt,
+      })),
+    [user],
+  );
+
+  const create = useCallback(async () => {
+    if (!user) throw new Error('Sign in again to add a passkey.');
+    await user.createPasskey();
+    await user.reload();
+  }, [user]);
+
+  const remove = useCallback(
+    async (passkeyId: string) => {
+      const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
+      if (!user || !passkey) return;
+      await passkey.delete();
+      await user.reload();
+    },
+    [user],
+  );
+
+  return { isLoaded, isSupported: browserSupportsPasskeys(), passkeys, create, remove };
 }
