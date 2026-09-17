@@ -117,6 +117,7 @@ vi.mock('@/features/desktop-host', () => ({
   listDeveloperModels: (...args: unknown[]) => listDeveloperModels(...(args as [])),
   listDeveloperSessions: () => listDeveloperSessions(),
   onDeveloperSessionEvent: () => () => undefined,
+  openWorkspaceInEditor: vi.fn(async () => true),
   pickWorkspaceRoot: () => pickWorkspaceRoot(),
   readDeveloperSession: () => readDeveloperSession(),
   startDeveloperSession: (rootId: string, model?: string) => startDeveloperSession(rootId, model),
