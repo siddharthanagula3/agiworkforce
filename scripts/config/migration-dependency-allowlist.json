@@ -622,6 +622,11 @@
       "reason": "the workspace erasure inventory classifies the organization_encryption_keys table 0220 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0220 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0220 is applied."
     },
     {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 223,
+      "reason": "the workspace erasure inventory classifies the connector_call_events table 0223 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0223 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0223 is applied."
+    },
+    {
       "file": "apps/web/lib/server/product-analytics.ts",
       "migration": 213,
       "reason": "the event writer and the derived account milestones insert into and read the product_analytics_events table 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
