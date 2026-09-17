@@ -9,6 +9,11 @@ const mocks = vi.hoisted(() => ({
   verifyIdentitySessionToken: vi.fn(),
   getRequestIdentity: vi.fn(),
   requireCsrfToken: vi.fn(async () => null),
+  notifyNewDeviceRegistered: vi.fn(async (..._args: unknown[]) => undefined),
+}));
+
+vi.mock('@/lib/services/account-activity-notifications', () => ({
+  notifyNewDeviceRegistered: (...args: unknown[]) => mocks.notifyNewDeviceRegistered(...args),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -107,6 +112,30 @@ describe('POST /api/devices/heartbeat', () => {
       'family-7',
       null,
     ]);
+  });
+
+  it('tells the account the first time an install reports in, and never again', async () => {
+    mocks.query.mockResolvedValue([{ id: DEVICE_ID, first_seen: true }]);
+    await POST(heartbeat(CLI_BODY));
+    expect(mocks.notifyNewDeviceRegistered).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user-1',
+      deviceId: DEVICE_ID,
+      surface: 'cli',
+      name: 'build-box',
+      os: 'linux',
+    });
+
+    mocks.notifyNewDeviceRegistered.mockClear();
+    mocks.query.mockResolvedValue([{ id: DEVICE_ID, first_seen: false }]);
+    await POST(heartbeat(CLI_BODY));
+    expect(mocks.notifyNewDeviceRegistered).not.toHaveBeenCalled();
+  });
+
+  it('asks the upsert whether this install is new, rather than guessing', async () => {
+    await POST(heartbeat(CLI_BODY));
+    expect(mocks.query.mock.calls[0]?.[0] as string).toContain(
+      'returning id, (xmax = 0) as first_seen',
+    );
   });
 
   it('links a cookie-signed shell to the identity session it runs under', async () => {

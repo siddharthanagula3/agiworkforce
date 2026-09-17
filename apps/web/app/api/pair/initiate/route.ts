@@ -12,6 +12,8 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
 const DEFAULT_TTL_SECONDS = 300;
@@ -53,6 +55,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const rateLimited = await withRateLimit(request, 'device-link', userId);
   if (rateLimited) return rateLimited;
+
+  const featureGate = await buildWorkspaceFeatureGateResponse(
+    userId,
+    request,
+    'remote_control',
+    resolveCloudChatSurface(request),
+  );
+  if (featureGate) return featureGate;
 
   const signalingUrl = process.env['SIGNALING_HTTP_URL'];
   const signalingSecret = process.env['SIGNALING_INTERNAL_SECRET'];

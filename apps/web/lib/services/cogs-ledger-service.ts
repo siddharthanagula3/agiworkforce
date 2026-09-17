@@ -34,6 +34,8 @@ export const COGS_CAPABILITIES = [
   'browser',
   'work_compute',
   'code_compute',
+  'connector',
+  'artifact',
 ] as const;
 
 export const COGS_UNIT_BASES = [
@@ -169,6 +171,8 @@ const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   browser: 'browser',
   work_compute: 'work_compute',
   code_compute: 'code_compute',
+  connector: 'connector',
+  artifact: 'artifact',
 };
 
 const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
@@ -189,6 +193,8 @@ const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
   browser: 'minute',
   work_compute: 'minute',
   code_compute: 'minute',
+  connector: 'request',
+  artifact: 'gibibyte_month',
 };
 
 /**
@@ -206,6 +212,8 @@ const RATE_CARD_FEATURE_BY_CAPABILITY = {
   browser: 'browser_session_minute',
   work_compute: 'work_compute_minute',
   code_compute: 'code_compute_minute',
+  connector: 'connector_call_request',
+  artifact: 'artifact_storage_gib_month',
 } as const satisfies Partial<Record<CogsCapability, RateCardFeature>>;
 
 export type InfrastructureCogsCapability = keyof typeof RATE_CARD_FEATURE_BY_CAPABILITY;
@@ -260,10 +268,12 @@ export function resolveCogsUnits(
     case 'vector':
     case 'notification':
     case 'email':
+    case 'connector':
       return { unitBasis, units: numeric(usage['requests']) ?? 1 };
     case 'sandbox':
       return { unitBasis, units: numeric(usage['sandboxMinutes']) ?? 0 };
     case 'storage':
+    case 'artifact':
       return { unitBasis, units: numeric(usage['gibibyteMonths']) ?? 0 };
     case 'egress':
       return { unitBasis, units: numeric(usage['gibibytes']) ?? 0 };
