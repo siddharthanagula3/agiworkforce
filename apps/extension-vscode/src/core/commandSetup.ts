@@ -1281,7 +1281,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await openPathReference(target);
     }),
 
-    register('agi-workforce.openActionSheet', async (scope?: unknown) => {
+    register('agi-workforce.openActionSheet', async () => {
       const currentModel = normalizeConfiguredModelId(Config.model());
       const currentMode = Config.agentMode();
       const currentEffort = Config.agentEffort();
@@ -1345,13 +1345,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
       ];
 
-      const composerScope = scope === 'composer';
-      const items = composerScope
-        ? allItems.filter((item) => item.action === 'mode' || item.action === 'effort')
-        : allItems;
-      const pick = await vscode.window.showQuickPick(items, {
-        title: composerScope ? 'AGI Workforce, Mode and effort' : 'AGI Workforce, Actions',
-        placeHolder: composerScope ? 'Choose mode or reasoning effort…' : 'Search actions…',
+      const pick = await vscode.window.showQuickPick(allItems, {
+        title: 'AGI Workforce, Actions',
+        placeHolder: 'Search actions…',
         matchOnDescription: true,
       });
 
