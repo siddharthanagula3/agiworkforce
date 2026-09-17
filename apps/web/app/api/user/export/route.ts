@@ -275,6 +275,9 @@ const mediaAssetExportSchema = z.object({
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
   source_surface: z.string().nullable(),
+  // Why a file the subject uploaded is absent from their Library (0218): it
+  // arrived in a temporary chat and is retired with that chat.
+  temporary_chat: z.boolean(),
   created_at: timestampSchema,
   deleted_at: timestampSchema.nullable(),
 });
