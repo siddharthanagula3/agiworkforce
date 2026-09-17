@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/voice/transcribe/route';
 import { getRoutingSlotModel } from '@agiworkforce/types';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 
 vi.mock('server-only', () => ({}));
 
@@ -180,9 +181,9 @@ describe('POST /api/voice/transcribe', () => {
     mockGetUserScopedDb.mockResolvedValue({
       userId: 'user-123',
       organizationId: null,
-      db: { query: vi.fn() },
+      db: createDatabaseAdapterFake(),
     });
-    mockGetNeonDb.mockReturnValue({ query: vi.fn() });
+    mockGetNeonDb.mockReturnValue(createDatabaseAdapterFake());
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mockReserveManagedUsage.mockImplementation(
       async (input: {

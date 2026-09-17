@@ -24,6 +24,13 @@ vi.mock('@/lib/error-handler', () => ({
   withErrorHandler: <T extends (...args: never[]) => unknown>(handler: T) => handler,
 }));
 vi.mock('@/lib/model-tiers', () => ({ canAccessModel: () => true }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  return {
+    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    getNeonDb: () => createDatabaseAdapterFake(),
+  };
+});
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));

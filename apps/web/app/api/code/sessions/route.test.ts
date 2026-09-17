@@ -51,7 +51,10 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 }));
 
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { POST } from './route';
+
+const db = createDatabaseAdapterFake();
 
 function postRequest(body: unknown): NextRequest {
   return new NextRequest('http://localhost:3000/api/code/sessions', {
@@ -67,7 +70,7 @@ beforeEach(() => {
   mockRateLimit.mockResolvedValue(null);
   mockE2bReady.mockReturnValue(true);
   mockBetaEnabled.mockReturnValue(true);
-  mockGetUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1', organizationId: null });
+  mockGetUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
   mockCreateSession.mockResolvedValue({
     id: 'session-1',
     title: 'workspace',

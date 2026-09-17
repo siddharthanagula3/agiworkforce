@@ -38,10 +38,15 @@ vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) 
 });
 
 vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async (request: NextRequest) => ({
-    db: {},
-    userId: request.headers.get('idempotency-key')?.startsWith('free-') ? 'user-free' : 'user-pro',
-  })),
+  getUserScopedDb: vi.fn(async (request: NextRequest) => {
+    const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+    return {
+      db: createDatabaseAdapterFake(),
+      userId: request.headers.get('idempotency-key')?.startsWith('free-')
+        ? 'user-free'
+        : 'user-pro',
+    };
+  }),
 }));
 
 import {
