@@ -1277,8 +1277,8 @@ enum PluginSubcommand {
         /// Bypass integrity verification. AUDIT-FIX: H-16, prints a warning to stderr every install.
         #[arg(long)]
         unsafe_no_integrity: bool,
-        /// Install a plugin that carries no signature from a publisher in
-        /// `[plugins.trusted_publishers]`. A signature that fails to verify is never accepted.
+        /// Install an unsigned plugin when `plugins.require_signed` is set, unless managed
+        /// settings forbid the override. A signature that fails to verify is never accepted.
         #[arg(long)]
         unsafe_allow_unsigned: bool,
     },
@@ -1411,7 +1411,8 @@ enum MarketplaceSubcommand {
         /// Installation scope (user, project, local).
         #[arg(long, default_value = "user")]
         scope: String,
-        /// Install a plugin that carries no trusted publisher signature.
+        /// Install an unsigned plugin when `plugins.require_signed` is set, unless managed
+        /// settings forbid the override.
         #[arg(long)]
         unsafe_allow_unsigned: bool,
     },
@@ -1422,9 +1423,10 @@ enum MarketplaceSubcommand {
     },
     /// List all installed marketplace plugins.
     List,
-    /// Update all git-installed plugins, refusing updates whose signature no longer verifies.
+    /// Update all git-installed plugins, rolling back an update the signature policy refuses.
     Update {
-        /// Accept updates that carry no trusted publisher signature.
+        /// Accept unsigned updates when `plugins.require_signed` is set, unless managed
+        /// settings forbid the override.
         #[arg(long)]
         unsafe_allow_unsigned: bool,
     },
@@ -3523,7 +3525,20 @@ pub async fn run_main() -> Result<()> {
                 match action {
                     PluginSubcommand::List => {
                         mgr.load_all(std::env::current_dir().ok().as_deref())?;
+                        let signature_policy = plugins::PluginSignaturePolicy {
+                            publishers:
+                                features::plugins::signature::TrustedPublishers::configured()
+                                    .unwrap_or_default(),
+                            ..plugins::PluginSignaturePolicy::default()
+                        };
                         for p in mgr.plugins() {
+                            let signature_tag = match plugins::describe_plugin_signature(
+                                &p.root,
+                                &signature_policy,
+                            ) {
+                                Ok(state) => state.label(),
+                                Err(error) => format!("signature invalid: {error}"),
+                            };
                             let st = if p.enabled {
                                 ts::success("enabled")
                             } else {
@@ -3537,10 +3552,11 @@ pub async fn run_main() -> Result<()> {
                                 None => "[no-manifest]".to_string(),
                             };
                             println!(
-                                "  {} {} [{}] {}",
+                                "  {} {} [{}] [{}] {}",
                                 p.config_name,
                                 fmt_tag,
                                 st,
+                                terminal_text::sanitize_terminal_text(&signature_tag),
                                 p.root.display()
                             );
                         }
@@ -3582,14 +3598,9 @@ pub async fn run_main() -> Result<()> {
                             (None, true) => plugins::PluginIntegrity::UnsafeSkip,
                             (None, false) => plugins::PluginIntegrity::PublisherSignature,
                         };
-                        let publishers =
-                            features::plugins::signature::TrustedPublishers::configured()
+                        let psignature =
+                            plugins::PluginSignaturePolicy::configured(*unsafe_allow_unsigned)
                                 .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
-                        let psignature = if *unsafe_allow_unsigned {
-                            plugins::PluginSignaturePolicy::UnsafeAllowUnsigned(publishers)
-                        } else {
-                            plugins::PluginSignaturePolicy::RequireTrustedPublisher(publishers)
-                        };
                         match mgr.install(plugins::PluginInstallRequest {
                             source: psrc,
                             name: pname,
@@ -3599,20 +3610,18 @@ pub async fn run_main() -> Result<()> {
                             plugins::PluginInstallOutcome::Installed {
                                 path,
                                 format,
-                                publisher,
+                                signature,
                             } => {
                                 let fmt_tag = match format {
                                     Some(fmt) => format!(" ({} manifest)", fmt.short_tag()),
                                     None => String::new(),
                                 };
-                                let signed_by = match publisher {
-                                    Some(publisher) => format!(
-                                        ", signed by {}",
-                                        terminal_text::sanitize_terminal_text(&publisher)
-                                    ),
-                                    None => ", unsigned".to_string(),
-                                };
-                                println!("Installed to {}{}{}", path.display(), fmt_tag, signed_by);
+                                println!(
+                                    "Installed to {}{}, {}",
+                                    path.display(),
+                                    fmt_tag,
+                                    terminal_text::sanitize_terminal_text(&signature.label())
+                                );
                                 Ok(())
                             }
                             plugins::PluginInstallOutcome::AlreadyInstalled { path } => {
@@ -3899,14 +3908,9 @@ pub async fn run_main() -> Result<()> {
                         scope,
                         unsafe_allow_unsigned,
                     } => {
-                        let publishers =
-                            features::plugins::signature::TrustedPublishers::configured()
+                        let policy =
+                            plugins::PluginSignaturePolicy::configured(*unsafe_allow_unsigned)
                                 .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
-                        let policy = if *unsafe_allow_unsigned {
-                            plugins::PluginSignaturePolicy::UnsafeAllowUnsigned(publishers)
-                        } else {
-                            plugins::PluginSignaturePolicy::RequireTrustedPublisher(publishers)
-                        };
                         mp.install(source, &home, scope, &policy).await?;
                         Ok(())
                     }
@@ -3922,14 +3926,9 @@ pub async fn run_main() -> Result<()> {
                     MarketplaceSubcommand::Update {
                         unsafe_allow_unsigned,
                     } => {
-                        let publishers =
-                            features::plugins::signature::TrustedPublishers::configured()
+                        let policy =
+                            plugins::PluginSignaturePolicy::configured(*unsafe_allow_unsigned)
                                 .map_err(|error| anyhow::anyhow!("Refusing update: {error}"))?;
-                        let policy = if *unsafe_allow_unsigned {
-                            plugins::PluginSignaturePolicy::UnsafeAllowUnsigned(publishers)
-                        } else {
-                            plugins::PluginSignaturePolicy::RequireTrustedPublisher(publishers)
-                        };
                         mp.update_all(&home, &policy).await?;
                         Ok(())
                     }

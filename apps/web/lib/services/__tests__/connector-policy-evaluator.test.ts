@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   connectorPolicyRestrictsAnything,
   evaluateConnectorAccess,
+  evaluateMcpHostAccess,
+  evaluatePluginAccess,
+  mcpHostMatches,
   type ConnectorAccessPolicy,
 } from '../connector-policy-evaluator';
 
@@ -118,5 +121,56 @@ describe('connectorPolicyRestrictsAnything', () => {
 
   it('counts the custom-connector switch as a restriction', () => {
     expect(connectorPolicyRestrictsAnything(policy({ allowCustomConnectors: false }))).toBe(true);
+  });
+});
+
+describe('evaluateMcpHostAccess', () => {
+  it('matches exact hosts and strict subdomain wildcards', () => {
+    expect(mcpHostMatches('mcp.corp.example', 'MCP.corp.example')).toBe(true);
+    expect(mcpHostMatches('*.corp.example', 'tools.corp.example')).toBe(true);
+    expect(mcpHostMatches('*.corp.example', 'corp.example')).toBe(false);
+    expect(mcpHostMatches('*.corp.example', 'evilcorp.example')).toBe(false);
+    expect(mcpHostMatches('corp.example', 'mcp.corp.example')).toBe(false);
+  });
+
+  it('is unrestricted with an empty host list and refuses unlisted or unparsable URLs otherwise', () => {
+    expect(evaluateMcpHostAccess(policy(), 'https://anything.example/sse').allowed).toBe(true);
+    const restricted = policy({ allowedMcpHosts: ['*.corp.example'] });
+    expect(evaluateMcpHostAccess(restricted, 'https://a.corp.example/mcp').allowed).toBe(true);
+    expect(evaluateMcpHostAccess(restricted, 'https://a.other.example/mcp').code).toBe(
+      'mcp_host_not_allowed',
+    );
+    expect(evaluateMcpHostAccess(restricted, 'not a url').allowed).toBe(false);
+  });
+
+  it('applies to custom connectors only when a URL is supplied', () => {
+    const restricted = policy({ allowedMcpHosts: ['*.corp.example'] });
+    expect(
+      evaluateConnectorAccess(restricted, {
+        connectorId: 'custom-abc',
+        isCustom: true,
+        url: 'https://mcp.other.example/sse',
+      }).code,
+    ).toBe('mcp_host_not_allowed');
+    expect(
+      evaluateConnectorAccess(restricted, {
+        connectorId: CONNECTOR,
+        isCustom: false,
+        url: 'https://mcp.other.example/sse',
+      }).allowed,
+    ).toBe(true);
+    expect(connectorPolicyRestrictsAnything(restricted)).toBe(true);
+  });
+});
+
+describe('evaluatePluginAccess', () => {
+  it('lets a block win over an allow, and treats an empty allowlist as unrestricted', () => {
+    expect(evaluatePluginAccess(policy(), 'acme').allowed).toBe(true);
+    const both = policy({ allowedPlugins: ['acme'], blockedPlugins: ['acme'] });
+    expect(evaluatePluginAccess(both, 'acme').code).toBe('plugin_blocked');
+    const allowlist = policy({ allowedPlugins: ['acme'] });
+    expect(evaluatePluginAccess(allowlist, 'ACME').allowed).toBe(true);
+    expect(evaluatePluginAccess(allowlist, 'other').code).toBe('plugin_not_allowed');
+    expect(evaluatePluginAccess(null, 'other').code).toBe('ungoverned');
   });
 });

@@ -10,6 +10,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
+import { evaluatePluginPolicyForUser } from '@/lib/services/connector-policy-gate';
+import { pluginNotPermittedResponse } from '@/features/plugins/server/directory/install-responses';
 import {
   installWebPlugin,
   listPluginInstallations,
@@ -53,6 +55,13 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
 
   const db = getNeonDb();
+  const policy = await evaluatePluginPolicyForUser({
+    db,
+    userId,
+    pluginKey: parsed.data.pluginId,
+    request,
+  });
+  if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
   const installation = await installWebPlugin(db, userId, parsed.data.pluginId);
   if (!installation) {
     return NextResponse.json(

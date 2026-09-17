@@ -2,19 +2,23 @@
 import JSZip from 'jszip';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { csrfMock, rateLimitMock, userScopedDbMock, storeOwnedPluginSourceMock } = vi.hoisted(
-  () => ({
+const { csrfMock, rateLimitMock, userScopedDbMock, storeOwnedPluginSourceMock, pluginPolicyMock } =
+  vi.hoisted(() => ({
     csrfMock: vi.fn(),
     rateLimitMock: vi.fn(),
     userScopedDbMock: vi.fn(),
     storeOwnedPluginSourceMock: vi.fn(),
-  }),
-);
+    pluginPolicyMock: vi.fn(),
+  }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
+vi.mock('@/lib/services/connector-policy-gate', () => ({
+  evaluateConnectorPolicyForUser: vi.fn(),
+  evaluatePluginPolicyForUser: pluginPolicyMock,
+}));
 vi.mock('@/lib/services/plugin-owned-source-service', () => ({
   storeOwnedPluginSource: storeOwnedPluginSourceMock,
 }));
@@ -119,6 +123,12 @@ beforeEach(() => {
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
   userScopedDbMock.mockResolvedValue({ db: DB, userId: USER_ID, organizationId: null });
+  pluginPolicyMock.mockResolvedValue({
+    allowed: true,
+    code: 'ungoverned',
+    reason: '',
+    organizationId: null,
+  });
   storeOwnedPluginSourceMock.mockResolvedValue([
     {
       entryId: 'entry-1',
@@ -224,6 +234,21 @@ describe('POST /api/plugins/uploads', () => {
       sourceName: 'my-plugin',
       plugins: [{ pluginKey: 'my-plugin', skills: ['summarise'], installation: INSTALLATION }],
     });
+  });
+
+  it('refuses an uploaded plugin the workspace policy forbids and stores nothing', async () => {
+    pluginPolicyMock.mockResolvedValue({
+      allowed: false,
+      code: 'plugin_blocked',
+      reason: 'Your workspace administrator has blocked the "research-pack" plugin.',
+      organizationId: 'org-1',
+    });
+    const response = await POST(uploadRequest(archiveForm(await pluginZip())));
+    expect(response.status).toBe(403);
+    expect(pluginPolicyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginKey: 'my-plugin', userId: USER_ID }),
+    );
+    expect(storeOwnedPluginSourceMock).not.toHaveBeenCalled();
   });
 
   it('prefers the caller supplied name over the file name', async () => {

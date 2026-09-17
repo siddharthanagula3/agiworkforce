@@ -9,6 +9,9 @@ export interface ConnectorPolicyLists {
   allowedConnectors: string[];
   blockedConnectors: string[];
   allowCustomConnectors: boolean;
+  allowedPlugins: string[];
+  blockedPlugins: string[];
+  allowedMcpHosts: string[];
 }
 
 export interface ConnectorPolicyResult {

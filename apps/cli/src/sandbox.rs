@@ -436,13 +436,23 @@ pub(crate) async fn execute_sandboxed_with_timeout(
     cwd: Option<&Path>,
     timeout: Option<std::time::Duration>,
 ) -> Result<std::process::Output> {
+    execute_sandboxed_with_input(manager, command, cwd, None, timeout).await
+}
+
+pub(crate) async fn execute_sandboxed_with_input(
+    manager: &SandboxManager,
+    command: &str,
+    cwd: Option<&Path>,
+    stdin: Option<Vec<u8>>,
+    timeout: Option<std::time::Duration>,
+) -> Result<std::process::Output> {
     let mut cmd = tokio::process::Command::new("sh");
     cmd.arg("-c").arg(command);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
     if matches!(manager.policy, SandboxPolicy::DangerFullAccess) {
-        return crate::process_tree::output(cmd, None, timeout)
+        return crate::process_tree::output(cmd, stdin, timeout)
             .await
             .map_err(anyhow::Error::new)
             .context("unsandboxed exec failed");
@@ -481,7 +491,7 @@ pub(crate) async fn execute_sandboxed_with_timeout(
             if let Some(dir) = cwd {
                 scmd.current_dir(dir);
             }
-            crate::process_tree::output(scmd, None, timeout)
+            crate::process_tree::output(scmd, stdin, timeout)
                 .await
                 .map_err(anyhow::Error::new)
                 .context("Seatbelt exec failed")
@@ -493,7 +503,7 @@ pub(crate) async fn execute_sandboxed_with_timeout(
             if let Some(dir) = cwd {
                 bcmd.current_dir(dir);
             }
-            crate::process_tree::output(bcmd, None, timeout)
+            crate::process_tree::output(bcmd, stdin, timeout)
                 .await
                 .map_err(anyhow::Error::new)
                 .context("Bubblewrap exec failed")

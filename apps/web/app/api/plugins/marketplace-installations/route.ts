@@ -14,9 +14,16 @@ import {
   installMarketplaceEntry,
   listMarketplaceInstallations,
 } from '@/lib/services/plugin-marketplace-installation-service';
-import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
+import {
+  getMarketplaceEntryForUser,
+  isMissingPluginMarketplaceSchema,
+} from '@/lib/services/plugin-marketplace-service';
+import { evaluatePluginPolicyForUser } from '@/lib/services/connector-policy-gate';
 import { installDirectoryPlugin } from '@/features/plugins/server/directory/install';
-import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
+import {
+  installsDisabledResponse,
+  pluginNotPermittedResponse,
+} from '@/features/plugins/server/directory/install-responses';
 import type { PluginMarketplaceInstallationsResponse } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -51,6 +58,8 @@ async function installFromDirectory(
   pluginId: string,
 ): Promise<NextResponse> {
   const db = getNeonDb();
+  const policy = await evaluatePluginPolicyForUser({ db, userId, pluginKey: pluginId, request });
+  if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
   const result = await installDirectoryPlugin(db, userId, pluginId);
   switch (result.status) {
     case 'installed':
@@ -120,6 +129,16 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     }
 
     const db = getNeonDb();
+    const entry = await getMarketplaceEntryForUser(db, userId, parsed.data.entryId);
+    if (entry) {
+      const policy = await evaluatePluginPolicyForUser({
+        db,
+        userId,
+        pluginKey: entry.pluginKey,
+        request,
+      });
+      if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
+    }
     const installation = await installMarketplaceEntry(db, userId, parsed.data.entryId);
     if (!installation) {
       return NextResponse.json(

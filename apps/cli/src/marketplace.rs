@@ -34,6 +34,8 @@ pub struct InstalledPluginEntry {
     pub install_path: String,
     pub version: String,
     pub installed_at: chrono::DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
 }
 
 /// Registry of installed plugins, persisted as `plugins/installed.json`.
@@ -121,6 +123,7 @@ fn reconcile_with_disk(plugins_dir: &Path, registry: &mut InstalledPlugins) -> b
                 install_path: path.to_string_lossy().to_string(),
                 version: read_manifest_version(&path),
                 installed_at: Utc::now(),
+                signature: None,
             },
         );
         changed = true;
@@ -288,7 +291,13 @@ impl Marketplace {
     ///
     /// The `scope` parameter records the installation scope in installed.json
     /// (one of `"user"`, `"project"`, `"local"`).
-    pub async fn install(&self, source: &str, home: &Path, scope: &str) -> Result<()> {
+    pub async fn install(
+        &self,
+        source: &str,
+        home: &Path,
+        scope: &str,
+        signature: &crate::plugins::PluginSignaturePolicy,
+    ) -> Result<()> {
         let plugins_dir = home.join("plugins");
         std::fs::create_dir_all(&plugins_dir).context("failed to create plugins directory")?;
 
@@ -319,6 +328,15 @@ impl Marketplace {
             self.install_from_path(source, &name, &plugins_dir)?
         };
 
+        let signature_state =
+            match crate::plugins::evaluate_plugin_signature(&install_path, signature) {
+                Ok(state) => state,
+                Err(error) => {
+                    let _ = std::fs::remove_dir_all(&install_path);
+                    bail!("refusing to install '{name}': {error}");
+                }
+            };
+
         // Read the real version from the plugin's manifest. Falling back to
         // "0.0.0" (unknown) rather than a fake "1.0.0" makes a missing/invalid
         // manifest version visible instead of pretending every plugin is 1.0.0.
@@ -333,14 +351,16 @@ impl Marketplace {
                 install_path: install_path.to_string_lossy().to_string(),
                 version,
                 installed_at: Utc::now(),
+                signature: Some(signature_state.label()),
             },
         );
         reg.save(&plugins_dir)?;
 
         eprintln!(
-            "Installed '{}' to {}",
+            "Installed '{}' to {} ({})",
             crate::terminal_text::sanitize_terminal_text(&name),
-            install_path.display()
+            install_path.display(),
+            crate::terminal_text::sanitize_terminal_text(&signature_state.label())
         );
         Ok(())
     }
@@ -479,7 +499,11 @@ impl Marketplace {
     /// Update all git-installed plugins by re-cloning from their repositories.
     ///
     /// Local-path plugins are skipped (no remote to pull from).
-    pub async fn update_all(&self, home: &Path) -> Result<()> {
+    pub async fn update_all(
+        &self,
+        home: &Path,
+        signature: &crate::plugins::PluginSignaturePolicy,
+    ) -> Result<()> {
         let plugins_dir = home.join("plugins");
         let mut registry = InstalledPlugins::load(&plugins_dir);
 
@@ -493,7 +517,7 @@ impl Marketplace {
         // Collect (name, fresh_version) for plugins that pulled new commits so
         // the recorded version is refreshed from the post-pull manifest rather
         // than left stale.
-        let mut version_refresh: Vec<(String, String)> = Vec::new();
+        let mut version_refresh: Vec<(String, String, String)> = Vec::new();
 
         for (name, entry) in &registry.plugins {
             let install_path = PathBuf::from(&entry.install_path);
@@ -523,18 +547,43 @@ impl Marketplace {
                             "  {}, already up to date",
                             crate::terminal_text::sanitize_terminal_text(name)
                         );
-                    } else {
-                        eprintln!(
-                            "  {}, updated",
-                            crate::terminal_text::sanitize_terminal_text(name)
-                        );
+                        continue;
                     }
-                    // Re-read the manifest version after the pull so update
-                    // decisions trust the real installed version.
+                    let signature_state =
+                        match crate::plugins::evaluate_plugin_signature(&install_path, signature) {
+                            Ok(state) => state,
+                            Err(error) => {
+                                let rollback = std::process::Command::new("git")
+                                    .arg("-C")
+                                    .arg(&install_path)
+                                    .args(["reset", "--hard", "ORIG_HEAD"])
+                                    .output();
+                                let rolled_back =
+                                    matches!(rollback, Ok(ref out) if out.status.success());
+                                eprintln!(
+                                    "  {}, update refused ({}){}",
+                                    crate::terminal_text::sanitize_terminal_text(name),
+                                    crate::terminal_text::sanitize_terminal_text(&error),
+                                    if rolled_back {
+                                        ", kept the previous version"
+                                    } else {
+                                        ", rollback failed: remove the plugin"
+                                    }
+                                );
+                                continue;
+                            }
+                        };
                     let fresh = read_manifest_version(&install_path);
-                    if fresh != entry.version {
-                        version_refresh.push((name.clone(), fresh));
-                    }
+                    eprintln!(
+                        "  {}",
+                        crate::terminal_text::sanitize_terminal_text(&describe_plugin_update(
+                            name,
+                            &entry.version,
+                            &fresh,
+                            &changed_files_since_orig_head(&install_path),
+                        ))
+                    );
+                    version_refresh.push((name.clone(), fresh, signature_state.label()));
                     updated += 1;
                 }
                 Ok(o) => {
@@ -556,9 +605,10 @@ impl Marketplace {
         }
 
         if !version_refresh.is_empty() {
-            for (name, fresh) in version_refresh {
+            for (name, fresh, signature_label) in version_refresh {
                 if let Some(entry) = registry.plugins.get_mut(&name) {
                     entry.version = fresh;
+                    entry.signature = Some(signature_label);
                 }
             }
             registry.save(&plugins_dir)?;
@@ -586,8 +636,15 @@ pub fn format_installed(registry: &InstalledPlugins) -> String {
     let mut out = String::new();
     for (name, entry) in &registry.plugins {
         out.push_str(&format!(
-            "  {:<25} v{:<8} [{}]  {}\n",
-            name, entry.version, entry.scope, entry.install_path,
+            "  {:<25} v{:<8} [{}] [{}]  {}\n",
+            name,
+            entry.version,
+            entry.scope,
+            entry
+                .signature
+                .as_deref()
+                .unwrap_or("signature not checked"),
+            entry.install_path,
         ));
     }
     out.push_str(&format!(
@@ -634,6 +691,46 @@ pub fn format_search_results(plugins: &[MarketplacePlugin]) -> String {
 /// when the plugin has no manifest or omits a version. This is recorded in
 /// `installed.json` so `format_installed` and update/compatibility logic
 /// reflect the real version rather than a hardcoded placeholder.
+fn changed_files_since_orig_head(install_path: &Path) -> Vec<String> {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(install_path)
+        .args(["diff", "--name-status", "ORIG_HEAD", "HEAD"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+                .filter(|line| !line.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn describe_plugin_update(
+    name: &str,
+    previous_version: &str,
+    current_version: &str,
+    changed_files: &[String],
+) -> String {
+    let version = if previous_version == current_version {
+        format!("{name}, updated (still v{current_version})")
+    } else {
+        format!("{name}, updated v{previous_version} -> v{current_version}")
+    };
+    if changed_files.is_empty() {
+        return version;
+    }
+    let mut out = format!("{version}, {} file(s) changed:", changed_files.len());
+    for change in changed_files {
+        out.push_str("\n      ");
+        out.push_str(change);
+    }
+    out
+}
+
 fn read_manifest_version(install_path: &Path) -> String {
     crate::plugins::load_manifest_for(install_path)
         .and_then(|(manifest, _format)| manifest.version)
@@ -975,6 +1072,7 @@ mod tests {
                 install_path: "/home/user/.agiworkforce/plugins/test-plugin".to_string(),
                 version: "1.2.0".to_string(),
                 installed_at: Utc::now(),
+                signature: None,
             },
         );
         let reg = InstalledPlugins {
@@ -1073,13 +1171,181 @@ mod tests {
 
         let mp = Marketplace::with_url("http://127.0.0.1:1");
         let err = mp
-            .install("https://example.invalid/..", home.path(), "user")
+            .install(
+                "https://example.invalid/..",
+                home.path(),
+                "user",
+                &crate::plugins::PluginSignaturePolicy::default(),
+            )
             .await
             .unwrap_err()
             .to_string();
 
         assert!(err.contains("plugin name"), "{err}");
         assert!(keep.join("marker.txt").exists(), "config dir was wiped");
+    }
+
+    #[test]
+    fn plugin_update_summary_shows_the_version_diff_and_changed_files() {
+        assert_eq!(
+            describe_plugin_update("acme", "1.0.0", "1.1.0", &[]),
+            "acme, updated v1.0.0 -> v1.1.0"
+        );
+        assert_eq!(
+            describe_plugin_update(
+                "acme",
+                "1.0.0",
+                "1.0.0",
+                &["M commands/run.md".to_string(), "A hooks.json".to_string()]
+            ),
+            "acme, updated (still v1.0.0), 2 file(s) changed:\n      M commands/run.md\n      A hooks.json"
+        );
+    }
+
+    fn unsigned_source() -> (tempfile::TempDir, PathBuf) {
+        let source = tempfile::tempdir().unwrap();
+        let source_dir = source.path().join("unsigned");
+        let manifest = source_dir.join(".agiworkforce-plugin").join("plugin.json");
+        std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+        std::fs::write(&manifest, r#"{"name":"unsigned","version":"1.0.0"}"#).unwrap();
+        (source, source_dir)
+    }
+
+    #[tokio::test]
+    async fn marketplace_install_accepts_an_unsigned_plugin_by_default_and_lists_it_unsigned() {
+        let home = tempfile::tempdir().unwrap();
+        let (_source, source_dir) = unsigned_source();
+
+        Marketplace::with_url("http://127.0.0.1:1")
+            .install(
+                source_dir.to_str().unwrap(),
+                home.path(),
+                "user",
+                &crate::plugins::PluginSignaturePolicy::default(),
+            )
+            .await
+            .unwrap();
+
+        let registry = Marketplace::list_installed(home.path());
+        assert_eq!(
+            registry.plugins["unsigned"].signature.as_deref(),
+            Some("unsigned")
+        );
+        assert!(format_installed(&registry).contains("[unsigned]"));
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "user.name=test",
+                "-c",
+                "user.email=test@example.invalid",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(status.status.success(), "git {args:?}: {status:?}");
+    }
+
+    fn write_manifest(dir: &Path, version: &str) {
+        let manifest = dir.join(".agiworkforce-plugin").join("plugin.json");
+        std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+        std::fs::write(
+            manifest,
+            format!(r#"{{"name":"tracked","version":"{version}"}}"#),
+        )
+        .unwrap();
+    }
+
+    fn cloned_plugin_with_pending_update() -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
+        let origin = tempfile::tempdir().unwrap();
+        git(origin.path(), &["init", "-q"]);
+        write_manifest(origin.path(), "1.0.0");
+        git(origin.path(), &["add", "."]);
+        git(origin.path(), &["commit", "-q", "-m", "v1"]);
+
+        let home = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        std::fs::create_dir_all(&plugins_dir).unwrap();
+        let install_path = plugins_dir.join("tracked");
+        git(
+            &plugins_dir,
+            &["clone", "-q", origin.path().to_str().unwrap(), "tracked"],
+        );
+        let mut registry = InstalledPlugins::default();
+        registry.plugins.insert(
+            "tracked".to_string(),
+            InstalledPluginEntry {
+                scope: "user".to_string(),
+                install_path: install_path.to_string_lossy().to_string(),
+                version: "1.0.0".to_string(),
+                installed_at: Utc::now(),
+                signature: None,
+            },
+        );
+        registry.save(&plugins_dir).unwrap();
+
+        write_manifest(origin.path(), "2.0.0");
+        git(origin.path(), &["commit", "-q", "-am", "v2"]);
+        (origin, home, install_path)
+    }
+
+    #[tokio::test]
+    async fn an_unsigned_update_rolls_back_only_when_signatures_are_required() {
+        let mp = Marketplace::with_url("http://127.0.0.1:1");
+
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        mp.update_all(
+            home.path(),
+            &crate::plugins::PluginSignaturePolicy {
+                require_signed: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(read_manifest_version(&install_path), "1.0.0");
+
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        mp.update_all(
+            home.path(),
+            &crate::plugins::PluginSignaturePolicy::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(read_manifest_version(&install_path), "2.0.0");
+        let entry = &Marketplace::list_installed(home.path()).plugins["tracked"];
+        assert_eq!(entry.version, "2.0.0");
+        assert_eq!(entry.signature.as_deref(), Some("unsigned"));
+    }
+
+    #[tokio::test]
+    async fn marketplace_install_rolls_back_an_unsigned_plugin_when_signatures_are_required() {
+        let home = tempfile::tempdir().unwrap();
+        let (_source, source_dir) = unsigned_source();
+
+        let err = Marketplace::with_url("http://127.0.0.1:1")
+            .install(
+                source_dir.to_str().unwrap(),
+                home.path(),
+                "user",
+                &crate::plugins::PluginSignaturePolicy {
+                    require_signed: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("--unsafe-allow-unsigned"), "{err}");
+        assert!(!home.path().join("plugins").join("unsigned").exists());
+        assert!(!Marketplace::list_installed(home.path())
+            .plugins
+            .contains_key("unsigned"));
     }
 
     #[tokio::test]

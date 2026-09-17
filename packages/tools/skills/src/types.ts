@@ -1,11 +1,5 @@
-
 export type SkillSource =
-  | 'bundled'
-  | 'managed-local'
-  | 'personal'
-  | 'project'
-  | 'workspace'
-  | 'extra';
+  'bundled' | 'managed-local' | 'personal' | 'project' | 'workspace' | 'extra';
 
 export interface SkillMetadata {
   always?: boolean;
@@ -20,6 +14,7 @@ export interface SkillMetadata {
     tools?: string[];
     env?: string[];
     config?: string[];
+    mcp?: string[];
   };
 }
 

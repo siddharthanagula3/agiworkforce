@@ -416,6 +416,25 @@ describe('selected skill requirements', () => {
     expect(failure?.message).toContain('create_office_file');
   });
 
+  it('names a required MCP connector the turn does not offer, and passes once it does', () => {
+    const crmSkill: Skill = {
+      ...officeSkill,
+      name: 'account-brief',
+      metadata: { requires: { mcp: ['salesforce'] } },
+    };
+
+    const failure = selectedSkillRequirementFailure(
+      crmSkill,
+      new Set(['skill', 'mcp__github__search']),
+    );
+    expect(failure).toMatchObject({ missingTools: [], missingMcpServers: ['salesforce'] });
+    expect(failure?.message).toContain('the salesforce connector');
+
+    expect(
+      selectedSkillRequirementFailure(crmSkill, new Set(['skill', 'mcp__salesforce__query'])),
+    ).toBeNull();
+  });
+
   it('passes once the turn offers the tool', () => {
     expect(
       selectedSkillRequirementFailure(officeSkill, new Set(['skill', 'create_office_file'])),

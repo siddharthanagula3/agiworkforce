@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createSkillToolDefinition,
+  describeSkillUnavailability,
   executeSkillTool,
   executeSkillToolWithFiles,
   formatSkillsForToolPrompt,
@@ -179,6 +180,37 @@ describe('model-facing Skill tool', () => {
     expect(result.content).not.toContain('SECOND_PRIVATE_TOKEN');
     expect(result.content).not.toContain('private-renderer');
     expect(result.content).not.toContain('private.account');
+  });
+
+  it('checks a required MCP server against the servers the turn offers', () => {
+    const connectorSkill = skill({ metadata: { requires: { mcp: ['Linear'] } } });
+
+    const refused = executeSkillTool(
+      [connectorSkill],
+      { action: 'load', name: 'documents' },
+      { availableTools: new Set(['skill', 'mcp__github__search']) },
+    );
+    expect(refused).toMatchObject({ isError: true, code: 'skill_dependencies_unavailable' });
+    expect(refused.content).toContain('Connect these MCP servers first: Linear.');
+
+    const listed = JSON.parse(
+      executeSkillTool([connectorSkill], { action: 'list' }, { availableTools: new Set(['skill']) })
+        .content,
+    ) as { skills: Array<{ available: boolean; missingMcpServers?: string[] }> };
+    expect(listed.skills[0]).toMatchObject({ available: false, missingMcpServers: ['Linear'] });
+
+    expect(
+      executeSkillTool(
+        [connectorSkill],
+        { action: 'load', name: 'documents' },
+        { availableTools: new Set(['skill']), availableMcpServers: new Set(['linear']) },
+      ),
+    ).toMatchObject({ isError: false, code: 'skill_loaded' });
+    expect(
+      describeSkillUnavailability(connectorSkill, {
+        availableTools: new Set(['skill', 'mcp__linear__create_issue']),
+      }),
+    ).toBeNull();
   });
 
   it('checks declared tool dependencies against the tools the Cloud loop actually offers', () => {

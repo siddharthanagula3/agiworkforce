@@ -14,7 +14,11 @@ import {
   readPluginArchive,
   type UploadedPlugin,
 } from '@/features/plugins/server/directory/archive';
-import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
+import {
+  installsDisabledResponse,
+  pluginNotPermittedResponse,
+} from '@/features/plugins/server/directory/install-responses';
+import { evaluatePluginPolicyForUser } from '@/lib/services/connector-policy-gate';
 import {
   PLUGIN_UPLOAD_FILE_FIELD,
   PLUGIN_UPLOAD_NAME_FIELD,
@@ -91,6 +95,16 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       );
     }
     throw error;
+  }
+
+  for (const plugin of archive.plugins) {
+    const policy = await evaluatePluginPolicyForUser({
+      db,
+      userId,
+      pluginKey: plugin.key,
+      request,
+    });
+    if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
   }
 
   try {

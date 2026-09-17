@@ -45,6 +45,7 @@ export interface SkillToolRuntimeContext {
   availableTools?: ReadonlySet<string>;
   availableBins?: ReadonlySet<string>;
   availableConfig?: ReadonlySet<string>;
+  availableMcpServers?: ReadonlySet<string>;
   platform?: string;
   maxOutputBytes?: number;
 }
@@ -159,9 +160,22 @@ function hasAny(values: readonly string[] | undefined, available: ReadonlySet<st
 export interface SkillUnavailability {
   kinds: readonly SkillRequirementKind[];
   missingTools: readonly string[];
+  missingMcpServers: readonly string[];
 }
 
-export type SkillRequirementKind = 'tools' | 'environment' | 'platform';
+export type SkillRequirementKind = 'tools' | 'mcp' | 'environment' | 'platform';
+
+const MCP_QUALIFIED_TOOL = /^mcp__(.+?)__.+$/;
+
+function mcpServersOffered(context: SkillToolRuntimeContext): ReadonlySet<string> {
+  const servers = new Set<string>();
+  for (const server of context.availableMcpServers ?? []) servers.add(server.toLowerCase());
+  for (const tool of context.availableTools ?? []) {
+    const match = MCP_QUALIFIED_TOOL.exec(tool);
+    if (match?.[1]) servers.add(match[1].toLowerCase());
+  }
+  return servers;
+}
 
 export function describeSkillUnavailability(
   skill: Skill,
@@ -180,6 +194,11 @@ export function describeSkillUnavailability(
   const kinds: SkillRequirementKind[] = [];
   const missingTools = (requirements?.tools ?? []).filter((tool) => !tools.has(tool));
   if (missingTools.length > 0) kinds.push('tools');
+  const offeredMcpServers = mcpServersOffered(context);
+  const missingMcpServers = (requirements?.mcp ?? []).filter(
+    (server) => !offeredMcpServers.has(server.toLowerCase()),
+  );
+  if (missingMcpServers.length > 0) kinds.push('mcp');
   if (
     !hasAll(requiredEnvironment, environment) ||
     !hasAll(requirements?.bins, bins) ||
@@ -192,7 +211,7 @@ export function describeSkillUnavailability(
     kinds.push('platform');
   }
 
-  return kinds.length === 0 ? null : { kinds, missingTools };
+  return kinds.length === 0 ? null : { kinds, missingTools, missingMcpServers };
 }
 
 export function isSkillAvailable(skill: Skill, context: SkillToolRuntimeContext = {}): boolean {
@@ -296,6 +315,9 @@ function listSkills(skills: readonly Skill[], context: SkillToolRuntimeContext):
         ...(unavailability && unavailability.missingTools.length > 0
           ? { missingTools: unavailability.missingTools }
           : {}),
+        ...(unavailability && unavailability.missingMcpServers.length > 0
+          ? { missingMcpServers: unavailability.missingMcpServers }
+          : {}),
         version: skill.version ?? null,
         contentHash: skill.contentHash,
         treeHash: skill.treeHash ?? null,
@@ -334,10 +356,15 @@ function selectSkill(
 
   const unavailability = describeSkillUnavailability(selected, context);
   if (unavailability) {
-    const missing =
+    const missingTools =
       unavailability.missingTools.length > 0
         ? ` Turn on or grant these tools first: ${unavailability.missingTools.map(oneLine).join(', ')}.`
         : '';
+    const missingServers =
+      unavailability.missingMcpServers.length > 0
+        ? ` Connect these MCP servers first: ${unavailability.missingMcpServers.map(oneLine).join(', ')}.`
+        : '';
+    const missing = `${missingTools}${missingServers}`;
     return {
       ok: false,
       result: boundedResult(

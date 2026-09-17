@@ -109,6 +109,16 @@ async function handlePost(request: NextRequest) {
   const url = parsedUrl.toString();
   const transport = transportForUrl(parsedUrl, body.transport);
 
+  const hostDecision = await evaluateConnectorPolicyForUser({
+    db,
+    userId,
+    connectorId: null,
+    isCustom: true,
+    url,
+    request,
+  });
+  if (!hostDecision.allowed) throw createError.forbidden(hostDecision.reason);
+
   const authToken = typeof body.authToken === 'string' ? body.authToken.trim() : '';
   if (authToken.length > AUTH_TOKEN_MAX_LENGTH) {
     throw createError.validation('authToken is too long');

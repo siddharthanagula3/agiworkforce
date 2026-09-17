@@ -15,7 +15,10 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/services/active-workspace-service', () => ({ resolveActiveOrganizationId }));
 vi.mock('@/lib/services/connector-policy-service', () => ({ readConnectorPolicySafely }));
 
-import { evaluateConnectorPolicyForUser } from '../connector-policy-gate';
+import {
+  evaluateConnectorPolicyForUser,
+  evaluatePluginPolicyForUser,
+} from '../connector-policy-gate';
 
 const ORG = 'org-1';
 const USER = 'user-1';
@@ -156,5 +159,58 @@ describe('evaluateConnectorPolicyForUser', () => {
 
     expect(decision.allowed).toBe(true);
     expect(resolveActiveOrganizationId).not.toHaveBeenCalled();
+  });
+});
+
+describe('evaluateConnectorPolicyForUser with an MCP host allowlist', () => {
+  it('refuses a custom endpoint on a host the workspace has not approved', async () => {
+    readConnectorPolicySafely.mockResolvedValue(policy({ allowedMcpHosts: ['*.corp.example'] }));
+
+    const refused = await evaluateConnectorPolicyForUser({
+      db,
+      userId: USER,
+      connectorId: null,
+      isCustom: true,
+      url: 'https://mcp.attacker.example/sse',
+    });
+    expect(refused).toMatchObject({ allowed: false, code: 'mcp_host_not_allowed' });
+
+    const permitted = await evaluateConnectorPolicyForUser({
+      db,
+      userId: USER,
+      connectorId: null,
+      isCustom: true,
+      url: 'https://tools.corp.example/mcp',
+    });
+    expect(permitted.allowed).toBe(true);
+  });
+});
+
+describe('evaluatePluginPolicyForUser', () => {
+  it('refuses a blocked plugin and one missing from a non-empty allowlist', async () => {
+    readConnectorPolicySafely.mockResolvedValue(
+      policy({ allowedPlugins: ['acme-review'], blockedPlugins: ['shadow-sync'] }),
+    );
+
+    await expect(
+      evaluatePluginPolicyForUser({ db, userId: USER, pluginKey: 'shadow-sync' }),
+    ).resolves.toMatchObject({ allowed: false, code: 'plugin_blocked', organizationId: ORG });
+    await expect(
+      evaluatePluginPolicyForUser({ db, userId: USER, pluginKey: 'other-plugin' }),
+    ).resolves.toMatchObject({ allowed: false, code: 'plugin_not_allowed' });
+    await expect(
+      evaluatePluginPolicyForUser({ db, userId: USER, pluginKey: 'ACME-Review' }),
+    ).resolves.toMatchObject({ allowed: true, code: 'allowed' });
+  });
+
+  it('leaves a personal account ungoverned without a policy read', async () => {
+    const decision = await evaluatePluginPolicyForUser({
+      db,
+      userId: USER,
+      pluginKey: 'anything',
+      organizationId: null,
+    });
+    expect(decision).toMatchObject({ allowed: true, code: 'ungoverned' });
+    expect(readConnectorPolicySafely).not.toHaveBeenCalled();
   });
 });

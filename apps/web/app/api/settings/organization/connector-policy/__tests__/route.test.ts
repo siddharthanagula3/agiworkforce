@@ -42,6 +42,9 @@ function row(over: Record<string, unknown> = {}) {
     allowed_connectors: [],
     blocked_connectors: [],
     allow_custom_connectors: true,
+    allowed_plugins: [],
+    blocked_plugins: [],
+    allowed_mcp_hosts: [],
     updated_by_user_id: 'user-1',
     updated_at: '2026-08-23T00:00:00.000Z',
     ...over,
@@ -74,7 +77,14 @@ function req(method: string, body?: unknown): Request {
   });
 }
 
-const BASE = { allowedConnectors: [], blockedConnectors: [], allowCustomConnectors: true };
+const BASE = {
+  allowedConnectors: [],
+  blockedConnectors: [],
+  allowCustomConnectors: true,
+  allowedPlugins: [],
+  blockedPlugins: [],
+  allowedMcpHosts: [],
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -145,6 +155,71 @@ describe('connector policy', () => {
 
     expect(res.status).toBe(400);
     expect(JSON.stringify(await res.json())).toMatch(/both approved and blocked/i);
+  });
+
+  it('saves plugin and MCP host allowlists and records which lists changed', async () => {
+    bind({
+      role: 'admin',
+      written: row({ allowed_plugins: ['acme-review'], allowed_mcp_hosts: ['*.corp.example'] }),
+    });
+    const res = await PUT(
+      req('PUT', {
+        ...BASE,
+        allowedPlugins: ['Acme-Review'],
+        allowedMcpHosts: ['*.corp.example'],
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ConnectorPolicyResponse;
+    expect(body.policy.allowedPlugins).toEqual(['acme-review']);
+    expect(body.policy.allowedMcpHosts).toEqual(['*.corp.example']);
+    const insert = mockQuery.mock.calls.find(([sql]) =>
+      /insert into public\.organization_connector_policies/i.test(String(sql)),
+    );
+    expect(insert?.[1]).toEqual([
+      ORG,
+      [],
+      [],
+      true,
+      ['acme-review'],
+      [],
+      ['*.corp.example'],
+      'user-1',
+    ]);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          changedKeys: ['allowedPlugins', 'allowedMcpHosts'],
+        }),
+      }),
+    );
+  });
+
+  it('refuses a plugin that is both approved and blocked, and a malformed host', async () => {
+    bind({ role: 'admin' });
+    const both = await PUT(
+      req('PUT', { ...BASE, allowedPlugins: ['acme'], blockedPlugins: ['acme'] }) as never,
+    );
+    expect(both.status).toBe(400);
+    expect(JSON.stringify(await both.json())).toMatch(/plugin cannot be both/i);
+
+    const badHost = await PUT(
+      req('PUT', { ...BASE, allowedMcpHosts: ['https://mcp.example.com/path'] }) as never,
+    );
+    expect(badHost.status).toBe(400);
+  });
+
+  it('refuses a body that omits the plugin lists rather than wiping them', async () => {
+    bind({ role: 'admin' });
+    const res = await PUT(
+      req('PUT', {
+        allowedConnectors: [],
+        blockedConnectors: [],
+        allowCustomConnectors: true,
+      }) as never,
+    );
+    expect(res.status).toBe(400);
   });
 
   it('rejects a list beyond the table ceiling instead of failing in the database', async () => {

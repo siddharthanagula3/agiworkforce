@@ -52,6 +52,17 @@ pub struct Hook {
     /// `if:` and `matcher` are AND-ed when both are set.
     #[serde(default, rename = "if")]
     pub if_condition: Option<String>,
+
+    #[serde(skip)]
+    pub source: HookSource,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum HookSource {
+    #[default]
+    User,
+    Managed,
+    Plugin,
 }
 
 fn default_timeout() -> u64 {
@@ -146,6 +157,12 @@ pub enum HookEvent {
     Elicitation,
     /// Fires after the user responds to an MCP elicitation request.
     ElicitationResult,
+    /// Fires when a turn begins, before any model call.
+    TurnStart,
+    /// Fires when a turn fails with a model, provider or tool-loop error.
+    Error,
+    /// Fires when the user cancels a turn that is still running.
+    TurnCancelled,
 }
 
 impl std::fmt::Display for HookEvent {
@@ -183,6 +200,9 @@ impl std::fmt::Display for HookEvent {
             Self::WorktreeRemove => write!(f, "WorktreeRemove"),
             Self::Elicitation => write!(f, "Elicitation"),
             Self::ElicitationResult => write!(f, "ElicitationResult"),
+            Self::TurnStart => write!(f, "TurnStart"),
+            Self::Error => write!(f, "Error"),
+            Self::TurnCancelled => write!(f, "TurnCancelled"),
         }
     }
 }
@@ -233,6 +253,9 @@ fn resolve_event_name(name: &str) -> Option<HookEvent> {
         "WorktreeRemove" => Some(HookEvent::WorktreeRemove),
         "Elicitation" => Some(HookEvent::Elicitation),
         "ElicitationResult" => Some(HookEvent::ElicitationResult),
+        "TurnStart" => Some(HookEvent::TurnStart),
+        "Error" => Some(HookEvent::Error),
+        "TurnCancelled" => Some(HookEvent::TurnCancelled),
         _ => None,
     };
     if let Some(event) = canonical {
@@ -292,7 +315,8 @@ impl<'de> Deserialize<'de> for HookEvent {
                  ToolResultPersist, SubagentStart, SubagentStop, PermissionRequest, \
                  PermissionDenied, Notification, Stop, StopFailure, PostToolBatch, CronTriggered, \
                  WebhookReceived, FileChanged, DaemonStarted, DaemonStopped, Setup, TeammateIdle, \
-                 WorktreeCreate, WorktreeRemove, Elicitation, ElicitationResult. \
+                 WorktreeCreate, WorktreeRemove, Elicitation, ElicitationResult, TurnStart, \
+                 Error, TurnCancelled. \
                  Legacy aliases (deprecated): BeforeToolUse, AfterToolUse, BeforeMessage, \
                  PreEdit, PostEdit, PreCommand, PostCommand, ContextCompacted, \
                  SubagentSpawned, SubagentCompleted.",
@@ -353,7 +377,7 @@ fn matches_permission_rule(
 /// Tiny shell-style glob matcher: `*` matches any (possibly empty) run of
 /// characters, `?` matches exactly one character, all other chars match
 /// literally. Anchored, the entire input must match.
-fn glob_match(pattern: &str, input: &str) -> bool {
+pub(crate) fn glob_match(pattern: &str, input: &str) -> bool {
     let p: Vec<char> = pattern.chars().collect();
     let s: Vec<char> = input.chars().collect();
     // Iterative two-pointer with backtracking on `*`.
@@ -658,14 +682,21 @@ pub fn aggregate_results(results: &[HookResult]) -> HookAggregateOutcome {
 /// behavior explicitly can use [`load_hooks_or_default`] instead of chaining
 /// `.unwrap_or_default()` themselves.
 pub fn load_hooks() -> Result<HooksConfig> {
+    let managed = super::managed::load_managed_hook_policy();
     match load_hooks_inner() {
-        Ok(config) => Ok(config),
+        Ok(config) => Ok(super::managed::apply_managed_hook_policy(config, &managed)),
         Err(e) => {
             eprintln!(
                 "{} hooks.json failed to load: {:#}, hooks disabled",
                 crate::terminal_style::danger_header("warning:"),
                 e
             );
+            if managed.has_managed_hooks() {
+                return Ok(super::managed::apply_managed_hook_policy(
+                    HooksConfig::default(),
+                    &managed,
+                ));
+            }
             Err(e)
         }
     }
@@ -816,7 +847,8 @@ fn merge_plugin_hooks(config: &mut HooksConfig) {
     for (event_name, hook_values) in plugins_mgr.hook_configs() {
         for value in hook_values {
             match serde_json::from_value::<Hook>(value.clone()) {
-                Ok(hook) => {
+                Ok(mut hook) => {
+                    hook.source = HookSource::Plugin;
                     config
                         .hooks
                         .entry(event_name.clone())
@@ -1154,15 +1186,49 @@ pub async fn run_hooks(
 }
 
 /// Execute a single hook command.
+pub(crate) fn hook_requires_sandbox(hook: &Hook) -> bool {
+    hook.source == HookSource::Plugin && !crate::sandbox::sandbox_disabled()
+}
+
+async fn run_hook_process(hook: &Hook, input_json: &str) -> std::io::Result<std::process::Output> {
+    let timeout = Duration::from_secs(hook.timeout);
+    let stdin = Some(input_json.as_bytes().to_vec());
+    if !hook_requires_sandbox(hook) {
+        let mut cmd = tokio::process::Command::new("sh");
+        cmd.arg("-c").arg(&hook.command);
+        return crate::process_tree::output(cmd, stdin, Some(timeout)).await;
+    }
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let manager = crate::sandbox::SandboxManager::for_command_execution(
+        cwd.clone(),
+        crate::sandbox::NetworkPolicy::Allow,
+    )
+    .map_err(|error| {
+        std::io::Error::other(format!(
+            "plugin hook refused, it must run sandboxed: {error}"
+        ))
+    })?;
+    crate::sandbox::execute_sandboxed_with_input(
+        &manager,
+        &hook.command,
+        Some(&cwd),
+        stdin,
+        Some(timeout),
+    )
+    .await
+    .map_err(|error| {
+        let kind = error
+            .downcast_ref::<std::io::Error>()
+            .map(std::io::Error::kind)
+            .unwrap_or(std::io::ErrorKind::Other);
+        std::io::Error::new(kind, format!("{error:#}"))
+    })
+}
+
 async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
     let start = std::time::Instant::now();
 
-    let mut cmd = tokio::process::Command::new("sh");
-    cmd.arg("-c").arg(&hook.command);
-
-    let timeout = Duration::from_secs(hook.timeout);
-    let result =
-        crate::process_tree::output(cmd, Some(input_json.as_bytes().to_vec()), Some(timeout)).await;
+    let result = run_hook_process(hook, input_json).await;
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -1218,7 +1284,7 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
 /// The authority on *resolution* stays [`resolve_event_name`]; this list is
 /// what `add` validates against and what an error message enumerates.
 /// `every_declared_event_resolves` fails if the two ever drift.
-pub const ALL_EVENTS: [HookEvent; 32] = [
+pub const ALL_EVENTS: [HookEvent; 35] = [
     HookEvent::SessionStart,
     HookEvent::SessionEnd,
     HookEvent::PreToolUse,
@@ -1251,6 +1317,9 @@ pub const ALL_EVENTS: [HookEvent; 32] = [
     HookEvent::WorktreeRemove,
     HookEvent::Elicitation,
     HookEvent::ElicitationResult,
+    HookEvent::TurnStart,
+    HookEvent::Error,
+    HookEvent::TurnCancelled,
 ];
 
 /// Resolve an event the user typed, accepting the same canonical names and
@@ -1286,6 +1355,7 @@ pub fn add_hook(config: &mut HooksConfig, event: &str, command: &str) -> Result<
         blocking: default_blocking(),
         matcher: None,
         if_condition: None,
+        source: HookSource::User,
     });
     Ok((name, hooks.len()))
 }
@@ -1402,6 +1472,59 @@ pub fn format_hooks_list(config: &HooksConfig) -> String {
 #[cfg(test)]
 mod editing_tests {
     use super::*;
+
+    #[test]
+    fn turn_lifecycle_events_are_canonical() {
+        for name in ["TurnStart", "Error", "TurnCancelled"] {
+            assert_eq!(parse_event_name(name).unwrap().to_string(), name);
+        }
+    }
+
+    #[test]
+    fn only_plugin_hooks_require_the_sandbox() {
+        let mut hook: Hook = serde_json::from_str(r#"{"command":"true"}"#).unwrap();
+        assert_eq!(hook.source, HookSource::User);
+        assert!(!hook_requires_sandbox(&hook));
+        hook.source = HookSource::Managed;
+        assert!(!hook_requires_sandbox(&hook));
+        hook.source = HookSource::Plugin;
+        assert_eq!(
+            hook_requires_sandbox(&hook),
+            !crate::sandbox::sandbox_disabled()
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn a_plugin_hook_cannot_write_outside_the_workspace() {
+        if crate::sandbox::SandboxType::detect() == crate::sandbox::SandboxType::None
+            || crate::sandbox::sandbox_disabled()
+        {
+            return;
+        }
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("escaped.txt");
+        let hook_for = |source| Hook {
+            command: format!("cat > '{}'", target.display()),
+            args: Vec::new(),
+            timeout: 10,
+            blocking: true,
+            matcher: None,
+            if_condition: None,
+            source,
+        };
+
+        let plugin_result = run_single_hook(&hook_for(HookSource::Plugin), "{}").await;
+        assert!(
+            !plugin_result.success,
+            "sandboxed plugin hook wrote outside the workspace"
+        );
+        assert!(!target.exists());
+
+        let user_result = run_single_hook(&hook_for(HookSource::User), "{\"ok\":true}").await;
+        assert!(user_result.success, "{}", user_result.stderr);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "{\"ok\":true}");
+    }
 
     #[test]
     fn every_declared_event_resolves_to_itself() {
@@ -1615,6 +1738,7 @@ mod tests {
                 blocking: true,
                 matcher: None,
                 if_condition: None,
+                source: HookSource::User,
             }],
         );
 
@@ -1658,6 +1782,7 @@ mod tests {
             blocking: true,
             matcher: None,
             if_condition: None,
+            source: HookSource::User,
         };
 
         let result = run_single_hook(&hook, "{}").await;
@@ -1677,6 +1802,7 @@ mod tests {
             blocking: true,
             matcher: None,
             if_condition: None,
+            source: HookSource::User,
         };
 
         let result = run_single_hook(&hook, "{}").await;
@@ -1695,6 +1821,7 @@ mod tests {
             blocking: true,
             matcher: None,
             if_condition: None,
+            source: HookSource::User,
         };
         let input = HookInput {
             event: "AfterToolUse".to_string(),
@@ -1718,6 +1845,7 @@ mod tests {
             blocking: true,
             matcher: Some("Session.*".to_string()),
             if_condition: None,
+            source: HookSource::User,
         };
         let input = HookInput {
             event: "SessionStart".to_string(),
@@ -1742,6 +1870,7 @@ mod tests {
             blocking: true,
             matcher: Some("^bash$".to_string()),
             if_condition: None,
+            source: HookSource::User,
         };
         let input_bash = HookInput {
             event: "AfterToolUse".to_string(),
@@ -1776,6 +1905,7 @@ mod tests {
             blocking: true,
             matcher: Some("^Bash$".to_string()),
             if_condition: None,
+            source: HookSource::User,
         };
         let input = HookInput {
             event: "PostToolUse".to_string(),
@@ -1838,6 +1968,7 @@ mod tests {
             blocking: true,
             matcher: Some("[invalid".to_string()),
             if_condition: None,
+            source: HookSource::User,
         };
         let input = HookInput {
             event: "SessionStart".to_string(),
@@ -1865,6 +1996,7 @@ mod tests {
                     blocking: true,
                     matcher: Some("^bash$".to_string()),
                     if_condition: None,
+                    source: HookSource::User,
                 },
                 Hook {
                     command: "echo always".to_string(),
@@ -1873,6 +2005,7 @@ mod tests {
                     blocking: true,
                     matcher: None,
                     if_condition: None,
+                    source: HookSource::User,
                 },
             ],
         );
@@ -2048,6 +2181,7 @@ mod tests {
             blocking: true,
             matcher: None,
             if_condition: None,
+            source: HookSource::User,
         };
         let result = run_single_hook(&hook, "{}").await;
         assert!(result.success);
@@ -2065,6 +2199,7 @@ mod tests {
             blocking: true,
             matcher: None,
             if_condition: None,
+            source: HookSource::User,
         };
         let result = run_single_hook(&hook, "{}").await;
         assert!(result.success);
@@ -2335,6 +2470,7 @@ mod tests {
                 blocking: true,
                 matcher: Some("^bash$".to_string()),
                 if_condition: None,
+                source: HookSource::User,
             }],
         );
         let config = HooksConfig { hooks };
