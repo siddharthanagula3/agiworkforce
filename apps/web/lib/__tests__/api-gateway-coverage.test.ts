@@ -15,7 +15,16 @@ const HANDLER_EXPORT =
   /export\s+(?:const|async\s+function|function)\s+(GET|POST|PUT|PATCH|DELETE)\b/u;
 const GATEWAY_POLICY_ARGUMENT = /withErrorHandler\(\s*\w+\s*,\s*(?:GATEWAY_POLICY|\{)/u;
 
-const MAX_ROUTES_OUTSIDE_GATEWAY = 70;
+// Cron routes are counted separately and are not part of the ratchet below.
+// The wrapper exists to shape an error a caller reads: it maps a thrown error
+// onto a status and a safe body, applies deadlines and idempotency, and keeps
+// a raw message from reaching a user. A cron path has no such caller. The
+// scheduler is its only client, `verifyCronRequest` refuses everyone else, and
+// its body is a run summary read from a log. Counting the 27 of them against
+// the ratchet let a sweep land without touching a route a user can reach, and
+// spent budget meant for the ones they can.
+const CRON_ROUTE_PREFIX = 'app/api/cron/';
+const MAX_ROUTES_OUTSIDE_GATEWAY = 46;
 const MIN_ROUTES_WITH_DECLARED_POLICY = 6;
 
 function routeFiles(dir: string, out: string[] = []): string[] {
@@ -33,11 +42,24 @@ const routes = routeFiles(join(APP_ROOT, 'app/api'))
 
 describe('API gateway coverage', () => {
   it('does not let the number of handlers outside withErrorHandler grow', () => {
-    const outside = routes.filter((route) => !route.source.includes('withErrorHandler('));
+    const outside = routes.filter(
+      (route) =>
+        !route.source.includes('withErrorHandler(') && !route.path.startsWith(CRON_ROUTE_PREFIX),
+    );
     expect(
       outside.length,
       `Routes outside the gateway wrapper:\n${outside.map((route) => route.path).join('\n')}`,
     ).toBeLessThanOrEqual(MAX_ROUTES_OUTSIDE_GATEWAY);
+  });
+
+  it('keeps every cron route on the scheduler credential that earns its exclusion', () => {
+    const unguarded = routes
+      .filter((route) => route.path.startsWith(CRON_ROUTE_PREFIX))
+      .filter((route) => !route.source.includes('verifyCronRequest'));
+    expect(
+      unguarded.map((route) => route.path),
+      'a cron route reachable without the scheduler credential belongs inside the gateway wrapper',
+    ).toEqual([]);
   });
 
   it('keeps the routes that declared deadlines, circuits or idempotency on a declared policy', () => {

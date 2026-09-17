@@ -58,7 +58,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 73 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 76 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -151,12 +151,12 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 120 of 208 database-backed hosted API route files. Counted against the 208 route files that reach the database; the other 88 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 88 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-14.',
+      'Partial: 124 of 229 database-backed hosted API route files. Counted against the 229 route files that reach the database; the other 90 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 105 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-17.',
   },
   {
     label: 'Authentication and CSRF',
     value:
-      'Implemented. Thirteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-14.',
+      'Implemented. Fourteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-17.',
   },
   {
     label: 'Rate limiting',
@@ -316,6 +316,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-17',
+                        value:
+                          'Re-measured after the retrieval index, the memory lifecycle, workspace retention and the device registry shipped. The enumerated erasure list grew from 73 user-scoped tables to 76, with the retrieval documents and passages an account owns and its registered devices. The row-level-isolation count is now 124 of 229 database-backed routes, the owner-connection remainder 105, and 90 hosted routes touch no database. Protected route groups read thirteen while the matcher enforced fourteen, the fourteenth being the shared-link opener. Each figure is derived from the deciding source by a test, not maintained by hand.',
+                      },
                       {
                         label: '2026-09-12',
                         value:

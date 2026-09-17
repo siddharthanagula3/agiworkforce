@@ -1029,7 +1029,7 @@ export default function PrivacyPage() {
                         What deliberately survives deleting your account
                       </h3>
                       <Prose size="sm">
-                        &ldquo;Delete my account&rdquo; erases an enumerated list of 73 user-scoped
+                        &ldquo;Delete my account&rdquo; erases an enumerated list of 76 user-scoped
                         tables and your stored files. A short list of things is kept on purpose, and
                         you should know what before you decide, not after.
                       </Prose>
