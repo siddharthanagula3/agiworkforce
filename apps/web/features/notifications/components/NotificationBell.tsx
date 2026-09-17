@@ -123,7 +123,7 @@ export function NotificationBell() {
           {feed.unreadCount > 0 && (
             <span
               aria-hidden
-              className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] px-1 text-[10px] font-semibold leading-none text-[var(--chat-accent-on-primary)]"
+              className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] px-1 text-xs font-semibold leading-none text-[var(--chat-accent-on-primary)]"
             >
               {badge}
             </span>

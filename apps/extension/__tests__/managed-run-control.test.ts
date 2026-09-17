@@ -5,6 +5,7 @@ import type {
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import {
+  ALL_MANAGED_RUN_STATES,
   cancelChromeManagedRun,
   findChromeManagedRunByRequestId,
   resumeChromeManagedRun,
@@ -173,17 +174,7 @@ describe('Chrome managed run control', () => {
 
     const result = await findChromeManagedRunByRequestId('request-1', dependencies(client));
 
-    const allManagedRunStates = [
-      'queued',
-      'running',
-      'awaiting_input',
-      'ready_for_review',
-      'completed',
-      'failed',
-      'cancelled',
-      'paused',
-      'archived',
-    ];
+    const allManagedRunStates = [...ALL_MANAGED_RUN_STATES];
     expect(listRuns).toHaveBeenCalledOnce();
     expect(listRuns).toHaveBeenCalledWith({
       states: allManagedRunStates,
