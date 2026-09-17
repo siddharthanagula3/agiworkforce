@@ -424,7 +424,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     expect(thinking.effort).toBe('medium');
     expect(onUpgradeRequest).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByText('High, xHigh, Max effort levels are not included in your plan.'),
+      screen.getByText('High, Extra high, Max effort levels are not included in your plan.'),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));

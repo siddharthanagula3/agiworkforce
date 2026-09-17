@@ -15,7 +15,7 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
-import { getAutoRoutingProfileTiers, getModelReasoning } from '@agiworkforce/types';
+import { EFFORT_LABEL, getAutoRoutingProfileTiers, getModelReasoning } from '@agiworkforce/types';
 import {
   AUTO_MODES,
   CLOUD_LOCK_REASON,
@@ -36,16 +36,6 @@ const EFFORT_LADDER_ORDER: readonly string[] = [
   'xhigh',
   'max',
 ];
-
-const REASONING_EFFORT_LABEL: Readonly<Record<string, string>> = {
-  none: 'None',
-  minimal: 'Minimal',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'xHigh',
-  max: 'Max',
-};
 
 const REASONING_EFFORT_TRADEOFF: Readonly<Record<string, string>> = {
   none: 'Answers straight away. Cheapest, weakest on hard problems.',
@@ -587,7 +577,7 @@ export function ModelPickerSheet({
               ) : null}
             </View>
             {effortOptions.map((effort) => {
-              const label = REASONING_EFFORT_LABEL[effort] ?? effort;
+              const label = EFFORT_LABEL[effort] ?? effort;
               const tradeoff = REASONING_EFFORT_TRADEOFF[effort];
               const active = effort === selectedEffort;
               return (

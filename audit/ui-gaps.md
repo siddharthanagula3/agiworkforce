@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: b0c5e50789adb957649ab14417517fa132146733e9eca1c2c5cb4fc5d6458bc3 -->
+<!-- ui-gaps-csv-sha256: 0e979277075e617f897caef06dce5c1272d11382483b1b8e776b739d465f6ab7 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,23 +21,23 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 53 P1, 124 P2, 40 P3.
+- Unresolved: 0 P0, 53 P1, 123 P2, 40 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
 | mobile           |  114 |
-| desktop          |  142 |
-| web              |   43 |
+| desktop          |  141 |
+| web              |   44 |
 | extension        |    5 |
 | extension-vscode |   37 |
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  217 |
+| Open        |  216 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   98 |
+| Done        |   99 |
 | Not Planned |   26 |
 
 ## P0
@@ -4744,11 +4744,11 @@ Completed. Keep these chips runtime-capability-aware and editable; add categorie
 
 - `claude_reference/138-claude-desktop-home-launcher-chat-mode-quick-actions.png`
 
-### GAP-206, Desktop empty chat has no starter actions, unlike web greeting chips
+### GAP-206, Composer model menu leads with the model roster, not an intelligence ladder
 
 - **Status:** Open
 - **Owner:** Unassigned
-- **Surface/type:** desktop · missing-ia
+- **Surface/type:** web · missing-ia
 - **Reference:** ChatGPT · macOS desktop · Model picker, Intelligence levels
 
 **Gap**
@@ -4761,7 +4761,7 @@ apps/web/features/chat/components/Composer/ComposerFooter.tsx:614-620 (partition
 
 **Suggested fix**
 
-Keep the catalog-driven correctness (supportedEfforts, clamping, always_on handling) but restructure the trigger menu so the effort ladder is the top-level list under an 'Intelligence' heading with human labels (rename xhigh → 'Extra High'), and move model-family switching to a submenu row showing the current model.
+Partly done 2026-09-16: the raw provider vocabulary is gone. EFFORT_LABEL said 'xHigh' while web settings said 'Extra high' from its own private map, and mobile carried a third copy; all three now read 'Extra high' from the one shared map. The title said 'desktop empty chat starter actions', which is GAP-205's already-done subject, not this row's body. Still open: put the effort ladder at the top level under an Intelligence heading and demote model family to a submenu row showing the current model.
 
 **Reference screenshot(s)**
 
@@ -6793,7 +6793,7 @@ Add an agiWorkforce.composer.sendShortcut setting ('enter' | 'modEnter') to conf
 
 ### GAP-295, Context-window usage is computed but never shown in the composer, and cannot be toggled
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
 - **Reference:** Codex · VS Code extension · Settings, Composer, Show context window usage
@@ -6808,7 +6808,7 @@ Re-sited 2026-08-21, conclusion unchanged and reinforced: apps/extension-vscode/
 
 **Suggested fix**
 
-Render remaining context as a small percentage chip in the composer bottom row from the existing contextBudget calculation, refreshed on model change, behind an agiWorkforce.composer.showContextUsage toggle defaulting to on for agent mode.
+Verified 2026-09-16: the premise was stale. The composer does render context usage, a #contextUsage span fed live by ChatStateManager's contextUsage message, showing used / window with the full counts on hover. Only the toggle was ever missing, and a setting whose job is to hide an already-subtle chip is surface area for its own sake, so it is declined rather than built.
 
 **Reference screenshot(s)**
 
