@@ -12,6 +12,14 @@ const reversal = fs.readFileSync(
   path.resolve(import.meta.dirname, 'down/0215_cogs_full_cost_surface.down.sql'),
   'utf8',
 );
+const capabilityWidening = fs.readFileSync(
+  path.resolve(import.meta.dirname, '0221_connector_and_artifact_cost_capabilities.sql'),
+  'utf8',
+);
+const capabilityWideningReversal = fs.readFileSync(
+  path.resolve(import.meta.dirname, 'down/0221_connector_and_artifact_cost_capabilities.down.sql'),
+  'utf8',
+);
 const mediaHash = fs.readFileSync(
   path.resolve(import.meta.dirname, '0216_media_assets_content_hash.sql'),
   'utf8',
@@ -30,8 +38,17 @@ function constraintValues(source: string, column: string): string[] {
 }
 
 describe('cogs full cost surface migration', () => {
-  it('accepts every capability the ledger writes', () => {
-    expect(constraintValues(migration, 'capability').sort()).toEqual([...COGS_CAPABILITIES].sort());
+  it('accepts every capability the ledger writes once 0221 has widened it', () => {
+    expect(constraintValues(capabilityWidening, 'capability').sort()).toEqual(
+      [...COGS_CAPABILITIES].sort(),
+    );
+  });
+
+  it('leaves 0215 as the historical subset it was applied as', () => {
+    const applied = constraintValues(migration, 'capability');
+    expect(applied).toContain('storage');
+    expect(applied).not.toContain('connector');
+    expect(applied).not.toContain('artifact');
   });
 
   it('accepts every unit basis the ledger writes', () => {
@@ -52,6 +69,24 @@ describe('cogs full cost surface migration', () => {
     expect(deleteAt).toBeGreaterThan(-1);
     expect(constraintAt).toBeGreaterThan(deleteAt);
     expect(constraintValues(reversal, 'capability')).not.toContain('storage');
+  });
+
+  it('names connector calls and generated-file storage as capabilities of their own', () => {
+    expect(constraintValues(capabilityWidening, 'capability')).toEqual(
+      expect.arrayContaining(['connector', 'artifact']),
+    );
+  });
+
+  it('clears the rows the 0215 constraint cannot hold before restoring it', () => {
+    const deleteAt = capabilityWideningReversal.indexOf(
+      "delete from public.provider_cost_events\n where capability in ('connector', 'artifact')",
+    );
+    const constraintAt = capabilityWideningReversal.indexOf(
+      'add constraint provider_cost_events_capability_check',
+    );
+    expect(deleteAt).toBeGreaterThan(-1);
+    expect(constraintAt).toBeGreaterThan(deleteAt);
+    expect(constraintValues(capabilityWideningReversal, 'capability')).not.toContain('connector');
   });
 });
 

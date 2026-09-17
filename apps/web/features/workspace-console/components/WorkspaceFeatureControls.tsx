@@ -31,22 +31,30 @@ export const GOVERNED_FEATURES: readonly WorkspaceFeature[] = [
   'work',
   'code',
   'research',
+  'projects',
   'skills',
   'plugins',
+  'hooks',
   'browser',
   'computer_use',
+  'remote_control',
   'schedules',
+  'event_triggers',
 ];
 
 const FEATURE_HINTS: Readonly<Partial<Record<WorkspaceFeature, string>>> = {
   work: 'Multi-step Work runs in chat.',
   code: 'Cloud Code sessions, their agent, commands and notebooks.',
   research: 'Research mode in chat.',
+  projects: 'Creating projects, and the knowledge and instructions they carry.',
   skills: 'Choosing, offering, creating and installing skills.',
   plugins: 'Installing plugins, and plugin skills in chat.',
+  hooks: 'Plugin and settings hooks running on the desktop app and the CLI.',
   browser: 'The Chrome extension acting on web pages.',
   computer_use: 'The desktop app controlling the screen, mouse and keyboard.',
+  remote_control: 'Pairing a phone to a desktop, and driving a session from it.',
   schedules: 'Creating schedules, and scheduled runs.',
+  event_triggers: 'Triggers that start a task when a connected account fires an event.',
 };
 
 const cardStyle = {

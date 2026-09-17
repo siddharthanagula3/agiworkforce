@@ -68,6 +68,8 @@ describe('FEATURE_RATE_CARD', () => {
       'work_compute_minute',
       'code_compute_minute',
       'browser_session_minute',
+      'connector_call_request',
+      'artifact_storage_gib_month',
     ] as const) {
       const entry = FEATURE_RATE_CARD[feature];
       expect(entry.providerCogsBasis).toBe('deployment_metered');

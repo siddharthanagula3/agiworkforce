@@ -14,6 +14,7 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { resolveDeviceCredentialLink } from '@/lib/server/device-credential-link';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { notifyNewDeviceRegistered } from '@/lib/services/account-activity-notifications';
 
 export const runtime = 'nodejs';
 
@@ -41,7 +42,7 @@ const UPSERT = `
     identity_session_id = coalesce(excluded.identity_session_id, public.device_registrations.identity_session_id),
     last_seen_at = now(),
     updated_at = now()
-  returning id`;
+  returning id, (xmax = 0) as first_seen`;
 
 async function handleHeartbeat(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'device-heartbeat');
@@ -59,7 +60,7 @@ async function handleHeartbeat(request: NextRequest): Promise<NextResponse> {
   const heartbeat = parsed.data;
   const link = await resolveDeviceCredentialLink(request, userId);
 
-  const rows = await db.query<{ id: string }>(UPSERT, [
+  const rows = await db.query<{ id: string; first_seen: boolean }>(UPSERT, [
     userId,
     organizationId,
     heartbeat.surface,
@@ -80,6 +81,16 @@ async function handleHeartbeat(request: NextRequest): Promise<NextResponse> {
   ]);
   const deviceId = rows[0]?.id;
   if (!deviceId) throw createError.internal('Could not record this device');
+
+  if (rows[0]?.first_seen === true) {
+    await notifyNewDeviceRegistered(db, {
+      userId,
+      deviceId,
+      surface: heartbeat.surface,
+      name: heartbeat.name ?? null,
+      os: heartbeat.os,
+    });
+  }
 
   const body: DeviceHeartbeatResponse = {
     deviceId,

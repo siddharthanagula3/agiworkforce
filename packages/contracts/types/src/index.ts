@@ -107,6 +107,8 @@ export * from './audit';
 
 export * from './event-triggers';
 
+export * from './notifications';
+
 export * from './a2a';
 
 export * from './cross-device';

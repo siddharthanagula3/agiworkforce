@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_WORKSPACE_CONTROLS } from '@agiworkforce/types';
+import {
+  DEFAULT_WORKSPACE_CONTROLS,
+  WORKSPACE_FEATURES,
+  WORKSPACE_FEATURE_LABELS,
+} from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({
   policy: vi.fn(),
@@ -30,7 +34,7 @@ vi.mock('../../hooks/use-workspace-roles', () => ({
   useDeletePolicyOverride: () => ({ mutate: mocks.deleteOverride, isPending: false, error: null }),
 }));
 
-import { WorkspaceFeatureControls } from '../WorkspaceFeatureControls';
+import { GOVERNED_FEATURES, WorkspaceFeatureControls } from '../WorkspaceFeatureControls';
 
 function withPolicy(configured = true, canManagePolicy = true) {
   mocks.policy.mockReturnValue({
@@ -79,6 +83,34 @@ describe('WorkspaceFeatureControls', () => {
     expect(patch.controls.featureAccess.code).toBe(false);
     expect(patch.controls.featureAccess.work).toBe(true);
     expect(patch.controls.maxReasoningEffort).toBe('medium');
+  });
+
+  it('governs every feature the policy carries, so none is left ungovernable', () => {
+    withPolicy();
+    render(<WorkspaceFeatureControls />);
+
+    for (const label of Object.values(WORKSPACE_FEATURE_LABELS)) {
+      expect(screen.getByRole('switch', { name: `Allow ${label}` })).toBeInTheDocument();
+    }
+    expect(GOVERNED_FEATURES).toEqual(expect.arrayContaining([...WORKSPACE_FEATURES]));
+  });
+
+  it('saves Remote Control, Hooks, Event triggers and Projects as controls patches', () => {
+    withPolicy();
+    render(<WorkspaceFeatureControls />);
+
+    for (const label of ['Remote Control', 'Hooks', 'Event triggers', 'Projects']) {
+      fireEvent.click(screen.getByRole('switch', { name: `Allow ${label}` }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Save features and defaults' }));
+
+    const [patch] = mocks.updatePolicy.mock.calls[0] as [
+      { controls: typeof DEFAULT_WORKSPACE_CONTROLS },
+    ];
+    expect(patch.controls.featureAccess.remote_control).toBe(false);
+    expect(patch.controls.featureAccess.hooks).toBe(false);
+    expect(patch.controls.featureAccess.event_triggers).toBe(false);
+    expect(patch.controls.featureAccess.projects).toBe(false);
   });
 
   it('refuses to save from here before a workspace policy exists', () => {

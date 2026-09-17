@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { LIBRARY_DEFAULT_SORT, type LibrarySort } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { deleteStoredMedia } from '@/lib/server/media-storage';
+import { recordGeneratedArtifactBytes } from '@/lib/services/infrastructure-cost';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -186,7 +187,18 @@ async function insertMediaAssetRow(
       p.temporaryChat ?? false,
     ],
   );
-  return rows[0]?.id ?? null;
+  const id = rows[0]?.id ?? null;
+  if (id && p.byteSize) {
+    recordGeneratedArtifactBytes({
+      userId: p.userId,
+      organizationId,
+      bytes: p.byteSize,
+      kind: p.kind,
+      provider: p.provider ?? 'unknown',
+      surface: p.sourceSurface ?? null,
+    });
+  }
+  return id;
 }
 
 export interface UpsertVideoMediaAssetParams {

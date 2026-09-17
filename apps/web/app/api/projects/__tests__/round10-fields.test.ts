@@ -14,6 +14,7 @@ const {
   mockNeonExecute,
   mockGetSubscription,
   mockResolveActiveOrganizationId,
+  mockWorkspaceFeatureGate,
 } = vi.hoisted(() => {
   const mockSingle = vi.fn();
   const mockSelect = vi.fn();
@@ -26,6 +27,7 @@ const {
   const mockNeonExecute = vi.fn();
   const mockGetSubscription = vi.fn();
   const mockResolveActiveOrganizationId = vi.fn();
+  const mockWorkspaceFeatureGate = vi.fn(async () => null);
   return {
     mockFrom,
     mockUpdate,
@@ -38,6 +40,7 @@ const {
     mockNeonExecute,
     mockGetSubscription,
     mockResolveActiveOrganizationId,
+    mockWorkspaceFeatureGate,
   };
 });
 
@@ -99,6 +102,9 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
   resolveOrganizationMembershipId: vi.fn(),
+}));
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: mockWorkspaceFeatureGate,
 }));
 
 import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
@@ -442,6 +448,26 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
 describe('POST /api/projects · round-10 fields', () => {
   beforeEach(() => {
     wireAuthAndDb();
+    mockWorkspaceFeatureGate.mockResolvedValue(null);
+  });
+
+  it('refuses before touching the database when the workspace has turned Projects off', async () => {
+    mockWorkspaceFeatureGate.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'feature_disabled' } }), {
+        status: 403,
+      }) as unknown as null,
+    );
+
+    const res = await POST(makePostRequest({ name: 'Governed project' }));
+
+    expect(res.status).toBe(403);
+    expect(mockWorkspaceFeatureGate).toHaveBeenCalledWith(
+      'user-abc',
+      expect.anything(),
+      'projects',
+      expect.any(String),
+    );
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
   it('POST accepts round-10 fields and maps them in the response', async () => {

@@ -5,6 +5,11 @@ vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
   recordWorkspaceAuditEvent: vi.fn(),
+  featureGate: vi.fn(),
+}));
+
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: mocks.featureGate,
 }));
 
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -45,6 +50,7 @@ function signalingPayload() {
 describe('POST /api/pair/initiate audit trail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.featureGate.mockResolvedValue(null);
     vi.stubEnv('SIGNALING_HTTP_URL', 'https://signal.example.test');
     vi.stubEnv('SIGNALING_INTERNAL_SECRET', 'signal-secret');
   });
@@ -83,6 +89,26 @@ describe('POST /api/pair/initiate audit trail', () => {
     const response = await POST(pairRequest({}));
 
     expect(response.status).toBe(502);
+    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('never reaches the signaling server when the workspace has turned Remote Control off', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    mocks.featureGate.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'feature_disabled' } }), { status: 403 }),
+    );
+
+    const response = await POST(pairRequest({}));
+
+    expect(response.status).toBe(403);
+    expect(mocks.featureGate).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      'remote_control',
+      expect.any(String),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
   });
 });

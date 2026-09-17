@@ -4,59 +4,22 @@ import {
   isWebSettingsSection,
 } from '@/features/settings/lib/web-settings-sections';
 
-export const NOTIFICATION_CATEGORIES = [
-  'general',
-  'agent_run',
-  'schedule',
-  'media',
-  'research',
-  'connector',
-  'device',
-  'security',
-  'billing',
-] as const;
-
-export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
-
-export const NOTIFICATION_SEVERITIES = ['info', 'success', 'warning', 'error'] as const;
-
-export type NotificationSeverity = (typeof NOTIFICATION_SEVERITIES)[number];
-
-export type NotificationTargetKind =
-  'chat' | 'settings' | 'file' | 'artifact' | 'work' | 'research' | 'schedule' | 'browser-task';
-
-export interface NotificationTarget {
-  kind: NotificationTargetKind;
-  id: string;
-}
-
-export interface NotificationFeedItem {
-  id: string;
-  category: NotificationCategory;
-  severity: NotificationSeverity;
-  title: string;
-  message: string;
-  href: string | null;
-  read: boolean;
-  createdAt: string;
-}
-
-export interface NotificationFeedResponse {
-  notifications: NotificationFeedItem[];
-  unreadCount: number;
-}
-
-export function isNotificationCategory(value: unknown): value is NotificationCategory {
-  return (
-    typeof value === 'string' && (NOTIFICATION_CATEGORIES as readonly string[]).includes(value)
-  );
-}
-
-export function isNotificationSeverity(value: unknown): value is NotificationSeverity {
-  return (
-    typeof value === 'string' && (NOTIFICATION_SEVERITIES as readonly string[]).includes(value)
-  );
-}
+export {
+  NOTIFICATION_CATEGORIES,
+  NOTIFICATION_SEVERITIES,
+  NOTIFICATION_TARGET_KINDS,
+  isNotificationCategory,
+  isNotificationSeverity,
+  isNotificationTargetKind,
+} from '@agiworkforce/types';
+export type {
+  NotificationCategory,
+  NotificationFeedItem,
+  NotificationFeedResponse,
+  NotificationSeverity,
+  NotificationTarget,
+  NotificationTargetKind,
+} from '@agiworkforce/types';
 
 export function notificationTargetHref(
   kind: string | null | undefined,

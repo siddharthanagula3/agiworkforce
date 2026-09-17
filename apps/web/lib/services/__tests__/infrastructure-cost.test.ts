@@ -11,7 +11,9 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({
 }));
 
 import {
+  recordConnectorCall,
   recordEgressBytes,
+  recordGeneratedArtifactBytes,
   recordNotificationDeliveries,
 } from '@/lib/services/infrastructure-cost';
 
@@ -48,7 +50,40 @@ describe('infrastructure accruals', () => {
     });
   });
 
+  it('meters one unit per connector call, named by the connector it reached', async () => {
+    recordConnectorCall({
+      userId: 'user_1',
+      organizationId: 'org_1',
+      connectorId: 'github',
+      toolName: 'create_issue',
+    });
+    await vi.waitFor(() => expect(recorded).toHaveBeenCalledTimes(1));
+    expect(accruals()[0]).toMatchObject({
+      capability: 'connector',
+      units: 1,
+      provider: 'github',
+      userId: 'user_1',
+    });
+  });
+
+  it('meters a generated file as one month of its own size', async () => {
+    recordGeneratedArtifactBytes({
+      userId: 'user_1',
+      bytes: 1024 ** 3 / 2,
+      kind: 'image',
+      provider: 'openai',
+    });
+    await vi.waitFor(() => expect(recorded).toHaveBeenCalledTimes(1));
+    expect(accruals()[0]).toMatchObject({
+      capability: 'artifact',
+      units: 0.5,
+      provider: 'openai',
+    });
+  });
+
   it('accrues nothing when nothing was delivered or served', () => {
+    recordGeneratedArtifactBytes({ bytes: 0, kind: 'image', provider: 'openai' });
+    recordGeneratedArtifactBytes({ bytes: Number.NaN, kind: 'image', provider: 'openai' });
     recordEgressBytes({ bytes: 0, provider: 'object_storage' });
     recordEgressBytes({ bytes: Number.NaN, provider: 'object_storage' });
     recordNotificationDeliveries({ provider: 'web_push', deliveries: 0 });

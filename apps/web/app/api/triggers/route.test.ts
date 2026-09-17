@@ -7,9 +7,13 @@ const mocks = vi.hoisted(() => ({
   createTrigger: vi.fn(),
   listTriggers: vi.fn(),
   recordAuditEvent: vi.fn(),
+  featureGate: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: mocks.featureGate,
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
@@ -61,6 +65,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.withRateLimit.mockResolvedValue(null);
   mocks.requireCsrfToken.mockResolvedValue(null);
+  mocks.featureGate.mockResolvedValue(null);
   mocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1', organizationId: null });
   mocks.listTriggers.mockResolvedValue([trigger]);
   mocks.createTrigger.mockResolvedValue({
@@ -95,6 +100,25 @@ describe('POST /api/triggers', () => {
     );
 
     expect(response.status).toBe(403);
+    expect(mocks.createTrigger).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the workspace has turned event triggers off', async () => {
+    mocks.featureGate.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'feature_disabled' } }), { status: 403 }),
+    );
+
+    const response = await POST(
+      request({ taskId: TASK_ID, name: 'CI failed', source: 'connector', eventTypes: ['*'] }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.featureGate).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      'event_triggers',
+      expect.any(String),
+    );
     expect(mocks.createTrigger).not.toHaveBeenCalled();
   });
 

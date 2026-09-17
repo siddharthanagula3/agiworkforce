@@ -35,6 +35,8 @@ export const RATE_CARD_FEATURES = [
   'work_compute_minute',
   'code_compute_minute',
   'browser_session_minute',
+  'connector_call_request',
+  'artifact_storage_gib_month',
 ] as const;
 
 export type RateCardFeature = (typeof RATE_CARD_FEATURES)[number];
@@ -248,6 +250,8 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   work_compute_minute: infrastructureRate('minute'),
   code_compute_minute: infrastructureRate('minute'),
   browser_session_minute: infrastructureRate('minute'),
+  connector_call_request: infrastructureRate('request'),
+  artifact_storage_gib_month: infrastructureRate('gibibyte_month'),
 };
 
 export const RATE_CARD_PROVIDER_COGS_ENV = {
@@ -262,6 +266,8 @@ export const RATE_CARD_PROVIDER_COGS_ENV = {
   work_compute_minute: 'AGI_WORK_COMPUTE_MICROUSD_PER_MINUTE',
   code_compute_minute: 'AGI_CODE_COMPUTE_MICROUSD_PER_MINUTE',
   browser_session_minute: 'AGI_BROWSER_MICROUSD_PER_MINUTE',
+  connector_call_request: 'AGI_CONNECTOR_CALL_MICROUSD_PER_REQUEST',
+  artifact_storage_gib_month: 'AGI_ARTIFACT_STORAGE_MICROUSD_PER_GIB_MONTH',
 } as const satisfies Partial<Record<RateCardFeature, string>>;
 
 function providerCogsEnvName(feature: RateCardFeature): string | undefined {
