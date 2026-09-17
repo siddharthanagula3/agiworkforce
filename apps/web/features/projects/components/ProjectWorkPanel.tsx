@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
+import { TERMINAL_AGENT_TASK_STATES, agentTaskStateLabel } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { toUserMessage } from '@/lib/user-error-message';
 
@@ -24,23 +25,11 @@ const RUN_STATES = [
   'archived',
 ] as const;
 
-const STATE_LABEL: Record<string, string> = {
-  queued: 'Queued',
-  running: 'Running',
-  awaiting_input: 'Needs you',
-  ready_for_review: 'Ready for review',
-  paused: 'Paused',
-  completed: 'Done',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-  archived: 'Archived',
-};
-
-const ACTIVE_STATES = new Set(['queued', 'running', 'awaiting_input', 'ready_for_review']);
-
-function stateColour(state: string): string {
-  if (state === 'failed') return 'var(--chat-destructive-text)';
-  if (ACTIVE_STATES.has(state)) return 'var(--chat-accent-primary-text)';
+function stateColour(state: CloudAgentRun['state']): string {
+  if (state === 'failed' || state === 'timed_out') return 'var(--chat-destructive-text)';
+  if (state === 'ready_for_review' || !TERMINAL_AGENT_TASK_STATES.has(state)) {
+    return 'var(--chat-accent-primary-text)';
+  }
   return 'var(--agi-ink-2)';
 }
 
@@ -193,8 +182,14 @@ export function ProjectWorkPanel({ projectId, projectName }: ProjectWorkPanelPro
               >
                 {title}
               </span>
-              <span style={{ fontSize: 12, flexShrink: 0, color: stateColour(run.state) }}>
-                {STATE_LABEL[run.state] ?? run.state}
+              <span
+                style={{
+                  fontSize: 12,
+                  flexShrink: 0,
+                  color: stateColour(run.workState ?? run.state),
+                }}
+              >
+                {agentTaskStateLabel(run.workState ?? run.state)}
               </span>
               {dateLabel && (
                 <span style={{ color: 'var(--agi-ink-2)', fontSize: 12, flexShrink: 0 }}>

@@ -59,12 +59,39 @@ pub fn format_task_list(tasks: &[(String, String, SubagentStatus)]) -> String {
     lines.join("\n")
 }
 
+/// What one subagent turn consumed, attributed to the session that spawned it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SubagentUsage {
+    pub model: String,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub cache_read_tokens: u32,
+    pub cache_creation_tokens: u32,
+    pub cost_usd: f64,
+    pub via_subscription: bool,
+}
+
+impl SubagentUsage {
+    fn from_turn(model: &str, turn: &crate::agent::TurnResult) -> Self {
+        Self {
+            model: model.to_string(),
+            input_tokens: turn.input_tokens,
+            output_tokens: turn.output_tokens,
+            cache_read_tokens: turn.cache_read_tokens,
+            cache_creation_tokens: turn.cache_creation_tokens,
+            cost_usd: turn.cost_usd,
+            via_subscription: turn.via_subscription,
+        }
+    }
+}
+
 /// Result produced by a completed subagent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentResult {
     pub id: String,
     pub output: String,
     pub files_modified: Vec<String>,
+    pub usage: SubagentUsage,
 }
 
 /// Internal handle tracking a spawned subagent thread.
@@ -282,6 +309,8 @@ impl SubagentManager {
         let task_result = Arc::clone(&result);
         let task_cancelled = Arc::clone(&cancelled);
         let task_description = description.to_string();
+        let task_depth = self.depth + 1;
+        let prompt_chars = prompt.chars().count();
         let process_owner = crate::process_tree::current_owner();
 
         eprintln!(
@@ -302,9 +331,25 @@ impl SubagentManager {
                     .expect("Failed to create subagent tokio runtime");
 
                 let task = async move {
+                    let audit = |status: &SubagentStatus, result: Option<&SubagentResult>| {
+                        crate::subagent_audit::record_subagent(
+                            &crate::subagent_audit::SubagentAuditRecord {
+                                subagent_id: &task_id,
+                                description: &task_description,
+                                depth: task_depth,
+                                prompt_chars,
+                                status,
+                                usage: result.map(|result| &result.usage),
+                                files_modified: result
+                                    .map_or(0, |result| result.files_modified.len()),
+                            },
+                        );
+                    };
+
                     // Check cancellation before starting
                     if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
                         *task_status.write().await = SubagentStatus::Cancelled;
+                        audit(&SubagentStatus::Cancelled, None);
                         return;
                     }
 
@@ -314,19 +359,23 @@ impl SubagentManager {
                     // Check cancellation after completion
                     if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
                         *task_status.write().await = SubagentStatus::Cancelled;
+                        audit(&SubagentStatus::Cancelled, None);
                         return;
                     }
 
                     match outcome {
-                        Ok(output) => {
-                            let files = extract_modified_files(&output);
+                        Ok((model, turn)) => {
+                            let files = extract_modified_files(&turn.response);
+                            let usage = SubagentUsage::from_turn(&model, &turn);
 
                             let subagent_result = SubagentResult {
                                 id: task_id.clone(),
-                                output,
+                                output: turn.response,
                                 files_modified: files,
+                                usage,
                             };
 
+                            audit(&SubagentStatus::Completed, Some(&subagent_result));
                             *task_result.write().await = Some(subagent_result);
                             *task_status.write().await = SubagentStatus::Completed;
 
@@ -338,7 +387,9 @@ impl SubagentManager {
                         }
                         Err(e) => {
                             let err_msg = format!("{:#}", e);
-                            *task_status.write().await = SubagentStatus::Failed(err_msg.clone());
+                            let failed = SubagentStatus::Failed(err_msg.clone());
+                            audit(&failed, None);
+                            *task_status.write().await = failed;
 
                             eprintln!(
                                 "  {} Subagent {} failed: {}",
@@ -551,7 +602,7 @@ async fn run_subagent(
     run_config: &SubagentRunConfig,
     prompt: &str,
     cancelled: &std::sync::atomic::AtomicBool,
-) -> Result<String> {
+) -> Result<(String, crate::agent::TurnResult)> {
     let mut session = crate::agent::AgentSession::new_checked(
         &run_config.model,
         &run_config.sys_context,
@@ -576,6 +627,7 @@ async fn run_subagent(
         definition.apply_to_subagent_session(&mut session);
     }
 
+    let model = session.model.clone();
     let send_fut = session.send(
         &run_config.config,
         prompt,
@@ -599,7 +651,7 @@ async fn run_subagent(
         r = &mut send_fut => r?,
     };
 
-    Ok(result.response)
+    Ok((model, result))
 }
 
 /// Resolve once the cancellation flag is set, polling cooperatively (every

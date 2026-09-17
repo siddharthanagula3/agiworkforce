@@ -7,12 +7,14 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(() => null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   CloudAgentRunNotFoundError: class CloudAgentRunNotFoundError extends Error {},
+  cancelPausedCloudAgentRun: vi.fn(),
   getCloudAgentRun: vi.fn(),
   requestCloudAgentRunCancellation: vi.fn(),
 }));
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
+  cancelPausedCloudAgentRun,
   getCloudAgentRun,
   requestCloudAgentRunCancellation,
 } from '@/lib/services/cloud-agent-run-service';
@@ -149,5 +151,35 @@ describe('/api/llm/v1/chat/completions/runs/[runId]', () => {
         cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
       },
     });
+    expect(cancelPausedCloudAgentRun).not.toHaveBeenCalled();
+  });
+
+  it('ends a paused run at once, since no executor is left to read the request', async () => {
+    vi.mocked(requestCloudAgentRunCancellation).mockResolvedValue({
+      ...run,
+      state: 'paused',
+      workState: 'paused',
+      cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
+    } as never);
+    vi.mocked(cancelPausedCloudAgentRun).mockResolvedValue({
+      ...run,
+      state: 'cancelled',
+      workState: 'cancelled',
+      cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
+    } as never);
+
+    const response = await POST(
+      new NextRequest(`http://localhost/api/llm/v1/chat/completions/runs/${run.id}`, {
+        method: 'POST',
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(202);
+    expect(cancelPausedCloudAgentRun).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      runId: run.id,
+    });
+    await expect(response.json()).resolves.toMatchObject({ run: { state: 'cancelled' } });
   });
 });

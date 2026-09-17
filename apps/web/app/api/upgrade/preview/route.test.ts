@@ -444,6 +444,47 @@ describe('POST /api/upgrade/preview', () => {
       );
     });
 
+    it('co-terms a seat increase and quotes only the prorated seats due today', async () => {
+      stripeMocks.createInvoicePreview.mockResolvedValue({
+        currency: 'usd',
+        starting_balance: 0,
+        lines: {
+          data: [
+            {
+              amount: 7_000,
+              description: 'Remaining time on 7 x Team',
+              period: { start: 1_788_000_000, end: 1_789_500_000 },
+              parent: { subscription_item_details: { proration: true } },
+              taxes: [{ amount: 700 }],
+            },
+            {
+              amount: 24_000,
+              description: '12 x Team (next period)',
+              period: { start: 1_789_500_000, end: 1_792_000_000 },
+              parent: { subscription_item_details: { proration: false } },
+              taxes: [{ amount: 2_400 }],
+            },
+          ],
+        },
+      });
+
+      const response = await POST(teamRequest(12));
+      const body = (await response.json()) as {
+        amountDueNowCents: number;
+        charge: { lineItems: unknown[]; renewsAt: string | null };
+      };
+
+      expect(body.amountDueNowCents).toBe(7_700);
+      expect(body.charge.lineItems).toHaveLength(1);
+      expect(body.charge.renewsAt).toBe(new Date(1_789_500_000 * 1000).toISOString());
+      const details = stripeMocks.createInvoicePreview.mock.calls.at(-1)?.[0]?.subscription_details;
+      expect(details).toMatchObject({
+        billing_cycle_anchor: 'unchanged',
+        proration_behavior: 'always_invoice',
+        proration_date: expect.any(Number),
+      });
+    });
+
     it('quotes the recurring amount as unit price x seats', async () => {
       const response = await POST(teamRequest(12));
 

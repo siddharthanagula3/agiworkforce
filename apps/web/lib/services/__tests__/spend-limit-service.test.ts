@@ -4,6 +4,12 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
+const alertMocks = vi.hoisted(() => ({
+  dispatchSpendAlertIfDue: vi.fn(async () => ({ dispatched: false, reason: 'not_due' })),
+}));
+vi.mock('@/lib/services/spend-alert-service', () => ({
+  dispatchSpendAlertIfDue: alertMocks.dispatchSpendAlertIfDue,
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
@@ -171,5 +177,38 @@ describe('evaluateSpendLimit', () => {
     expect((await evaluateSpendLimit(h.db, ORG, { now: 1_000 })).allowed).toBe(false);
     const permissive = harness({ cap: null });
     expect((await evaluateSpendLimit(permissive.db, other, { now: 1_000 })).allowed).toBe(true);
+  });
+});
+
+describe('evaluateSpendLimit admin alerts', () => {
+  it('offers every recomputed state to the alert dispatcher', async () => {
+    const h = harness({ enforcement: 'notify', spent: 9_000 });
+    await evaluateSpendLimit(h.db, ORG, { now: 1_000 });
+
+    expect(alertMocks.dispatchSpendAlertIfDue).toHaveBeenCalledTimes(1);
+    const [organizationId, state] = alertMocks.dispatchSpendAlertIfDue.mock.calls[0] as unknown as [
+      string,
+      { overThreshold: boolean; enforcement: string },
+    ];
+    expect(organizationId).toBe(ORG);
+    expect(state).toMatchObject({ overThreshold: true, enforcement: 'notify' });
+  });
+
+  it('does not re-offer a cached decision', async () => {
+    const h = harness({ enforcement: 'notify', spent: 9_000 });
+    await evaluateSpendLimit(h.db, ORG, { now: 1_000 });
+    await evaluateSpendLimit(h.db, ORG, { now: 2_000 });
+
+    expect(alertMocks.dispatchSpendAlertIfDue).toHaveBeenCalledTimes(1);
+  });
+
+  it('still returns the decision when the announcement fails', async () => {
+    alertMocks.dispatchSpendAlertIfDue.mockRejectedValueOnce(new Error('mail down'));
+    const h = harness({ enforcement: 'block', spent: 20_000 });
+
+    const decision = await evaluateSpendLimit(h.db, ORG, { now: 1_000 });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('over_cap');
   });
 });

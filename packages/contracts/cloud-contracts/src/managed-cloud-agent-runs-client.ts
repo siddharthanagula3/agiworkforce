@@ -21,7 +21,10 @@ import {
   type ManagedCloudAgentRunHandle as RunHandle,
   type ManagedCloudAgentRunReference as RunReference,
 } from './managed-cloud-agent-run-reference';
-import { ToolApprovalResumeRequestSchema } from './tool-approval-resume';
+import {
+  PausedRunResumeRequestSchema,
+  ToolApprovalResumeRequestSchema,
+} from './tool-approval-resume';
 import { stripTrailingSlashes } from '@agiworkforce/types';
 
 export const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
@@ -94,6 +97,11 @@ export interface ManagedCloudAgentRunClient {
   resumeRun(
     runId: string,
     approvals: ManagedCloudAgentRunApproval[],
+    options?: { signal?: AbortSignal; guidance?: string },
+  ): Promise<void>;
+  pauseRun(runId: string, options?: { signal?: AbortSignal }): Promise<CloudAgentRun>;
+  resumePausedRun(
+    runId: string,
     options?: { signal?: AbortSignal; guidance?: string },
   ): Promise<void>;
   followRun(
@@ -298,7 +306,7 @@ export function createManagedCloudAgentRunClient(
     async listRuns(options = {}) {
       const states = z
         .array(AgentTaskStateSchema)
-        .max(9)
+        .max(AgentTaskStateSchema.options.length)
         .parse(options.states ?? []);
       const requestId = ManagedCloudAgentRunRequestIdSchema.optional().parse(options.requestId);
       const cursor = z.string().min(1).max(512).optional().parse(options.cursor);
@@ -373,6 +381,40 @@ export function createManagedCloudAgentRunClient(
         throw error;
       }
 
+      await response.body?.cancel().catch(() => undefined);
+    },
+
+    async pauseRun(runId, options = {}) {
+      const response = await request(`${managedCloudAgentRunPath(runId)}/pause`, {
+        method: 'POST',
+        headers: await mutationHeaders(),
+        signal: options.signal,
+      });
+      const body = await parseContract(
+        response,
+        CloudAgentRunCancellationResponseSchema,
+        'pause response',
+      );
+      return body.run;
+    },
+
+    async resumePausedRun(runId, options = {}) {
+      const guidance = options.guidance?.trim();
+      const body = PausedRunResumeRequestSchema.parse(guidance ? { guidance } : {});
+      let response: Response;
+      try {
+        response = await request(`${managedCloudAgentRunPath(runId)}/resume`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
+          body: JSON.stringify(body),
+          signal: options.signal,
+        });
+      } catch (error) {
+        if (error instanceof ManagedCloudAgentRunHttpError && error.status === 409) {
+          throw new ManagedCloudAgentRunAlreadyResumingError(error.message);
+        }
+        throw error;
+      }
       await response.body?.cancel().catch(() => undefined);
     },
 

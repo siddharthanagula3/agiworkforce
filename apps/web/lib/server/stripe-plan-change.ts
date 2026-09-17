@@ -45,9 +45,40 @@ export function isUpgrade(from: string, to: string): boolean {
 
 export type PlanChangeKind = 'tier_upgrade' | 'seat_increase';
 
+export type PlanChangeAnchor = 'now' | 'unchanged';
+
+export function planChangeAnchor(kind: PlanChangeKind): PlanChangeAnchor {
+  return kind === 'seat_increase' ? 'unchanged' : 'now';
+}
+
+/**
+ * The preview and the charge must use the same anchor or the number quoted and
+ * the number charged come from different rules. A tier upgrade restarts the
+ * cycle, and Stripe rejects `proration_date` alongside that reset. A seat
+ * increase keeps the renewal date, so the added seats co-term with the seats
+ * already held, and `proration_date` pins the charge to the quoted instant.
+ */
+export function planChangeProration(
+  anchor: PlanChangeAnchor,
+  prorationDate: number,
+):
+  | { proration_behavior: 'always_invoice'; billing_cycle_anchor: 'now' }
+  | {
+      proration_behavior: 'always_invoice';
+      billing_cycle_anchor: 'unchanged';
+      proration_date: number;
+    } {
+  return anchor === 'unchanged'
+    ? {
+        proration_behavior: 'always_invoice',
+        billing_cycle_anchor: 'unchanged',
+        proration_date: prorationDate,
+      }
+    : { proration_behavior: 'always_invoice', billing_cycle_anchor: 'now' };
+}
+
 export type PlanChangeDecision =
-  | { allowed: true; kind: PlanChangeKind }
-  | { allowed: false; reason: string };
+  { allowed: true; kind: PlanChangeKind } | { allowed: false; reason: string };
 
 export function classifyPlanChange(input: {
   currentTier: string;

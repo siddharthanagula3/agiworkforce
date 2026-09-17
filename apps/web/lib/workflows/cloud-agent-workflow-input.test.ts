@@ -135,6 +135,7 @@ describe('cloud agent workflow input', () => {
       model: 'fixture-model',
       quotaFeature: 'chat',
       routeId: 'openai/fixture-model',
+      attribution: { workload: 'research', projectId: 'project-1', sessionId: 'conversation-1' },
     };
     const { kind: _kind, ...reservation } = full;
     processed.managedUsage = { ...processed.managedUsage!, ...reservation };
@@ -373,6 +374,7 @@ describe('cloud agent workflow input', () => {
       initialCompletedSteps: 2,
       invocationContinuation: true,
       resume: fullResume,
+      resumedFromPause: { guidance: 'Focus on pricing' },
     };
     const fullFreeTrial: Required<SerializedFreeTrialReservation> = {
       kind: 'free_trial',

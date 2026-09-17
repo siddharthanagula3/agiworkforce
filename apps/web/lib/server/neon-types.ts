@@ -143,11 +143,7 @@ export type OrganizationMemberRow = {
 };
 
 export type OrganizationInvitationStatus =
-  | 'pending'
-  | 'accepted'
-  | 'declined'
-  | 'revoked'
-  | 'expired';
+  'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
 
 export type OrganizationInvitationRow = {
   id: string;
@@ -521,6 +517,12 @@ export type OrganizationBillingContractRow = {
   stripe_price_id: string | null;
   procurement_reference: string | null;
   customer_legal_entity: string | null;
+  billing_contact_name: string | null;
+  billing_contact_email: string | null;
+  procurement_contact_name: string | null;
+  procurement_contact_email: string | null;
+  payment_terms_days: number | null;
+  tax_exempt_status: 'none' | 'exempt' | 'reverse';
   contract_term_start: string | null;
   contract_term_end: string | null;
   billing_cadence: BillingCadence;

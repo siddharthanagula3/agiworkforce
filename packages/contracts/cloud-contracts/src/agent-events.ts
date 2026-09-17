@@ -252,6 +252,11 @@ export const AgentTaskStateSchema = z.enum([
   'cancelled',
   'paused',
   'archived',
+  'planning',
+  'awaiting_approval',
+  'resuming',
+  'partial',
+  'timed_out',
 ]);
 
 const TaskStateChangedSchema = z.object({

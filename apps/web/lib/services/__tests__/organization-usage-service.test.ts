@@ -20,6 +20,8 @@ function harness(rows: Record<string, unknown[]> = {}) {
       if (/user_id as key/.test(text)) return rows['member'] ?? [];
       if (/model as key/.test(text)) return rows['model'] ?? [];
       if (/provider as key/.test(text)) return rows['provider'] ?? [];
+      if (/'workload' as key/.test(text)) return rows['workload'] ?? [];
+      if (/'projectId' as key/.test(text)) return rows['project'] ?? [];
     }
     return rows['totals'] ?? [];
   });
@@ -134,6 +136,25 @@ describe('readOrganizationUsage', () => {
       if (/date_trunc/.test(String(sql))) continue;
       expect(String(sql)).toMatch(/limit \d+/);
     }
+  });
+});
+
+describe('readOrganizationUsage product area and project', () => {
+  const window = { from: '2026-07-24T00:00:00.000Z', to: '2026-08-23T00:00:00.000Z' };
+
+  it('groups settled spend by workload and by project from the recorded attribution', async () => {
+    const h = harness({
+      workload: [agg({ key: 'research', cost_cents: '900' }), agg({ key: null })],
+      project: [agg({ key: 'project-1', cost_cents: '400' })],
+    });
+
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.byWorkload.map((row) => [row.key, row.costCents])).toEqual([
+      ['research', 900],
+      ['unknown', 250],
+    ]);
+    expect(usage.byProject[0]).toMatchObject({ key: 'project-1', costCents: 400 });
   });
 });
 

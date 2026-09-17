@@ -508,6 +508,7 @@ describe('provider-proxy route', () => {
       expect(reserved['model']).toBe(MODEL);
       expect(reserved['estimatedCostMicrousd']).toBe(200_000);
       expect(reserved['quotaFeature']).toBe('code_harness');
+      expect(reserved['attribution']).toEqual({ workload: 'code', sessionId: SESSION_ID });
       expect(String(reserved['idempotencyKey'])).toMatch(new RegExp(`^code-proxy:${SESSION_ID}:`));
       expect(mockEstimateListCostMicrousd).toHaveBeenCalledWith(MODEL, expect.any(Number), 512);
       expect(mockMarkProviderStarted).toHaveBeenCalledTimes(1);

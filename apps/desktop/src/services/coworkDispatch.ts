@@ -1,12 +1,13 @@
-import type {
-  CompanionApprovalRequestEvent,
-  CompanionApprovalResponse,
-  CompanionApprovalSnapshotEvent,
-  CompanionApprovalType,
-  CompanionApprovalClosedEvent,
-  DispatchTaskControlRequest,
-  DispatchTaskLifecycleStatus,
-  DispatchTaskStatusEvent,
+import {
+  dispatchStatusForAgentTaskState,
+  type CompanionApprovalRequestEvent,
+  type CompanionApprovalResponse,
+  type CompanionApprovalSnapshotEvent,
+  type CompanionApprovalType,
+  type CompanionApprovalClosedEvent,
+  type DispatchTaskControlRequest,
+  type DispatchTaskLifecycleStatus,
+  type DispatchTaskStatusEvent,
 } from '@agiworkforce/types';
 
 import { resolveApprovalRequest } from './approvalResolution';
@@ -295,14 +296,7 @@ async function resolveCompanionApproval(response: CompanionApprovalResponse): Pr
 }
 
 function statusForAgentTask(status: AgentTaskStatus): DispatchTaskLifecycleStatus {
-  switch (status) {
-    case 'paused':
-      return 'awaiting_input';
-    case 'archived':
-      return 'completed';
-    default:
-      return status;
-  }
+  return dispatchStatusForAgentTaskState(status);
 }
 
 function clipStatusText(value: string | undefined): string | undefined {

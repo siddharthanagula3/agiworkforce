@@ -171,10 +171,103 @@ export const AGENT_TASK_STATE_LABELS: Readonly<Record<AgentTaskState, string>> =
   cancelled: RUN_STATUS_LABELS.cancelled,
   paused: 'Paused',
   archived: 'Archived',
+  planning: 'Planning',
+  awaiting_approval: 'Waiting for approval',
+  resuming: 'Resuming',
+  partial: 'Partially completed',
+  timed_out: 'Timed out',
 });
 
 export function agentTaskStateLabel(state: AgentTaskState): string {
   return AGENT_TASK_STATE_LABELS[state];
+}
+
+/**
+ * Mirrors `AgentTaskState::legacy_equivalent` in the Rust protocol: the state a
+ * client built before the last five variants was shown for the same situation,
+ * so it renders the run instead of rejecting the payload.
+ */
+export const LEGACY_AGENT_TASK_STATES: Readonly<Record<AgentTaskState, AgentTaskState>> =
+  Object.freeze({
+    queued: 'queued',
+    running: 'running',
+    awaiting_input: 'awaiting_input',
+    ready_for_review: 'ready_for_review',
+    completed: 'completed',
+    failed: 'failed',
+    cancelled: 'cancelled',
+    paused: 'paused',
+    archived: 'archived',
+    planning: 'running',
+    awaiting_approval: 'awaiting_input',
+    resuming: 'running',
+    partial: 'failed',
+    timed_out: 'failed',
+  });
+
+export function legacyAgentTaskState(state: AgentTaskState): AgentTaskState {
+  return LEGACY_AGENT_TASK_STATES[state];
+}
+
+export function agentTaskStatesReadAs(state: AgentTaskState): AgentTaskState[] {
+  return (Object.keys(LEGACY_AGENT_TASK_STATES) as AgentTaskState[]).filter(
+    (candidate) => candidate === state || LEGACY_AGENT_TASK_STATES[candidate] === state,
+  );
+}
+
+export const TERMINAL_AGENT_TASK_STATES: ReadonlySet<AgentTaskState> = new Set<AgentTaskState>([
+  'ready_for_review',
+  'completed',
+  'partial',
+  'failed',
+  'timed_out',
+  'cancelled',
+  'archived',
+]);
+
+export const DISPATCH_STATUS_AGENT_TASK_STATES: Readonly<
+  Record<DispatchTaskLifecycleStatus, AgentTaskState>
+> = Object.freeze({
+  accepted: 'queued',
+  queued: 'queued',
+  running: 'running',
+  awaiting_input: 'awaiting_input',
+  ready_for_review: 'ready_for_review',
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  rejected: 'failed',
+});
+
+export const AGENT_TASK_STATE_DISPATCH_STATUSES: Readonly<
+  Record<AgentTaskState, DispatchTaskLifecycleStatus>
+> = Object.freeze({
+  queued: 'queued',
+  planning: 'running',
+  running: 'running',
+  resuming: 'running',
+  awaiting_input: 'awaiting_input',
+  awaiting_approval: 'awaiting_input',
+  paused: 'awaiting_input',
+  ready_for_review: 'ready_for_review',
+  completed: 'completed',
+  archived: 'completed',
+  partial: 'failed',
+  failed: 'failed',
+  timed_out: 'failed',
+  cancelled: 'cancelled',
+});
+
+export function dispatchStatusForAgentTaskState(
+  state: AgentTaskState,
+): DispatchTaskLifecycleStatus {
+  return AGENT_TASK_STATE_DISPATCH_STATUSES[state];
+}
+
+export function agentTaskStateForDispatchStatus(
+  status: DispatchTaskLifecycleStatus,
+): AgentTaskState {
+  return DISPATCH_STATUS_AGENT_TASK_STATES[status];
 }
 
 export interface DispatchTaskStatusEvent {
@@ -192,11 +285,7 @@ export interface DispatchTaskStatusEvent {
 export type CompanionApprovalRiskLevel = 'low' | 'medium' | 'high';
 
 export type CompanionApprovalType =
-  | 'file_delete'
-  | 'command'
-  | 'api_call'
-  | 'data_modification'
-  | 'other';
+  'file_delete' | 'command' | 'api_call' | 'data_modification' | 'other';
 
 export interface CompanionApprovalRequestEvent {
   action: 'approval_request';

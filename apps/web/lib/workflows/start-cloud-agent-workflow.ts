@@ -20,9 +20,11 @@ import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-
 import {
   completeCloudAgentApprovalCheckpoint,
   isCloudAgentRunCancellationRequested,
+  isCloudAgentRunPauseRequested,
   saveCloudAgentApprovalCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
+  saveCloudAgentPauseCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import { makeUserConnectorExecutor } from '@/lib/user-connector-tools';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
@@ -266,6 +268,9 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
           initialEventSequence: input.continuation.initialEventSequence,
           initialCompletedSteps: input.continuation.initialCompletedSteps,
           invocationContinuation: input.continuation.invocationContinuation,
+          ...(input.continuation.resumedFromPause
+            ? { resumedFromPause: input.continuation.resumedFromPause }
+            : {}),
         }
       : {}),
     failover: {
@@ -280,6 +285,22 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
         userId: input.userId,
         runId: input.runId,
       }),
+    isPauseRequested: () =>
+      isCloudAgentRunPauseRequested(input.db, { userId: input.userId, runId: input.runId }),
+    onPauseCheckpoint: async (checkpoint) => {
+      await saveCloudAgentPauseCheckpoint(input.db, {
+        userId: input.userId,
+        runId: input.runId,
+        sessionId: checkpoint.sessionId,
+        turnId: checkpoint.turnId,
+        nextEventSequence: checkpoint.nextEventSequence,
+        completedSteps: checkpoint.completedSteps,
+        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        messages: checkpoint.messages,
+        events: checkpoint.events,
+      });
+      pauseCheckpointSaved = true;
+    },
     onApprovalCheckpoint: async (checkpoint) => {
       await saveCloudAgentApprovalCheckpoint(input.db, {
         userId: input.userId,

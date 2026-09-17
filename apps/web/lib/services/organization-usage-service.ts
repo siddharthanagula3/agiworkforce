@@ -50,6 +50,8 @@ export interface OrganizationUsage {
   byMember: UsageBreakdownRow[];
   byModel: UsageBreakdownRow[];
   byProvider: UsageBreakdownRow[];
+  byWorkload: UsageBreakdownRow[];
+  byProject: UsageBreakdownRow[];
   daily: UsageDayRow[];
 }
 
@@ -141,9 +143,10 @@ export async function readOrganizationUsage(
 ): Promise<OrganizationUsage> {
   const { from, to } = window;
 
-  const [totalsRows, byMember, byModel, byProvider, dailyRows] = await Promise.all([
-    db.query<AggregateRow>(
-      `select null as key,
+  const [totalsRows, byMember, byModel, byProvider, byWorkload, byProject, dailyRows] =
+    await Promise.all([
+      db.query<AggregateRow>(
+        `select null as key,
               count(*)::int as requests,
               sum(${TOKENS})::bigint as input_tokens,
               sum(${OUT_TOKENS})::bigint as output_tokens,
@@ -153,13 +156,15 @@ export async function readOrganizationUsage(
           and ${SETTLED}
           and created_at >= $2
           and created_at < $3`,
-      [organizationId, from, to],
-    ),
-    aggregateBy(db, organizationId, from, to, 'user_id'),
-    aggregateBy(db, organizationId, from, to, 'model'),
-    aggregateBy(db, organizationId, from, to, 'provider'),
-    db.query<DayRow>(
-      `select date_trunc('day', created_at) as day,
+        [organizationId, from, to],
+      ),
+      aggregateBy(db, organizationId, from, to, 'user_id'),
+      aggregateBy(db, organizationId, from, to, 'model'),
+      aggregateBy(db, organizationId, from, to, 'provider'),
+      aggregateBy(db, organizationId, from, to, `usage->>'workload'`),
+      aggregateBy(db, organizationId, from, to, `usage->>'projectId'`),
+      db.query<DayRow>(
+        `select date_trunc('day', created_at) as day,
               count(*)::int as requests,
               sum(coalesce(actual_cost_cents, 0))::bigint as cost_cents
          from public.managed_usage_requests
@@ -169,9 +174,9 @@ export async function readOrganizationUsage(
           and created_at < $3
         group by 1
         order by 1 asc`,
-      [organizationId, from, to],
-    ),
-  ]);
+        [organizationId, from, to],
+      ),
+    ]);
 
   const totals = totalsRows[0]
     ? toRow(totalsRows[0])
@@ -190,6 +195,8 @@ export async function readOrganizationUsage(
     byMember,
     byModel,
     byProvider,
+    byWorkload,
+    byProject,
     daily: dailyRows.map((row) => ({
       day: row.day instanceof Date ? row.day.toISOString() : String(row.day),
       requests: num(row.requests),

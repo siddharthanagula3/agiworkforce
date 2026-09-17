@@ -85,14 +85,29 @@ function Sparkline({ days }: { days: UsageDayRow[] }) {
   );
 }
 
+const WORKLOAD_LABELS: Record<string, string> = {
+  chat: 'Chat',
+  work: 'AGI Work',
+  research: 'Deep Research',
+  code: 'AGI Code',
+  browser: 'Browser',
+  unknown: 'Not attributed',
+};
+
+function workloadLabel(key: string): string {
+  return WORKLOAD_LABELS[key] ?? key;
+}
+
 function BreakdownTable({
   title,
   caption,
   rows,
+  labelFor,
 }: {
   title: string;
   caption: string;
   rows: UsageBreakdownRow[];
+  labelFor?: (key: string) => string;
 }) {
   const headingId = `${title.toLowerCase().replace(/\s+/g, '-')}-heading`;
 
@@ -130,7 +145,7 @@ function BreakdownTable({
                     className="max-w-[16rem] truncate px-5 py-2.5"
                     style={{ color: 'var(--text-1)' }}
                   >
-                    {row.key}
+                    {labelFor ? labelFor(row.key) : row.key}
                   </td>
                   <td
                     className="px-5 py-2.5 text-right tabular-nums"
@@ -281,6 +296,12 @@ export function WorkspaceUsageAnalytics() {
             title="By member"
             caption="Who is spending. Volume and cost only, this surface never carries what anyone asked the model."
             rows={usage.byMember}
+          />
+          <BreakdownTable
+            title="By product area"
+            caption="Chat, AGI Work, Deep Research, AGI Code and browser tasks. Turns settled before product areas were recorded show as not attributed."
+            rows={usage.byWorkload}
+            labelFor={workloadLabel}
           />
           <BreakdownTable
             title="By model"

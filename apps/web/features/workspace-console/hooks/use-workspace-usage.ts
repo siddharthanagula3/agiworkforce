@@ -32,6 +32,8 @@ export interface WorkspaceUsage {
   byMember: UsageBreakdownRow[];
   byModel: UsageBreakdownRow[];
   byProvider: UsageBreakdownRow[];
+  byWorkload: UsageBreakdownRow[];
+  byProject: UsageBreakdownRow[];
   daily: UsageDayRow[];
 }
 

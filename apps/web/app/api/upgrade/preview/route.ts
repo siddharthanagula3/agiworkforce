@@ -25,6 +25,9 @@ import {
   classifyPlanChange,
   currentSeatsFromStripeItem,
   isUpgrade,
+  planChangeAnchor,
+  planChangeProration,
+  type PlanChangeAnchor,
 } from '@/lib/server/stripe-plan-change';
 import { isPerSeatBillingPlan } from '@agiworkforce/types';
 import {
@@ -81,8 +84,25 @@ export interface UpgradeChargeBreakdown {
  * therefore show the credit and drop the charge it offsets, quoting -$1.05.
  * Every line on this preview belongs on the bill.
  */
-function immediateProrationBreakdown(preview: Stripe.Invoice): UpgradeChargeBreakdown {
-  const lines = preview.lines?.data ?? [];
+function isProrationLine(line: Stripe.InvoiceLineItem): boolean {
+  return (
+    line.parent?.subscription_item_details?.proration === true ||
+    line.parent?.invoice_item_details?.proration === true
+  );
+}
+
+/**
+ * A seat increase co-terms: the added seats are charged only for the rest of
+ * the current period and renew with the seats already held, so the renewal
+ * date does not move. That preview carries the next period's recurring line
+ * as well, which is not billed today, so only proration lines are due now.
+ */
+function immediateProrationBreakdown(
+  preview: Stripe.Invoice,
+  anchor: PlanChangeAnchor,
+): UpgradeChargeBreakdown {
+  const allLines = preview.lines?.data ?? [];
+  const lines = anchor === 'unchanged' ? allLines.filter(isProrationLine) : allLines;
 
   let subtotalCents = 0;
   let taxCents = 0;
@@ -161,9 +181,11 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to load subscription for upgrade preview');
-    throw createError.serviceUnavailable(
-      'Billing details could not be verified. No upgrade was prepared; please retry.',
-    );
+    throw createError
+      .serviceUnavailable(
+        'Billing details could not be verified. No upgrade was prepared; please retry.',
+      )
+      .asUserSafe();
   }
   const sub = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(sub);
@@ -221,9 +243,11 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
       );
     } catch (error) {
       logger.error({ error, userId }, 'Failed to load billing customer for upgrade preview');
-      throw createError.serviceUnavailable(
-        'Billing customer details could not be verified. No upgrade was prepared; please retry.',
-      );
+      throw createError
+        .serviceUnavailable(
+          'Billing customer details could not be verified. No upgrade was prepared; please retry.',
+        )
+        .asUserSafe();
     }
     stripeCustomerId = profileRows[0]?.stripe_customer_id ?? null;
   }
@@ -347,6 +371,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   }
   const newPriceId = priceSelection.priceId;
   const prorationDate = Math.floor(Date.now() / 1000);
+  const anchor = planChangeAnchor(planChange.kind);
 
   let preview: Stripe.Invoice;
   try {
@@ -355,11 +380,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
       subscription: stripeSubId,
       subscription_details: {
         items: [{ id: stripeItemId, price: newPriceId, quantity: requestedSeats }],
-        proration_behavior: 'always_invoice',
-        // The cycle restarts on upgrade: a full period of the new plan is bought
-        // today, less credit for unused time on the old one, and the renewal date
-        // moves. Stripe rejects `proration_date` alongside this.
-        billing_cycle_anchor: 'now',
+        ...planChangeProration(anchor, prorationDate),
       },
     });
   } catch (err) {
@@ -367,7 +388,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     throw createError.internal('Failed to preview the upgrade cost');
   }
 
-  const charge = immediateProrationBreakdown(preview);
+  const charge = immediateProrationBreakdown(preview, anchor);
 
   return NextResponse.json({
     plan: targetPlan,

@@ -4,11 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { withErrorHandler } from '@/lib/error-handler';
+import { SETTINGS_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { readJsonBody } from '@/lib/read-json-body';
+import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -83,12 +84,9 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
 
   const { db, userId, membership } = await requireAdmin(request);
 
-  const parsed = PutSchema.safeParse(await readJsonBody(request));
-  if (!parsed.success) {
-    throw createError.validation('Invalid spend limit', parsed.error.issues);
-  }
+  const body = await readValidatedJsonBody(request, PutSchema, 'Invalid spend limit');
 
-  const limit = await upsertSpendLimit(getNeonDb(), membership.organizationId, parsed.data, userId);
+  const limit = await upsertSpendLimit(getNeonDb(), membership.organizationId, body, userId);
 
   await recordAuditEvent({
     userId,
@@ -153,9 +151,14 @@ async function handleDelete(request: NextRequest): Promise<NextResponse | Respon
   return NextResponse.json(payload);
 }
 
-export const GET = withErrorHandler(handleGet);
-export const PUT = withErrorHandler(handlePut);
-export const DELETE = withErrorHandler(handleDelete);
+const GATEWAY_POLICY = {
+  deadlineMs: SETTINGS_API_ROUTE_DEADLINE_MS,
+  circuit: 'settings.organization.spend-limit',
+} as const;
+
+export const GET = withErrorHandler(handleGet, GATEWAY_POLICY);
+export const PUT = withErrorHandler(handlePut, GATEWAY_POLICY);
+export const DELETE = withErrorHandler(handleDelete, GATEWAY_POLICY);
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

@@ -133,4 +133,20 @@ describe('metered-unit tagging on managed chat reservations', () => {
       expect.objectContaining({ quotaFeature: 'chat' }),
     );
   });
+
+  it('attributes a plain chat turn to the chat workload with no project or session', async () => {
+    const result = await processRequest(chatRequest('quota-feature-2'), {
+      ok: true,
+      userId: 'user-pro',
+      token: 'session-token',
+      subscription: proSubscription,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.reserveManagedUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attribution: { workload: 'chat', projectId: null, sessionId: null },
+      }),
+    );
+  });
 });

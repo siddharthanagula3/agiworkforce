@@ -30,7 +30,8 @@ import {
   type CloudAgentWorkflowInput,
 } from '../cloud-agent-workflow-input';
 
-export type WorkflowTerminalOutcome = 'completed' | 'failed' | 'cancelled' | 'awaiting_input';
+export type WorkflowTerminalOutcome =
+  'completed' | 'failed' | 'cancelled' | 'awaiting_input' | 'paused';
 
 export function terminalState(outcome: WorkflowTerminalOutcome): AgentTaskState | null {
   switch (outcome) {
@@ -41,6 +42,7 @@ export function terminalState(outcome: WorkflowTerminalOutcome): AgentTaskState 
     case 'cancelled':
       return 'cancelled';
     case 'awaiting_input':
+    case 'paused':
       return null;
   }
 }
@@ -74,7 +76,7 @@ async function persistWorkflowAssistantTurn(
         runId: input.runId,
         runPath: managedCloudAgentRunPath(input.runId),
         lastSequence: journal.lastSequence,
-        state: terminalState(outcome) ?? 'awaiting_input',
+        state: terminalState(outcome) ?? (outcome === 'paused' ? 'paused' : 'awaiting_input'),
       },
     },
   });
@@ -122,7 +124,7 @@ async function settleBilling(
     // A turn parked on an approval has finished this invocation's work; the
     // resume reserves again. Settling it as anything but a normal completion
     // would leave free budget reserved against a turn that is no longer running.
-    outcome: outcome === 'awaiting_input' ? 'completed' : outcome,
+    outcome: outcome === 'awaiting_input' || outcome === 'paused' ? 'completed' : outcome,
     provider,
     model,
     measuredCostDollars: calculateObservedProviderUsageCostDollars(usage, { provider, model }),
@@ -173,7 +175,7 @@ export async function settleWorkflowInvocation(
     db,
     userId: input.userId,
     processed: input.processed as ProcessedRequest,
-    outcome: outcome === 'awaiting_input' ? 'cancelled' : outcome,
+    outcome: outcome === 'awaiting_input' || outcome === 'paused' ? 'cancelled' : outcome,
   });
 
   if (input.predecessorApproval) {

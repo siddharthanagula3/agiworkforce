@@ -295,17 +295,21 @@ fn goal_outcome(task_state: AgentTaskState) -> Option<SubtaskOutcome> {
         AgentTaskState::ReadyForReview | AgentTaskState::Completed | AgentTaskState::Archived => {
             Some(SubtaskOutcome::Succeeded)
         }
-        AgentTaskState::Failed => Some(SubtaskOutcome::Failed(
-            "Sub-agent stopped before finishing the subtask",
-        )),
+        AgentTaskState::Failed | AgentTaskState::Partial | AgentTaskState::TimedOut => Some(
+            SubtaskOutcome::Failed("Sub-agent stopped before finishing the subtask"),
+        ),
         AgentTaskState::Cancelled => Some(SubtaskOutcome::Failed("Subtask was cancelled")),
         // A sub-goal runs in a throwaway core whose id no surface is bound to,
         // so nobody can ever answer it; waiting would burn the whole subtask
         // budget and hold a pool slot for a question with no asker.
-        AgentTaskState::AwaitingInput => Some(SubtaskOutcome::Failed(
-            "Subtask needed input no one can answer",
-        )),
-        AgentTaskState::Queued | AgentTaskState::Running | AgentTaskState::Paused => None,
+        AgentTaskState::AwaitingInput | AgentTaskState::AwaitingApproval => Some(
+            SubtaskOutcome::Failed("Subtask needed input no one can answer"),
+        ),
+        AgentTaskState::Queued
+        | AgentTaskState::Running
+        | AgentTaskState::Paused
+        | AgentTaskState::Planning
+        | AgentTaskState::Resuming => None,
     }
 }
 

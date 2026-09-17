@@ -220,20 +220,15 @@ describe('POST /api/upgrade, Team seat quantity', () => {
     );
   });
 
-  it('charges on the same anchor the preview quoted, restarting the cycle', async () => {
-    // The preview prices a FULL period of the new plan less credit for unused
-    // time, and moves the renewal date. If this call billed on a different
-    // anchor the user would be charged something other than the number they
-    // agreed to, the quoted-vs-charged drift this pair exists to prevent.
+  it('co-terms added seats with the current renewal, at the instant the preview quoted', async () => {
     await POST(
       request({ plan: 'team', billingInterval: 'monthly', seats: 20, previewToken: tokenFor(20) }),
     );
 
     const params = stripeMocks.updateSubscription.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(params['billing_cycle_anchor']).toBe('now');
+    expect(params['billing_cycle_anchor']).toBe('unchanged');
     expect(params['proration_behavior']).toBe('always_invoice');
-    // Stripe rejects the two together, so sending it would fail every upgrade.
-    expect(params).not.toHaveProperty('proration_date');
+    expect(params['proration_date']).toBe(PRORATION_DATE);
   });
 
   it('refuses an active store-owned plan before any Stripe lookup or mutation', async () => {

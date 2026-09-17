@@ -4,8 +4,11 @@
  * Stable task lifecycle emitted by an agent engine.
  *
  * `ReadyForReview` is intentionally distinct from `Completed`: engine work can
- * finish before a human accepts it. Timeouts map to `Failed` with a summary,
- * and recovery maps back to `Running`; neither is a durable product state.
+ * finish before a human accepts it. `AwaitingInput` waits on the user and
+ * `AwaitingApproval` on a permission decision. `Partial` finished with only
+ * part of the work done, and `TimedOut` stopped on a time budget rather than
+ * an error. The last five variants were added after the first nine shipped,
+ * so a reader built before them sees each through `legacy_equivalent`.
  */
 export type AgentTaskState =
   | 'queued'
@@ -16,4 +19,9 @@ export type AgentTaskState =
   | 'failed'
   | 'cancelled'
   | 'paused'
-  | 'archived';
+  | 'archived'
+  | 'planning'
+  | 'awaiting_approval'
+  | 'resuming'
+  | 'partial'
+  | 'timed_out';

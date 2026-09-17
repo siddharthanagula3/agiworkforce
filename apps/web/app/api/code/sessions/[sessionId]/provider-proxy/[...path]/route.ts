@@ -476,6 +476,7 @@ async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> 
         planTier: input.planTier,
         isFlagship: FLAGSHIP_SLOTS.has(getSlotForModel(parsed.model) ?? ''),
         quotaFeature: CODE_HARNESS_QUOTA_FEATURE,
+        attribution: { workload: 'code', sessionId: input.sessionId },
       });
     } catch (err) {
       const managed =

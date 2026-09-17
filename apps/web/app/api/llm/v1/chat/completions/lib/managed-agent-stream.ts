@@ -332,8 +332,9 @@ export function buildManagedAgentStream(
               } else if (
                 lastTaskState === undefined ||
                 lastTaskState === 'queued' ||
+                lastTaskState === 'planning' ||
                 lastTaskState === 'running' ||
-                lastTaskState === 'paused'
+                lastTaskState === 'resuming'
               ) {
                 await transitionJournal('ready_for_review');
               }

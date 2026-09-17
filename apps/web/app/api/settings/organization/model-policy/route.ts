@@ -9,7 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { readJsonBody } from '@/lib/read-json-body';
+import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -164,21 +164,18 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     );
   }
 
-  const parsed = PolicyPutSchema.safeParse(await readJsonBody(request));
-  if (!parsed.success) {
-    throw createError.validation('Invalid model policy', parsed.error.issues);
-  }
-  assertNoContradiction(parsed.data);
+  const body = await readValidatedJsonBody(request, PolicyPutSchema, 'Invalid model policy');
+  assertNoContradiction(body);
 
   const catalog = catalogChoices();
   const knownModels = new Set(catalog.models.map((m) => m.id.toLowerCase()));
   const knownProviders = new Set(catalog.providers.map((p) => p.toLowerCase()));
 
   const input = {
-    allowedProviders: dedupe(parsed.data.allowedProviders) as Provider[],
-    blockedProviders: dedupe(parsed.data.blockedProviders) as Provider[],
-    allowedModels: dedupe(parsed.data.allowedModels),
-    blockedModels: dedupe(parsed.data.blockedModels),
+    allowedProviders: dedupe(body.allowedProviders) as Provider[],
+    blockedProviders: dedupe(body.blockedProviders) as Provider[],
+    allowedModels: dedupe(body.allowedModels),
+    blockedModels: dedupe(body.blockedModels),
   };
 
   // An id the catalog does not know governs nothing, so accepting it would

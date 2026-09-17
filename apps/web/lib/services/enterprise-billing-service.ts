@@ -25,6 +25,15 @@ const CONTRACT_METADATA_KEY_COMMITTED_USAGE_BLOCK_CENTS = 'committed_usage_block
 const CONTRACT_METADATA_KEY_MINIMUM_ANNUAL_SPEND_CENTS = 'minimum_annual_spend_cents';
 const CONTRACT_METADATA_KEY_SUPPORT_TIER = 'support_tier';
 const CONTRACT_METADATA_KEY_CUSTOMER_LEGAL_ENTITY = 'customer_legal_entity';
+const CONTRACT_METADATA_KEY_BILLING_CONTACT_NAME = 'billing_contact_name';
+const CONTRACT_METADATA_KEY_BILLING_CONTACT_EMAIL = 'billing_contact_email';
+const CONTRACT_METADATA_KEY_PROCUREMENT_CONTACT_NAME = 'procurement_contact_name';
+const CONTRACT_METADATA_KEY_PROCUREMENT_CONTACT_EMAIL = 'procurement_contact_email';
+const CONTRACT_METADATA_KEY_NET_TERMS_DAYS = 'net_terms_days';
+const MAX_PAYMENT_TERMS_DAYS = 180;
+const SECONDS_PER_DAY = 86_400;
+const CONTACT_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/u;
+const TAX_EXEMPT_STATUSES: ReadonlySet<string> = new Set(['none', 'exempt', 'reverse']);
 const AUDIT_ENDPOINT = '/api/stripe-webhook';
 const AUDIT_SURFACE = 'stripe_webhook';
 const UNMAPPED_ENTERPRISE_PRICE_AUDIT_REASON = 'unmapped_stripe_price';
@@ -189,6 +198,37 @@ function parseMetadataText(
   return raw ? raw : null;
 }
 
+function parseMetadataEmail(
+  metadata: Stripe.Metadata | null | undefined,
+  key: string,
+  subscriptionId: string,
+): string | null {
+  const raw = parseMetadataText(metadata, key);
+  if (raw === null) return null;
+  if (!CONTACT_EMAIL_PATTERN.test(raw)) {
+    logger.error({ subscriptionId, key }, 'Malformed enterprise contract contact email; ignored');
+    return null;
+  }
+  return raw.toLowerCase();
+}
+
+function parseMetadataPaymentTermsDays(
+  metadata: Stripe.Metadata | null | undefined,
+  subscriptionId: string,
+): number | null {
+  const raw = metadata?.[CONTRACT_METADATA_KEY_NET_TERMS_DAYS];
+  if (raw === undefined) return null;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > MAX_PAYMENT_TERMS_DAYS) {
+    logger.error(
+      { subscriptionId, key: CONTRACT_METADATA_KEY_NET_TERMS_DAYS, value: raw },
+      'Malformed enterprise contract payment terms; ignored',
+    );
+    return null;
+  }
+  return parsed;
+}
+
 interface NegotiatedContractMetadata {
   includedUsageCentsPerPeriod: number | null;
   overagePriceId: string | null;
@@ -196,6 +236,11 @@ interface NegotiatedContractMetadata {
   minimumAnnualSpendCents: number | null;
   supportTier: string | null;
   customerLegalEntity: string | null;
+  billingContactName: string | null;
+  billingContactEmail: string | null;
+  procurementContactName: string | null;
+  procurementContactEmail: string | null;
+  paymentTermsDays: number | null;
 }
 
 function resolveNegotiatedContractMetadata(
@@ -221,7 +266,44 @@ function resolveNegotiatedContractMetadata(
     ),
     supportTier: parseMetadataText(metadata, CONTRACT_METADATA_KEY_SUPPORT_TIER),
     customerLegalEntity: parseMetadataText(metadata, CONTRACT_METADATA_KEY_CUSTOMER_LEGAL_ENTITY),
+    billingContactName: parseMetadataText(metadata, CONTRACT_METADATA_KEY_BILLING_CONTACT_NAME),
+    billingContactEmail: parseMetadataEmail(
+      metadata,
+      CONTRACT_METADATA_KEY_BILLING_CONTACT_EMAIL,
+      subscription.id,
+    ),
+    procurementContactName: parseMetadataText(
+      metadata,
+      CONTRACT_METADATA_KEY_PROCUREMENT_CONTACT_NAME,
+    ),
+    procurementContactEmail: parseMetadataEmail(
+      metadata,
+      CONTRACT_METADATA_KEY_PROCUREMENT_CONTACT_EMAIL,
+      subscription.id,
+    ),
+    paymentTermsDays: parseMetadataPaymentTermsDays(metadata, subscription.id),
   };
+}
+
+async function resolveCustomerTaxExemptStatus(
+  stripe: Stripe,
+  customer: Stripe.Subscription['customer'],
+  subscriptionId: string,
+): Promise<string | null> {
+  if (!customer) return null;
+  try {
+    const resolved =
+      typeof customer === 'string' ? await stripe.customers.retrieve(customer) : customer;
+    if ('deleted' in resolved && resolved.deleted) return null;
+    const status = (resolved as Stripe.Customer).tax_exempt;
+    return typeof status === 'string' && TAX_EXEMPT_STATUSES.has(status) ? status : null;
+  } catch (error) {
+    logger.warn(
+      { error, subscriptionId },
+      'Enterprise customer tax status could not be read; the recorded status is kept',
+    );
+    return null;
+  }
 }
 
 export interface EnterpriseSyncOptions {
@@ -265,6 +347,11 @@ export async function syncEnterpriseContractFromSubscription(
   const committedSeats = resolveCommittedSeats(subscription);
   const stripeCustomerId = extractCustomerId(subscription.customer);
   const negotiated = resolveNegotiatedContractMetadata(subscription);
+  const taxExemptStatus = await resolveCustomerTaxExemptStatus(
+    stripe,
+    subscription.customer,
+    subscription.id,
+  );
   const eventCreatedAt = typeof options.eventCreatedAt === 'number' ? options.eventCreatedAt : null;
   const subscriptionEnded = ENDED_SUBSCRIPTION_STATUSES.has(subscription.status);
 
@@ -273,12 +360,15 @@ export async function syncEnterpriseContractFromSubscription(
        (organization_id, stripe_customer_id, stripe_subscription_id, stripe_product_id, stripe_price_id,
         procurement_reference, contract_term_start, contract_term_end, billing_cadence, committed_seats,
         included_usage_cents_per_period, overage_stripe_price_id, committed_usage_block_cents,
-        minimum_annual_spend_cents, support_tier, customer_legal_entity, last_stripe_event_at, ended_at)
+        minimum_annual_spend_cents, support_tier, customer_legal_entity, last_stripe_event_at, ended_at,
+        billing_contact_name, billing_contact_email, procurement_contact_name, procurement_contact_email,
+        payment_terms_days, tax_exempt_status)
      values (
        $1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text, $7::date, $8::date, $9::text, $10::integer,
        coalesce($11::bigint, 0), $12::text, coalesce($13::bigint, 0), coalesce($14::bigint, 0), $15::text, $16::text,
        to_timestamp($17::double precision),
-       case when $18::boolean then now() else null end
+       case when $18::boolean then now() else null end,
+       $19::text, $20::text, $21::text, $22::text, $23::integer, coalesce($24::text, 'none')
      )
      on conflict (organization_id) do update set
        ended_at = case
@@ -318,6 +408,18 @@ export async function syncEnterpriseContractFromSubscription(
          $16::text,
          organization_billing_contracts.customer_legal_entity
        ),
+       billing_contact_name = coalesce($19::text, organization_billing_contracts.billing_contact_name),
+       billing_contact_email = coalesce($20::text, organization_billing_contracts.billing_contact_email),
+       procurement_contact_name = coalesce(
+         $21::text,
+         organization_billing_contracts.procurement_contact_name
+       ),
+       procurement_contact_email = coalesce(
+         $22::text,
+         organization_billing_contracts.procurement_contact_email
+       ),
+       payment_terms_days = coalesce($23::integer, organization_billing_contracts.payment_terms_days),
+       tax_exempt_status = coalesce($24::text, organization_billing_contracts.tax_exempt_status),
        last_stripe_event_at = coalesce(
          excluded.last_stripe_event_at,
          organization_billing_contracts.last_stripe_event_at
@@ -345,6 +447,12 @@ export async function syncEnterpriseContractFromSubscription(
       negotiated.customerLegalEntity,
       eventCreatedAt,
       subscriptionEnded,
+      negotiated.billingContactName,
+      negotiated.billingContactEmail,
+      negotiated.procurementContactName,
+      negotiated.procurementContactEmail,
+      negotiated.paymentTermsDays,
+      taxExemptStatus,
     ],
   );
 
@@ -448,6 +556,27 @@ function resolveInvoiceProcurementReference(invoice: Stripe.Invoice): string | n
   return field?.value?.trim() || null;
 }
 
+export function resolveInvoiceDueAt(
+  invoice: Stripe.Invoice,
+  paymentTermsDays: number | null,
+  organizationId: string,
+): number | null {
+  const finalizedAt = invoice.status_transitions?.finalized_at ?? null;
+  const termsDueAt =
+    paymentTermsDays !== null && typeof finalizedAt === 'number'
+      ? finalizedAt + paymentTermsDays * SECONDS_PER_DAY
+      : null;
+  const stripeDueAt = typeof invoice.due_date === 'number' ? invoice.due_date : null;
+  if (stripeDueAt === null) return termsDueAt;
+  if (termsDueAt !== null && Math.abs(stripeDueAt - termsDueAt) > SECONDS_PER_DAY) {
+    logger.warn(
+      { invoiceId: invoice.id, organizationId, paymentTermsDays, stripeDueAt, termsDueAt },
+      'Enterprise invoice due date disagrees with the contract payment terms; the invoice date is kept',
+    );
+  }
+  return stripeDueAt;
+}
+
 export async function recordEnterpriseInvoiceEvent(
   db: DatabaseAdapter,
   invoice: Stripe.Invoice,
@@ -457,8 +586,10 @@ export async function recordEnterpriseInvoiceEvent(
   const stripeSubscriptionId = extractInvoiceSubscriptionId(invoice);
   if (!stripeSubscriptionId) return;
 
-  const [contract] = await db.query<Pick<OrganizationBillingContractRow, 'organization_id'>>(
-    `select organization_id
+  const [contract] = await db.query<
+    Pick<OrganizationBillingContractRow, 'organization_id' | 'payment_terms_days'>
+  >(
+    `select organization_id, payment_terms_days
        from public.organization_billing_contracts
       where stripe_subscription_id = $1
       limit 1`,
@@ -468,6 +599,7 @@ export async function recordEnterpriseInvoiceEvent(
   if (!organizationId) return;
 
   const eventCreatedAt = typeof options.eventCreatedAt === 'number' ? options.eventCreatedAt : null;
+  const dueAt = resolveInvoiceDueAt(invoice, contract?.payment_terms_days ?? null, organizationId);
 
   const written = await db.query<{ stripe_invoice_id: string }>(
     `insert into public.organization_billing_invoices
@@ -520,7 +652,7 @@ export async function recordEnterpriseInvoiceEvent(
       resolveInvoiceProcurementReference(invoice),
       isoTimestamp(invoice.period_start),
       isoTimestamp(invoice.period_end),
-      isoTimestamp(invoice.due_date),
+      isoTimestamp(dueAt),
       isoTimestamp(invoice.status_transitions?.paid_at),
       isoTimestamp(invoice.status_transitions?.voided_at),
       invoice.hosted_invoice_url ?? null,
@@ -559,3 +691,114 @@ export async function endEnterpriseContractIfPresent(
 }
 
 export type { OrganizationBillingContractRow, OrganizationBillingInvoiceRow };
+
+export interface EnterpriseContractContact {
+  name: string | null;
+  email: string | null;
+}
+
+export interface EnterpriseContractSummary {
+  customerLegalEntity: string | null;
+  procurementReference: string | null;
+  termStart: string | null;
+  termEnd: string | null;
+  billingCadence: BillingCadence;
+  committedSeats: number;
+  supportTier: string | null;
+  paymentTermsDays: number | null;
+  taxExemptStatus: OrganizationBillingContractRow['tax_exempt_status'];
+  collectionStage: OrganizationBillingContractRow['collection_stage'];
+  ended: boolean;
+  billingContact: EnterpriseContractContact | null;
+  procurementContact: EnterpriseContractContact | null;
+}
+
+export interface EnterpriseInvoiceSummary {
+  invoiceNumber: string | null;
+  status: string;
+  amountDueCents: number;
+  amountPaidCents: number;
+  currency: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  dueAt: string | null;
+  paidAt: string | null;
+  hostedInvoiceUrl: string | null;
+  invoicePdfUrl: string | null;
+}
+
+export const ENTERPRISE_INVOICE_HISTORY_LIMIT = 24;
+
+function contactOrNull(
+  name: string | null,
+  email: string | null,
+): EnterpriseContractContact | null {
+  return name || email ? { name, email } : null;
+}
+
+function isoOrNull(value: string | Date | null): string | null {
+  if (value === null) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+export async function readEnterpriseContractSummary(
+  db: DatabaseAdapter,
+  organizationId: string,
+): Promise<{ contract: EnterpriseContractSummary | null; invoices: EnterpriseInvoiceSummary[] }> {
+  const [contract] = await db.query<OrganizationBillingContractRow>(
+    `select customer_legal_entity, procurement_reference, contract_term_start, contract_term_end,
+            billing_cadence, committed_seats, support_tier, payment_terms_days, tax_exempt_status,
+            collection_stage, ended_at, billing_contact_name, billing_contact_email,
+            procurement_contact_name, procurement_contact_email
+       from public.organization_billing_contracts
+      where organization_id = $1::uuid
+      limit 1`,
+    [organizationId],
+  );
+  if (!contract) return { contract: null, invoices: [] };
+
+  const invoices = await db.query<OrganizationBillingInvoiceRow>(
+    `select invoice_number, status, amount_due_cents, amount_paid_cents, currency, period_start,
+            period_end, due_at, paid_at, hosted_invoice_url, invoice_pdf_url
+       from public.organization_billing_invoices
+      where organization_id = $1::uuid
+        and status <> 'draft'
+      order by coalesce(period_end, created_at) desc
+      limit ${ENTERPRISE_INVOICE_HISTORY_LIMIT}`,
+    [organizationId],
+  );
+
+  return {
+    contract: {
+      customerLegalEntity: contract.customer_legal_entity,
+      procurementReference: contract.procurement_reference,
+      termStart: isoOrNull(contract.contract_term_start),
+      termEnd: isoOrNull(contract.contract_term_end),
+      billingCadence: contract.billing_cadence,
+      committedSeats: Number(contract.committed_seats),
+      supportTier: contract.support_tier,
+      paymentTermsDays: contract.payment_terms_days,
+      taxExemptStatus: contract.tax_exempt_status ?? 'none',
+      collectionStage: contract.collection_stage,
+      ended: contract.ended_at !== null,
+      billingContact: contactOrNull(contract.billing_contact_name, contract.billing_contact_email),
+      procurementContact: contactOrNull(
+        contract.procurement_contact_name,
+        contract.procurement_contact_email,
+      ),
+    },
+    invoices: invoices.map((invoice) => ({
+      invoiceNumber: invoice.invoice_number,
+      status: invoice.status,
+      amountDueCents: Number(invoice.amount_due_cents),
+      amountPaidCents: Number(invoice.amount_paid_cents),
+      currency: invoice.currency,
+      periodStart: isoOrNull(invoice.period_start),
+      periodEnd: isoOrNull(invoice.period_end),
+      dueAt: isoOrNull(invoice.due_at),
+      paidAt: isoOrNull(invoice.paid_at),
+      hostedInvoiceUrl: invoice.hosted_invoice_url,
+      invoicePdfUrl: invoice.invoice_pdf_url,
+    })),
+  };
+}

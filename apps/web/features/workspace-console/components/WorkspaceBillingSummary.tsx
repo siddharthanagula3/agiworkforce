@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { isOrganizationAdminRole } from '@agiworkforce/types';
 
 import { useOrganizationOverview } from '@/features/settings/hooks/use-settings-queries';
 import { EnterpriseCollectionBanner } from '@/features/settings/components/EnterpriseCollectionBanner';
+import { WorkspaceEnterpriseContract } from './WorkspaceEnterpriseContract';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
@@ -119,6 +121,10 @@ export function WorkspaceBillingSummary() {
           <Row label="Members" value={String(organization.memberCount)} />
         </div>
       </section>
+
+      {isOrganizationAdminRole(organization.currentUserRole) ? (
+        <WorkspaceEnterpriseContract />
+      ) : null}
 
       <section style={cardStyle} aria-labelledby="manage-heading">
         <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>

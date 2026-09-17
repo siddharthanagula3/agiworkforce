@@ -408,6 +408,33 @@ impl AgentSession {
     /// push a second consecutive user message and corrupt the alternation. Append
     /// the partial assistant text (or a `[stopped]` marker) so history stays a
     /// valid user→assistant sequence for the next turn.
+    pub async fn cancel_turn(&mut self, partial: &str) {
+        let was_running = self.messages.last().map(|m| m.role.as_str()) == Some("user");
+        self.finalize_cancelled_turn(partial);
+        if was_running {
+            self.fire_turn_hook(hooks::HookEvent::TurnCancelled, Some(partial.to_string()))
+                .await;
+        }
+    }
+
+    async fn fire_turn_hook(&self, event: hooks::HookEvent, message: Option<String>) {
+        hooks::run_hooks(
+            &self.hooks_config,
+            event,
+            &hooks::HookInput {
+                event: event.to_string(),
+                session_id: self.session_name.clone(),
+                model: Some(self.model.clone()),
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message,
+                tool_execution: None,
+            },
+        )
+        .await;
+    }
+
     pub fn finalize_cancelled_turn(&mut self, partial: &str) {
         if self.messages.last().map(|m| m.role.as_str()) == Some("user") {
             let text = if partial.trim().is_empty() {
@@ -633,6 +660,9 @@ impl AgentSession {
         // anything downstream reads `self.model` (compaction limits, request
         // construction, cost attribution).
         self.re_resolve_auto_route_for_turn(user_input);
+
+        self.fire_turn_hook(hooks::HookEvent::TurnStart, Some(user_input.to_string()))
+            .await;
 
         // Bring path-scoped rules into the conversation before the first model
         // call. Explicit file attachments activate through
@@ -895,6 +925,13 @@ message -- revise and call `update_plan` again.\n\n",
                 // failure are still billable. Preserve those exact per-request
                 // receipts before propagating the turn error.
                 self.record_partial_completion_usage(&completion_usage);
+                self.fire_turn_hook(
+                    hooks::HookEvent::Error,
+                    Some(crate::secret_redaction::redact_secrets(&format!(
+                        "{error:#}"
+                    ))),
+                )
+                .await;
                 return Err(error);
             }
         };
@@ -1795,6 +1832,10 @@ impl TurnHost for TurnHostAdapter<'_> {
                 Ok(ref id) => {
                     if let Some(ref mgr) = self.session.subagent_manager {
                         if let Some(sa_result) = mgr.get_result(id).await {
+                            self.session.cost_ledger.record_subagent_run(
+                                &sa_result.usage.model,
+                                sa_result.usage.cost_usd,
+                            );
                             let mut output = sa_result.output;
                             if !sa_result.files_modified.is_empty() {
                                 output.push_str("\n\nFiles modified:\n");
@@ -2790,6 +2831,7 @@ mod tests {
                 blocking: true,
                 matcher: None,
                 if_condition: None,
+                source: hooks::HookSource::User,
             }],
         );
         hooks::HooksConfig {
@@ -3081,6 +3123,23 @@ mod tests {
         assert_eq!(last.text_content(), "partial answ\n\n[stopped]");
     }
 
+    #[tokio::test]
+    async fn cancelling_a_running_turn_fires_the_turn_cancelled_hook_once() {
+        let scratch = tempfile::tempdir().unwrap();
+        let marker = scratch.path().join("cancelled.log");
+        let mut session = live_session();
+        session.hooks_config =
+            hook_config(&[("TurnCancelled", format!("cat >> '{}'", marker.display()))]);
+        session.messages.push(Message::text("user", "long task"));
+
+        session.cancel_turn("partial").await;
+        session.cancel_turn("straggler").await;
+
+        let logged = std::fs::read_to_string(&marker).unwrap();
+        assert_eq!(logged.matches("\"event\":\"TurnCancelled\"").count(), 1);
+        assert!(logged.contains("\"message\":\"partial\""), "{logged}");
+    }
+
     #[test]
     fn cancelled_turn_with_no_output_appends_stopped_marker() {
         let mut session = make_local_session();
@@ -3251,6 +3310,7 @@ mod tests {
                     blocking: true,
                     matcher: None,
                     if_condition: None,
+                    source: hooks::HookSource::User,
                 });
         }
         hooks::HooksConfig {

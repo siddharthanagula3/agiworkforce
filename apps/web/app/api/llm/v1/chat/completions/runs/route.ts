@@ -75,7 +75,7 @@ async function handleGet(request: NextRequest) {
   const parsedStates = z
     .array(AgentTaskStateSchema)
     .min(1)
-    .max(9)
+    .max(AgentTaskStateSchema.options.length)
     .safeParse(rawStates.length > 0 ? [...new Set(rawStates)] : DEFAULT_ACTIVE_STATES);
   const rawLimit = url.searchParams.get('limit') ?? '25';
   const parsedLimit = z.coerce.number().int().min(1).max(100).safeParse(rawLimit);

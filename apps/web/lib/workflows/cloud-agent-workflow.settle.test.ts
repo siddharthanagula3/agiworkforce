@@ -58,6 +58,8 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   completeCloudAgentApprovalCheckpoint: mocks.completeCheckpoint,
   getCloudAgentRun: vi.fn(),
   isCloudAgentRunCancellationRequested: vi.fn(),
+  isCloudAgentRunPauseRequested: vi.fn(async () => false),
+  saveCloudAgentPauseCheckpoint: vi.fn(),
   readCloudAgentRunAssistantText: mocks.assistantText,
   recordCloudAgentRunSettledUsage: mocks.recordRunUsage,
   saveCloudAgentApprovalCheckpoint: vi.fn(),
@@ -203,6 +205,24 @@ describe('durable cloud agent workflow settlement', () => {
       state: 'awaiting_input',
     });
     expect(mocks.transition).not.toHaveBeenCalled();
+  });
+
+  it('keeps a paused run paused and points its saved turn at the paused run', async () => {
+    mocks.assistantText.mockResolvedValue({
+      text: 'Found three competitors so far',
+      lastSequence: 21,
+      interactiveCards: [],
+    });
+
+    await settleWorkflowInvocation(makeInput(), 'paused');
+
+    const turn = persistedTurn();
+    expect(turn?.metadata['truncated']).toBeUndefined();
+    expect(turn?.metadata['cloudAgentRun']).toMatchObject({ lastSequence: 21, state: 'paused' });
+    expect(mocks.transition).not.toHaveBeenCalled();
+    expect(mocks.autoMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'cancelled' }),
+    );
   });
 
   it('persists validated interactive cards recovered from durable tool receipts', async () => {
@@ -424,6 +444,14 @@ describe('durable cloud agent workflow settlement', () => {
         expect.objectContaining({ outcome: 'completed' }),
       );
       expect(mocks.finalize).not.toHaveBeenCalled();
+    });
+
+    it('settles a free turn the user paused so its budget is released until they resume', async () => {
+      await settleWorkflowInvocation(freeInput(), 'paused');
+
+      expect(mocks.settleFreeTrial).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'completed' }),
+      );
     });
 
     it('propagates a cancelled free turn as cancelled, not as a completed charge', async () => {

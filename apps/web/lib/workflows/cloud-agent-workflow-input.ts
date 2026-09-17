@@ -10,6 +10,7 @@ import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/req
 import type {
   ApprovalMode,
   ResumeApproval,
+  ResumeFromPause,
   ResumeDeviceResult,
   ResumeInputResponse,
   ToolApprovalDecision,
@@ -17,6 +18,7 @@ import type {
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { FreeTrialReservation } from '@/lib/services/free-trial-service';
 import type { ManagedUsageRequestReservation } from '@/lib/services/managed-usage-request-service';
+import { USAGE_WORKLOADS } from '@/lib/billing/usage-attribution';
 import { TOOL_APPROVAL_POLICIES, type ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 import type {
   ConnectorToolPermissionEntry,
@@ -129,6 +131,14 @@ const ManagedBillingSchema = z
     provider: z.string().min(1).optional(),
     model: z.string().min(1).optional(),
     routeId: z.string().min(1).nullable().optional(),
+    attribution: z
+      .object({
+        workload: z.enum(USAGE_WORKLOADS).nullable().optional(),
+        projectId: z.string().min(1).nullable().optional(),
+        sessionId: z.string().min(1).nullable().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -187,8 +197,7 @@ void freeTrialBillingSchemaCoversReservation;
 
 /** Whichever reservation paid for this turn, carried across the invocation boundary. */
 export type CloudAgentWorkflowBilling =
-  | SerializedManagedUsageReservation
-  | SerializedFreeTrialReservation;
+  SerializedManagedUsageReservation | SerializedFreeTrialReservation;
 
 export interface CloudAgentWorkflowInput {
   version: 1;
@@ -207,6 +216,7 @@ export interface CloudAgentWorkflowInput {
     initialCompletedSteps: number;
     invocationContinuation: boolean;
     resume?: ResumeApproval;
+    resumedFromPause?: ResumeFromPause;
   };
   predecessorApproval?: {
     checkpointId: string;
@@ -282,6 +292,12 @@ const ContinuationSchema = z
     initialCompletedSteps: z.number().int().nonnegative(),
     invocationContinuation: z.boolean(),
     resume: ResumeApprovalSchema.optional(),
+    resumedFromPause: z
+      .object({
+        guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 const continuationSchemaCoversWorkflowInput: SameKeys<

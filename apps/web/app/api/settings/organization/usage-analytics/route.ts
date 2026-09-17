@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { withErrorHandler } from '@/lib/error-handler';
+import { SETTINGS_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { createError } from '@/lib/errors';
@@ -55,7 +56,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json(payload);
 }
 
-export const GET = withErrorHandler(handleGet);
+export const GET = withErrorHandler(handleGet, {
+  deadlineMs: SETTINGS_API_ROUTE_DEADLINE_MS,
+  circuit: 'settings.organization.usage-analytics',
+});
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

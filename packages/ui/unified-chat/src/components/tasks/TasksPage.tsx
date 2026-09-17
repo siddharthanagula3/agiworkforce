@@ -327,9 +327,15 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
 
   const handleResume = useCallback(
     async (runId: string) => {
+      const guidance = guidanceByRunId[runId]?.trim();
       setPausingId(runId);
       try {
-        await getClient().resumePausedRun(runId);
+        await getClient().resumePausedRun(runId, guidance ? { guidance } : {});
+        setGuidanceByRunId((current) => {
+          const next = { ...current };
+          delete next[runId];
+          return next;
+        });
         await load(filter, null);
         if (selectedRunId === runId) await loadJournal(runId);
       } catch (err) {
@@ -343,7 +349,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
         setPausingId(null);
       }
     },
-    [filter, getClient, load, loadJournal, selectedRunId, transport],
+    [filter, getClient, guidanceByRunId, load, loadJournal, selectedRunId, transport],
   );
 
   const handleArchive = useCallback(
@@ -697,6 +703,25 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                       ) : null}
                     </div>
                   </div>
+
+                  {workState === 'paused' ? (
+                    <textarea
+                      data-testid={`task-pause-guidance-${run.id}`}
+                      value={guidanceByRunId[run.id] ?? ''}
+                      onChange={(event) =>
+                        setGuidanceByRunId((current) => ({
+                          ...current,
+                          [run.id]: event.target.value,
+                        }))
+                      }
+                      disabled={pausingId === run.id}
+                      rows={2}
+                      maxLength={TOOL_APPROVAL_GUIDANCE_MAX_LENGTH}
+                      placeholder="Tell the agent what to change when it resumes (optional)"
+                      aria-label="Guidance for when this work session resumes"
+                      className="mt-3 w-full resize-none rounded-md border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground"
+                    />
+                  ) : null}
 
                   {run.state === 'awaiting_input' && run.pendingApproval ? (
                     <ApprovalCard

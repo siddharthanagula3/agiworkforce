@@ -12,6 +12,11 @@ fn canonical_task_states_have_stable_snake_case_wire_values() {
         (AgentTaskState::Cancelled, "\"cancelled\""),
         (AgentTaskState::Paused, "\"paused\""),
         (AgentTaskState::Archived, "\"archived\""),
+        (AgentTaskState::Planning, "\"planning\""),
+        (AgentTaskState::AwaitingApproval, "\"awaiting_approval\""),
+        (AgentTaskState::Resuming, "\"resuming\""),
+        (AgentTaskState::Partial, "\"partial\""),
+        (AgentTaskState::TimedOut, "\"timed_out\""),
     ];
 
     for (state, expected) in cases {
@@ -51,4 +56,42 @@ fn semantic_groups_drive_task_filters_without_surface_specific_inference() {
     assert!(!AgentTaskState::Running.needs_input());
     assert!(!AgentTaskState::ReadyForReview.is_terminal());
     assert!(!AgentTaskState::Paused.is_terminal());
+
+    assert!(AgentTaskState::AwaitingApproval.needs_input());
+    assert!(AgentTaskState::Partial.is_terminal());
+    assert!(AgentTaskState::TimedOut.is_terminal());
+    assert!(!AgentTaskState::Planning.is_terminal());
+    assert!(!AgentTaskState::Resuming.is_terminal());
+}
+
+#[test]
+fn every_added_state_degrades_to_one_an_older_reader_already_parses() {
+    let original = [
+        AgentTaskState::Queued,
+        AgentTaskState::Running,
+        AgentTaskState::AwaitingInput,
+        AgentTaskState::ReadyForReview,
+        AgentTaskState::Completed,
+        AgentTaskState::Failed,
+        AgentTaskState::Cancelled,
+        AgentTaskState::Paused,
+        AgentTaskState::Archived,
+    ];
+    for state in original {
+        assert_eq!(state.legacy_equivalent(), state);
+    }
+    let added = [
+        (AgentTaskState::Planning, AgentTaskState::Running),
+        (
+            AgentTaskState::AwaitingApproval,
+            AgentTaskState::AwaitingInput,
+        ),
+        (AgentTaskState::Resuming, AgentTaskState::Running),
+        (AgentTaskState::Partial, AgentTaskState::Failed),
+        (AgentTaskState::TimedOut, AgentTaskState::Failed),
+    ];
+    for (state, legacy) in added {
+        assert_eq!(state.legacy_equivalent(), legacy);
+        assert!(original.contains(&state.legacy_equivalent()));
+    }
 }

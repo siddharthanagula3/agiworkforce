@@ -9,6 +9,10 @@ vi.mock('@/features/settings/hooks/use-settings-queries', () => ({
   useOrganizationOverview: mockUseOrganizationOverview,
 }));
 
+vi.mock('../WorkspaceEnterpriseContract', () => ({
+  WorkspaceEnterpriseContract: () => <div data-testid="enterprise-contract" />,
+}));
+
 import { WorkspaceBillingSummary } from '../WorkspaceBillingSummary';
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -99,6 +103,14 @@ describe('WorkspaceBillingSummary', () => {
     expect(screen.getByText('Plan and seats')).toBeTruthy();
   });
 
+  it('shows the enterprise contract to an owner', async () => {
+    ready();
+    render(<WorkspaceBillingSummary />);
+
+    expect(screen.getByTestId('enterprise-contract')).toBeTruthy();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  });
+
   it('shows the read-only-only notice to a member console viewer', async () => {
     ready({
       organization: {
@@ -124,5 +136,6 @@ describe('WorkspaceBillingSummary', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('read-only');
+    expect(screen.queryByTestId('enterprise-contract')).toBeNull();
   });
 });
