@@ -49,6 +49,8 @@ pub struct ManagedSessionSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree_root: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<ManagedSessionForkMetadata>,
@@ -201,6 +203,7 @@ impl ManagedSessionSummary {
             client: session.client.clone(),
             git_branch: session.git_branch.clone(),
             worktree_root: session.worktree_root.clone(),
+            repository: session.repository.clone(),
             archived_at: session.archived_at,
             fork: session.fork.clone(),
             routing_authority: session
@@ -267,6 +270,12 @@ fn session_paths_with_prefix_in(base_dir: &Path, prefix: &str) -> Vec<PathBuf> {
         Ok(entries) => entries
             .flatten()
             .map(|entry| entry.path())
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(|extension| extension.to_str()),
+                    Some("jsonl") | Some("json")
+                )
+            })
             .filter(|path| {
                 path.file_stem()
                     .and_then(|stem| stem.to_str())
@@ -482,6 +491,8 @@ fn fork_redacted_managed_session_in(
     )))
 }
 
+/// Delete a session file together with what is kept beside it: its writer
+/// lease and any copy set aside when two writers collided on it.
 fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference) -> Result<()> {
     let resolved = resolve_managed_session_reference_in(base_dir, reference)?;
     fs::remove_file(&resolved.path).with_context(|| {
@@ -489,7 +500,32 @@ fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference
             "Failed to delete managed session {}",
             resolved.path.display()
         )
-    })
+    })?;
+    let Some(file_name) = resolved.path.file_name().and_then(|name| name.to_str()) else {
+        return Ok(());
+    };
+    let lease = format!(
+        "{file_name}.{}",
+        super::writer_lease::WRITER_LEASE_EXTENSION
+    );
+    let conflict_prefix = format!("{file_name}.conflict-");
+    let Some(dir) = resolved.path.parent() else {
+        return Ok(());
+    };
+    for entry in fs::read_dir(dir)
+        .with_context(|| format!("Failed to read managed session directory {}", dir.display()))?
+        .flatten()
+    {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name == lease || name.starts_with(&conflict_prefix) {
+            fs::remove_file(entry.path())
+                .with_context(|| format!("Failed to delete {}", entry.path().display()))?;
+        }
+    }
+    Ok(())
 }
 
 /// Return the managed session store directory.
@@ -699,6 +735,9 @@ mod tests {
             client: None,
             git_branch: None,
             worktree_root: None,
+            repository: None,
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -727,6 +766,9 @@ mod tests {
             client: None,
             git_branch: None,
             worktree_root: None,
+            repository: None,
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -878,6 +920,48 @@ mod tests {
             after_unarchive.summary.archived_at.is_none(),
             "unarchive must clear archived_at"
         );
+    }
+
+    #[test]
+    fn deleting_a_session_removes_its_lease_and_collision_copies_but_no_neighbour() {
+        let temp_dir = tempdir().unwrap();
+        let store = super::ManagedSessionStore::new(temp_dir.path().to_path_buf());
+        seed_session(temp_dir.path(), "doomed-4f1c");
+        seed_session(temp_dir.path(), "neighbour");
+        let dir = managed_session_dir_in(temp_dir.path());
+        let session_path = dir.join("doomed-4f1c.jsonl");
+        let writer = super::super::writer_lease::WriterIdentity {
+            id: "writer".to_string(),
+            label: "writer".to_string(),
+        };
+        super::super::writer_lease::claim(&session_path, &writer).expect("lease");
+        std::fs::write(
+            dir.join("doomed-4f1c.jsonl.conflict-20260917T000000.000"),
+            "kept",
+        )
+        .unwrap();
+
+        assert!(
+            resolve_managed_session_reference_in(
+                temp_dir.path(),
+                ManagedSessionReference::SessionId("doomed".to_string()),
+            )
+            .is_ok(),
+            "a lease or collision copy beside a session must not make its short id ambiguous"
+        );
+
+        store
+            .delete(ManagedSessionReference::SessionId(
+                "doomed-4f1c".to_string(),
+            ))
+            .expect("delete");
+
+        let remaining: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(remaining, vec!["neighbour.jsonl".to_string()]);
     }
 
     #[test]

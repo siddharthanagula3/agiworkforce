@@ -221,6 +221,7 @@ pub struct AgentSession {
     memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
+    pub(crate) session_activity: crate::runtime::session_activity::SharedSessionActivity,
     /// When false this session must never write managed-session state, not the
     /// session file under `~/.agiworkforce/managed_sessions/`, and not the
     /// session index row that mirrors it. Seeded at construction from the
@@ -650,6 +651,7 @@ impl AgentSession {
             memory_consolidation_tasks: Vec::new(),
             managed_session: None,
             managed_session_path: None,
+            session_activity: Default::default(),
             session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
             pending_image_blocks: Vec::new(),
@@ -1452,9 +1454,57 @@ impl AgentSession {
         self.runtime_session_id = managed_session.session_id.clone();
         self.json_session_id = managed_session.session_id.clone();
         self.pending_privacy_handoff = None;
+        self.session_activity = std::sync::Arc::new(std::sync::Mutex::new(
+            crate::runtime::session_activity::SessionActivity::from_session(&managed_session),
+        ));
         self.managed_session = Some(managed_session);
         self.managed_session_path = Some(path);
         Ok(())
+    }
+
+    /// Claim, or renew, this process's writer lease on the backing session.
+    ///
+    /// A live writer elsewhere is reported, never waited on: the fingerprint
+    /// check on save keeps both writers' turns.
+    pub(crate) fn claim_writer_lease(&self) {
+        use crate::runtime::writer_lease::{self, LeaseClaim};
+        if !self.session_persistence {
+            return;
+        }
+        let Some(path) = self.managed_session_path.as_deref() else {
+            return;
+        };
+        let warning = match writer_lease::claim(path, writer_lease::process_writer("AGI CLI")) {
+            Ok(LeaseClaim::HeldBy(holder)) => format!(
+                "{} is also writing this session. Both copies of the conversation are kept, but neither sees the other's turns until the session is resumed again.",
+                holder.holder_label
+            ),
+            Ok(LeaseClaim::StaleTakeover { previous, .. }) => format!(
+                "{} stopped writing this session without handing it over; this process has taken it over.",
+                previous.holder_label
+            ),
+            Ok(_) => return,
+            Err(error) => {
+                tracing::warn!(%error, "session writer lease unavailable");
+                return;
+            }
+        };
+        if self.quiet {
+            tracing::warn!("{warning}");
+        } else {
+            crate::output::print_warn(&warning);
+        }
+    }
+
+    /// The approval callback a tool call receives: the surface's own, with
+    /// every decision recorded on this session.
+    pub(crate) fn recorded_approval_callback(&self) -> Option<crate::tools::ApprovalCallback> {
+        self.on_tool_approval.as_ref().map(|sink| {
+            crate::runtime::session_activity::recording_approval_callback(
+                self.session_activity.clone(),
+                sink.0.clone(),
+            )
+        })
     }
 
     /// Persist the current in-memory conversation into the managed session file.
@@ -1508,9 +1558,13 @@ impl AgentSession {
         managed_session.output_style = Some(self.output_style.clone());
         managed_session.fallback_model_ids =
             self.fallback_chain.as_ref().map(|fc| fc.primaries.clone());
+        if let Ok(activity) = self.session_activity.lock() {
+            activity.write_to(managed_session);
+        }
         managed_session.version = crate::runtime::session::MANAGED_SESSION_VERSION;
         managed_session.touch();
         managed_session.save_to_path(path)?;
+        self.claim_writer_lease();
         self.sync_managed_session_metadata()
     }
 

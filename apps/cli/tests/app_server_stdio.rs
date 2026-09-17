@@ -288,6 +288,7 @@ async fn every_line_the_stdio_transport_writes_is_json() {
     // `next_line` is what the extension's reader does, and `from_str` below is
     // where it fails: a raw continuation line ends the session there.
     let mut deltas = String::new();
+    let mut announced_model: Option<Value> = None;
     let mut completed: Option<Value> = None;
     let mut failed: Option<Value> = None;
     let mut turn_ended = false;
@@ -302,6 +303,9 @@ async fn every_line_the_stdio_transport_writes_is_json() {
         let value: Value = serde_json::from_str(&line)
             .unwrap_or_else(|error| panic!("stdout carried a non-JSON line ({error}): {line}"));
         match value["method"].as_str() {
+            Some("turn/model") => {
+                announced_model = Some(value["params"].clone());
+            }
             Some("turn/output_delta") => {
                 deltas.push_str(value["params"]["delta"].as_str().unwrap_or_default());
             }
@@ -330,6 +334,28 @@ async fn every_line_the_stdio_transport_writes_is_json() {
         }
         serde_json::from_str::<Value>(&line)
             .unwrap_or_else(|error| panic!("stdout carried a non-JSON line ({error}): {line}"));
+    }
+
+    if turn_ended {
+        let model = announced_model
+            .as_ref()
+            .unwrap_or_else(|| panic!("a turn must announce the route it runs on"));
+        assert_eq!(model["threadId"], thread_id);
+        assert!(model["turnId"].is_string(), "{model}");
+        assert!(
+            model["model"]
+                .as_str()
+                .is_some_and(|value| !value.is_empty()),
+            "{model}"
+        );
+        assert!(
+            model["provider"]
+                .as_str()
+                .is_some_and(|value| !value.is_empty()),
+            "{model}"
+        );
+        assert!(model["trustMode"].is_string(), "{model}");
+        assert!(model.get("fallbackFrom").is_none(), "{model}");
     }
 
     if let Some(params) = failed {

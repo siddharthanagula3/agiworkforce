@@ -6,24 +6,26 @@ use agiworkforce_protocol::agent_events::AGENT_EVENT_SCHEMA_VERSION;
 use agiworkforce_protocol::developer_session::{
     method, AccountLoginOutcome, AccountLoginResponse, AccountLoginWaitParams,
     AccountLoginWaitResponse, AccountSource, AccountStatusParams, AccountStatusResponse,
-    AccountTokenResponse, AcknowledgedResponse, AppServerCapabilities, AppServerClientInfo,
-    AppServerNotification, AppServerRequest, ApprovalResponseParams, CommandSourceKind,
-    ContextInstructionsParams, ContextInstructionsResponse, DeveloperAgentMode,
-    DeveloperReasoningEffort, DeveloperSessionSource, DeveloperSessionTrustMode, HookConfigScope,
-    HookListResponse, HookSummary, InitializeParams, InitializeResponse, InstructionFile,
-    InstructionFileKind, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
-    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
-    McpServerScope, McpServerSummary, ModelListParams, PluginListResponse, PluginScope,
+    AccountTokenResponse, AcknowledgedResponse, ActiveTurnSnapshot, AppServerCapabilities,
+    AppServerClientInfo, AppServerNotification, AppServerRequest, ApprovalResponseParams,
+    CommandSourceKind, ContextInstructionsParams, ContextInstructionsResponse, DeveloperAgentMode,
+    DeveloperReasoningEffort, DeveloperSessionSource, DeveloperSessionTrustMode,
+    DeveloperSessionWriter, HookConfigScope, HookListResponse, HookSummary, InitializeParams,
+    InitializeResponse, InstructionFile, InstructionFileKind, LocalModelListResponse,
+    LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
+    McpServerConfiguredStatus, McpServerListResponse, McpServerScope, McpServerSummary,
+    ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginScope,
     PluginSetEnabledParams, PluginSummary, ProtocolVersionUnsupportedData, SettingsReadResponse,
     SettingsWriteParams, SkillCatalogScope, SkillConsentParams, SkillConsentResponse,
     SkillListResponse, SkillSetEnabledParams, SkillSummary, SlashCommandListResponse,
     SlashCommandResultKind, SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary,
     ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary, TurnInterruptParams,
-    TurnStartParams, TurnStartResponse, TurnStatus, TurnSteerParams, TurnSummary,
-    DEVELOPER_SESSION_PROTOCOL_VERSION, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    ThreadReconnectResponse, ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary,
+    ThreadWriterConflictData, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus,
+    TurnSteerParams, TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -43,6 +45,10 @@ enum Call {
     Read(ThreadIdParams),
     Fork(ThreadForkParams),
     Archive(ThreadIdParams),
+    Delete(ThreadIdParams),
+    Reconnect(ThreadIdParams),
+    ReleaseWriter(ThreadIdParams),
+    TakeOverWriter(ThreadIdParams),
     StartTurn(TurnStartParams),
     SteerTurn(TurnSteerParams),
     Interrupt(TurnInterruptParams),
@@ -78,6 +84,8 @@ fn thread(id: &str) -> ThreadSummary {
         git_branch: None,
         worktree_root: None,
         client: None,
+        repository: None,
+        writer: None,
         created_at: "2026-07-14T12:00:00Z".to_string(),
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
@@ -145,6 +153,8 @@ impl DeveloperSessionHost for FakeHost {
             thread: thread("thread-1"),
             messages: Vec::new(),
             transcript_truncated: false,
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
         })
     }
 
@@ -163,6 +173,65 @@ impl DeveloperSessionHost for FakeHost {
     ) -> Result<(), DeveloperSessionHostError> {
         self.calls.lock().await.push(Call::Archive(params));
         Ok(())
+    }
+
+    async fn delete_thread(&self, params: ThreadIdParams) -> Result<(), DeveloperSessionHostError> {
+        self.calls.lock().await.push(Call::Delete(params.clone()));
+        if params.thread_id == "held-thread" {
+            return Err(DeveloperSessionHostError::writer_conflict(
+                "AGI CLI (pid 42) is writing this thread",
+                ThreadWriterConflictData {
+                    thread_id: params.thread_id,
+                    writer: DeveloperSessionWriter {
+                        holder_id: "other-writer".to_string(),
+                        holder_label: "AGI CLI (pid 42)".to_string(),
+                        acquired_at: "2026-09-17T00:00:00Z".to_string(),
+                        expires_at: "2026-09-17T00:02:00Z".to_string(),
+                        held_by_this_host: false,
+                        stale: false,
+                    },
+                },
+            ));
+        }
+        Ok(())
+    }
+
+    async fn reconnect_thread(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<ThreadReconnectResponse, DeveloperSessionHostError> {
+        self.calls.lock().await.push(Call::Reconnect(params));
+        Ok(ThreadReconnectResponse {
+            thread: thread("thread-1"),
+            active_turn: Some(ActiveTurnSnapshot {
+                turn_id: "turn-1".to_string(),
+                partial_response: "half an answer".to_string(),
+                next_delta_index: 2,
+                next_event_sequence: 5,
+                pending_approvals: vec![PendingApprovalSnapshot {
+                    request_id: "approval-1".to_string(),
+                    kind: "Exec".to_string(),
+                    summary: "Run tests".to_string(),
+                    detail: "cargo test".to_string(),
+                }],
+            }),
+        })
+    }
+
+    async fn release_thread_writer(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        self.calls.lock().await.push(Call::ReleaseWriter(params));
+        Ok(())
+    }
+
+    async fn take_over_thread_writer(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        self.calls.lock().await.push(Call::TakeOverWriter(params));
+        Ok(thread("thread-1"))
     }
 
     async fn start_turn(
@@ -252,6 +321,9 @@ fn capabilities() -> AppServerCapabilities {
         hooks: false,
         settings: false,
         commands: false,
+        thread_delete: false,
+        reconnect: false,
+        writer_lease: false,
     }
 }
 
@@ -345,6 +417,224 @@ async fn stdio_eof_quiesces_the_host_even_without_an_explicit_shutdown_request()
     .expect("stdio server exits cleanly on EOF");
 
     assert_eq!(host.calls.lock().await.as_slice(), &[Call::Shutdown]);
+}
+
+#[tokio::test]
+async fn a_client_that_closes_its_pipe_ends_the_session_cleanly_and_quiesces_the_host() {
+    let host = Arc::new(FakeHost::new());
+    let (mut request_writer, request_reader) = tokio::io::duplex(1024);
+    let (response_reader, response_writer) = tokio::io::duplex(1024);
+    drop(response_reader);
+
+    let line = serde_json::to_string(&initialize()).expect("serialize initialize");
+    request_writer
+        .write_all(format!("{line}\n").as_bytes())
+        .await
+        .expect("send initialize");
+
+    let served = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        agiworkforce_app_server::serve_developer_session_io(
+            request_reader,
+            response_writer,
+            host.clone(),
+            capabilities(),
+        ),
+    )
+    .await
+    .expect("a closed pipe must end the session instead of hanging");
+
+    assert!(
+        served.is_ok(),
+        "a client going away is not a server failure: {served:?}"
+    );
+    assert_eq!(host.calls.lock().await.as_slice(), &[Call::Shutdown]);
+}
+
+#[tokio::test]
+async fn session_lifecycle_and_writer_methods_route_to_the_host_with_typed_results() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    processor.process(initialize()).await;
+    let thread_id = || ThreadIdParams {
+        thread_id: "thread-1".to_string(),
+    };
+
+    let deleted = processor
+        .process(request(2, method::THREAD_DELETE, thread_id()))
+        .await;
+    let acknowledged: AcknowledgedResponse =
+        serde_json::from_value(deleted.result.expect("delete result")).expect("ack");
+    assert!(acknowledged.acknowledged);
+
+    let reconnected = processor
+        .process(request(3, method::THREAD_RECONNECT, thread_id()))
+        .await;
+    let reconnected: ThreadReconnectResponse =
+        serde_json::from_value(reconnected.result.expect("reconnect result")).expect("typed");
+    let active = reconnected.active_turn.expect("active turn snapshot");
+    assert_eq!(active.partial_response, "half an answer");
+    assert_eq!(active.next_delta_index, 2);
+    assert_eq!(active.pending_approvals[0].request_id, "approval-1");
+
+    let released = processor
+        .process(request(4, method::THREAD_WRITER_RELEASE, thread_id()))
+        .await;
+    assert!(released.error.is_none(), "{released:?}");
+    let taken = processor
+        .process(request(5, method::THREAD_WRITER_TAKEOVER, thread_id()))
+        .await;
+    let taken: ThreadStartResponse =
+        serde_json::from_value(taken.result.expect("takeover result")).expect("typed");
+    assert_eq!(taken.thread.id, "thread-1");
+
+    let refused = processor
+        .process(request(
+            6,
+            method::THREAD_DELETE,
+            ThreadIdParams {
+                thread_id: "held-thread".to_string(),
+            },
+        ))
+        .await;
+    let error = refused.error.expect("a held thread refuses deletion");
+    assert_eq!(error.code, THREAD_WRITER_CONFLICT_ERROR_CODE);
+    let data: ThreadWriterConflictData =
+        serde_json::from_value(error.data.expect("conflict names the writer")).expect("typed");
+    assert_eq!(data.writer.holder_label, "AGI CLI (pid 42)");
+
+    assert_eq!(
+        host.calls.lock().await.as_slice(),
+        &[
+            Call::Delete(thread_id()),
+            Call::Reconnect(thread_id()),
+            Call::ReleaseWriter(thread_id()),
+            Call::TakeOverWriter(thread_id()),
+            Call::Delete(ThreadIdParams {
+                thread_id: "held-thread".to_string(),
+            }),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_host_without_session_lifecycle_support_answers_unavailable() {
+    let host = Arc::new(SurfaceHost::new());
+    let mut processor = DeveloperSessionProcessor::new(host, capabilities());
+    processor.process(initialize()).await;
+    for (id, method) in [
+        (2, method::THREAD_DELETE),
+        (3, method::THREAD_RECONNECT),
+        (4, method::THREAD_WRITER_RELEASE),
+        (5, method::THREAD_WRITER_TAKEOVER),
+    ] {
+        let response = processor
+            .process(request(
+                id,
+                method,
+                ThreadIdParams {
+                    thread_id: "thread-1".to_string(),
+                },
+            ))
+            .await;
+        assert_eq!(
+            response.error.expect("unimplemented method must fail").code,
+            -32010,
+            "{method}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn every_websocket_reader_of_a_host_receives_its_live_events() {
+    let host = Arc::new(FakeHost::new());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind test listener");
+    let addr = listener.local_addr().expect("test listener address");
+    let server_host = host.clone();
+    let server_task = tokio::spawn(async move {
+        agiworkforce_app_server::serve_developer_session_websocket(
+            listener,
+            agiworkforce_app_server::WebSocketSecurity {
+                auth_token: Some("test-secret".to_string()),
+                allowed_origins: Vec::new(),
+                allow_query_token: false,
+            },
+            server_host,
+            capabilities(),
+        )
+        .await
+    });
+
+    let mut readers = Vec::new();
+    for _ in 0..3 {
+        let mut websocket_request = format!("ws://{addr}/ws")
+            .into_client_request()
+            .expect("valid websocket request");
+        websocket_request.headers_mut().insert(
+            "authorization",
+            HeaderValue::from_static("Bearer test-secret"),
+        );
+        let (mut websocket, _) = tokio_tungstenite::connect_async(websocket_request)
+            .await
+            .expect("authenticated websocket connects");
+        websocket
+            .send(Message::text(
+                serde_json::to_string(&initialize()).expect("serialize initialize"),
+            ))
+            .await
+            .expect("send initialize");
+        let initialized = websocket
+            .next()
+            .await
+            .expect("initialize response frame")
+            .expect("initialize response succeeds");
+        assert!(initialized
+            .to_text()
+            .expect("text")
+            .contains("protocolVersion"));
+        readers.push(websocket);
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while host.notifications.receiver_count() < readers.len() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("every reader subscribes");
+
+    host.notifications
+        .send(
+            AppServerNotification::new(
+                "turn/output_delta",
+                serde_json::json!({
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "delta": "shared",
+                    "index": 0,
+                }),
+            )
+            .expect("delta notification"),
+        )
+        .expect("readers are subscribed");
+
+    for reader in &mut readers {
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(5), reader.next())
+            .await
+            .expect("every reader receives the event")
+            .expect("frame")
+            .expect("frame succeeds");
+        let notification: AppServerNotification =
+            serde_json::from_str(frame.to_text().expect("text")).expect("typed notification");
+        assert_eq!(notification.method, "turn/output_delta");
+        assert_eq!(notification.params["delta"], "shared");
+    }
+
+    for mut reader in readers {
+        reader.close(None).await.expect("close websocket");
+    }
+    server_task.abort();
 }
 
 #[tokio::test]
@@ -761,6 +1051,8 @@ impl DeveloperSessionHost for SurfaceHost {
             thread: thread("thread-1"),
             messages: Vec::new(),
             transcript_truncated: false,
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
         })
     }
 

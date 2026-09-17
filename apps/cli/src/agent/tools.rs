@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::io::IsTerminal;
 
 use crate::mcp;
 use crate::teams;
@@ -144,7 +143,7 @@ async fn request_mcp_tool_approval(
         return tools::approval_allows(decision);
     }
 
-    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+    if !crate::interactive::can_prompt() {
         return false;
     }
 

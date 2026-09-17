@@ -12,6 +12,7 @@ pub mod agent;
 pub mod agent_events;
 pub mod agents;
 pub mod auth;
+pub mod broken_pipe;
 pub mod browser_bridge;
 pub mod claude_parity;
 pub mod cli_options;
@@ -99,6 +100,7 @@ pub mod apply_patch;
 pub mod approval_audit;
 pub mod ecosystem;
 pub mod init;
+pub mod interactive;
 pub mod keybindings;
 pub mod local_models;
 pub mod model_catalog;
@@ -1562,11 +1564,7 @@ pub fn structured_output(json_flag: bool, output: Option<OutputFormat>) -> Struc
 /// A non-interactive stdin cannot answer, so it refuses instead of proceeding
 /// unasked. `--yes` is how a script says yes.
 fn confirm_destructive(prompt: &str, yes: bool) -> bool {
-    confirm_destructive_when(
-        prompt,
-        yes,
-        io::stdin().is_terminal() && io::stderr().is_terminal(),
-    )
+    confirm_destructive_when(prompt, yes, interactive::can_prompt())
 }
 
 fn confirm_destructive_when(prompt: &str, yes: bool, interactive: bool) -> bool {
@@ -2847,7 +2845,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             runtime::session_control::resolve_managed_session_reference(&session_id)
                 .with_context(|| format!("session '{session_id}' was not found"))?;
 
-            let interactive = io::stdin().is_terminal() && io::stderr().is_terminal();
+            let interactive = interactive::can_prompt();
             match resolve_destructive_decision(force, interactive) {
                 DestructiveDecision::Refuse => {
                     anyhow::bail!(
@@ -2969,8 +2967,7 @@ pub async fn run_main() -> Result<()> {
         if cli.command.is_none()
             && cli.prompt.is_none()
             && !cli.dump_system_prompt
-            && io::stdin().is_terminal()
-            && io::stderr().is_terminal()
+            && interactive::can_prompt()
             && !onboarding::is_setup_complete()
         {
             match onboarding::run_onboarding().await {
@@ -2993,7 +2990,7 @@ pub async fn run_main() -> Result<()> {
     let mut project_trusted = trusted_during_first_run;
     if invocation_requires_project_trust(&cli) {
         if !project_trusted {
-            if io::stdin().is_terminal() && io::stderr().is_terminal() {
+            if interactive::can_prompt() {
                 match onboarding::ensure_current_directory_trusted() {
                     Ok(true) => project_trusted = true,
                     Ok(false) => return Ok(()),

@@ -164,6 +164,10 @@
         "icon": "$(trash)"
       },
       {
+        "command": "agi-workforce.permanentlyDeleteConversation",
+        "title": "AGI Workforce: Permanently Delete Conversation"
+      },
+      {
         "command": "agi-workforce.refreshConversations",
         "title": "AGI Workforce: Refresh Conversations",
         "icon": "$(refresh)"

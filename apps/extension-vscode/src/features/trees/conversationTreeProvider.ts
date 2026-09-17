@@ -189,6 +189,19 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     return true;
   }
 
+  async deleteThread(threadId: string): Promise<boolean> {
+    let owner = this.runtimeByThread.get(threadId);
+    if (owner === undefined) {
+      await this.getThreads();
+      owner = this.runtimeByThread.get(threadId);
+    }
+    if (owner === undefined) return false;
+    await owner.runtime.deleteThread(threadId);
+    this.runtimeByThread.delete(threadId);
+    this.refresh();
+    return true;
+  }
+
   dispose(): void {
     this._onDidChangeTreeData.dispose();
     this.runtimeByThread.clear();

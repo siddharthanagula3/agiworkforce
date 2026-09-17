@@ -1,24 +1,28 @@
 use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
 use agiworkforce_protocol::agent_events::{
-    AgentEvent, AgentEventProgressStatus, AgentEventProgressUpdate, AgentEventToolCategory,
-    AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
+    AgentEvent, AgentEventArtifactProduced, AgentEventProgressStatus, AgentEventProgressUpdate,
+    AgentEventToolCategory, AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
 };
 use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
     AccountLoginWaitParams, AccountLoginWaitResponse, AccountSource, AccountStatusParams,
-    AccountStatusResponse, AccountTokenResponse, AppServerCapabilities, AppServerClientInfo,
-    AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort,
-    DeveloperRoutingTaskType, DeveloperSessionSource, DeveloperSessionTrustMode, HookListResponse,
-    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
-    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
-    ModelListParams, PluginListResponse, PluginSetEnabledParams, SettingsReadResponse,
-    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams, TurnStartParams,
-    TurnStatus, TurnSteerParams, TurnSummary,
+    AccountStatusResponse, AccountTokenResponse, ActiveTurnSnapshot, AppServerCapabilities,
+    AppServerClientInfo, AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
+    ContextInstructionsResponse, DeveloperAgentMode, DeveloperApprovalOutcome,
+    DeveloperFileChangeKind, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
+    DeveloperSessionApproval, DeveloperSessionFileChange, DeveloperSessionSource,
+    DeveloperSessionTrustMode, DeveloperSessionWriter, DeveloperSessionWriterChange,
+    HookListResponse, HostModelSummary, LocalModelListResponse, LocalModelProvider,
+    LocalModelSummary, McpLoginParams, McpLoginResponse, McpServerConfiguredStatus,
+    McpServerListResponse, ModelListParams, PendingApprovalSnapshot, PluginListResponse,
+    PluginSetEnabledParams, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
+    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
+    TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -40,11 +44,16 @@ use crate::context;
 use crate::models::{self, ContentBlock};
 use crate::models::{OllamaMode, Provider};
 use crate::platform::policy::{PolicyDecision, PolicyEngine};
-use crate::runtime::session::{ManagedSession, ManagedSessionAutoRouting};
+use crate::runtime::session::{
+    ManagedSession, ManagedSessionApprovalOutcome, ManagedSessionAutoRouting,
+    ManagedSessionFileChangeKind,
+};
+use crate::runtime::session_activity::SharedSessionActivity;
 use crate::runtime::session_control::{
     ManagedSessionReference, ManagedSessionStore, ManagedSessionSummary,
     ResolvedManagedSessionReference,
 };
+use crate::runtime::writer_lease::{self, LeaseClaim, WriterIdentity, WriterLease};
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
 
 const DEFAULT_THREAD_LIMIT: usize = 50;
@@ -87,6 +96,9 @@ const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// value times that cap. Without it the multiplier is however many threads a
 /// client chooses to drive at once.
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
+const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
+const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
+const WRITER_LABEL: &str = "AGI app-server";
 
 fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse {
     AccountStatusResponse {
@@ -170,8 +182,61 @@ struct ResolvedThreadModel {
 struct RunningTurn {
     turn_id: String,
     handle: tokio::task::JoinHandle<()>,
-    partial: Arc<StdMutex<String>>,
+    partial: Arc<StdMutex<PartialOutput>>,
+    event_sequence: Arc<StdMutex<u64>>,
     process_owner: crate::process_tree::ProcessTreeOwner,
+}
+
+/// Output streamed so far, and how many deltas carried it, under one lock so a
+/// reconnect snapshot and the delta stream never disagree.
+#[derive(Default)]
+struct PartialOutput {
+    text: String,
+    next_delta_index: u64,
+}
+
+struct ClientTurn {
+    client_turn_id: String,
+    turn: TurnSummary,
+}
+
+type ClientTurns = Arc<StdMutex<HashMap<String, Vec<ClientTurn>>>>;
+
+fn remember_client_turn(
+    client_turns: &ClientTurns,
+    thread_id: &str,
+    client_turn_id: &str,
+    turn: TurnSummary,
+) {
+    let mut client_turns = client_turns
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let remembered = client_turns.entry(thread_id.to_string()).or_default();
+    crate::runtime::session::push_bounded(
+        remembered,
+        ClientTurn {
+            client_turn_id: client_turn_id.to_string(),
+            turn,
+        },
+        MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD,
+    );
+}
+
+fn settle_client_turn(
+    client_turns: &ClientTurns,
+    thread_id: &str,
+    turn_id: &str,
+    status: TurnStatus,
+) {
+    let mut client_turns = client_turns
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(turn) = client_turns
+        .get_mut(thread_id)
+        .and_then(|remembered| remembered.iter_mut().find(|entry| entry.turn.id == turn_id))
+    {
+        turn.turn.status = status;
+    }
 }
 
 async fn take_steered_input_or_close(
@@ -220,6 +285,7 @@ async fn close_running_turn_claim(
 struct PendingApproval {
     thread_id: String,
     turn_id: String,
+    snapshot: PendingApprovalSnapshot,
     responder: oneshot::Sender<ApprovalDecision>,
 }
 
@@ -242,6 +308,8 @@ pub struct CliDeveloperSessionHost {
     lifecycle: Arc<RwLock<()>>,
     pending_logins: Arc<Mutex<HashMap<String, PendingDeviceLogin>>>,
     host_models: Arc<RwLock<Option<Vec<HostModelSummary>>>>,
+    writer: &'static WriterIdentity,
+    client_turns: ClientTurns,
 }
 
 /// A device grant this host started and has not yet resolved.
@@ -288,6 +356,8 @@ impl CliDeveloperSessionHost {
             lifecycle: Arc::new(RwLock::new(())),
             pending_logins: Arc::new(Mutex::new(HashMap::new())),
             host_models: Arc::new(RwLock::new(None)),
+            writer: writer_lease::process_writer(WRITER_LABEL),
+            client_turns: Arc::new(StdMutex::new(HashMap::new())),
         })
     }
 
@@ -319,6 +389,9 @@ impl CliDeveloperSessionHost {
             hooks: true,
             settings: true,
             commands: true,
+            thread_delete: true,
+            reconnect: true,
+            writer_lease: true,
         }
     }
 
@@ -693,6 +766,9 @@ impl CliDeveloperSessionHost {
                 .as_ref()
                 .map(|path| path.display().to_string()),
             client: summary.client.clone(),
+            repository: summary.repository.clone(),
+            writer: writer_lease::read(&summary.path)
+                .map(|lease| writer_summary(self.writer, lease)),
         }
     }
 
@@ -810,6 +886,141 @@ impl CliDeveloperSessionHost {
             },
             decoded_bytes,
         ))
+    }
+
+    fn accepted_client_turn(&self, thread_id: &str, client_turn_id: &str) -> Option<TurnSummary> {
+        let client_turns = self
+            .client_turns
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        client_turns
+            .get(thread_id)?
+            .iter()
+            .rev()
+            .find(|entry| entry.client_turn_id == client_turn_id)
+            .map(|entry| entry.turn.clone())
+    }
+
+    async fn resume_thread_summary(
+        &self,
+        thread_id: &str,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        let store = self.store.clone();
+        let thread_id = thread_id.to_string();
+        let resolved = tokio::task::spawn_blocking(move || {
+            store.resolve(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        Ok(self.resolved_summary(resolved).await)
+    }
+
+    async fn persisted_session_path(
+        &self,
+        thread_id: &str,
+    ) -> Result<PathBuf, DeveloperSessionHostError> {
+        let store = self.store.clone();
+        let thread_id = thread_id.to_string();
+        tokio::task::spawn_blocking(move || {
+            store.resolve(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map(|resolved| resolved.path)
+        .map_err(not_found_error)
+    }
+
+    fn emit_writer_change(
+        &self,
+        thread_id: &str,
+        change: DeveloperSessionWriterChange,
+        writer: Option<WriterLease>,
+        previous: Option<WriterLease>,
+    ) {
+        emit_writer_change(
+            &self.notifications,
+            self.writer,
+            thread_id,
+            change,
+            writer,
+            previous,
+        );
+    }
+
+    /// Claim the thread's writer lease for a turn, refusing it while another
+    /// live process holds the thread.
+    async fn claim_writer_for_turn(
+        &self,
+        thread_id: &str,
+        session_path: &Path,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let path = session_path.to_path_buf();
+        let writer = self.writer;
+        let claim = tokio::task::spawn_blocking(move || writer_lease::claim(&path, writer))
+            .await
+            .map_err(internal_error)?
+            .map_err(internal_error)?;
+        match claim {
+            LeaseClaim::Acquired(lease) => {
+                self.emit_writer_change(
+                    thread_id,
+                    DeveloperSessionWriterChange::Acquired,
+                    Some(lease),
+                    None,
+                );
+                Ok(())
+            }
+            LeaseClaim::Renewed(_) => Ok(()),
+            LeaseClaim::StaleTakeover { lease, previous } => {
+                self.emit_writer_change(
+                    thread_id,
+                    DeveloperSessionWriterChange::StaleTakeover,
+                    Some(lease),
+                    Some(previous),
+                );
+                Ok(())
+            }
+            LeaseClaim::TakenOver { lease, previous } => {
+                self.emit_writer_change(
+                    thread_id,
+                    DeveloperSessionWriterChange::TakenOver,
+                    Some(lease),
+                    Some(previous),
+                );
+                Ok(())
+            }
+            LeaseClaim::HeldBy(holder) => Err(DeveloperSessionHostError::writer_conflict(
+                format!(
+                    "{} is writing this thread; take it over or wait until it hands the thread back",
+                    holder.holder_label
+                ),
+                ThreadWriterConflictData {
+                    thread_id: thread_id.to_string(),
+                    writer: writer_summary(self.writer, holder),
+                },
+            )),
+        }
+    }
+
+    async fn release_writer_quietly(&self, thread_id: &str) {
+        let Ok(path) = self.persisted_session_path(thread_id).await else {
+            return;
+        };
+        let writer = self.writer;
+        let released = tokio::task::spawn_blocking(move || writer_lease::release(&path, writer))
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .flatten();
+        if let Some(previous) = released {
+            self.emit_writer_change(
+                thread_id,
+                DeveloperSessionWriterChange::Released,
+                None,
+                Some(previous),
+            );
+        }
     }
 
     fn emit(&self, method: &str, params: serde_json::Value) {
@@ -1118,15 +1329,21 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         managed.workspace_root = Some(self.workspace_root.clone());
         managed.created_by = Some(source_to_stored(source).to_string());
         managed.client = Some(client.name.clone());
-        let (git_branch, worktree_root) = workspace_git_state(&self.workspace_root);
-        managed.git_branch = git_branch;
-        managed.worktree_root = worktree_root;
+        let git = workspace_git_state(&self.workspace_root);
+        managed.git_branch = git.branch;
+        managed.worktree_root = git.worktree_root;
+        managed.repository = git.repository;
         let store = self.store.clone();
         let managed_to_save = managed.clone();
-        let path = tokio::task::spawn_blocking(move || store.save(&managed_to_save))
-            .await
-            .map_err(internal_error)?
-            .map_err(internal_error)?;
+        let writer = self.writer;
+        let path = tokio::task::spawn_blocking(move || {
+            let path = store.save(&managed_to_save)?;
+            writer_lease::claim(&path, writer)?;
+            anyhow::Ok(path)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
         agent
             .adopt_managed_session(managed, path)
             .map_err(invalid_request)?;
@@ -1275,6 +1492,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             thread: self.resolved_summary(resolved).await,
             messages: messages_newest_first,
             transcript_truncated,
+            approvals: session.approvals.iter().map(approval_record).collect(),
+            file_changes: session
+                .file_changes
+                .iter()
+                .map(file_change_record)
+                .collect(),
         })
     }
 
@@ -1344,6 +1567,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
         .map_err(internal_error)?
         .map_err(not_found_error)?;
+        self.release_writer_quietly(&id_for_event).await;
         let removed = self.sessions.lock().await.remove(&id_for_event);
         if let Some(session) = removed {
             let memory_consolidation_tasks = session.lock().await.take_memory_consolidation_tasks();
@@ -1370,6 +1594,184 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         Ok(())
     }
 
+    async fn delete_thread(&self, params: ThreadIdParams) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        if self
+            .running_turns
+            .lock()
+            .await
+            .contains_key(&params.thread_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "Interrupt the running turn before deleting its thread",
+            ));
+        }
+        let path = self.persisted_session_path(&params.thread_id).await?;
+        if let Some(holder) = writer_lease::read(&path).filter(|lease| {
+            lease.holder_id != self.writer.id && !lease.is_stale(chrono::Utc::now())
+        }) {
+            return Err(DeveloperSessionHostError::writer_conflict(
+                format!(
+                    "{} is writing this thread; it cannot be deleted until that writer stops",
+                    holder.holder_label
+                ),
+                ThreadWriterConflictData {
+                    thread_id: params.thread_id.clone(),
+                    writer: writer_summary(self.writer, holder),
+                },
+            ));
+        }
+
+        let removed = self.sessions.lock().await.remove(&params.thread_id);
+        if let Some(session) = removed {
+            let (mcp_manager, subagent_manager, memory_consolidation_tasks) = {
+                let mut session = session.lock().await;
+                (
+                    session.take_mcp_manager(),
+                    session.take_subagent_manager(),
+                    session.take_memory_consolidation_tasks(),
+                )
+            };
+            abort_and_join_tasks(memory_consolidation_tasks).await;
+            if let Some(manager) = subagent_manager {
+                manager.shutdown_all().await;
+            }
+            if let Some(mut manager) = mcp_manager {
+                manager.shutdown_all().await;
+            }
+        }
+        self.client_turns
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&params.thread_id);
+
+        let store = self.store.clone();
+        let thread_id = params.thread_id.clone();
+        tokio::task::spawn_blocking(move || {
+            store.delete(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
+        self.emit(
+            "thread/deleted",
+            serde_json::json!({ "threadId": params.thread_id }),
+        );
+        Ok(())
+    }
+
+    async fn reconnect_thread(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<ThreadReconnectResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        let active_turn = {
+            let running = self.running_turns.lock().await;
+            match running.get(&params.thread_id) {
+                Some(turn) => {
+                    let (partial_response, next_delta_index) = {
+                        let partial = turn
+                            .partial
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        (partial.text.clone(), partial.next_delta_index)
+                    };
+                    let next_event_sequence = *turn
+                        .event_sequence
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    let turn_id = turn.turn_id.clone();
+                    let pending_approvals = self
+                        .pending_approvals
+                        .lock()
+                        .await
+                        .values()
+                        .filter(|approval| {
+                            approval.thread_id == params.thread_id && approval.turn_id == turn_id
+                        })
+                        .map(|approval| approval.snapshot.clone())
+                        .collect();
+                    Some(ActiveTurnSnapshot {
+                        turn_id,
+                        partial_response,
+                        next_delta_index,
+                        next_event_sequence,
+                        pending_approvals,
+                    })
+                }
+                None => None,
+            }
+        };
+        let store = self.store.clone();
+        let thread_id = params.thread_id;
+        let resolved = tokio::task::spawn_blocking(move || {
+            store.resolve(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        Ok(ThreadReconnectResponse {
+            thread: self.resolved_summary(resolved).await,
+            active_turn,
+        })
+    }
+
+    async fn release_thread_writer(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        if self
+            .running_turns
+            .lock()
+            .await
+            .contains_key(&params.thread_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "A turn is running on this thread; interrupt it before handing the thread over",
+            ));
+        }
+        self.release_writer_quietly(&params.thread_id).await;
+        Ok(())
+    }
+
+    async fn take_over_thread_writer(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        let path = self.persisted_session_path(&params.thread_id).await?;
+        let writer = self.writer;
+        let claim_path = path.clone();
+        let claim =
+            tokio::task::spawn_blocking(move || writer_lease::take_over(&claim_path, writer))
+                .await
+                .map_err(internal_error)?
+                .map_err(internal_error)?;
+        let (change, lease, previous) = match claim {
+            LeaseClaim::Acquired(lease) => (DeveloperSessionWriterChange::Acquired, lease, None),
+            LeaseClaim::Renewed(_) | LeaseClaim::HeldBy(_) => {
+                return self.resume_thread_summary(&params.thread_id).await;
+            }
+            LeaseClaim::StaleTakeover { lease, previous } => (
+                DeveloperSessionWriterChange::StaleTakeover,
+                lease,
+                Some(previous),
+            ),
+            LeaseClaim::TakenOver { lease, previous } => (
+                DeveloperSessionWriterChange::TakenOver,
+                lease,
+                Some(previous),
+            ),
+        };
+        self.emit_writer_change(&params.thread_id, change, Some(lease), previous);
+        self.resume_thread_summary(&params.thread_id).await
+    }
+
     async fn start_turn(
         &self,
         params: TurnStartParams,
@@ -1379,11 +1781,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let context_files =
             self.validate_context_files(params.context_files.as_deref().unwrap_or_default())?;
         let prepared = self.prepare_input(params.input)?;
+        let client_turn_id = validated_client_turn_id(params.client_turn_id)?;
         let session = self.load_agent(&params.thread_id).await?;
         // Claim exclusive start ownership before touching the shared agent.
         // Keeping this guard through session setup prevents a losing concurrent
         // request from changing the model, controls, messages, or attachments.
         let mut running_turns = self.running_turns.lock().await;
+        if let Some(accepted) = client_turn_id
+            .as_deref()
+            .and_then(|id| self.accepted_client_turn(&params.thread_id, id))
+        {
+            return Ok(accepted);
+        }
         if running_turns.contains_key(&params.thread_id) {
             return Err(DeveloperSessionHostError::conflict(
                 "A turn is already running for this thread; use turn/steer or turn/interrupt",
@@ -1394,6 +1803,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "This app-server already has {MAX_CONCURRENT_RUNNING_TURNS} turns running; interrupt one before starting another"
             )));
         }
+        let (session_path, activity) = {
+            let agent = session.lock().await;
+            (
+                agent.managed_session_path.clone(),
+                agent.session_activity.clone(),
+            )
+        };
+        let session_path = session_path.ok_or_else(|| {
+            DeveloperSessionHostError::internal("This thread has no persisted session file")
+        })?;
+        self.claim_writer_for_turn(&params.thread_id, &session_path)
+            .await?;
 
         let mut refused_turn: Option<anyhow::Error> = None;
         {
@@ -1466,9 +1887,29 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             self.apply_subagent_boundary_policy(&mut agent);
         }
 
+        let turn_model = {
+            let agent = session.lock().await;
+            TurnModelNotification {
+                thread_id: params.thread_id.clone(),
+                turn_id: String::new(),
+                model: agent.model.clone(),
+                provider: models::provider_persistence_name(&agent.provider),
+                trust_mode: trust_mode_of(agent.privacy_mode),
+                auto_selection: agent
+                    .managed_auto_routing()
+                    .map(|state| state.selection.clone()),
+                fallback_from: None,
+                fallback_reason: None,
+            }
+        };
         let thread_id = params.thread_id;
         let turn_id = Uuid::new_v4().to_string();
-        let partial = Arc::new(StdMutex::new(String::new()));
+        let turn_model = TurnModelNotification {
+            turn_id: turn_id.clone(),
+            ..turn_model
+        };
+        let announced_model = turn_model.clone();
+        let partial = Arc::new(StdMutex::new(PartialOutput::default()));
         let (start_sender, start_receiver) = oneshot::channel();
         let task_session = session.clone();
         let task_config = self.config.clone();
@@ -1479,11 +1920,22 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let task_partial = partial.clone();
         let task_thread_id = thread_id.clone();
         let task_turn_id = turn_id.clone();
-        let task_event_sequence = Arc::new(StdMutex::new(0_u64));
+        let event_sequence = Arc::new(StdMutex::new(0_u64));
+        let task_event_sequence = event_sequence.clone();
         let task_store = self.store.clone();
         let task_workspace_root = self.workspace_root.clone();
+        let task_client_turns = self.client_turns.clone();
+        let task_writer = self.writer;
+        let task_session_path = session_path;
+        let task_activity = activity;
         let process_owner = crate::process_tree::ProcessTreeOwner::new();
         let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
+            let _lease_heartbeat = AbortOnDrop(tokio::spawn(renew_writer_lease(
+                task_session_path,
+                task_writer,
+                task_thread_id.clone(),
+                task_notifications.clone(),
+            )));
             if start_receiver.await.is_err() {
                 close_running_turn_claim(
                     task_running.as_ref(),
@@ -1568,6 +2020,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_turn_id.clone(),
                     task_event_sequence.clone(),
                     task_notifications.clone(),
+                    task_activity.clone(),
+                )));
+                agent.on_fallback = Some(crate::agent::FallbackSink(fallback_callback(
+                    turn_model.clone(),
+                    task_notifications.clone(),
                 )));
 
                 let on_chunk = install_output_deltas(
@@ -1584,6 +2041,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 agent.on_tool_approval = None;
                 agent.on_tool_event = None;
                 agent.on_continuation_chunk = None;
+                agent.on_fallback = None;
 
                 match result {
                     Ok(turn) => {
@@ -1689,6 +2147,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             ) {
                 let _ = task_notifications.send(notification);
             }
+            settle_client_turn(
+                &task_client_turns,
+                &task_thread_id,
+                &task_turn_id,
+                final_status,
+            );
             refresh_persisted_workspace_state(
                 &task_store,
                 &task_workspace_root,
@@ -1718,9 +2182,22 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 turn_id: turn_id.clone(),
                 handle,
                 partial,
+                event_sequence,
                 process_owner,
             },
         );
+        if let Some(client_turn_id) = client_turn_id.as_deref() {
+            remember_client_turn(
+                &self.client_turns,
+                &thread_id,
+                client_turn_id,
+                TurnSummary {
+                    id: turn_id.clone(),
+                    thread_id: thread_id.clone(),
+                    status: TurnStatus::Running,
+                },
+            );
+        }
         drop(running_turns);
         if let Ok(notification) = task_state_notification(
             turn_id.clone(),
@@ -1735,6 +2212,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             "turn/started",
             serde_json::json!({ "threadId": thread_id, "turnId": turn_id }),
         );
+        if let Ok(notification) = AppServerNotification::new("turn/model", announced_model) {
+            let _ = self.notifications.send(notification);
+        }
         Ok(TurnSummary {
             id: turn_id,
             thread_id,
@@ -1839,11 +2319,17 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.steering.lock().await.remove(&params.thread_id);
         self.cancel_pending_approvals(&params.turn_id).await;
 
+        settle_client_turn(
+            &self.client_turns,
+            &params.thread_id,
+            &params.turn_id,
+            TurnStatus::Interrupted,
+        );
         let mut persist_error = None;
         if let Some(session) = self.sessions.lock().await.get(&params.thread_id).cloned() {
             let partial = match running.partial.lock() {
-                Ok(partial) => partial.clone(),
-                Err(poisoned) => poisoned.into_inner().clone(),
+                Ok(partial) => partial.text.clone(),
+                Err(poisoned) => poisoned.into_inner().text.clone(),
             };
             let mut session = session.lock().await;
             session.cancel_turn(&partial).await;
@@ -2204,8 +2690,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 continue;
             };
             let partial = match partial.lock() {
-                Ok(partial) => partial.clone(),
-                Err(poisoned) => poisoned.into_inner().clone(),
+                Ok(partial) => partial.text.clone(),
+                Err(poisoned) => poisoned.into_inner().text.clone(),
             };
             let mut session = session.lock().await;
             session.cancel_turn(&partial).await;
@@ -2217,7 +2703,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         for mut manager in mcp_managers {
             manager.shutdown_all().await;
         }
-        self.sessions.lock().await.clear();
+        let held_threads = self
+            .sessions
+            .lock()
+            .await
+            .drain()
+            .map(|(thread_id, _)| thread_id)
+            .collect::<Vec<_>>();
+        for thread_id in held_threads {
+            self.release_writer_quietly(&thread_id).await;
+        }
 
         if let Some(error) = process_shutdown_error {
             return Err(internal_error(error));
@@ -2231,6 +2726,146 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     fn subscribe(&self) -> broadcast::Receiver<AppServerNotification> {
         self.notifications.subscribe()
     }
+}
+
+struct AbortOnDrop(tokio::task::JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+fn emit_writer_change(
+    notifications: &broadcast::Sender<AppServerNotification>,
+    identity: &WriterIdentity,
+    thread_id: &str,
+    change: DeveloperSessionWriterChange,
+    writer: Option<WriterLease>,
+    previous: Option<WriterLease>,
+) {
+    if let Ok(notification) = AppServerNotification::new(
+        "thread/writer_changed",
+        ThreadWriterChangedNotification {
+            thread_id: thread_id.to_string(),
+            change,
+            writer: writer.map(|lease| writer_summary(identity, lease)),
+            previous: previous.map(|lease| writer_summary(identity, lease)),
+        },
+    ) {
+        let _ = notifications.send(notification);
+    }
+}
+
+/// Keep a running turn's lease alive. When another process has explicitly
+/// taken the thread, say so once; the turn still finishes and its messages are
+/// kept by the collision check on save.
+async fn renew_writer_lease(
+    session_path: PathBuf,
+    identity: &'static WriterIdentity,
+    thread_id: String,
+    notifications: broadcast::Sender<AppServerNotification>,
+) {
+    let mut interval = tokio::time::interval(writer_lease::WRITER_LEASE_RENEW_INTERVAL);
+    interval.tick().await;
+    loop {
+        interval.tick().await;
+        let path = session_path.clone();
+        let claim = tokio::task::spawn_blocking(move || writer_lease::claim(&path, identity)).await;
+        if let Ok(Ok(LeaseClaim::HeldBy(holder))) = claim {
+            emit_writer_change(
+                &notifications,
+                identity,
+                &thread_id,
+                DeveloperSessionWriterChange::TakenOver,
+                Some(holder),
+                None,
+            );
+            return;
+        }
+    }
+}
+
+fn writer_summary(identity: &WriterIdentity, lease: WriterLease) -> DeveloperSessionWriter {
+    DeveloperSessionWriter {
+        held_by_this_host: lease.holder_id == identity.id,
+        stale: lease.is_stale(chrono::Utc::now()),
+        acquired_at: lease.acquired_at.to_rfc3339(),
+        expires_at: lease.expires_at.to_rfc3339(),
+        holder_id: lease.holder_id,
+        holder_label: lease.holder_label,
+    }
+}
+
+fn trust_mode_of(privacy_mode: crate::agent::PrivacyMode) -> DeveloperSessionTrustMode {
+    match privacy_mode {
+        crate::agent::PrivacyMode::Local => DeveloperSessionTrustMode::Local,
+        crate::agent::PrivacyMode::Byok => DeveloperSessionTrustMode::Byok,
+        crate::agent::PrivacyMode::Managed => DeveloperSessionTrustMode::Managed,
+    }
+}
+
+fn validated_client_turn_id(
+    client_turn_id: Option<String>,
+) -> Result<Option<String>, DeveloperSessionHostError> {
+    let Some(client_turn_id) = client_turn_id else {
+        return Ok(None);
+    };
+    if client_turn_id.trim().is_empty()
+        || client_turn_id.chars().count() > MAX_CLIENT_TURN_ID_CHARS
+        || client_turn_id.chars().any(char::is_control)
+    {
+        return Err(DeveloperSessionHostError::invalid_request(format!(
+            "clientTurnId must be 1 to {MAX_CLIENT_TURN_ID_CHARS} printable characters"
+        )));
+    }
+    Ok(Some(client_turn_id))
+}
+
+fn approval_record(
+    approval: &crate::runtime::session::ManagedSessionApproval,
+) -> DeveloperSessionApproval {
+    DeveloperSessionApproval {
+        request_id: approval.request_id.clone(),
+        kind: approval.kind.clone(),
+        summary: approval.summary.clone(),
+        outcome: match approval.outcome {
+            ManagedSessionApprovalOutcome::AllowOnce => DeveloperApprovalOutcome::AllowOnce,
+            ManagedSessionApprovalOutcome::AllowSession => DeveloperApprovalOutcome::AllowSession,
+            ManagedSessionApprovalOutcome::AlwaysAllow => DeveloperApprovalOutcome::AlwaysAllow,
+            ManagedSessionApprovalOutcome::Deny => DeveloperApprovalOutcome::Deny,
+            ManagedSessionApprovalOutcome::Cancel => DeveloperApprovalOutcome::Cancel,
+            ManagedSessionApprovalOutcome::Timeout => DeveloperApprovalOutcome::Timeout,
+        },
+        requested_at: approval.requested_at.to_rfc3339(),
+        decided_at: approval.decided_at.to_rfc3339(),
+    }
+}
+
+fn file_change_record(
+    change: &crate::runtime::session::ManagedSessionFileChange,
+) -> DeveloperSessionFileChange {
+    DeveloperSessionFileChange {
+        path: change.path.display().to_string(),
+        kind: match change.kind {
+            ManagedSessionFileChangeKind::Created => DeveloperFileChangeKind::Created,
+            ManagedSessionFileChangeKind::Modified => DeveloperFileChangeKind::Modified,
+        },
+        tool: change.tool.clone(),
+        tool_call_id: change.tool_call_id.clone(),
+        changed_at: change.changed_at.to_rfc3339(),
+    }
+}
+
+fn artifact_mime_type(path: &Path) -> String {
+    mime_guess::from_path(path)
+        .first_or_octet_stream()
+        .essence_str()
+        .to_string()
+}
+
+fn file_uri(path: &Path) -> String {
+    crate::platform::lsp::client::path_to_file_uri(path)
 }
 
 /// Build the config a turn hands to the engine, with the process defaults
@@ -2270,12 +2905,19 @@ fn approval_callback(
         let notifications = notifications.clone();
         Box::pin(async move {
             let request_id = request.id.to_string();
+            let snapshot = PendingApprovalSnapshot {
+                request_id: request_id.clone(),
+                kind: format!("{:?}", request.kind),
+                summary: request.summary.clone(),
+                detail: request.detail.join("\n"),
+            };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
                 request_id.clone(),
                 PendingApproval {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
+                    snapshot: snapshot.clone(),
                     responder: sender,
                 },
             );
@@ -2293,9 +2935,9 @@ fn approval_callback(
                     "threadId": thread_id,
                     "turnId": turn_id,
                     "requestId": request_id,
-                    "kind": format!("{:?}", request.kind),
-                    "summary": request.summary,
-                    "detail": request.detail.join("\n"),
+                    "kind": snapshot.kind,
+                    "summary": snapshot.summary,
+                    "detail": snapshot.detail,
                 }),
             ) {
                 let _ = notifications.send(notification);
@@ -2350,20 +2992,23 @@ fn emit_agent_event(
 fn output_delta_callback(
     thread_id: String,
     turn_id: String,
-    partial: Arc<StdMutex<String>>,
+    partial: Arc<StdMutex<PartialOutput>>,
     notifications: broadcast::Sender<AppServerNotification>,
 ) -> Arc<dyn Fn(&str) + Send + Sync> {
     Arc::new(move |chunk: &str| {
-        match partial.lock() {
-            Ok(mut partial) => partial.push_str(chunk),
-            Err(poisoned) => poisoned.into_inner().push_str(chunk),
-        }
+        let mut partial = partial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        partial.text.push_str(chunk);
+        let index = partial.next_delta_index;
+        partial.next_delta_index += 1;
         if let Ok(notification) = AppServerNotification::new(
             "turn/output_delta",
             serde_json::json!({
                 "threadId": thread_id,
                 "turnId": turn_id,
                 "delta": chunk,
+                "index": index,
             }),
         ) {
             let _ = notifications.send(notification);
@@ -2386,12 +3031,81 @@ fn tool_event_callback(
     turn_id: String,
     sequence: Arc<StdMutex<u64>>,
     notifications: broadcast::Sender<AppServerNotification>,
+    activity: SharedSessionActivity,
 ) -> Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync> {
     Arc::new(move |event| {
+        let generated = match &event {
+            crate::tui::app_event::TuiAppEvent::ToolCompleted {
+                call_id,
+                status: crate::tui::app_event::ToolStatus::Succeeded,
+                ..
+            } => generated_artifacts(&activity, call_id),
+            _ => Vec::new(),
+        };
         let Some(event) = map_tool_event(event) else {
             return;
         };
         emit_agent_event(&thread_id, &turn_id, &sequence, &notifications, event);
+        for artifact in generated {
+            emit_agent_event(
+                &thread_id,
+                &turn_id,
+                &sequence,
+                &notifications,
+                AgentEvent::ArtifactProduced(artifact),
+            );
+        }
+    })
+}
+
+/// Files a finished tool call created, as artifacts a client can open.
+fn generated_artifacts(
+    activity: &SharedSessionActivity,
+    call_id: &str,
+) -> Vec<AgentEventArtifactProduced> {
+    let activity = activity
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    activity
+        .file_changes()
+        .iter()
+        .rev()
+        .take_while(|change| change.tool_call_id == call_id)
+        .filter(|change| change.kind == ManagedSessionFileChangeKind::Created)
+        .map(|change| AgentEventArtifactProduced {
+            artifact_id: format!("{call_id}:{}", change.path.display()),
+            name: change
+                .path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| change.path.display().to_string()),
+            mime_type: artifact_mime_type(&change.path),
+            uri: file_uri(&change.path),
+            size_bytes: std::fs::metadata(&change.path)
+                .ok()
+                .map(|metadata| metadata.len()),
+        })
+        .collect()
+}
+
+fn fallback_callback(
+    turn_model: TurnModelNotification,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> Box<dyn Fn(&str, &str, &str) + Send + Sync> {
+    Box::new(move |from: &str, to: &str, reason: &str| {
+        let provider = models::resolve_selected_provider(to, None)
+            .map(|provider| models::provider_persistence_name(&provider))
+            .unwrap_or_else(|_| turn_model.provider.clone());
+        let notification = TurnModelNotification {
+            model: to.to_string(),
+            provider,
+            fallback_from: Some(from.to_string()),
+            fallback_reason: Some(reason.to_string()),
+            ..turn_model.clone()
+        };
+        if let Ok(notification) = AppServerNotification::new("turn/model", notification) {
+            let _ = notifications.send(notification);
+        }
     })
 }
 
@@ -2662,21 +3376,31 @@ async fn refresh_persisted_workspace_state(
     let store = store.clone();
     let workspace_root = workspace_root.to_path_buf();
     let _ = tokio::task::spawn_blocking(move || {
-        let (git_branch, worktree_root) = workspace_git_state(&workspace_root);
-        if git_branch.is_none() && worktree_root.is_none() {
+        let git = workspace_git_state(&workspace_root);
+        if git.branch.is_none() && git.worktree_root.is_none() {
             return;
         }
         let Ok(mut session) = store.load(ManagedSessionReference::SessionId(thread_id)) else {
             return;
         };
-        if session.git_branch == git_branch && session.worktree_root == worktree_root {
+        if session.git_branch == git.branch
+            && session.worktree_root == git.worktree_root
+            && session.repository == git.repository
+        {
             return;
         }
-        session.git_branch = git_branch;
-        session.worktree_root = worktree_root;
+        session.git_branch = git.branch;
+        session.worktree_root = git.worktree_root;
+        session.repository = git.repository;
         let _ = store.save(&session);
     })
     .await;
+}
+
+struct WorkspaceGitState {
+    branch: Option<String>,
+    worktree_root: Option<PathBuf>,
+    repository: Option<String>,
 }
 
 /// Branch and worktree root of `root`.
@@ -2690,7 +3414,7 @@ async fn refresh_persisted_workspace_state(
 /// outright in a repository with no commits, which would lose the worktree
 /// root as well as the branch. `branch --show-current` answers there, and
 /// answers empty on a detached HEAD, where there is genuinely no branch.
-fn workspace_git_state(root: &Path) -> (Option<String>, Option<PathBuf>) {
+fn workspace_git_state(root: &Path) -> WorkspaceGitState {
     fn git(root: &Path, args: &[&str]) -> Option<String> {
         let output = std::process::Command::new("git")
             .arg("-C")
@@ -2705,10 +3429,33 @@ fn workspace_git_state(root: &Path) -> (Option<String>, Option<PathBuf>) {
         (!value.is_empty()).then_some(value)
     }
 
-    (
-        git(root, &["branch", "--show-current"]),
-        git(root, &["rev-parse", "--show-toplevel"]).map(PathBuf::from),
-    )
+    WorkspaceGitState {
+        branch: git(root, &["branch", "--show-current"]),
+        worktree_root: git(root, &["rev-parse", "--show-toplevel"]).map(PathBuf::from),
+        repository: git(root, &["remote", "get-url", "origin"])
+            .as_deref()
+            .and_then(repository_without_credentials),
+    }
+}
+
+/// A remote URL safe to persist and show: the userinfo a token is commonly
+/// pasted into is removed, and anything that is not one line is refused.
+fn repository_without_credentials(remote: &str) -> Option<String> {
+    let remote = remote.trim();
+    if remote.is_empty() || remote.chars().any(char::is_control) {
+        return None;
+    }
+    let Some((scheme, rest)) = remote.split_once("://") else {
+        return Some(remote.to_string());
+    };
+    let (authority, path) = match rest.find('/') {
+        Some(index) => rest.split_at(index),
+        None => (rest, ""),
+    };
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    Some(format!("{scheme}://{host}{path}"))
 }
 
 /// Which surface a connection speaks for, from the name it introduced itself
@@ -2875,7 +3622,8 @@ mod tests {
             RunningTurn {
                 turn_id: turn_id.clone(),
                 handle: tokio::spawn(async {}),
-                partial: Arc::new(StdMutex::new(String::new())),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
             },
         );
@@ -2928,7 +3676,8 @@ mod tests {
             RunningTurn {
                 turn_id: turn_id.clone(),
                 handle: tokio::spawn(async {}),
-                partial: Arc::new(StdMutex::new(String::new())),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
             },
         );
@@ -3118,7 +3867,8 @@ mod tests {
             RunningTurn {
                 turn_id: turn_id.clone(),
                 handle: tokio::spawn(async {}),
-                partial: Arc::new(StdMutex::new(String::new())),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),
             },
         );
@@ -3292,6 +4042,7 @@ mod tests {
                 agent_mode: None,
                 reasoning_effort: None,
                 context_files: None,
+                client_turn_id: None,
             })
             .await
             .expect_err("unknown authority must not start a turn");
@@ -3633,7 +4384,7 @@ mod tests {
     #[tokio::test]
     async fn a_turns_continuation_reaches_the_client_instead_of_the_protocol_stream() {
         let (notifications, mut receiver) = broadcast::channel(8);
-        let partial = Arc::new(StdMutex::new(String::new()));
+        let partial = Arc::new(StdMutex::new(PartialOutput::default()));
         let mut agent = test_agent();
 
         let mut on_chunk = install_output_deltas(
@@ -3662,11 +4413,12 @@ mod tests {
         assert_eq!(continuation.params["threadId"], "thread-1");
         assert_eq!(continuation.params["turnId"], "turn-1");
         assert_eq!(continuation.params["delta"], "`README.md`");
+        assert_eq!(first.params["index"], 0);
+        assert_eq!(continuation.params["index"], 1);
 
-        assert_eq!(
-            partial.lock().expect("partial").as_str(),
-            "First line of `README.md`"
-        );
+        let partial = partial.lock().expect("partial");
+        assert_eq!(partial.text, "First line of `README.md`");
+        assert_eq!(partial.next_delta_index, 2);
     }
 
     #[tokio::test]
@@ -3679,6 +4431,7 @@ mod tests {
             "turn-1".to_string(),
             Arc::new(StdMutex::new(0)),
             notifications,
+            Arc::default(),
         );
 
         callback(TuiAppEvent::ToolStarted {
@@ -3707,6 +4460,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_file_a_tool_created_reaches_the_client_as_an_artifact_after_its_tool_ends() {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+
+        let workspace = tempdir().expect("workspace");
+        std::fs::write(workspace.path().join("existing.md"), "old").unwrap();
+        let activity: SharedSessionActivity = Arc::default();
+        let (notifications, mut receiver) = broadcast::channel(8);
+        let callback = tool_event_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            Arc::new(StdMutex::new(0)),
+            notifications,
+            activity.clone(),
+        );
+
+        for (call_id, path) in [("tool-new", "report.md"), ("tool-edit", "existing.md")] {
+            activity.lock().unwrap().tool_started(
+                call_id,
+                "write_file",
+                &serde_json::json!({ "path": path }),
+                Some(workspace.path()),
+            );
+            std::fs::write(workspace.path().join(path), "new").unwrap();
+            activity.lock().unwrap().tool_finished(call_id, true);
+            callback(TuiAppEvent::ToolCompleted {
+                call_id: call_id.to_string(),
+                name: "write_file".to_string(),
+                status: ToolStatus::Succeeded,
+                output: "written".to_string(),
+                duration_ms: 1,
+            });
+        }
+
+        let ended = receiver.recv().await.expect("tool end");
+        assert_eq!(ended.params["event"]["type"], "tool-execution-end");
+        let artifact = receiver.recv().await.expect("artifact");
+        assert_eq!(artifact.params["event"]["type"], "artifact-produced");
+        assert_eq!(artifact.params["event"]["name"], "report.md");
+        assert_eq!(artifact.params["event"]["mimeType"], "text/markdown");
+        assert!(artifact.params["event"]["uri"]
+            .as_str()
+            .is_some_and(|uri| uri.starts_with("file://") && uri.ends_with("report.md")));
+        assert_eq!(artifact.params["sequence"], 1);
+        let edited = receiver.recv().await.expect("second tool end");
+        assert_eq!(edited.params["event"]["type"], "tool-execution-end");
+        assert!(
+            receiver.try_recv().is_err(),
+            "modifying a file that existed is not a generated artifact"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_fallback_announces_the_model_the_turn_moved_to_and_why() {
+        let (notifications, mut receiver) = broadcast::channel(4);
+        let announced = TurnModelNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            model: "primary-model".to_string(),
+            provider: "fixture-provider".to_string(),
+            trust_mode: DeveloperSessionTrustMode::Byok,
+            auto_selection: Some("auto-balanced".to_string()),
+            fallback_from: None,
+            fallback_reason: None,
+        };
+        let sink = fallback_callback(announced, notifications);
+
+        sink("primary-model", "secondary-model", "rate limited");
+
+        let notification = receiver.recv().await.expect("turn/model");
+        assert_eq!(notification.method, "turn/model");
+        let reported: TurnModelNotification =
+            serde_json::from_value(notification.params).expect("typed turn/model");
+        assert_eq!(reported.model, "secondary-model");
+        assert_eq!(reported.fallback_from.as_deref(), Some("primary-model"));
+        assert_eq!(reported.fallback_reason.as_deref(), Some("rate limited"));
+        assert_eq!(reported.turn_id, "turn-1");
+        assert_eq!(reported.trust_mode, DeveloperSessionTrustMode::Byok);
+        assert_eq!(reported.auto_selection.as_deref(), Some("auto-balanced"));
+    }
+
+    #[tokio::test]
     async fn progress_and_tool_events_share_one_ordered_turn_sequence() {
         use crate::tui::app_event::TuiAppEvent;
         use agiworkforce_protocol::agent_events::{
@@ -3732,6 +4566,7 @@ mod tests {
             "turn-1".to_string(),
             sequence,
             notifications,
+            Arc::default(),
         )(TuiAppEvent::ToolStarted {
             call_id: "tool-1".to_string(),
             name: "read_file".to_string(),
@@ -3925,6 +4760,7 @@ mod tests {
                 agent_mode: None,
                 reasoning_effort: None,
                 context_files: None,
+                client_turn_id: None,
             })
             .await
             .expect("next Auto turn");
@@ -4089,6 +4925,7 @@ mod tests {
                 agent_mode: None,
                 reasoning_effort: None,
                 context_files: None,
+                client_turn_id: None,
             })
             .await;
         if result.is_ok() {
@@ -4190,7 +5027,10 @@ mod tests {
         let persisted_provider = thread.provider.clone();
         let persisted_model = thread.model.clone();
         let turn_id = "turn-interrupt-test".to_string();
-        let partial = Arc::new(StdMutex::new("partial assistant response".to_string()));
+        let partial = Arc::new(StdMutex::new(PartialOutput {
+            text: "partial assistant response".to_string(),
+            next_delta_index: 1,
+        }));
         host.sessions
             .lock()
             .await
@@ -4209,6 +5049,7 @@ mod tests {
                 turn_id: turn_id.clone(),
                 handle,
                 partial,
+                event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
             },
         );
@@ -4315,7 +5156,8 @@ mod tests {
             RunningTurn {
                 turn_id: turn_id.clone(),
                 handle,
-                partial: Arc::new(StdMutex::new(String::new())),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
             },
         );
@@ -4405,7 +5247,8 @@ mod tests {
             RunningTurn {
                 turn_id: "turn-command-shutdown".to_string(),
                 handle,
-                partial: Arc::new(StdMutex::new(String::new())),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
             },
         );
@@ -5044,7 +5887,8 @@ mod tests {
                     RunningTurn {
                         turn_id: format!("saturating-turn-{index}"),
                         handle: tokio::spawn(std::future::pending::<()>()),
-                        partial: Arc::new(StdMutex::new(String::new())),
+                        partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                        event_sequence: Arc::new(StdMutex::new(0)),
                         process_owner: crate::process_tree::ProcessTreeOwner::new(),
                     },
                 );
@@ -5061,6 +5905,7 @@ mod tests {
                 agent_mode: None,
                 reasoning_effort: None,
                 context_files: None,
+                client_turn_id: None,
             })
             .await
             .expect_err("a saturated host must refuse another turn");
@@ -5137,7 +5982,8 @@ mod tests {
             RunningTurn {
                 turn_id: turn_id.clone(),
                 handle,
-                partial: Arc::new(StdMutex::new(String::new())),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
             },
         );
@@ -5171,7 +6017,8 @@ mod tests {
             RunningTurn {
                 turn_id: "turn-parked-shutdown".to_string(),
                 handle,
-                partial: Arc::new(StdMutex::new(String::new())),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
                 process_owner,
             },
         );
@@ -5182,5 +6029,481 @@ mod tests {
             .expect("shutdown the host");
 
         assert!(host.running_turns.lock().await.is_empty());
+    }
+
+    async fn managed_thread(
+        workspace: &Path,
+        store: &Path,
+    ) -> (CliDeveloperSessionHost, ThreadSummary) {
+        let mut config = CliConfig::default();
+        config.default.provider = "agiworkforce".to_string();
+        config.default.model = "auto-premium".to_string();
+        let host = CliDeveloperSessionHost::new_with_store(
+            config,
+            workspace.to_path_buf(),
+            ManagedSessionStore::new(store.to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let thread = host
+            .start_thread(
+                ThreadStartParams {
+                    model: Some("auto-premium".to_string()),
+                    provider: None,
+                    cwd: Some(workspace.display().to_string()),
+                    title: None,
+                },
+                AppServerClientInfo {
+                    name: "agi_vscode_test".to_string(),
+                    title: "VS Code test".to_string(),
+                    version: "0.0.0".to_string(),
+                },
+            )
+            .await
+            .expect("start thread");
+        (host, thread)
+    }
+
+    fn foreign_lease(pid: u32, expires_in: chrono::Duration) -> WriterLease {
+        let now = chrono::Utc::now();
+        WriterLease {
+            holder_id: "another-process".to_string(),
+            holder_label: "AGI CLI (pid 4242)".to_string(),
+            pid,
+            acquired_at: now - chrono::Duration::minutes(5),
+            renewed_at: now,
+            expires_at: now + expires_in,
+        }
+    }
+
+    fn write_lease(session_path: &Path, lease: &WriterLease) {
+        std::fs::write(
+            writer_lease::lease_path(session_path),
+            serde_json::to_vec(lease).expect("serialize lease"),
+        )
+        .expect("write lease");
+    }
+
+    fn drain_method(
+        receiver: &mut broadcast::Receiver<AppServerNotification>,
+        method: &str,
+    ) -> Vec<serde_json::Value> {
+        let mut found = Vec::new();
+        while let Ok(notification) = receiver.try_recv() {
+            if notification.method == method {
+                found.push(notification.params);
+            }
+        }
+        found
+    }
+
+    #[tokio::test]
+    async fn a_thread_starts_owned_by_its_host_and_carries_its_writer_on_the_summary() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+
+        let writer = thread
+            .writer
+            .expect("a new thread is claimed by the host that made it");
+        assert!(writer.held_by_this_host);
+        assert!(!writer.stale);
+        assert_eq!(writer.holder_id, host.writer.id);
+    }
+
+    #[tokio::test]
+    async fn a_live_writer_elsewhere_refuses_a_turn_until_the_user_takes_the_thread_over() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let session_path = host
+            .persisted_session_path(&thread.id)
+            .await
+            .expect("session path");
+        write_lease(
+            &session_path,
+            &foreign_lease(std::process::id(), chrono::Duration::minutes(2)),
+        );
+        let mut notifications = host.subscribe();
+
+        let refused = host
+            .start_turn(TurnStartParams {
+                thread_id: thread.id.clone(),
+                input: vec![text_input("must not run beside another writer")],
+                model: None,
+                routing_task_type: None,
+                cwd: None,
+                agent_mode: None,
+                reasoning_effort: None,
+                context_files: None,
+                client_turn_id: None,
+            })
+            .await
+            .expect_err("a live writer elsewhere must refuse the turn");
+        assert_eq!(
+            refused.code(),
+            agiworkforce_protocol::developer_session::THREAD_WRITER_CONFLICT_ERROR_CODE
+        );
+        let conflict: ThreadWriterConflictData =
+            serde_json::from_value(refused.data().cloned().expect("conflict data"))
+                .expect("typed conflict");
+        assert_eq!(conflict.writer.holder_label, "AGI CLI (pid 4242)");
+        assert!(!conflict.writer.held_by_this_host);
+        assert!(host.running_turns.lock().await.is_empty());
+
+        let deleted = host
+            .delete_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect_err("a thread another process is writing cannot be deleted");
+        assert_eq!(
+            deleted.code(),
+            agiworkforce_protocol::developer_session::THREAD_WRITER_CONFLICT_ERROR_CODE
+        );
+
+        let taken = host
+            .take_over_thread_writer(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("explicit takeover");
+        assert!(taken.writer.expect("writer").held_by_this_host);
+        let changes = drain_method(&mut notifications, "thread/writer_changed");
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0]["change"], "taken_over");
+        assert_eq!(changes[0]["previous"]["holderLabel"], "AGI CLI (pid 4242)");
+
+        host.release_thread_writer(ThreadIdParams {
+            thread_id: thread.id.clone(),
+        })
+        .await
+        .expect("hand the thread back");
+        assert!(writer_lease::read(&session_path).is_none());
+        let released = drain_method(&mut notifications, "thread/writer_changed");
+        assert_eq!(released[0]["change"], "released");
+    }
+
+    #[tokio::test]
+    async fn an_expired_writer_is_taken_over_with_a_warning_instead_of_blocking_the_turn() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let session_path = host
+            .persisted_session_path(&thread.id)
+            .await
+            .expect("session path");
+        write_lease(
+            &session_path,
+            &foreign_lease(std::process::id(), -chrono::Duration::seconds(1)),
+        );
+        let listed = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("list");
+        assert!(listed.threads[0].writer.as_ref().expect("writer").stale);
+        let mut notifications = host.subscribe();
+
+        host.claim_writer_for_turn(&thread.id, &session_path)
+            .await
+            .expect("a lapsed lease never blocks a turn");
+
+        let changes = drain_method(&mut notifications, "thread/writer_changed");
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0]["change"], "stale_takeover");
+        assert_eq!(changes[0]["previous"]["holderId"], "another-process");
+        assert_eq!(changes[0]["writer"]["heldByThisHost"], true);
+    }
+
+    #[tokio::test]
+    async fn a_retried_turn_start_answers_the_turn_already_accepted_instead_of_running_it_twice() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let accepted = TurnSummary {
+            id: "turn-accepted".to_string(),
+            thread_id: thread.id.clone(),
+            status: TurnStatus::Running,
+        };
+        host.running_turns.lock().await.insert(
+            thread.id.clone(),
+            RunningTurn {
+                turn_id: accepted.id.clone(),
+                handle: tokio::spawn(std::future::pending::<()>()),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
+                process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            },
+        );
+        remember_client_turn(
+            &host.client_turns,
+            &thread.id,
+            "client-attempt-1",
+            accepted.clone(),
+        );
+        let retry = |client_turn_id: Option<&str>| TurnStartParams {
+            thread_id: thread.id.clone(),
+            input: vec![text_input("run the migration")],
+            model: None,
+            routing_task_type: None,
+            cwd: None,
+            agent_mode: None,
+            reasoning_effort: None,
+            context_files: None,
+            client_turn_id: client_turn_id.map(str::to_string),
+        };
+
+        let replayed = host
+            .start_turn(retry(Some("client-attempt-1")))
+            .await
+            .expect("a retry of an accepted turn is answered, not refused");
+        assert_eq!(replayed, accepted);
+        assert_eq!(
+            host.start_turn(retry(Some("client-attempt-2")))
+                .await
+                .expect_err("a different turn still waits for the running one")
+                .code(),
+            -32009
+        );
+
+        settle_client_turn(
+            &host.client_turns,
+            &thread.id,
+            "turn-accepted",
+            TurnStatus::Completed,
+        );
+        let finished = host.running_turns.lock().await.remove(&thread.id);
+        if let Some(turn) = finished {
+            turn.handle.abort();
+        }
+        let after = host
+            .start_turn(retry(Some("client-attempt-1")))
+            .await
+            .expect("a retry after the turn ended reports how it ended");
+        assert_eq!(after.status, TurnStatus::Completed);
+        assert!(host.running_turns.lock().await.is_empty());
+
+        assert_eq!(
+            host.start_turn(retry(Some("bad\nid")))
+                .await
+                .expect_err("control characters are refused")
+                .code(),
+            -32602
+        );
+    }
+
+    #[tokio::test]
+    async fn reconnect_hands_a_client_the_output_and_approvals_it_missed() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+
+        let idle = host
+            .reconnect_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("reconnect to an idle thread");
+        assert!(idle.active_turn.is_none());
+        assert_eq!(idle.thread.id, thread.id);
+
+        host.running_turns.lock().await.insert(
+            thread.id.clone(),
+            RunningTurn {
+                turn_id: "turn-live".to_string(),
+                handle: tokio::spawn(std::future::pending::<()>()),
+                partial: Arc::new(StdMutex::new(PartialOutput {
+                    text: "Half of the answer".to_string(),
+                    next_delta_index: 4,
+                })),
+                event_sequence: Arc::new(StdMutex::new(9)),
+                process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            },
+        );
+        let (responder, _decision) = oneshot::channel();
+        host.pending_approvals.lock().await.insert(
+            "approval-live".to_string(),
+            PendingApproval {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-live".to_string(),
+                snapshot: PendingApprovalSnapshot {
+                    request_id: "approval-live".to_string(),
+                    kind: "Exec".to_string(),
+                    summary: "Run the test suite".to_string(),
+                    detail: "cargo test".to_string(),
+                },
+                responder,
+            },
+        );
+
+        let live = host
+            .reconnect_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("reconnect to a running thread");
+        assert_eq!(live.thread.status, ThreadStatus::AwaitingApproval);
+        let active = live.active_turn.expect("the running turn is described");
+        assert_eq!(active.turn_id, "turn-live");
+        assert_eq!(active.partial_response, "Half of the answer");
+        assert_eq!(active.next_delta_index, 4);
+        assert_eq!(active.next_event_sequence, 9);
+        assert_eq!(active.pending_approvals.len(), 1);
+        assert_eq!(active.pending_approvals[0].summary, "Run the test suite");
+
+        let finished = host.running_turns.lock().await.remove(&thread.id);
+        if let Some(turn) = finished {
+            turn.handle.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_refuses_a_running_thread_then_removes_every_trace_of_it() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let session_path = host
+            .persisted_session_path(&thread.id)
+            .await
+            .expect("session path");
+        assert!(writer_lease::lease_path(&session_path).exists());
+
+        host.running_turns.lock().await.insert(
+            thread.id.clone(),
+            RunningTurn {
+                turn_id: "turn-running".to_string(),
+                handle: tokio::spawn(std::future::pending::<()>()),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
+                process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            },
+        );
+        assert_eq!(
+            host.delete_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect_err("a running thread is not deleted")
+            .code(),
+            -32009
+        );
+        let finished = host.running_turns.lock().await.remove(&thread.id);
+        if let Some(turn) = finished {
+            turn.handle.abort();
+        }
+
+        let mut notifications = host.subscribe();
+        host.delete_thread(ThreadIdParams {
+            thread_id: thread.id.clone(),
+        })
+        .await
+        .expect("delete an idle thread");
+
+        assert!(!session_path.exists());
+        assert!(!writer_lease::lease_path(&session_path).exists());
+        assert!(!host.sessions.lock().await.contains_key(&thread.id));
+        assert!(host
+            .list_threads(ThreadListParams {
+                include_archived: true,
+                ..ThreadListParams::default()
+            })
+            .await
+            .expect("list")
+            .threads
+            .is_empty());
+        let deleted = drain_method(&mut notifications, "thread/deleted");
+        assert_eq!(deleted, vec![serde_json::json!({ "threadId": thread.id })]);
+        assert_eq!(
+            host.read_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect_err("a deleted thread is gone")
+            .code(),
+            -32004
+        );
+    }
+
+    #[tokio::test]
+    async fn thread_read_returns_the_approvals_and_files_recorded_on_the_session() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace.path().canonicalize().expect("canonical");
+        let now = chrono::Utc::now();
+        let mut session = ManagedSession::new("activity-thread", now);
+        session.workspace_root = Some(workspace_root.clone());
+        session.repository = Some("https://github.com/example/project.git".to_string());
+        session
+            .approvals
+            .push(crate::runtime::session::ManagedSessionApproval {
+                request_id: "approval-1".to_string(),
+                kind: "Exec".to_string(),
+                summary: "Run cargo test".to_string(),
+                outcome: ManagedSessionApprovalOutcome::AllowSession,
+                requested_at: now,
+                decided_at: now,
+            });
+        session
+            .file_changes
+            .push(crate::runtime::session::ManagedSessionFileChange {
+                path: workspace_root.join("report.md"),
+                kind: ManagedSessionFileChangeKind::Created,
+                tool: "write_file".to_string(),
+                tool_call_id: "call-1".to_string(),
+                changed_at: now,
+            });
+        store.save(&session).expect("save session");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root.clone(),
+            store,
+            false,
+        )
+        .expect("host");
+
+        let read = host
+            .read_thread(ThreadIdParams {
+                thread_id: "activity-thread".to_string(),
+            })
+            .await
+            .expect("read");
+
+        assert_eq!(
+            read.thread.repository.as_deref(),
+            Some("https://github.com/example/project.git")
+        );
+        assert_eq!(read.approvals.len(), 1);
+        assert_eq!(
+            read.approvals[0].outcome,
+            DeveloperApprovalOutcome::AllowSession
+        );
+        assert_eq!(read.file_changes.len(), 1);
+        assert_eq!(read.file_changes[0].kind, DeveloperFileChangeKind::Created);
+        assert_eq!(
+            read.file_changes[0].path,
+            workspace_root.join("report.md").display().to_string()
+        );
+    }
+
+    #[test]
+    fn a_repository_remote_never_persists_the_credential_pasted_into_it() {
+        assert_eq!(
+            repository_without_credentials(
+                "https://x-access-token:ghp_secret@github.com/org/repo.git"
+            )
+            .as_deref(),
+            Some("https://github.com/org/repo.git")
+        );
+        assert_eq!(
+            repository_without_credentials("ssh://git@host.example:2222/org/repo").as_deref(),
+            Some("ssh://host.example:2222/org/repo")
+        );
+        assert_eq!(
+            repository_without_credentials("git@github.com:org/repo.git").as_deref(),
+            Some("git@github.com:org/repo.git")
+        );
+        assert_eq!(repository_without_credentials("bad\nremote"), None);
+        assert_eq!(repository_without_credentials("  "), None);
     }
 }

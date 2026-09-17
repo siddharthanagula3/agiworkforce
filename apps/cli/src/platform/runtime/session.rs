@@ -259,6 +259,74 @@ pub struct ManagedSessionAutoRouting {
     pub trust_mode: TrustMode,
 }
 
+pub const MANAGED_SESSION_MAX_APPROVALS: usize = 1_000;
+pub const MANAGED_SESSION_MAX_FILE_CHANGES: usize = 5_000;
+const MANAGED_SESSION_ACTIVITY_TEXT_MAX_CHARS: usize = 500;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagedSessionApprovalOutcome {
+    AllowOnce,
+    AllowSession,
+    AlwaysAllow,
+    Deny,
+    Cancel,
+    Timeout,
+}
+
+/// One approval decided on this session, whichever surface asked for it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSessionApproval {
+    pub request_id: String,
+    pub kind: String,
+    pub summary: String,
+    pub outcome: ManagedSessionApprovalOutcome,
+    pub requested_at: DateTime<Utc>,
+    pub decided_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagedSessionFileChangeKind {
+    Created,
+    Modified,
+}
+
+/// One file a tool on this session wrote. `Created` marks a generated file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSessionFileChange {
+    pub path: PathBuf,
+    pub kind: ManagedSessionFileChangeKind,
+    pub tool: String,
+    pub tool_call_id: String,
+    pub changed_at: DateTime<Utc>,
+}
+
+/// Make recorded activity text safe to persist and to hand to a protocol
+/// client: one line, bounded.
+pub fn activity_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if matches!(character, '\u{0000}'..='\u{001f}' | '\u{007f}'..='\u{009f}') {
+                ' '
+            } else {
+                character
+            }
+        })
+        .take(MANAGED_SESSION_ACTIVITY_TEXT_MAX_CHARS)
+        .collect()
+}
+
+/// Append to a bounded activity log, dropping the oldest entries.
+pub fn push_bounded<T>(log: &mut Vec<T>, entry: T, max: usize) {
+    log.push(entry);
+    if log.len() > max {
+        let excess = log.len() - max;
+        log.drain(..excess);
+    }
+}
+
 /// Persisted managed session snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManagedSession {
@@ -291,6 +359,13 @@ pub struct ManagedSession {
     pub git_branch: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree_root: Option<PathBuf>,
+    /// The workspace's `origin` remote with any credential removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub approvals: Vec<ManagedSessionApproval>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub file_changes: Vec<ManagedSessionFileChange>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
     // --- v2 session-state fields (all optional for backward compat with v1 files) ---
@@ -345,6 +420,12 @@ struct ManagedSessionJsonlHeader {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     worktree_root: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    repository: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    approvals: Vec<ManagedSessionApproval>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    file_changes: Vec<ManagedSessionFileChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     archived_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     permission_mode: Option<PermissionMode>,
@@ -390,6 +471,9 @@ impl ManagedSession {
             client: None,
             git_branch: None,
             worktree_root: None,
+            repository: None,
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -476,6 +560,9 @@ impl ManagedSession {
             client: source.client.clone(),
             git_branch: source.git_branch.clone(),
             worktree_root: source.worktree_root.clone(),
+            repository: source.repository.clone(),
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -690,6 +777,9 @@ impl ManagedSession {
                         client: record.client,
                         git_branch: record.git_branch,
                         worktree_root: record.worktree_root,
+                        repository: record.repository,
+                        approvals: record.approvals,
+                        file_changes: record.file_changes,
                         archived_at: record.archived_at,
                         permission_mode: record.permission_mode,
                         plan_mode: record.plan_mode,
@@ -759,6 +849,52 @@ impl ManagedSession {
             )?;
         }
 
+        if let Some(repository) = self.repository.as_deref() {
+            validate_summary_text(repository, "repository", MANAGED_SESSION_CWD_MAX_UTF16)?;
+        }
+        if self.approvals.len() > MANAGED_SESSION_MAX_APPROVALS {
+            bail!("Managed session records more than {MANAGED_SESSION_MAX_APPROVALS} approvals");
+        }
+        for approval in &self.approvals {
+            validate_summary_text(
+                &approval.request_id,
+                "approval id",
+                MANAGED_SESSION_MODEL_MAX_UTF16,
+            )?;
+            validate_summary_text(
+                &approval.kind,
+                "approval kind",
+                MANAGED_SESSION_TITLE_MAX_UTF16,
+            )?;
+            if contains_protocol_control(&approval.summary)
+                || approval.summary.encode_utf16().count() > MANAGED_SESSION_TITLE_MAX_UTF16
+            {
+                bail!("Managed session approval summary is not a bounded single line");
+            }
+        }
+        if self.file_changes.len() > MANAGED_SESSION_MAX_FILE_CHANGES {
+            bail!(
+                "Managed session records more than {MANAGED_SESSION_MAX_FILE_CHANGES} file changes"
+            );
+        }
+        for change in &self.file_changes {
+            validate_summary_text(
+                &change.path.to_string_lossy(),
+                "file change path",
+                MANAGED_SESSION_CWD_MAX_UTF16,
+            )?;
+            validate_summary_text(
+                &change.tool,
+                "file change tool",
+                MANAGED_SESSION_MODEL_MAX_UTF16,
+            )?;
+            validate_summary_text(
+                &change.tool_call_id,
+                "file change tool call",
+                MANAGED_SESSION_TITLE_MAX_UTF16,
+            )?;
+        }
+
         if self.messages.len() > MANAGED_SESSION_MAX_MESSAGES {
             bail!("Managed session contains more than {MANAGED_SESSION_MAX_MESSAGES} messages");
         }
@@ -810,6 +946,9 @@ impl ManagedSession {
             client: self.client.clone(),
             git_branch: self.git_branch.clone(),
             worktree_root: self.worktree_root.clone(),
+            repository: self.repository.clone(),
+            approvals: self.approvals.clone(),
+            file_changes: self.file_changes.clone(),
             archived_at: self.archived_at,
             permission_mode: self.permission_mode,
             plan_mode: self.plan_mode,
@@ -949,6 +1088,9 @@ mod tests {
             client: None,
             git_branch: None,
             worktree_root: None,
+            repository: None,
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
             archived_at: None,
             permission_mode,
             plan_mode,
@@ -997,6 +1139,9 @@ mod tests {
             client: None,
             git_branch: None,
             worktree_root: None,
+            repository: None,
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
             archived_at: None,
             permission_mode,
             plan_mode,

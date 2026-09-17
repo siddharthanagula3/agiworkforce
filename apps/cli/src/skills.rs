@@ -193,8 +193,7 @@ fn project_skills_consented(skills_dir: &Path) -> bool {
         return true;
     }
 
-    use std::io::IsTerminal;
-    if !std::io::stdin().is_terminal() {
+    if !crate::interactive::can_prompt() {
         return false;
     }
 

@@ -1044,6 +1044,32 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
+    register('agi-workforce.permanentlyDeleteConversation', async (item?: ConversationTreeItem) => {
+      const thread =
+        item?.thread ?? (await pickDeveloperSession('Permanently delete which session?'));
+      if (thread === undefined) return;
+      const choice = await vscode.window.showWarningMessage(
+        `Permanently delete developer session "${thread.title}"?`,
+        {
+          modal: true,
+          detail:
+            'Its transcript and the approvals and file changes recorded with it are removed from this machine for every AGI surface. This cannot be undone. Archive the session instead to keep it.',
+        },
+        'Delete Permanently',
+      );
+      if (choice !== 'Delete Permanently') return;
+      try {
+        const deleted = await conversationTreeProvider.deleteThread(thread.id);
+        if (!deleted) {
+          vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
+        }
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }),
+
     register('agi-workforce.forkConversation', async (item?: ConversationTreeItem) => {
       const thread = item?.thread ?? (await pickDeveloperSession('Fork which session?'));
       if (thread === undefined) return;
