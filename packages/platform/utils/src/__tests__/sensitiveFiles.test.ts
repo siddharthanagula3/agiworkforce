@@ -95,3 +95,25 @@ describe('isSensitiveFile', () => {
     expect(matchSensitivePattern('README.md')).toBeUndefined();
   });
 });
+
+describe('terraform state and variables', () => {
+  it('treats state files as credential material, because that is what they hold', () => {
+    expect(isSensitiveFile('terraform.tfstate')).toBe(true);
+    expect(isSensitiveFile('infra/prod.tfstate')).toBe(true);
+    expect(isSensitiveFile('infra/terraform.tfstate.backup')).toBe(true);
+    expect(isSensitiveFile('terraform.tfstate.d/prod/terraform.tfstate')).toBe(true);
+    expect(isSensitiveFile('.terraform/terraform.tfstate')).toBe(true);
+  });
+
+  it('treats variable files and the CLI credentials file as sensitive', () => {
+    expect(isSensitiveFile('terraform.tfvars')).toBe(true);
+    expect(isSensitiveFile('prod.auto.tfvars.json')).toBe(true);
+    expect(isSensitiveFile('.terraformrc')).toBe(true);
+    expect(isSensitiveFile('terraform.rc')).toBe(true);
+  });
+
+  it('leaves ordinary terraform source alone', () => {
+    expect(isSensitiveFile('infra/main.tf')).toBe(false);
+    expect(isSensitiveFile('infra/variables.tf')).toBe(false);
+  });
+});

@@ -1,4 +1,3 @@
-
 export const SENSITIVE_FILE_PATTERNS: ReadonlyArray<RegExp> = [
   /(^|\/)\.env(\..+)?$/i,
   /(^|\/)\.envrc$/i,
@@ -28,6 +27,17 @@ export const SENSITIVE_FILE_PATTERNS: ReadonlyArray<RegExp> = [
   /(^|\/)\.git-credentials$/i,
 
   /(^|\/)\.(github|gitlab)_token$/i,
+
+  // Terraform state holds every resource attribute in plain text, including the
+  // secrets a provider generated, and a .tfvars file is where the inputs to it
+  // are kept. Both are ordinary-looking project files.
+  /(^|\/).*\.tfstate(\.backup)?$/i,
+  /(^|\/)terraform\.tfstate\.d\//i,
+  /(^|\/).*\.auto\.tfvars(\.json)?$/i,
+  /(^|\/)terraform\.tfvars(\.json)?$/i,
+  /(^|\/)\.terraform\/terraform\.tfstate$/i,
+  /(^|\/)\.terraformrc$/i,
+  /(^|\/)terraform\.rc$/i,
 ];
 
 export function isSensitiveFile(pathLike: string): boolean {

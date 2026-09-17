@@ -212,6 +212,11 @@
       "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
     },
     {
+      "file": "apps/web/app/api/triggers/route.ts",
+      "migration": 210,
+      "reason": "the trigger CRUD route reads and writes the event_triggers table 0210 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0210 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0210 is applied."
+    },
+    {
       "file": "apps/web/app/api/user/delete-account/route.ts",
       "migration": 162,
       "reason": "the sole-owner guard runs the schedule-aware query first and falls back to the same query without that clause on a 42703, so where this migration has not been applied every workspace is still owned and the guard asks the question the schema can answer. Refusing every account deletion on a column that is not there yet would be the worse answer, and the fallback is covered by a test that throws 42703 and asserts the retry drops the clause."
@@ -352,11 +357,6 @@
       "reason": "every engagement, retention and quality figure is measured from the product_analytics_events and product_metric_days tables 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
     },
     {
-      "file": "apps/web/features/notifications/lib/notification-target.ts",
-      "migration": 199,
-      "reason": "names the category field of a notification object returned by /api/notifications, not the database column, and never queries the notifications table; the route that does is covered by its own entry."
-    },
-    {
       "file": "apps/web/features/plugins/server/directory/install.ts",
       "migration": 159,
       "reason": "plugin marketplace tables are founder-gated; until the deploy runbook applies migration 0159 the route answers a missing table (42P01) with one plain sentence, see docs/development/plugins-directory.md."
@@ -365,6 +365,11 @@
       "file": "apps/web/features/plugins/server/directory/installed-skills.ts",
       "migration": 159,
       "reason": "plugin marketplace tables are founder-gated; until the deploy runbook applies migration 0159 the route answers a missing table (42P01) with one plain sentence, see docs/development/plugins-directory.md."
+    },
+    {
+      "file": "apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx",
+      "migration": 210,
+      "reason": "the admin control names the event_triggers feature whose rows 0210 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0210 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0210 is applied."
     },
     {
       "file": "apps/web/lib/feature-flags/flag-store.ts",
@@ -487,6 +492,11 @@
       "reason": "workspace API keys are stored in and verified against organization_admin_api_keys, which 0206 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
     },
     {
+      "file": "apps/web/lib/server/data-region.ts",
+      "migration": 220,
+      "reason": "region selection reads the data_region columns 0220 adds to organizations; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0220 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0220 is applied."
+    },
+    {
       "file": "apps/web/lib/server/media-assets.ts",
       "migration": 216,
       "reason": "the upload path reads and writes the content_sha256 column 0216 adds to media_assets, so an identical file is stored and billed once; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0216 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0216 is applied."
@@ -510,6 +520,11 @@
       "file": "apps/web/lib/server/neon-chat.ts",
       "migration": 219,
       "reason": "0219 adds web_conversations.draft and draft_updated_at; this module only widens ChatConversationRow to carry them, and every reader treats them as optional, so the type is correct before and after the migration is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-encryption-keys.ts",
+      "migration": 220,
+      "reason": "the workspace key store reads and writes the organization_encryption_keys table 0220 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0220 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0220 is applied."
     },
     {
       "file": "apps/web/lib/server/organization-erasure.ts",
@@ -587,6 +602,11 @@
       "reason": "the workspace erasure inventory classifies the product_analytics_events table 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
     },
     {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 220,
+      "reason": "the workspace erasure inventory classifies the organization_encryption_keys table 0220 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0220 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0220 is applied."
+    },
+    {
       "file": "apps/web/lib/server/product-analytics.ts",
       "migration": 213,
       "reason": "the event writer and the derived account milestones insert into and read the product_analytics_events table 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
@@ -595,6 +615,21 @@
       "file": "apps/web/lib/server/rolling-usage.ts",
       "migration": 182,
       "reason": "0182 adds the microUSD columns this file reads; the deploy runbook applies it before this code reaches production, and until it does the cents-shaped SQL wrappers 0182 keeps, plus the triggers that maintain the cents mirror, serve every unmigrated caller unchanged."
+    },
+    {
+      "file": "apps/web/lib/server/slo/catalogue.ts",
+      "migration": 208,
+      "reason": "the service level catalogue measures attainment from the background_jobs table 0208 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0208 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0208 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/slo/catalogue.ts",
+      "migration": 212,
+      "reason": "the service level catalogue measures attainment from the routing_decision_traces table 0212 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0212 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0212 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/slo/catalogue.ts",
+      "migration": 213,
+      "reason": "the service level catalogue measures attainment from the product_analytics_events table 0213 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
     },
     {
       "file": "apps/web/lib/server/spendable-credits.ts",

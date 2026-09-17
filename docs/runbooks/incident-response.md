@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-09
+Last updated: 2026-09-17
 
 Until 2026-08-09 nothing in this repository could reach a human when production
 broke. `/api/health` was correct and public, and no scheduled job, uptime
@@ -12,37 +12,116 @@ detection gaps that are still open.
 
 ## What detects an outage
 
-| Detector                      | Where                                              | Cadence          | Reaches a human?                            |
-| ----------------------------- | -------------------------------------------------- | ---------------- | ------------------------------------------- |
-| `/api/cron/health-probe`      | `apps/web/app/api/cron/health-probe/route.ts`      | daily, 06:15 UTC | yes, by email (below)                       |
-| `/api/cron/reconcile-credits` | `apps/web/app/api/cron/reconcile-credits/route.ts` | daily, 00:30 UTC | yes, by email, only on terminal settlements |
-| `/api/health`                 | `apps/web/app/api/health/route.ts`                 | on request       | only if something polls it                  |
-| `/status` page                | `apps/web/app/status/page.tsx`                     | on request       | only if a human opens it                    |
+| Detector                       | Where                                                | Cadence                | Reaches a human?                            |
+| ------------------------------ | ---------------------------------------------------- | ---------------------- | ------------------------------------------- |
+| `/api/cron/health-probe`       | `apps/web/app/api/cron/health-probe/route.ts`        | every 10 minutes       | yes, through the dispatcher below           |
+| `/api/cron/evaluate-slo-burn`  | `apps/web/app/api/cron/evaluate-slo-burn/route.ts`   | :05 and :35 every hour | yes, when an error budget is burning        |
+| `/api/cron/page-security-anomalies` | `apps/web/app/api/cron/page-security-anomalies/route.ts` | every 15 minutes  | yes, on a triggered security alert          |
+| `/api/cron/reconcile-credits`  | `apps/web/app/api/cron/reconcile-credits/route.ts`   | daily, 00:30 UTC       | yes, by email, only on terminal settlements |
+| `/api/health`                  | `apps/web/app/api/health/route.ts`                   | on request             | only if something polls it                  |
+| `/status` page                 | `apps/web/app/status/page.tsx`                       | on request             | only if a human opens it                    |
 
 The probe runs the same `runHealthChecks()` the public endpoint and the status
 page run. It calls it directly rather than fetching `/api/health` over HTTP:
 building a self-request URL from request headers is a Host-header SSRF vector,
 and a self-HTTP hop reports the platform unhealthy for reasons of its own.
 
-**Detection latency is up to 24 hours.** The Vercel project is on the Hobby
-plan, which rejects the deploy outright for any cron more frequent than daily
-(`PROD-VERCEL-DEPLOY-TOPOLOGY-01`), so a tighter cadence would take the site
-down in order to improve its monitoring. Closing this gap is a founder action.
-see [Open gaps](#open-gaps).
+**Detection latency is up to 20 minutes for an outage**: the probe runs every
+ten minutes and holds the page until a second consecutive run misses, so a
+single blip does not wake anyone. Error budget burn is evaluated twice an hour
+against the objectives in `apps/web/lib/server/slo/catalogue.ts`; a fast burn
+pages, a slow burn warns. Both windows and the sample floor under which the
+evaluator stays silent are in `apps/web/lib/server/slo/attainment.ts`.
 
 ## Where the alert lands
 
-The probe sends through the Resend transport
-(`apps/web/lib/support/handoff/resend-client.ts`), addressed to
-`AGI_SUPPORT_FALLBACK_EMAIL`: the mailbox
-`apps/web/lib/support/handoff/config.ts` already requires to be monitored. It
-defaults to `support@agiworkforce.com`.
+`apps/web/lib/server/incident/dispatch.ts` is the one place an incident reaches
+people. Every detector above hands it a key, a severity, a subject and a body,
+and it does three things with them.
 
-Delivery requires **both** `RESEND_API_KEY` and a valid
-`AGI_SUPPORT_FROM_EMAIL`. With either missing, nothing is delivered and the
-probe returns **HTTP 500**, so the failed invocation is visible in the Vercel
-cron log, the last signal left once email is gone. Check that log after any
-deployment that changes environment variables.
+1. **Email** to whoever the rotation says holds the pager, through the Resend
+   transport (`apps/web/lib/support/handoff/resend-client.ts`). With no rotation
+   configured it addresses `AGI_SUPPORT_FALLBACK_EMAIL`, the mailbox
+   `apps/web/lib/support/handoff/config.ts` already requires to be monitored.
+2. **Pager** webhook, when `PAGER_WEBHOOK_URL` is set. Best-effort: a pager that
+   is down never stops the email.
+3. **Incident channel** webhook, when `INCIDENT_CHANNEL_WEBHOOK_URL` is set, so
+   the second responder sees the first one's context rather than a second copy
+   of the alert.
+
+Delivery of the email requires **both** `RESEND_API_KEY` and a valid
+`AGI_SUPPORT_FROM_EMAIL`. When none of the three channels reached anyone the
+dispatcher logs `no human has been told` and the probe returns **HTTP 500**, so
+the failed invocation is visible in the Vercel cron log, the last signal left
+once email is gone. Check that log after any deployment that changes
+environment variables.
+
+## On-call rotation
+
+The rotation is configuration, never a name in the source tree
+(`apps/web/lib/server/incident/on-call.ts`):
+
+| Variable                           | Meaning                                                      | Default |
+| ---------------------------------- | ------------------------------------------------------------ | ------- |
+| `AGI_ONCALL_ROTATION`              | Ordered `handle:email` pairs, comma separated                 | empty   |
+| `AGI_ONCALL_ROTATION_START`        | ISO timestamp the first shift began                           | epoch   |
+| `AGI_ONCALL_SHIFT_HOURS`           | Length of one shift                                           | 168     |
+| `AGI_ONCALL_ESCALATE_AFTER_MINUTES`| How long one level holds before the next one is pulled in     | 15      |
+
+Who holds the pager at an instant is `floor((now - start) / shift)` modulo the
+number of responders, so a handover is a date, not a calendar invitation
+somebody has to remember. An entry that is not an address is dropped rather
+than paged: an alert addressed to a person who does not exist reaches nobody.
+
+**An empty rotation is honest, not broken.** With nothing configured every
+alert goes to the monitored mailbox, exactly as it did before, and the
+`Escalation level` line in the body says `support mailbox` rather than a name.
+
+## Escalation
+
+Without a pager vendor there is no acknowledgement signal, so the dispatcher
+uses the only one it has: whether the condition is still true on the next
+evaluation.
+
+| Level | Reached when                                        | Who is notified                     |
+| ----- | ---------------------------------------------------- | ----------------------------------- |
+| 1     | first dispatch for this incident key                  | the responder on call                |
+| 2     | still firing after `AGI_ONCALL_ESCALATE_AFTER_MINUTES`| that responder and the next in turn  |
+| 3     | still firing after twice that                         | everyone in the rotation             |
+
+The level is held in the key-value store under `agi-incident:<key>` for six
+hours and is cleared the moment the condition clears, so the next incident of
+the same kind starts at level 1 again. With no key-value store configured every
+dispatch is level 1: escalation degrades to the old behaviour rather than
+failing the alert.
+
+## Customer notice
+
+Publish nothing until the impact can be described accurately, then:
+
+1. Update `/status`. It is the only customer-facing surface that is not behind
+   sign-in and it already states the severity ladder and the notification
+   commitment.
+2. For a confirmed security incident involving personal data, follow
+   `docs/runbooks/personal-data-breach.md`, which owns the regulator and data
+   subject clocks. Do not improvise a parallel notice.
+3. For an availability incident, email affected account holders at the address
+   on the account once the impact window is known. Use the template below and
+   keep it to what is known:
+
+   > **Subject:** AGI service disruption on \<date\>, \<impact in five words\>
+   >
+   > Between \<start\> and \<end\> UTC, \<what did not work\> for \<who was
+   > affected\>. \<What we did\>. The service has been \<restored / degraded
+   > with a workaround\> since \<time\>.
+   >
+   > What we know about the cause: \<one paragraph, no speculation\>.
+   > What we are changing: \<the follow-ups and their dates\>.
+   > If you are still affected, reply to this mail.
+
+   Never claim a cause that has not been confirmed, never quote an availability
+   number that is not measured, and never promise a date the follow-up list
+   does not already carry.
 
 ## Severity
 
@@ -127,54 +206,68 @@ Like the health probe, an undelivered alert returns **HTTP 500** so the failed
 invocation is visible in the Vercel cron log. The settlement work itself has
 already committed and is idempotent, so that 500 never double-charges anyone.
 
+## Postmortem
+
+Every severity 1 and severity 2 incident gets a written postmortem within five
+working days, from `docs/runbooks/incident-postmortem-template.md`. It is
+blameless: the subject is the system that let the failure through, never the
+person who typed the command.
+
+A postmortem is finished when each follow-up in it exists as a row in
+`ACTIVE_ISSUES.md` with a named owner and a date, or as a defect row in
+`docs/agent-context/known-flaws.md` when it is a known behaviour rather than
+work in flight. A follow-up that lives only in the postmortem is a follow-up
+nobody owns, which is the failure mode this rule exists for.
+
 ## Verifying the alert path (drill)
 
-Run this after any change to the probe, the health checks, or the email
-configuration. It is the only way to know the path still works, because a path
-that is never exercised is indistinguishable from one that is broken.
+Run this after any change to the probe, the health checks, the dispatcher, or
+the email configuration. It is the only way to know the path still works,
+because a path that is never exercised is indistinguishable from one that is
+broken.
 
 1. Deploy a preview build.
 2. Remove `DATABASE_URL` and `AGI_DATABASE_URL` from the preview environment.
    Both `environment` and `database` then report unhealthy, so overall status is
    `unhealthy`: the same state a real outage produces.
-3. Invoke the probe with the deployment's cron secret (the schedule is daily, so
-   do not wait for it):
+3. Invoke the probe twice with the deployment's cron secret. The first miss is
+   held deliberately; the second one dispatches:
 
    ```sh
    curl -i -H "Authorization: Bearer $CRON_SECRET" \
      https://<preview-deployment>/api/cron/health-probe
    ```
 
-4. Expect `HTTP 200` and a body of
-   `{"status":"unhealthy","alerted":true,"delivery":"delivered","severity":"critical"}`,
-   and expect the mail in the fallback mailbox within a minute.
-   - `delivery: "undeliverable"` with `HTTP 500` means the probe worked and the
-     email channel did not. Fix `RESEND_API_KEY` / `AGI_SUPPORT_FROM_EMAIL`.
+4. Expect `HTTP 200` and a body carrying
+   `"alerted":true,"delivery":"delivered","severity":"critical"` with an
+   `escalationLevel`, and expect the mail within a minute at whichever address
+   the rotation resolves to.
+   - `delivery: "undeliverable"` with `HTTP 500` means the probe worked and no
+     channel reached anyone. Fix `RESEND_API_KEY` / `AGI_SUPPORT_FROM_EMAIL`.
    - `HTTP 401` means `CRON_SECRET` does not match. The route is fail-closed and
      will also 401 when no secret is configured at all.
 5. Restore the environment variables and redeploy the preview.
 
-Local equivalent: `pnpm --filter @agiworkforce/web exec vitest run app/api/cron/health-probe`
+Local equivalent:
+`pnpm --filter @agiworkforce/web exec vitest run app/api/cron/health-probe lib/server/incident`
 covers the decision logic (severity split, undeliverable-is-a-failure,
-harness-threw, hung-dependency) but not real delivery. It is not a substitute
-for the drill.
+harness-threw, hung-dependency, rotation and escalation) but not real delivery.
+It is not a substitute for the drill.
 
 ## Open gaps
 
-These cannot be closed by a commit. They are tracked as founder actions in
-`docs/work/release-readiness-2026-08-25.md`.
+These cannot be closed by a commit.
 
-- **No pager.** No PagerDuty/Opsgenie/BetterStack account exists, so the alert
-  is an email, not a page: nothing wakes anyone at 03:00 and nothing escalates
-  if the first recipient does not acknowledge. Once a vendor is chosen, add its
-  dispatch alongside the email in `dispatchAlert()`, the severity split and the
-  undeliverable-is-a-failure behaviour already exist and should be reused.
+- **No pager vendor.** `PAGER_WEBHOOK_URL` is the seam and the dispatcher posts
+  to it, but no PagerDuty/Opsgenie/BetterStack account exists, so unless that
+  variable is set the alert is an email and a channel post. Choosing and paying
+  for the vendor is a founder action; no further code is needed to adopt one.
 - **No external uptime monitor.** Every detector above runs _inside_ the
   deployment being measured, so a deployment that fails to boot, a DNS failure,
   or a Vercel region outage is invisible to all of them. An external monitor
   polling `/api/health` from outside is the only detector that survives the
   platform being down, and it needs no code, `/api/health` is public and
   already returns 503 when core checks fail.
-- **Daily cadence.** Tighten the `vercel.json` entry to a five-minute schedule
-  the same day the Vercel project moves to Pro, and not before.
-- **No on-call rotation.** One mailbox, one person, no handoff.
+- **Nobody may be in the rotation.** The rotation is a deployment variable. If
+  `AGI_ONCALL_ROTATION` is unset in production then coverage is one mailbox and
+  whoever reads it, which is not 24/7 and is not claimed to be.

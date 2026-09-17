@@ -10,6 +10,11 @@ import {
   type ObjectStorageConfig,
   type ObjectStorageEnvironment,
 } from './config';
+import {
+  createRetryingObjectStore,
+  resolveObjectStorageRetryPolicy,
+  type RetryingObjectStoreOptions,
+} from './retry';
 import { ObjectStorageConfigError, type ObjectStore, type ObjectStorageProvider } from './types';
 
 export interface ObjectStorageRuntime {
@@ -23,6 +28,7 @@ export interface ResolveObjectStorageRuntimeOptions {
   timeouts?: S3ClientTimeouts;
   client?: S3ObjectStoreOptions['client'];
   memory?: MemoryObjectStoreOptions;
+  retry?: RetryingObjectStoreOptions;
 }
 
 /**
@@ -43,10 +49,17 @@ export function resolveObjectStorageRuntime(
         );
       }
       const client = options.client ?? createS3Client(config, options.timeouts);
+      const store = createS3ObjectStore({
+        client,
+        requestTimeoutMs: options.timeouts.requestTimeoutMs,
+      });
       return {
         provider: config.provider,
         config,
-        store: createS3ObjectStore({ client, requestTimeoutMs: options.timeouts.requestTimeoutMs }),
+        store: createRetryingObjectStore(store, {
+          policy: resolveObjectStorageRetryPolicy(options.env),
+          ...options.retry,
+        }),
       };
     }
     case 'memory':

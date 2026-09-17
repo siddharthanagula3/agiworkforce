@@ -8,7 +8,7 @@ import {
   SecurityMonitoringService,
   type AlertStatus,
 } from '@/lib/services/security-monitoring-service';
-import { pageOnCall, type AlertSeverity } from '../health-probe/route';
+import { pageOnCall, type AlertSeverity } from '@/lib/server/incident/pager';
 
 export const runtime = 'nodejs';
 

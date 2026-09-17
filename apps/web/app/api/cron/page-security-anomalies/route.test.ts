@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/services/security-monitoring-service', () => ({
   SecurityMonitoringService: { checkAlerts: mocks.checkAlerts },
 }));
-vi.mock('../health-probe/route', () => ({ pageOnCall: mocks.pageOnCall }));
+vi.mock('@/lib/server/incident/pager', () => ({ pageOnCall: mocks.pageOnCall }));
 vi.mock('@/lib/security-audit', () => ({
   consumePendingSecurityAnomalyCheck: mocks.consumePendingSecurityAnomalyCheck,
 }));
