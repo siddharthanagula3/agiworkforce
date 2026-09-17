@@ -1,5 +1,8 @@
 'use client';
 
+// Ref types here name the element each primitive renders rather than deriving
+// it from cmdk: under some installs that inference collapses to never, and a
+// ref typed never fails the build only where the dependency resolves that way.
 import * as React from 'react';
 import { type DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
@@ -8,7 +11,7 @@ import { cn } from '../cn';
 import { Dialog, DialogContent } from './Dialog';
 
 interface CommandProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive> {
-  ref?: React.Ref<React.ElementRef<typeof CommandPrimitive>>;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 function Command({ className, ref, ...props }: CommandProps) {
@@ -42,7 +45,7 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
 }
 
 interface CommandInputProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> {
-  ref?: React.Ref<React.ElementRef<typeof CommandPrimitive.Input>>;
+  ref?: React.Ref<HTMLInputElement>;
 }
 
 function CommandInput({ className, ref, ...props }: CommandInputProps) {
@@ -63,7 +66,7 @@ function CommandInput({ className, ref, ...props }: CommandInputProps) {
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 
 interface CommandListProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.List> {
-  ref?: React.Ref<React.ElementRef<typeof CommandPrimitive.List>>;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 function CommandList({ className, ref, ...props }: CommandListProps) {
@@ -78,7 +81,7 @@ function CommandList({ className, ref, ...props }: CommandListProps) {
 CommandList.displayName = CommandPrimitive.List.displayName;
 
 interface CommandEmptyProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty> {
-  ref?: React.Ref<React.ElementRef<typeof CommandPrimitive.Empty>>;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 function CommandEmpty({ ref, ...props }: CommandEmptyProps) {
@@ -87,7 +90,7 @@ function CommandEmpty({ ref, ...props }: CommandEmptyProps) {
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
 interface CommandGroupProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group> {
-  ref?: React.Ref<React.ElementRef<typeof CommandPrimitive.Group>>;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 function CommandGroup({ className, ref, ...props }: CommandGroupProps) {
@@ -107,7 +110,7 @@ CommandGroup.displayName = CommandPrimitive.Group.displayName;
 interface CommandSeparatorProps extends React.ComponentPropsWithoutRef<
   typeof CommandPrimitive.Separator
 > {
-  ref?: React.Ref<React.ElementRef<typeof CommandPrimitive.Separator>>;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 function CommandSeparator({ className, ref, ...props }: CommandSeparatorProps) {
@@ -122,7 +125,7 @@ function CommandSeparator({ className, ref, ...props }: CommandSeparatorProps) {
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 
 interface CommandItemProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item> {
-  ref?: React.Ref<React.ElementRef<typeof CommandPrimitive.Item>>;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 function CommandItem({ className, ref, ...props }: CommandItemProps) {
