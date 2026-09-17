@@ -2,6 +2,7 @@ use agiworkforce_app_server::{
     DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError,
     DeveloperSessionProcessor,
 };
+use agiworkforce_protocol::agent_events::AGENT_EVENT_SCHEMA_VERSION;
 use agiworkforce_protocol::developer_session::{
     method, AccountLoginOutcome, AccountLoginResponse, AccountLoginWaitParams,
     AccountLoginWaitResponse, AccountSource, AccountStatusParams, AccountStatusResponse,
@@ -13,14 +14,16 @@ use agiworkforce_protocol::developer_session::{
     InstructionFileKind, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
     McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
     McpServerScope, McpServerSummary, ModelListParams, PluginListResponse, PluginScope,
-    PluginSetEnabledParams, PluginSummary, SettingsReadResponse, SettingsWriteParams,
-    SkillCatalogScope, SkillConsentParams, SkillConsentResponse, SkillListResponse,
-    SkillSetEnabledParams, SkillSummary, SlashCommandListResponse, SlashCommandResultKind,
-    SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary, ThreadForkParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams,
-    TurnStartResponse, TurnStatus, TurnSteerParams, TurnSummary,
+    PluginSetEnabledParams, PluginSummary, ProtocolVersionUnsupportedData, SettingsReadResponse,
+    SettingsWriteParams, SkillCatalogScope, SkillConsentParams, SkillConsentResponse,
+    SkillListResponse, SkillSetEnabledParams, SkillSummary, SlashCommandListResponse,
+    SlashCommandResultKind, SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary,
+    ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary, TurnInterruptParams,
+    TurnStartParams, TurnStartResponse, TurnStatus, TurnSteerParams, TurnSummary,
     DEVELOPER_SESSION_PROTOCOL_VERSION, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -1317,9 +1320,41 @@ async fn a_client_that_states_no_version_is_answered_with_the_legacy_one() {
         negotiated.protocol_version,
         DEVELOPER_SESSION_PROTOCOL_VERSION
     );
+    assert_eq!(
+        negotiated.agent_event_schema_version,
+        Some(AGENT_EVENT_SCHEMA_VERSION)
+    );
+    assert_eq!(
+        negotiated.minimum_protocol_version,
+        Some(MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION)
+    );
 
-    let mut unsupported =
-        DeveloperSessionProcessor::new(Arc::new(SurfaceHost::new()), capabilities());
-    let refused = unsupported.process(initialize_at(Some(99))).await;
-    assert_eq!(refused.error.expect("unsupported version").code, -32005);
+    for (requested, side) in [
+        (99, "upgrade the AGI CLI"),
+        (
+            MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION - 1,
+            "upgrade the client",
+        ),
+    ] {
+        let mut unsupported =
+            DeveloperSessionProcessor::new(Arc::new(SurfaceHost::new()), capabilities());
+        let refused = unsupported
+            .process(initialize_at(Some(requested)))
+            .await
+            .error
+            .expect("unsupported version");
+        assert_eq!(refused.code, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE);
+        assert!(refused.message.contains(side), "{}", refused.message);
+        let data: ProtocolVersionUnsupportedData =
+            serde_json::from_value(refused.data.expect("structured refusal"))
+                .expect("typed refusal data");
+        assert_eq!(
+            data,
+            ProtocolVersionUnsupportedData {
+                requested_protocol_version: requested,
+                supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
+                minimum_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+            }
+        );
+    }
 }

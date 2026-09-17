@@ -171,13 +171,21 @@
     "model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["identity", "lifecycle", "evidenceRefs"],
+      "required": ["identity", "lifecycle", "residencyRegions", "evidenceRefs"],
       "properties": {
         "identity": {
           "$ref": "#/definitions/modelIdentity"
         },
         "lifecycle": {
           "$ref": "#/definitions/lifecycle"
+        },
+        "residencyRegions": {
+          "type": ["array", "null"],
+          "uniqueItems": true,
+          "description": "Regions this model can be processed in, projected from its serving provider's governance record. null when the provider has published no verified residency answer.",
+          "items": {
+            "$ref": "#/definitions/nonEmptyString"
+          }
         },
         "evidenceRefs": {
           "type": "array",
@@ -198,7 +206,8 @@
         "providerModelId",
         "kind",
         "aliases",
-        "family"
+        "family",
+        "version"
       ],
       "properties": {
         "key": {
@@ -250,6 +259,11 @@
         "family": {
           "type": ["string", "null"],
           "description": "The canonical family this model belongs to, resolved from model-families.json. null when the model occupies no family slot."
+        },
+        "version": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]+(\\.[0-9]+)*$",
+          "description": "The model's dotted generation within its family, parsed by the family slot's apiModelIdPattern. null when the model belongs to no family."
         }
       }
     },
@@ -264,7 +278,8 @@
         "deprecatedOn",
         "stage",
         "stagedOn",
-        "stageSource"
+        "stageSource",
+        "replacedBy"
       ],
       "properties": {
         "status": {
@@ -319,6 +334,10 @@
         "stageSource": {
           "$ref": "#/definitions/nonEmptyString",
           "description": "What justifies the stage: a slot, a probe record, or the source of the scores it was evaluated on."
+        },
+        "replacedBy": {
+          "type": ["string", "null"],
+          "description": "The model key that supersedes this one: the active model of its family slot when this model is deprecated. null when the model is not deprecated or has no family successor."
         }
       }
     },

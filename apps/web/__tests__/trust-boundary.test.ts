@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { buildLocalToByokHandoffDraft } from '@agiworkforce/utils';
 import {
   LocalInferenceRefused,
   isLocalModelId,
@@ -218,5 +219,65 @@ describe('local models on the desktop shell', () => {
       { role: 'assistant', content: 'answered in the cloud' },
       { role: 'assistant', content: 'answered here' },
     ]);
+  });
+});
+
+describe('managed cloud never silently exposes user credentials', () => {
+  const credentials = [
+    {
+      label: '.env',
+      kind: 'file',
+      secret: 'sk-abcdefghijklmnopqrstuvwxyz123456',
+      prefix: 'OPENAI_API_KEY=',
+    },
+    {
+      label: 'aws.env',
+      kind: 'file',
+      secret: 'AKIAIOSFODNN7EXAMPLE0000',
+      prefix: 'AWS_SECRET_ACCESS_KEY=',
+    },
+    {
+      label: 'last prompt',
+      kind: 'message',
+      secret: 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789',
+      prefix: 'use my key ',
+    },
+  ] as const;
+
+  async function managedHandoff(content: string, label: string, kind: 'file' | 'message') {
+    return buildLocalToByokHandoffDraft({
+      sourceSessionId: 'desktop-session',
+      sourceSurface: 'desktop',
+      targetSurface: 'desktop',
+      target: 'managed',
+      createdAt: '2026-09-16T00:00:00.000Z',
+      expiresAt: '2026-09-16T01:00:00.000Z',
+      selectedContext: [{ id: 'ctx-1', kind, label, content }],
+    });
+  }
+
+  it.each(credentials)(
+    'CRITICAL: a credential in $label blocks the managed handoff and never reaches its payload',
+    async ({ label, kind, secret, prefix }) => {
+      const preview = await managedHandoff(`${prefix}${secret}`, label, kind);
+
+      expect(preview.draft.targetPrivacyMode).toBe('managed');
+      expect(preview.draft.consentRequired).toBe(true);
+      expect(preview.redactionReport.blocked).toBe(true);
+      expect(preview.redactionReport.findings.length).toBeGreaterThan(0);
+      expect(preview.redactedPayload).not.toContain(secret);
+      expect(JSON.stringify(preview.redactedContext)).not.toContain(secret);
+      expect(JSON.stringify(preview.draft)).not.toContain(secret);
+    },
+  );
+
+  it('CRITICAL: the persisted managed draft carries evidence of context, never its content', async () => {
+    const preview = await managedHandoff('plain project notes', 'notes.md', 'file');
+
+    expect(preview.redactionReport.blocked).toBe(false);
+    for (const item of preview.draft.selectedContext) {
+      expect(item).not.toHaveProperty('content');
+      expect(item.checksumSha256).toMatch(/^[a-f0-9]{64}$/);
+    }
   });
 });

@@ -27,13 +27,17 @@ import type {
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
+import {
+  DEVELOPER_SESSION_PROTOCOL_VERSION as PROTOCOL_VERSION,
+  MINIMUM_SUPPORTED_RUNTIME_VERSION,
+  isSupportedRuntimeVersion,
+} from '@agiworkforce/types';
 import { CLOUD_APP_ORIGIN } from '../config';
 import { rememberShellSignedCliIn, shellSignedCliIn } from './cliAccountStore';
 import { reconcileDeveloperAccount, type DeveloperAccountBridge } from './developerAccountSync';
 import { readWorkspaceGit } from './gitService';
 import { getRoot, listRoots } from './workspaceStore';
 
-const PROTOCOL_VERSION = 8;
 const CLIENT_NAME = 'agi-desktop';
 const CLIENT_TITLE = 'AGI Cloud for desktop';
 const DEFAULT_BINARY = 'agi';
@@ -576,6 +580,14 @@ async function handshake(server: RunningServer): Promise<void> {
   if (!isRecord(result) || result['protocolVersion'] !== PROTOCOL_VERSION) {
     throw new DeveloperRuntimeUnavailableError(
       `The installed AGI CLI does not speak developer-session protocol ${PROTOCOL_VERSION}.`,
+      'Update the AGI CLI, or point Settings at a current binary.',
+    );
+  }
+  const serverInfo = result['serverInfo'];
+  const runtimeVersion = isRecord(serverInfo) ? serverInfo['version'] : undefined;
+  if (typeof runtimeVersion !== 'string' || !isSupportedRuntimeVersion(runtimeVersion)) {
+    throw new DeveloperRuntimeUnavailableError(
+      `The installed AGI CLI reports version ${JSON.stringify(runtimeVersion ?? null)}; this app needs ${MINIMUM_SUPPORTED_RUNTIME_VERSION} or newer.`,
       'Update the AGI CLI, or point Settings at a current binary.',
     );
   }

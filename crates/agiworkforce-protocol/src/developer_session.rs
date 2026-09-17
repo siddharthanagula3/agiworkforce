@@ -36,6 +36,16 @@ pub const SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS: &[u32] = &[8, 7];
 /// Version answered when a client does not state one.
 pub const LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 7;
 
+/// Oldest wire version this server still answers. A client below it is
+/// refused at `initialize` with [`ProtocolVersionUnsupportedData`].
+pub const MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION: u32 =
+    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS
+        [SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.len() - 1];
+
+/// JSON-RPC error code for an `initialize` naming a version this server does
+/// not answer.
+pub const PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE: i32 = -32005;
+
 pub mod method {
     pub const INITIALIZE: &str = "initialize";
     pub const INITIALIZED: &str = "initialized";
@@ -250,6 +260,27 @@ pub struct InitializeResponse {
     pub server_info: AppServerClientInfo,
     pub protocol_version: u32,
     pub capabilities: AppServerCapabilities,
+    /// Schema version of every `turn/agent_event` envelope this connection
+    /// will carry. Absent from servers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent_event_schema_version: Option<u32>,
+    /// Oldest protocol version this server answers. Absent from servers that
+    /// predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub minimum_protocol_version: Option<u32>,
+}
+
+/// `data` of the [`PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE`] refusal, so a
+/// client can say which side must upgrade instead of echoing prose.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProtocolVersionUnsupportedData {
+    pub requested_protocol_version: u32,
+    pub supported_protocol_versions: Vec<u32>,
+    pub minimum_protocol_version: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1313,6 +1344,13 @@ mod tests {
         assert!(
             SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS
                 .contains(&LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION)
+        );
+        assert_eq!(
+            SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.last(),
+            Some(&MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION)
+        );
+        assert!(
+            MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION <= LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION
         );
         assert_eq!(
             SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.first(),

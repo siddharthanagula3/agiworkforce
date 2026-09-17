@@ -35,6 +35,13 @@ import type {
   SlashCommandListResponse,
   SlashCommandRunResponse,
 } from '@agiworkforce/types/protocol';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  DEVELOPER_SESSION_PROTOCOL_VERSION as SUPPORTED_PROTOCOL_VERSION,
+  MINIMUM_SUPPORTED_RUNTIME_VERSION as MINIMUM_SUPPORTED_CLI_VERSION_LABEL,
+  PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+  isSupportedRuntimeVersion as isSupportedCliVersion,
+} from '@agiworkforce/types';
 import { redactSecrets } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
 
@@ -48,10 +55,6 @@ const ACCOUNT_LOGIN_WAIT_TIMEOUT_MS = 15 * 60_000;
 const MCP_LOGIN_TIMEOUT_MS = 5 * 60_000;
 const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
 const HARD_KILL_TIMEOUT_MS = 2_000;
-const SUPPORTED_PROTOCOL_VERSION = 8;
-const MINIMUM_SUPPORTED_CLI_VERSION = [1, 7, 1] as const;
-const MINIMUM_SUPPORTED_CLI_VERSION_LABEL = MINIMUM_SUPPORTED_CLI_VERSION.join('.');
-const AGENT_EVENT_SCHEMA_VERSION = 4;
 const CLI_PATH_SETTING = 'agiWorkforce.cliPath';
 const CLI_NPM_PACKAGE = '@agiworkforce/cli';
 
@@ -111,6 +114,8 @@ const notificationSchema = z.object({
   params: z.unknown().optional(),
 });
 
+const trustModeSchema = z.enum(['local', 'byok', 'managed', 'unknown']).catch('unknown');
+
 const capabilitiesSchema = z.object({
   threads: z.boolean(),
   turns: z.boolean(),
@@ -134,6 +139,14 @@ const initializeResponseSchema = z.object({
   serverInfo: z.object({ name: z.string(), title: z.string(), version: z.string() }),
   protocolVersion: z.number().int().positive(),
   capabilities: capabilitiesSchema,
+  agentEventSchemaVersion: z.number().int().positive().optional(),
+  minimumProtocolVersion: z.number().int().positive().optional(),
+});
+
+const protocolVersionUnsupportedDataSchema = z.object({
+  requestedProtocolVersion: z.number().int().nonnegative(),
+  supportedProtocolVersions: z.array(z.number().int().positive()).min(1),
+  minimumProtocolVersion: z.number().int().positive(),
 });
 
 const legacyInitializeResponseSchema = z.object({
@@ -165,7 +178,7 @@ const threadSummarySchema = z.object({
       { message: 'Provider metadata contains control characters' },
     )
     .optional(),
-  trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
+  trustMode: trustModeSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
   createdBy: z.enum(['cli', 'vscode', 'desktop']),
@@ -210,7 +223,7 @@ const hostModelSummarySchema = z.object({
       provider: z.string().optional(),
     })
     .optional(),
-  trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
+  trustMode: trustModeSchema,
 });
 
 const localModelListResponseSchema = z.object({
@@ -434,20 +447,22 @@ const mcpStatusEventSchema = z.object({
   threadId: z.string().min(1),
   message: z.string().nullable().optional(),
 });
-const toolCategorySchema = z.enum([
-  'web-search',
-  'web-fetch',
-  'code-execution',
-  'filesystem',
-  'shell',
-  'skill',
-  'memory',
-  'connector',
-  'mcp',
-  'computer-use',
-  'artifact',
-  'other',
-]);
+const toolCategorySchema = z
+  .enum([
+    'web-search',
+    'web-fetch',
+    'code-execution',
+    'filesystem',
+    'shell',
+    'skill',
+    'memory',
+    'connector',
+    'mcp',
+    'computer-use',
+    'artifact',
+    'other',
+  ])
+  .catch('other');
 const toolExecutionStartSchema = z.object({
   type: z.literal('tool-execution-start'),
   toolCallId: z.string().min(1),
@@ -1100,14 +1115,18 @@ export class LocalRuntimeClient {
 
   private async initializeOnce(): Promise<InitializeResponse> {
     const connection = this.ensureProcess();
-    const rawResult = await connection.request('initialize', {
-      clientInfo: {
-        name: 'agi_vscode',
-        title: 'AGI for VS Code',
-        version: this.options.clientVersion,
-      },
-      protocolVersion: SUPPORTED_PROTOCOL_VERSION,
-    });
+    const rawResult = await connection
+      .request('initialize', {
+        clientInfo: {
+          name: 'agi_vscode',
+          title: 'AGI for VS Code',
+          version: this.options.clientVersion,
+        },
+        protocolVersion: SUPPORTED_PROTOCOL_VERSION,
+      })
+      .catch((error: unknown) => {
+        throw describeVersionRefusal(error);
+      });
     const parsedResult = initializeResponseSchema.safeParse(rawResult);
     if (!parsedResult.success) {
       if (legacyInitializeResponseSchema.safeParse(rawResult).success) {
@@ -1121,6 +1140,18 @@ export class LocalRuntimeClient {
     if (result.protocolVersion !== SUPPORTED_PROTOCOL_VERSION) {
       throw new Error(
         `Installed AGI CLI uses developer-session protocol ${result.protocolVersion}; this extension requires exactly protocol ${SUPPORTED_PROTOCOL_VERSION}. Install a compatible AGI CLI or update the extension.`,
+      );
+    }
+    if (
+      result.agentEventSchemaVersion !== undefined &&
+      result.agentEventSchemaVersion !== AGENT_EVENT_SCHEMA_VERSION
+    ) {
+      throw new Error(
+        `Installed AGI CLI streams agent events in schema ${result.agentEventSchemaVersion}; this extension reads schema ${AGENT_EVENT_SCHEMA_VERSION}. ${
+          result.agentEventSchemaVersion > AGENT_EVENT_SCHEMA_VERSION
+            ? 'Update AGI for VS Code.'
+            : 'Update the AGI CLI or set agiWorkforce.cliPath to a current binary.'
+        }`,
       );
     }
     if (!isSupportedCliVersion(result.serverInfo.version)) {
@@ -1244,17 +1275,24 @@ export class LocalRuntimeClient {
   }
 }
 
-function isSupportedCliVersion(version: string): boolean {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u);
-  if (match === null) return false;
-  const parts = match.slice(1, 4).map(Number);
-  if (parts.some((part) => !Number.isSafeInteger(part))) return false;
-  for (const [index, minimum] of MINIMUM_SUPPORTED_CLI_VERSION.entries()) {
-    const part = parts[index] ?? 0;
-    if (part > minimum) return true;
-    if (part < minimum) return false;
+function describeVersionRefusal(error: unknown): unknown {
+  if (
+    !(error instanceof LocalRuntimeProtocolError) ||
+    error.code !== PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE
+  ) {
+    return error;
   }
-  return match[4] === undefined;
+  const refusal = protocolVersionUnsupportedDataSchema.safeParse(error.data);
+  if (!refusal.success) return error;
+  const { supportedProtocolVersions, minimumProtocolVersion } = refusal.data;
+  const newestSupported = Math.max(...supportedProtocolVersions);
+  const action =
+    SUPPORTED_PROTOCOL_VERSION < minimumProtocolVersion
+      ? 'Update AGI for VS Code.'
+      : 'Update the AGI CLI or set agiWorkforce.cliPath to a current binary.';
+  return new Error(
+    `Installed AGI CLI answers developer-session protocol ${minimumProtocolVersion} through ${newestSupported}; this extension requires protocol ${SUPPORTED_PROTOCOL_VERSION}. ${action}`,
+  );
 }
 
 async function waitWithTimeout<T>(

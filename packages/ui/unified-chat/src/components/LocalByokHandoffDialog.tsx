@@ -1,6 +1,10 @@
 import type { HandoffTarget, LocalToByokHandoffPreview } from '@agiworkforce/utils';
 import type { HandoffContextItem } from '@agiworkforce/types';
-import { formatPrivacyModeLabel, formatProviderModeLabel } from '@agiworkforce/types';
+import {
+  formatPrivacyModeLabel,
+  formatPrivacyModeUsageImplication,
+  formatProviderModeLabel,
+} from '@agiworkforce/types';
 import { AlertTriangle, CheckCircle2, FileCheck2, Fingerprint, ShieldCheck } from 'lucide-react';
 import {
   Badge,
@@ -106,7 +110,8 @@ export function LocalByokHandoffDialog({
                 : `This creates a separate ${targetPrivacyLabel} conversation. The original ${localPrivacyLabel} thread is left unchanged.`}
               {targetProviderLabel
                 ? ` Context will be sent directly to ${targetProviderLabel}.`
-                : ''}
+                : ''}{' '}
+              {formatPrivacyModeUsageImplication(isManagedTarget ? 'managed' : 'byok')}
             </DialogDescription>
           </DialogHeader>
 

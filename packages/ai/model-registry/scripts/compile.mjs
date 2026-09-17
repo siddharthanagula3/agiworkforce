@@ -16,6 +16,7 @@ import {
   collectFamilyRefs,
   loadFamilyCatalog,
   matchFamilyMember,
+  parseGeneration,
   resolveFamilyRefsDeep,
   validateFamilyCatalog,
 } from './families.mjs';
@@ -1185,6 +1186,9 @@ function assertIsoDateOrUnknown(label, value) {
 }
 
 const UNKNOWN_FAMILY = null;
+const UNKNOWN_VERSION = null;
+const UNKNOWN_REPLACEMENT = null;
+const UNKNOWN_RESIDENCY_REGIONS = null;
 
 function resolveModelKeyForTarget(catalog, target) {
   if (catalog.models[target]) return target;
@@ -1216,15 +1220,33 @@ function buildModelFamilyIndex(catalog, familyCatalog) {
   const families = {};
   for (const [familyId, family] of Object.entries(familyCatalog.families)) {
     for (const [modelKey, model] of Object.entries(catalog.models)) {
-      if (!matchFamilyMember(family, model, modelKey, familyCatalog.policy)) continue;
+      const member = matchFamilyMember(family, model, modelKey, familyCatalog.policy);
+      if (!member) continue;
+      const existing = families[modelKey];
       assert.ok(
-        families[modelKey] === undefined || families[modelKey] === family.canonicalFamily,
-        `${modelKey} matches more than one family slot (${families[modelKey]} and ${familyId})`,
+        existing === undefined || existing.family === family.canonicalFamily,
+        `${modelKey} matches more than one family slot (${existing?.family} and ${familyId})`,
       );
-      families[modelKey] = family.canonicalFamily;
+      families[modelKey] ??= {
+        family: family.canonicalFamily,
+        version: parseGeneration(member.generation).join('.'),
+        activeModelKey: family.active.modelKey,
+      };
     }
   }
   return families;
+}
+
+function resolveReplacement(modelKey, lifecycle, familyMember, catalog) {
+  if (!lifecycle.deprecated || !familyMember || familyMember.activeModelKey === modelKey) {
+    return UNKNOWN_REPLACEMENT;
+  }
+  const replacement = catalog.models[familyMember.activeModelKey];
+  assert.ok(
+    replacement && replacement.deprecated !== true && replacement.status !== 'deprecated',
+    `${modelKey} is deprecated in favour of ${familyMember.activeModelKey}, which must be a live catalog model`,
+  );
+  return familyMember.activeModelKey;
 }
 
 const LIFECYCLE_STAGE_FIELDS = ['stage', 'stagedOn', 'source'];
@@ -2275,9 +2297,14 @@ function buildNormalizedRegistry(
           commercialRestrictions: model.commercialRestrictions,
         }),
         aliases: aliasIndex[modelKey] ?? [],
-        family: familyIndex[modelKey] ?? UNKNOWN_FAMILY,
+        family: familyIndex[modelKey]?.family ?? UNKNOWN_FAMILY,
+        version: familyIndex[modelKey]?.version ?? UNKNOWN_VERSION,
       },
-      lifecycle,
+      lifecycle: {
+        ...lifecycle,
+        replacedBy: resolveReplacement(modelKey, lifecycle, familyIndex[modelKey], catalog),
+      },
+      residencyRegions: governance[model.provider]?.residencyRegions ?? UNKNOWN_RESIDENCY_REGIONS,
       evidenceRefs: Array.isArray(model.evidenceRefs) ? model.evidenceRefs : [],
     };
     (providerModelKeys[model.provider] ??= []).push(modelKey);

@@ -170,6 +170,14 @@ export * from './sessions';
 export * from './capability-handshake';
 
 export {
+  AGENT_EVENT_SCHEMA_VERSION,
+  DEVELOPER_SESSION_PROTOCOL_VERSION,
+  MINIMUM_SUPPORTED_RUNTIME_VERSION,
+  PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+  isSupportedRuntimeVersion,
+} from './developer-session-versioning';
+
+export {
   decodeTextFileBlock,
   inlineFileBlockAsText,
   isTextLikeFileMediaType,
