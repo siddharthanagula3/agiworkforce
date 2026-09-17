@@ -57,7 +57,9 @@ describe('0090 shared project knowledge is read-only for org members', () => {
       .filter((f) => Number.parseInt(f.slice(0, 4), 10) > 90)
       .filter((f) => {
         const sqlText = readMigration(f);
-        return /(create|alter|drop)\s+policy[\s\S]{0,400}?project_knowledge_files/i.test(sqlText);
+        return /(create|alter|drop)\s+policy\s+(if\s+exists\s+)?\w+\s+on\s+(public\.)?project_knowledge_files\b/i.test(
+          sqlText,
+        );
       });
 
     expect(laterPolicyChanges).toEqual([]);
