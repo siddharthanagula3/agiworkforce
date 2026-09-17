@@ -59,13 +59,19 @@ vi.mock('../../../stores/projectStore', () => ({
     }),
 }));
 
-vi.mock('../../../stores/auth', () => ({
-  selectUser: () => null,
-  selectPlanDisplayName: () => 'Cloud',
-  selectHasCloudAccountSession: () => mocks.hasCloudSession,
-  useUnifiedAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ cloudSessionEpoch: 1 }),
-}));
+vi.mock('../../../stores/auth', () => {
+  const state = { cloudSessionEpoch: 1 };
+  const useUnifiedAuthStore = (selector: (state: Record<string, unknown>) => unknown) =>
+    selector(state);
+  useUnifiedAuthStore.getState = () => state;
+  return {
+    selectUser: () => null,
+    selectPlanDisplayName: () => 'Cloud',
+    selectHasCloudAccountSession: () => mocks.hasCloudSession,
+    useUnifiedAuthStore,
+    useAuthStore: useUnifiedAuthStore,
+  };
+});
 
 vi.mock('../../../stores/settingsDialogStore', () => ({
   useSettingsDialogStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -74,6 +80,7 @@ vi.mock('../../../stores/settingsDialogStore', () => ({
 
 vi.mock('../../../stores/appModeStore', () => ({
   selectPrivacyMode: () => mocks.privacyMode,
+  selectMode: (state: { mode: string }) => state.mode,
   useAppModeStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ mode: 'cloud', setMode: vi.fn() }),
 }));

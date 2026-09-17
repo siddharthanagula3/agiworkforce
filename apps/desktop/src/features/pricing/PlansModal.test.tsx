@@ -45,6 +45,17 @@ vi.mock('../../utils/navigation', () => ({
 
 vi.mock('../../lib/stripeCheckout', () => ({
   openBillingPortal: billingMocks.openBillingPortal,
+  openCheckout: vi.fn(async () => null),
+  openUpgradePayment: vi.fn(async () => undefined),
+  previewPlanUpgrade: vi.fn(async () => ({
+    kind: 'prorated' as const,
+    amountDueNowCents: 0,
+    recurringAmountCents: 0,
+    currency: 'usd',
+    previewToken: 'preview-token',
+  })),
+  applyPlanUpgrade: vi.fn(async () => ({ kind: 'webhook-pending' as const })),
+  waitForPlanActivation: vi.fn(async () => true),
 }));
 
 vi.mock('../../services/cloudAccountAuth', () => ({

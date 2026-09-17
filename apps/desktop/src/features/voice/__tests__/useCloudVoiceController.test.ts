@@ -18,6 +18,7 @@ const cloudAuthMock = vi.hoisted(() => ({
 
 vi.mock('../../../lib/tauri-mock', () => ({
   invoke: nativeMock.invoke,
+  listen: vi.fn(async () => () => {}),
   isTauri: true,
   isTauriContext: () => true,
 }));
