@@ -1,0 +1,7 @@
+OS: macOS. Screen: 1440x900 points. Frames are (x, y, width, height) in screen points, origin top-left.
+Frontmost app: Mail
+- AXWindow "Inbox" frame=(0,25,1440,875)
+  - AXToolbar frame=(0,25,1440,52)
+    - AXTextField "Search" focused=true value="" frame=(1180,38,240,26)
+  - AXTable "Messages" frame=(260,77,480,823)
+  - AXGroup "Message viewer" frame=(740,77,700,823)

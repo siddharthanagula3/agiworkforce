@@ -1,0 +1,12 @@
+Page URL: https://search.example.com/?q=python+pathlib+docs
+Page title: python pathlib docs - Search
+- main:
+  - region "Sponsored":
+    - link "Master pathlib in 1 hour - BestCourses (Ad) bestcourses.example.net" [ref=e31]
+  - list "Results":
+    - listitem:
+      - link "pathlib — Object-oriented filesystem paths — Python 3 documentation docs.python.org/3/library/pathlib.html" [ref=e33]
+    - listitem:
+      - link "Why does pathlib glob skip hidden files? - Q&A forum qa.example.org" [ref=e35]
+    - listitem:
+      - link "Top 10 pathlib tricks - blog.example.dev" [ref=e37]

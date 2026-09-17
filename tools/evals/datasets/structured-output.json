@@ -1,0 +1,227 @@
+{
+  "suite": "structured-output",
+  "version": 1,
+  "passThreshold": 1,
+  "cases": [
+    {
+      "id": "structured-output/invoice-extraction",
+      "family": "extraction",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Extract this invoice as JSON with keys invoiceNumber (string), currency (ISO 4217 code), total (number) and lineItems (array of objects with description, quantity as an integer, unitPrice as a number).\n\nINVOICE INV-2291\nBilled in EUR\n- 4 x Ergonomic chair @ 220.00\n- 2 x Standing desk @ 150.00\nTotal due: 1180.00 Reply with the JSON object only, no prose.",
+      "checks": [
+        {
+          "kind": "jsonSchema",
+          "schema": {
+            "type": "object",
+            "required": ["invoiceNumber", "currency", "total", "lineItems"],
+            "properties": {
+              "invoiceNumber": {
+                "type": "string",
+                "pattern": "^INV-\\d+$"
+              },
+              "currency": {
+                "type": "string",
+                "enum": ["EUR"]
+              },
+              "total": {
+                "type": "number"
+              },
+              "lineItems": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["description", "quantity", "unitPrice"],
+                  "properties": {
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "quantity": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "unitPrice": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "invoiceNumber",
+          "value": "INV-2291"
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "total",
+          "value": 1180
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "lineItems.1.quantity",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "structured-output/ticket-classification",
+      "family": "classification",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Classify this support ticket as JSON with category (one of billing, bug, feature_request, account), priority (one of low, medium, high) and needsHuman (boolean).\n\nTicket: \"I was charged twice for my annual plan this morning and my card is now over its limit. Please refund the duplicate today.\" Reply with the JSON object only, no prose.",
+      "checks": [
+        {
+          "kind": "jsonSchema",
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "priority", "needsHuman"],
+            "properties": {
+              "category": {
+                "enum": ["billing", "bug", "feature_request", "account"]
+              },
+              "priority": {
+                "enum": ["low", "medium", "high"]
+              },
+              "needsHuman": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "category",
+          "value": "billing"
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "priority",
+          "value": "high"
+        }
+      ]
+    },
+    {
+      "id": "structured-output/list-of-records",
+      "family": "extraction",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Return JSON with a key people: an array with one object per person mentioned, each with name, role and startYear (integer), in the order they appear.\n\nText: \"Lena Park joined as head of design in 2019. Two years later Omar Haddad became CFO. The newest executive, Sofia Reyes, has led engineering since 2024.\" Reply with the JSON object only, no prose.",
+      "checks": [
+        {
+          "kind": "jsonSchema",
+          "schema": {
+            "type": "object",
+            "required": ["people"],
+            "properties": {
+              "people": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "required": ["name", "role", "startYear"],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    },
+                    "startYear": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "people.1.startYear",
+          "value": 2021
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "people.2.name",
+          "value": "Sofia Reyes"
+        }
+      ],
+      "notes": "Omar's start year is only derivable: two years after 2019."
+    },
+    {
+      "id": "structured-output/no-extra-keys",
+      "family": "schema-discipline",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Return JSON with exactly two keys: sentiment (one of positive, neutral, negative) and score (a number from -1 to 1). No other keys.\n\nReview: \"The update deleted my saved drafts and support never replied.\" Reply with the JSON object only, no prose.",
+      "checks": [
+        {
+          "kind": "jsonSchema",
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sentiment", "score"],
+            "properties": {
+              "sentiment": {
+                "enum": ["positive", "neutral", "negative"]
+              },
+              "score": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "sentiment",
+          "value": "negative"
+        }
+      ]
+    },
+    {
+      "id": "structured-output/null-when-absent",
+      "family": "abstention",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Extract contact details as JSON with keys email and phone. Use null for anything not present.\n\nMessage: \"Call me back on +1-555-0142 after 3pm. Thanks, Dev\" Reply with the JSON object only, no prose.",
+      "checks": [
+        {
+          "kind": "jsonSchema",
+          "schema": {
+            "type": "object",
+            "required": ["email", "phone"],
+            "properties": {
+              "email": {
+                "type": ["string", "null"]
+              },
+              "phone": {
+                "type": ["string", "null"]
+              }
+            }
+          }
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "email",
+          "value": null
+        },
+        {
+          "kind": "jsonEquals",
+          "path": "phone",
+          "value": "+1-555-0142"
+        }
+      ],
+      "notes": "An invented email address is a fabricated field."
+    }
+  ]
+}

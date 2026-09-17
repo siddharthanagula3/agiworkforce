@@ -1,0 +1,101 @@
+{
+  "suite": "reasoning",
+  "version": 1,
+  "passThreshold": 1,
+  "cases": [
+    {
+      "id": "reasoning/pipes-together",
+      "family": "arithmetic",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "One pipe fills a tank in 6 hours and a second pipe fills it in 3 hours. How many hours do both pipes take together? Give a number of hours. Show brief working, then finish with a final line of the form 'Answer: <value>'.",
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "2"
+        }
+      ]
+    },
+    {
+      "id": "reasoning/age-puzzle",
+      "family": "algebra",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Maya is three times as old as her son. In 12 years she will be twice as old as him. How old is Maya now? Give a number of years. Show brief working, then finish with a final line of the form 'Answer: <value>'.",
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "36"
+        }
+      ]
+    },
+    {
+      "id": "reasoning/race-order",
+      "family": "logic",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Four runners, Ann, Ben, Cal and Dee, finish a race with no ties. Ben finished before Cal. Ann finished after Dee. Ann finished before Ben. Who finished third? Give the name only. Show brief working, then finish with a final line of the form 'Answer: <value>'.",
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "Ben"
+        }
+      ]
+    },
+    {
+      "id": "reasoning/coin-probability",
+      "family": "probability",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "A fair coin is tossed three times. What is the probability of exactly two heads? Give a decimal. Show brief working, then finish with a final line of the form 'Answer: <value>'.",
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "0.375",
+          "tolerance": 0.0005
+        }
+      ]
+    },
+    {
+      "id": "reasoning/weekday",
+      "family": "calendar",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What day of the week was 1 January 2026? Give the day name only. Show brief working, then finish with a final line of the form 'Answer: <value>'.",
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "Thursday"
+        }
+      ]
+    },
+    {
+      "id": "reasoning/compound-interest",
+      "family": "finance",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "$1000 is invested at 10% interest compounded annually. What is the balance after 3 years? Give the amount in dollars. Show brief working, then finish with a final line of the form 'Answer: <value>'.",
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "1331",
+          "tolerance": 0.01
+        }
+      ]
+    },
+    {
+      "id": "reasoning/bat-and-ball",
+      "family": "trap",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost, in dollars? Show brief working, then finish with a final line of the form 'Answer: <value>'.",
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "0.05",
+          "tolerance": 0.001
+        }
+      ]
+    }
+  ]
+}

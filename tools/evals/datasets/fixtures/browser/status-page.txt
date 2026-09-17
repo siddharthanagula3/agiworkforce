@@ -1,0 +1,9 @@
+Page URL: https://status.example.com/
+Page title: Example Status
+- main:
+  - heading "Partial outage" [level=1] [ref=e2]
+  - paragraph: Webhooks are delayed by up to 20 minutes. Our engineers are investigating.
+  - list "Components":
+    - listitem: API - Operational
+    - listitem: Dashboard - Operational
+    - listitem: Webhooks - Degraded performance

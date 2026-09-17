@@ -218,7 +218,7 @@ function firstPresent(env, names) {
   return undefined;
 }
 
-function resolveProbeAdapter(entry, env, adapters) {
+export function resolveProbeAdapter(entry, env, adapters) {
   if (!adapters.isKnownProvider(entry.provider)) {
     return {
       failure: {

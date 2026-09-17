@@ -1,0 +1,320 @@
+{
+  "suite": "tools",
+  "version": 1,
+  "passThreshold": 1,
+  "requires": ["functionCalling"],
+  "cases": [
+    {
+      "id": "tools/single-call-arguments",
+      "family": "arguments",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What's the weather in Lisbon right now? I want it in celsius.",
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Get the current weather for a city.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"]
+              }
+            },
+            "required": ["city"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "get_weather",
+          "position": "first",
+          "arguments": {
+            "city": {
+              "matches": "lisbo"
+            },
+            "unit": {
+              "equals": "celsius"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "tools/choose-the-right-tool",
+      "family": "selection",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "How much is 250 US dollars in euros?",
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Get the current weather for a city.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"]
+              }
+            },
+            "required": ["city"],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "convert_currency",
+          "description": "Convert an amount between two ISO 4217 currencies at today's rate.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": "number"
+              },
+              "from": {
+                "type": "string",
+                "description": "ISO 4217 code"
+              },
+              "to": {
+                "type": "string",
+                "description": "ISO 4217 code"
+              }
+            },
+            "required": ["amount", "from", "to"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "convert_currency",
+          "arguments": {
+            "amount": {
+              "within": {
+                "min": 250,
+                "max": 250
+              }
+            },
+            "from": {
+              "matches": "^usd$"
+            },
+            "to": {
+              "matches": "^eur$"
+            }
+          }
+        },
+        {
+          "kind": "noToolCall",
+          "names": ["get_weather"]
+        }
+      ]
+    },
+    {
+      "id": "tools/no-tool-needed",
+      "family": "restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What is the capital of France? Answer directly.",
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Get the current weather for a city.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"]
+              }
+            },
+            "required": ["city"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "kind": "noToolCall"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["Paris"]
+        }
+      ]
+    },
+    {
+      "id": "tools/use-tool-result",
+      "family": "result-use",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Summarise that weather result for me in one sentence.",
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Get the current weather for a city.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"]
+              }
+            },
+            "required": ["city"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "turns": [
+        {
+          "role": "user",
+          "content": "What's the weather in Oslo?"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_oslo",
+              "name": "get_weather",
+              "input": {
+                "city": "Oslo"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "toolUseId": "call_oslo",
+          "content": "{\"city\":\"Oslo\",\"temperature_c\":-4,\"condition\":\"snow\"}"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "noToolCall"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["-4"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["snow"]
+        }
+      ]
+    },
+    {
+      "id": "tools/search-query",
+      "family": "query-formulation",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Find the current population of Reykjavik.",
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the web and return the top results.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "web_search",
+          "arguments": {
+            "query": {
+              "matches": "reykjav"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "tools/structured-arguments",
+      "family": "arguments",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Schedule 'Design review' on 2026-10-02 at 15:00 UTC for 45 minutes with ana@example.com and raj@example.com.",
+      "tools": [
+        {
+          "name": "create_calendar_event",
+          "description": "Create a calendar event.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "start": {
+                "type": "string",
+                "description": "ISO 8601 date-time in UTC"
+              },
+              "durationMinutes": {
+                "type": "integer"
+              },
+              "attendees": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "email address"
+                }
+              }
+            },
+            "required": ["title", "start", "durationMinutes", "attendees"],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "create_calendar_event",
+          "arguments": {
+            "title": {
+              "matches": "design review"
+            },
+            "start": {
+              "matches": "^2026-10-02T15:00"
+            },
+            "durationMinutes": {
+              "within": {
+                "min": 45,
+                "max": 45
+              }
+            },
+            "attendees.0": {
+              "matches": "^(?:ana|raj)@example\\.com$"
+            },
+            "attendees.1": {
+              "matches": "^(?:ana|raj)@example\\.com$"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

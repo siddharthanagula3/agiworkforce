@@ -2,10 +2,11 @@
 
 Status: Current
 Owner: Tooling/security lead
-Last updated: 2026-08-09
-Purpose: Grade what the product's models actually say, correctness on a golden
-corpus, refusal on disallowed requests, and resistance to jailbreaks and prompt
-injection.
+Last updated: 2026-09-17
+Purpose: Grade what the product's models actually say and do, per capability
+(chat, coding, reasoning, research, search, tools, structured output, long
+context, files, browser, computer use, multilingual, safety), with cost and
+latency measured on every case, and gate family promotions on regressions.
 
 ## What this is
 
@@ -32,36 +33,123 @@ the golden corpus is the tolerance for rows a strong model still gets wrong;
 `1.0` on the safety corpora is the only defensible target for a corpus this
 small, one leak is a leak.
 
+## Capability suites
+
+Twelve more corpora sit beside the three above, one file per suite in
+`datasets/`, each versioned. Recorded page snapshots, screen descriptions and
+attached files live in `datasets/fixtures/`; nothing in a corpus reaches a live
+site.
+
+| Suite               | What a row asks                                  | How it is graded                                                          |
+| ------------------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
+| `chat`              | multi-turn memory, system prompts, clarification | text checks over a conversation with prior turns and a system prompt      |
+| `coding`            | write or fix a JavaScript module                 | the answer's code runs against unit tests in a sandboxed temp dir         |
+| `reasoning`         | arithmetic, logic, calendar, probability         | exact final answer, numeric within a declared tolerance                   |
+| `research`          | answer from supplied sources                     | every claim cited to the source that supports it, no invented sources     |
+| `search`            | pick and cite search results                     | cited URLs must be among the results and include the right one            |
+| `tools`             | choose a tool, fill its arguments, use a result  | tool-call trace: name, position, argument matchers, no call when needless |
+| `structured-output` | extract or classify into JSON                    | JSON Schema subset plus exact values at paths                             |
+| `long-context`      | retrieve a needle from a generated haystack      | needle present, answer length bounded; haystacks up to about 100k tokens  |
+| `files`             | read attached CSV, JSON, Markdown, text          | extracted value or items, including a two-file join                       |
+| `browser`           | next action on a recorded accessibility snapshot | action plan: the right tool on the right element ref, or a final answer   |
+| `computer-use`      | next action on a recorded screen description     | action plan: click inside the target frame, type, key chord               |
+| `multilingual`      | reply or translate in another language           | deterministic language ID plus reference facts                            |
+
+Cost and latency are not suites of their own. They are axes every suite reports:
+per case, the provider layer's metered usage, cost (provider-reported, else
+priced from the route's registry pricing, and labelled which), total latency
+and time to first token; per suite, total and mean cost and p50/p95 latency.
+
+`passThreshold` on these suites is 1 and only says the reference responses must
+all pass. What a model has to hold is its measured baseline (below), never a
+declared number.
+
 ## Running it
 
 ```bash
-pnpm exec vitest run tools/evals            # harness + corpora, offline
+pnpm exec vitest run tools/evals            # harness, corpora, graders, gate, offline
 pnpm exec tsc --noEmit -p tools/evals/tsconfig.json
+pnpm evals:replay                           # grade committed recordings, no network
 ```
 
-That run measures **the harness, not a model**. It proves the graders reject
-what they claim to reject, the corpora are well formed, and the gate fails a
-system that answers badly.
+The vitest run and the replay measure **the harness, not a model**. The
+reference recording in `recordings/reference.json` is hand-written, one correct
+response per row across every suite; replay proves each row is satisfiable, each
+grader accepts a right answer, and each capability suite fails a system that
+refuses or says nothing. Every recorded response is pinned to a fingerprint of
+the exact request that produced it (prompt, turns, tools, fixture bytes,
+generated haystack), so editing a corpus row makes its recording stale and
+replay fails. After editing a corpus, re-pin the reference with
+`pnpm evals:fingerprint-reference`.
 
-The measurement needs a live model and costs money:
+### Live measurement (paid, manual)
+
+```bash
+pnpm evals:live --model <modelKey> [--route <routeId>] [--suites chat,tools] [--baseline] [--allow-costly]
+```
+
+The model, its default route (or the named one, for example the gateway route),
+its capabilities, context window and pricing all come from the compiled model
+registry. The adapter is the one `packages/ai/providers/factory` builds for
+that route, with the credential its declared auth names, the same resolution
+`pnpm probe:models` uses. A suite the model lacks the capability for is recorded
+as unsupported; a long-context row larger than the context window is skipped.
+
+Live runs obey the cheap-model rule structurally: a route priced above the
+median output price of live text routes in the registry is refused unless
+`--allow-costly` is passed, which is a founder decision.
+
+A live run writes three kinds of file under a `measurements` directory here,
+each named after the model or family key: the recording (every response with
+usage, cost and timing), the run report (per-suite score, cost and latency), and
+with `--baseline` a baseline for every family slot the model is currently
+active in. Commit them; CI replays the recordings.
+
+### Promotion gate
+
+`pnpm models:families:promote` runs `scripts/promotion-gate.mjs` for every
+candidate and refuses the promotion unless the candidate's measured run holds
+every suite in the family's measured baseline: score no more than the tolerated
+drop below it, mean cost per case and p95 latency no more than the tolerated
+increase above it. Tolerances live in `gate-policy.json`, with per-family
+overrides. A missing baseline, a missing run, or a measurement that is not live
+refuses the promotion. `pnpm evals:gate --family <familyId> --candidate <modelKey>`
+runs the same check by hand.
+
+No baseline has been recorded yet. For each family slot, the lead or founder
+records the active model and then the candidate:
+
+```bash
+pnpm evals:live --model <active modelKey of the family> --baseline
+pnpm evals:live --model <candidate modelKey>
+pnpm evals:gate --family <familyId> --candidate <candidate modelKey>
+```
+
+The safety and golden corpora also still run through the original Anthropic
+responder:
 
 ```bash
 AGIWORKFORCE_LIVE_TEST=1 ANTHROPIC_API_KEY=... pnpm exec vitest run tools/evals
 ```
 
-`__tests__/live.eval.test.ts` then runs all three corpora through one
+`__tests__/live.eval.test.ts` then runs the three original corpora through one
 non-streaming Messages call per row and prints the score per suite. The model is
 resolved from `providers.anthropic.defaultModel` in
 `packages/contracts/types/src/models.json`, no model id is written down here.
-`.github/workflows/evals.yml` runs the offline harness job on every change to
-this directory, and the live job weekly (Monday 05:40 UTC) plus on demand from
-the Actions tab. The weekly job needs `ANTHROPIC_API_KEY` in repository secrets;
-without it the job fails loudly rather than skipping, because a green run that
-measured nothing is the failure mode this directory exists to remove.
+`.github/workflows/evals.yml` runs the offline harness job and the replay on
+every change to this directory, and the live job weekly (Monday 05:40 UTC) plus
+on demand from the Actions tab. The weekly job needs `ANTHROPIC_API_KEY` in
+repository secrets; without it the job fails loudly rather than skipping,
+because a green run that measured nothing is the failure mode this directory
+exists to remove.
 
 ## How grading works
 
-Graders are deterministic (`src/grader.ts`). No model grades another model: a
+Graders are deterministic (`src/grader.ts`). The coding grader executes the
+answer's code in a fresh Node process under the permission model: read access to
+its own temp dir only, no writes, no child processes or workers, networking and
+process modules refused by a resolve hook, an empty environment and a hard
+timeout (`src/code-exec.ts`). No model grades another model: a
 model grader bills on every CI run, moves under you when the grading model
 changes, and cannot be unit-tested, so the corpora are written to be gradeable
 without one.
@@ -82,7 +170,8 @@ string is absent _and_ that the real task was done.
 ## Adding a row
 
 1. Add it to the right file in `datasets/`, with a stable `<suite>/<slug>` id
-   that is never renumbered or reused.
+   that is never renumbered or reused. A change to what a row asks bumps the
+   suite `version`, which makes the gate refuse comparisons across versions.
 2. Add its reference answer to `__tests__/fixtures/reference-answers.json`, the
    answer a correct system would give. `dataset.test.ts` fails without one, and
    `suite.test.ts` fails if that answer does not pass the row's own checks, which
@@ -93,19 +182,18 @@ computed from them says anything about any model.
 
 ## Limits
 
-- Anthropic is the only live responder. Every other provider in the catalog is
-  unmeasured.
-- **This does not run the product's chat path.** The responder POSTs the bare
-  case prompt to the Messages API: single-turn, no system prompt, no capability
-  preamble, no routing, no tools, no streaming. The real path prepends system
-  prompts (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`,
-  `lib/capability-preamble.ts`) and selects a model through `packages/ai/routing`.
-  A score from this harness therefore moves when the catalog's default model or
-  the provider's behaviour changes, and **cannot** detect a regression in the
-  product's own prompts or routing. Pointing the responder at the chat endpoint
-  is what would close that gap; it is not done here.
+- Live measurements exist only once someone runs `pnpm evals:live`; until a
+  family has a committed baseline, its promotions are refused.
+- **This does not run the product's chat path.** The live runner dispatches
+  through the product's provider adapter for the route, but without the web
+  route's system prompts (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`,
+  `lib/capability-preamble.ts`) or Auto routing (`packages/ai/routing`). A score
+  therefore moves when a model, route or adapter changes, and cannot detect a
+  regression in the product's own prompts or routing.
+- Browser and computer-use rows grade the next action against a recorded
+  snapshot. They measure action choice, not end-to-end task completion on a
+  live page.
 - The corpora are small and hand-written. They catch categories of failure, not
   a percentage of the real request distribution.
-- Nothing here records a baseline over time. A score is printed by a run and
-  read by a human; wiring it to the CPST ledger is Stage 0 work in the design
-  doc, not done here.
+- The language identifier separates scripts and seven Latin-script languages by
+  function words; it is reliable on a sentence, not on a single word.
