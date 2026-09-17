@@ -560,6 +560,41 @@
       "file": "apps/web/lib/services/spend-alert-service.ts",
       "migration": 194,
       "reason": "spend alerts record one alert per crossing in organization_spend_alerts from 0194; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0194 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0194 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 199,
+      "reason": "the personal data export includes the notification category and target columns 0199 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/agent-notification-service.ts",
+      "migration": 199,
+      "reason": "agent run notices write a category through notification-service; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/notification-service.ts",
+      "migration": 199,
+      "reason": "the feed writer and reader use the category, dedupe key, read and target columns 0199 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/schedule-notification-service.ts",
+      "migration": 199,
+      "reason": "schedule notices write a category through notification-service; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
+    },
+    {
+      "file": "apps/web/features/notifications/lib/notification-target.ts",
+      "migration": 199,
+      "reason": "names the category field of a notification object returned by /api/notifications, not the database column, and never queries the notifications table; the route that does is covered by its own entry."
+    },
+    {
+      "file": "apps/web/shared/stores/notification-store.ts",
+      "migration": 199,
+      "reason": "names the category field of a notification object returned by /api/notifications, not the database column, and never queries the notifications table; the route that does is covered by its own entry."
+    },
+    {
+      "file": "apps/web/shared/stores/query-client.ts",
+      "migration": 199,
+      "reason": "names the category field of a notification object returned by /api/notifications, not the database column, and never queries the notifications table; the route that does is covered by its own entry."
     }
   ]
 }
