@@ -137,7 +137,9 @@ describe('media asset active-workspace scoping', () => {
     await expect(
       getMediaAssetByStoragePathname(USER_ID, 'media/file/asset.pdf', null, callerDb),
     ).resolves.toMatchObject({ id: ASSET_ID });
-    expect(mocks.query.mock.calls[0]?.[1]).toEqual([USER_ID, 'media/file/asset.pdf', null]);
+    // The fourth parameter is the temporary-chat flag 0218 added: a lookup must
+    // not return a durable asset when it asked for a temporary one, or the reverse.
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual([USER_ID, 'media/file/asset.pdf', null, false]);
 
     mocks.query.mockClear();
     await expect(listMediaAssets(USER_ID, {}, callerDb)).resolves.toHaveLength(1);
