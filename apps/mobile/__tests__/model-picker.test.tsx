@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -358,6 +358,11 @@ describe('ModelPickerSheet', () => {
       jobs: {},
     });
     const { getByLabelText } = renderPicker();
+    // The sheet reads what is installed asynchronously and marks every
+    // on-device model "download required" until that resolves. Pressing before
+    // the read settles selects a model the sheet believes is absent, and the
+    // wait below then never sees the store change.
+    await act(async () => {});
 
     fireEvent.press(getByLabelText(/AGI Lite/));
 
