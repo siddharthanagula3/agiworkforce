@@ -7,6 +7,7 @@ import {
   type AdminPolicy,
   type SecretHandlingMode,
 } from '@agiworkforce/types';
+import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
@@ -18,6 +19,7 @@ import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterpris
 import { resolveGoverningOrganizationIds } from '@/lib/services/governing-organizations';
 import {
   getCachedIpAllowList,
+  getLastKnownIpAllowList,
   setCachedIpAllowList,
 } from '@/lib/services/organization-ip-allow-list-cache';
 import {
@@ -27,6 +29,10 @@ import {
   type PolicyAsk,
   type PolicyDecision,
 } from '@/lib/services/organization-policy-evaluator';
+
+const ACCOUNT_CONTROL_READ_ATTEMPTS = 2;
+const ACCOUNT_CONTROL_UNAVAILABLE_MESSAGE =
+  'We could not confirm your workspace security settings, so this request was stopped. Try again in a moment, and contact your workspace administrator if it keeps happening.';
 
 interface ScopedRequest {
   headers: { get(name: string): string | null };
@@ -88,6 +94,38 @@ async function governingOrganizationIds(
   } catch (error) {
     logger.warn({ error, userId }, '[org-policy] governing organizations could not be resolved');
     return null;
+  }
+}
+
+async function withAccountControlRetry<T>(read: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < ACCOUNT_CONTROL_READ_ATTEMPTS; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function accountControlUnavailable() {
+  return createError.serviceUnavailable(ACCOUNT_CONTROL_UNAVAILABLE_MESSAGE);
+}
+
+async function governingOrganizationIdsOrDeny(
+  db: DatabaseAdapter,
+  userId: string,
+  control: string,
+): Promise<readonly string[]> {
+  try {
+    return await withAccountControlRetry(() => resolveGoverningOrganizationIds(db, userId));
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      `[${control}] governing organizations could not be resolved; request denied`,
+    );
+    throw accountControlUnavailable();
   }
 }
 
@@ -237,25 +275,34 @@ export async function resolveMfaPolicy(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<MfaPolicyResult> {
-  const organizationIds = await governingOrganizationIds(db, userId);
-  if (!organizationIds) return { policy: null, organizationId: null };
+  const organizationIds = await governingOrganizationIdsOrDeny(db, userId, 'mfa-policy');
 
   let firstGoverned: MfaPolicyResult | null = null;
+  let unreadableOrganizationId: string | null = null;
 
   for (const organizationId of organizationIds) {
     let policy: AdminPolicy | null;
     try {
-      policy = await readOrganizationPolicy(db, organizationId);
+      policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
     } catch (error) {
       logger.error(
         { error, userId, organizationId },
-        '[mfa-policy] policy read failed; organization treated as ungoverned',
+        '[mfa-policy] policy read failed after retry',
       );
+      unreadableOrganizationId ??= organizationId;
       continue;
     }
 
     if (policy?.requireMfa) return { policy, organizationId };
     firstGoverned ??= { policy, organizationId };
+  }
+
+  if (unreadableOrganizationId) {
+    logger.error(
+      { userId, organizationId: unreadableOrganizationId },
+      '[mfa-policy] mfa requirement unknown; request denied',
+    );
+    throw accountControlUnavailable();
   }
 
   return firstGoverned ?? { policy: null, organizationId: null };
@@ -307,8 +354,7 @@ export async function resolveIpAllowListPolicy(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<IpAllowListPolicyResult> {
-  const organizationIds = await governingOrganizationIds(db, userId);
-  if (!organizationIds) return { governed: [] };
+  const organizationIds = await governingOrganizationIdsOrDeny(db, userId, 'ip-allow-list');
 
   const governed: GovernedIpAllowList[] = [];
 
@@ -319,17 +365,29 @@ export async function resolveIpAllowListPolicy(
       continue;
     }
 
+    let policy: AdminPolicy | null;
     try {
-      const policy = await readOrganizationPolicy(db, organizationId);
-      const cidrs = policy?.ipAllowList ?? [];
-      setCachedIpAllowList(organizationId, cidrs);
-      governed.push({ organizationId, cidrs });
+      policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
     } catch (error) {
-      logger.error(
+      const lastKnown = getLastKnownIpAllowList(organizationId);
+      if (lastKnown === undefined) {
+        logger.error(
+          { error, userId, organizationId },
+          '[ip-allow-list] policy read failed after retry and no allow list is known; request denied',
+        );
+        throw accountControlUnavailable();
+      }
+      logger.warn(
         { error, userId, organizationId },
-        '[ip-allow-list] policy read failed; organization treated as ungoverned',
+        '[ip-allow-list] policy read failed after retry; enforcing the last known allow list',
       );
+      governed.push({ organizationId, cidrs: lastKnown });
+      continue;
     }
+
+    const cidrs = policy?.ipAllowList ?? [];
+    setCachedIpAllowList(organizationId, cidrs);
+    governed.push({ organizationId, cidrs });
   }
 
   return { governed };
