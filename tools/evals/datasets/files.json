@@ -58,7 +58,7 @@
       "prompt": "From the attached meeting notes, list only the action items owned by Priya, one per line.",
       "attachments": [
         {
-          "fixture": "files/meeting-notes.md",
+          "fixture": "files/meeting-notes.md.txt",
           "mediaType": "text/markdown"
         }
       ],
