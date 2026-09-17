@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 345b31449f8149352e50fbd371ff73f8e9428378a270c3431806582ad113f36d -->
+<!-- ui-gaps-csv-sha256: b0c5e50789adb957649ab14417517fa132146733e9eca1c2c5cb4fc5d6458bc3 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 53 P1, 125 P2, 40 P3.
+- Unresolved: 0 P0, 53 P1, 124 P2, 40 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  218 |
+| Open        |  217 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   97 |
+| Done        |   98 |
 | Not Planned |   26 |
 
 ## P0
@@ -6724,7 +6724,7 @@ Drive an announcement card from the model catalogue metadata (packages/contracts
 
 ### GAP-292, Effort picker leaves the webview and shows no selected-state checkmark
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-interaction
 - **Reference:** Codex · VS Code extension · Reasoning effort menu with nested model and speed
@@ -6739,7 +6739,7 @@ Re-sited 2026-08-21 per the earlier verification (webviewContent.ts was refactor
 
 **Suggested fix**
 
-Reuse the existing model-popover component for mode and effort: render the four levels with descriptions and a codicon-check on the active one, keep the native QuickPick only as the command-palette path, and post setEffort/setMode (both handlers already exist at ChatStateManager.ts:384-406).
+Done: controlsSummary now opens an inline #controlsPopover reusing the model-popover markup, with Mode and Reasoning effort groups, a menuitemradio per option and aria-checked on the live value. It posts setMode/setEffort, which already enforce consent host-side, and paints only what the host echoes back. wireMenuKeyboard gives it the same focus-first, arrow-wrap, Escape-returns-focus contract as the plus menu. The native QuickPick stays as the command-palette path; its composer scope only ever offered these same two rows.
 
 **Reference screenshot(s)**
 
