@@ -4,6 +4,7 @@
     "copied": "Copied",
     "close": "Close",
     "refresh": "Refresh",
+    "tryAgain": "Try again",
     "delete": "Delete",
     "options": "Options",
     "settings": "Settings",
@@ -343,6 +344,8 @@
       "title": "Live artifacts",
       "subtitle": "Outputs from scheduled tasks. Refreshed on each run.",
       "loading": "Loading artifacts…",
+      "loadFailed": "Could not load your artifacts.",
+      "loadFailedStale": "Could not refresh your artifacts. Showing the last list that loaded.",
       "empty": "No artifacts yet. Run a scheduled task to generate outputs.",
       "emptyTitle": "No artifacts yet",
       "startChat": "Start a chat"

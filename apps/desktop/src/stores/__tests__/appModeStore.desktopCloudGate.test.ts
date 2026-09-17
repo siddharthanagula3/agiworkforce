@@ -22,7 +22,13 @@ import {
   DESKTOP_CLOUD_TAGLINE,
   DESKTOP_CLOUD_TAGLINE_SHORT,
 } from '../../constants/cloudAvailability';
-import v3English from '../../i18n/locales/en/v3.json';
+// The shipped copy comes from the shared i18n package. Asserting against a
+// copy under apps/desktop let this guard pass while the real string changed.
+import { resources } from '@agiworkforce/i18n';
+
+const v3English = resources.en.v3 as {
+  sidebar: { mode: { cloudUnavailable: string } };
+};
 
 const BANNED = /coming soon|invite|waitlist|private[\s-]?beta/i;
 

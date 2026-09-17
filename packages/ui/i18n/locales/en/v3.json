@@ -4,6 +4,7 @@
     "copied": "Copied",
     "close": "Close",
     "refresh": "Refresh",
+    "tryAgain": "Try again",
     "delete": "Delete",
     "options": "Options",
     "settings": "Settings",
@@ -343,6 +344,8 @@
       "title": "Artifacts",
       "subtitle": "Saved outputs, generated files, and reusable work.",
       "loading": "Loading artifacts…",
+      "loadFailed": "Could not load your artifacts.",
+      "loadFailedStale": "Could not refresh your artifacts. Showing the last list that loaded.",
       "empty": "No artifacts yet. Generate or save an artifact to see it here.",
       "emptyTitle": "No artifacts yet",
       "startChat": "Start a chat"

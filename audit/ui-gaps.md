@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 0e979277075e617f897caef06dce5c1272d11382483b1b8e776b739d465f6ab7 -->
+<!-- ui-gaps-csv-sha256: 090ba860dff11b575a5531ba9d189d18a5bda968654f7877047934e429bdcbc5 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 53 P1, 123 P2, 40 P3.
+- Unresolved: 0 P0, 53 P1, 122 P2, 40 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  216 |
+| Open        |  215 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   99 |
+| Done        |  100 |
 | Not Planned |   26 |
 
 ## P0
@@ -4792,7 +4792,7 @@ Add a 'Default permissions' preset selector (e.g. Always ask / Allow low-risk ac
 
 ### GAP-208, Adopt the partial-failure + empty + unselected triple-state pattern for list panels
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Pull requests list states
@@ -4807,7 +4807,7 @@ apps/desktop/src/features/v3/AgiWorkProjects.tsx lines 324-354 (the error/loadin
 
 **Suggested fix**
 
-In AgiWorkProjects.tsx, decouple the error banner from the list: render the partial-error banner ABOVE the project grid (not instead of it) whenever projects.length > 0, so the 'last loaded list' claim in the copy becomes true, and reserve the full-panel error state for the projects.length === 0 case.
+Done 2026-09-16, though not where the row pointed. AgiWorkProjects had already been fixed: the banner is a sibling of the grid now, so the 'Showing the last loaded project list' copy is true. The row admitted it never checked the other two panels, and that is where the defect was. AgiWorkArtifacts modelled no failure at all: listPersistedArtifacts swallowed the error and returned [], so a failed load rendered the empty state, telling someone with artifacts that they had none and offering to start a chat. The store now keeps summariesError, and the panel shows a retryable banner, keeps the last list when a refresh fails, and reserves the empty state for a load that genuinely returned nothing. AgiWorkScheduled already had the pattern.
 
 **Reference screenshot(s)**
 
