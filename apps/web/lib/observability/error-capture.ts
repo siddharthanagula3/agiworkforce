@@ -2,6 +2,7 @@ import { AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { isSentryConfigured } from '@/lib/sentry-shared';
 
+import { OBSERVABILITY_ATTRIBUTE } from './attributes';
 import { recordFailure } from './metrics';
 
 const FIRST_SERVER_ERROR_STATUS = 500;
@@ -15,6 +16,12 @@ export interface ServerErrorContext {
 export interface WorkerFailureContext {
   readonly worker: string;
   readonly jobId: string;
+}
+
+export interface ModelFailureContext {
+  readonly provider: string;
+  readonly model: string;
+  readonly errorCode: string;
 }
 
 function declaredStatus(error: unknown): number | null {
@@ -53,8 +60,18 @@ export function captureServerError(error: unknown, context: ServerErrorContext):
 export function captureWorkerFailure(error: unknown, context: WorkerFailureContext): void {
   recordFailure('worker', context.worker);
   sendToErrorMonitoring(error, {
-    'agi.failure.kind': 'worker',
+    [OBSERVABILITY_ATTRIBUTE.failureKind]: 'worker',
     'worker.name': context.worker,
     'worker.job_id': context.jobId,
+  });
+}
+
+export function captureModelFailure(error: unknown, context: ModelFailureContext): void {
+  recordFailure('model', context.errorCode);
+  sendToErrorMonitoring(error, {
+    [OBSERVABILITY_ATTRIBUTE.failureKind]: 'model',
+    [OBSERVABILITY_ATTRIBUTE.providerName]: context.provider,
+    [OBSERVABILITY_ATTRIBUTE.requestModel]: context.model,
+    [OBSERVABILITY_ATTRIBUTE.errorType]: context.errorCode,
   });
 }

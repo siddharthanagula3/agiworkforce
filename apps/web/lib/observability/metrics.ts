@@ -21,11 +21,13 @@ export const METRIC_NAME = {
   httpDuration: 'http.server.request.duration',
   toolCalls: 'agi.tool.calls',
   toolDuration: 'agi.tool.duration',
+  browserTasks: 'agi.browser.tasks',
+  notificationDeliveries: 'agi.notification.deliveries',
   failures: 'agi.failures',
 } as const;
 
 export type FailureKind =
-  'api' | 'browser' | 'connector' | 'mcp' | 'model' | 'remote' | 'tool' | 'worker';
+  'api' | 'browser' | 'connector' | 'mcp' | 'model' | 'notification' | 'remote' | 'tool' | 'worker';
 
 export type SpanOutcome = 'ok' | 'error';
 
@@ -42,6 +44,8 @@ interface Instruments {
   readonly httpDuration: Histogram;
   readonly toolCalls: Counter;
   readonly toolDuration: Histogram;
+  readonly browserTasks: Counter;
+  readonly notificationDeliveries: Counter;
   readonly failures: Counter;
 }
 
@@ -58,6 +62,8 @@ function instruments(): Instruments {
     httpDuration: meter.createHistogram(METRIC_NAME.httpDuration, { unit: MILLISECONDS }),
     toolCalls: meter.createCounter(METRIC_NAME.toolCalls),
     toolDuration: meter.createHistogram(METRIC_NAME.toolDuration, { unit: MILLISECONDS }),
+    browserTasks: meter.createCounter(METRIC_NAME.browserTasks),
+    notificationDeliveries: meter.createCounter(METRIC_NAME.notificationDeliveries),
     failures: meter.createCounter(METRIC_NAME.failures),
   };
   cached = { provider, instruments: created };
@@ -113,6 +119,47 @@ export function recordFailure(kind: FailureKind, errorType?: string): void {
       [OBSERVABILITY_ATTRIBUTE.errorType]: errorType,
     }),
   );
+}
+
+export type BrowserTaskStatus =
+  'handed_off' | 'completed' | 'failed' | 'blocked' | 'sent_to_device';
+
+export function recordBrowserTask(input: {
+  status: BrowserTaskStatus;
+  surface: string;
+  errorType?: string | undefined;
+}): void {
+  instruments().browserTasks.add(
+    1,
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.browserTaskStatus]: input.status,
+      [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+    }),
+  );
+  if (input.status === 'failed') recordFailure('browser', input.errorType);
+}
+
+export type NotificationChannel = 'email' | 'push_expo' | 'push_web';
+
+export type NotificationOutcome = 'delivered' | 'failed' | 'not_configured';
+
+export function recordNotificationDelivery(input: {
+  channel: NotificationChannel;
+  outcome: NotificationOutcome;
+  reason?: string | undefined;
+  count?: number;
+}): void {
+  const attempts = Math.max(0, Math.trunc(input.count ?? 1));
+  if (attempts === 0) return;
+  instruments().notificationDeliveries.add(
+    attempts,
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.notificationChannel]: input.channel,
+      [OBSERVABILITY_ATTRIBUTE.notificationOutcome]: input.outcome,
+      [OBSERVABILITY_ATTRIBUTE.notificationReason]: input.reason,
+    }),
+  );
+  if (input.outcome === 'failed') recordFailure('notification', input.reason);
 }
 
 const TOOL_FAILURE_STATUS = 'failed';

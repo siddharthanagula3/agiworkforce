@@ -1,0 +1,139 @@
+name: Cross-version and cross-surface
+
+# §109 pairs an N-1 artifact of one surface with the current build of another,
+# and §110 walks one chain across every surface. Most pairs cannot run: the CLI
+# is the only surface with a published predecessor, and the §110 chain needs a
+# QA enterprise tenant that does not exist yet. Those gaps live in
+# .github/cross-version-matrix.json and .github/cross-surface-e2e-chain.json,
+# and check-cross-version-matrix.mjs fails if either file ever claims coverage
+# it does not have. The unreleased-pairs job below fails on purpose, on a
+# schedule, so the gap stays visible without blocking unrelated merges.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: cross-version-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  matrix-integrity:
+    name: Matrices match the checklist
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Every §109 pair and §110 step is recorded, covered or blocked
+        run: node scripts/check-cross-version-matrix.mjs
+
+      - name: Guard regression tests
+        run: node --test scripts/check-cross-version-matrix.test.mjs
+
+  covered-pairs:
+    name: ${{ matrix.pair }}
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pair: new-cli-old-vscode
+            runtime: rust
+          - pair: old-cli-new-vscode
+            runtime: node
+          - pair: new-remote-old-host
+            runtime: node
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: matrix.runtime == 'node'
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: ${{ matrix.runtime == 'node' && 'pnpm' || '' }}
+
+      - name: Install dependencies
+        if: matrix.runtime == 'node'
+        run: pnpm install --frozen-lockfile
+
+      - name: Read the command this pair is covered by
+        id: pair
+        run: |
+          COMMAND=$(node -e "
+            const matrix = require('./.github/cross-version-matrix.json');
+            const pair = matrix.pairs.find((entry) => entry.id === process.argv[1]);
+            if (!pair || pair.status !== 'covered') {
+              throw new Error(process.argv[1] + ' is not a covered pair');
+            }
+            process.stdout.write(pair.command);
+          " '${{ matrix.pair }}')
+          echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
+
+      - name: Run the skew suite
+        run: ${{ steps.pair.outputs.command }}
+
+  unreleased-pairs:
+    name: Pairs with no released predecessor (expected to fail)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Name every pair that cannot be tested and what would unblock it
+        run: |
+          node -e "
+            const matrix = require('./.github/cross-version-matrix.json');
+            const blocked = matrix.pairs.filter((pair) => pair.status === 'blocked');
+            for (const pair of blocked) {
+              console.error('::error title=' + pair.title + '::' + pair.reason + ' Unblocked by: ' + pair.unblockedBy);
+            }
+            console.error(blocked.length + ' of ' + matrix.pairs.length + ' §109 pairs cannot be tested yet.');
+            process.exit(blocked.length === 0 ? 0 : 1);
+          "
+
+  cross-surface-chain:
+    name: Cross-surface E2E chain (§110)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Without the tenant secrets the runner writes the list of steps that did
+      # not run into the job summary and exits non-zero. On push and pull
+      # request it reports rather than fails, so an absent founder credential
+      # does not block merges; the weekly and manual runs let it fail, which is
+      # what keeps the gap from reading as a pass.
+      - name: Walk the chain against the QA enterprise tenant
+        env:
+          QA_ENTERPRISE_TENANT_ID: ${{ secrets.QA_ENTERPRISE_TENANT_ID }}
+          QA_ENTERPRISE_TENANT_TOKEN: ${{ secrets.QA_ENTERPRISE_TENANT_TOKEN }}
+          AGI_CHAIN_REPORT_ONLY: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '0' || '1' }}
+        run: node scripts/run-cross-surface-chain.mjs

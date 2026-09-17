@@ -2,7 +2,7 @@ import 'server-only';
 
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
-import { recordFailure } from '@/lib/observability/metrics';
+import { captureModelFailure } from '@/lib/observability/error-capture';
 import { withSpan, type ActiveSpan } from '@/lib/observability/span';
 import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 import { computeAnthropicCacheConfig } from './canonical-request';
@@ -116,8 +116,13 @@ async function startProviderStreamInner(
   }
   if (!first.done && first.value.type === 'error') {
     const mapped = mapError(first.value);
-    span.setAttributes({ 'gen_ai.response.error_code': first.value.code ?? 'unknown' });
-    recordFailure('model', first.value.code ?? MODEL_FAILURE_UNKNOWN_CODE);
+    const errorCode = first.value.code ?? MODEL_FAILURE_UNKNOWN_CODE;
+    span.setAttributes({ 'gen_ai.response.error_code': errorCode });
+    captureModelFailure(mapped, {
+      provider: adapter.id,
+      model: chatRequest.model,
+      errorCode,
+    });
     const status = first.value.code ? Number(first.value.code) : Number.NaN;
     if (Number.isInteger(status) && status >= 100 && status <= 599) {
       (mapped as Error & { status?: number }).status = status;
