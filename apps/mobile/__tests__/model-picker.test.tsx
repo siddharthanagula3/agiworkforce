@@ -190,7 +190,7 @@ function sortedEfforts(reasoning: ModelReasoning): readonly string[] {
 }
 
 function effortLabel(effort: string): string {
-  if (effort === 'xhigh') return 'xHigh';
+  if (effort === 'xhigh') return 'Extra high';
   return `${effort.charAt(0).toUpperCase()}${effort.slice(1)}`;
 }
 
