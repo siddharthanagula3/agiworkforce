@@ -37,8 +37,10 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 }));
 
 const recordSettledProviderCostMock = vi.fn(async (..._args: unknown[]) => {});
+const recordCacheHitCostEventMock = vi.fn(async (..._args: unknown[]) => {});
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCostMock(...args),
+  recordCacheHitCostEvent: (...args: unknown[]) => recordCacheHitCostEventMock(...args),
 }));
 
 import { callSupportModel } from '../answer/model-route';
