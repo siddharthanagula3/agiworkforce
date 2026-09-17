@@ -25,6 +25,7 @@ import { routeOutcomeClassForCategory, type ResilienceScope } from '@agiworkforc
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  resolveWorkspaceControlsForRequest,
   buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveAuthenticatedSurface } from './lib/request-surface';
@@ -383,7 +384,7 @@ async function dispatchChatCompletions(
   // Runs with the spend gate, which reads a different row and consults nothing
   // this one decides. The policy verdict is still reported first, so a
   // workspace that blocks a model says so even when the budget is also spent.
-  const [policyGateResponse, spendGateResponse] = await Promise.all([
+  const [policyGateResponse, spendGateResponse, workspaceControls] = await Promise.all([
     timePhase(CHAT_TURN_PHASE.policyGate, () =>
       buildOrganizationPolicyGateResponse(
         userId,
@@ -400,13 +401,17 @@ async function dispatchChatCompletions(
     // The workspace budget, checked before any credit is reserved so a turn
     // that a spend cap will refuse never spends anything first.
     timePhase(CHAT_TURN_PHASE.spendGate, () => buildSpendLimitGateResponse(userId)),
+    timePhase(CHAT_TURN_PHASE.policyGate, () =>
+      resolveWorkspaceControlsForRequest(userId, request, getSecurityHeaders()),
+    ),
   ]);
   if (policyGateResponse) return policyGateResponse;
   if (spendGateResponse) return spendGateResponse;
+  if (!workspaceControls.ok) return workspaceControls.response;
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
   const processResult = await timePhase(CHAT_TURN_PHASE.processRequest, () =>
-    processRequest(request, authResult),
+    processRequest(request, authResult, { workspaceControls: workspaceControls.controls }),
   );
   if (!processResult.ok) return processResult.response;
 

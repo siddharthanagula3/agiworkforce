@@ -14,6 +14,10 @@
 
 import type { Provider } from '../provider';
 import type { PrivacyMode, SourceSurface, SyncedAppSurface } from '../suite-contracts';
+import { DEFAULT_WORKSPACE_CONTROLS, type WorkspaceControls } from './workspace-controls';
+
+export * from './permissions';
+export * from './workspace-controls';
 
 export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -113,7 +117,9 @@ export interface AdminPolicy {
   monthlySpendCapCents: number | null;
   zeroDataRetentionOnly: boolean;
   ipAllowList: readonly string[];
+  controls: WorkspaceControls;
   metadata?: Record<string, unknown>;
+  revision?: number;
   updatedAt: string;
 }
 
@@ -420,6 +426,7 @@ export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId'
   monthlySpendCapCents: null,
   zeroDataRetentionOnly: false,
   ipAllowList: [],
+  controls: DEFAULT_WORKSPACE_CONTROLS,
 };
 
 export const MANAGED_COMPUTE_MARGIN_POLICY = {

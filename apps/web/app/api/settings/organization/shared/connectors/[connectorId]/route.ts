@@ -8,7 +8,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { requireOrgAdmin, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { requireSharingManager, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { shareConnector, unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
 
@@ -37,7 +37,7 @@ async function handleShare(
   const parsedConnectorId = parseConnectorId(connectorId);
 
   const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgAdmin(await resolveOrgMembership(db, userId));
+  const membership = await requireSharingManager(await resolveOrgMembership(db, userId), userId);
 
   const shared = await shareConnector(db, {
     organizationId: membership.organizationId,
@@ -62,7 +62,7 @@ async function handleUnshare(
   const parsedConnectorId = parseConnectorId(connectorId);
 
   const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgAdmin(await resolveOrgMembership(db, userId));
+  const membership = await requireSharingManager(await resolveOrgMembership(db, userId), userId);
 
   const removed = await unshareConnector(db, membership.organizationId, parsedConnectorId);
   if (!removed) {

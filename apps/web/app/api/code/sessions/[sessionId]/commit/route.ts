@@ -81,6 +81,7 @@ async function handleCommit(request: NextRequest, context: RouteContext) {
     subscription,
     resolveCloudChatSurface(request),
     { request },
+    'code',
   );
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;

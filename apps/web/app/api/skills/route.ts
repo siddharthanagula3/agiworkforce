@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -145,6 +147,13 @@ async function handleCreateSkill(request: NextRequest) {
   if (rateLimit) return rateLimit;
 
   const { db, userId } = await getUserScopedDb(request);
+  const featureGate = await buildWorkspaceFeatureGateResponse(
+    userId,
+    request,
+    'skills',
+    resolveCloudChatSurface(request),
+  );
+  if (featureGate) return featureGate;
   const uploaded = (request.headers.get('content-type') ?? '').includes(MULTIPART_CONTENT_TYPE);
 
   let draft;

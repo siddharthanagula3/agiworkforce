@@ -31,6 +31,25 @@ const INLINE_ADMIN_ROLE =
 const HELPER = 'isOrganizationAdminRole';
 const HELPER_SOURCE = 'packages/contracts/types/src/enterprise/index.ts';
 
+const MIGRATIONS_DIR = 'apps/web/db/neon';
+const FIRST_PERMISSION_GRID_MIGRATION = 200;
+const MIGRATION_FILE = /^(\d{4})_.+\.sql$/;
+const SQL_ROLE_ARRAY_CHECK =
+  /\bapp_has_org_role\s*\(|\bcurrent_app_org_role\s*\(\s*\)\s*(?:in|=)\s*[('"]/i;
+const SQL_PERMISSION_HELPER = 'app_has_org_permission';
+
+function stripSqlComments(source) {
+  return source.replace(/--[^\n]*/g, '');
+}
+
+function findRoleArrayChecksInMigration(source) {
+  const hits = [];
+  for (const [index, line] of stripSqlComments(source).split('\n').entries()) {
+    if (SQL_ROLE_ARRAY_CHECK.test(line)) hits.push({ line: index + 1, text: line.trim() });
+  }
+  return hits;
+}
+
 function walk(dir, files = []) {
   let entries;
   try {
@@ -64,13 +83,40 @@ for (const file of walk(root)) {
   }
 }
 
+const sqlOffenders = [];
+const migrationsAbs = path.join(root, MIGRATIONS_DIR);
+if (fs.existsSync(migrationsAbs)) {
+  for (const name of fs.readdirSync(migrationsAbs).sort()) {
+    const match = MIGRATION_FILE.exec(name);
+    if (!match || Number.parseInt(match[1], 10) < FIRST_PERMISSION_GRID_MIGRATION) continue;
+    const source = fs.readFileSync(path.join(migrationsAbs, name), 'utf8');
+    for (const hit of findRoleArrayChecksInMigration(source)) {
+      sqlOffenders.push(`${MIGRATIONS_DIR}/${name}:${hit.line}  ${hit.text}`);
+    }
+  }
+}
+
 if (offenders.length > 0) {
   console.error(
     `check:org-role-checks, ${offenders.length} inline organization-admin role test(s) found.\n` +
       `Use ${HELPER}() from @agiworkforce/types so one edit changes every gate.\n`,
   );
   for (const offender of offenders) console.error(`  ${offender}`);
-  process.exit(1);
 }
 
-console.log('check:org-role-checks, every organization-admin gate goes through the shared helper.');
+if (sqlOffenders.length > 0) {
+  console.error(
+    `check:org-role-checks, ${sqlOffenders.length} role-name check(s) in a migration from ` +
+      `${String(FIRST_PERMISSION_GRID_MIGRATION).padStart(4, '0')} on.\n` +
+      `A policy asks ${SQL_PERMISSION_HELPER}(organization_id, '<permission>') so custom, ` +
+      `additional and group-granted roles are honoured (0200).\n`,
+  );
+  for (const offender of sqlOffenders) console.error(`  ${offender}`);
+}
+
+if (offenders.length > 0 || sqlOffenders.length > 0) process.exit(1);
+
+console.log(
+  'check:org-role-checks, every organization-admin gate goes through the shared helper, ' +
+    'and every new policy asks for a permission.',
+);

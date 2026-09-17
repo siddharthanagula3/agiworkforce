@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { getDefaultModelFor } from '@agiworkforce/types';
+import { DEFAULT_WORKSPACE_CONTROLS, getDefaultModelFor } from '@agiworkforce/types';
 
 const PRO_CHAT_MODEL = getDefaultModelFor('pro', 'chat');
 
@@ -204,5 +204,80 @@ describe('device tools are bound to a declared desktop host', () => {
     expect(result.chatSurface).toBe('api');
     expect(result.deviceHost).toBeUndefined();
     expect(toolNames(result.llmRequest.tools)).not.toContain('device_read_file');
+  });
+});
+
+describe('workspace feature controls reach the turn', () => {
+  const computerUseOff = {
+    ...DEFAULT_WORKSPACE_CONTROLS,
+    featureAccess: { ...DEFAULT_WORKSPACE_CONTROLS.featureAccess, computer_use: false },
+    appliedOverrideIds: [],
+  };
+
+  it('withholds computer-use tools from a desktop whose workspace turned computer use off', async () => {
+    const declared = { ...DECLARATION, capabilities: ['filesystem.read', 'computer.use'] };
+    const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'device-controls-1',
+        'x-agi-surface': 'desktop',
+        [DEVICE_HOST_HEADER]: encodeDesktopHostDeclaration(declared as DesktopHostDeclaration),
+      },
+      body: JSON.stringify({
+        model: PRO_CHAT_MODEL,
+        messages: [{ role: 'user', content: 'take a screenshot' }],
+        stream: true,
+      }),
+    });
+
+    const result = await processRequest(request, auth(), { workspaceControls: computerUseOff });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deviceHost?.capabilities).toEqual(['filesystem.read']);
+    const names = toolNames(result.llmRequest.tools);
+    expect(names).toContain('device_read_file');
+    expect(
+      names.some(
+        (name) =>
+          name.startsWith('device_') &&
+          name !== 'device_read_file' &&
+          name !== 'device_list_folder',
+      ),
+    ).toBe(false);
+  });
+
+  it('refuses a Work turn before reserving anything when the workspace turned Work off', async () => {
+    const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'work-off-1',
+        'x-agi-surface': 'web',
+      },
+      body: JSON.stringify({
+        model: PRO_CHAT_MODEL,
+        messages: [{ role: 'user', content: 'plan the migration' }],
+        work_mode: 'agiwork',
+        stream: true,
+      }),
+    });
+
+    const result = await processRequest(request, auth(), {
+      workspaceControls: {
+        ...DEFAULT_WORKSPACE_CONTROLS,
+        featureAccess: { ...DEFAULT_WORKSPACE_CONTROLS.featureAccess, work: false },
+        appliedOverrideIds: [],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(403);
+    expect(await result.response.json()).toMatchObject({
+      error: { code: 'feature_disabled', feature: 'work' },
+    });
+    expect(mocks.reserveManagedUsage).not.toHaveBeenCalled();
   });
 });

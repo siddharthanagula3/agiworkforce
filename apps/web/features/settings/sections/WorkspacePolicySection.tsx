@@ -10,7 +10,10 @@ import {
 } from '../hooks/use-settings-queries';
 import { isValidIpOrCidr } from '../schemas/settings-validation';
 
-type PolicyDraft = Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt'>;
+type PolicyDraft = Omit<
+  WorkspaceAdminPolicy,
+  'organizationId' | 'updatedAt' | 'controls' | 'revision'
+>;
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',

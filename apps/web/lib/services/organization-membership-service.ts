@@ -36,7 +36,7 @@ export async function requireOrganizationOwner(
     throw createError.forbidden('You are not a member of this organization');
   }
   if (membership.role !== 'owner') {
-    throw createError.forbidden(`Only the workspace owner can ${action}`);
+    throw createError.forbidden(`Only the Primary Owner can ${action}`).asUserSafe();
   }
   return membership;
 }

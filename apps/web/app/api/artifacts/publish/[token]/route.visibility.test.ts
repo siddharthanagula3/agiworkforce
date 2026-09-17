@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   csrf: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   scopedDb: vi.fn(),
+  permissions: new Set<string>(['content.read', 'content.share']),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -14,6 +15,17 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: (...a: unknown[]) => mocks.r
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...a: unknown[]) => mocks.scopedDb(...a),
 }));
+vi.mock('@/lib/services/organization-permission-service', async () => {
+  const { createError } = await import('@/lib/errors');
+  return {
+    SHARE_INTO_WORKSPACE_DENIED_MESSAGE: 'read-only',
+    requireOrganizationPermission: vi.fn(
+      async (_userId: string, _organizationId: string, permission: string, message: string) => {
+        if (!mocks.permissions.has(permission)) throw createError.forbidden(message);
+      },
+    ),
+  };
+});
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -97,6 +109,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.csrf.mockResolvedValue(null);
   mocks.rateLimit.mockResolvedValue(null);
+  mocks.permissions = new Set(['content.read', 'content.share']);
   mocks.query.mockImplementation(async (sql: string) => respond('organization')(sql));
   mocks.scopedDb.mockResolvedValue({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
@@ -121,6 +134,24 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
       statements.some((sql) => sql.includes('insert into public.organization_shared_artifacts')),
     ).toBe(true);
     expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(true);
+  });
+
+  it('refuses a read-only viewer before any grant row is written', async () => {
+    mocks.permissions = new Set(['content.read']);
+
+    const response = await call({ visibility: 'organization' });
+
+    expect(response.status).toBe(403);
+    const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
+    expect(statements.some((sql) => sql.includes('organization_shared_artifacts'))).toBe(false);
+    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(false);
+  });
+
+  it('still lets a viewer withdraw their own artifact from the workspace', async () => {
+    mocks.permissions = new Set(['content.read']);
+    mocks.query.mockImplementation(async (sql: string) => respond('public')(sql));
+
+    expect((await call({ visibility: 'public' })).status).toBe(200);
   });
 
   it('drops the grant row when the audience goes back to public', async () => {

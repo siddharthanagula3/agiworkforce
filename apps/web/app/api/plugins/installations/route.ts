@@ -3,6 +3,8 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -53,6 +55,14 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
+
+  const featureGate = await buildWorkspaceFeatureGateResponse(
+    userId,
+    request,
+    'plugins',
+    resolveCloudChatSurface(request),
+  );
+  if (featureGate) return featureGate;
 
   const db = getNeonDb();
   const policy = await evaluatePluginPolicyForUser({
