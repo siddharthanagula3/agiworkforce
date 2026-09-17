@@ -279,6 +279,39 @@ describe('handleNotificationResponse, no dead-end deep links', () => {
     expect(mockRouterPush).toHaveBeenCalledWith('/(app)/tasks');
   });
 
+  it('opens the approval a code-session notification is about, not the list of sessions', () => {
+    signIn();
+    fireNotification({
+      type: 'agent_approval_needed',
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      approvalId: 'req-9',
+    });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(app)/companion/code/[threadId]',
+      params: { threadId: 'thread-1', rootId: 'root-1', approvalId: 'req-9' },
+    });
+  });
+
+  it('opens the agent an escalated approval is about when the payload names one', () => {
+    signIn();
+    fireNotification({
+      type: 'approval_pending_escalation',
+      agentId: 'agent-7',
+      requestId: 'req-3',
+    });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(app)/companion/agent/[id]',
+      params: { id: 'agent-7', approvalId: 'req-3' },
+    });
+  });
+
+  it('still opens the session list when an approval notification names no session', () => {
+    signIn();
+    fireNotification({ type: 'agent_approval_needed' });
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
+  });
+
   it('routes the schedule_run push the web backend actually sends to /(app)/schedules', () => {
     signIn();
     fireNotification({ type: 'schedule_run', taskId: 'task-1' });

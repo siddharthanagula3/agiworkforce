@@ -420,6 +420,11 @@ pub struct Cli {
     #[arg(long = "no-session-persistence", default_value_t = true, action = clap::ArgAction::SetFalse)]
     session_persistence: bool,
 
+    /// Plain output for a screen reader: no colour, no spinners, no rules.
+    /// Also enabled by setting AGI_PLAIN in the environment.
+    #[arg(long = "plain", global = true)]
+    plain: bool,
+
     /// Resume a session at a specific event/turn marker.
     #[arg(long = "resume-session-at", value_name = "MARKER")]
     resume_session_at: Option<String>,
@@ -2934,6 +2939,11 @@ pub async fn run_main() -> Result<()> {
             terminal_style::warning("note:")
         );
     }
+    // Plain mode has to be in force before anything prints, including the
+    // banner and any spinner a subcommand starts, so it is published here
+    // rather than resolved per call site.
+    output::set_plain_output(cli.plain || output::plain_output_requested_by_environment());
+
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
     // `--no-session-persistence` is a privacy opt-out, so it has to be in force
     // before ANY session is constructed, including inside the subcommand arms

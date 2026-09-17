@@ -176,6 +176,8 @@ function fakeRuntime(
     initializeExtra?: Record<string, unknown>;
     initializeError?: { code: number; message: string; data?: unknown };
     trustMode?: string;
+    createdBy?: string;
+    threadStatus?: string;
   } = {},
 ): {
   spawn: SpawnLocalRuntime;
@@ -263,8 +265,8 @@ function fakeRuntime(
                         trustMode: options.trustMode ?? 'byok',
                         createdAt: '2026-07-14T00:00:00Z',
                         updatedAt: '2026-07-14T00:00:00Z',
-                        createdBy: 'vscode',
-                        status: 'idle',
+                        createdBy: options.createdBy ?? 'vscode',
+                        status: options.threadStatus ?? 'idle',
                       },
                     ],
                   }
@@ -466,6 +468,21 @@ describe('LocalRuntimeClient', () => {
 
     const listed = await client.listThreads({});
     expect(listed.threads.map((thread) => thread.trustMode)).toEqual(['unknown']);
+    await client.dispose();
+  });
+
+  it('reads an origin and a status it does not know as unknown, on the same terms', async () => {
+    const runtime = fakeRuntime(8, { createdBy: 'phone', threadStatus: 'hibernating' });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    const listed = await client.listThreads({});
+    expect(listed.threads.map((thread) => thread.createdBy)).toEqual(['unknown']);
+    expect(listed.threads.map((thread) => thread.status)).toEqual(['unknown']);
     await client.dispose();
   });
 

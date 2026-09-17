@@ -34,6 +34,7 @@ export const DEVELOPER_SESSION_ORIGIN_LABELS: Record<DeveloperSessionSource, str
   cli: 'CLI',
   vscode: 'VS Code',
   desktop: 'Desktop',
+  unknown: 'Another surface',
 };
 
 export const DEVELOPER_SESSION_TRUST_LABELS: Record<DeveloperSessionTrustMode, string> = {
@@ -162,6 +163,16 @@ export const DEVELOPER_TURN_OUTCOMES = ['completed', 'failed', 'interrupted'] as
 
 export type DeveloperTurnOutcome = (typeof DEVELOPER_TURN_OUTCOMES)[number];
 
+export const DEVELOPER_FILE_CHANGES = ['created', 'modified', 'deleted'] as const;
+
+export type DeveloperFileChange = (typeof DEVELOPER_FILE_CHANGES)[number];
+
+export const DEVELOPER_FILE_CHANGE_LABELS: Record<DeveloperFileChange, string> = {
+  created: 'Created',
+  modified: 'Edited',
+  deleted: 'Deleted',
+};
+
 export type DeveloperSessionEvent =
   | { type: 'turn-started'; threadId: string; turnId: string }
   | { type: 'output-delta'; threadId: string; turnId: string; delta: string }
@@ -174,12 +185,44 @@ export type DeveloperSessionEvent =
       failure: DeveloperTurnFailure | null;
     }
   | {
+      type: 'tool-queued';
+      threadId: string;
+      turnId: string;
+      toolCallId: string;
+      name: string;
+      position: number;
+      queueDepth: number;
+    }
+  | {
       type: 'tool-started';
       threadId: string;
       turnId: string;
       toolCallId: string;
       name: string;
       summary: string;
+    }
+  | {
+      type: 'command-started';
+      threadId: string;
+      turnId: string;
+      toolCallId: string;
+      command: string;
+      cwd: string | null;
+    }
+  | {
+      type: 'file-changed';
+      threadId: string;
+      turnId: string;
+      toolCallId: string;
+      path: string;
+      change: DeveloperFileChange;
+    }
+  | {
+      type: 'turn-diff';
+      threadId: string;
+      turnId: string;
+      unifiedDiff: string;
+      paths: string[];
     }
   | {
       type: 'tool-finished';

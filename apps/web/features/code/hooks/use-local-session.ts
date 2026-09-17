@@ -11,7 +11,12 @@ import {
   startDeveloperTurn,
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
-import { EMPTY_LOCAL_TURN, LOCAL_CODE_COPY, type LocalTurn } from '../local-code';
+import {
+  EMPTY_LOCAL_TURN,
+  LOCAL_CODE_COPY,
+  type LocalToolRun,
+  type LocalTurn,
+} from '../local-code';
 
 export interface LocalApproval {
   turnId: string;
@@ -101,7 +106,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
         setTurn((current) => ({ ...current, reply: current.reply + event.delta }));
         return;
       }
-      if (event.type === 'tool-started') {
+      if (event.type === 'tool-queued') {
         setTurn((current) => ({
           ...current,
           tools: [
@@ -109,11 +114,67 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
             {
               toolCallId: event.toolCallId,
               name: event.name,
-              summary: event.summary,
+              summary: event.name,
               output: '',
               isError: false,
+              state: 'queued',
+              command: null,
+              files: [],
             },
           ],
+        }));
+        return;
+      }
+      if (event.type === 'tool-started') {
+        setTurn((current) => {
+          const started: LocalToolRun = {
+            toolCallId: event.toolCallId,
+            name: event.name,
+            summary: event.summary,
+            output: '',
+            isError: false,
+            state: 'running',
+            command: null,
+            files: [],
+          };
+          const queued = current.tools.some((tool) => tool.toolCallId === event.toolCallId);
+          return {
+            ...current,
+            tools: queued
+              ? current.tools.map((tool) =>
+                  tool.toolCallId === event.toolCallId
+                    ? { ...tool, summary: event.summary, state: 'running' }
+                    : tool,
+                )
+              : [...current.tools, started],
+          };
+        });
+        return;
+      }
+      if (event.type === 'command-started') {
+        setTurn((current) => ({
+          ...current,
+          tools: current.tools.map((tool) =>
+            tool.toolCallId === event.toolCallId ? { ...tool, command: event.command } : tool,
+          ),
+        }));
+        return;
+      }
+      if (event.type === 'file-changed') {
+        setTurn((current) => ({
+          ...current,
+          tools: current.tools.map((tool) =>
+            tool.toolCallId === event.toolCallId
+              ? { ...tool, files: [...tool.files, { path: event.path, change: event.change }] }
+              : tool,
+          ),
+        }));
+        return;
+      }
+      if (event.type === 'turn-diff') {
+        setTurn((current) => ({
+          ...current,
+          diff: { unifiedDiff: event.unifiedDiff, paths: event.paths },
         }));
         return;
       }
@@ -122,7 +183,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
           ...current,
           tools: current.tools.map((tool) =>
             tool.toolCallId === event.toolCallId
-              ? { ...tool, output: event.output, isError: event.isError }
+              ? { ...tool, output: event.output, isError: event.isError, state: 'finished' }
               : tool,
           ),
         }));
