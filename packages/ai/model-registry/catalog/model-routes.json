@@ -1447,6 +1447,22 @@
       "defaultRoute": {
         "commercialStatus": "customer_byok"
       }
+    },
+    "gemini-embedding-2": {
+      "additionalRoutes": [
+        {
+          "provider": "vercel_gateway",
+          "harnessId": "vercel_gateway/embeddings",
+          "upstreamModelId": "google/gemini-embedding-2",
+          "cacheClass": "no_provider_cache",
+          "commercialStatus": "authorized_marketplace",
+          "pricing": {
+            "inputPerMillion": 0.2,
+            "outputPerMillion": 0
+          },
+          "pricingNote": "Vercel AI Gateway lists google/gemini-embedding-2 at $0.0000002 per input token through GET https://ai-gateway.vercel.sh/v1/models, retrieved 2026-09-17, and its OpenAI-compatible /v1/embeddings endpoint maps the root-level dimensions field to the provider (vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions/embeddings)."
+        }
+      ]
     }
   }
 }

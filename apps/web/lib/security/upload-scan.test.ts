@@ -128,3 +128,53 @@ describe('inspectUploadBytes, reporting', () => {
     expect(() => inspectUploadBytes(new Uint8Array(), 'image/png')).not.toThrow();
   });
 });
+
+describe('scanUploadBytes, external scanner requirement', () => {
+  it('refuses an upload when a scanner is required and none is configured', async () => {
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', '');
+    vi.stubEnv('UPLOAD_SCAN_REQUIRED', 'true');
+    try {
+      const { scanUploadBytes } = await import('./upload-scan');
+      const result = await scanUploadBytes(utf8('just some notes'), 'text/plain');
+      expect(result.ok).toBe(false);
+      expect(result.findings.map((finding) => finding.code)).toEqual(['external_scanner']);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('keeps structural checks only when no scanner is configured or required', async () => {
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', '');
+    vi.stubEnv('UPLOAD_SCAN_REQUIRED', '');
+    try {
+      const { scanUploadBytes, uploadScannerStatus } = await import('./upload-scan');
+      expect(uploadScannerStatus()).toEqual({ configured: false, required: false });
+      expect((await scanUploadBytes(utf8('just some notes'), 'text/plain')).ok).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('fails closed when the configured scanner rejects the file', async () => {
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', 'https://scanner.example.test/scan');
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ safe: false, detail: 'Eicar test signature' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { scanUploadBytes } = await import('./upload-scan');
+      const result = await scanUploadBytes(utf8('X5O!P%@AP'), 'text/plain');
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(result.findings).toEqual([
+        { code: 'external_scanner', detail: 'Eicar test signature' },
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  });
+});
