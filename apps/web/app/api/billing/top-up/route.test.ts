@@ -197,6 +197,22 @@ describe('POST /api/billing/top-up', () => {
     expect(mocks.createSession).not.toHaveBeenCalled();
   });
 
+  it('refuses a top-up with a 503 when the workspace billing status cannot be confirmed', async () => {
+    mocks.evaluateActiveWorkspacePolicy.mockResolvedValueOnce({
+      allowed: false,
+      code: 'workspace_policy_unavailable',
+      reason: 'We could not confirm your workspace billing status, so this purchase was stopped.',
+      obligations: [],
+      organizationId: null,
+    });
+
+    const response = await POST(request(10));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: 'SERVICE_UNAVAILABLE' } });
+    expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
   it('rejects accounts that are not actively billed by Stripe', async () => {
     mocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('to_regprocedure')) return [{ ready: true }];

@@ -14,7 +14,11 @@ import {
   evaluateActiveWorkspacePolicy,
   type PolicyGateResult,
 } from '@/lib/services/organization-policy-gate';
-import type { PolicyAsk, PolicySurface } from '@/lib/services/organization-policy-evaluator';
+import {
+  isPolicyUnavailable,
+  type PolicyAsk,
+  type PolicySurface,
+} from '@/lib/services/organization-policy-evaluator';
 import { evaluateSpendLimit } from '@/lib/services/spend-limit-service';
 import {
   resolveSubscriptionAccess,
@@ -29,8 +33,7 @@ interface ScopedRequest {
 }
 
 export type ManagedComputeAccessScope =
-  | { request: ScopedRequest }
-  | { organizationId: string | null };
+  { request: ScopedRequest } | { organizationId: string | null };
 
 export interface ManagedComputeAccessDecision {
   allowed: boolean;
@@ -162,6 +165,6 @@ export function buildManagedComputeAccessGateResponse(
         code: decision.code,
       },
     },
-    { status: 403, headers },
+    { status: isPolicyUnavailable(decision) ? 503 : 403, headers },
   );
 }

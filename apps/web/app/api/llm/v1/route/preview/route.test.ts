@@ -36,12 +36,10 @@ interface ZeroDataRetentionPolicyResultLike {
 }
 
 const zdrMocks = vi.hoisted(() => ({
-  resolveZeroDataRetentionPolicy: vi.fn(
-    async (): Promise<ZeroDataRetentionPolicyResultLike> => ({
-      required: false,
-      organizationId: null,
-    }),
-  ),
+  resolveZeroDataRetentionPolicy: vi.fn(async (): Promise<ZeroDataRetentionPolicyResultLike> => ({
+    required: false,
+    organizationId: null,
+  })),
 }));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
   resolveZeroDataRetentionPolicy: zdrMocks.resolveZeroDataRetentionPolicy,
@@ -193,6 +191,23 @@ describe('POST /api/llm/v1/route/preview · shape', () => {
     expect(response.status).toBe(200);
     expect(affinityMocks.getServedRouteAffinity).toHaveBeenCalledWith('conv-1');
     expect(zdrMocks.resolveZeroDataRetentionPolicy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/llm/v1/route/preview · zero data retention unknown', () => {
+  it('refuses with a 503 instead of previewing routes that ignore the retention requirement', async () => {
+    authenticated();
+    const { createError } = await import('@/lib/errors');
+    zdrMocks.resolveZeroDataRetentionPolicy.mockRejectedValueOnce(
+      createError.serviceUnavailable('We could not confirm your workspace security settings.'),
+    );
+
+    const response = await POST(request({ taskType: 'coding' }));
+
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body.selected).toBeUndefined();
+    expect(body.candidates).toBeUndefined();
   });
 });
 

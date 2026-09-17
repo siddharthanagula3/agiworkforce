@@ -8,7 +8,11 @@ import { evaluateSpendLimit } from '@/lib/services/spend-limit-service';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
-import type { PolicySurface } from '@/lib/services/organization-policy-evaluator';
+import {
+  isPolicyUnavailable,
+  WORKSPACE_POLICY_UNAVAILABLE_DECISION,
+  type PolicySurface,
+} from '@/lib/services/organization-policy-evaluator';
 
 export const MANAGED_COMPUTE_PRIVATE_BETA_ENV = 'AGI_MANAGED_COMPUTE_PRIVATE_BETA';
 export const MANAGED_COMPUTE_BETA_HEADER = 'x-agi-managed-compute-beta';
@@ -84,10 +88,6 @@ export async function buildOrganizationPolicyGateResponse(
   descriptor: ManagedComputeDescriptor & { surface: PolicySurface },
   headers?: HeadersInit,
 ): Promise<NextResponse | null> {
-  // Acquiring the adapter can itself throw when the database is unconfigured or
-  // unreachable. That is an infrastructure fault, not an administrator's
-  // decision, and it must not surface to a member as a policy denial or turn a
-  // well-formed request into a 500 before its own validation has run.
   let decision;
   try {
     decision = await evaluateActiveWorkspacePolicy(
@@ -99,9 +99,9 @@ export async function buildOrganizationPolicyGateResponse(
   } catch (error) {
     logger.error(
       { error, userId, feature: descriptor.feature ?? 'managed_compute' },
-      '[managed-compute-gate] workspace policy unavailable; request treated as ungoverned',
+      '[managed-compute-gate] workspace policy unavailable; request denied',
     );
-    return null;
+    decision = { ...WORKSPACE_POLICY_UNAVAILABLE_DECISION, organizationId: null };
   }
 
   if (decision.allowed) return null;
@@ -133,7 +133,7 @@ export async function buildOrganizationPolicyGateResponse(
         allowed: false,
       },
     },
-    { status: 403, headers },
+    { status: isPolicyUnavailable(decision) ? 503 : 403, headers },
   );
 }
 
@@ -201,9 +201,9 @@ export async function buildExternalSharingGateResponse(
   } catch (error) {
     logger.error(
       { error, userId },
-      '[external-sharing] workspace policy unavailable; request treated as ungoverned',
+      '[external-sharing] workspace policy unavailable; request denied',
     );
-    return null;
+    decision = { ...WORKSPACE_POLICY_UNAVAILABLE_DECISION, organizationId: null };
   }
 
   if (decision.allowed) return null;
@@ -212,7 +212,7 @@ export async function buildExternalSharingGateResponse(
 
   return NextResponse.json(
     { error: { message: decision.reason, type: 'forbidden', code: decision.code } },
-    { status: 403, headers },
+    { status: isPolicyUnavailable(decision) ? 503 : 403, headers },
   );
 }
 
