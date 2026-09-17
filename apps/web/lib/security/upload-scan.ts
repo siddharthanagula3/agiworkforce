@@ -1,6 +1,11 @@
 import 'server-only';
 
+import { isSensitiveFile } from '@agiworkforce/utils';
+
 import { logger } from '@/lib/logger';
+
+import { isHighConfidenceSecretName } from './secret-patterns';
+import { scanForSecrets } from './secrets-audit';
 
 /**
  * Content inspection for user uploads.
@@ -59,6 +64,8 @@ export interface UploadScanFinding {
     | 'active_content_pdf'
     | 'executable'
     | 'archive_not_allowed'
+    | 'credential_material'
+    | 'sensitive_filename'
     | 'external_scanner';
   detail: string;
 }
@@ -129,6 +136,65 @@ function scanPdf(bytes: Uint8Array): UploadScanFinding[] {
     findings.push({ code: 'active_content_pdf', detail: 'PDF contains an embedded file' });
   }
   return findings;
+}
+
+const TEXTUAL_MIME_PREFIXES = ['text/'];
+const TEXTUAL_MIMES: ReadonlySet<string> = new Set([
+  'application/json',
+  'application/xml',
+  'application/x-yaml',
+  'application/yaml',
+  'application/x-sh',
+  'application/javascript',
+  'application/x-httpd-php',
+  'application/sql',
+]);
+const CREDENTIAL_SCAN_BYTES = 256_000;
+
+function isTextualMime(mime: string): boolean {
+  return TEXTUAL_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix)) || TEXTUAL_MIMES.has(mime);
+}
+
+/**
+ * A file full of credentials is not malware, so the structural checks above
+ * never see it, and the product then stores it, serves it through a share
+ * link and feeds it to a model. Only a detection that names a format refuses
+ * the upload; the entropy detector recognises no format, so what it finds is
+ * reported and left to a human.
+ */
+export function scanUploadForCredentials(
+  bytes: Uint8Array,
+  declaredMime: string,
+  filename?: string,
+): UploadScanFinding[] {
+  const findings: UploadScanFinding[] = [];
+
+  if (filename && isSensitiveFile(filename)) {
+    findings.push({
+      code: 'sensitive_filename',
+      detail: `${filename} is the name of a credential file`,
+    });
+  }
+
+  if (!isTextualMime(declaredMime)) return findings;
+
+  for (const detection of scanForSecrets(textPrefix(bytes, CREDENTIAL_SCAN_BYTES), {
+    includeHighEntropy: true,
+  })) {
+    findings.push({
+      code: 'credential_material',
+      detail: `${detection.name} at byte ${detection.position}`,
+    });
+  }
+
+  return findings;
+}
+
+export function uploadFindingRejects(finding: UploadScanFinding): boolean {
+  if (finding.code === 'sensitive_filename') return true;
+  if (finding.code !== 'credential_material') return true;
+  const name = finding.detail.slice(0, finding.detail.lastIndexOf(' at byte '));
+  return isHighConfidenceSecretName(name);
 }
 
 export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): UploadScanResult {
@@ -256,9 +322,20 @@ async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[
 export async function scanUploadBytes(
   bytes: Uint8Array,
   declaredMime: string,
+  filename?: string,
 ): Promise<UploadScanResult> {
   const structural = inspectUploadBytes(bytes, declaredMime);
+  const credentials = scanUploadForCredentials(bytes, declaredMime, filename);
   const external = await runExternalScanner(bytes);
-  const findings = [...structural.findings, ...external];
-  return { ok: findings.length === 0, findings };
+  const findings = [...structural.findings, ...credentials, ...external];
+
+  const reported = credentials.filter((finding) => !uploadFindingRejects(finding));
+  if (reported.length > 0) {
+    logger.warn(
+      { declaredMime, findings: reported.map((finding) => finding.detail) },
+      '[upload-scan] upload carries material that looks like a credential',
+    );
+  }
+
+  return { ok: findings.every((finding) => !uploadFindingRejects(finding)), findings };
 }

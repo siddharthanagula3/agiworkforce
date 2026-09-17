@@ -16,7 +16,7 @@ import {
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
-import { pageOnCall } from '../health-probe/route';
+import { pageOnCall } from '@/lib/server/incident/pager';
 
 export const runtime = 'nodejs';
 

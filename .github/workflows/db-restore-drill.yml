@@ -67,11 +67,14 @@ jobs:
           AGI_DATABASE_URL: postgres://postgres:changeme@localhost:5432/agiworkforce_drill
         run: pnpm db:migrate -- apply --target ci
 
-      # No seed script exists yet for the core tables the drill checks; the
-      # drill still proves dump, restore, presence and count comparison work
-      # against a real postgres:17 server with an empty-but-migrated schema.
+      # The drill seeds a row in every core table before the dump. An empty
+      # database restores an empty database, which proves the commands ran and
+      # nothing about whether data survives them; the seed is refused against
+      # any source that is not on this machine.
       - name: Run the logical restore drill
         env:
           AGI_RESTORE_DRILL_SOURCE_URL: postgres://postgres:changeme@localhost:5432/agiworkforce_drill
           AGI_RESTORE_DRILL_TARGET_ADMIN_URL: postgres://postgres:changeme@localhost:5432/postgres
+          AGI_RESTORE_DRILL_SEED: '1'
+          AGI_RESTORE_DRILL_MAX_SECONDS: '600'
         run: node scripts/db-restore-drill-logical.mjs

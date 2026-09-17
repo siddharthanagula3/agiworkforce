@@ -5,15 +5,15 @@ import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { runHealthChecks, type HealthCheckResult } from '@/lib/server/health-check';
-import { getHandoffConfig } from '@/lib/support/handoff/config';
-import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
+import { clearIncident, notifyIncident } from '@/lib/server/incident/dispatch';
+import type { AlertSeverity, PageOutcome } from '@/lib/server/incident/pager';
 
 export const runtime = 'nodejs';
 
 export const maxDuration = 30;
 
 const HEALTH_CHECK_TIMEOUT_MS = 8_000;
-const PAGER_TIMEOUT_MS = 5_000;
+const INCIDENT_KEY = 'health-probe';
 const FAILURE_STREAK_REDIS_KEY = 'agi-health-probe:consecutive-failures';
 const FAILURE_STREAK_TTL_SECONDS = 1_800;
 const CONSECUTIVE_FAILURES_BEFORE_PAGE = 2;
@@ -38,7 +38,7 @@ async function recordFailureStreak(healthy: boolean): Promise<number | null> {
 
 const TIMED_OUT = Symbol('health-check-timeout');
 
-export type AlertSeverity = 'critical' | 'warning';
+export type { AlertSeverity };
 
 interface ProbeSummary {
   status: HealthCheckResult['status'] | 'probe_failed';
@@ -46,7 +46,8 @@ interface ProbeSummary {
   delivery: 'not_needed' | 'delivered' | 'undeliverable';
   severity?: AlertSeverity;
   reason?: string;
-  paged?: 'paged' | 'unconfigured' | 'failed';
+  paged?: PageOutcome;
+  escalationLevel?: number;
 }
 
 function environmentLabel(): string {
@@ -57,14 +58,6 @@ function failingChecks(result: HealthCheckResult): string[] {
   return Object.entries(result.checks)
     .filter(([, check]) => check.status !== 'healthy')
     .map(([name]) => name);
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;');
 }
 
 function checkDetail(
@@ -83,7 +76,7 @@ function buildAlert(
   severity: AlertSeverity,
   result: HealthCheckResult,
   failed: string[],
-): { subject: string; text: string; html: string } {
+): { subject: string; text: string } {
   const environment = environmentLabel();
   const subject = `[AGI ${severity === 'critical' ? 'CRITICAL' : 'WARNING'}] ${environment} health ${result.status} · ${failed.join(', ')}`;
 
@@ -102,45 +95,7 @@ function buildAlert(
       ? 'CRITICAL means the platform cannot serve requests. Follow docs/runbooks/incident-response.md.'
       : 'WARNING means billing is degraded while chat keeps working. Follow docs/runbooks/incident-response.md.',
   ];
-  const text = lines.join('\n');
-
-  return {
-    subject,
-    text,
-    html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(text)}</pre>`,
-  };
-}
-
-/**
- * Posts the alert to a pager webhook when one is configured. Email alone waits
- * for someone to read it; a health probe firing at 06:15 needs to wake a
- * person. Best-effort by design, a pager that is down must not stop the email
- * from going out, so this never throws.
- */
-export async function pageOnCall(
-  severity: AlertSeverity,
-  subject: string,
-  text: string,
-): Promise<'paged' | 'unconfigured' | 'failed'> {
-  const webhook = process.env['PAGER_WEBHOOK_URL'];
-  if (!webhook) return 'unconfigured';
-
-  try {
-    const response = await fetch(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ severity, subject, text, source: 'health-probe' }),
-      signal: AbortSignal.timeout(PAGER_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      logger.error({ severity, status: response.status }, 'Pager webhook rejected the alert');
-      return 'failed';
-    }
-    return 'paged';
-  } catch (error) {
-    logger.error({ severity, error }, 'Pager webhook could not be reached');
-    return 'failed';
-  }
+  return { subject, text: lines.join('\n') };
 }
 
 async function dispatchAlert(
@@ -148,45 +103,39 @@ async function dispatchAlert(
   result: HealthCheckResult,
   failed: string[],
 ): Promise<ProbeSummary> {
-  const { subject, text, html } = buildAlert(severity, result, failed);
-  const [sent, paged] = await Promise.all([
-    sendSupportEmail({
-      to: getHandoffConfig().fallbackEmail,
-      subject,
-      text,
-      html,
-    }),
-    pageOnCall(severity, subject, text),
-  ]);
+  const { subject, text } = buildAlert(severity, result, failed);
+  const dispatched = await notifyIncident({ key: INCIDENT_KEY, severity, subject, text });
 
-  if (paged === 'unconfigured') {
+  if (dispatched.paged === 'unconfigured') {
     logger.warn(
       { severity },
       'PAGER_WEBHOOK_URL is unset · this alert reached an inbox and nothing else',
     );
   }
 
-  if (sent.delivered) {
-    logger.error(
-      { severity, status: result.status, failed, paged },
-      'Health probe alert dispatched',
-    );
-    return { status: result.status, alerted: true, delivery: 'delivered', severity, paged };
-  }
-
   logger.error(
-    { severity, status: result.status, failed, reason: sent.reason, paged },
-    paged === 'paged'
-      ? 'Health probe alert email failed · the pager was reached'
-      : 'Health probe alert could NOT be delivered · no human has been told',
+    {
+      severity,
+      status: result.status,
+      failed,
+      paged: dispatched.paged,
+      channel: dispatched.channel,
+      escalationLevel: dispatched.level,
+      notified: dispatched.notified,
+    },
+    dispatched.delivery === 'delivered'
+      ? 'Health probe alert dispatched'
+      : 'Health probe alert email failed',
   );
+
   return {
     status: result.status,
     alerted: true,
-    delivery: 'undeliverable',
+    delivery: dispatched.delivery,
     severity,
-    reason: sent.reason,
-    paged,
+    paged: dispatched.paged,
+    escalationLevel: dispatched.level,
+    ...(dispatched.reason ? { reason: dispatched.reason } : {}),
   };
 }
 
@@ -253,6 +202,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (result.status === 'healthy') {
     await recordFailureStreak(true);
+    await clearIncident(INCIDENT_KEY);
     return NextResponse.json({
       status: result.status,
       alerted: false,

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { inspectUploadBytes } from './upload-scan';
+import { inspectUploadBytes, scanUploadBytes, scanUploadForCredentials } from './upload-scan';
 
 /**
  * Uploads reached a publicly-servable URL after only three checks, path
@@ -176,5 +176,65 @@ describe('scanUploadBytes, external scanner requirement', () => {
       vi.unstubAllEnvs();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('credential material in an upload', () => {
+  const bytesOf = (text: string) => new TextEncoder().encode(text);
+
+  it('rejects a text upload carrying a recognised live credential', async () => {
+    const result = await scanUploadBytes(
+      bytesOf(`STRIPE_SECRET_KEY=sk_live_${'EXAMPLE'.repeat(4)}\n`),
+      'text/plain',
+      'notes.txt',
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toContain('credential_material');
+  });
+
+  it('rejects a file whose name is itself a credential file', async () => {
+    const result = await scanUploadBytes(
+      bytesOf('nothing to see'),
+      'text/plain',
+      '.env.production',
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toContain('sensitive_filename');
+  });
+
+  it('rejects terraform state by name, because its contents are provider secrets', async () => {
+    const result = await scanUploadBytes(bytesOf('{}'), 'application/json', 'terraform.tfstate');
+
+    expect(result.findings.map((finding) => finding.code)).toContain('sensitive_filename');
+    expect(result.ok).toBe(false);
+  });
+
+  it('reports an unrecognised high-entropy token without refusing the upload', async () => {
+    const result = await scanUploadBytes(
+      bytesOf('value = "Xk7pQ2vLm9RtZa4YbW3CnH8sJfE6dU1gOiPy5N0qBx"\n'),
+      'text/plain',
+      'config.txt',
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.findings.map((finding) => finding.code)).toContain('credential_material');
+  });
+
+  it('leaves a clean text upload alone', async () => {
+    const result = await scanUploadBytes(
+      bytesOf('a perfectly ordinary note\n'),
+      'text/plain',
+      'a.txt',
+    );
+
+    expect(result).toEqual({ ok: true, findings: [] });
+  });
+
+  it('does not scan binary bytes for credentials', () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+    expect(scanUploadForCredentials(png, 'image/png', 'a.png')).toEqual([]);
   });
 });

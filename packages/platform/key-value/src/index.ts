@@ -48,6 +48,20 @@ export {
 } from './adapters/redis';
 
 export {
+  createCircuitBreakerKeyValueStore,
+  resolveKeyValueBreakerPolicy,
+  KeyValueCircuitOpenError,
+  DEFAULT_KEY_VALUE_BREAKER_POLICY,
+  KEY_VALUE_BREAKER_COOLDOWN_MS_ENV,
+  KEY_VALUE_BREAKER_THRESHOLD_ENV,
+  type CircuitBreakerKeyValueStore,
+  type KeyValueBreakerObservation,
+  type KeyValueBreakerOptions,
+  type KeyValueBreakerPolicy,
+  type KeyValueCircuitState,
+} from './circuit-breaker';
+
+export {
   createSlidingWindowRateLimiter,
   type SlidingWindowRateLimiterOptions,
 } from './sliding-window';

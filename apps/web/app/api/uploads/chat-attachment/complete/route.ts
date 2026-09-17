@@ -215,7 +215,7 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const scan = await scanUploadBytes(object.data, mimeType);
+  const scan = await scanUploadBytes(object.data, mimeType, fileName);
   if (!scan.ok) {
     trackProductAnalyticsEvent(
       { userId, organizationId },

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-07
+Last updated: 2026-09-17
 
 Neon's point-in-time branch is the recovery mechanism today; there is no
 separate `pg_dump` schedule, and until this document existed no restore had
@@ -182,12 +182,21 @@ AGI_RESTORE_DRILL_PG_BIN_DIR="/opt/homebrew/opt/postgresql@17/bin" \
 `postgres:17` service container: it applies every migration under
 `apps/web/db/neon` through `pnpm db:migrate -- apply --target ci`, then runs
 the drill with that same container as both source and target. It does not
-touch the Neon drill's triggers or the Neon drill itself. No seed script for
-the core tables exists yet, so the CI run proves the mechanism (dump, create,
-restore, presence, count and ledger comparison, drop) against an
-empty-but-migrated schema; row counts on both sides are 0 and still have to
-match, which they do. Seeding the CI schema with representative rows is open
-work, not a gap in the drill itself.
+touch the Neon drill's triggers or the Neon drill itself.
+
+The CI run sets `AGI_RESTORE_DRILL_SEED=1`, so before the dump it writes one
+row into each table in `CORE_TABLES` (`scripts/lib/restore-drill-seed.mjs`).
+That matters: an empty database restores an empty database, and a drill over
+zero rows proves the commands ran and nothing about whether data survives
+them. After the restore the drill compares, per table, presence, row count and
+an `md5` over every row's text, so a restore that produced the right number of
+different rows fails. The seed is refused outright against any source host
+that is not loopback, because a drill that can write to a shared host is a
+drill that can corrupt one.
+
+`AGI_RESTORE_DRILL_MAX_SECONDS` (600 in CI) fails a run that took longer than
+its budget. That number is a regression guard on a container-sized database,
+not a recovery time objective for production: see [Open gaps](#open-gaps).
 
 ## One-day host-swap procedure
 
@@ -249,12 +258,58 @@ the updater signing key. The logical drill has no such blocker: it ran
 against local Postgres 17 the same day this section was written, and runs
 weekly in CI against a disposable `postgres:17` container.
 
+## Object storage backups
+
+Postgres is not the only durable state. Objects (attachments, generated media)
+live in the private bucket, and until 2026-09-17 nothing copied them anywhere:
+a bucket-level mistake or a region incident took them with it.
+
+`apps/web/lib/server/object-backup.ts` resolves a **second, independent**
+object store from its own variables and `apps/web/app/api/cron/replicate-object-backups/route.ts`
+copies newly stored objects into it hourly, resuming from a cursor and skipping
+anything the backup already holds at the same size.
+
+| Variable                              | Meaning                                       |
+| ------------------------------------- | --------------------------------------------- |
+| `AGI_STORAGE_BACKUP_ENDPOINT`         | S3-compatible endpoint for the backup bucket   |
+| `AGI_STORAGE_BACKUP_REGION`           | Region the backup bucket lives in              |
+| `AGI_STORAGE_BACKUP_BUCKET`           | Backup bucket name                             |
+| `AGI_STORAGE_BACKUP_ACCESS_KEY_ID`    | Credential for the backup bucket only          |
+| `AGI_STORAGE_BACKUP_SECRET_ACCESS_KEY`| Its secret                                     |
+
+**Cross-region is a configuration fact, not a claim.** The replication report
+carries `crossRegion`, which is true only when the backup endpoint or region
+differs from the primary's; a second bucket behind the same endpoint is a copy,
+not a disaster-recovery copy. With no backup configured the route answers
+`{"replicated":0,"reason":"unconfigured"}` and writes nothing, the same way the
+pager seam reports an unset webhook rather than pretending someone was paged.
+
+Two properties this does **not** give you, and the reason each is open below:
+object versioning is a bucket setting on the storage provider, not something
+the application can set per write, and deletions are deliberately not
+replicated, so the backup is a copy of what existed, not a mirror that follows
+a delete.
+
 ## Open gaps
 
 - This project's actual `history_retention_seconds` has never been read and
   recorded here. Do that the first time the drill runs.
-- No RPO/RTO has been published to customers; that is a vendor-SLA
-  commitment against Neon's plan, not something this document can assert.
+- No RPO/RTO has been published to customers. The only recovery time this
+  repository has measured is the logical drill's, on a container-sized
+  database in CI; that number says nothing about restoring production-sized
+  data, and no restore of production data has ever been run. Publishing either
+  objective requires a real drill against a production-sized copy, which is
+  blocked on the same Neon credential as the Neon drill.
+- **Object versioning and the backup bucket are not provisioned.** The
+  replication code path exists and is inert until the five
+  `AGI_STORAGE_BACKUP_*` variables are set, and object versioning has to be
+  enabled on both buckets in the storage provider's console or API. Both are
+  founder actions; no further code is needed.
+- Deletes are not replicated, by design. Restoring an object from the backup
+  after an erasure request would reintroduce data the account asked to have
+  removed, so the erasure path in `apps/web/lib/server/account-erasure.ts`
+  must be extended to the backup bucket before the backup is treated as a
+  live mirror.
 - No third-party uptime monitor calls `/api/health`, so an outage that
   triggers a restore may be detected only by `docs/runbooks/incident-response.md`'s
   existing daily cron, not sooner.

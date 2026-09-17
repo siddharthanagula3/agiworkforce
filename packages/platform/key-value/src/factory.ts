@@ -7,6 +7,7 @@ import {
   readUpstashCredentials,
   type UpstashRedisLike,
 } from './adapters/upstash';
+import { createCircuitBreakerKeyValueStore, type KeyValueBreakerOptions } from './circuit-breaker';
 import { createSlidingWindowRateLimiter } from './sliding-window';
 import {
   KeyValueConfigError,
@@ -30,6 +31,7 @@ export interface ResolveKeyValueRuntimeOptions extends MemoryKeyValueStoreOption
   provider?: KeyValueProvider;
   upstashClient?: UpstashRedisLike;
   redisUrl?: string;
+  breaker?: KeyValueBreakerOptions;
 }
 
 function readEnv(name: string): string | undefined {
@@ -83,7 +85,10 @@ export function resolveKeyValueRuntime(
       }
       return {
         provider,
-        store: createUpstashKeyValueStore(client),
+        store: createCircuitBreakerKeyValueStore(
+          createUpstashKeyValueStore(client),
+          options.breaker,
+        ),
         rateLimiter: createUpstashRateLimiter(client),
       };
     }
@@ -94,7 +99,10 @@ export function resolveKeyValueRuntime(
           `The redis provider needs a connection URL; set ${KEY_VALUE_REDIS_URL_ENV}.`,
         );
       }
-      const store = createNodeRedisKeyValueStore(connectToLocalRedis(url));
+      const store = createCircuitBreakerKeyValueStore(
+        createNodeRedisKeyValueStore(connectToLocalRedis(url)),
+        options.breaker,
+      );
       return { provider, store, rateLimiter: createSlidingWindowRateLimiter(store, options) };
     }
     case 'memory': {
