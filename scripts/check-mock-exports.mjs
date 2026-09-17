@@ -2,13 +2,26 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-const TEST_ROOTS = Object.freeze(['apps/web', 'packages/ui', 'packages/client']);
+// Every surface with vi.mock factories, not just the web app. A mock that
+// omits an export the subject imports fails at collection time with no
+// assertion to point at, and on 2026-09-17 two desktop suites sat broken in CI
+// while this guard reported the tree clean because it never looked there.
+const TEST_ROOTS = Object.freeze([
+  'apps/web',
+  'apps/desktop',
+  'apps/extension',
+  'apps/extension-vscode',
+  'packages/ui',
+  'packages/client',
+  'packages/contracts',
+]);
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.(?:tsx?|jsx?)$/;
 const SOURCE_EXTENSIONS = Object.freeze([
   '.ts',
@@ -640,13 +653,23 @@ export function discoverTestFiles(repoRoot = REPO_ROOT, roots = TEST_ROOTS) {
     .map((relativePath) => path.join(repoRoot, relativePath));
 }
 
+function readAllowlist(repoRoot) {
+  const file = path.join(repoRoot, 'scripts/config/mock-exports-allowlist.json');
+  if (!fs.existsSync(file)) return new Set();
+  const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  return new Set((parsed.entries ?? []).map((entry) => `${entry.file}\u0000${entry.specifier}`));
+}
+
 export function runMockExportsGuard({
   repoRoot = REPO_ROOT,
   roots = TEST_ROOTS,
   details = false,
 } = {}) {
   const testFiles = discoverTestFiles(repoRoot, roots);
-  const findings = testFiles.flatMap((testFile) => checkTestFile(repoRoot, testFile));
+  const allowlist = readAllowlist(repoRoot);
+  const findings = testFiles
+    .flatMap((testFile) => checkTestFile(repoRoot, testFile))
+    .filter((finding) => !allowlist.has(`${finding.file}\u0000${finding.specifier}`));
   findings.sort(
     (left, right) =>
       left.file.localeCompare(right.file) || left.specifier.localeCompare(right.specifier),
