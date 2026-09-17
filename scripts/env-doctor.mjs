@@ -176,6 +176,8 @@ export const contracts = {
 };
 
 const platformProvidedKeys = new Set([
+  'CARGO_PKG_NAME',
+  'CARGO_PKG_VERSION',
   'CI',
   'COLORFGBG',
   'COLORTERM',
