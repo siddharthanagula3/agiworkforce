@@ -583,6 +583,11 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
             cancelled: 'Cancelled',
             paused: 'Paused',
             archived: 'Archived',
+            planning: 'Planning',
+            awaiting_approval: 'Waiting for approval',
+            resuming: 'Resuming',
+            partial: 'Partially completed',
+            timed_out: 'Timed out',
           };
           return labels[status] ?? 'Unknown';
         },

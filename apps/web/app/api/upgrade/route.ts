@@ -24,6 +24,8 @@ import {
   classifyPlanChange,
   currentSeatsFromStripeItem,
   isUpgrade,
+  planChangeAnchor,
+  planChangeProration,
 } from '@/lib/server/stripe-plan-change';
 import { isPerSeatBillingPlan } from '@agiworkforce/types';
 import {
@@ -77,9 +79,11 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to load subscription for upgrade');
-    throw createError.serviceUnavailable(
-      'Billing details could not be verified. Your current plan is unchanged; please retry.',
-    );
+    throw createError
+      .serviceUnavailable(
+        'Billing details could not be verified. Your current plan is unchanged; please retry.',
+      )
+      .asUserSafe();
   }
   const sub = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(sub);
@@ -116,9 +120,11 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
       );
     } catch (error) {
       logger.error({ error, userId }, 'Failed to load billing customer for upgrade');
-      throw createError.serviceUnavailable(
-        'Billing customer details could not be verified. Your current plan is unchanged; please retry.',
-      );
+      throw createError
+        .serviceUnavailable(
+          'Billing customer details could not be verified. Your current plan is unchanged; please retry.',
+        )
+        .asUserSafe();
     }
     stripeCustomerId = profileRows[0]?.stripe_customer_id ?? null;
   }
@@ -270,14 +276,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
       stripeSubId,
       {
         items: [{ id: stripeItem.id, price: newPriceId, quantity: requestedSeats }],
-        proration_behavior: 'always_invoice',
-        // Must stay equal to the preview's anchor, or the number quoted and the
-        // number charged come from different rules. 'now' restarts the cycle:
-        // a full period of the new plan today, less credit for unused time on
-        // the old one, and the renewal date moves. Stripe rejects
-        // `proration_date` alongside it, so the preview token's timestamp binds
-        // and dedupes the request rather than driving the arithmetic.
-        billing_cycle_anchor: 'now',
+        ...planChangeProration(planChangeAnchor(planChange.kind), prorationDate),
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
         metadata: {

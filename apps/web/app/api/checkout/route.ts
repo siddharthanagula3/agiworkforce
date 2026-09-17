@@ -7,6 +7,8 @@ import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { getOptionalEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
+import { IDEMPOTENCY_KEY_HEADER } from '@/lib/api-gateway-policy';
+import { BILLING_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -15,6 +17,8 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
+import { buildCheckoutTrialParams, resolveCheckoutTrialDays } from '@/lib/billing/trial-policy';
+import { getPlanTrialDays } from '@agiworkforce/types';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -59,6 +63,49 @@ async function findLiveStripeSubscription(
     }
   }
   return null;
+}
+
+async function customerHasSubscriptionHistory(
+  stripe: Stripe,
+  customerId: string,
+  userId: string,
+): Promise<boolean | null> {
+  try {
+    const page = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 1 });
+    return page.data.length > 0;
+  } catch (error) {
+    logger.warn(
+      { error, userId, customerId },
+      'Trial eligibility could not be verified; checkout continues without a trial',
+    );
+    return null;
+  }
+}
+
+async function resolveTrialDaysForCheckout(input: {
+  stripe: Stripe;
+  plan: string;
+  userId: string;
+  stripeCustomerId: string | null;
+  existingSubscription: Pick<
+    SubscriptionRow,
+    'stripe_subscription_id' | 'apple_original_transaction_id' | 'google_purchase_token'
+  > | null;
+}): Promise<number | null> {
+  const trialDays = getPlanTrialDays(input.plan);
+  if (trialDays === null) return null;
+  const existing = input.existingSubscription;
+  return resolveCheckoutTrialDays({
+    trialDays,
+    priorStoreOrStripeSubscription: Boolean(
+      existing?.stripe_subscription_id ||
+      existing?.apple_original_transaction_id ||
+      existing?.google_purchase_token,
+    ),
+    customerHasSubscriptionHistory: input.stripeCustomerId
+      ? await customerHasSubscriptionHistory(input.stripe, input.stripeCustomerId, input.userId)
+      : false,
+  });
 }
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
@@ -111,10 +158,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   const { plan, billingInterval } = validationResult.data;
   const quantity = resolveCheckoutQuantity(validationResult.data);
-  const requestIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
-  if (requestIdempotencyKey && !/^[A-Za-z0-9._:-]{8,128}$/.test(requestIdempotencyKey)) {
-    throw createError.validation('Idempotency-Key must be 8-128 URL-safe characters.');
-  }
+  const requestIdempotencyKey = request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim() || null;
   const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
   const priceSelection = await getCheckoutPriceSelection(plan, billingInterval, country);
   if (!priceSelection) {
@@ -147,9 +191,11 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     );
   } catch (error) {
     logger.error({ error, userId: user.id }, 'Failed to verify existing subscription');
-    throw createError.serviceUnavailable(
-      'Billing details could not be verified. No checkout was created; please retry.',
-    );
+    throw createError
+      .serviceUnavailable(
+        'Billing details could not be verified. No checkout was created; please retry.',
+      )
+      .asUserSafe();
   }
   const existingSubscription = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(existingSubscription);
@@ -166,9 +212,11 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     );
   } catch (error) {
     logger.error({ error, userId: user.id }, 'Failed to verify Stripe customer');
-    throw createError.serviceUnavailable(
-      'Billing customer details could not be verified. No checkout was created; please retry.',
-    );
+    throw createError
+      .serviceUnavailable(
+        'Billing customer details could not be verified. No checkout was created; please retry.',
+      )
+      .asUserSafe();
   }
   const profile = profileRows[0] ?? null;
 
@@ -241,9 +289,11 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
           { error, userId: user.id, customerId: stripeCustomerId },
           'Failed to verify existing Stripe subscriptions before checkout',
         );
-        throw createError.serviceUnavailable(
-          'Billing details could not be verified. No checkout was created; please retry.',
-        );
+        throw createError
+          .serviceUnavailable(
+            'Billing details could not be verified. No checkout was created; please retry.',
+          )
+          .asUserSafe();
       }
 
       // A stored id Stripe does not recognise, which is what every customer
@@ -277,6 +327,15 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  const trialDays = await resolveTrialDaysForCheckout({
+    stripe,
+    plan,
+    userId: user.id,
+    stripeCustomerId: hadStoredStripeCustomer ? stripeCustomerId : null,
+    existingSubscription,
+  });
+  const trialParams = buildCheckoutTrialParams(trialDays);
+
   const checkoutMetadata = {
     user_id: user.id,
     plan_tier: plan,
@@ -302,7 +361,9 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       metadata: checkoutMetadata,
       subscription_data: {
         metadata: checkoutMetadata,
+        ...trialParams.subscriptionData,
       },
+      ...trialParams.session,
       allow_promotion_codes: true,
       ...buildCheckoutTaxParams({ hasExistingCustomer: Boolean(stripeCustomerId) }),
     };
@@ -350,22 +411,28 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     } else if (error instanceof Stripe.errors.StripeInvalidRequestError) {
       throw createError.validation('Invalid checkout configuration. Please contact support.');
     } else if (error instanceof Stripe.errors.StripeAuthenticationError) {
-      throw createError.serviceUnavailable(
-        'Payment service temporarily unavailable. Please try again later.',
-      );
+      throw createError
+        .serviceUnavailable('Payment service temporarily unavailable. Please try again later.')
+        .asUserSafe();
     } else if (error instanceof Stripe.errors.StripeRateLimitError) {
       throw createError.rateLimit('Too many requests. Please wait a moment and try again.');
     } else if (error instanceof Stripe.errors.StripeConnectionError) {
-      throw createError.serviceUnavailable(
-        'Unable to connect to payment service. Please try again.',
-      );
+      throw createError
+        .serviceUnavailable('Unable to connect to payment service. Please try again.')
+        .asUserSafe();
     }
 
     throw error;
   }
 }
 
-export const POST = withCorsRoute(withErrorHandler(handleCheckout));
+export const POST = withCorsRoute(
+  withErrorHandler(handleCheckout, {
+    idempotencyKey: 'optional',
+    deadlineMs: BILLING_API_ROUTE_DEADLINE_MS,
+    circuit: 'billing.checkout',
+  }),
+);
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

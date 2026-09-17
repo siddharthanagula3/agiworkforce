@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
+import { dispatchSpendAlertIfDue } from '@/lib/services/spend-alert-service';
 
 export type SpendEnforcement = 'off' | 'notify' | 'block';
 
@@ -188,7 +189,16 @@ export async function evaluateSpendLimit(
         };
 
   cache.set(organizationId, { expiresAt: now + SPEND_CACHE_TTL_MS, decision });
+  await announceSpendCrossing(organizationId, state);
   return decision;
+}
+
+async function announceSpendCrossing(organizationId: string, state: SpendState): Promise<void> {
+  try {
+    await dispatchSpendAlertIfDue(organizationId, state);
+  } catch (error) {
+    logger.error({ error, organizationId }, '[spend-limit] crossing could not be announced');
+  }
 }
 
 /** Drops the cached decision so a raised cap takes effect at once rather than after the window. */

@@ -15,6 +15,7 @@ import {
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   CloudAgentRunNotFoundError,
+  cancelPausedCloudAgentRun,
   getCloudAgentRun,
   requestCloudAgentRunCancellation,
 } from '@/lib/services/cloud-agent-run-service';
@@ -74,7 +75,11 @@ async function handleCancel(request: NextRequest, context: RouteContext) {
   const runId = await resolveRunId(context);
 
   try {
-    const run = await requestCloudAgentRunCancellation(db, { userId, runId });
+    const requested = await requestCloudAgentRunCancellation(db, { userId, runId });
+    const run =
+      requested.workState === 'paused'
+        ? await cancelPausedCloudAgentRun(db, { userId, runId })
+        : requested;
     return NextResponse.json(
       { run },
       {

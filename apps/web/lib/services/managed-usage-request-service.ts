@@ -19,6 +19,7 @@ import {
   getOrganizationMonthToDateSpendCents,
   recordSettledProviderCost,
 } from '@/lib/services/cogs-ledger-service';
+import { normalizeUsageAttribution, type UsageAttribution } from '@/lib/billing/usage-attribution';
 import {
   CreditService,
   ledgerCentsFromMicrousd,
@@ -110,6 +111,7 @@ export interface ManagedUsageRequestReservation {
   provider?: string;
   model?: string;
   routeId?: string | null;
+  attribution?: UsageAttribution;
 }
 
 /**
@@ -463,6 +465,7 @@ export async function reserveManagedUsageRequest(
     planTier: string;
     isFlagship: boolean;
     quotaFeature?: string;
+    attribution?: UsageAttribution;
   } & ManagedUsageAmount,
 ): Promise<ManagedUsageRequestReservation> {
   const spendCapOrganizationId = await resolveSpendCapOrganizationId(
@@ -532,6 +535,7 @@ export async function reserveManagedUsageRequest(
     model: input.model,
     routeId: buildRouteId(input.provider, input.model),
     ...(input.quotaFeature ? { quotaFeature: input.quotaFeature } : {}),
+    ...(input.attribution ? { attribution: input.attribution } : {}),
   };
 }
 
@@ -728,9 +732,13 @@ export async function finalizeManagedUsageRequest(
   const actualCostMicrousd = input.outcome === 'failed' ? 0 : Math.max(0, billedMicrousd);
   const providerCostMicrousd =
     input.outcome === 'failed' ? 0 : Math.max(0, providerSuppliedMicrousd ?? actualCostMicrousd);
+  const attribution = Object.fromEntries(
+    Object.entries(normalizeUsageAttribution(input.attribution)).filter(([, value]) => value),
+  ) as UsageAttribution;
+  const attributedUsage = { ...(input.usage ?? {}), ...attribution };
   const quotaTaggedUsage = input.quotaFeature
-    ? { ...(input.usage ?? {}), quotaFeature: input.quotaFeature }
-    : (input.usage ?? {});
+    ? { ...attributedUsage, quotaFeature: input.quotaFeature }
+    : attributedUsage;
   const servedRoute = resolveServedRouteFromObservations(quotaTaggedUsage);
   const usage = servedRoute
     ? {
@@ -846,6 +854,7 @@ export async function finalizeManagedUsageRequest(
       taskOutcome: settledTaskOutcome,
       taskRef: input.requestHash,
       usage,
+      ...attribution,
     });
   }
 

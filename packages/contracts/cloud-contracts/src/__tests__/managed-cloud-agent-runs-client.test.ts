@@ -290,6 +290,80 @@ describe('managed Cloud agent-run client', () => {
     );
   });
 
+  describe('pausing and resuming a run from any surface', () => {
+    function pauseClient(response: Response) {
+      const fetchImpl = vi.fn(async () => response);
+      const client = createManagedCloudAgentRunClient({
+        fetchImpl,
+        getAuthToken: async () => 'token-1',
+        decorateMutationHeaders: (headers) => ({ ...headers, 'x-csrf-token': 'csrf-1' }),
+      });
+      return { client, fetchImpl };
+    }
+
+    it('asks for a pause and returns the run with its finer Work state', async () => {
+      const { client, fetchImpl } = pauseClient(
+        jsonResponse(
+          {
+            run: {
+              ...run('running'),
+              workState: 'planning',
+              pauseRequestedAt: '2026-07-17T20:00:01.000Z',
+            },
+          },
+          { status: 202 },
+        ),
+      );
+
+      const paused = await client.pauseRun(RUN_ID);
+
+      expect(paused).toMatchObject({ workState: 'planning', pauseRequestedAt: expect.any(String) });
+      expect(fetchImpl).toHaveBeenCalledWith(
+        `/api/llm/v1/chat/completions/runs/${RUN_ID}/pause`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ 'x-csrf-token': 'csrf-1' }),
+        }),
+      );
+    });
+
+    it('resumes with trimmed guidance and releases the stream it will not read', async () => {
+      let cancelled = false;
+      const body = new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.enqueue(new TextEncoder().encode('data: {}\n\n'));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+      const { client, fetchImpl } = pauseClient(
+        new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
+      );
+
+      await client.resumePausedRun(RUN_ID, { guidance: '  Focus on pricing.  ' });
+
+      expect(fetchImpl).toHaveBeenCalledWith(
+        `/api/llm/v1/chat/completions/runs/${RUN_ID}/resume`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ guidance: 'Focus on pricing.' }),
+        }),
+      );
+      expect(cancelled).toBe(true);
+    });
+
+    it('names a resume another device already started', async () => {
+      const { client } = pauseClient(
+        jsonResponse({ error: { message: 'This task is already resuming.' } }, { status: 409 }),
+      );
+
+      await expect(client.resumePausedRun(RUN_ID)).rejects.toMatchObject({
+        name: 'ManagedCloudAgentRunAlreadyResumingError',
+      });
+    });
+  });
+
   describe('answering an approval from a surface that is not watching the run', () => {
     function resumeClient(response: Response) {
       const fetchImpl = vi.fn(async () => response);

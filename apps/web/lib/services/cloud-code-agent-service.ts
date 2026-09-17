@@ -562,6 +562,7 @@ async function runClaimedAgentTurn(
       estimatedCostCents: ESTIMATED_TURN_COST_CENTS,
       planTier,
       isFlagship,
+      attribution: { workload: 'code', sessionId },
     });
   } catch (error) {
     await markTurnFailed(

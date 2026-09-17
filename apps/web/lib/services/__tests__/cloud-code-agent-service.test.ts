@@ -157,6 +157,14 @@ beforeEach(() => {
 });
 
 describe('Cloud Code turn lifecycle', () => {
+  it('attributes the turn reservation to the code workload and its session', async () => {
+    await runTurn({});
+
+    expect(reserveManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ attribution: { workload: 'code', sessionId: 'session-1' } }),
+    );
+  });
+
   it('starts the reservation before the first provider step is charged', async () => {
     await runTurn({});
 

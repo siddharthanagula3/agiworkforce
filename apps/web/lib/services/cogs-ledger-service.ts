@@ -6,6 +6,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
+import { normalizeUsageAttribution, type UsageAttribution } from '@/lib/billing/usage-attribution';
 
 export const COGS_CAPABILITIES = [
   'chat',
@@ -57,7 +58,7 @@ export type CogsReconciliationStatus = (typeof COGS_RECONCILIATION_STATUSES)[num
  * query does not scan jsonb. Every field is optional: a caller that cannot
  * attribute one leaves the column null rather than writing a guess.
  */
-export interface CostEventAttribution {
+export interface CostEventAttribution extends UsageAttribution {
   /** Canonical customer charge in microUSD. Falls back to `resolveRetailCostCents` when omitted. */
   customerCanonicalMicrousd?: number | null;
   /** The same charge in cents, for callers that only hold cents. */
@@ -381,6 +382,7 @@ export async function recordProviderCostEvent(
   db: DatabaseAdapter = getNeonDb(),
 ): Promise<void> {
   const tokenClasses = event.tokenClasses ?? NO_TOKEN_CLASSES;
+  const attribution = normalizeUsageAttribution(event);
   const customerCanonicalMicrousd = resolveCustomerCanonicalMicrousd(event);
   const providerReportedCents = nonNegativeInt(event.providerReportedCostCents);
   await db.execute(
@@ -393,9 +395,10 @@ export async function recordProviderCostEvent(
        customer_canonical_microusd, customer_credits,
        provider_estimated_cost_microusd, provider_reported_cost_microusd,
        reconciliation_status, feature, route_id, surface,
-       input_tokens, cached_tokens, output_tokens, reasoning_tokens
+       input_tokens, cached_tokens, output_tokens, reasoning_tokens,
+       workload, project_id, session_id
      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17,
-               $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+               $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
      on conflict (source_ref) do nothing`,
     [
       event.userId ?? null,
@@ -428,6 +431,9 @@ export async function recordProviderCostEvent(
       nonNegativeInt(event.cachedTokens),
       nonNegativeInt(event.outputTokens),
       nonNegativeInt(event.reasoningTokens),
+      attribution.workload,
+      attribution.projectId,
+      attribution.sessionId,
     ],
   );
 }
@@ -704,6 +710,9 @@ export async function recordSettledProviderCost(
         feature: input.feature ?? null,
         routeId: input.routeId ?? null,
         surface: input.surface ?? null,
+        workload: input.workload ?? null,
+        projectId: input.projectId ?? null,
+        sessionId: input.sessionId ?? null,
         inputTokens: input.inputTokens ?? chatTokens?.promptTokens ?? null,
         cachedTokens: input.cachedTokens ?? chatTokens?.cacheReadTokens ?? null,
         outputTokens: input.outputTokens ?? chatTokens?.completionTokens ?? null,

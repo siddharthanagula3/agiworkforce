@@ -45,6 +45,7 @@ import {
   formatTaskCost,
   formatTaskTokens,
   isLiveTaskState,
+  runWorkState,
   taskStateLabel,
   taskStateTone,
   TASK_TONE_BADGE_CLASS,
@@ -276,7 +277,7 @@ function OutputRow({ output }: { output: AgentActivityArtifactEntry }) {
 
 function TaskCostSection({ run }: { run: CloudAgentRun }) {
   const usage = run.usage;
-  const live = isLiveTaskState(run.state);
+  const live = isLiveTaskState(runWorkState(run));
   return (
     <section
       data-testid="task-cost"
@@ -401,7 +402,7 @@ export function TaskDetailPanel({
   const failures = entries.filter(
     (entry): entry is AgentActivityErrorEntry => entry.kind === 'error',
   );
-  const tone = taskStateTone(run.state);
+  const tone = taskStateTone(runWorkState(run));
 
   return (
     <aside
@@ -421,7 +422,7 @@ export function TaskDetailPanel({
               TASK_TONE_BADGE_CLASS[tone],
             )}
           >
-            {taskStateLabel(run.state)}
+            {taskStateLabel(runWorkState(run))}
           </span>
           {autoRefreshing ? (
             <span
@@ -483,7 +484,7 @@ export function TaskDetailPanel({
               {goalEntry.detail}
             </p>
           ) : null}
-          {onRerun && !isLiveTaskState(run.state) ? (
+          {onRerun && !isLiveTaskState(runWorkState(run)) ? (
             <Button
               variant="outline"
               size="sm"

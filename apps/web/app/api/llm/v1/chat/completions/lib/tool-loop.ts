@@ -428,6 +428,19 @@ export interface ToolLoopDeviceCheckpoint {
   };
 }
 
+export interface ResumeFromPause {
+  guidance?: string;
+}
+
+export interface ToolLoopPauseCheckpoint {
+  sessionId: string;
+  turnId: string;
+  nextEventSequence: number;
+  completedSteps: number;
+  events: AgentEventEnvelope[];
+  messages: ProcessedRequest['llmRequest']['messages'];
+}
+
 export interface ToolLoopInvocationCheckpoint {
   sessionId: string;
   turnId: string;
@@ -583,6 +596,11 @@ export interface ToolLoopOptions {
   connectorExecutor?: ConnectorToolExecutor;
   usage?: ObservedProviderUsage;
   isCancellationRequested?: () => Promise<boolean>;
+  /** Read at each step boundary; honoured only when `onPauseCheckpoint` can store the pause. */
+  isPauseRequested?: () => Promise<boolean>;
+  onPauseCheckpoint?: (checkpoint: ToolLoopPauseCheckpoint) => Promise<void>;
+  /** This continuation starts a run the user paused, with any guidance they gave on resuming. */
+  resumedFromPause?: ResumeFromPause;
   signal?: AbortSignal;
   connectorPermissions?: ConnectorToolPermissions;
   toolApprovalPolicy?: ToolApprovalPolicy;
@@ -3208,6 +3226,7 @@ export async function* runToolLoop(
 
   async function* flushTerminal(
     reason: AgentEventStopReason = 'end-turn',
+    stoppedShort?: Extract<AgentTaskState, 'partial' | 'timed_out'>,
   ): AsyncGenerator<Uint8Array> {
     if (reason !== 'tool-use') {
       await recordGroundingSpend(reason !== 'error' && reason !== 'cancelled');
@@ -3227,6 +3246,15 @@ export async function* runToolLoop(
     }
     if (reason === 'cancelled') {
       yield encoder.encode(taskStateEvent('cancelled', 'Agent work was cancelled.'));
+    } else if (stoppedShort === 'timed_out') {
+      yield encoder.encode(taskStateEvent('timed_out', 'Agent work ran out of time.'));
+    } else if (stoppedShort === 'partial') {
+      yield encoder.encode(
+        taskStateEvent(
+          'partial',
+          'Agent work stopped at its step limit with part of the task done.',
+        ),
+      );
     } else if (reason === 'error' || reason === 'refusal') {
       yield encoder.encode(taskStateEvent('failed', 'Agent work ended with an error.'));
     } else if (reason !== 'tool-use') {
@@ -3775,6 +3803,30 @@ export async function* runToolLoop(
         phase: options.resume ? 'resumed' : 'started',
       }),
     );
+  } else if (options.resumedFromPause) {
+    yield encoder.encode(taskStateEvent('running', 'Agent resumed working.'));
+    yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'resumed' }));
+    const pauseGuidance = options.resumedFromPause.guidance?.trim();
+    if (pauseGuidance) {
+      const last = messages.at(-1);
+      if (last?.role === 'user') {
+        messages[messages.length - 1] = {
+          ...last,
+          content: `${last.content}\n\n${pauseGuidance}`,
+        };
+      } else {
+        messages.push({ role: 'user', content: pauseGuidance });
+      }
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'progress-update',
+          progressId: `pause-guidance:${options.initialEventSequence ?? 0}`,
+          summary: 'Applied your guidance',
+          detail: pauseGuidance,
+          status: 'completed',
+        }),
+      );
+    }
   }
 
   try {
@@ -3784,6 +3836,7 @@ export async function* runToolLoop(
     }
 
     if (showWorkPhases && agiWorkGoal && !options.resume && !options.invocationContinuation) {
+      yield encoder.encode(taskStateEvent('planning', 'Agent is planning the work.'));
       yield encoder.encode(eventStream.emit(agiWorkGoalProgressEvent(agiWorkGoal)));
 
       try {
@@ -3822,6 +3875,7 @@ export async function* runToolLoop(
           '[tool-loop] AGI Work planning turn failed; continuing without a plan',
         );
       }
+      yield encoder.encode(taskStateEvent('running', 'Agent is working through the plan.'));
     }
 
     if (options.resume) {
@@ -4091,6 +4145,38 @@ export async function* runToolLoop(
         yield* flushTerminal('cancelled');
         return;
       }
+      if (options.onPauseCheckpoint && (await options.isPauseRequested?.()) === true) {
+        const pauseChunks: Uint8Array[] = [];
+        const pauseEvents: AgentEventEnvelope[] = [];
+        for (const line of await harvestGeneratedFilesEvents()) {
+          pauseChunks.push(encoder.encode(line));
+        }
+        const previousState = taskState;
+        taskState = 'paused';
+        const stateEmitted = eventStream.emitWithEnvelope({
+          type: 'task-state-changed',
+          taskId,
+          state: 'paused',
+          ...(previousState !== undefined ? { previousState } : {}),
+          summary: 'Agent work is paused. Resume it to continue from here.',
+        });
+        pauseEvents.push(stateEmitted.envelope);
+        pauseChunks.push(encoder.encode(stateEmitted.sse));
+        const pausedEmitted = eventStream.emitWithEnvelope({ type: 'lifecycle', phase: 'paused' });
+        pauseEvents.push(pausedEmitted.envelope);
+        pauseChunks.push(encoder.encode(pausedEmitted.sse));
+        await options.onPauseCheckpoint({
+          sessionId,
+          turnId,
+          nextEventSequence: eventStream.nextSequence(),
+          completedSteps: step,
+          events: pauseEvents,
+          messages: messages.map((message) => ({ ...message })),
+        });
+        for (const chunk of pauseChunks) yield chunk;
+        yield encoder.encode(sseDone());
+        return;
+      }
       if (maxDurationMs !== undefined && now() - startedAt >= maxDurationMs) {
         logger.warn(
           { maxDurationMs, maxSteps, completedSteps: step, provider: processed.provider },
@@ -4118,7 +4204,7 @@ export async function* runToolLoop(
             retryable: true,
           }),
         );
-        yield* flushTerminal('error');
+        yield* flushTerminal('error', 'timed_out');
         return;
       }
       step++;
@@ -4864,7 +4950,7 @@ export async function* runToolLoop(
         retryable: false,
       }),
     );
-    yield* flushTerminal('error');
+    yield* flushTerminal('error', 'partial');
   } finally {
     if (e2bExecutor) {
       if (e2bSessionScope) {

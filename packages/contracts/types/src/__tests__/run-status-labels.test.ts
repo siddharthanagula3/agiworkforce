@@ -1,7 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { agentTaskStateForStopReason } from '../cloud-code';
 import {
   AGENT_TASK_STATE_LABELS,
+  TERMINAL_AGENT_TASK_STATES,
+  agentTaskStateForDispatchStatus,
   agentTaskStateLabel,
+  dispatchStatusForAgentTaskState,
+  agentTaskStatesReadAs,
+  legacyAgentTaskState,
   RUN_STATUS_LABELS,
   runStatusLabel,
   type DispatchTaskLifecycleStatus,
@@ -98,6 +107,11 @@ describe('agent task state labels', () => {
       'cancelled',
       'paused',
       'archived',
+      'planning',
+      'awaiting_approval',
+      'resuming',
+      'partial',
+      'timed_out',
     ];
     expect([...states].sort()).toEqual([...expected].sort());
   });
@@ -121,9 +135,115 @@ describe('agent task state labels', () => {
     expect(Object.values(AGENT_TASK_STATE_LABELS)).not.toContain('Waiting on you');
   });
 
-  it('adds only the two states dispatch has no word for', () => {
+  it('adds words only for the states dispatch has none for', () => {
     expect(agentTaskStateLabel('paused')).toBe('Paused');
     expect(agentTaskStateLabel('archived')).toBe('Archived');
+    expect(agentTaskStateLabel('planning')).toBe('Planning');
+    expect(agentTaskStateLabel('awaiting_approval')).toBe('Waiting for approval');
+    expect(agentTaskStateLabel('resuming')).toBe('Resuming');
+    expect(agentTaskStateLabel('partial')).toBe('Partially completed');
+    expect(agentTaskStateLabel('timed_out')).toBe('Timed out');
+  });
+
+  it('uses the tool-call word for an approval wait, so a run and its call agree', () => {
+    expect(agentTaskStateLabel('awaiting_approval')).toBe(toolCallStatusLabel('awaiting_approval'));
+  });
+});
+
+describe('work state mapping', () => {
+  const states = Object.keys(AGENT_TASK_STATE_LABELS) as AgentTaskState[];
+  const original: AgentTaskState[] = [
+    'queued',
+    'running',
+    'awaiting_input',
+    'ready_for_review',
+    'completed',
+    'failed',
+    'cancelled',
+    'paused',
+    'archived',
+  ];
+
+  it('degrades every state to one a client built before the finer states parses', () => {
+    for (const state of states) {
+      expect(original).toContain(legacyAgentTaskState(state));
+    }
+    for (const state of original) {
+      expect(legacyAgentTaskState(state)).toBe(state);
+    }
+  });
+
+  it('mirrors the Rust legacy_equivalent mapping exactly', () => {
+    const source = readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        '../../../../../crates/agiworkforce-protocol/src/task_state.rs',
+      ),
+      'utf8',
+    );
+    const body = /pub const fn legacy_equivalent[\s\S]*?\n {4}\}/u.exec(source)?.[0] ?? '';
+    const snake = (name: string) => name.replace(/(?<!^)([A-Z])/gu, '_$1').toLowerCase();
+    const rustPairs = new Map<string, string>();
+    for (const [, lhs, rhs] of body.matchAll(/((?:Self::\w+\s*\|?\s*)+)=>\s*Self::(\w+)/gu)) {
+      for (const [, variant] of (lhs ?? '').matchAll(/Self::(\w+)/gu)) {
+        rustPairs.set(snake(variant ?? ''), snake(rhs ?? ''));
+      }
+    }
+    expect(rustPairs.size).toBeGreaterThan(0);
+    for (const state of states) {
+      expect(legacyAgentTaskState(state)).toBe(rustPairs.get(state) ?? state);
+    }
+  });
+
+  it('lists a legacy filter state together with every finer state that reads as it', () => {
+    expect(agentTaskStatesReadAs('running').sort()).toEqual(['planning', 'resuming', 'running']);
+    expect(agentTaskStatesReadAs('failed').sort()).toEqual(['failed', 'partial', 'timed_out']);
+    expect(agentTaskStatesReadAs('awaiting_input').sort()).toEqual([
+      'awaiting_approval',
+      'awaiting_input',
+    ]);
+    expect(agentTaskStatesReadAs('timed_out')).toEqual(['timed_out']);
+  });
+
+  it('maps every dispatch status and code stop reason onto the one Work vocabulary', () => {
+    expect(agentTaskStateForDispatchStatus('accepted')).toBe('queued');
+    expect(agentTaskStateForDispatchStatus('rejected')).toBe('failed');
+    expect(agentTaskStateForDispatchStatus('awaiting_input')).toBe('awaiting_input');
+    expect(agentTaskStateForStopReason('awaiting_approval')).toBe('awaiting_approval');
+    expect(agentTaskStateForStopReason('timeout')).toBe('timed_out');
+    expect(agentTaskStateForStopReason('max_steps')).toBe('partial');
+    expect(agentTaskStateForStopReason('done')).toBe('ready_for_review');
+    for (const status of RUN_STATUSES) {
+      expect(states).toContain(agentTaskStateForDispatchStatus(status));
+    }
+    expect(dispatchStatusForAgentTaskState('paused')).toBe('awaiting_input');
+    expect(dispatchStatusForAgentTaskState('archived')).toBe('completed');
+    for (const state of states) {
+      expect(dispatchStatusForAgentTaskState(state)).toBe(
+        dispatchStatusForAgentTaskState(legacyAgentTaskState(state)),
+      );
+    }
+  });
+
+  it('names every checklist Work state', () => {
+    for (const state of [
+      'queued',
+      'planning',
+      'running',
+      'awaiting_input',
+      'awaiting_approval',
+      'paused',
+      'resuming',
+      'completed',
+      'partial',
+      'failed',
+      'cancelled',
+      'timed_out',
+    ] as const) {
+      expect(TERMINAL_AGENT_TASK_STATES.has(state)).toBe(
+        ['completed', 'partial', 'failed', 'cancelled', 'timed_out'].includes(state),
+      );
+    }
   });
 });
 

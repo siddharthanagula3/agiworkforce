@@ -155,7 +155,7 @@ fn terminal_agent_state(task_state: AgentTaskState) -> Option<(AgentState, Optio
         AgentTaskState::ReadyForReview | AgentTaskState::Completed | AgentTaskState::Archived => {
             Some((AgentState::Completed, None))
         }
-        AgentTaskState::Failed => Some((
+        AgentTaskState::Failed | AgentTaskState::Partial | AgentTaskState::TimedOut => Some((
             AgentState::Failed,
             Some("The agent stopped before finishing the task."),
         )),
@@ -165,7 +165,10 @@ fn terminal_agent_state(task_state: AgentTaskState) -> Option<(AgentState, Optio
         AgentTaskState::Queued
         | AgentTaskState::Running
         | AgentTaskState::AwaitingInput
-        | AgentTaskState::Paused => None,
+        | AgentTaskState::Paused
+        | AgentTaskState::Planning
+        | AgentTaskState::AwaitingApproval
+        | AgentTaskState::Resuming => None,
     }
 }
 
