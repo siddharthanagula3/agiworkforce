@@ -525,6 +525,18 @@ export interface ProjectMember {
  */
 export const MAX_PROJECT_KNOWLEDGE_FILES = 20;
 
+export type ProjectKnowledgeIndexStatus = 'pending' | 'indexing' | 'indexed' | 'stale' | 'failed';
+
+/** Where a knowledge file stands in the retrieval index that search and chat read. */
+export interface ProjectKnowledgeIndexState {
+  status: ProjectKnowledgeIndexStatus;
+  chunkCount: number;
+  semantic: boolean;
+  attempts: number;
+  error: string | null;
+  indexedAt: string | null;
+}
+
 export interface ProjectKnowledgeFile {
   id: string;
   projectId: string;
@@ -539,6 +551,7 @@ export interface ProjectKnowledgeFile {
   retentionExpiresAt?: string | null;
   deletedAt?: string | null;
   storageUri: string;
+  indexing?: ProjectKnowledgeIndexState | null;
 }
 
 export interface ProjectInstructions {

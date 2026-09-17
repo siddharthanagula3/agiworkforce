@@ -8,9 +8,7 @@ import {
 import {
   getModels,
   getModelMetadataById,
-  resolveEffectiveModelPricingForInputTokens,
   type ModelMetadata,
-  type PricedModel,
 } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
@@ -27,6 +25,11 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { embedTextsWithGoogle, GoogleEmbeddingError } from '@/lib/server/google-embeddings';
+import {
+  estimateEmbeddingCostCents,
+  estimateEmbeddingCostMicrousd,
+} from '@/lib/services/retrieval-embedding-service';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
 import {
   ManagedUsageRequestError,
@@ -59,37 +62,7 @@ function managedUsageErrorResponse(
   );
 }
 
-const MICROUSD_PER_USD = 1_000_000;
-const MICROUSD_PER_LEDGER_CENT = 10_000;
-
-/**
- * An embedding call is the clearest case the one-cent floor got wrong: a few
- * hundred tokens cost a small fraction of a cent, and the floor charged a full
- * one. The ledger settles in microUSD since 0182.
- */
-export function estimateEmbeddingCostMicrousd(
-  model: PricedModel,
-  estimatedTokens: number,
-  pricedAt: Date = new Date(),
-): number {
-  const inputRate = resolveEffectiveModelPricingForInputTokens(
-    model,
-    pricedAt,
-    estimatedTokens,
-  ).inputCost;
-  const costDollars = (inputRate * estimatedTokens) / 1_000_000;
-  return costDollars > 0 ? Math.max(1, Math.ceil(costDollars * MICROUSD_PER_USD)) : 0;
-}
-
-export function estimateEmbeddingCostCents(
-  model: PricedModel,
-  estimatedTokens: number,
-  pricedAt: Date = new Date(),
-): number {
-  return Math.ceil(
-    estimateEmbeddingCostMicrousd(model, estimatedTokens, pricedAt) / MICROUSD_PER_LEDGER_CENT,
-  );
-}
+export { estimateEmbeddingCostCents, estimateEmbeddingCostMicrousd };
 
 function estimateTokens(inputs: readonly string[]): number {
   const characters = inputs.reduce((total, input) => total + input.length, 0);
@@ -113,10 +86,6 @@ function resolveEmbeddingModel(requested: string | undefined): ModelMetadata {
   return model;
 }
 
-interface GoogleEmbeddingResponse {
-  embeddings?: Array<{ values?: number[] }>;
-}
-
 async function embedWithGoogle(
   inputs: readonly string[],
   model: ModelMetadata,
@@ -128,40 +97,22 @@ async function embedWithGoogle(
   if (!apiKey) {
     throw createError.serviceUnavailable('Embeddings are not configured on this deployment.');
   }
-
-  const providerModelId = model.apiModelId ?? model.id;
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${providerModelId}:batchEmbedContents`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        requests: inputs.map((text) => ({
-          model: `models/${providerModelId}`,
-          content: { parts: [{ text }] },
-        })),
-      }),
-    },
-  );
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    logger.error(
-      { status: response.status, body: body.slice(0, 500), model: providerModelId },
-      'Embedding provider call failed',
-    );
-    throw createError.serviceUnavailable('The embedding provider rejected the request.');
+  try {
+    return await embedTextsWithGoogle({
+      apiKey,
+      providerModelId: model.apiModelId ?? model.id,
+      inputs,
+    });
+  } catch (error) {
+    if (error instanceof GoogleEmbeddingError) {
+      throw createError.serviceUnavailable(
+        error.status === null
+          ? 'The embedding provider returned an incomplete result set.'
+          : 'The embedding provider rejected the request.',
+      );
+    }
+    throw error;
   }
-
-  const payload = (await response.json()) as GoogleEmbeddingResponse;
-  const vectors = payload.embeddings?.map((entry) => entry.values ?? []) ?? [];
-
-  if (vectors.length !== inputs.length || vectors.some((vector) => vector.length === 0)) {
-    throw createError.serviceUnavailable(
-      'The embedding provider returned an incomplete result set.',
-    );
-  }
-  return vectors;
 }
 
 async function handleEmbeddings(request: NextRequest): Promise<Response> {

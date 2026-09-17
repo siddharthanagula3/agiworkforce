@@ -38,6 +38,15 @@ export const ManagedCloudProjectKnowledgePresignResponseSchema = z.object({
   publicUrl: z.string().url().optional(),
 });
 
+export const ManagedCloudProjectKnowledgeIndexStateSchema = z.object({
+  status: z.enum(['pending', 'indexing', 'indexed', 'stale', 'failed']),
+  chunkCount: z.number().int().nonnegative(),
+  semantic: z.boolean(),
+  attempts: z.number().int().nonnegative(),
+  error: z.string().nullable(),
+  indexedAt: z.string().nullable(),
+});
+
 export const ManagedCloudProjectKnowledgeFileSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
@@ -52,6 +61,11 @@ export const ManagedCloudProjectKnowledgeFileSchema = z.object({
   retentionExpiresAt: z.string().nullable().optional(),
   deletedAt: z.string().nullable().optional(),
   storageUri: z.string().min(1),
+  indexing: ManagedCloudProjectKnowledgeIndexStateSchema.nullable().optional(),
+});
+
+export const ManagedCloudProjectKnowledgeReindexResponseSchema = z.object({
+  indexing: ManagedCloudProjectKnowledgeIndexStateSchema.nullable(),
 });
 
 export const ManagedCloudProjectKnowledgeListResponseSchema = z.object({

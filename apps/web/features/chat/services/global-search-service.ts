@@ -3,8 +3,25 @@ import { logger } from '@shared/lib/logger';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 
+export type IndexedSearchSourceType =
+  | 'project_knowledge'
+  | 'library_file'
+  | 'conversation'
+  | 'artifact'
+  | 'research_report'
+  | 'developer_session';
+
 export interface SearchResult {
-  type: 'session' | 'message' | 'project' | 'file';
+  type:
+    | 'session'
+    | 'message'
+    | 'project'
+    | 'file'
+    | 'artifact'
+    | 'research_report'
+    | 'developer_session'
+    | 'project_knowledge';
+  href?: string;
   sessionId: string;
   sessionTitle: string;
   messageId?: string;
@@ -33,6 +50,7 @@ export interface SearchStats {
   messageMatches: number;
   projectMatches: number;
   fileMatches: number;
+  documentMatches: number;
   searchTime: number;
 }
 
@@ -86,6 +104,17 @@ interface APIProjectResult {
   matchedText: string;
   contextBefore?: string;
   contextAfter?: string;
+}
+
+interface APIDocumentResult {
+  type: IndexedSearchSourceType;
+  sourceId: string;
+  title: string;
+  href: string;
+  snippet: string;
+  matchedTerms: string[];
+  messageId?: string;
+  indexedAt: string | null;
 }
 
 interface APIFileResult {
@@ -151,6 +180,7 @@ class GlobalSearchService {
       results: APISearchResult[];
       projects?: APIProjectResult[];
       files?: APIFileResult[];
+      documents?: APIDocumentResult[];
       stats: APISearchStats;
     };
 
@@ -192,17 +222,56 @@ class GlobalSearchService {
       contextAfter: f.contextAfter,
     }));
 
-    const results: SearchResult[] = [...conversationResults, ...projectResults, ...fileResults];
+    const seenConversations = new Set(conversationResults.map((r) => r.sessionId));
+    const seenFiles = new Set(fileResults.map((r) => r.sessionId));
+    const documentResults: SearchResult[] = (data.documents || []).flatMap(
+      (document): SearchResult[] => {
+        if (document.type === 'conversation' && seenConversations.has(document.sourceId)) return [];
+        if (document.type === 'library_file' && seenFiles.has(document.sourceId)) return [];
+        const indexedAt = document.indexedAt ? new Date(document.indexedAt) : new Date(0);
+        return [
+          {
+            type:
+              document.type === 'conversation'
+                ? document.messageId
+                  ? 'message'
+                  : 'session'
+                : document.type === 'library_file'
+                  ? 'file'
+                  : document.type,
+            href: document.href,
+            sessionId: document.sourceId,
+            sessionTitle: document.title,
+            ...(document.messageId ? { messageId: document.messageId } : {}),
+            content: document.snippet,
+            createdAt: indexedAt,
+            updatedAt: indexedAt,
+            matchedText: document.snippet,
+          },
+        ];
+      },
+    );
+
+    const results: SearchResult[] = [
+      ...conversationResults,
+      ...projectResults,
+      ...fileResults,
+      ...documentResults,
+    ];
 
     const projectMatches = data.stats?.projectMatches ?? projectResults.length;
     const fileMatches = data.stats?.fileMatches ?? fileResults.length;
     const stats: SearchStats = {
       totalResults:
-        (data.stats?.totalResults ?? conversationResults.length) + projectMatches + fileMatches,
+        (data.stats?.totalResults ?? conversationResults.length) +
+        projectMatches +
+        fileMatches +
+        documentResults.length,
       sessionMatches: data.stats?.sessionMatches ?? 0,
       messageMatches: data.stats?.messageMatches ?? 0,
       projectMatches,
       fileMatches,
+      documentMatches: documentResults.length,
       searchTime: Date.now() - startTime,
     };
 

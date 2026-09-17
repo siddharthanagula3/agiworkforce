@@ -1,14 +1,15 @@
 'use client';
 
-import { useConfirmAction } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   ALLOWED_ATTACHMENT_ACCEPT,
   MAX_PROJECT_KNOWLEDGE_FILES,
   type ProjectKnowledgeFile,
+  type ProjectKnowledgeIndexState,
 } from '@agiworkforce/types';
 import { FilePreviewModal } from './FilePreviewModal';
 import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload';
@@ -34,6 +35,18 @@ function fileIcon(mimeType: string): string {
   return '📁';
 }
 
+const INDEX_POLL_INTERVAL_MS = 5_000;
+const MAX_INDEX_POLLS = 60;
+const IN_PROGRESS_INDEX_STATUSES: ReadonlySet<ProjectKnowledgeIndexState['status']> = new Set([
+  'pending',
+  'indexing',
+  'stale',
+]);
+
+function isIndexInProgress(file: ProjectKnowledgeFile): boolean {
+  return file.indexing ? IN_PROGRESS_INDEX_STATUSES.has(file.indexing.status) : false;
+}
+
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
@@ -55,28 +68,74 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
   const [previewFile, setPreviewFile] = useState<ProjectKnowledgeFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const indexPollsRef = useRef(0);
+  const [retryingFileId, setRetryingFileId] = useState<string | null>(null);
+
+  const fetchFiles = useCallback(
+    async (signal?: { cancelled: boolean }) => {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`,
+      );
+      const body = (await response.json()) as {
+        files?: ProjectKnowledgeFile[];
+        storage?: { usedBytes: number | null; limitBytes: number | null };
+      };
+      if (signal?.cancelled) return;
+      setFiles(body.files ?? []);
+      setStorage(body.storage ?? null);
+      setLoadState('loaded');
+    },
+    [projectId],
+  );
+
   useEffect(() => {
-    let cancelled = false;
+    const signal = { cancelled: false };
     setLoadState('loading');
-    fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge-files`)
-      .then((r) => r.json())
-      .then((data: unknown) => {
-        if (cancelled) return;
-        const body = data as {
-          files?: ProjectKnowledgeFile[];
-          storage?: { usedBytes: number | null; limitBytes: number | null };
-        };
-        setFiles(body.files ?? []);
-        setStorage(body.storage ?? null);
-        setLoadState('loaded');
-      })
-      .catch(() => {
-        if (!cancelled) setLoadState('error');
-      });
+    indexPollsRef.current = 0;
+    fetchFiles(signal).catch(() => {
+      if (!signal.cancelled) setLoadState('error');
+    });
     return () => {
-      cancelled = true;
+      signal.cancelled = true;
     };
-  }, [projectId]);
+  }, [fetchFiles]);
+
+  const indexingInProgress = files.some(isIndexInProgress);
+  useEffect(() => {
+    if (!indexingInProgress || indexPollsRef.current >= MAX_INDEX_POLLS) return;
+    const signal = { cancelled: false };
+    const timer = setTimeout(() => {
+      indexPollsRef.current += 1;
+      fetchFiles(signal).catch(() => undefined);
+    }, INDEX_POLL_INTERVAL_MS);
+    return () => {
+      signal.cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [indexingInProgress, files, fetchFiles]);
+
+  async function handleRetryIndexing(file: ProjectKnowledgeFile) {
+    setRetryingFileId(file.id);
+    try {
+      const csrfToken = await getCsrfToken();
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}/reindex`,
+        { method: 'POST', headers: { 'x-csrf-token': csrfToken }, credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Reindex failed (${res.status})`);
+      const body = (await res.json()) as { indexing?: ProjectKnowledgeIndexState | null };
+      indexPollsRef.current = 0;
+      setFiles((current) =>
+        current.map((entry) =>
+          entry.id === file.id ? { ...entry, indexing: body.indexing ?? entry.indexing } : entry,
+        ),
+      );
+    } catch {
+      toast.error(`Couldn't restart indexing for ${file.fileName}. Try again.`);
+    } finally {
+      setRetryingFileId(null);
+    }
+  }
 
   async function handleDelete(file: ProjectKnowledgeFile) {
     const previous = files;
@@ -367,19 +426,32 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               </span>
               <span
                 style={{
-                  fontSize: 13,
-                  color: 'var(--agi-ink)',
                   flex: 1,
                   // Without minWidth a flex child refuses to shrink below its
                   // content, so a long file name pushes the size and delete
                   // controls out of the row instead of ellipsing.
                   minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
                 }}
               >
-                {file.fileName}
+                <span
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--agi-ink)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {file.fileName}
+                </span>
+                <KnowledgeIndexStatus
+                  indexing={file.indexing ?? null}
+                  retrying={retryingFileId === file.id}
+                  onRetry={() => void handleRetryIndexing(file)}
+                />
               </span>
               <span style={{ fontSize: 12, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
                 {(file.byteCount / 1024).toFixed(1)} KB
@@ -449,5 +521,65 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       {/* File preview modal */}
       <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
+  );
+}
+
+function KnowledgeIndexStatus({
+  indexing,
+  retrying,
+  onRetry,
+}: {
+  indexing: ProjectKnowledgeIndexState | null;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  if (!indexing) return null;
+  const inProgress = IN_PROGRESS_INDEX_STATUSES.has(indexing.status) || retrying;
+  if (!inProgress && indexing.status === 'indexed') return null;
+
+  const label = inProgress
+    ? 'Indexing for search'
+    : indexing.chunkCount > 0
+      ? 'Keyword search only'
+      : 'Not indexed';
+
+  return (
+    <span
+      data-testid="knowledge-files-index-status"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 6,
+        fontSize: 12,
+        color: !inProgress && indexing.chunkCount === 0 ? 'var(--agi-error)' : 'var(--agi-ink-2)',
+      }}
+    >
+      {inProgress ? <Spinner size="sm" aria-label="Indexing" /> : null}
+      <span>{inProgress ? label : (indexing.error ?? label)}</span>
+      {!inProgress && indexing.status === 'failed' ? (
+        <button
+          type="button"
+          data-testid="knowledge-files-retry-index"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRetry();
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          style={{
+            background: 'transparent',
+            border: 0,
+            padding: 0,
+            minHeight: 24,
+            color: 'var(--agi-ink)',
+            fontSize: 12,
+            cursor: 'pointer',
+            textDecoration: 'underline',
+          }}
+        >
+          Retry indexing
+        </button>
+      ) : null}
+    </span>
   );
 }

@@ -118,6 +118,41 @@ function resolveServerProviderApiKey(providerId: string): string | undefined {
   return undefined;
 }
 
+function resolveServerProviderBaseUrl(providerId: string, envPrefix: string): string | undefined {
+  const candidateBaseUrl = getOptionalEnv(`${envPrefix}_BASE_URL`);
+  if (candidateBaseUrl) {
+    const validated = validateBaseUrl(candidateBaseUrl, {
+      allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
+    });
+    if (validated.ok) return validated.url;
+    logger.warn(
+      {
+        providerId,
+        envKey: `${envPrefix}_BASE_URL`,
+        reason: validated.reason,
+        host: validated.hostname,
+      },
+      'Refusing *_BASE_URL override pointing to a non-allowlisted host (potential SSRF)',
+    );
+  }
+  return undefined;
+}
+
+export interface ServerProviderCredentials {
+  apiKey: string;
+  baseUrl?: string;
+}
+
+export function resolveServerProviderCredentials(
+  providerId: string,
+): ServerProviderCredentials | null {
+  const providerConfig = SERVER_PROVIDER_CONFIG[providerId];
+  const apiKey = resolveServerProviderApiKey(providerId);
+  if (!providerConfig || !apiKey) return null;
+  const baseUrl = resolveServerProviderBaseUrl(providerId, providerConfig.envPrefix);
+  return { apiKey, ...(baseUrl ? { baseUrl } : {}) };
+}
+
 export function hasServerProviderKey(providerId: string): boolean {
   return resolveServerProviderApiKey(providerId) !== undefined;
 }
@@ -297,26 +332,7 @@ export function buildServerProviderAdapter(
     );
   }
 
-  let baseUrl: string | undefined;
-  const candidateBaseUrl = getOptionalEnv(`${envPrefix}_BASE_URL`);
-  if (candidateBaseUrl) {
-    const validated = validateBaseUrl(candidateBaseUrl, {
-      allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
-    });
-    if (validated.ok) {
-      baseUrl = validated.url;
-    } else {
-      logger.warn(
-        {
-          providerId,
-          envKey: `${envPrefix}_BASE_URL`,
-          reason: validated.reason,
-          host: validated.hostname,
-        },
-        'Refusing *_BASE_URL override pointing to a non-allowlisted host (potential SSRF)',
-      );
-    }
-  }
+  const baseUrl = resolveServerProviderBaseUrl(providerId, envPrefix);
 
   const baseConfig = { apiKey, ...(baseUrl ? { baseUrl } : {}) };
   if (providerId === 'anthropic' && options.anthropicCache) {

@@ -143,6 +143,13 @@
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
+    "vercel_gateway/embeddings": {
+      "provider": "vercel_gateway",
+      "apiFamily": "embeddings",
+      "adapter": "@agiworkforce/providers-vercel-gateway",
+      "trustModes": ["managed_cloud"],
+      "features": {}
+    },
     "xai/chat-completions": {
       "provider": "xai",
       "apiFamily": "chat_completions",

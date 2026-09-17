@@ -1294,6 +1294,10 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     'Transient cache in front of a connector call (0147 names it a stateless cache); nothing is held here that is not read back from the connector.',
   web_artifact_index:
     'Derived lookup rebuilt from web_artifacts, which is exported in full alongside every version.',
+  retrieval_documents:
+    'Search index state derived from chats, project files, library files, artifacts, research reports and developer sessions, each exported in full in its own section.',
+  retrieval_chunks:
+    'Passages and embeddings cut from those same exported sources for search; an embedding is a numeric derivative of text the export already contains.',
 };
 
 const MEDIA_DOWNLOAD_FIELD = 'download_url';

@@ -34,6 +34,9 @@ import {
   History,
   TrendingUp,
   Trash2,
+  Shapes,
+  Telescope,
+  SquareTerminal,
 } from 'lucide-react';
 import {
   globalSearchService,
@@ -52,6 +55,16 @@ interface GlobalSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const RESULT_TYPE_LABELS: Partial<Record<SearchResult['type'], string>> = {
+  project: 'Project',
+  file: 'File',
+  session: 'Title',
+  artifact: 'Artifact',
+  research_report: 'Report',
+  developer_session: 'Code session',
+  project_knowledge: 'Project source',
+};
 
 function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps) {
   // Radix hides a modal dialog's siblings, but which nodes that reaches depends
@@ -225,6 +238,11 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
   const handleResultClick = (result: SearchResult) => {
     onOpenChange(false);
+
+    if (result.href) {
+      router.push(result.href);
+      return;
+    }
 
     if (result.type === 'project') {
       router.push(`/chat/projects/${result.sessionId}`);
@@ -638,7 +656,13 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         {result.type === 'project' ? (
                           <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
-                        ) : result.type === 'file' ? (
+                        ) : result.type === 'artifact' ? (
+                          <Shapes className="h-4 w-4 shrink-0 text-primary" />
+                        ) : result.type === 'research_report' ? (
+                          <Telescope className="h-4 w-4 shrink-0 text-primary" />
+                        ) : result.type === 'developer_session' ? (
+                          <SquareTerminal className="h-4 w-4 shrink-0 text-primary" />
+                        ) : result.type === 'file' || result.type === 'project_knowledge' ? (
                           <FileText className="h-4 w-4 shrink-0 text-primary" />
                         ) : result.type === 'session' ? (
                           <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
@@ -669,13 +693,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                     {/* Badges */}
                     <div className="mt-2 flex items-center gap-2">
                       <Badge variant="outline" className="px-1.5 py-0 text-[12px]">
-                        {result.type === 'project'
-                          ? 'Project'
-                          : result.type === 'file'
-                            ? 'File'
-                            : result.type === 'session'
-                              ? 'Title'
-                              : result.role}
+                        {RESULT_TYPE_LABELS[result.type] ?? result.role}
                       </Badge>
                     </div>
                   </button>

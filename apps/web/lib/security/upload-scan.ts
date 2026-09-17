@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { logger } from '@/lib/logger';
+
 /**
  * Content inspection for user uploads.
  *
@@ -181,9 +183,41 @@ export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): Upl
   return { ok: findings.length === 0, findings };
 }
 
+export interface UploadScannerStatus {
+  configured: boolean;
+  required: boolean;
+}
+
+export function uploadScannerStatus(): UploadScannerStatus {
+  return {
+    configured: Boolean(process.env['UPLOAD_SCAN_WEBHOOK_URL']?.trim()),
+    required: process.env['UPLOAD_SCAN_REQUIRED']?.trim().toLowerCase() === 'true',
+  };
+}
+
+let unconfiguredScannerReported = false;
+
 async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[]> {
-  const endpoint = process.env['UPLOAD_SCAN_WEBHOOK_URL'];
-  if (!endpoint) return [];
+  const endpoint = process.env['UPLOAD_SCAN_WEBHOOK_URL']?.trim();
+  if (!endpoint) {
+    const status = uploadScannerStatus();
+    if (status.required) {
+      return [
+        {
+          code: 'external_scanner',
+          detail: 'A malware scanner is required for uploads and none is configured',
+        },
+      ];
+    }
+    if (!unconfiguredScannerReported && process.env['NODE_ENV'] === 'production') {
+      unconfiguredScannerReported = true;
+      logger.warn(
+        { event: 'upload_scanner_unconfigured' },
+        '[upload-scan] no external malware scanner is configured; uploads get structural checks only',
+      );
+    }
+    return [];
+  }
 
   try {
     const response = await fetch(endpoint, {

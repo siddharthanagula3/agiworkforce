@@ -237,6 +237,11 @@
       "reason": "the personal data export includes the notification category and target columns 0199 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0199 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0199 is applied."
     },
     {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 202,
+      "reason": "the export names the retrieval index tables 0202 creates only to declare them withheld as derived data; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0202 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0202 is applied."
+    },
+    {
       "file": "apps/web/app/api/web-push/route.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -325,6 +330,11 @@
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 195,
       "reason": "account erasure clears the per-project cost attribution column 0195 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0195 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0195 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 202,
+      "reason": "account erasure deletes the retrieval index rows 0202 creates for the subject; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0202 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0202 is applied."
     },
     {
       "file": "apps/web/lib/server/neon-chat.ts",
@@ -567,6 +577,21 @@
       "reason": "the founder-assistance entry for migrations 0183 to 0191 applies this migration before the deployment that carries this file; until it runs the settled-cost write is caught as an undefined column and the report simply states no cost"
     },
     {
+      "file": "apps/web/lib/services/retrieval-index-service.ts",
+      "migration": 192,
+      "reason": "indexing reads the page and heading anchors 0192 adds so a chunk carries its location; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0192 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0192 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/retrieval-index-service.ts",
+      "migration": 202,
+      "reason": "indexing writes the retrieval documents and chunks 0202 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0202 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0202 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/retrieval-search-service.ts",
+      "migration": 202,
+      "reason": "hybrid search reads the retrieval chunks 0202 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0202 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0202 is applied."
+    },
+    {
       "file": "apps/web/lib/services/route-cache-observability-service.ts",
       "migration": 166,
       "reason": "provider_cost_events.organization_id is founder-gated; the deploy runbook applies migration 0166 before this code reaches production."
@@ -615,6 +640,11 @@
       "file": "apps/web/shared/stores/query-client.ts",
       "migration": 199,
       "reason": "names the category field of a notification object returned by /api/notifications, not the database column, and never queries the notifications table; the route that does is covered by its own entry."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 200,
+      "reason": "the account erasure inventory classifies the permission grid tables 0200 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0200 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0200 is applied."
     }
   ]
 }

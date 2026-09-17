@@ -108,3 +108,73 @@ describe('globalSearchService.search, project surfacing', () => {
     expect(stats.totalResults).toBe(1);
   });
 });
+
+describe('globalSearchService.search, indexed documents', () => {
+  it('adds artifacts, reports and developer sessions with their destination links', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        results: [
+          {
+            type: 'session',
+            sessionId: 'sess-1',
+            sessionTitle: 'Pricing chat',
+            content: 'pricing',
+            createdAt: '2026-07-01T00:00:00Z',
+            updatedAt: '2026-07-01T00:00:00Z',
+            matchedText: 'pricing',
+          },
+        ],
+        documents: [
+          {
+            type: 'artifact',
+            sourceId: 'art-1',
+            title: 'Pricing table',
+            href: '/chat/conv-1',
+            snippet: 'Plan pricing table',
+            matchedTerms: ['pricing'],
+            indexedAt: '2026-09-17T00:00:00Z',
+          },
+          {
+            type: 'research_report',
+            sourceId: 'rep-1',
+            title: 'Market pricing',
+            href: '/chat/conv-2',
+            snippet: 'Competitor pricing',
+            matchedTerms: ['pricing'],
+            indexedAt: null,
+          },
+          {
+            type: 'developer_session',
+            sourceId: 'code-1',
+            title: 'Fix pricing page',
+            href: '/code/code-1',
+            snippet: 'pricing page',
+            matchedTerms: ['pricing'],
+            indexedAt: null,
+          },
+          {
+            type: 'conversation',
+            sourceId: 'sess-1',
+            title: 'Pricing chat',
+            href: '/chat/sess-1',
+            snippet: 'already listed',
+            matchedTerms: ['pricing'],
+            indexedAt: null,
+          },
+        ],
+        stats: { totalResults: 1, sessionMatches: 1, messageMatches: 0 },
+      }),
+    );
+
+    const { results, stats } = await globalSearchService.search('user-1', { query: 'pricing' });
+
+    expect(results.map((result) => [result.type, result.href ?? null])).toEqual([
+      ['session', null],
+      ['artifact', '/chat/conv-1'],
+      ['research_report', '/chat/conv-2'],
+      ['developer_session', '/code/code-1'],
+    ]);
+    expect(stats.documentMatches).toBe(3);
+    expect(stats.totalResults).toBe(4);
+  });
+});

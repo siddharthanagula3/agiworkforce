@@ -13641,6 +13641,25 @@
         "outputPerMillion": 0
       }
     },
+    "vercel_gateway/gemini-embedding-2": {
+      "modelKey": "gemini-embedding-2",
+      "provider": "vercel_gateway",
+      "providerModelId": "google/gemini-embedding-2",
+      "harnessId": "vercel_gateway/embeddings",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": false,
+      "cacheClass": "no_provider_cache",
+      "commercialStatus": "authorized_marketplace",
+      "dataRetention": "conditional",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 0
+      }
+    },
     "google/gemini-3.1-pro-preview": {
       "modelKey": "gemini-3.1-pro-preview",
       "provider": "google",
@@ -23641,6 +23660,15 @@
       "apiFamily": "embed_content",
       "adapter": "apps/web/app/api/llm/v1/embeddings",
       "trustModes": ["managed_cloud", "byok"],
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
+    },
+    "vercel_gateway/embeddings": {
+      "provider": "vercel_gateway",
+      "apiFamily": "embeddings",
+      "adapter": "@agiworkforce/providers-vercel-gateway",
+      "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"

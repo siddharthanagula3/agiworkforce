@@ -168,3 +168,9 @@ export function createProviderAdapter<ProviderId extends ProviderAdapterId>(
   ) => ProviderAdapter;
   return factory(config as ProviderAdapterConfigMap[ProviderAdapterId]);
 }
+
+export {
+  createVercelGatewayEmbeddings,
+  VercelGatewayEmbeddingError,
+  type VercelGatewayEmbeddingResult,
+} from '@agiworkforce/providers-vercel-gateway';
