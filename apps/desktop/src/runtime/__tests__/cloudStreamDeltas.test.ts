@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { StreamEvent } from '@agiworkforce/unified-chat';
 import { createCloudStreamDeltaSink } from '../cloudStreamDeltas';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 function makeSink() {
   const events: StreamEvent[] = [];
@@ -18,7 +19,7 @@ describe('cloudStreamDeltas, every x_* delta key the wire can emit', () => {
     sink.onEvent(
       payload({
         x_agent_event: {
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'session-1',
           turnId: 'turn-1',
           sequence: 0,
@@ -41,7 +42,11 @@ describe('cloudStreamDeltas, every x_* delta key the wire can emit', () => {
 
   it('x_agent_event: rejects malformed envelopes instead of publishing untrusted activity', () => {
     const { sink, events } = makeSink();
-    sink.onEvent(payload({ x_agent_event: { schemaVersion: 4, event: { type: 'lifecycle' } } }));
+    sink.onEvent(
+      payload({
+        x_agent_event: { schemaVersion: AGENT_EVENT_SCHEMA_VERSION, event: { type: 'lifecycle' } },
+      }),
+    );
 
     expect(events.some((event) => event.type === 'agent_event')).toBe(false);
     expect(sink.getAgentActivity()).toBeUndefined();

@@ -17,6 +17,7 @@ import {
   type ChatExecutionMode,
 } from '@agiworkforce/types';
 import type { AgentEvent, JsonValue } from '@agiworkforce/types/protocol';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -660,7 +661,7 @@ export class TauriRuntime implements ChatRuntime {
 
     const pushAgentEvent = (event: AgentEvent) => {
       const envelope: AgentEventEnvelope = {
-        schemaVersion: 4,
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
         sessionId: String(backendConversationId),
         turnId: frontendMessageId,
         sequence: agentEventSequence++,

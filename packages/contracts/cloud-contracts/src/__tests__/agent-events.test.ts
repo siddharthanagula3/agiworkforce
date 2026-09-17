@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AGENT_EVENT_SCHEMA_VERSION as CANONICAL_SCHEMA_VERSION } from '@agiworkforce/types';
 
 import {
   AGENT_EVENT_SCHEMA_VERSION,
@@ -7,7 +8,7 @@ import {
 } from '../agent-events';
 
 const BASE_ENVELOPE = {
-  schemaVersion: 4,
+  schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
   sessionId: 'conversation-1',
   turnId: 'turn-1',
   sequence: 0,
@@ -15,8 +16,15 @@ const BASE_ENVELOPE = {
 } as const;
 
 describe('AgentEventEnvelopeSchema / parseAgentEventDelta', () => {
-  it('pins the canonical run-activity schema version', () => {
-    expect(AGENT_EVENT_SCHEMA_VERSION).toBe(4);
+  it('reads the canonical schema version rather than keeping its own', () => {
+    // This package used to declare its own copy of the number, which drifted
+    // one behind the wire and made the envelope schema reject events the
+    // runtime was really sending. Rust parity is asserted in
+    // @agiworkforce/types; what matters here is that there is one value.
+    expect(AGENT_EVENT_SCHEMA_VERSION).toBe(CANONICAL_SCHEMA_VERSION);
+    expect(
+      parseAgentEventDelta({ ...BASE_ENVELOPE, schemaVersion: CANONICAL_SCHEMA_VERSION - 1 }),
+    ).toBeNull();
   });
 
   it('parses the engine-authored task lifecycle without surface inference', () => {

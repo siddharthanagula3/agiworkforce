@@ -3,6 +3,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   SYNTHETIC_LOCAL_MODEL_ID,
   SYNTHETIC_LOCAL_MODEL_ID_SECONDARY,
@@ -421,9 +422,12 @@ describe('LocalRuntimeClient', () => {
     },
   );
 
+  // Both sides of the negotiated version come from the shared constant: a bump
+  // is a contract change, and this suite should follow it rather than pin a
+  // number that quietly becomes the wrong one.
   it.each([
-    [5, 'Update AGI for VS Code.'],
-    [3, 'Update the AGI CLI'],
+    [AGENT_EVENT_SCHEMA_VERSION + 1, 'Update AGI for VS Code.'],
+    [AGENT_EVENT_SCHEMA_VERSION - 1, 'Update the AGI CLI'],
   ])('refuses a handshake declaring agent event schema %i', async (schemaVersion, action) => {
     const runtime = fakeRuntime(8, { initializeExtra: { agentEventSchemaVersion: schemaVersion } });
     const client = new LocalRuntimeClient({
@@ -434,14 +438,17 @@ describe('LocalRuntimeClient', () => {
     });
 
     await expect(client.initialize()).rejects.toThrow(
-      `streams agent events in schema ${schemaVersion}; this extension reads schema 4. ${action}`,
+      `streams agent events in schema ${schemaVersion}; this extension reads schema ${AGENT_EVENT_SCHEMA_VERSION}. ${action}`,
     );
     await client.dispose();
   });
 
   it('accepts a handshake that declares the schema and minimum it negotiates', async () => {
     const runtime = fakeRuntime(8, {
-      initializeExtra: { agentEventSchemaVersion: 4, minimumProtocolVersion: 7 },
+      initializeExtra: {
+        agentEventSchemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        minimumProtocolVersion: 7,
+      },
     });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
@@ -451,7 +458,7 @@ describe('LocalRuntimeClient', () => {
     });
 
     await expect(client.initialize()).resolves.toMatchObject({
-      agentEventSchemaVersion: 4,
+      agentEventSchemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       minimumProtocolVersion: 7,
     });
     await client.dispose();
@@ -643,7 +650,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence: 0,
@@ -663,7 +670,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence: 1,
@@ -683,7 +690,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence: 2,
@@ -702,7 +709,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence: 3,
@@ -743,7 +750,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence,

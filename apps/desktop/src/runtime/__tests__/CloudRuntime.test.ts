@@ -6,6 +6,7 @@ import type {
   ManagedCloudAgentRunFollowResult,
 } from '@agiworkforce/cloud-contracts';
 import { CloudRuntime } from '../CloudRuntime';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const FIXTURE_MODEL_ID = 'fixture-model';
 const FIXTURE_IMAGE_MODEL_ID = 'fixture-image-model';
@@ -471,7 +472,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 4,
+                    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                     sessionId: 'session-1',
                     turnId: 'turn-1',
                     sequence: 0,
@@ -487,7 +488,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 4,
+                    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                     sessionId: 'session-1',
                     turnId: 'turn-1',
                     sequence: 1,
@@ -617,7 +618,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 4,
+                    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                     sessionId: 'session-reject',
                     turnId: 'turn-reject',
                     sequence: 0,
@@ -678,7 +679,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 4,
+                    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                     sessionId: 'session-reconnect',
                     turnId: 'turn-reconnect',
                     sequence: 0,
@@ -699,7 +700,7 @@ describe('CloudRuntime', () => {
           options: TestFollowOptions,
         ): Promise<ManagedCloudAgentRunFollowResult> => {
           options.onEvent({
-            schemaVersion: 4,
+            schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
             sessionId: 'session-reconnect',
             turnId: 'turn-reconnect',
             sequence: 1,
@@ -707,7 +708,7 @@ describe('CloudRuntime', () => {
             event: { type: 'text-delta', delta: ' recovered' },
           });
           options.onEvent({
-            schemaVersion: 4,
+            schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
             sessionId: 'session-reconnect',
             turnId: 'turn-reconnect',
             sequence: 2,
@@ -769,7 +770,7 @@ describe('CloudRuntime', () => {
           options: TestFollowOptions,
         ): Promise<ManagedCloudAgentRunFollowResult> => {
           options.onEvent({
-            schemaVersion: 4,
+            schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
             sessionId: 'session-overlap',
             turnId: 'turn-overlap',
             sequence: 0,
@@ -777,7 +778,7 @@ describe('CloudRuntime', () => {
             event: { type: 'text-delta', delta: 'Already visible' },
           });
           options.onEvent({
-            schemaVersion: 4,
+            schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
             sessionId: 'session-overlap',
             turnId: 'turn-overlap',
             sequence: 1,
@@ -910,7 +911,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 4,
+                    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                     sessionId: 'session-cancel',
                     turnId: 'turn-cancel',
                     sequence: 0,
@@ -1035,7 +1036,7 @@ describe('CloudRuntime', () => {
           options: TestFollowOptions,
         ): Promise<ManagedCloudAgentRunFollowResult> => {
           options.onEvent({
-            schemaVersion: 4,
+            schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
             sessionId: 'session-reattach',
             turnId: 'turn-reattach',
             sequence: 5,
