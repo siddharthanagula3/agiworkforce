@@ -172,7 +172,7 @@ export type WebviewToExtMessage =
   | { type: 'fileSearch'; payload: { query: string } }
   | { type: 'shareDiagnostics' }
   | { type: 'clearConversation' }
-  | { type: 'openActionSheet'; payload?: { scope: 'composer' } }
+  | { type: 'openActionSheet' }
   | { type: 'openModePicker' }
   | { type: 'openEffortPicker' }
   | { type: 'setMode'; payload: { mode: AgentMode } }
@@ -869,10 +869,7 @@ export class ChatStateManager {
       }
 
       case 'openActionSheet': {
-        await vscode.commands.executeCommand(
-          'agi-workforce.openActionSheet',
-          msg.payload?.scope === 'composer' ? 'composer' : undefined,
-        );
+        await vscode.commands.executeCommand('agi-workforce.openActionSheet');
         break;
       }
 
