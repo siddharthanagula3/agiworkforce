@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   claim: vi.fn(),
   push: vi.fn(),
+  record: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -13,6 +14,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/video-generation-jobs', () => ({
   claimVideoCompletionNotice: (...args: unknown[]) => mocks.claim(...args),
+}));
+vi.mock('./notification-service', () => ({
+  recordNotification: (...args: unknown[]) => mocks.record(...args),
 }));
 vi.mock('./push-notification-service', () => ({
   sendPushToUser: (...args: unknown[]) => mocks.push(...args),
@@ -72,6 +76,23 @@ describe('video completion notice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.push.mockResolvedValue({ sent: 1, invalidated: 0 });
+    mocks.record.mockResolvedValue({ recorded: true });
+  });
+
+  it('writes one in-app feed row that opens the conversation holding the video', async () => {
+    mocks.claim.mockResolvedValue(true);
+
+    await deliverVideoCompletionNotice(db, job());
+
+    expect(mocks.record).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      category: 'media',
+      severity: 'success',
+      title: 'Your video is ready',
+      message: 'Open the chat to watch it.',
+      target: { kind: 'chat', id: CONVERSATION_ID },
+      dedupeKey: `video-job:${JOB_ID}`,
+    });
   });
 
   it('sends a notice that deep links to the message holding the video', async () => {
@@ -103,6 +124,7 @@ describe('video completion notice', () => {
 
     await expect(deliverVideoCompletionNotice(db, job())).resolves.toBe(false);
     expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 
   /**

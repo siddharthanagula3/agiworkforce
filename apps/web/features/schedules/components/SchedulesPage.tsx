@@ -26,7 +26,7 @@ import {
   Skeleton,
 } from '@agiworkforce/ui';
 import { CalendarClock, Loader2, MessageSquarePlus, Plus, RotateCcw } from 'lucide-react';
-import { ScheduleCard, type ScheduleOperation } from './ScheduleCard';
+import { ScheduleCard, scheduleCardElementId, type ScheduleOperation } from './ScheduleCard';
 import { ScheduleForm } from './ScheduleForm';
 import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
 import type { ScheduleHistoryState } from './ScheduleRunHistory';
@@ -113,6 +113,7 @@ export interface ScheduleProjectScope {
 }
 
 interface SchedulesPageProps {
+  focusScheduleId?: string | null;
   api?: ScheduleApi;
   now?: () => Date;
   createIdempotencyKey?: () => string;
@@ -150,6 +151,7 @@ export function SchedulesPage({
   scope = null,
   projects = [],
   onOpenChat,
+  focusScheduleId = null,
 }: SchedulesPageProps) {
   const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -455,6 +457,21 @@ export function SchedulesPage({
     const current = historyById[schedule.id];
     if (!current || current.status === 'idle') void loadHistory(schedule);
   };
+
+  const focusedScheduleRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusScheduleId || listStatus !== 'success') return;
+    if (focusedScheduleRef.current === focusScheduleId) return;
+    const target = schedules.find((schedule) => schedule.id === focusScheduleId);
+    if (!target) return;
+    focusedScheduleRef.current = focusScheduleId;
+    setExpandedHistoryId(target.id);
+    void loadHistory(target);
+    document
+      .getElementById(scheduleCardElementId(target.id))
+      ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadHistory is rebuilt every render; the ref makes this run once per focused id
+  }, [focusScheduleId, listStatus, schedules]);
 
   const runNow = async (schedule: ScheduleTask) => {
     setOperation(schedule.id, 'run');

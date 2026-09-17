@@ -66,6 +66,14 @@ describe('deepLinkDestination', () => {
     );
   });
 
+  it('routes a work, research, schedule, file, artifact or browser task link to its resolver', () => {
+    expect(deepLinkDestination('agiworkforce-cloud://work/run-1')).toBe('/open/work/run-1');
+    expect(deepLinkDestination('agiworkforce-cloud://browser-task/run-2')).toBe(
+      '/open/browser-task/run-2',
+    );
+    expect(deepLinkDestination('agiworkforce-cloud://schedule/s-1')).toBe('/open/schedule/s-1');
+  });
+
   it('drops a settings link naming a section this build cannot render', () => {
     expect(deepLinkDestination('agiworkforce-cloud://settings/developer')).toBeNull();
   });

@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn(), sendPush: vi.fn(), sendEmail: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  sendPush: vi.fn(),
+  sendEmail: vi.fn(),
+  record: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -8,6 +13,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('../push-notification-service', () => ({
   sendPushToUser: (...args: unknown[]) => mocks.sendPush(...args),
+}));
+vi.mock('../notification-service', () => ({
+  recordNotification: (...args: unknown[]) => mocks.record(...args),
 }));
 vi.mock('../notification-email-service', () => ({
   sendScheduleCompletionEmail: (...args: unknown[]) => mocks.sendEmail(...args),
@@ -33,6 +41,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.sendPush.mockResolvedValue({ sent: 1, invalidated: 0 });
   mocks.sendEmail.mockResolvedValue({ delivered: true, providerMessageId: 'msg-1' });
+  mocks.record.mockResolvedValue({ recorded: true });
   preferences({ [SCHEDULE_PUSH_PREFERENCE_KEY]: true });
 });
 
@@ -62,6 +71,22 @@ describe('notifyScheduleCompleted, consent', () => {
       emailed: false,
     });
     expect(mocks.sendPush).not.toHaveBeenCalled();
+  });
+
+  it('records the in-app feed row whatever the push and email opt-ins say', async () => {
+    preferences({});
+
+    await notifyScheduleCompleted(callerDb, { ...notice, status: 'failed', runId: 'run-9' });
+
+    expect(mocks.record).toHaveBeenCalledWith(callerDb, {
+      userId: 'user-1',
+      category: 'schedule',
+      severity: 'error',
+      title: 'Scheduled task failed',
+      message: '“Daily report” failed.',
+      target: { kind: 'schedule', id: 'task-1' },
+      dedupeKey: 'schedule-run:run-9',
+    });
   });
 
   it('sends nothing when the account has no settings row', async () => {
@@ -132,6 +157,7 @@ describe('notifyScheduleCompleted, content', () => {
       emailed: false,
     });
     expect(mocks.sendPush).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 });
 

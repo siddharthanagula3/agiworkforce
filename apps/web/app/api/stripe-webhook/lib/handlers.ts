@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
+import { recordNotification } from '@/lib/services/notification-service';
 import { logSecurityEvent, recordAuditEvent } from '@/lib/security-audit';
 import {
   handleCreditTopUp,
@@ -30,6 +31,39 @@ function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   if (typeof current === 'string') return current;
   if (current?.id) return current.id;
   return (invoice as unknown as { subscription?: string | null }).subscription ?? null;
+}
+
+async function notifyInvoicePaymentFailed(
+  db: DatabaseAdapter,
+  invoice: Stripe.Invoice,
+  stripeSubId: string | null,
+  stripeCustomerId: string | null,
+): Promise<void> {
+  if (!invoice.id || (!stripeSubId && !stripeCustomerId)) return;
+  let owner: { user_id: string | null } | undefined;
+  try {
+    [owner] = await db.query<{ user_id: string | null }>(
+      `select user_id from subscriptions
+        where ($1::text is not null and stripe_subscription_id = $1)
+           or ($2::text is not null and stripe_customer_id = $2)
+        limit 1`,
+      [stripeSubId, stripeCustomerId],
+    );
+  } catch (error) {
+    logger.warn({ error, invoiceId: invoice.id }, 'Payment failure notice owner lookup failed');
+    return;
+  }
+  if (!owner?.user_id) return;
+  await recordNotification(db, {
+    userId: owner.user_id,
+    category: 'billing',
+    severity: 'error',
+    title: 'Your payment did not go through',
+    message:
+      'The card on file was declined for your latest invoice. Update your payment method to keep your plan.',
+    target: { kind: 'settings', id: 'billing' },
+    dedupeKey: `invoice-payment-failed:${invoice.id}:${invoice.attempt_count ?? 0}`,
+  });
 }
 
 export async function dispatchStripeEvent(
@@ -206,6 +240,7 @@ export async function dispatchStripeEvent(
         );
       }
       await recordEnterpriseInvoiceEvent(db, invoice, { eventCreatedAt: event.created });
+      await notifyInvoicePaymentFailed(db, invoice, stripeSubId, stripeCustomerId);
       break;
     }
     case 'payment_intent.processing': {

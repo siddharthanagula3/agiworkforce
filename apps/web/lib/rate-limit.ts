@@ -113,6 +113,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 10 browser registrations per minute, one browser only ever needs a few
     failClosed: true, // Writes a row keyed on an attacker-suppliable endpoint
   },
+  notifications: {
+    limit: 120,
+    window: '1 m', // feed polling from every open tab plus mark-read clicks
+    failClosed: false,
+  },
   'mobile-feedback': {
     limit: 10,
     window: '1 h', // 10 feedback submissions per hour, generous for real use, blocks spam

@@ -51,6 +51,7 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
+import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import {
   conversationDeleteConfirm,
@@ -470,7 +471,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     error: conversationListError,
     onRetryLoad: () => void fetchConversations(),
     mode: 'cloud' as const,
-    headerSlot: <SidebarWordmark />,
+    headerSlot: <SidebarBrandRow />,
     navItems: sidebarNavItems,
     footerSlot,
     collapsedFooterSlot,

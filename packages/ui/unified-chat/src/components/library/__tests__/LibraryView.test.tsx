@@ -739,6 +739,21 @@ describe('shared LibraryView', () => {
       expect(transport.openPreview).not.toHaveBeenCalled();
     });
 
+    it('opens the item a deep link names once its page loads', async () => {
+      const transport = artifactTransport('<p>linked</p>');
+      render(<LibraryView transport={transport} initialItemId="asset-artifact" />);
+
+      expect(await screen.findByTestId('artifact-renderer')).toBeTruthy();
+    });
+
+    it('opens nothing for a deep link naming an item the page does not hold', async () => {
+      const transport = makeTransport({ listPage: pageOf([{ ...ITEM, previewable: true }]) });
+      render(<LibraryView transport={transport} initialItemId="asset-missing" />);
+
+      await screen.findByText('quarterly-report.pdf');
+      expect(screen.queryByTestId('library-file-viewer')).toBeNull();
+    });
+
     it('reports an artifact that cannot be read instead of an empty viewer', async () => {
       const transport = makeTransport({
         listPage: pageOf([ARTIFACT_ITEM]),

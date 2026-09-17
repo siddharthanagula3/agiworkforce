@@ -4,6 +4,11 @@ import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import type { MobileAuthSession } from './authSession';
 import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
+import {
+  nativeRouteForProductLink,
+  productLinkWebFallbackUrl,
+  readProductLink,
+} from '@/lib/productLinks';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
 import { notificationAllowed, vibrationAllowed } from './notificationGate';
 import {
@@ -285,6 +290,20 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   // wall. Whatever the notification was about, the app opens (MOBILE-052).
   if (!_isSignedIn) {
     safeNavigate({ pathname: '/(app)' as const });
+    return;
+  }
+
+  const productLink = readProductLink(data);
+  if (productLink) {
+    const nativeRoute = nativeRouteForProductLink(productLink);
+    if (nativeRoute) {
+      safeNavigate(nativeRoute as Parameters<typeof router.push>[0]);
+    } else {
+      const fallbackUrl = productLinkWebFallbackUrl(productLink);
+      void import('@/lib/safeOpenURL').then(({ openInAppBrowser }) =>
+        openInAppBrowser(fallbackUrl),
+      );
+    }
     return;
   }
 

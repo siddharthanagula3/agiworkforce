@@ -6,8 +6,16 @@ vi.mock('../tauri-mock', () => ({
   isTauriContext: vi.fn(() => false),
 }));
 
+vi.mock('../../utils/navigation', () => ({
+  openExternalUrl: vi.fn(async () => undefined),
+  openPricingPage: vi.fn(async () => undefined),
+}));
+
 import { desktopDeepLink } from '../tauri-electron/bridgeContract';
 import { routeDesktopDeepLink, subscribeDesktopDeepLinkEvents } from '../desktopDeepLinkRouter';
+import { WEB_APP_URL } from '../../api/config';
+import { openExternalUrl } from '../../utils/navigation';
+import { PRODUCT_LINK_TARGETS, productLinkUrl } from '@agiworkforce/types';
 import { useChatStore } from '../../stores/chat/chatStore';
 import { useProjectStore, type Project } from '../../stores/projectStore';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
@@ -48,6 +56,7 @@ function panelNavigations(): unknown[] {
 
 beforeEach(() => {
   vi.mocked(window.dispatchEvent).mockClear();
+  vi.mocked(openExternalUrl).mockClear();
   useChatStore.setState({
     conversations: [conversation('conversation-1')],
     activeConversationId: null,
@@ -94,9 +103,20 @@ describe('routeDesktopDeepLink', () => {
     expect(useSettingsDialogStore.getState().settingsOpen).toBe(false);
   });
 
+  it('hands every cloud-only target to the web fallback, which owns the deleted, expired and unauthorized states', () => {
+    for (const target of PRODUCT_LINK_TARGETS) {
+      expect(routeDesktopDeepLink(desktopDeepLink(target, 'item-1'))).toBe(true);
+      expect(openExternalUrl).toHaveBeenLastCalledWith(
+        productLinkUrl(WEB_APP_URL, target, 'item-1'),
+      );
+    }
+    expect(panelNavigations()).toHaveLength(0);
+  });
+
   it('changes nothing for an unknown target', () => {
     expect(routeDesktopDeepLink('agiworkforce-cloud://invoice/inv-1')).toBe(false);
     expect(panelNavigations()).toHaveLength(0);
+    expect(openExternalUrl).not.toHaveBeenCalled();
   });
 
   it('changes nothing for an unparseable link', () => {

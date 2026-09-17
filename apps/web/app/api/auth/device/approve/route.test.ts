@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   loggerInfo: vi.fn(),
   hasAcceptedCurrentTerms: vi.fn(),
+  notifySignIn: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -21,6 +22,10 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 // re-simulating a settings read.
 vi.mock('@/lib/server/device-signin-policy', () => ({
   isDeviceCodeSignInEnabled: vi.fn(async () => true),
+}));
+vi.mock('@/lib/services/account-activity-notifications', () => ({
+  notifyDeviceSignInApproved: (...args: unknown[]) => mocks.notifySignIn(...args),
+  notifyDeviceDisconnected: vi.fn(),
 }));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
@@ -96,6 +101,22 @@ describe('POST /api/auth/device/approve', () => {
     expect(JSON.stringify(mocks.loggerInfo.mock.calls)).not.toContain(
       '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
     );
+  });
+
+  it('puts the approval in the account owner’s security feed under the derived reference', async () => {
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/auth/device/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ user_code: 'ABCD-2345' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.notifySignIn).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user_approved',
+      deviceRef: expect.stringMatching(/^[a-f0-9]{12}$/),
+    });
   });
 
   it('does not approve a device for an account missing the current terms revision', async () => {

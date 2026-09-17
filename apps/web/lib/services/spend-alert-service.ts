@@ -5,6 +5,7 @@ import { isOrganizationAdminRole, type OrganizationRole } from '@agiworkforce/ty
 import { formatCurrency } from '@agiworkforce/utils';
 
 import { logger } from '@/lib/logger';
+import { recordNotification } from '@/lib/services/notification-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { sendSpendAlertEmail } from '@/lib/services/notification-email-service';
@@ -94,6 +95,27 @@ export async function dispatchSpendAlertIfDue(
       where m.organization_id = $1::uuid`,
     [organizationId],
   );
+  await Promise.all(
+    members
+      .filter((member) => isOrganizationAdminRole(member.role))
+      .map((member) =>
+        recordNotification(db, {
+          userId: member.user_id,
+          category: 'billing',
+          severity: kind === 'cap' ? 'error' : 'warning',
+          title:
+            kind === 'cap'
+              ? `${member.workspace_name ?? 'Your workspace'} reached its monthly spend limit`
+              : `${member.workspace_name ?? 'Your workspace'} passed ${state.alertThresholdPct}% of its monthly spend limit`,
+          message:
+            kind === 'cap' && enforcement === 'block'
+              ? 'Managed Cloud requests from members are refused until the limit is raised or the month resets.'
+              : 'Review or change the limit in the workspace console under Spend limit.',
+          dedupeKey: `spend-alert:${organizationId}:${periodKey}:${kind}`,
+        }),
+      ),
+  );
+
   const recipients = members.filter(
     (member): member is AdminRecipientRow & { email: string } =>
       isOrganizationAdminRole(member.role) && typeof member.email === 'string',

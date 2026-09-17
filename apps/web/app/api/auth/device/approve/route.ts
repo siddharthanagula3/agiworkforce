@@ -11,6 +11,7 @@ import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { notifyDeviceSignInApproved } from '@/lib/services/account-activity-notifications';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -176,6 +177,8 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
   }
 
   logger.info({ deviceRef, userId: authUser.userId }, 'Device code approved');
+
+  await notifyDeviceSignInApproved(approverDb, { userId: authUser.userId, deviceRef });
 
   await recordAuditEvent({
     userId: authUser.userId,

@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { sendPushToUser } from './push-notification-service';
 import { sendScheduleCompletionEmail } from './notification-email-service';
+import { recordNotification } from './notification-service';
 
 export const SCHEDULE_PUSH_PREFERENCE_KEY = 'mobilePushScheduleDone';
 export const SCHEDULE_EMAIL_PREFERENCE_KEY = 'emailScheduleDone';
@@ -49,6 +50,7 @@ export interface ScheduleCompletionNotice {
   taskId: string;
   taskName: string;
   status: 'success' | 'failed' | 'timeout' | 'cancelled';
+  runId?: string;
 }
 
 export async function notifyScheduleCompleted(
@@ -59,21 +61,33 @@ export async function notifyScheduleCompleted(
   try {
     if (notice.status === 'cancelled') return none;
 
-    const preferences = await loadSchedulePreferences(db, notice.userId);
-    if (!preferences.push && !preferences.email) return none;
-
     const succeeded = notice.status === 'success';
     const timedOut = notice.status === 'timeout';
+    const title = succeeded ? 'Scheduled task finished' : 'Scheduled task failed';
+    const body = succeeded
+      ? `“${shortTitle(notice.taskName)}” completed.`
+      : `“${shortTitle(notice.taskName)}” ${timedOut ? 'timed out' : 'failed'}.`;
+
+    await recordNotification(db, {
+      userId: notice.userId,
+      category: 'schedule',
+      severity: succeeded ? 'success' : 'error',
+      title,
+      message: body,
+      target: { kind: 'schedule', id: notice.taskId },
+      dedupeKey: notice.runId ? `schedule-run:${notice.runId}` : null,
+    });
+
+    const preferences = await loadSchedulePreferences(db, notice.userId);
+    if (!preferences.push && !preferences.email) return none;
 
     const [pushResult, emailResult] = await Promise.all([
       preferences.push
         ? sendPushToUser(
             notice.userId,
             {
-              title: succeeded ? 'Scheduled task finished' : 'Scheduled task failed',
-              body: succeeded
-                ? `“${shortTitle(notice.taskName)}” completed.`
-                : `“${shortTitle(notice.taskName)}” ${timedOut ? 'timed out' : 'failed'}.`,
+              title,
+              body,
               data: { type: 'schedule_run', taskId: notice.taskId },
             },
             // The opt-in behind `preferences.push` is settings' "Mobile push",

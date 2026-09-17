@@ -322,6 +322,8 @@ export interface LibraryViewProps {
   initialQuery?: string;
   /** Preselected surface tab, so `/chat/library?surface=artifact` opens on Artifacts. */
   initialSurface?: SurfaceFilter;
+  /** Opens this item once it appears in the loaded page, for a deep link that names one. */
+  initialItemId?: string | null;
   overlayContainerId?: string;
 }
 
@@ -329,6 +331,7 @@ export function LibraryView({
   transport,
   initialQuery = '',
   initialSurface = 'all',
+  initialItemId = null,
   overlayContainerId,
 }: LibraryViewProps) {
   const { isSignedIn } = transport;
@@ -672,6 +675,15 @@ export function LibraryView({
     },
     [unavailableIds, openArtifactIds, artifactSources, loadArtifactSource],
   );
+
+  const openedInitialItemRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialItemId || openedInitialItemRef.current === initialItemId) return;
+    const item = page.items.find((candidate) => candidate.id === initialItemId);
+    if (!item) return;
+    openedInitialItemRef.current = initialItemId;
+    openItem(item);
+  }, [initialItemId, page.items, openItem]);
 
   const uploadFiles = transport.uploadFiles;
   const handleUploadPicked = useCallback(

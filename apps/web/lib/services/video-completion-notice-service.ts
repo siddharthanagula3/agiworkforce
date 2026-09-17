@@ -6,6 +6,7 @@ import {
   claimVideoCompletionNotice,
   type VideoGenerationJob,
 } from '@/lib/server/video-generation-jobs';
+import { recordNotification } from './notification-service';
 import { sendPushToUser } from './push-notification-service';
 
 /**
@@ -62,6 +63,20 @@ export async function deliverVideoCompletionNotice(
   if (!claimed) return false;
 
   const { title, body } = describe(job);
+  await recordNotification(db, {
+    userId: job.userId,
+    category: 'media',
+    severity:
+      job.status === 'completed'
+        ? 'success'
+        : job.status === 'outcome_unknown'
+          ? 'warning'
+          : 'error',
+    title,
+    message: body,
+    target: job.conversationId ? { kind: 'chat', id: job.conversationId } : null,
+    dedupeKey: `video-job:${job.id}`,
+  });
   const data: Record<string, string> = {
     type: MOBILE_NOTIFICATION_TYPE,
     route: MOBILE_ROUTE,

@@ -30,6 +30,10 @@ import { ScheduleRunHistory, type ScheduleHistoryState } from './ScheduleRunHist
 
 export type ScheduleOperation = 'toggle' | 'run' | 'delete' | null;
 
+export function scheduleCardElementId(scheduleId: string): string {
+  return `schedule-${scheduleId}`;
+}
+
 interface ScheduleCardProps {
   schedule: ScheduleTask;
   operation: ScheduleOperation;
@@ -151,6 +155,7 @@ export function ScheduleCard({
   return (
     <Card
       as="article"
+      id={scheduleCardElementId(schedule.id)}
       aria-labelledby={headingId}
       className="overflow-hidden border-border/80 bg-card shadow-sm"
     >

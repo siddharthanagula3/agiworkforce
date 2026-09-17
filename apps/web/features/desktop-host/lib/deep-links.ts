@@ -3,6 +3,7 @@ import {
   parseDesktopDeepLink,
   type DesktopDeepLink,
 } from '@agiworkforce/local-runtime-contract';
+import { isProductLinkTarget, productLinkPath } from '@agiworkforce/types';
 import { SETTINGS_DEEP_LINK_QUERY_KEY } from '@/features/settings/lib/web-settings-sections';
 import { isWebSettingsSection } from '@/features/settings/lib/web-settings-sections';
 
@@ -31,6 +32,7 @@ export function deepLinkDestination(url: string): string | null {
 
   if (link.target === 'chat') return `${CHAT_PATH}/${encodeURIComponent(link.id)}`;
   if (link.target === 'project') return `${PROJECT_PATH}/${encodeURIComponent(link.id)}`;
+  if (isProductLinkTarget(link.target)) return productLinkPath(link.target, link.id);
   // A `agiworkforce-cloud://settings/...` link only ever arrives from the
   // shell, so the desktop-only sections are routable here.
   if (!isWebSettingsSection(link.id, true)) return null;

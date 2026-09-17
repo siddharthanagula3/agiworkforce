@@ -146,7 +146,7 @@ import {
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
-import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
+import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import { CODE_ROUTES } from '@/features/code/code-surface';
 import { VoiceModeSurface, VOICE_SURFACE_VARIANT } from '../components/Voice/VoiceModeSurface';
@@ -4933,7 +4933,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     isLoadingMoreSessions: isLoadingMoreConversations,
     onLoadMoreSessions: () => void loadMoreConversations(),
     mode: 'cloud' as const,
-    headerSlot: <SidebarWordmark />,
+    headerSlot: <SidebarBrandRow />,
     onNewChat: handleSidebarNewChat,
     onOpenCode: handleSidebarOpenCode,
     onToggleCollapse: handleToggleSidebar,

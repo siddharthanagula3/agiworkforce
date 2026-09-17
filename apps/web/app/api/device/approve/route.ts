@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getNeonDb } from '@/lib/server/neon-db';
+import { notifyDeviceSignInApproved } from '@/lib/services/account-activity-notifications';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -182,6 +183,8 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     if (!updated.length) {
       throw createError.conflict('This device code has already been processed');
     }
+
+    await notifyDeviceSignInApproved(approverDb, { userId, deviceRef: record.device_id });
 
     return NextResponse.json(
       { success: true, status: 'approved' },
