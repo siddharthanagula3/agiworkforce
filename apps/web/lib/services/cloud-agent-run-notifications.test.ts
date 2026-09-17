@@ -239,7 +239,7 @@ describe('cloud agent run notifications', () => {
 
     expect(db.query).toHaveBeenCalledWith(
       expect.stringMatching(/previous\.state as previous_state/i),
-      [RUN_ROW.id, 'user-1', 'completed'],
+      [RUN_ROW.id, 'user-1', 'completed', expect.any(Array), expect.any(Array)],
     );
     expect(mocks.notify).not.toHaveBeenCalled();
   });
