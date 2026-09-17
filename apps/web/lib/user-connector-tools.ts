@@ -18,6 +18,7 @@ import type { InteractiveCard } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
+import { recordConnectorCall } from '@/lib/services/infrastructure-cost';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
@@ -2364,6 +2365,17 @@ export function makeUserConnectorExecutor(
     const guarded = async (
       run: (safeArgs: Record<string, unknown>) => Promise<ConnectorExecResult>,
     ): Promise<ConnectorExecResult> => {
+      const meter = (result: ConnectorExecResult): ConnectorExecResult => {
+        if (result.handled) {
+          recordConnectorCall({
+            userId,
+            organizationId: organizationId ?? null,
+            connectorId: serverId,
+            toolName,
+          });
+        }
+        return result;
+      };
       const verdict = await inspectOutboundContent({
         channel: 'connector_write',
         value: args,
@@ -2379,7 +2391,7 @@ export function makeUserConnectorExecutor(
       if (verdict.action === 'blocked') {
         return { handled: true, content: verdict.message, isError: true };
       }
-      return run(verdict.value);
+      return meter(await run(verdict.value));
     };
 
     if (serverId === GITHUB_SERVER_ID) {

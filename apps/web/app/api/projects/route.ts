@@ -4,6 +4,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -84,6 +86,14 @@ async function handleCreateProject(request: NextRequest) {
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
+
+  const featureGate = await buildWorkspaceFeatureGateResponse(
+    userId,
+    request,
+    'projects',
+    resolveCloudChatSurface(request),
+  );
+  if (featureGate) return featureGate;
 
   let rawBody: unknown;
   try {

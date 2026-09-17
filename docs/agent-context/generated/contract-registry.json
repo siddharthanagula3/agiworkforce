@@ -42,6 +42,7 @@
     "model",
     "model-catalog",
     "model-price-copy",
+    "notifications",
     "on-device-models",
     "pairing",
     "paywall-vocabulary",

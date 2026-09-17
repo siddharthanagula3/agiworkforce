@@ -12,6 +12,7 @@ export const WORKSPACE_FEATURES = [
   'remote_control',
   'schedules',
   'event_triggers',
+  'projects',
 ] as const;
 
 export type WorkspaceFeature = (typeof WORKSPACE_FEATURES)[number];
@@ -37,6 +38,7 @@ export const WORKSPACE_FEATURE_LABELS: Readonly<Record<WorkspaceFeature, string>
   remote_control: 'Remote Control',
   schedules: 'Schedules',
   event_triggers: 'Event triggers',
+  projects: 'Projects',
 });
 
 export const WORKSPACE_REASONING_EFFORTS = [

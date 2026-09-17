@@ -21,6 +21,30 @@ export async function notifyDeviceSignInApproved(
   });
 }
 
+const SURFACE_LABEL: Readonly<Record<string, string>> = {
+  desktop: 'The desktop app',
+  cli: 'The CLI',
+  vscode: 'The VS Code extension',
+  chrome: 'The Chrome extension',
+  mobile: 'The mobile app',
+};
+
+export async function notifyNewDeviceRegistered(
+  db: DatabaseAdapter,
+  input: { userId: string; deviceId: string; surface: string; name: string | null; os: string },
+): Promise<void> {
+  const label = input.name?.trim() || SURFACE_LABEL[input.surface] || 'A new device';
+  await recordNotification(db, {
+    userId: input.userId,
+    category: 'security',
+    severity: 'warning',
+    title: `${label} started using your account`,
+    message: `It reported itself as ${input.os} and is now signed in. If this was not you, unlink it and review your account security.`,
+    target: { kind: 'settings', id: DEVICES_SETTINGS_SECTION },
+    dedupeKey: `device-registered:${input.deviceId}`,
+  });
+}
+
 export async function notifyDeviceDisconnected(
   db: DatabaseAdapter,
   input: { userId: string; deviceId: string; kind: string; name: string | null },
