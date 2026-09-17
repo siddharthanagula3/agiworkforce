@@ -35,14 +35,10 @@ function processed(
   } as ProcessedRequest;
 }
 
-/** The insert ships its rows as one JSON parameter, so read the contents back out of it. */
 function insertedCandidates(query: ReturnType<typeof vi.fn>): string[] {
-  const insert = query.mock.calls.find((call) =>
-    String(call[0]).includes('insert into user_memories'),
-  );
-  const batch = (insert?.[1] as unknown[] | undefined)?.[1];
-  if (typeof batch !== 'string') return [];
-  return (JSON.parse(batch) as Array<{ content: string }>).map((row) => row.content);
+  return query.mock.calls
+    .filter((call) => String(call[0]).includes('insert into user_memories'))
+    .map((call) => String((call[1] as unknown[])[4]));
 }
 
 describe('recordManagedAutoMemoryTurn, model extraction flag', () => {

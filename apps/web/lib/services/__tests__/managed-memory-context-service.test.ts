@@ -29,7 +29,7 @@ describe('loadManagedMemoryContext', () => {
     ]);
     expect(query.mock.calls[0]?.[0]).toMatch(/user_id = \$1[\s\S]*is_deleted = false/);
     expect(query.mock.calls[0]?.[0]).toContain('order by pinned desc, updated_at desc');
-    expect(query.mock.calls[0]?.[1]).toEqual(['user-1']);
+    expect(query.mock.calls[0]?.[1]).toEqual(['user-1', null]);
   });
 });
 
@@ -239,7 +239,7 @@ describe('applyManagedMemoryContext', () => {
 
 describe('persistManagedAutoMemoryFacts', () => {
   it('deduplicates, bounds, categorizes, and idempotently inserts auto facts', async () => {
-    const query = vi.fn().mockResolvedValue([{ id: 'memory-1' }, { id: 'memory-2' }]);
+    const query = vi.fn().mockResolvedValue([{ outcome: 'inserted', id: 'memory-1' }]);
     const candidates = [
       'User prefers Rust',
       '  user   prefers rust  ',
@@ -253,31 +253,23 @@ describe('persistManagedAutoMemoryFacts', () => {
     const first = await persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates });
     const second = await persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates });
 
-    expect(first).toEqual({ extracted: 7, inserted: 2, excluded: 0 });
-    expect(second).toEqual({ extracted: 7, inserted: 2, excluded: 0 });
+    expect(first).toEqual({ extracted: 7, inserted: 5, excluded: 0 });
+    expect(second).toEqual({ extracted: 7, inserted: 5, excluded: 0 });
     const insertCalls = query.mock.calls.filter((call) =>
       String(call[0]).includes('insert into user_memories'),
     );
-    expect(insertCalls).toHaveLength(2);
+    expect(insertCalls).toHaveLength(10);
 
     const sql = insertCalls[0]?.[0] as string;
-    const firstBatch = JSON.parse(insertCalls[0]?.[1]?.[1] as string) as Array<{
-      id: string;
-      content: string;
-      category: string;
-      normalizedKey: string;
-    }>;
-    const secondBatch = JSON.parse(insertCalls[1]?.[1]?.[1] as string) as typeof firstBatch;
+    const firstRun = insertCalls.slice(0, 5).map((call) => call[1] as unknown[]);
+    const secondRun = insertCalls.slice(5).map((call) => call[1] as unknown[]);
 
     expect(sql).toMatch(/user_id = \$1[\s\S]*is_deleted = false/);
-    expect(sql).toContain('on conflict (user_id, id) do nothing');
-    expect(firstBatch).toHaveLength(5);
-    expect(firstBatch[0]).toMatchObject({
-      content: 'User prefers Rust',
-      category: 'preference',
-      normalizedKey: 'user prefers rust',
-    });
-    expect(firstBatch.map((row) => row.id)).toEqual(secondBatch.map((row) => row.id));
+    expect(sql).toContain('on conflict (user_id, id) do update');
+    expect(firstRun[0]?.[4]).toBe('User prefers Rust');
+    expect(firstRun[0]?.[5]).toBe('preference');
+    expect(firstRun[0]?.[6]).toBe('auto');
+    expect(firstRun.map((params) => params[1])).toEqual(secondRun.map((params) => params[1]));
   });
 
   it('does not query the database when no facts were extracted', async () => {

@@ -83,7 +83,7 @@ describe('enrichManagedMemoryContext', () => {
 
     const recall = query.mock.calls.find(([sql]) => sql.includes('from user_memories'));
     expect(recall?.[0]).toContain("coalesce(source, 'web') <> all");
-    expect(recall?.[1]).toEqual(['user-1', ['auto']]);
+    expect(recall?.[1]).toEqual(['user-1', ['auto'], null]);
   });
 
   it('does not load or inject account memory for Temporary Chats', async () => {

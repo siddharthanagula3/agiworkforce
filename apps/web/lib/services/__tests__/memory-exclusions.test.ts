@@ -33,9 +33,9 @@ function fakeDb(options: { settings?: unknown; inserted?: string[] } = {}) {
 }
 
 function insertedBatch(db: ReturnType<typeof fakeDb>) {
-  const call = db.calls.find((entry) => entry.sql.includes('insert into user_memories'));
-  if (!call) return null;
-  return JSON.parse(String(call.params?.[1])) as Array<{ content: string }>;
+  const calls = db.calls.filter((entry) => entry.sql.includes('insert into user_memories'));
+  if (calls.length === 0) return null;
+  return calls.map((call) => ({ content: String(call.params?.[4]) }));
 }
 
 describe('normalizeMemoryExclusions', () => {
@@ -174,7 +174,7 @@ describe('memory source suppression', () => {
 
     const call = db.calls.find((entry) => entry.sql.includes('from user_memories'));
     expect(call?.sql).toContain('source');
-    expect(call?.params).toEqual(['u1', ['auto']]);
+    expect(call?.params).toEqual(['u1', ['auto'], null]);
   });
 
   it('does not filter by source when nothing is suppressed', async () => {
@@ -183,7 +183,7 @@ describe('memory source suppression', () => {
     await loadManagedMemoryContext(db, { userId: 'u1' });
 
     const call = db.calls.find((entry) => entry.sql.includes('from user_memories'));
-    expect(call?.params).toEqual(['u1']);
+    expect(call?.params).toEqual(['u1', null]);
   });
 
   it('refuses to write a new memory whose source the account suppressed', async () => {

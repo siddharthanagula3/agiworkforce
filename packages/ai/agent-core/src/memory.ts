@@ -134,10 +134,7 @@ export type MemoryFactExtractionRunner = (
 ) => Promise<string>;
 
 export type MemoryFactExtractionFallbackReason =
-  | 'not_worthwhile'
-  | 'runner_failed'
-  | 'timed_out'
-  | 'malformed_output';
+  'not_worthwhile' | 'runner_failed' | 'timed_out' | 'malformed_output';
 
 export interface ModelMemoryExtractionOptions {
   runner: MemoryFactExtractionRunner;
@@ -345,6 +342,35 @@ function finite(value: number | undefined, fallback: number): number {
 
 export function normalizeMemoryKey(value: string): string {
   return value.trim().replace(/\s+/gu, ' ').toLowerCase();
+}
+
+export function memoryConsolidationKey(value: string): string {
+  return normalizeMemoryKey(value)
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+const MEMORY_CONFLICT_TOPICS: ReadonlyArray<{ topic: string; prefixes: readonly string[] }> = [
+  { topic: 'name', prefixes: ['user s name is', 'my name is'] },
+  { topic: 'residence', prefixes: ['user lives in', 'i live in'] },
+  { topic: 'employer', prefixes: ['user works at', 'i work at'] },
+  { topic: 'role', prefixes: ['user works as', 'i work as'] },
+  { topic: 'origin', prefixes: ['user is from', 'i am from', 'i m from'] },
+];
+
+export interface MemoryConflictTopic {
+  topic: string;
+  prefixes: readonly string[];
+}
+
+export function memoryConflictTopic(value: string): MemoryConflictTopic | null {
+  const key = memoryConsolidationKey(value);
+  for (const entry of MEMORY_CONFLICT_TOPICS) {
+    if (entry.prefixes.some((prefix) => key.startsWith(`${prefix} `))) {
+      return { topic: entry.topic, prefixes: entry.prefixes };
+    }
+  }
+  return null;
 }
 
 export function classifyMemoryCategory(value: string): MemoryCategory {

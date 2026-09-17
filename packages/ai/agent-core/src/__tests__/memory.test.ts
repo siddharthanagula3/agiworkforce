@@ -5,6 +5,8 @@ import {
   cosineSimilarity,
   decayMemoryImportance,
   extractCandidateMemoryFacts,
+  memoryConflictTopic,
+  memoryConsolidationKey,
   memoryRelevanceScore,
   normalizeMemoryKey,
 } from '../memory';
@@ -14,6 +16,25 @@ describe('shared memory engine', () => {
     expect(classifyMemoryCategory('User prefers Rust over Go')).toBe('preference');
     expect(classifyMemoryCategory('We decided to keep SQLite local')).toBe('decision');
     expect(normalizeMemoryKey('  User   PREFERS\nRust  ')).toBe('user prefers rust');
+  });
+
+  it('keys near-duplicates together regardless of case, spacing and punctuation', () => {
+    expect(memoryConsolidationKey('User prefers Rust.')).toBe(
+      memoryConsolidationKey('  user   PREFERS rust!! '),
+    );
+    expect(memoryConsolidationKey("User's name is Ada")).toBe('user s name is ada');
+    expect(memoryConsolidationKey('User prefers Rust')).not.toBe(
+      memoryConsolidationKey('User prefers Go'),
+    );
+  });
+
+  it('names a conflict topic only for single-valued facts', () => {
+    expect(memoryConflictTopic('User lives in Berlin')?.topic).toBe('residence');
+    expect(memoryConflictTopic('I live in Paris.')?.topic).toBe('residence');
+    expect(memoryConflictTopic("User's name is Ada")?.topic).toBe('name');
+    expect(memoryConflictTopic('User works at Acme')?.topic).toBe('employer');
+    expect(memoryConflictTopic('User likes Rust')).toBeNull();
+    expect(memoryConflictTopic('User lives in')).toBeNull();
   });
 
   it('applies the canonical decay and boost policy', () => {

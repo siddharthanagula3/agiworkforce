@@ -1085,6 +1085,7 @@ export async function enrichManagedMemoryContext(params: {
   chatRequest: ChatCompletionRequest;
   isTemporary: boolean;
   projectId?: string | null;
+  organizationId?: string | null;
 }): Promise<void> {
   if (params.isTemporary || params.chatRequest.memory_enabled === false) return;
 
@@ -1097,6 +1098,7 @@ export async function enrichManagedMemoryContext(params: {
   ]);
   const memories = await loadManagedMemoryContext(params.db, {
     userId: params.userId,
+    organizationId: params.organizationId ?? null,
     suppressedSources,
     scope,
   });
@@ -2565,6 +2567,7 @@ export async function processRequest(
           chatRequest,
           isTemporary: false,
           projectId: conversationProjectId,
+          organizationId: scoped.organizationId,
         }),
       );
       if (chatRequest.messages.length > preMemoryMessageCount) {
