@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -17,6 +16,19 @@ function readDeclaredCommands(): DeclaredCommand[] {
     contributes?: { commands?: DeclaredCommand[] };
   };
   return pkg.contributes?.commands ?? [];
+}
+
+function sourceFiles(dir = path.resolve(__dirname, '..'), found: string[] = []): string[] {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+      sourceFiles(full, found);
+    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+      found.push(full);
+    }
+  }
+  return found;
 }
 
 function makeMockContext(): vscode.ExtensionContext {
@@ -131,6 +143,22 @@ describe('package.json ↔ runtime command parity', () => {
 
     expect(declared).toEqual([]);
     expect(setupSource).not.toMatch(/restore-checkpoint|restoreCheckpoint|rewindLast/);
+  });
+
+  // Rewind needs a turn-rollback the developer-session protocol does not have:
+  // `thread/fork` forks a whole thread and names no point to fork from. The
+  // handler that used to stand in for it reached nobody, refused every call,
+  // and left a `rewindComplete` webview branch that nothing could ever post.
+  // A stub costs more than the absence, so the absence is the contract.
+  it('keeps no unreachable rewind handler behind that', () => {
+    const offenders = sourceFiles().filter((file) =>
+      /rewindLast|rewindComplete/.test(fs.readFileSync(file, 'utf8')),
+    );
+
+    expect(
+      offenders.map((file) => path.relative(path.resolve(__dirname, '..'), file)),
+      'a rewind path is back with no protocol method behind it; add turn rollback first',
+    ).toEqual([]);
   });
 
   it('keeps Cloud connectors and Team administration as explicit Web handoffs', () => {

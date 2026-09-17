@@ -218,8 +218,4 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   public resetConversation(): void {
     this._stateManager.resetConversation();
   }
-
-  public rewindLast(): void {
-    this._stateManager.rewindLast();
-  }
 }

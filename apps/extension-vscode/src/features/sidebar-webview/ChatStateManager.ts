@@ -386,7 +386,6 @@ export type ExtToWebviewMessage =
     }
   | { type: 'attachmentsConsumed'; payload: { ids: string[] } }
   | { type: 'attachmentsReleased'; payload: { ids: string[] } }
-  | { type: 'rewindComplete' }
   | {
       type: 'accountStatus';
       payload: {
@@ -1971,13 +1970,6 @@ export class ChatStateManager {
       },
     });
     return id;
-  }
-
-  rewindLast(): void {
-    this._postError(
-      'Rewind is unavailable until the local runtime exposes turn rollback.',
-      RUNTIME_REFUSAL,
-    );
   }
 
   private _dropQueuedSends(message: string): void {
