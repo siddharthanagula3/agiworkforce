@@ -1,4 +1,4 @@
-import { Box, ExternalLink, File, RefreshCw, Table } from 'lucide-react';
+import { AlertTriangle, Box, ExternalLink, File, RefreshCw, Table } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -46,6 +46,7 @@ export function AgiWorkArtifacts({ onNewChat }: { onNewChat?: () => void } = {})
   const { t } = useTranslation('v3');
   const summaries = useArtifactStore((s) => s.summaries);
   const isLoading = useArtifactStore((s) => s.isLoading);
+  const summariesError = useArtifactStore((s) => s.summariesError);
   const listPersistedArtifacts = useArtifactStore((s) => s.listPersistedArtifacts);
   const setActiveArtifact = useArtifactStore((s) => s.setActiveArtifact);
   const openPanel = useArtifactStore((s) => s.openPanel);
@@ -82,22 +83,51 @@ export function AgiWorkArtifacts({ onNewChat }: { onNewChat?: () => void } = {})
           </div>
         </div>
 
+        {summariesError && (
+          <div
+            role="alert"
+            data-testid="artifacts-load-error"
+            className="flex items-center gap-3 rounded-xl border border-[var(--chat-destructive)] bg-[var(--chat-surface-elevated)] px-4 py-3"
+          >
+            <AlertTriangle
+              size={16}
+              aria-hidden="true"
+              className="flex-shrink-0 text-[var(--chat-destructive)]"
+            />
+            <p className="min-w-0 flex-1 text-sm text-[var(--chat-text-primary)]">
+              {summaries.length > 0
+                ? t('agiWork.artifacts.loadFailedStale')
+                : t('agiWork.artifacts.loadFailed')}
+            </p>
+            <button
+              type="button"
+              onClick={() => void listPersistedArtifacts(undefined, 50)}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-[var(--chat-border)] px-2.5 py-1.5 text-sm font-medium text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              {t('common.tryAgain')}
+            </button>
+          </div>
+        )}
+
         {/* Artifact grid */}
         {isLoading && summaries.length === 0 ? (
           <div className="py-8 text-center text-sm text-[var(--chat-text-muted)]">
             {t('agiWork.artifacts.loading')}
           </div>
         ) : summaries.length === 0 ? (
-          <EmptyState
-            icon={Box}
-            title={t('agiWork.artifacts.emptyTitle')}
-            description={t('agiWork.artifacts.empty')}
-            action={
-              onNewChat
-                ? { label: t('agiWork.artifacts.startChat'), onClick: onNewChat }
-                : undefined
-            }
-          />
+          summariesError ? null : (
+            <EmptyState
+              icon={Box}
+              title={t('agiWork.artifacts.emptyTitle')}
+              description={t('agiWork.artifacts.empty')}
+              action={
+                onNewChat
+                  ? { label: t('agiWork.artifacts.startChat'), onClick: onNewChat }
+                  : undefined
+              }
+            />
+          )
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {summaries.map((a) => {
