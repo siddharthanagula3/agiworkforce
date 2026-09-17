@@ -538,3 +538,82 @@ describe('artifact panel auto-open', () => {
     expect(useArtifactsStore.getState().panelOpen).toBe(true);
   });
 });
+
+describe('forkArtifact', () => {
+  const base = {
+    id: 'artifact-fork-source',
+    type: 'html' as const,
+    title: 'Landing page',
+    language: 'html',
+    messageId: 'msg-fork',
+    conversationId: 'conv-fork',
+  };
+
+  beforeEach(() => {
+    useArtifactsStore.getState().clearArtifacts();
+  });
+
+  it('makes a separate artifact whose edits leave the original alone', () => {
+    const store = useArtifactsStore.getState();
+    store.upsertArtifact({ ...base, content: '<main>original</main>' });
+
+    const forkId = useArtifactsStore.getState().forkArtifact(base.id);
+    expect(forkId).not.toBeNull();
+    expect(forkId).not.toBe(base.id);
+
+    useArtifactsStore.getState().upsertArtifact({
+      ...base,
+      id: forkId!,
+      title: 'Landing page (copy)',
+      content: '<main>changed in the copy</main>',
+    });
+
+    const state = useArtifactsStore.getState();
+    expect(state.artifacts.find((a) => a.id === base.id)?.content).toBe('<main>original</main>');
+    expect(state.artifacts.find((a) => a.id === forkId)?.content).toBe(
+      '<main>changed in the copy</main>',
+    );
+    expect(state.getArtifactVersions(base.id).map((v) => v.content)).toEqual([
+      '<main>original</main>',
+    ]);
+  });
+
+  it('names the copy so a list can tell them apart, and numbers a copy of a copy', () => {
+    const store = useArtifactsStore.getState();
+    store.upsertArtifact({ ...base, content: '<main>original</main>' });
+
+    const first = useArtifactsStore.getState().forkArtifact(base.id)!;
+    expect(useArtifactsStore.getState().artifacts.find((a) => a.id === first)?.title).toBe(
+      'Landing page (copy)',
+    );
+
+    const second = useArtifactsStore.getState().forkArtifact(first)!;
+    expect(useArtifactsStore.getState().artifacts.find((a) => a.id === second)?.title).toBe(
+      'Landing page (copy 2)',
+    );
+  });
+
+  it('forks the version on screen, not only the latest', () => {
+    const store = useArtifactsStore.getState();
+    store.upsertArtifact({ ...base, content: '<main>one</main>' });
+    store.upsertArtifact({ ...base, content: '<main>two</main>' });
+
+    const forkId = useArtifactsStore.getState().forkArtifact(base.id, '<main>one</main>')!;
+
+    expect(useArtifactsStore.getState().artifacts.find((a) => a.id === forkId)?.content).toBe(
+      '<main>one</main>',
+    );
+  });
+
+  it('selects the copy, so the panel shows what was just made', () => {
+    useArtifactsStore.getState().upsertArtifact({ ...base, content: '<main>original</main>' });
+
+    const forkId = useArtifactsStore.getState().forkArtifact(base.id);
+
+    expect(useArtifactsStore.getState().selectedArtifactId).toBe(forkId);
+  });
+
+  it('answers null for an artifact the store does not hold', () => {
+    expect(useArtifactsStore.getState().forkArtifact('nothing-here')).toBeNull();
+  });
+});

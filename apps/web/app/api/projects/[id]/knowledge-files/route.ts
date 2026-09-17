@@ -11,7 +11,10 @@ import {
 import { logger } from '@/lib/logger';
 import { mapKnowledgeFileRow } from '@/lib/projects';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
+import {
+  resolveProjectWriteAccess,
+  resolveSharedProjectScope,
+} from '@/lib/services/org-sharing-service';
 import { MAX_KNOWLEDGE_FILES } from '@/lib/services/project-context-service';
 import {
   extractProjectKnowledgeFile,
@@ -298,7 +301,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   if (!attachmentValidation.ok) {
     throw createError.validation(attachmentValidation.message);
   }
-  const [project] = await db.query<{ id: string }>(
+  const [owned] = await db.query<{ id: string }>(
     `select id
        from user_projects
       where id = $1
@@ -310,8 +313,24 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     [projectId, userId, organizationId],
   );
 
-  if (!project) {
-    throw createError.notFound('Project not found');
+  if (!owned) {
+    const writeAccess = await resolveProjectWriteAccess(db, { projectId, userId, organizationId });
+    if (writeAccess !== 'editor') {
+      throw createError.notFound('Project not found');
+    }
+    const [shared] = await db.query<{ id: string }>(
+      `select id
+         from user_projects
+        where id = $1
+          and organization_id is not distinct from $2::uuid
+          and is_archived = false
+          and deleted_at is null
+        limit 1`,
+      [projectId, organizationId],
+    );
+    if (!shared) {
+      throw createError.notFound('Project not found');
+    }
   }
 
   let activeCount = 0;

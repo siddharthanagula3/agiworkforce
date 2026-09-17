@@ -1,0 +1,10 @@
+{
+  "_description": "Surfaces that claim more than they do. Measured at a committed revision, never against a dirty tree. Three of the four rules stand at zero and must stay there. raw-identifier keeps two: the model catalogue card and the plugin console bar both render an id as the record it names, which is the thing the reader selects by, so those two are the deliberate exception rather than leaked machine state.",
+  "_measuredAt": "fc62f20d4f17aadd8169b95c3d499dcbcfab45a4. Every count was taken on a clean checkout of that commit with this lane applied and nothing else, so no other lane's uncommitted work is baked in; each number sits exactly at its ceiling with no headroom.",
+  "maxFindings": {
+    "placeholder-copy": 0,
+    "dead-control": 0,
+    "fake-success": 0,
+    "raw-identifier": 2
+  }
+}

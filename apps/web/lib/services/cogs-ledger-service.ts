@@ -1,12 +1,20 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { creditsFromMicrousd, microusdFromCents, type RateCardFeature } from '@agiworkforce/types';
+import {
+  centsFromMicrousdCeil,
+  creditsFromMicrousd,
+  microusdFromCents,
+  resolveFeatureRate,
+  type RateCardFeature,
+} from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { normalizeUsageAttribution, type UsageAttribution } from '@/lib/billing/usage-attribution';
+import { normalizePromptStamps } from '@/lib/prompts/prompt-stamp';
+import { trackMeteredCapability } from '@/lib/server/product-analytics';
 
 export const COGS_CAPABILITIES = [
   'chat',
@@ -17,9 +25,26 @@ export const COGS_CAPABILITIES = [
   'computer_use',
   'sandbox',
   'tool',
+  'storage',
+  'database',
+  'vector',
+  'notification',
+  'email',
+  'egress',
+  'browser',
+  'work_compute',
+  'code_compute',
 ] as const;
 
-export const COGS_UNIT_BASES = ['token', 'image', 'second', 'minute', 'request'] as const;
+export const COGS_UNIT_BASES = [
+  'token',
+  'image',
+  'second',
+  'minute',
+  'request',
+  'gibibyte',
+  'gibibyte_month',
+] as const;
 
 export const COGS_ADJUSTMENT_KINDS = [
   'stripe_fee',
@@ -72,6 +97,12 @@ export interface CostEventAttribution extends UsageAttribution {
   cachedTokens?: number | null;
   outputTokens?: number | null;
   reasoningTokens?: number | null;
+  /** Manifest stamps (`id@version`) of every prompt the turn sent to the model. */
+  promptIds?: readonly string[] | null;
+  /** True when the answer was served from a cache and no provider call was made. */
+  cacheHit?: boolean;
+  /** What that cache hit did not spend, in microUSD. */
+  avoidedCostMicrousd?: number | null;
 }
 
 export interface ProviderCostEvent extends CostEventAttribution {
@@ -129,6 +160,15 @@ const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   computer_use: 'computer_use',
   sandbox: 'sandbox',
   tool: 'tool',
+  storage: 'storage',
+  database: 'database',
+  vector: 'vector',
+  notification: 'notification',
+  email: 'email',
+  egress: 'egress',
+  browser: 'browser',
+  work_compute: 'work_compute',
+  code_compute: 'code_compute',
 };
 
 const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
@@ -140,7 +180,50 @@ const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
   computer_use: 'request',
   sandbox: 'minute',
   tool: 'request',
+  storage: 'gibibyte_month',
+  database: 'second',
+  vector: 'request',
+  notification: 'request',
+  email: 'request',
+  egress: 'gibibyte',
+  browser: 'minute',
+  work_compute: 'minute',
+  code_compute: 'minute',
 };
+
+/**
+ * The rate-card row each non-model capability is metered against. Every one of
+ * them is `deployment_metered`, so the amount is whatever the deployment's own
+ * override says and never a number stated here.
+ */
+const RATE_CARD_FEATURE_BY_CAPABILITY = {
+  storage: 'object_storage_gib_month',
+  database: 'database_compute_second',
+  vector: 'vector_query_request',
+  notification: 'notification_delivery_request',
+  email: 'email_message_request',
+  egress: 'network_egress_gib',
+  browser: 'browser_session_minute',
+  work_compute: 'work_compute_minute',
+  code_compute: 'code_compute_minute',
+} as const satisfies Partial<Record<CogsCapability, RateCardFeature>>;
+
+export type InfrastructureCogsCapability = keyof typeof RATE_CARD_FEATURE_BY_CAPABILITY;
+
+export function infrastructureRateCardFeature(
+  capability: InfrastructureCogsCapability,
+): RateCardFeature {
+  return RATE_CARD_FEATURE_BY_CAPABILITY[capability];
+}
+
+export function infrastructureCostMicrousd(
+  capability: InfrastructureCogsCapability,
+  units: number,
+): number | null {
+  if (!Number.isFinite(units) || units < 0) return null;
+  const rate = resolveFeatureRate(RATE_CARD_FEATURE_BY_CAPABILITY[capability]);
+  return rate.providerCogsMicrousd === null ? null : rate.providerCogsMicrousd * units;
+}
 
 function numeric(value: unknown): number | null {
   const parsed = typeof value === 'string' ? Number(value) : value;
@@ -174,9 +257,22 @@ export function resolveCogsUnits(
       };
     case 'computer_use':
     case 'tool':
+    case 'vector':
+    case 'notification':
+    case 'email':
       return { unitBasis, units: numeric(usage['requests']) ?? 1 };
     case 'sandbox':
       return { unitBasis, units: numeric(usage['sandboxMinutes']) ?? 0 };
+    case 'storage':
+      return { unitBasis, units: numeric(usage['gibibyteMonths']) ?? 0 };
+    case 'egress':
+      return { unitBasis, units: numeric(usage['gibibytes']) ?? 0 };
+    case 'database':
+      return { unitBasis, units: numeric(usage['computeSeconds']) ?? 0 };
+    case 'browser':
+    case 'work_compute':
+    case 'code_compute':
+      return { unitBasis, units: numeric(usage['computeMinutes']) ?? 0 };
     default: {
       const input = numeric(usage['promptTokens']) ?? numeric(usage['inputTokens']) ?? 0;
       const output = numeric(usage['completionTokens']) ?? numeric(usage['outputTokens']) ?? 0;
@@ -396,9 +492,10 @@ export async function recordProviderCostEvent(
        provider_estimated_cost_microusd, provider_reported_cost_microusd,
        reconciliation_status, feature, route_id, surface,
        input_tokens, cached_tokens, output_tokens, reasoning_tokens,
-       workload, project_id, session_id
+       workload, project_id, session_id, prompt_ids, cache_hit, avoided_cost_microusd
      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17,
-               $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+               $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
+               $34::text[], $35, $36)
      on conflict (source_ref) do nothing`,
     [
       event.userId ?? null,
@@ -434,8 +531,118 @@ export async function recordProviderCostEvent(
       attribution.workload,
       attribution.projectId,
       attribution.sessionId,
+      normalizePromptStamps(event.promptIds),
+      event.cacheHit === true,
+      nonNegativeInt(event.avoidedCostMicrousd),
     ],
   );
+
+  trackMeteredCapability({
+    userId: event.userId,
+    organizationId: event.organizationId ?? null,
+    capability: event.capability,
+    surface: event.surface ?? null,
+    taskOutcome: event.taskOutcome ?? 'delivered',
+    provider: event.provider,
+  });
+}
+
+/**
+ * The accounting line for a turn a cache answered. Provider cost is zero
+ * because no provider call was made; `avoided_cost_microusd` is what the call
+ * that did not happen would have cost at list price, so the saving is a summed
+ * column rather than an inference from missing rows.
+ */
+export async function recordCacheHitCostEvent(
+  input: CostEventAttribution & {
+    userId: string;
+    organizationId?: string | null;
+    capability?: CogsCapability;
+    provider: string;
+    model?: string | null;
+    mechanism: string;
+    avoidedCostMicrousd: number;
+    sourceRef: string;
+    usage: Record<string, unknown>;
+    db?: DatabaseAdapter;
+  },
+): Promise<void> {
+  const capability = input.capability ?? resolveCogsCapability(input.usage);
+  const { unitBasis, units } = resolveCogsUnits(capability, input.usage);
+  const avoided = Math.max(0, Math.round(input.avoidedCostMicrousd));
+  try {
+    await recordProviderCostEvent(
+      {
+        ...input,
+        capability,
+        unitBasis,
+        units,
+        providerCostCents: 0,
+        billedCents: 0,
+        cacheHit: true,
+        avoidedCostMicrousd: avoided,
+        customerCanonicalMicrousd: resolveCustomerCanonicalMicrousd(input) ?? 0,
+        metadata: { ...input.usage, cacheMechanism: input.mechanism },
+      },
+      input.db ?? getNeonDb(),
+    );
+  } catch (error) {
+    logger.error(
+      {
+        event: 'cogs_cache_hit_event_lost',
+        error: error instanceof Error ? error.message : String(error),
+        mechanism: input.mechanism,
+        sourceRef: input.sourceRef,
+      },
+      'Cache-hit accounting line could not be written; the saving is missing from the COGS ledger',
+    );
+  }
+}
+
+/**
+ * One metered unit of infrastructure the platform bought for itself. The cost
+ * is resolved from the rate card, which publishes no rate until the deployment
+ * sets one, so an unpriced row still records what was consumed.
+ */
+export async function recordInfrastructureCostEvent(
+  input: CostEventAttribution & {
+    userId?: string | null;
+    organizationId?: string | null;
+    capability: InfrastructureCogsCapability;
+    provider: string;
+    units: number;
+    sourceRef: string;
+    metadata?: Record<string, unknown>;
+    db?: DatabaseAdapter;
+  },
+): Promise<void> {
+  const units = Math.max(0, input.units);
+  const costMicrousd = infrastructureCostMicrousd(input.capability, units);
+  try {
+    await recordProviderCostEvent(
+      {
+        ...input,
+        feature: infrastructureRateCardFeature(input.capability),
+        unitBasis: UNIT_BASIS_BY_CAPABILITY[input.capability],
+        units,
+        providerCostCents: costMicrousd === null ? 0 : centsFromMicrousdCeil(costMicrousd),
+        billedCents: 0,
+        customerCanonicalMicrousd: resolveCustomerCanonicalMicrousd(input) ?? 0,
+        metadata: { ...(input.metadata ?? {}), priced: costMicrousd !== null },
+      },
+      input.db ?? getNeonDb(),
+    );
+  } catch (error) {
+    logger.error(
+      {
+        event: 'cogs_infrastructure_event_lost',
+        error: error instanceof Error ? error.message : String(error),
+        capability: input.capability,
+        sourceRef: input.sourceRef,
+      },
+      'Infrastructure cost event could not be written; this consumption is missing from the COGS ledger',
+    );
+  }
 }
 
 export async function recordCogsAdjustment(
@@ -713,6 +920,7 @@ export async function recordSettledProviderCost(
         workload: input.workload ?? null,
         projectId: input.projectId ?? null,
         sessionId: input.sessionId ?? null,
+        promptIds: input.promptIds ?? null,
         inputTokens: input.inputTokens ?? chatTokens?.promptTokens ?? null,
         cachedTokens: input.cachedTokens ?? chatTokens?.cacheReadTokens ?? null,
         outputTokens: input.outputTokens ?? chatTokens?.completionTokens ?? null,

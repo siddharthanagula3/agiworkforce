@@ -70,6 +70,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          # check:llm-operability below runs check:doc-freshness, which dates
+          # every doc with `git log --follow -1`. On a depth-1 clone that
+          # returns the checkout commit for every file, so a stale doc reads as
+          # written today and the guard passes without measuring anything.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -92,20 +98,21 @@ jobs:
         # only place an exclusion may live. A continue-on-error step that is not
         # registered there, or a registered exclusion that has gone stale.
         # fails here instead of quietly weakening the gate.
-        run: |
-          node --test scripts/check-security-gates.test.mjs
-          node scripts/check-security-gates.mjs
+        #
+        # Only the guard: check:script-tests, inside the operability chain
+        # below, already runs check-security-gates.test.mjs.
+        run: node scripts/check-security-gates.mjs
 
       - name: Release gate contract (blocking, DESK-25 / INFRA-18 / INFRA-19)
         # Desktop releases must emit an SBOM, install on a clean machine, and
         # survive an upgrade plus rollback before publication; mobile releases
         # must reconcile the iOS privacy manifest with the Play data-safety
         # declaration and pass a device matrix before either store submission.
-        run: |
-          node --test scripts/check-release-gates.test.mjs
-          node --test scripts/generate-sbom.test.mjs
-          node --test scripts/verify-desktop-upgrade.test.mjs
-          node scripts/check-release-gates.mjs
+        #
+        # Only the guard: check:script-tests, inside the operability chain
+        # below, already runs check-release-gates.test.mjs, generate-sbom.test.mjs
+        # and verify-desktop-upgrade.test.mjs.
+        run: node scripts/check-release-gates.mjs
 
       - name: Hardcoded-model-id gate (Rust)
         # ESLint covers TS/JS in the js-verify lane; this script covers
@@ -113,43 +120,15 @@ jobs:
         # IDs; derive them from the catalog" is enforced uniformly.
         run: bash scripts/check-no-hardcoded-models.sh
 
-      - name: HookEvent fire-site gate (AP-07)
-        # AP-07 / R27-PARITY: every HookEvent enum variant must have ≥1
-        # run_hooks() call site in apps/cli/src. Static grep, no cargo build.
-        run: pnpm check:hook-fire-sites
-
       - name: Rust egress boundary gate
         # DESK-01: a Rust transport that builds its own reqwest client bypasses
         # the host-owned egress policy (and its connect-time address pinning).
         # The allowlist records the transports that predate the boundary and
         # only ratchets down; a new bare client fails here.
-        run: |
-          node --test scripts/check-rust-egress-boundary.test.mjs
-          pnpm check:rust-egress-boundary
-
-      - name: Module reachability gate
-        # R26-1 prevention layer: Rust files under CLI/Desktop native sources
-        # must be reachable from lib.rs, main.rs, or bin roots. The ratchet test
-        # guards the one rule the baseline itself cannot state: it only shrinks.
-        run: |
-          node --test scripts/check-module-reachability-ratchet.test.mjs
-          pnpm check:module-reachability
-
-      - name: Extension AP-02, no hardcoded color literals
-        # R27-PARITY: extension must use var(--agi-ext-*) design tokens; no hex/rgb/hsl literals.
-        run: pnpm --filter @agiworkforce/extension check:no-hex
-
-      - name: Web AP-02, no new hardcoded color literals
-        # DESIGN-SYSTEM-004: ratchet guard over apps/web app/components/lib/features.
-        # Pre-existing literals are grandfathered in apps/web/scripts/.no-hex-baseline.json;
-        # anything new fails here.
-        run: pnpm --filter @agiworkforce/web check:no-hex-web
-
-      - name: Mobile AP-02, no new hardcoded color literals
-        # DESIGN-SYSTEM-005: ratchet guard over apps/mobile TS/TSX.
-        # Pre-existing literals are grandfathered in apps/mobile/scripts/.no-hex-baseline.json,
-        # whose own _description already promised "New violations will fail CI".
-        run: pnpm check:no-hex-mobile
+        #
+        # Only the guard: check:script-tests, inside the operability chain
+        # below, already runs check-rust-egress-boundary.test.mjs.
+        run: pnpm check:rust-egress-boundary
 
       - name: Web UI invariants, no new colour, type or legibility regressions
         # Ratchet guard over apps/web and packages/ui TS/TSX during the frontend
@@ -170,19 +149,6 @@ jobs:
         # (*Definitions.ts, *Catalog.ts) are exempt. Exit 1 = anti-pattern.
         run: pnpm check:hardcoded-arrays
 
-      - name: Secret scan (CRIT-017)
-        # Repository-owned credential scanning over every tracked file. BLOCKING
-        # on purpose: a committed credential is already in history by the time
-        # anyone reads an advisory warning, so the only useful moment to stop it
-        # is before the merge.
-        #
-        # Not entropy analysis, every pattern matches a vendor-prefixed
-        # credential format, so a hit is a credential SHAPE rather than "this
-        # looks random". Reviewed fixtures live in
-        # scripts/secret-scan-allowlist.json keyed on (path, format), and an
-        # entry that stops matching fails the job as stale.
-        run: pnpm check:secrets
-
       - name: Lock-vs-build drift check (AP-09, advisory)
         # R27-PARITY: compares model ID references in Claude memory lock files
         # against packages/contracts/types/src/models.json. Lock files live in ~/.claude/
@@ -192,13 +158,23 @@ jobs:
         run: pnpm check:lock-drift
         continue-on-error: true
 
-      - name: Tauri IPC wiring (FIX-023)
-        # Catches two regressions:
-        #   1. Frontend invoke('foo') where lib.rs has no `foo` registered.
-        #   2. #[tauri::command] fn defined in src-tauri but missing from
-        #      the generate_handler!{} list (silently dead, a frontend
-        #      invoke would fail at runtime instead of compile time).
-        run: bash apps/desktop/check-wiring.sh
+      - name: LLM and repo operability checks
+        # The whole chain, not a hand-picked subset. This is the same command
+        # .husky/pre-push runs, so what a developer is stopped by locally and
+        # what CI enforces are one list that cannot drift apart. It is also what
+        # makes these guards gate a deploy: deploy-production.yml waits on CI,
+        # and repo-operability.yml is a separate workflow it never waited on.
+        #
+        # Sixty-six guards. Eight steps that this job used to run on its own
+        # were removed because the chain already runs them: check:hook-fire-sites,
+        # check:module-reachability, the three no-hex ratchets, check:secrets,
+        # check:tauri-wiring and check:feature-baseline. Three more steps kept
+        # only their guard and dropped the node --test line the chain's
+        # check:script-tests already covers. Minutes are spent once.
+        #
+        # repo-operability.yml still runs this chain on its own schedule; that
+        # duplicate is cheap next to a gate that silently does not gate.
+        run: pnpm check:llm-operability
 
   database:
     name: Postgres migrations and RLS

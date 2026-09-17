@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { invoke, isTauri } from '@/lib/tauri-mock';
+import { invoke, isTauri } from '@/lib/tauri-bridge';
 import { storageFallback } from '@shared/utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
 
@@ -56,14 +56,7 @@ export interface Screenshot {
 }
 
 export type ActionLogEntryType =
-  | 'plan'
-  | 'terminal'
-  | 'filesystem'
-  | 'browser'
-  | 'ui'
-  | 'mcp'
-  | 'approval'
-  | 'metrics';
+  'plan' | 'terminal' | 'filesystem' | 'browser' | 'ui' | 'mcp' | 'approval' | 'metrics';
 
 export type ActionLogStatus = 'pending' | 'running' | 'success' | 'failed' | 'blocked';
 

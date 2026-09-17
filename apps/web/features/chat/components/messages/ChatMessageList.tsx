@@ -28,7 +28,7 @@ import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { MessageBubble, type RegenerateModelOption } from './MessageBubble';
 import { openModelPicker } from '@features/chat/lib/model-picker-trigger';
-import type { ResearchPlanDecision } from '../research/ResearchActivity';
+import type { ResearchPlanDecision, ResearchPlanOptions } from '../research/ResearchActivity';
 import {
   InlinePaywallCard,
   normalizePaywallFeature,
@@ -132,7 +132,11 @@ export interface ChatMessageListProps {
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
   onRetryResearch?: (messageId: string) => void;
-  onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
+  onResearchPlanDecision?: (
+    messageId: string,
+    decision: ResearchPlanDecision,
+    options?: ResearchPlanOptions,
+  ) => void;
   retryingResearchMessageId?: string | null;
   onContinue?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
@@ -275,7 +279,11 @@ interface MessageGroupRowProps {
   currentTier: UserTier;
   onRegenerate?: (id: string) => void;
   onRetryResearch?: (id: string) => void;
-  onResearchPlanDecision?: (id: string, decision: ResearchPlanDecision) => void;
+  onResearchPlanDecision?: (
+    id: string,
+    decision: ResearchPlanDecision,
+    options?: ResearchPlanOptions,
+  ) => void;
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -317,7 +325,11 @@ interface MessageRowProps {
   currentTier: UserTier;
   onRegenerate?: (id: string) => void;
   onRetryResearch?: (id: string) => void;
-  onResearchPlanDecision?: (id: string, decision: ResearchPlanDecision) => void;
+  onResearchPlanDecision?: (
+    id: string,
+    decision: ResearchPlanDecision,
+    options?: ResearchPlanOptions,
+  ) => void;
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -1655,8 +1667,7 @@ const ChatMessageListComponent = ({
                   finishReason={
                     (
                       lastMessage.metadata as
-                        | { finishReason?: 'refusal' | 'content_filter' }
-                        | undefined
+                        { finishReason?: 'refusal' | 'content_filter' } | undefined
                     )?.finishReason
                   }
                 />

@@ -161,8 +161,37 @@ describe('OrganizationSharingSection', () => {
     renderSection();
 
     expect(screen.getByText('Roadmap')).toBeInTheDocument();
-    expect(screen.getByText(/Read-only · visible to 2 of 2 members/)).toBeInTheDocument();
+    expect(screen.getByText(/Visible to 2 of 2 members · read-only/)).toBeInTheDocument();
     expect(screen.getByText(/orgmcp-a1b2c3d4e5/)).toBeInTheDocument();
+  });
+
+  it('says how many members hold the editor grant', () => {
+    mockOverview.mockReturnValue(
+      overview({
+        sharedProjects: [
+          {
+            projectId: PROJECT,
+            organizationId: ORG,
+            name: 'Roadmap',
+            ownerUserId: 'user-owner',
+            sharedByUserId: 'user-owner',
+            defaultAccess: 'read',
+            createdAt: '2026-01-03T00:00:00.000Z',
+            memberGrants: [{ userId: 'user-member', access: 'write' }],
+          },
+        ],
+      }),
+    );
+    renderSection();
+
+    expect(screen.getByText(/Visible to 2 of 2 members · 1 can edit/)).toBeInTheDocument();
+    const control = screen.getByLabelText(/user-member/) as HTMLSelectElement;
+    expect(control.value).toBe('write');
+    expect(Array.from(control.options).map((option) => option.value)).toEqual([
+      'read',
+      'write',
+      'none',
+    ]);
   });
 
   it('counts an explicitly denied member as NOT able to see the project', () => {
@@ -183,7 +212,7 @@ describe('OrganizationSharingSection', () => {
       }),
     );
     renderSection();
-    expect(screen.getByText(/visible to 1 of 2 members/)).toBeInTheDocument();
+    expect(screen.getByText(/Visible to 1 of 2 members/)).toBeInTheDocument();
   });
 
   it('hides every mutation control from a member who cannot manage sharing', () => {

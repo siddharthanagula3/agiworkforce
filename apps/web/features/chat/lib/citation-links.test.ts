@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { citationAnchorId, citedSourceNumbers, linkifyCitations } from './citation-links';
+import {
+  citationAnchorId,
+  citationRenderOutcome,
+  citedSourceNumbers,
+  linkifyCitations,
+} from './citation-links';
 
 describe('linkifyCitations', () => {
   it('turns a marker into a link to its source', () => {
@@ -61,5 +66,25 @@ describe('citedSourceNumbers', () => {
   it('returns nothing for a report that cites nothing', () => {
     expect(citedSourceNumbers('No references at all.')).toEqual([]);
     expect(citedSourceNumbers('')).toEqual([]);
+  });
+});
+
+describe('citationRenderOutcome', () => {
+  it('reports nothing for a report that cites nothing', () => {
+    expect(citationRenderOutcome('No markers here.', 0)).toBeNull();
+    expect(citationRenderOutcome('', 3)).toBeNull();
+  });
+
+  it('succeeds when every marker reaches a source', () => {
+    expect(citationRenderOutcome('Claim [1] and claim [2].', 2)).toBe('succeeded');
+  });
+
+  it('fails on a marker naming a source the report does not carry', () => {
+    expect(citationRenderOutcome('Claim [1] and claim [4].', 2)).toBe('failed');
+  });
+
+  it('does not count an index inside code as a citation', () => {
+    expect(citationRenderOutcome('Use `items[4]` here.', 1)).toBeNull();
+    expect(citationRenderOutcome('```\nitems[9]\n```', 1)).toBeNull();
   });
 });

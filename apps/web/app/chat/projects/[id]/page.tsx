@@ -134,6 +134,13 @@ export default function ProjectDetailPage() {
    */
   const isSharedProject = Boolean(project?.isOrgShared);
 
+  /**
+   * An editor grant (§20) reopens the content controls on a shared project: its
+   * name, instructions, appearance and sources. Archiving, pinning and deleting
+   * stay with the owner, and the update route enforces the same split.
+   */
+  const canEditProject = !isSharedProject || project?.sharedAccess === 'write';
+
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
@@ -506,7 +513,7 @@ export default function ProjectDetailPage() {
                       zIndex: 'var(--z-popover)',
                     }}
                   >
-                    {isSharedProject ? null : (
+                    {canEditProject ? (
                       <button
                         type="button"
                         role="menuitem"
@@ -542,7 +549,7 @@ export default function ProjectDetailPage() {
                         />
                         Project settings
                       </button>
-                    )}
+                    ) : null}
 
                     {isSharedProject ? null : (
                       <button
@@ -634,7 +641,7 @@ export default function ProjectDetailPage() {
                     <TriggerIcon className="h-[28px] w-[28px]" aria-hidden="true" />
                   </span>
                 );
-                return isSharedProject ? (
+                return !canEditProject ? (
                   <div data-testid="project-appearance-static" style={badge}>
                     {glyph}
                   </div>
@@ -654,7 +661,7 @@ export default function ProjectDetailPage() {
                 );
               })()}
 
-              {appearancePickerOpen && !isSharedProject && (
+              {appearancePickerOpen && canEditProject && (
                 <div
                   role="dialog"
                   aria-label="Project icon and colour"
@@ -866,7 +873,7 @@ export default function ProjectDetailPage() {
                   color: 'var(--agi-ink-2)',
                 }}
               >
-                Shared with you
+                {canEditProject ? 'Shared with you · you can edit' : 'Shared with you'}
               </span>
             ) : null}
 
@@ -1109,7 +1116,7 @@ export default function ProjectDetailPage() {
             ) : tab === 'work' ? (
               <ProjectWorkPanel projectId={project.id} projectName={project.name} />
             ) : tab === 'sources' ? (
-              <SourcesPanel projectId={project.id} readOnly={isSharedProject} />
+              <SourcesPanel projectId={project.id} readOnly={!canEditProject} />
             ) : (
               <SchedulesPage
                 scope={{ projectId: project.id, projectName: project.name }}

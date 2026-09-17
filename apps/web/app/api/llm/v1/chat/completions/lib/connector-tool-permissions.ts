@@ -113,6 +113,34 @@ export function withDisabledConnectorIds(
   };
 }
 
+/**
+ * Temporary Chat's connector policy (§18). A standing "always allow" was
+ * granted in a chat that is kept; it does not carry into one that is not. Every
+ * allow becomes an ask, so a connector call inside a temporary chat is approved
+ * for that turn in front of the person making it, and approving it there
+ * changes nothing outside the chat.
+ *
+ * `deny` is left alone in both directions: a blocked tool stays blocked, and a
+ * temporary chat is not a way around a verdict the account already made.
+ */
+export function withoutStandingApprovals(
+  permissions: ConnectorToolPermissions,
+): ConnectorToolPermissions {
+  const askInsteadOfAllow = (
+    level: ConnectorToolPermissionLevel | undefined,
+  ): ConnectorToolPermissionLevel | undefined => (level === 'allow' ? 'ask' : level);
+  return {
+    ...permissions,
+    entries: permissions.entries.map((entry) => ({
+      ...entry,
+      level: askInsteadOfAllow(entry.level) ?? entry.level,
+    })),
+    levelFor: (qualifiedName) => askInsteadOfAllow(permissions.levelFor(qualifiedName)),
+    levelForConnectorTool: (connectorId, toolName) =>
+      askInsteadOfAllow(permissions.levelForConnectorTool(connectorId, toolName)),
+  };
+}
+
 export function connectorToolPermissionsFromEntries(
   entries: ReadonlyArray<ConnectorToolPermissionEntry>,
 ): ConnectorToolPermissions {

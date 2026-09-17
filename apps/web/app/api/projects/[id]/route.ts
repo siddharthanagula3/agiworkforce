@@ -17,7 +17,24 @@ import {
   ProjectConversationMembershipError,
   replaceProjectConversationMembership,
 } from '@/lib/services/project-membership-service';
-import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
+import {
+  resolveProjectWriteAccess,
+  resolveSharedProjectScope,
+  type ProjectWriteAccess,
+  type SharedProjectAccess,
+} from '@/lib/services/org-sharing-service';
+
+const OWNER_ONLY_PROJECT_FIELDS = [
+  'isArchived',
+  'starred',
+  'defaultPrivacyMode',
+  'defaultProviderMode',
+  'allowedSurfaces',
+  'usesGlobalMemory',
+  'importedFrom',
+] as const;
+
+class ProjectUpdateMiss extends Error {}
 
 const PG_UNDEFINED_COLUMN = '42703';
 const PG_UNDEFINED_TABLE = '42P01';
@@ -61,11 +78,13 @@ async function selectSharedProjectWithConversationCount(
   userId: string,
   sharedProjectIds: string[],
   organizationId: string,
+  sharedAccess: SharedProjectAccess,
 ): Promise<Record<string, unknown> | undefined> {
   if (sharedProjectIds.length === 0) return undefined;
   const [project] = await db.query<Record<string, unknown>>(
     `select p.*,
             true as is_org_shared,
+            $5::text as shared_access,
             (select count(*)::int
                from web_conversations c
               where c.project_id = p.id::text
@@ -78,7 +97,7 @@ async function selectSharedProjectWithConversationCount(
         and p.organization_id is not distinct from $4::uuid
         and p.deleted_at is null
       limit 1`,
-    [id, userId, sharedProjectIds, organizationId],
+    [id, userId, sharedProjectIds, organizationId, sharedAccess],
   );
   return project;
 }
@@ -101,6 +120,7 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
         userId,
         sharedScope.projectIds,
         organizationId,
+        sharedScope.writableProjectIds.includes(id) ? 'write' : 'read',
       );
     }
   }
@@ -132,6 +152,8 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     throw createError.validation('Invalid request body');
   }
   const body = parseProjectRequest(ManagedCloudProjectUpdateRequestSchema, rawBody);
+
+  let writeAccess: ProjectWriteAccess = 'owner';
 
   const baseSetClauses: string[] = ['updated_at = now()'];
   const baseParams: unknown[] = [];
@@ -188,8 +210,9 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     const idIdx = params.length + 1;
     const userIdx = params.length + 2;
     const organizationIdx = params.length + 3;
+    const ownerPredicate = writeAccess === 'owner' ? '=' : '<>';
     return {
-      sql: `update user_projects set ${setClauses.join(', ')} where id = $${idIdx} and user_id = $${userIdx} and organization_id is not distinct from $${organizationIdx}::uuid and deleted_at is null returning *`,
+      sql: `update user_projects set ${setClauses.join(', ')} where id = $${idIdx} and user_id ${ownerPredicate} $${userIdx} and organization_id is not distinct from $${organizationIdx}::uuid and deleted_at is null returning *`,
       params: [...params, id, userId, organizationId],
     };
   }
@@ -197,7 +220,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   const executeUpdate = async (targetDb: DatabaseAdapter, includeRound10: boolean) => {
     const { sql, params } = buildUpdateSql(includeRound10);
     const [updated] = await targetDb.query<Record<string, unknown>>(sql, params);
-    if (!updated) throw createError.notFound('Project not found');
+    if (!updated) throw new ProjectUpdateMiss();
   };
 
   const updateAndReplaceMembership = (includeRound10: boolean) =>
@@ -211,7 +234,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
       });
     });
 
-  try {
+  const runUpdate = async () => {
     if (body.isArchived === true || body.conversationIds !== undefined) {
       try {
         await updateAndReplaceMembership(hasRound10);
@@ -243,14 +266,47 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
         }
       }
     }
+  };
+
+  try {
+    try {
+      await runUpdate();
+    } catch (error) {
+      if (!(error instanceof ProjectUpdateMiss)) throw error;
+      const access = await resolveProjectWriteAccess(db, { projectId: id, userId, organizationId });
+      if (access !== 'editor') throw createError.notFound('Project not found');
+      const ownerOnly = OWNER_ONLY_PROJECT_FIELDS.filter(
+        (field) => (body as Record<string, unknown>)[field] !== undefined,
+      );
+      if (ownerOnly.length > 0) {
+        throw createError
+          .forbidden(
+            `An editor on a shared project can change its name, description, instructions and appearance. ${ownerOnly.join(', ')} stays with the owner.`,
+          )
+          .asUserSafe();
+      }
+      writeAccess = 'editor';
+      await runUpdate();
+    }
   } catch (error) {
+    if (error instanceof ProjectUpdateMiss) throw createError.notFound('Project not found');
     if (error instanceof ProjectConversationMembershipError) {
       throw createError.validation(error.message);
     }
     throw error;
   }
 
-  const projectWithCount = await selectProjectWithConversationCount(db, id, userId, organizationId);
+  const projectWithCount =
+    writeAccess === 'owner'
+      ? await selectProjectWithConversationCount(db, id, userId, organizationId)
+      : await selectSharedProjectWithConversationCount(
+          db,
+          id,
+          userId,
+          [id],
+          organizationId as string,
+          'write',
+        );
   if (!projectWithCount) throw createError.notFound('Project not found');
 
   return NextResponse.json({ project: mapProjectRow(projectWithCount) });

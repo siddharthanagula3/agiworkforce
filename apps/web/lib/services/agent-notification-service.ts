@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import type { NotificationSeverity } from '@/features/notifications/lib/notification-target';
 import { recordNotification } from './notification-service';
 import { sendPushToUser } from './push-notification-service';
+import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 
 /**
  * Preference key for cloud agent lifecycle push.
@@ -132,6 +133,16 @@ export async function notifyAgentRunEvent(
     // and is not silenced by a preference set on a phone.
     const { title, body } = describeAgentRunEvent(notice);
     const terminal = notice.event === 'completed' || notice.event === 'failed';
+    if (terminal) {
+      trackProductAnalyticsEvent(
+        { userId: notice.userId },
+        {
+          name: 'work_run_finished',
+          surface: 'web',
+          outcome: notice.event === 'completed' ? 'succeeded' : 'failed',
+        },
+      );
+    }
     await recordNotification(db, {
       userId: notice.userId,
       category: 'agent_run',
@@ -182,6 +193,14 @@ export async function notifyResearchReportSettled(
   if (notice.status !== 'completed' && notice.status !== 'failed') return none;
   try {
     const completed = notice.status === 'completed';
+    trackProductAnalyticsEvent(
+      { userId: notice.userId },
+      {
+        name: 'research_run_finished',
+        surface: 'web',
+        outcome: completed ? 'succeeded' : 'failed',
+      },
+    );
     const label = shortLabel(notice.title) || 'Your research';
     const title = completed ? 'Research report ready' : 'Research did not finish';
     const body = completed

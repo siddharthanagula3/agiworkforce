@@ -57,6 +57,11 @@
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
     },
     {
+      "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
+      "migration": 219,
+      "reason": "0219 adds web_conversations.draft and draft_updated_at, which this route reads on GET and writes on a draft-only PUT; both paths catch 42703 and fall back to the pre-0219 shape, so shipping ahead of the migration costs the synced draft and nothing else."
+    },
+    {
       "file": "apps/web/app/api/chat/conversations/bulk/route.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -80,6 +85,11 @@
       "file": "apps/web/app/api/cron/purge-deleted-organizations/route.ts",
       "migration": 162,
       "reason": "organization deletion is founder-gated; the deploy runbook applies migration 0162 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/cron/purge-temporary-chats/route.ts",
+      "migration": 218,
+      "reason": "0218 marks an upload that arrived in a temporary chat so the Library does not list it and this cron retires it on the conversation's own 30-day clock; the statement is wrapped so a missing column cannot break the conversation purge, and the deploy runbook applies 0218 before this code reaches production."
     },
     {
       "file": "apps/web/app/api/cron/reconcile-provider-costs/route.ts",
@@ -307,6 +317,11 @@
       "reason": "the personal data export declares the routing decision traces 0212 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0212 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0212 is applied."
     },
     {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 213,
+      "reason": "the personal data export includes the product analytics events 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
+    },
+    {
       "file": "apps/web/app/api/web-push/route.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -320,6 +335,11 @@
       "file": "apps/web/features/admin/services/economics-summary.ts",
       "migration": 181,
       "reason": "0181 adds provider_cost_reconciliation_days; the deploy runbook applies it before this code reaches production, and until it does the reconciliation window falls back to its default rather than reading a table that is not there."
+    },
+    {
+      "file": "apps/web/features/admin/services/product-metrics.ts",
+      "migration": 213,
+      "reason": "every engagement, retention and quality figure is measured from the product_analytics_events and product_metric_days tables 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
     },
     {
       "file": "apps/web/features/notifications/lib/notification-target.ts",
@@ -447,9 +467,24 @@
       "reason": "the erasure inventory classifies the routing decision traces 0212 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0212 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0212 is applied."
     },
     {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 213,
+      "reason": "account erasure deletes the product_analytics_events rows 0213 files against the subject; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
+    },
+    {
       "file": "apps/web/lib/server/admin-api-keys.ts",
       "migration": 206,
       "reason": "workspace API keys are stored in and verified against organization_admin_api_keys, which 0206 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/media-assets.ts",
+      "migration": 216,
+      "reason": "the upload path reads and writes the content_sha256 column 0216 adds to media_assets, so an identical file is stored and billed once; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0216 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0216 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/media-assets.ts",
+      "migration": 218,
+      "reason": "0218 adds media_assets.temporary_chat, which this module writes on insert, filters out of the Library listing, and keys the two dedupe lookups on; the deploy runbook applies 0218 before this code reaches production, and until it does no temporary-chat attachment exists to hide."
     },
     {
       "file": "apps/web/lib/server/neon-chat.ts",
@@ -460,6 +495,11 @@
       "file": "apps/web/lib/server/neon-chat.ts",
       "migration": 156,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/server/neon-chat.ts",
+      "migration": 219,
+      "reason": "0219 adds web_conversations.draft and draft_updated_at; this module only widens ChatConversationRow to carry them, and every reader treats them as optional, so the type is correct before and after the migration is applied."
     },
     {
       "file": "apps/web/lib/server/organization-erasure.ts",
@@ -530,6 +570,16 @@
       "file": "apps/web/lib/server/organization-erasure.ts",
       "migration": 212,
       "reason": "the workspace erasure inventory classifies the routing decision traces 0212 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0212 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0212 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 213,
+      "reason": "the workspace erasure inventory classifies the product_analytics_events table 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/product-analytics.ts",
+      "migration": 213,
+      "reason": "the event writer and the derived account milestones insert into and read the product_analytics_events table 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
     },
     {
       "file": "apps/web/lib/server/rolling-usage.ts",
@@ -627,6 +677,16 @@
       "reason": "cost events carry workload, project and session attribution from 0195; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0195 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0195 is applied."
     },
     {
+      "file": "apps/web/lib/services/cogs-ledger-service.ts",
+      "migration": 214,
+      "reason": "the cost ledger stamps the prompt manifest into the prompt_ids column 0214 adds to provider_cost_events; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0214 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0214 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/cogs-ledger-service.ts",
+      "migration": 215,
+      "reason": "the cost ledger writes the cache_hit and avoided_cost_microusd accounting columns 0215 adds to provider_cost_events; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0215 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0215 is applied."
+    },
+    {
       "file": "apps/web/lib/services/conversation-branch-service.ts",
       "migration": 59,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -705,6 +765,11 @@
       "file": "apps/web/lib/services/model-rollout/routing-decision-trace-service.ts",
       "migration": 212,
       "reason": "the trace writer inserts into the routing_decision_traces table 0212 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0212 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0212 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/model-rollout/routing-decision-trace-service.ts",
+      "migration": 214,
+      "reason": "the routing trace stamps the prompt manifest into the prompt_ids column 0214 adds to routing_decision_traces; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0214 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0214 is applied."
     },
     {
       "file": "apps/web/lib/services/notification-service.ts",
@@ -790,6 +855,11 @@
       "file": "apps/web/lib/services/retrieval-index-service.ts",
       "migration": 202,
       "reason": "indexing writes the retrieval documents and chunks 0202 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0202 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0202 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/retrieval-index-service.ts",
+      "migration": 216,
+      "reason": "the retrieval indexer selects from media_assets and carries a content_sha256 field of its own, which the guard cannot tell apart from the column 0216 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0216 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0216 is applied."
     },
     {
       "file": "apps/web/lib/services/retrieval-search-service.ts",

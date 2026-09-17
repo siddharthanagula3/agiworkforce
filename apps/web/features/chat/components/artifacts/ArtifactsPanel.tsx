@@ -23,8 +23,10 @@ import {
   ArtifactPreview,
   type ArtifactAudienceControl,
   type ArtifactProjectLink,
+  type ArtifactProjectSave,
   type ArtifactPublishSelection,
 } from './ArtifactPreview';
+import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
 import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import {
@@ -116,6 +118,7 @@ function ArtifactViewer({
   publishArtifact,
   artifactAudience,
   projectLink,
+  projectSave,
 }: {
   artifact: Artifact;
   versionHistory: SharedArtifact[];
@@ -123,6 +126,7 @@ function ArtifactViewer({
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
   projectLink?: ArtifactProjectLink;
+  projectSave?: ArtifactProjectSave;
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -135,6 +139,7 @@ function ArtifactViewer({
         {...(publishArtifact ? { publishArtifact } : {})}
         {...(artifactAudience ? { artifactAudience } : {})}
         {...(projectLink ? { projectLink } : {})}
+        {...(projectSave ? { projectSave } : {})}
       />
     </div>
   );
@@ -285,6 +290,13 @@ export function ArtifactsPanel() {
     const project = projects.find((candidate) => candidate.id === projectId);
     return project ? { id: project.id, name: project.name } : undefined;
   }, [activeConversation, projects]);
+  const projectSave = useMemo<ArtifactProjectSave>(
+    () => ({
+      projects: projects.map((project) => ({ id: project.id, name: project.name })),
+      onSave: (projectId, file) => uploadProjectKnowledgeFile({ projectId, file }).then(() => {}),
+    }),
+    [projects],
+  );
   const artifactAudience = useMemo(
     () =>
       publishDetails?.workspace
@@ -654,6 +666,7 @@ export function ArtifactsPanel() {
                   publishArtifact={makePublishHandler(selectedArtifact)}
                   {...(artifactAudience ? { artifactAudience } : {})}
                   {...(projectLink ? { projectLink } : {})}
+                  projectSave={projectSave}
                 />
               ) : (
                 <ArtifactsEmptyState />

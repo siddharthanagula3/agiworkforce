@@ -11,6 +11,7 @@ import {
   Globe2,
   Info,
   Loader2,
+  MousePointerClick,
   PauseCircle,
   Square,
 } from 'lucide-react';
@@ -75,6 +76,12 @@ export interface AgentActivityTimelineProps {
   failureReason?: string;
   /** Actions for that failure, rendered beside the summary line. */
   failureActions?: ReactNode;
+  /**
+   * The picture a screen step returned, as a data URL, looked up by tool call
+   * id. Only the machine that took the shot has one, so every other surface
+   * renders the same step without an image rather than a broken one.
+   */
+  screenshotFor?: (toolCallId: string) => string | undefined;
 }
 
 export function hasCanonicalToolActivity(
@@ -404,6 +411,92 @@ function connectorInitial(entry: AgentActivityToolEntry): string | undefined {
   return serverId[0]?.toUpperCase();
 }
 
+const SCREEN_STEP_ACTIONS: Readonly<Record<string, (input: Record<string, unknown>) => string>> = {
+  device_screenshot: (input) =>
+    typeof input['display'] === 'number'
+      ? `Looked at display ${String(input['display'])}`
+      : 'Looked at the screen',
+  device_zoom: () => 'Zoomed in on part of the screen',
+  device_move: (input) => `Moved the pointer to ${point(input)}`,
+  device_click: (input) => {
+    const button = typeof input['button'] === 'string' ? String(input['button']) : 'left';
+    const count = typeof input['count'] === 'number' ? input['count'] : 1;
+    const verb = count >= 3 ? 'Triple-clicked' : count === 2 ? 'Double-clicked' : 'Clicked';
+    return `${verb} ${button === 'left' ? '' : `${button} button `}at ${point(input)}`.replace(
+      /\s+/g,
+      ' ',
+    );
+  },
+  device_drag: (input) =>
+    `Dragged from ${point(input)} to ${String(input['toX'])}, ${String(input['toY'])}`,
+  device_scroll: (input) => `Scrolled at ${point(input)}`,
+  device_type: (input) =>
+    typeof input['text'] === 'string'
+      ? `Typed \u201c${truncateAction(input['text'])}\u201d`
+      : 'Typed',
+  device_key: (input) =>
+    typeof input['key'] === 'string' ? `Pressed ${String(input['key'])}` : 'Pressed a key',
+  device_wait: (input) =>
+    typeof input['ms'] === 'number' ? `Waited ${String(input['ms'])}ms` : 'Waited',
+};
+
+const MAX_TYPED_ACTION_CHARS = 60;
+
+function truncateAction(value: string): string {
+  return value.length <= MAX_TYPED_ACTION_CHARS
+    ? value
+    : `${value.slice(0, MAX_TYPED_ACTION_CHARS)}\u2026`;
+}
+
+function point(input: Record<string, unknown>): string {
+  return `${String(input['x'])}, ${String(input['y'])}`;
+}
+
+/**
+ * What a computer-use step did, in the words a person watching it would use.
+ * Built from the step's own arguments rather than its result text, because the
+ * arguments are what the user is being asked to trust.
+ */
+function screenStepAction(entry: AgentActivityToolEntry): string | null {
+  const describe = SCREEN_STEP_ACTIONS[entry.name];
+  if (!describe) return null;
+  const input = asRecord(entry.input) ?? {};
+  return describe(input);
+}
+
+function ComputerUseStepCard({
+  action,
+  screenshot,
+  deviceName,
+}: {
+  action: string | null;
+  screenshot: string | undefined;
+  deviceName: string | undefined;
+}) {
+  return (
+    <div
+      className="mt-1.5 overflow-hidden rounded-lg border border-border/50 bg-muted/20"
+      data-testid="computer-use-step"
+    >
+      {action ? (
+        <p className="flex flex-wrap items-center gap-x-2 px-3 py-1.5 text-xs text-muted-foreground">
+          <MousePointerClick className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 break-words text-foreground">{action}</span>
+          {deviceName ? <span>on {deviceName}</span> : null}
+        </p>
+      ) : null}
+      {screenshot ? (
+        <img
+          src={screenshot}
+          alt={action ? `Screen after: ${action}` : 'Screen capture from this step'}
+          data-testid="computer-use-screenshot"
+          className="block max-h-80 w-full border-t border-border/40 object-contain"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function categoryToKind(category: AgentEventToolCategory): InlineToolKind {
   switch (category) {
     case 'web-search':
@@ -679,6 +772,7 @@ export function AgentActivityTimeline({
   onRetryTurn,
   failureReason,
   failureActions,
+  screenshotFor,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -891,6 +985,9 @@ export function AgentActivityTimeline({
                 );
               }
               const connectRequest = connectRequestFor(entry);
+              const screenAction =
+                entry.category === 'computer-use' ? screenStepAction(entry) : null;
+              const screenshot = screenshotFor?.(entry.toolCallId);
               return (
                 <div key={entry.id} className="relative py-1 pl-7">
                   <ToolCallCard
@@ -915,6 +1012,13 @@ export function AgentActivityTimeline({
                     onCancel={onCancel}
                     onResend={onResend}
                   />
+                  {screenAction || screenshot ? (
+                    <ComputerUseStepCard
+                      action={screenAction}
+                      screenshot={screenshot}
+                      deviceName={entry.deviceStep?.deviceName}
+                    />
+                  ) : null}
                   {connectRequest ? (
                     <div className="mt-1.5">
                       <ConnectorConnectCard

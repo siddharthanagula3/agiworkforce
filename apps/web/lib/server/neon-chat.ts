@@ -24,6 +24,8 @@ export type ChatConversationRow = {
   is_temporary: boolean;
   active_leaf_message_id?: string | null;
   work_mode?: string | null;
+  draft?: string | null;
+  draft_updated_at?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

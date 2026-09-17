@@ -63,17 +63,43 @@ export async function GET(request: NextRequest) {
       remaining = batch === MAX_BATCHES - 1;
     }
 
+    // A file attached to a temporary chat is retired on the same clock as the
+    // chat (0218). Marking it deleted rather than deleting it hands it to
+    // purge-deleted-media, which is the only job that removes stored bytes, so
+    // there is one place that talks to object storage instead of two.
+    const attachments = await db.query<{ count: number }>(
+      `with expired as (
+         update public.media_assets
+            set deleted_at = now()
+          where id in (
+            select id from public.media_assets
+             where temporary_chat
+               and deleted_at is null
+               and created_at < now() - make_interval(days => $1)
+             limit $2
+          )
+          returning id
+       )
+       select count(*)::int as count from expired`,
+      [RETENTION_DAYS, PURGE_BATCH],
+    );
+    const attachmentsRetired = attachments[0]?.count ?? 0;
+
     if (remaining) {
       logger.warn(
         { purged },
         'Temporary chat purge hit its per-run ceiling · a backlog remains past the retention cutoff',
       );
     }
-    logger.info({ purged, remaining }, 'Purged expired temporary chat conversations');
+    logger.info(
+      { purged, attachmentsRetired, remaining },
+      'Purged expired temporary chat conversations',
+    );
 
     return NextResponse.json({
       message: 'Temporary chat purge completed',
       purged,
+      attachmentsRetired,
       remaining,
     });
   } catch (error) {

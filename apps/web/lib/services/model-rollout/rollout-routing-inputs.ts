@@ -14,6 +14,7 @@ import {
   type FlagSubjectFacts,
 } from '@/lib/feature-flags/flag-evaluation-service';
 import { ROUTING_FLAG_PREFIX, routingFlagInputs } from '@/lib/feature-flags/routing-flags';
+import { PROMPT_FLAG_PREFIX, promptVariantsFromFlags } from '@/lib/prompts/prompt-flags';
 import { logger } from '@/lib/logger';
 import { managedCloudDataRegion } from '@/lib/server/data-region';
 import {
@@ -34,6 +35,8 @@ export interface WebCloudRolloutInputs {
   canaryCohorts?: Readonly<Record<string, boolean>>;
   shadowRequestsToday: Readonly<Record<string, number>>;
   flagVariants: Readonly<Record<string, string>>;
+  /** Prompt manifest version each prompt serves this subject; absent means pinned. */
+  promptVariants: Readonly<Record<string, number>>;
 }
 
 export interface CapabilitySignals {
@@ -65,16 +68,15 @@ export async function resolveWebCloudRolloutInputs(input: {
   nowMs?: number;
 }): Promise<WebCloudRolloutInputs> {
   const nowMs = input.nowMs ?? Date.now();
-  const [evaluations, shadowRequestsToday] = await Promise.all([
-    evaluateFlagsForSubject(
-      buildFlagSubject(input.request, input.subject),
-      { keyPrefix: ROUTING_FLAG_PREFIX },
-      nowMs,
-    ),
+  const subject = buildFlagSubject(input.request, input.subject);
+  const [evaluations, promptEvaluations, shadowRequestsToday] = await Promise.all([
+    evaluateFlagsForSubject(subject, { keyPrefix: ROUTING_FLAG_PREFIX }, nowMs),
+    evaluateFlagsForSubject(subject, { keyPrefix: PROMPT_FLAG_PREFIX }, nowMs),
     readShadowRequestsToday(nowMs),
   ]);
   return {
     ...routingFlagInputs(evaluations),
+    promptVariants: promptVariantsFromFlags(promptEvaluations),
     region: managedCloudDataRegion(),
     requestId: input.conversationId || input.requestId,
     capabilitiesInUse: capabilitiesInUseForRequest(input.signals),

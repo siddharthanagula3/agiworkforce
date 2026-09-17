@@ -109,10 +109,12 @@ import {
   BUILT_IN_SLASH_COMMANDS,
   decideComposerPaste,
   matchMentionQuery,
+  pastedCodeFence,
   useCapability,
 } from '@agiworkforce/unified-chat';
 import type {
   ComposerAttachmentPasteDecision,
+  ComposerCodePaste,
   ComposerEditorHandle,
   ComposerMentionCommit,
   ComposerMentionConfig,
@@ -658,6 +660,9 @@ const ChatComposerNewComponent = ({
   }, []);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
   const [pastedTextUndo, setPastedTextUndo] = useState<{ fileName: string; text: string } | null>(
+    null,
+  );
+  const [pastedCodeUndo, setPastedCodeUndo] = useState<{ fenced: string; raw: string } | null>(
     null,
   );
   // Reset per message so each new draft gets its own warning.
@@ -1659,11 +1664,24 @@ const ChatComposerNewComponent = ({
       const decision = decideComposerPaste(e.clipboardData, {
         existingFileNames: attachmentNames,
       });
-      if (decision.kind === 'text') return;
+      if (decision.kind === 'text') {
+        const fenced = pastedCodeFence(e.clipboardData);
+        if (!fenced) return;
+        e.preventDefault();
+        const node = e.currentTarget;
+        const start = node.selectionStart ?? messageRef.current.length;
+        const end = node.selectionEnd ?? start;
+        const base = messageRef.current;
+        const leading = start > 0 && !base.slice(0, start).endsWith('\n') ? '\n' : '';
+        const inserted = `${leading}${fenced.text}`;
+        writeComposerMessage(`${base.slice(0, start)}${inserted}${base.slice(end)}`);
+        setPastedCodeUndo({ fenced: inserted, raw: e.clipboardData.getData('text/plain') });
+        return;
+      }
       e.preventDefault();
       applyComposerPasteDecision(decision, e.clipboardData.getData('text/plain'));
     },
-    [applyComposerPasteDecision, attachmentNames, disabled, trialExhausted],
+    [applyComposerPasteDecision, attachmentNames, disabled, trialExhausted, writeComposerMessage],
   );
 
   const handleEditorPasteDecision = useCallback(
@@ -1673,6 +1691,10 @@ const ChatComposerNewComponent = ({
     },
     [applyComposerPasteDecision, disabled, trialExhausted],
   );
+
+  const handleEditorPasteCode = useCallback((paste: ComposerCodePaste) => {
+    setPastedCodeUndo({ fenced: paste.text, raw: paste.text.split('\n').slice(1, -1).join('\n') });
+  }, []);
 
   const handleEditorDropFiles = useCallback(
     (files: readonly File[]) => {
@@ -3120,6 +3142,38 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
+      {pastedCodeUndo && (
+        <div
+          role="status"
+          data-testid="pasted-code-notice"
+          className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <span>That paste looked like code, so it was wrapped in a code block.</span>
+          <button
+            type="button"
+            data-testid="pasted-code-undo"
+            className="font-medium text-foreground underline underline-offset-2 transition-colors hover:no-underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => {
+              writeComposerMessage(
+                messageRef.current.replace(pastedCodeUndo.fenced, pastedCodeUndo.raw),
+              );
+              setPastedCodeUndo(null);
+              focusComposerEnd();
+            }}
+          >
+            Paste as plain text
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss code paste notice"
+            className="ml-auto text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setPastedCodeUndo(null)}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
       {queuedFollowUps.length > 0 && (
         <ul aria-label="Queued messages" className="mb-2 flex flex-col gap-1.5">
           {queuedFollowUps.map((queued, index) => (
@@ -3599,6 +3653,7 @@ const ChatComposerNewComponent = ({
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 onPasteDecision={handleEditorPasteDecision}
+                onPasteCode={handleEditorPasteCode}
                 onDropFiles={handleEditorDropFiles}
                 onSubmit={handleSubmit}
                 onFocusChange={setIsFocused}

@@ -57,6 +57,35 @@ describe('FEATURE_RATE_CARD', () => {
     expect(FEATURE_RATE_CARD.voice_live_minute.customerMicrousd).toBe(50_000);
   });
 
+  it('publishes no rate for an infrastructure cost the deployment meters', () => {
+    for (const feature of [
+      'object_storage_gib_month',
+      'database_compute_second',
+      'vector_query_request',
+      'notification_delivery_request',
+      'email_message_request',
+      'network_egress_gib',
+      'work_compute_minute',
+      'code_compute_minute',
+      'browser_session_minute',
+    ] as const) {
+      const entry = FEATURE_RATE_CARD[feature];
+      expect(entry.providerCogsBasis).toBe('deployment_metered');
+      expect(entry.providerCogsMicrousd).toBeNull();
+      expect(entry.customerMicrousd).toBeNull();
+      expect(RATE_CARD_PROVIDER_COGS_ENV[feature]).toMatch(/^AGI_[A-Z0-9_]+$/);
+    }
+  });
+
+  it('prices a metered infrastructure row only once the deployment sets its rate', () => {
+    expect(resolveFeatureRate('network_egress_gib', {}).providerCogsMicrousd).toBeNull();
+    const configured = resolveFeatureRate('network_egress_gib', {
+      AGI_EGRESS_MICROUSD_PER_GIB: '90000',
+    });
+    expect(configured.providerCogsMicrousd).toBe(90_000);
+    expect(configured.overrideApplied).toBe(true);
+  });
+
   it('marks every inferred provider figure as an estimate', () => {
     expect(FEATURE_RATE_CARD.image_generation_openai_low.estimate).toBe(true);
     expect(FEATURE_RATE_CARD.image_generation_openai_medium.estimate).toBe(true);

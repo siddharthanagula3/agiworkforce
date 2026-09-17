@@ -164,6 +164,30 @@ export async function listReadableSharedProjectIds(
   return rows.map((row) => row.project_id);
 }
 
+/**
+ * An editor grant is per-member and explicit. The share's own `default_access`
+ * never confers write on its own, so raising a project's default can never
+ * silently hand the whole organization edit rights over someone's project.
+ */
+export async function listWritableSharedProjectIds(
+  db: DatabaseAdapter,
+  organizationId: string,
+  userId: string,
+): Promise<string[]> {
+  const rows = await db.query<{ project_id: string }>(
+    `select s.project_id
+       from public.organization_shared_projects s
+       join public.organization_project_access a
+         on a.organization_id = s.organization_id
+        and a.project_id = s.project_id
+      where s.organization_id = $1
+        and a.user_id = $2
+        and a.access = 'write'`,
+    [organizationId, userId],
+  );
+  return rows.map((row) => row.project_id);
+}
+
 const PG_UNDEFINED_TABLE = '42P01';
 
 function isMissingRelation(error: unknown): boolean {
@@ -178,6 +202,7 @@ function isMissingRelation(error: unknown): boolean {
 export interface SharedProjectScope {
   organizationId: string;
   projectIds: string[];
+  writableProjectIds: string[];
 }
 
 export async function resolveSharedProjectScope(
@@ -189,11 +214,46 @@ export async function resolveSharedProjectScope(
     if (!membership) return null;
     const projectIds = await listReadableSharedProjectIds(db, membership.organizationId, userId);
     if (projectIds.length === 0) return null;
-    return { organizationId: membership.organizationId, projectIds };
+    const writableProjectIds = await listWritableSharedProjectIds(
+      db,
+      membership.organizationId,
+      userId,
+    );
+    return { organizationId: membership.organizationId, projectIds, writableProjectIds };
   } catch (error) {
     if (isMissingRelation(error)) return null;
     throw error;
   }
+}
+
+export type ProjectWriteAccess = 'owner' | 'editor';
+
+/**
+ * Who may change a project. `owner` is the row's own user; `editor` is a member
+ * holding an explicit `write` grant on a project shared with their organization.
+ * Both routes that mutate a project resolve through here so an editor's reach is
+ * defined once rather than per handler.
+ */
+export async function resolveProjectWriteAccess(
+  db: DatabaseAdapter,
+  input: { projectId: string; userId: string; organizationId: string | null },
+): Promise<ProjectWriteAccess | null> {
+  const [owned] = await db.query<{ id: string }>(
+    `select id
+       from user_projects
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and deleted_at is null
+      limit 1`,
+    [input.projectId, input.userId, input.organizationId],
+  );
+  if (owned) return 'owner';
+  if (!input.organizationId) return null;
+
+  const scope = await resolveSharedProjectScope(db, input.userId);
+  if (scope?.organizationId !== input.organizationId) return null;
+  return scope.writableProjectIds.includes(input.projectId) ? 'editor' : null;
 }
 
 export interface ShareProjectInput {

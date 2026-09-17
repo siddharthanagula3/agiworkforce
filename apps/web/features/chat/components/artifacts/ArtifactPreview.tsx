@@ -26,10 +26,13 @@ import {
   AlertTriangle,
   FileText,
   FolderOpen,
+  FolderPlus,
   Globe,
   Pencil,
+  GitFork,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
+import { isSupportedChatAttachment } from '@agiworkforce/cloud-contracts';
 import {
   summarizeGeneratedFileBundle,
   type ArtifactManifest,
@@ -152,6 +155,16 @@ export interface ArtifactProjectLink {
   id: string;
   name: string;
 }
+
+/**
+ * Saving the artifact into a project as one of its sources (§23). Distinct from
+ * `projectLink`, which only reports where the artifact's conversation lives: a
+ * reader can keep a document in a project without moving the chat that made it.
+ */
+export interface ArtifactProjectSave {
+  projects: readonly ArtifactProjectLink[];
+  onSave: (projectId: string, file: File) => Promise<void>;
+}
 interface ArtifactPreviewProps {
   artifact: ArtifactData;
   onShare?: () => void;
@@ -165,6 +178,7 @@ interface ArtifactPreviewProps {
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
   projectLink?: ArtifactProjectLink;
+  projectSave?: ArtifactProjectSave;
 }
 
 /**
@@ -218,6 +232,7 @@ export function ArtifactPreview({
   publishArtifact,
   artifactAudience,
   projectLink,
+  projectSave,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
@@ -236,6 +251,7 @@ export function ArtifactPreview({
   // Version navigation (panel-only, view-only). null = show latest.
   const versionCount = versionHistory?.length ?? 0;
   const restoreArtifactVersion = useArtifactsStore((s) => s.restoreArtifactVersion);
+  const forkArtifact = useArtifactsStore((s) => s.forkArtifact);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
   const isStoredArtifact = useArtifactsStore((s) => s.artifacts.some((a) => a.id === artifact.id));
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
@@ -760,6 +776,42 @@ if (__AgiApp) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  /**
+   * The file a project source should receive. An artifact's language is
+   * whatever the model called it, and the source allowlist does not accept
+   * every such name, so anything it would reject is saved as Markdown with the
+   * body fenced, which is readable and always accepted rather than a save that
+   * fails after the reader picks a project.
+   */
+  const artifactSourceFile = useCallback((): File => {
+    const title = artifact.title || 'artifact';
+    const language = (artifact.language || artifact.type || 'txt').toLowerCase();
+    const sourceName = `${title}.${language}`;
+    if (isSupportedChatAttachment(sourceName, '')) {
+      return new File([activeContent], sourceName, { type: 'text/plain' });
+    }
+    const markdown = `# ${title}\n\n\`\`\`${language}\n${activeContent}\n\`\`\``;
+    return new File([markdown], `${title}.md`, { type: 'text/markdown' });
+  }, [activeContent, artifact.language, artifact.title, artifact.type]);
+
+  const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+
+  const handleSaveToProject = useCallback(
+    async (project: ArtifactProjectLink) => {
+      if (!projectSave) return;
+      setSavingProjectId(project.id);
+      try {
+        await projectSave.onSave(project.id, artifactSourceFile());
+        toast.success(`Saved to ${project.name}`);
+      } catch (error) {
+        toast.error(toUserMessage(error, 'That artifact could not be saved to the project'));
+      } finally {
+        setSavingProjectId(null);
+      }
+    },
+    [artifactSourceFile, projectSave],
+  );
 
   const handleDownloadGeneratedFile = async () => {
     if (!generatedFileSummary.primaryUri) return;
@@ -1409,6 +1461,70 @@ if (__AgiApp) {
                       Download generated file
                     </DropdownMenuItem>
                   )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Fork: a separate artifact starting from what is on screen, so a
+                reader can take a document somewhere else without editing over
+                the one the answer produced. Only for an artifact the store
+                actually holds; a card rendered from a message alone has
+                nothing to fork from. */}
+            {variant === 'panel' && isStoredArtifact && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const forkId = forkArtifact(artifact.id, activeContent);
+                  if (!forkId) {
+                    toast.error('That artifact could not be duplicated');
+                    return;
+                  }
+                  setSourceDraft(null);
+                  setViewedVersionIndex(null);
+                  toast.success('Duplicated. Edits here no longer touch the original.');
+                }}
+                className="h-7 px-2"
+                aria-label="Duplicate this artifact"
+                title="Duplicate"
+                data-testid="artifact-fork"
+              >
+                <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="ml-1 hidden text-xs @[30rem]:inline">Duplicate</span>
+              </Button>
+            )}
+
+            {/* Save to project: the artifact becomes one of a project's sources,
+                which is a different thing from the project its conversation
+                happens to sit in (the bar below). Rendered only when the host
+                knows of at least one project to save into. */}
+            {variant === 'panel' && projectSave && projectSave.projects.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    disabled={savingProjectId !== null}
+                    aria-label="Save this artifact to a project"
+                    title="Save to project"
+                    data-testid="artifact-save-to-project"
+                  >
+                    <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="ml-1 hidden text-xs @[30rem]:inline">
+                      {savingProjectId ? 'Saving…' : 'Save to project'}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {projectSave.projects.map((project) => (
+                    <DropdownMenuItem
+                      key={project.id}
+                      onClick={() => void handleSaveToProject(project)}
+                    >
+                      {project.name}
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

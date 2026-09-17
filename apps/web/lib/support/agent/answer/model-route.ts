@@ -10,6 +10,14 @@ import {
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import {
+  lookupSemanticResponseCache,
+  recordSemanticCacheHit,
+  storeSemanticResponseCache,
+  type SemanticCacheKeyFields,
+  type SemanticCacheSafety,
+} from '@/lib/services/semantic-response-cache-service';
+import { resolvePrompt } from '@/lib/prompts/prompt-registry';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
@@ -17,6 +25,21 @@ import { getOptionalEnv } from '@/shared/utils/env';
 import { buildSupportSystemPrompt } from '../prompt/system-prompt';
 
 const MAX_OUTPUT_TOKENS = 800;
+
+export const SUPPORT_SYSTEM_PROMPT_ID = 'support.system';
+
+/**
+ * The support answer is drawn only from excerpts already inside the prompt, it
+ * offers the model no tool, carries no attachment and samples at zero, so an
+ * identical question over identical excerpts has one correct answer and a
+ * repeat may be served from cache.
+ */
+const SUPPORT_CACHE_SAFETY: SemanticCacheSafety = {
+  toolsOffered: false,
+  attachmentsPresent: false,
+  freshDataRequired: false,
+  temperature: 0,
+};
 
 export type SupportModelResult =
   | { status: 'ok'; text: string; route: { provider: string; modelKey: string } }
@@ -58,7 +81,18 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
   }
 
   const routeInfo = { provider: route.provider, modelKey: route.modelKey };
+  const prompt = resolvePrompt(SUPPORT_SYSTEM_PROMPT_ID);
   const system = buildSupportSystemPrompt();
+  const cacheFields: SemanticCacheKeyFields = {
+    callType: 'support-answer',
+    tenantId: input.userId ?? 'anonymous',
+    provider: route.provider,
+    modelId: route.modelKey,
+    routeId: route.routeId,
+    promptStamps: [prompt.stamp],
+    systemPrompt: system,
+    input: input.userMessage,
+  };
 
   try {
     assertNoLeaks('support-agent-prompt', { system, user: input.userMessage });
@@ -79,6 +113,21 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
   });
 
   const wireMode = resolveWireMode(route.provider);
+
+  const cached = await lookupSemanticResponseCache(cacheFields, SUPPORT_CACHE_SAFETY);
+  if (cached.outcome === 'hit' && cached.entry) {
+    await recordSemanticCacheHit({
+      userId: input.userId ?? 'anonymous',
+      provider: route.provider,
+      modelId: route.modelKey,
+      routeId: route.routeId,
+      surface: input.surface,
+      sourceRef: `support-cache:${randomUUID()}`,
+      promptStamps: [prompt.stamp],
+      usage: cached.entry.usage,
+    });
+    return { status: 'ok', text: cached.entry.content, route: routeInfo };
+  }
 
   try {
     const response = await drainToLlmResponse(
@@ -112,10 +161,24 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
       surface: input.surface,
       customerCanonicalMicrousd: 0,
       usage,
+      promptIds: [prompt.stamp],
     });
 
     const text = response.content.trim();
     if (!text) return { status: 'unavailable', reason: 'empty_response', route: routeInfo };
+    await storeSemanticResponseCache(
+      cacheFields,
+      {
+        content: text,
+        usage: {
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+          totalTokens: usage.totalTokens,
+          cachedInputTokens: usage.cacheReadInputTokens,
+        },
+      },
+      SUPPORT_CACHE_SAFETY,
+    );
     return { status: 'ok', text, route: routeInfo };
   } catch (error) {
     logger.error(

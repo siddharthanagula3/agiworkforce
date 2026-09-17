@@ -5,6 +5,9 @@
  * text nor retrieved document text can reach it, which is the structural half of
  * the injection defence, `system-prompt.test.ts` asserts the exported builder
  * takes zero parameters and that the constant contains no placeholder syntax.
+ * That is also why this file imports nothing, including the prompt manifest:
+ * the manifest imports this constant, not the other way round, and carries the
+ * id and version stamped on the ledger row for an answer it produced.
  *
  * Note what is NOT in here: the abstention rules and the action allowlist are
  * enforced in code (`policy/hard-abstain.ts`, `answer/synthesize.ts`), not

@@ -10,6 +10,8 @@ import {
   type ResearchStep,
 } from '@agiworkforce/types';
 
+import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
+
 const MAX_CONTENT_CHARS = 400_000;
 const MAX_TITLE_CHARS = 500;
 const MAX_SUMMARY_CHARS = 8_000;
@@ -289,6 +291,9 @@ export async function saveResearchReport(
     throw new ResearchReportValidationError(
       'Research report was not persisted (row-level security denied the write)',
     );
+  }
+  if (input.status === 'pending') {
+    trackProductAnalyticsEvent({ userId }, { name: 'research_started', surface: 'web' });
   }
   return rowToReport(row);
 }

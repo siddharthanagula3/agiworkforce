@@ -29,11 +29,15 @@ function runGuard(root) {
   return { code: result.status, out: `${result.stdout}${result.stderr}` };
 }
 
-test('ci.yml runs the mobile ratchet guard as a real step', () => {
-  assert.match(
-    workflow,
-    /^\s*run: pnpm check:no-hex-mobile\s*$/m,
-    'ci.yml has no `run: pnpm check:no-hex-mobile` step, so the mobile baseline enforces nothing',
+test('ci.yml reaches the mobile ratchet guard, directly or through the operability chain', () => {
+  const direct = /^\s*run: pnpm check:no-hex-mobile\s*$/m.test(workflow);
+  const viaChain =
+    /^\s*run: pnpm check:llm-operability\s*$/m.test(workflow) &&
+    (manifest.scripts['check:llm-operability'] ?? '').includes('pnpm check:no-hex-mobile');
+  assert.ok(
+    direct || viaChain,
+    'ci.yml neither runs `pnpm check:no-hex-mobile` as its own step nor reaches it through ' +
+      '`pnpm check:llm-operability`, so the mobile baseline enforces nothing',
   );
 });
 

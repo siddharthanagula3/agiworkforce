@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { z } from 'zod';
+import { resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
   isValidIanaTimeZone,
   PLACES_SEARCH_DEFAULT_LIMIT,
@@ -35,6 +36,8 @@ const PlacesSearchInputSchema = z.object({
   limit: z.number().int().min(PLACES_SEARCH_MIN_LIMIT).max(PLACES_SEARCH_MAX_LIMIT).optional(),
 });
 
+export const PLACES_SEARCH_TOOL_PROMPT_ID = 'tool.places_search_description';
+
 export function placesSearchToolDef(): {
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
@@ -43,15 +46,7 @@ export function placesSearchToolDef(): {
     type: 'function',
     function: {
       name: PLACES_SEARCH_TOOL_NAME,
-      description:
-        'Search real places: restaurants, cafes, bars, hotels, shops, pharmacies, clinics and ' +
-        'other businesses or points of interest. Returns each place with its rating, review ' +
-        'count, category, price level, whether it is open now, opening hours, address, phone ' +
-        'and website. Call this instead of a web search whenever the user asks what is nearby, ' +
-        'what is open, where to eat, drink or stay, or for the address, hours or phone number ' +
-        'of a place. Answer only from what it returns: do not invent a place, a rating or an ' +
-        'opening time, and state the local time the result was true for rather than guessing ' +
-        'the time of day.',
+      description: resolvePromptText(PLACES_SEARCH_TOOL_PROMPT_ID),
       parameters: {
         type: 'object',
         properties: {

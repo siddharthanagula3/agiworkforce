@@ -106,12 +106,47 @@ requireIncludes(
   '.github/workflows/ci.yml',
   'cargo test -p agiworkforce-model-registry --test auto_route_conformance',
 );
-requireIncludes('.github/workflows/ci.yml', 'pnpm check:module-reachability');
-requireIncludes('.github/workflows/ci.yml', 'run: pnpm check:no-hex-mobile');
-requireIncludes(
-  '.github/workflows/ci.yml',
-  'run: pnpm --filter @agiworkforce/web check:no-hex-web',
-);
+// These gates must run in the blocking workflow. A step of their own satisfies
+// that, and so does ci.yml running the whole check:llm-operability chain, which
+// is how they are reached today: a literal-string requirement would otherwise
+// force a second copy of a guard the chain already runs, and the duplicate is
+// what rots. Asking both questions is stricter than the string match was,
+// because it also fails when the chain quietly stops containing the guard.
+function requireGatedByCi(guardCommand, chainCommand = guardCommand) {
+  const workflow = exists('.github/workflows/ci.yml') ? readText('.github/workflows/ci.yml') : '';
+  if (workflow.includes(guardCommand)) return;
+  if (!workflow.includes('pnpm check:llm-operability')) {
+    errors.push(
+      `.github/workflows/ci.yml must run ${JSON.stringify(guardCommand)}, either as its own step ` +
+        'or through "pnpm check:llm-operability"',
+    );
+    return;
+  }
+  const manifest = exists('package.json') ? JSON.parse(readText('package.json')) : { scripts: {} };
+  const chain = manifest.scripts?.['check:llm-operability'] ?? '';
+  if (!chain.includes(chainCommand)) {
+    errors.push(
+      `check:llm-operability no longer runs ${JSON.stringify(chainCommand)}, and ` +
+        '.github/workflows/ci.yml relies on the chain to reach it',
+    );
+    return;
+  }
+  // When the chain reaches the gate under a different name, that alias has to
+  // still mean what the gate is. Without this the guard passes on a script
+  // renamed to run something else entirely.
+  if (chainCommand === guardCommand) return;
+  const alias = chainCommand.replace(/^pnpm\s+/, '');
+  const definition = manifest.scripts?.[alias];
+  if (definition === undefined || !definition.includes(guardCommand)) {
+    errors.push(
+      `package.json ${JSON.stringify(alias)} no longer runs ${JSON.stringify(guardCommand)}`,
+    );
+  }
+}
+
+requireGatedByCi('pnpm check:module-reachability');
+requireGatedByCi('pnpm check:no-hex-mobile');
+requireGatedByCi('pnpm --filter @agiworkforce/web check:no-hex-web');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run typecheck --affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm test:affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run build --affected');
@@ -149,7 +184,7 @@ requireIncludes(
   '.github/workflows/ci.yml',
   'cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib',
 );
-requireIncludes('.github/workflows/ci.yml', 'bash apps/desktop/check-wiring.sh');
+requireGatedByCi('bash apps/desktop/check-wiring.sh', 'pnpm check:tauri-wiring');
 requireIncludes('.github/workflows/ci.yml', 'cargo test -p agiworkforce-cli');
 requireNotIncludes(
   '.github/workflows/ci.yml',
