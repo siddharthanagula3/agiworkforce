@@ -54,7 +54,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   { url: '/api/scim/v2/Users/[userId]', why: 'the customer identity provider calls this' },
   { url: '/api/mobile/iap/apple-notifications', why: 'the App Store server calls this' },
   { url: '/api/mobile/iap/google-notifications', why: 'the Play billing service calls this' },
-  { url: '/api/github/webhook', why: 'GitHub delivers webhooks here' },
   { url: '/api/github/oauth/callback', why: 'GitHub redirects the user here after authorization' },
 
   // Another surface or the browser reaches these without naming the path in
