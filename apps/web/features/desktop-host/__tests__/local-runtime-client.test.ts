@@ -8,7 +8,9 @@ import {
   DesktopHostUnavailable,
   cancelLocalCommand,
   clipboardAttachments,
+  openWorkspaceInEditor,
   openWorkspacePath,
+  pickWorkspaceRoot,
   readHostClipboard,
   readLocalCommandPolicy,
   revealWorkspacePath,
@@ -173,6 +175,24 @@ describe('opening and revealing', () => {
 
     expect(calls.map((call) => call.command)).toEqual(['app_open_path', 'app_reveal_path']);
     expect(calls[0]?.args).toEqual({ rootId: 'root-1', path: 'a.md' });
+  });
+
+  it('opens an approved folder in VS Code and picks a repository by kind', async () => {
+    const calls: { command: string; args?: Record<string, unknown> }[] = [];
+    installHost(async (command, args) => {
+      calls.push({ command, ...(args ? { args } : {}) });
+      return ok({ path: '', opened: true });
+    });
+
+    await openWorkspaceInEditor('root-1');
+    await pickWorkspaceRoot('repository');
+    await pickWorkspaceRoot();
+
+    expect(calls).toEqual([
+      { command: 'app_open_in_editor', args: { rootId: 'root-1' } },
+      { command: 'workspace_pick_root', args: { kind: 'repository' } },
+      { command: 'workspace_pick_root' },
+    ]);
   });
 
   it('raises the refusal the runtime returned', async () => {

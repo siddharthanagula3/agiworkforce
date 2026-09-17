@@ -27,6 +27,7 @@ mod task_registry;
 mod web;
 
 use bash::execute_run_command;
+pub(crate) use common::COMMAND_TIMEOUT;
 use common::{describe_command, print_tool_status, truncate_output_with_save};
 #[cfg(test)]
 use common::{
@@ -49,6 +50,7 @@ use task_registry::{
 #[cfg(test)]
 use web::is_private_or_internal_ip;
 use web::{execute_tool_search, execute_web_fetch, execute_web_search};
+pub(crate) use web::{WEB_FETCH_CALL_TIMEOUT, WEB_SEARCH_TIMEOUT};
 
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
 
@@ -491,6 +493,31 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         return tool.invoke(&call.args, opts.quiet).await;
     }
 
+    let boundary_gated = match canonical_name {
+        "web_fetch" => opts.require_confirmation,
+        _ => require_confirm,
+    };
+    if boundary_gated {
+        if let Some(request) = trust_boundary_approval(canonical_name, &call.args) {
+            let allowed =
+                match request_approval(opts.approval_callback.as_ref(), request.clone()).await {
+                    Some(decision) => approval_allows(decision),
+                    None => Confirm::new()
+                        .with_prompt(format!("{} Allow it?", request.summary))
+                        .default(false)
+                        .interact()
+                        .unwrap_or(false),
+                };
+            if !allowed {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.to_string(),
+                    success: false,
+                    output: format!("`{canonical_name}` was not approved and did not run."),
+                });
+            }
+        }
+    }
+
     let result = match canonical_name {
         "write_file" => {
             execute_write_file(&call.args, require_confirm, opts.approval_callback.as_ref()).await
@@ -577,6 +604,70 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     };
 
     result
+}
+
+fn trust_boundary_approval(
+    tool_name: &str,
+    args: &HashMap<String, String>,
+) -> Option<ApprovalRequest> {
+    let argument = |key: &str| {
+        args.get(key)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    };
+    let computer_use = |target: String, summary: &str| {
+        Some(ApprovalRequest::new(
+            ApprovalRequestKind::ComputerUse {
+                action: tool_name.to_string(),
+                target: target.clone(),
+            },
+            summary,
+            vec![format!("target: {target}")],
+        ))
+    };
+    match tool_name {
+        "browser_read_page" => computer_use(
+            "active tab".to_string(),
+            "The agent wants to read the page open in your signed-in Chrome.",
+        ),
+        "browser_screenshot" => computer_use(
+            "active tab".to_string(),
+            "The agent wants to capture the active tab of your signed-in Chrome.",
+        ),
+        "browser_click" => computer_use(
+            argument("selector").unwrap_or_default(),
+            "The agent wants to click in your signed-in Chrome.",
+        ),
+        "browser_type" => computer_use(
+            argument("selector").unwrap_or_default(),
+            "The agent wants to type into your signed-in Chrome.",
+        ),
+        "browser_navigate" => computer_use(
+            argument("url").unwrap_or_default(),
+            "The agent wants to open an address in your signed-in Chrome.",
+        ),
+        "web_fetch" => {
+            let url = argument("url").unwrap_or_default();
+            if !web::is_internal_fetch_target(&url) {
+                return None;
+            }
+            let destination = reqwest::Url::parse(&url)
+                .ok()
+                .and_then(|parsed| parsed.host_str().map(str::to_string))
+                .unwrap_or(url);
+            Some(ApprovalRequest::new(
+                ApprovalRequestKind::Network {
+                    tool_name: tool_name.to_string(),
+                    destination: destination.clone(),
+                },
+                format!(
+                    "The agent wants to fetch {destination}, which is on this computer, its private network or a cloud metadata service."
+                ),
+                vec![format!("destination: {destination}")],
+            ))
+        }
+        _ => None,
+    }
 }
 
 fn policy_primary_argument(tool_name: &str, args: &HashMap<String, String>) -> String {
@@ -687,6 +778,14 @@ fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_jso
             "workspace_policy",
             serde_json::json!({ "argument": primary_argument }),
         ),
+        ApprovalRequestKind::ComputerUse { action, target } => (
+            "computer_use",
+            serde_json::json!({ "action": action, "target": target }),
+        ),
+        ApprovalRequestKind::Network {
+            tool_name: _,
+            destination,
+        } => ("network", serde_json::json!({ "destination": destination })),
     }
 }
 
@@ -698,6 +797,8 @@ pub(crate) async fn permission_request_hook_denial(
     let tool_name = match &request.kind {
         ApprovalRequestKind::WorkspacePolicy { tool_name, .. } => tool_name.clone(),
         ApprovalRequestKind::McpTool { tool_name, .. } => tool_name.clone(),
+        ApprovalRequestKind::ComputerUse { action, .. } => action.clone(),
+        ApprovalRequestKind::Network { tool_name, .. } => tool_name.clone(),
         _ => fallback_name.to_string(),
     };
     let results = crate::hooks::run_hooks(
@@ -1302,6 +1403,135 @@ async fn execute_notebook_edit(
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    fn recording_callback(
+        decision: ApprovalDecision,
+    ) -> (
+        ApprovalCallback,
+        std::sync::Arc<std::sync::Mutex<Vec<ApprovalRequestKind>>>,
+    ) {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorder = std::sync::Arc::clone(&seen);
+        let callback: ApprovalCallback = std::sync::Arc::new(move |request| {
+            let recorder = std::sync::Arc::clone(&recorder);
+            Box::pin(async move {
+                recorder.lock().expect("seen lock").push(request.kind);
+                decision
+            })
+        });
+        (callback, seen)
+    }
+
+    fn byok_options(callback: ApprovalCallback, auto_approve_safe: bool) -> ToolExecOptions {
+        ToolExecOptions {
+            require_confirmation: true,
+            auto_approve_safe,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_browser_action_asks_for_computer_use_approval_before_it_runs() {
+        let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+        let call = ToolCall {
+            name: "browser_click".to_string(),
+            args: HashMap::from([("selector".to_string(), "#buy".to_string())]),
+        };
+        let result = execute_tool_with_opts(&call, &byok_options(callback, true))
+            .await
+            .expect("tool result");
+        assert!(!result.success);
+        assert_eq!(
+            result.output,
+            "`browser_click` was not approved and did not run."
+        );
+        assert_eq!(
+            *seen.lock().expect("seen lock"),
+            vec![ApprovalRequestKind::ComputerUse {
+                action: "browser_click".to_string(),
+                target: "#buy".to_string(),
+            }]
+        );
+    }
+
+    fn fetch(url: &str) -> ToolCall {
+        ToolCall {
+            name: "web_fetch".to_string(),
+            args: HashMap::from([("url".to_string(), url.to_string())]),
+        }
+    }
+
+    #[test]
+    fn public_web_fetch_and_search_carry_no_approval_in_any_mode() {
+        assert!(
+            trust_boundary_approval("web_fetch", &fetch("https://docs.rs/serde").args).is_none()
+        );
+        let search = HashMap::from([("query".to_string(), "rust serde".to_string())]);
+        assert!(trust_boundary_approval("web_search", &search).is_none());
+    }
+
+    #[tokio::test]
+    async fn a_fetch_to_this_machine_its_network_or_metadata_asks_even_when_safe_tools_are_approved(
+    ) {
+        for (url, host) in [
+            ("http://127.0.0.1:8080/admin", "127.0.0.1"),
+            (
+                "http://169.254.169.254/latest/meta-data/",
+                "169.254.169.254",
+            ),
+            ("http://10.0.0.7/", "10.0.0.7"),
+        ] {
+            for auto_approve_safe in [false, true] {
+                let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+                let result =
+                    execute_tool_with_opts(&fetch(url), &byok_options(callback, auto_approve_safe))
+                        .await
+                        .expect("tool result");
+                assert!(!result.success);
+                assert_eq!(
+                    result.output,
+                    "`web_fetch` was not approved and did not run."
+                );
+                assert_eq!(
+                    *seen.lock().expect("seen lock"),
+                    vec![ApprovalRequestKind::Network {
+                        tool_name: "web_fetch".to_string(),
+                        destination: host.to_string(),
+                    }]
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_headless_private_fetch_is_denied_without_a_prompt_surface() {
+        let mut opts = byok_options(recording_callback(ApprovalDecision::AllowOnce).0, false);
+        opts.approval_callback = None;
+        let result = execute_tool_with_opts(&fetch("http://127.0.0.1/"), &opts)
+            .await
+            .expect("tool result");
+        assert!(!result.success);
+        assert_eq!(
+            result.output,
+            "`web_fetch` was not approved and did not run."
+        );
+    }
+
+    #[test]
+    fn only_trust_boundary_tools_carry_a_boundary_approval() {
+        assert!(trust_boundary_approval("read_file", &HashMap::new()).is_none());
+        assert!(trust_boundary_approval("run_command", &HashMap::new()).is_none());
+        let (name, args) = approval_request_tool(&ApprovalRequestKind::Network {
+            tool_name: "run_command".to_string(),
+            destination: "the network".to_string(),
+        });
+        assert_eq!(name, "network");
+        assert_eq!(args["destination"], "the network");
+    }
 
     #[test]
     fn skill_results_are_marked_untrusted() {

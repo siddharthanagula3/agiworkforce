@@ -2062,6 +2062,12 @@ pub(crate) fn to_crate_tool_definitions(
             owner: String::new(),
             permission_class: String::new(),
             diagnostic_tags: Vec::new(),
+            stable_id: String::new(),
+            contract_version: 0,
+            capability: String::new(),
+            timeout_ms: None,
+            result_schema: None,
+            error_schema: None,
         })
         .collect()
 }

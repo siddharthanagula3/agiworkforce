@@ -4,6 +4,14 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { SidebarProvider } from '../features/sidebar-webview/sidebarProvider';
+import {
+  cliProbeMessage,
+  describeRemoteEnvironment,
+  nodeCliResolutionHost,
+  probeCli,
+  resolveCliPath,
+  runCliVersion,
+} from '../platform/remoteEnvironment';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider, type DiffSession } from '../providers/diffDecorationProvider';
 import {
@@ -647,6 +655,16 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         sidebarProvider.refreshRuntimeStatus();
         ChatEditorPanel.refreshRuntimeStatus();
       }
+    }),
+
+    register('agi-workforce.checkCli', async () => {
+      const environment = describeRemoteEnvironment(vscode.env.remoteName);
+      const cliPath = resolveCliPath(Config.cliPath(), nodeCliResolutionHost());
+      const result = await probeCli(cliPath, runCliVersion);
+      const message = cliProbeMessage(result, environment);
+      if (result.ok) vscode.window.showInformationMessage(message);
+      else vscode.window.showErrorMessage(message);
+      return { ...result, environment: environment.kind };
     }),
 
     register('agi-workforce.addToContext', async (uri?: vscode.Uri) => {

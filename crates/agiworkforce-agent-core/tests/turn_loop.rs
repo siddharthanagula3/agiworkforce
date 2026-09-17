@@ -13,9 +13,9 @@
 use std::collections::{HashMap, VecDeque};
 
 use agiworkforce_agent_core::{
-    Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, Prepared, PreparedCall,
-    ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEngine, TurnEvent, TurnHost,
-    TurnParams, TurnPhase, UsageTotals,
+    CancelFuture, Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, Prepared,
+    PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolCancellation, ToolClass,
+    TurnEngine, TurnEvent, TurnHost, TurnParams, TurnPhase, UsageTotals,
 };
 use agiworkforce_llm::{ChatOutcome, ToolCall, Usage};
 
@@ -49,6 +49,10 @@ struct ScriptedHost {
     /// Fixed per-turn cost reported to the budget guard.
     cost: f64,
     cancel_after_commits: Option<usize>,
+    /// Tool-name → the call never finishes on its own.
+    hanging: Vec<String>,
+    /// Tool-name → the cancellation signal the host arms for that call.
+    cancellations: HashMap<String, ToolCancellation>,
 
     // ---- recording ----
     events: Vec<TurnEvent>,
@@ -70,6 +74,8 @@ impl ScriptedHost {
             content_loop: LoopControl::Break,
             cost: 0.0,
             cancel_after_commits: None,
+            hanging: Vec::new(),
+            cancellations: HashMap::new(),
             events: Vec::new(),
             committed: Vec::new(),
             assistant_texts: Vec::new(),
@@ -101,6 +107,12 @@ impl ScriptedHost {
 
     fn cancel_after(mut self, commits: usize) -> Self {
         self.cancel_after_commits = Some(commits);
+        self
+    }
+
+    fn hang(mut self, name: &str, cancellation: ToolCancellation) -> Self {
+        self.hanging.push(name.to_string());
+        self.cancellations.insert(name.to_string(), cancellation);
         self
     }
 
@@ -164,6 +176,9 @@ impl TurnHost for ScriptedHost {
     }
 
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
+        if self.hanging.contains(&prepared.name) {
+            return Box::pin(std::future::pending());
+        }
         let result = self.exec_result_for(&prepared.name);
         Box::pin(async move { result })
     }
@@ -186,6 +201,9 @@ impl TurnHost for ScriptedHost {
         call: &ToolCall,
         _args: serde_json::Value,
     ) -> ExecResult {
+        if self.hanging.contains(&call.name) {
+            std::future::pending::<()>().await;
+        }
         self.exec_result_for(&call.name)
     }
 
@@ -241,6 +259,11 @@ impl TurnHost for ScriptedHost {
     fn is_cancelled(&self) -> bool {
         self.cancel_after_commits
             .is_some_and(|n| self.committed.len() >= n)
+    }
+
+    fn tool_cancellation(&self, call: &PreparedCall, _mode: DispatchMode) -> Option<CancelFuture> {
+        let cancellation = *self.cancellations.get(&call.name)?;
+        Some(Box::pin(async move { cancellation }))
     }
 }
 
@@ -765,4 +788,66 @@ async fn cancellation_before_first_dispatch_runs_no_tools() {
         "no iteration should start once cancellation is already latched"
     );
     assert_eq!(outcome.response, "only");
+}
+
+#[tokio::test]
+async fn a_sequential_call_past_its_timeout_is_cancelled_and_the_batch_continues() {
+    let mut host = ScriptedHost::new(vec![
+        completion(
+            "go",
+            vec![tc("slow", "run_command"), tc("next", "read_file")],
+        ),
+        completion("after", vec![]),
+    ])
+    .hang(
+        "run_command",
+        ToolCancellation::TimedOut { after_ms: 30_000 },
+    )
+    .result("read_file", true, "body");
+
+    drive(&mut host, params(25, None)).await.unwrap();
+
+    assert_eq!(host.committed.len(), 1);
+    let blocks = &host.committed[0];
+    assert_eq!(blocks.len(), 2);
+    assert!(blocks[0].is_error);
+    assert_eq!(
+        blocks[0].content,
+        "seq:Tool 'run_command' timed out after 30000 ms and was cancelled."
+    );
+    assert_eq!(blocks[1].content, "seq:body");
+    assert!(norm(&host.events).contains(&TurnEvent::ToolFinished {
+        id: "slow".into(),
+        name: "run_command".into(),
+        ok: false,
+        output: "Tool 'run_command' timed out after 30000 ms and was cancelled.".into(),
+        duration_ms: 0,
+        mode: DispatchMode::Sequential,
+    }));
+}
+
+#[tokio::test]
+async fn one_cancelled_parallel_call_does_not_hold_the_rest_of_the_batch() {
+    let mut host = ScriptedHost::new(vec![
+        completion("go", vec![tc("a", "web_fetch"), tc("b", "grep_files")]),
+        completion("after", vec![]),
+    ])
+    .class("web_fetch", ToolClass::ConcurrentEligible)
+    .class("grep_files", ToolClass::ConcurrentEligible)
+    .hang("web_fetch", ToolCancellation::Cancelled)
+    .result("grep_files", true, "hits");
+
+    drive(&mut host, params(25, None)).await.unwrap();
+
+    let blocks = &host.committed[0];
+    assert_eq!(
+        blocks[0],
+        ResultBlock {
+            tool_use_id: "a".into(),
+            content: "Tool 'web_fetch' was cancelled before it finished.".into(),
+            is_error: true,
+        }
+    );
+    assert_eq!(blocks[1].content, "hits");
+    assert!(!blocks[1].is_error);
 }

@@ -94,6 +94,30 @@ pub struct ToolDefinition {
     #[serde(skip)]
     #[serde(default)]
     pub diagnostic_tags: Vec<String>,
+    /// Registry identity that survives a rename of the provider-facing `name`.
+    #[serde(skip)]
+    #[serde(default)]
+    pub stable_id: String,
+    /// Version of this tool's input, result and error contract; bumped on any
+    /// incompatible change to them.
+    #[serde(skip)]
+    #[serde(default)]
+    pub contract_version: u32,
+    /// Capability family in the cross-surface tool vocabulary
+    /// (`AgentEventToolCategory`, kebab-case).
+    #[serde(skip)]
+    #[serde(default)]
+    pub capability: String,
+    /// Declared ceiling for one call; the host cancels a call that exceeds it.
+    #[serde(skip)]
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+    #[serde(skip)]
+    #[serde(default)]
+    pub result_schema: Option<serde_json::Value>,
+    #[serde(skip)]
+    #[serde(default)]
+    pub error_schema: Option<serde_json::Value>,
 }
 
 /// A fully-assembled tool call parsed from a provider response.

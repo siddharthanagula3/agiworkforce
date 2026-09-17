@@ -1,6 +1,6 @@
 'use client';
 
-import { Folder, Plus, TerminalSquare } from '@agiworkforce/icons';
+import { Folder, GitBranch, Plus, TerminalSquare } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 import type {
   LocalDeveloperSession,
@@ -28,6 +28,7 @@ export interface LocalSessionsSectionProps {
   onSelect: (session: LocalDeveloperSession) => void;
   onNewSession: (rootId: string) => void;
   onAddFolder: () => void;
+  onAddRepository: () => void;
 }
 
 export function LocalSessionsSection({
@@ -40,6 +41,7 @@ export function LocalSessionsSection({
   onSelect,
   onNewSession,
   onAddFolder,
+  onAddRepository,
 }: LocalSessionsSectionProps) {
   const empty = groups.length === 0 ? LOCAL_CODE_COPY.emptyNoFolders : LOCAL_CODE_COPY.empty;
   const nothingToShow =
@@ -69,7 +71,11 @@ export function LocalSessionsSection({
         groups.map((group) => (
           <div key={group.rootId}>
             <div className={styles['railGroup']}>
-              <Folder size={GROUP_GLYPH_SIZE} aria-hidden="true" />
+              {group.branch ? (
+                <GitBranch size={GROUP_GLYPH_SIZE} aria-hidden="true" />
+              ) : (
+                <Folder size={GROUP_GLYPH_SIZE} aria-hidden="true" />
+              )}
               <span className={styles['railGroupName']}>{group.name}</span>
               {group.branch && <span className={styles['railGroupBranch']}>{group.branch}</span>}
             </div>
@@ -117,6 +123,18 @@ export function LocalSessionsSection({
         ))}
 
       {nothingToShow && groups.length === 0 && <p className={styles['railEmpty']}>{empty}</p>}
+
+      <button
+        type="button"
+        className={styles['railRow']}
+        disabled={adding}
+        onClick={onAddRepository}
+      >
+        <span className={styles['railRowGlyph']}>
+          <GitBranch size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+        </span>
+        <span className={styles['railRowLabel']}>{LOCAL_CODE_COPY.addRepository}</span>
+      </button>
 
       <button type="button" className={styles['railRow']} disabled={adding} onClick={onAddFolder}>
         <span className={styles['railRowGlyph']}>

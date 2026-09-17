@@ -1,4 +1,8 @@
-export const APPLICATION_COMMANDS = ['app_open_path', 'app_reveal_path'] as const;
+export const APPLICATION_COMMANDS = [
+  'app_open_path',
+  'app_reveal_path',
+  'app_open_in_editor',
+] as const;
 
 export type ApplicationCommand = (typeof APPLICATION_COMMANDS)[number];
 

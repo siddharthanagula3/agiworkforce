@@ -1,3 +1,8 @@
+use agiworkforce_protocol::agent_events::AgentEventToolCategory;
+use agiworkforce_protocol::tool_primitive::{
+    tool_error_json_schema, tool_result_json_schema, TOOL_CONTRACT_VERSION,
+};
+
 use crate::models::ToolDefinition;
 
 /// Builder helper: only the API-visible fields are required; Phase 6 / Phase 8
@@ -19,6 +24,93 @@ fn def(name: &str, description: &str, input_schema: serde_json::Value) -> ToolDe
         owner: tool_owner(name).to_string(),
         permission_class: "mutating".to_string(),
         diagnostic_tags: diagnostic_tags(name, "mutating"),
+        stable_id: tool_stable_id(name),
+        contract_version: TOOL_CONTRACT_VERSION,
+        capability: capability_label(tool_capability(name)),
+        timeout_ms: tool_timeout(name).map(|timeout| timeout.as_millis() as u64),
+        result_schema: Some(tool_result_json_schema()),
+        error_schema: Some(tool_error_json_schema()),
+    }
+}
+
+pub fn tool_stable_id(name: &str) -> String {
+    format!("agiworkforce.tool.{}", canonical_tool_name(name))
+}
+
+pub fn mcp_tool_stable_id(server_name: &str, tool_name: &str) -> String {
+    format!("agiworkforce.mcp.{server_name}.{tool_name}")
+}
+
+pub fn capability_label(category: AgentEventToolCategory) -> String {
+    serde_json::to_value(category)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
+pub fn tool_timeout(name: &str) -> Option<std::time::Duration> {
+    match canonical_tool_name(name) {
+        "run_command" | "search_files" | "grep_files" => Some(crate::tools::COMMAND_TIMEOUT),
+        "web_fetch" => Some(crate::tools::WEB_FETCH_CALL_TIMEOUT),
+        "web_search" => Some(crate::tools::WEB_SEARCH_TIMEOUT),
+        "browser_read_page" | "browser_click" | "browser_type" | "browser_navigate"
+        | "browser_screenshot" => Some(crate::browser_bridge::COMMAND_TIMEOUT),
+        _ => None,
+    }
+}
+
+pub fn tool_capability(name: &str) -> AgentEventToolCategory {
+    let normalized = name.to_ascii_lowercase().replace(['-', ' '], "_");
+    if normalized.contains("web_search") || normalized == "search_web" {
+        AgentEventToolCategory::WebSearch
+    } else if normalized.contains("web_fetch")
+        || normalized.contains("fetch_url")
+        || normalized == "fetch"
+    {
+        AgentEventToolCategory::WebFetch
+    } else if normalized.contains("computer")
+        || normalized.contains("browser")
+        || normalized.contains("screenshot")
+    {
+        AgentEventToolCategory::ComputerUse
+    } else if normalized.contains("code_execution")
+        || normalized == "python"
+        || normalized == "javascript"
+    {
+        AgentEventToolCategory::CodeExecution
+    } else if normalized.contains("shell")
+        || normalized.contains("command")
+        || normalized == "bash"
+        || normalized == "exec"
+    {
+        AgentEventToolCategory::Shell
+    } else if normalized.contains("skill") {
+        AgentEventToolCategory::Skill
+    } else if normalized.contains("memory") {
+        AgentEventToolCategory::Memory
+    } else if normalized.contains("artifact") || normalized.contains("present_file") {
+        AgentEventToolCategory::Artifact
+    } else if normalized.contains("connector") {
+        AgentEventToolCategory::Connector
+    } else if normalized.contains("mcp") {
+        AgentEventToolCategory::Mcp
+    } else if [
+        "read",
+        "write",
+        "edit",
+        "patch",
+        "file",
+        "directory",
+        "list_dir",
+        "glob",
+        "grep",
+    ]
+    .iter()
+    .any(|fragment| normalized.contains(fragment))
+    {
+        AgentEventToolCategory::Filesystem
+    } else {
+        AgentEventToolCategory::Other
     }
 }
 
@@ -1182,6 +1274,70 @@ mod tests {
             owner: "test".to_string(),
             permission_class: "mutating".to_string(),
             diagnostic_tags: vec!["test".to_string()],
+            stable_id: String::new(),
+            contract_version: 0,
+            capability: String::new(),
+            timeout_ms: None,
+            result_schema: None,
+            error_schema: None,
+        }
+    }
+
+    #[test]
+    fn every_registry_tool_declares_identity_version_capability_and_schemas() {
+        let mut definitions = all_declared_tool_definitions();
+        definitions.extend(browser_tool_definitions());
+        let mut ids = std::collections::HashSet::new();
+        for definition in &definitions {
+            assert!(
+                ids.insert(definition.stable_id.clone()),
+                "duplicate stable id {}",
+                definition.stable_id
+            );
+            assert_eq!(definition.stable_id, tool_stable_id(&definition.name));
+            assert_eq!(definition.contract_version, TOOL_CONTRACT_VERSION);
+            assert!(!definition.capability.is_empty(), "{}", definition.name);
+            assert!(definition.result_schema.is_some(), "{}", definition.name);
+            let error_schema = definition.error_schema.as_ref().expect("error schema");
+            assert_eq!(error_schema["properties"]["status"]["const"], "error");
+        }
+        let by_name = |name: &str| {
+            definitions
+                .iter()
+                .find(|definition| definition.name == name)
+                .unwrap_or_else(|| panic!("{name} in catalog"))
+        };
+        assert_eq!(by_name("run_command").capability, "shell");
+        assert_eq!(by_name("web_fetch").capability, "web-fetch");
+        assert_eq!(by_name("read_file").capability, "filesystem");
+        assert_eq!(by_name("browser_click").capability, "computer-use");
+        assert_eq!(
+            by_name("run_command").timeout_ms,
+            Some(crate::tools::COMMAND_TIMEOUT.as_millis() as u64)
+        );
+        assert!(by_name("todo_read").timeout_ms.is_none());
+    }
+
+    #[test]
+    fn registry_contract_fields_never_reach_a_provider_payload() {
+        let definitions = all_builtin_tool_definitions();
+        for payload in [
+            serde_json::to_string(&definitions).expect("serialize"),
+            serde_json::Value::Array(agiworkforce_llm::serialize::anthropic_tools_json(
+                &definitions,
+            ))
+            .to_string(),
+        ] {
+            for local_key in [
+                "stable_id",
+                "contract_version",
+                "capability",
+                "timeout_ms",
+                "result_schema",
+                "error_schema",
+            ] {
+                assert!(!payload.contains(local_key), "{local_key} leaked");
+            }
         }
     }
 

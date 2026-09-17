@@ -94,6 +94,11 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "agi-workforce.checkCli",
+        "title": "AGI Workforce: Check the CLI in This Environment",
+        "icon": "$(pulse)"
+      },
+      {
         "command": "agi-workforce.agentMode",
         "title": "AGI Workforce: Choose Agent Mode",
         "icon": "$(robot)"

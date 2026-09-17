@@ -13,9 +13,13 @@ import type { ToolRetrySafety } from './ToolRetrySafety';
  */
 export type ToolDefinition = {
   name: string;
+  stableId?: string;
+  contractVersion?: number;
   description: string;
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
+  errorSchema?: Record<string, unknown>;
+  timeoutMs?: number;
   category: AgentEventToolCategory;
   actionClass: ToolActionClass;
   auth: ToolAuthRequirement;
