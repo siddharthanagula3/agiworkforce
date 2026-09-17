@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   ManagedCloudAgentRunAbortError,
   ManagedCloudAgentRunContractError,
@@ -32,7 +33,7 @@ function run(state = 'running', lastEventSequence = 1) {
 
 function event(sequence: number) {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: 'session-1',
     turnId: 'turn-1',
     sequence,

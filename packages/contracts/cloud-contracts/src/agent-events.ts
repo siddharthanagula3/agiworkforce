@@ -1,7 +1,11 @@
 import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import { z } from 'zod';
 
-export const AGENT_EVENT_SCHEMA_VERSION = 4 as const;
+// Re-exported, not redeclared: a second copy of this number silently accepted
+// envelopes the runtime had stopped sending, and disagreed with the Rust
+// constant the wire actually carries.
+export { AGENT_EVENT_SCHEMA_VERSION };
 
 const NonEmptyStringSchema = z.string().min(1);
 const OptionalNonNegativeIntegerSchema = z.number().int().nonnegative().optional();
