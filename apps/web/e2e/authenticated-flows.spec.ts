@@ -88,7 +88,7 @@ test.describe('authenticated primary workflows', () => {
 
     await page.goto('/tasks');
     await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Work history' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Active' })).toBeVisible();
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
     await page.getByTestId('tasks-view').getByRole('button', { name: 'All', exact: true }).click();

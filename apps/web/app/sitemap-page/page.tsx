@@ -104,7 +104,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/legal/eu-representative', label: 'EU representative' },
       { href: '/terms', label: 'Terms' },
       { href: '/acceptable-use', label: 'Acceptable use' },
-      { href: '/agent-permissions', label: 'Agent permissions' },
+      { href: '/agent-permissions', label: 'Approvals' },
       { href: '/privacy', label: 'Privacy' },
       { href: '/privacy/requests', label: 'Privacy requests' },
       { href: '/privacy/india', label: 'Privacy for India' },

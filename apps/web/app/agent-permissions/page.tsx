@@ -16,7 +16,7 @@ import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
-  title: 'Agent permissions',
+  title: 'Approvals',
   description:
     'What the AGI agent may do without asking, what always requires approval, which connector scopes are actually requested, and every way to revoke access.',
   path: '/agent-permissions',
@@ -117,7 +117,7 @@ export default function AgentPermissionsPage() {
       <main id="main-content">
         <PageHero
           id="agi-perm-title"
-          eyebrow="Agent permissions"
+          eyebrow="Approvals"
           title="What the agent may do, and what it must ask."
           lede={
             <>

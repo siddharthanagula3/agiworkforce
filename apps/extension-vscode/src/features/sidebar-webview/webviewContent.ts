@@ -3034,7 +3034,7 @@ export function getWebviewContent(
         var exhausted = payload.remaining !== null && payload.remaining <= 0;
         meterText.textContent = exhausted
           ? 'Managed Cloud quota exhausted'
-          : 'Usage: ' + (payload.usageLabel || 'Managed usage unavailable');
+          : 'Usage: ' + (payload.usageLabel || 'Managed Cloud usage unavailable');
         meterReset.textContent = payload.resetsIn ? '· ' + payload.resetsIn : '';
         if (exhausted && meterCollapsedLabel) meterCollapsedLabel.textContent = 'Quota exhausted';
         if (payload.showUpgrade) {

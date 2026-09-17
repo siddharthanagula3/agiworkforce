@@ -62,10 +62,10 @@ describe('WorkSessionPanel outputs rail', () => {
     render(<WorkSessionPanel messages={run('running', [])} open onClose={vi.fn()} agiWork />);
 
     expect(screen.getByText('Progress')).toBeVisible();
-    expect(screen.getByText('Steps appear here once the task plans its work')).toBeVisible();
-    expect(screen.getByText('Files created during this task appear here')).toBeVisible();
+    expect(screen.getByText('Steps appear here once the session plans its work')).toBeVisible();
+    expect(screen.getByText('Files created during this session appear here')).toBeVisible();
     expect(screen.getByText('No connectors used yet')).toBeVisible();
-    expect(screen.getByText('Pages the task reads appear here as it searches.')).toBeVisible();
+    expect(screen.getByText('Pages the session reads appear here as it searches.')).toBeVisible();
   });
 
   it('counts the finished steps while the run is still working', () => {
@@ -84,7 +84,7 @@ describe('WorkSessionPanel outputs rail', () => {
     expect(screen.getByText('1/2')).toBeVisible();
     expect(screen.getByText('Read the brief')).toBeVisible();
     expect(screen.getByText('Draft the summary')).toBeVisible();
-    expect(screen.getByText('Files created during this task appear here')).toBeVisible();
+    expect(screen.getByText('Files created during this session appear here')).toBeVisible();
   });
 
   it('lists each finished deliverable with its type line and a download control', () => {

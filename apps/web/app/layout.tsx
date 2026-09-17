@@ -59,7 +59,8 @@ const clerkLocalization = {
     start: {
       title: 'Create your AGI account',
       titleCombined: 'Create or sign in to AGI',
-      subtitle: 'Start with the hosted web trial, then move serious work to Local or BYOK.',
+      subtitle:
+        'Start with the Managed Cloud trial on the web, then move serious work to Local or BYOK.',
       subtitleCombined: 'Use your AGI account to continue.',
     },
   },

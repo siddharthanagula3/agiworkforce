@@ -75,6 +75,19 @@ describe('ProjectHeader', () => {
     expect(provider.getAttribute('data-provider-mode')).toBe('ManagedGateway');
   });
 
+  it('renders both chips as trust badges on the boundary the provider mode belongs to', () => {
+    const presentation = buildPresentation({
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedGateway',
+    });
+    render(<ProjectHeader presentation={presentation} />);
+    const privacy = screen.getByTestId('project-header-privacy-chip');
+    const provider = screen.getByTestId('project-header-provider-chip');
+    expect(privacy.getAttribute('data-trust-boundary')).toBe('managed');
+    expect(privacy.textContent).toBe('Managed Cloud');
+    expect(provider.getAttribute('data-trust-boundary')).toBe('managed');
+  });
+
   it('surfaces the imported-from chip when present', () => {
     const presentation = buildPresentation({ importedFrom: 'claude' });
     render(<ProjectHeader presentation={presentation} />);

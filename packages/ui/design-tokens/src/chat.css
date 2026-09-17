@@ -93,6 +93,8 @@
     --chat-thinking-line: rgba(26, 25, 21, 0.08);
     --chat-badge-result: #16a34a;
     --chat-badge-neutral: #8b8680;
+    --chat-loading-placeholder: #f0eeeb;
+    --chat-loading-indicator: #65615b;
     --chat-destructive: #dc2626;
     /* The fill above measures 4.49:1 as a word on --chat-bg, just under the
        4.5 AA needs, and its dark counterpart #ef4444 measures 4.28:1 on the
@@ -182,6 +184,8 @@
     --chat-thinking-line: rgba(255, 255, 255, 0.1);
     --chat-badge-result: #22c55e;
     --chat-badge-neutral: hsl(var(--neutral-fg-3));
+    --chat-loading-placeholder: hsl(var(--neutral-4));
+    --chat-loading-indicator: hsl(var(--neutral-fg-3));
     --chat-destructive: #ef4444;
     --chat-destructive-text: #f87171;
     --chat-destructive-on-fill: #ffffff;
@@ -262,6 +266,8 @@
     --chat-user-bubble-bg: #f4f4f4;
     --chat-thinking-text: #5d5d5d;
     --chat-thinking-line: rgba(0, 0, 0, 0.08);
+    --chat-loading-placeholder: #f0f0f0;
+    --chat-loading-indicator: #6a6a6a;
   }
 }
 

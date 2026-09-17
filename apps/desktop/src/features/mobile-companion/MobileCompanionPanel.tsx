@@ -30,7 +30,7 @@ export function MobileCompanionPanel() {
       <div className="flex flex-col h-full gap-4 p-4">
         <div className="flex items-center gap-2">
           <Smartphone className="h-5 w-5 text-violet-500" />
-          <h2 className="text-base font-semibold text-foreground">Mobile Companion</h2>
+          <h2 className="text-base font-semibold text-foreground">Remote</h2>
         </div>
         <div className="flex items-start gap-2 rounded-lg border border-border p-3">
           <WifiOff className="mt-0.5 h-4 w-4 text-muted-foreground" />
@@ -46,7 +46,7 @@ export function MobileCompanionPanel() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Smartphone className="h-5 w-5 text-violet-500" />
-          <h2 className="text-base font-semibold text-foreground">Mobile Companion</h2>
+          <h2 className="text-base font-semibold text-foreground">Remote</h2>
         </div>
         {isPaired ? (
           <Badge className="bg-emerald-100 text-emerald-700 gap-1">

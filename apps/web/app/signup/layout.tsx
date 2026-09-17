@@ -2,10 +2,12 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Create Account',
-  description: 'Create your AGI account for the hosted web trial and account-based workspace.',
+  description:
+    'Create your AGI account for the Managed Cloud trial on the web and an account-based workspace.',
   openGraph: {
     title: 'Create Account',
-    description: 'Sign up for the hosted web trial and account-based AGI workspace.',
+    description:
+      'Sign up for the Managed Cloud trial on the web and an account-based AGI workspace.',
     type: 'website',
     url: 'https://agiworkforce.com/signup',
     images: [
