@@ -14,7 +14,9 @@ import ContentTakedownPanel from '../components/ContentTakedownPanel';
 import EconomicsSummaryPanel from '../components/EconomicsSummaryPanel';
 import OperatorCostsPanel from '../components/OperatorCostsPanel';
 import PrivacyRequestsPanel from '../components/PrivacyRequestsPanel';
+import ProductMetricsPanel from '../components/ProductMetricsPanel';
 import RouteEconomicsPanel from '../components/RouteEconomicsPanel';
+import ServiceDashboardsPanel from '../components/ServiceDashboardsPanel';
 import FeatureFlagsPanel from '../components/FeatureFlagsPanel';
 import ModelRolloutPanel from '../components/ModelRolloutPanel';
 import RoutingHealthPanel from '../components/RoutingHealthPanel';
@@ -26,11 +28,13 @@ const TABS = [
   'overview',
   'feedback',
   'users',
+  'product',
   'costs',
   'routing',
   'rollout',
   'flags',
   'services',
+  'dashboards',
   'routes',
   'economics',
   'content',
@@ -413,6 +417,8 @@ export function OperatorDashboardPage() {
         )
       ) : null}
 
+      {tab === 'product' ? <ProductMetricsPanel /> : null}
+
       {tab === 'costs' ? <OperatorCostsPanel /> : null}
 
       {tab === 'routing' ? <RoutingHealthPanel /> : null}
@@ -422,6 +428,8 @@ export function OperatorDashboardPage() {
       {tab === 'flags' ? <FeatureFlagsPanel /> : null}
 
       {tab === 'services' ? <ServiceHealthPanel /> : null}
+
+      {tab === 'dashboards' ? <ServiceDashboardsPanel /> : null}
 
       {tab === 'routes' ? <RouteEconomicsPanel /> : null}
 
