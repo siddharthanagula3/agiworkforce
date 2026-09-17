@@ -25,6 +25,16 @@ pub const SENSITIVE_FILE_PATTERNS: &[&str] = &[
     r"(?i)(^|/)\.git/(config|credentials)$",
     r"(?i)(^|/)\.git-credentials$",
     r"(?i)(^|/)\.(github|gitlab)_token$",
+    // Terraform state holds every resource attribute in plain text, including the
+    // secrets a provider generated, and a .tfvars file is where the inputs to it
+    // are kept. Both are ordinary-looking project files.
+    r"(?i)(^|/).*\.tfstate(\.backup)?$",
+    r"(?i)(^|/)terraform\.tfstate\.d/",
+    r"(?i)(^|/).*\.auto\.tfvars(\.json)?$",
+    r"(?i)(^|/)terraform\.tfvars(\.json)?$",
+    r"(?i)(^|/)\.terraform/terraform\.tfstate$",
+    r"(?i)(^|/)\.terraformrc$",
+    r"(?i)(^|/)terraform\.rc$",
 ];
 
 static SENSITIVE_SET: Lazy<RegexSet> =
