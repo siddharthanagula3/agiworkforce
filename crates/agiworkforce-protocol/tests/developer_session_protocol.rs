@@ -123,6 +123,8 @@ fn thread_response_keeps_cli_and_vscode_on_one_session_identity() {
         git_branch: None,
         worktree_root: None,
         client: None,
+        repository: None,
+        writer: None,
     };
     let response = AppServerResponse::success(
         10,
@@ -157,16 +159,22 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
             git_branch: None,
             worktree_root: None,
             client: None,
+            repository: None,
+            writer: None,
         },
         messages: vec![DeveloperMessage {
             role: "assistant".to_string(),
             text: "newest message".to_string(),
         }],
         transcript_truncated: true,
+        approvals: Vec::new(),
+        file_changes: Vec::new(),
     };
 
     let value = serde_json::to_value(response).expect("serialize thread read response");
     assert_eq!(value["transcriptTruncated"], true);
+    assert!(value.get("approvals").is_none());
+    assert!(value.get("fileChanges").is_none());
 
     let mut missing_flag = value;
     missing_flag
@@ -195,9 +203,17 @@ fn the_wider_thread_summary_stays_additive() {
         git_branch: None,
         worktree_root: None,
         client: None,
+        repository: None,
+        writer: None,
     };
     let value = serde_json::to_value(&bare).expect("serialize bare summary");
-    for absent in ["gitBranch", "worktreeRoot", "client"] {
+    for absent in [
+        "gitBranch",
+        "worktreeRoot",
+        "client",
+        "repository",
+        "writer",
+    ] {
         assert!(
             value.get(absent).is_none(),
             "an unpopulated {absent} must not appear on the wire"
@@ -369,4 +385,79 @@ fn engine_errors_classify_into_the_shared_code_set() {
         AgiworkforceErr::InternalAgentDied.to_string(),
         "an unmapped error still carries its own text"
     );
+}
+
+/// Every method added for session lifecycle and concurrency is additive to v8:
+/// the capability flags stay off the wire on a host that lacks them, and a
+/// `turn/start` from a client that predates `clientTurnId` still parses.
+#[test]
+fn session_lifecycle_and_writer_surfaces_are_additive_to_v8() {
+    use agiworkforce_protocol::developer_session::{
+        ActiveTurnSnapshot, AppServerCapabilities, DEVELOPER_SESSION_PROTOCOL_VERSION,
+        DeveloperSessionWriter, DeveloperSessionWriterChange, ThreadReconnectResponse,
+        ThreadWriterChangedNotification, TurnStartParams, method,
+    };
+
+    assert_eq!(DEVELOPER_SESSION_PROTOCOL_VERSION, 8);
+    assert_eq!(method::THREAD_DELETE, "thread/delete");
+    assert_eq!(method::THREAD_RECONNECT, "thread/reconnect");
+    assert_eq!(method::THREAD_WRITER_RELEASE, "thread/writer/release");
+    assert_eq!(method::THREAD_WRITER_TAKEOVER, "thread/writer/takeover");
+
+    let legacy_capabilities = serde_json::json!({
+        "threads": true, "turns": true, "streaming": true, "approvals": true,
+        "tools": true, "mcp": false, "checkpoints": false, "worktrees": false,
+        "models": true,
+    });
+    let parsed: AppServerCapabilities =
+        serde_json::from_value(legacy_capabilities.clone()).expect("v8 capabilities");
+    assert!(!parsed.thread_delete && !parsed.reconnect && !parsed.writer_lease);
+    assert_eq!(serde_json::to_value(&parsed).unwrap(), legacy_capabilities);
+
+    let legacy_turn: TurnStartParams = serde_json::from_value(serde_json::json!({
+        "threadId": "thread-1",
+        "input": [],
+    }))
+    .expect("turn/start without clientTurnId");
+    assert_eq!(legacy_turn.client_turn_id, None);
+
+    let writer = DeveloperSessionWriter {
+        holder_id: "writer-1".to_string(),
+        holder_label: "AGI CLI (pid 42)".to_string(),
+        acquired_at: "2026-09-17T00:00:00Z".to_string(),
+        expires_at: "2026-09-17T00:02:00Z".to_string(),
+        held_by_this_host: false,
+        stale: false,
+    };
+    let changed = serde_json::to_value(ThreadWriterChangedNotification {
+        thread_id: "thread-1".to_string(),
+        change: DeveloperSessionWriterChange::StaleTakeover,
+        writer: Some(writer.clone()),
+        previous: None,
+    })
+    .unwrap();
+    assert_eq!(changed["change"], "stale_takeover");
+    assert_eq!(changed["writer"]["holderLabel"], "AGI CLI (pid 42)");
+    assert!(changed.get("previous").is_none());
+
+    let reconnect = serde_json::to_value(ThreadReconnectResponse {
+        thread: serde_json::from_value(serde_json::json!({
+            "id": "thread-1", "title": "t", "trustMode": "local",
+            "createdAt": "2026-09-17T00:00:00Z", "updatedAt": "2026-09-17T00:00:00Z",
+            "createdBy": "cli", "status": "running",
+            "writer": writer,
+        }))
+        .unwrap(),
+        active_turn: Some(ActiveTurnSnapshot {
+            turn_id: "turn-1".to_string(),
+            partial_response: "so far".to_string(),
+            next_delta_index: 3,
+            next_event_sequence: 7,
+            pending_approvals: Vec::new(),
+        }),
+    })
+    .unwrap();
+    assert_eq!(reconnect["activeTurn"]["nextDeltaIndex"], 3);
+    assert_eq!(reconnect["activeTurn"]["nextEventSequence"], 7);
+    assert_eq!(reconnect["thread"]["writer"]["holderId"], "writer-1");
 }

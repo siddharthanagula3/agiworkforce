@@ -79,6 +79,16 @@ fn export_typescript_bindings() {
         .expect("export developer-session approval graph");
     agiworkforce_protocol::developer_session::AcknowledgedResponse::export_all_to(dir)
         .expect("export developer-session acknowledgement graph");
+    // Session lifecycle and concurrency: `thread/reconnect`, the writer lease
+    // notification and conflict data, and the `turn/model` route report.
+    agiworkforce_protocol::developer_session::ThreadReconnectResponse::export_all_to(dir)
+        .expect("export developer-session reconnect graph");
+    agiworkforce_protocol::developer_session::ThreadWriterChangedNotification::export_all_to(dir)
+        .expect("export developer-session writer change graph");
+    agiworkforce_protocol::developer_session::ThreadWriterConflictData::export_all_to(dir)
+        .expect("export developer-session writer conflict graph");
+    agiworkforce_protocol::developer_session::TurnModelNotification::export_all_to(dir)
+        .expect("export developer-session turn model graph");
 
     // v8 developer-session surfaces. Each response is its own root: no
     // envelope references them, so none is reachable from the roots above.

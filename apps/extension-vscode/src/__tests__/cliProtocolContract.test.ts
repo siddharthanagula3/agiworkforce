@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  DEVELOPER_SESSION_PROTOCOL_VERSION,
+  MINIMUM_SUPPORTED_RUNTIME_VERSION,
+} from '@agiworkforce/types';
 import { cliAcquisitionHint } from '../integrations/localRuntimeClient';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../..');
@@ -54,20 +59,22 @@ function rustU32SliceConstant(relativePath: string, name: string): number[] {
     .map(Number);
 }
 
+const EXTENSION_VERSION_CONSTANTS: Record<string, number> = {
+  SUPPORTED_PROTOCOL_VERSION: DEVELOPER_SESSION_PROTOCOL_VERSION,
+  AGENT_EVENT_SCHEMA_VERSION,
+};
+
 function extensionConstant(name: string): number {
-  const source = readRepoFile('apps/extension-vscode/src/integrations/localRuntimeClient.ts');
-  const match = new RegExp(`const ${name} = (\\d+);`, 'u').exec(source);
-  expect(match, `${name} is no longer a numeric constant in localRuntimeClient.ts`).not.toBeNull();
-  return Number(match?.[1]);
+  const value = EXTENSION_VERSION_CONSTANTS[name];
+  expect(
+    value,
+    `${name} is not a shared developer-session version the extension reads`,
+  ).toBeDefined();
+  return value ?? Number.NaN;
 }
 
 function extensionMinimumCliVersion(): string {
-  const source = readRepoFile('apps/extension-vscode/src/integrations/localRuntimeClient.ts');
-  const match = /const MINIMUM_SUPPORTED_CLI_VERSION = \[(\d+), (\d+), (\d+)\] as const;/u.exec(
-    source,
-  );
-  expect(match, 'MINIMUM_SUPPORTED_CLI_VERSION is no longer a three-part tuple').not.toBeNull();
-  return match === null ? '' : `${match[1]}.${match[2]}.${match[3]}`;
+  return MINIMUM_SUPPORTED_RUNTIME_VERSION;
 }
 
 function compareSemver(left: string, right: string): number {

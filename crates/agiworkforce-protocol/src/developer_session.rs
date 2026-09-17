@@ -55,6 +55,10 @@ pub mod method {
     pub const THREAD_RESUME: &str = "thread/resume";
     pub const THREAD_FORK: &str = "thread/fork";
     pub const THREAD_ARCHIVE: &str = "thread/archive";
+    pub const THREAD_DELETE: &str = "thread/delete";
+    pub const THREAD_RECONNECT: &str = "thread/reconnect";
+    pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
+    pub const THREAD_WRITER_TAKEOVER: &str = "thread/writer/takeover";
     pub const MODEL_LIST: &str = "model/list";
     pub const TURN_START: &str = "turn/start";
     pub const TURN_STEER: &str = "turn/steer";
@@ -313,6 +317,16 @@ pub struct AppServerCapabilities {
     pub settings: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub commands: bool,
+    /// `thread/delete` removes a thread and everything persisted with it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub thread_delete: bool,
+    /// `thread/reconnect` returns the live state of a running turn, so a
+    /// client that lost its connection resumes rendering without a gap.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub reconnect: bool,
+    /// Threads carry a writer lease, and `thread/writer/*` hand it over.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub writer_lease: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -388,7 +402,80 @@ pub struct ThreadSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub client: Option<String>,
+    /// Remote the thread's repository fetches from, with any credential
+    /// stripped, as the host last persisted it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository: Option<String>,
+    /// Process currently entitled to append turns to this thread. Absent when
+    /// no writer has claimed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub writer: Option<DeveloperSessionWriter>,
 }
+
+/// A time-bounded claim on the right to append turns to a thread.
+///
+/// Every process that runs turns on a thread holds one while it works and
+/// renews it; a claim that is not renewed before `expires_at` is stale and the
+/// next writer takes it over.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperSessionWriter {
+    pub holder_id: String,
+    /// Which program holds the claim, for a person deciding whether to take it.
+    pub holder_label: String,
+    pub acquired_at: String,
+    pub expires_at: String,
+    /// True when the answering host is the holder.
+    pub held_by_this_host: bool,
+    /// True when the claim has lapsed and the next writer will take it over.
+    pub stale: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperSessionWriterChange {
+    /// The host claimed a thread nobody held.
+    Acquired,
+    /// The previous claim had lapsed, so this host took it without asking.
+    StaleTakeover,
+    /// The user explicitly took the thread from a live writer.
+    TakenOver,
+    /// The holder gave the thread up.
+    Released,
+}
+
+/// Params of `thread/writer_changed`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadWriterChangedNotification {
+    pub thread_id: String,
+    pub change: DeveloperSessionWriterChange,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub writer: Option<DeveloperSessionWriter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub previous: Option<DeveloperSessionWriter>,
+}
+
+/// `data` of the conflict a turn gets when another live process holds the
+/// thread, so a client can offer a takeover naming who would lose it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadWriterConflictData {
+    pub thread_id: String,
+    pub writer: DeveloperSessionWriter,
+}
+
+/// JSON-RPC error code for a turn refused because another live process holds
+/// the thread's writer lease.
+pub const THREAD_WRITER_CONFLICT_ERROR_CODE: i32 = -32011;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -432,6 +519,118 @@ pub struct ThreadReadResponse {
     /// Whether `messages` is a bounded newest-message window rather than the
     /// thread's complete persisted transcript.
     pub transcript_truncated: bool,
+    /// Every approval decided on this thread, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub approvals: Vec<DeveloperSessionApproval>,
+    /// Every file a tool on this thread wrote, oldest first. An entry whose
+    /// `kind` is `created` is a file the thread generated.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub file_changes: Vec<DeveloperSessionFileChange>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperApprovalOutcome {
+    AllowOnce,
+    AllowSession,
+    AlwaysAllow,
+    Deny,
+    Cancel,
+    Timeout,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperSessionApproval {
+    pub request_id: String,
+    pub kind: String,
+    pub summary: String,
+    pub outcome: DeveloperApprovalOutcome,
+    pub requested_at: String,
+    pub decided_at: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperFileChangeKind {
+    Created,
+    Modified,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperSessionFileChange {
+    pub path: String,
+    pub kind: DeveloperFileChangeKind,
+    pub tool: String,
+    pub tool_call_id: String,
+    pub changed_at: String,
+}
+
+/// A pending approval as `approval/requested` announced it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PendingApprovalSnapshot {
+    pub request_id: String,
+    pub kind: String,
+    pub summary: String,
+    pub detail: String,
+}
+
+/// Everything a client needs to render a turn it joined mid-flight.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ActiveTurnSnapshot {
+    pub turn_id: String,
+    /// Output streamed so far.
+    pub partial_response: String,
+    /// `index` of the first `turn/output_delta` not already in
+    /// `partial_response`; a client drops deltas below it.
+    pub next_delta_index: u64,
+    /// `sequence` of the first `turn/agent_event` this snapshot does not
+    /// account for.
+    pub next_event_sequence: u64,
+    pub pending_approvals: Vec<PendingApprovalSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadReconnectResponse {
+    pub thread: ThreadSummary,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub active_turn: Option<ActiveTurnSnapshot>,
+}
+
+/// Params of `turn/model`: the route a turn is running on, sent when the turn
+/// starts and again whenever a fallback moves it to another model.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnModelNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub model: String,
+    pub provider: String,
+    pub trust_mode: DeveloperSessionTrustMode,
+    /// The Auto profile that chose `model`, when one did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub auto_selection: Option<String>,
+    /// Model the turn left, when this notification reports a fallback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub fallback_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub fallback_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -629,6 +828,13 @@ pub struct TurnStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub context_files: Option<Vec<String>>,
+    /// Client-chosen idempotency key. A `turn/start` repeating the key of a
+    /// turn the host already accepted on this thread answers that turn instead
+    /// of starting a second one, so a retry after a dropped connection never
+    /// runs the same tools twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client_turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]

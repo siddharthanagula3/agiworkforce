@@ -17,4 +17,11 @@ export type TurnStartParams = {
    * The host must canonicalize and constrain every path to its workspace.
    */
   contextFiles?: Array<string>;
+  /**
+   * Client-chosen idempotency key. A `turn/start` repeating the key of a
+   * turn the host already accepted on this thread answers that turn instead
+   * of starting a second one, so a retry after a dropped connection never
+   * runs the same tools twice.
+   */
+  clientTurnId?: string;
 };

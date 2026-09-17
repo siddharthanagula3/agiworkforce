@@ -25,7 +25,7 @@ const LSP_SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2
 /// path segment (preserving `/` as the separator), normalizes Windows
 /// backslashes to `/`, and emits the canonical `file:///C:/...` drive form on
 /// Windows.
-fn path_to_file_uri(path: &Path) -> String {
+pub(crate) fn path_to_file_uri(path: &Path) -> String {
     // Normalize separators: on Windows a path may contain backslashes; LSP
     // file URIs always use forward slashes.
     let raw = path.to_string_lossy();

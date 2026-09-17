@@ -481,7 +481,6 @@ impl CliConfig {
     /// non-interactive session where we cannot prompt, the provider's `base_url`
     /// is dropped so nothing routes there. User-global config is never gated here.
     fn consent_gate_project_providers(project: &mut CliConfig) {
-        use std::io::IsTerminal;
         let project_path = project
             .source
             .project_path
@@ -489,7 +488,7 @@ impl CliConfig {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| ".agiworkforce/config.toml".to_string());
         let trusted = Self::load_trusted_provider_fingerprints();
-        let interactive = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+        let interactive = crate::interactive::can_prompt();
 
         let names: Vec<String> = project.providers.keys().cloned().collect();
         for name in names {
