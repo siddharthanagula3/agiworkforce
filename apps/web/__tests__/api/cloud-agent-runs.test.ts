@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CloudAgentRunSnapshotPageSchema } from '@agiworkforce/cloud-contracts';
+import {
+  CloudAgentRunSnapshotPageSchema,
+  AGENT_EVENT_SCHEMA_VERSION,
+} from '@agiworkforce/cloud-contracts';
 import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
@@ -38,7 +41,7 @@ const run = {
   updatedAt: '2026-07-17T20:00:01.000Z',
 };
 const event = {
-  schemaVersion: 4,
+  schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
   sessionId: run.conversationId,
   turnId: run.requestId,
   sequence: 2,

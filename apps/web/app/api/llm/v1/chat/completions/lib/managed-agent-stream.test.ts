@@ -108,7 +108,7 @@ import {
 } from '@/lib/services/managed-usage-accounting-service';
 import { buildManagedAgentStream } from './managed-agent-stream';
 import type { ProcessedRequest } from './request-processor';
-import { INTERACTIVE_CARDS_MAX_PER_MESSAGE } from '@agiworkforce/types';
+import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const processed = {
   provider: 'anthropic',
@@ -145,7 +145,7 @@ async function* canonicalEventGenerator(): AsyncGenerator<Uint8Array> {
         {
           delta: {
             x_agent_event: {
-              schemaVersion: 4,
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
               sessionId: 'conversation-1',
               turnId: 'turn-1',
               sequence: 0,

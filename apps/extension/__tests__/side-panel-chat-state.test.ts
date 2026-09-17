@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   applyCanonicalAgentEvent,
   applyStreamFailure,
@@ -26,7 +27,7 @@ describe('side-panel chat state', () => {
   it('projects canonical activity while excluding private reasoning from the visible log', () => {
     const messages = [message(1)];
     const base = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'conversation-1',
       turnId: 'turn-1',
       emittedAtMs: 1_000,
@@ -67,7 +68,7 @@ describe('side-panel chat state', () => {
       { ...message(1, 'assistant'), id: 'stream-1', content: '' },
     ];
     const envelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'conversation-1',
       turnId: 'turn-1',
       sequence: 0,
@@ -92,7 +93,7 @@ describe('side-panel chat state', () => {
   it('rebuilds the same safe inline activity from persisted canonical display events', () => {
     const messages: SidePanelChatMessage[] = [];
     const envelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'conversation-1',
       turnId: 'turn-1',
       sequence: 4,
@@ -114,7 +115,7 @@ describe('side-panel chat state', () => {
   it('faithfully hydrates durable activity, run, and approval metadata from history', () => {
     const runId = '11111111-1111-4111-8111-111111111111';
     const event = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'conversation-1',
       turnId: 'turn-1',
       sequence: 2,

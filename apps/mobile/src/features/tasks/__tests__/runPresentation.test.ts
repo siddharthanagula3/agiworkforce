@@ -14,6 +14,7 @@ import {
   CloudAgentOriginSurfaceSchema,
   CloudAgentWorkModeSchema,
   type CloudAgentRun,
+  AGENT_EVENT_SCHEMA_VERSION,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
@@ -61,7 +62,7 @@ function cloudRun(overrides: Partial<CloudAgentRun> = {}): CloudAgentRun {
 
 function envelope(event: AgentEventEnvelope['event'], sequence = 0): AgentEventEnvelope {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: 'session_1',
     turnId: 'turn_1',
     sequence,

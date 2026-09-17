@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import modelRegistryJson from '@agiworkforce/model-registry/registry.json' with { type: 'json' };
 import modelsCatalogJson from '@agiworkforce/types/models.json' with { type: 'json' };
 import { injectMockCloudAuth } from './utils/mock-cloud-auth';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   cloudConversationFixture,
   expectCloudShellReady,
@@ -91,7 +92,7 @@ function agentEvent(sequence: number, event: Record<string, unknown>) {
       {
         delta: {
           x_agent_event: {
-            schemaVersion: 4,
+            schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
             sessionId: 'session-agent-activity',
             turnId: 'turn-agent-activity',
             sequence,

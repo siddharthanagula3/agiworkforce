@@ -22,6 +22,7 @@ import {
   type ConversationRoutingState,
 } from '../src/features/background/conversation-history';
 import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const _store: Record<string, unknown> = {};
 const OWNER: ManagedCloudOwner = { accountId: 'account-a', authIncarnation: 'session-a' };
@@ -91,7 +92,7 @@ const RUN_ID = '11111111-1111-4111-8111-111111111111';
 
 function agentEvent(sequence = 0): AgentEventEnvelope {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: 'chrome-session',
     turnId: 'chrome-turn',
     sequence,

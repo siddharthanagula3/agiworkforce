@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TasksPage, TASK_JOURNAL_POLL_INTERVAL_MS } from '../TasksPage';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const RUN_ID = '0190a000-0000-7000-8000-0000000000aa';
 
@@ -28,7 +29,7 @@ function makeRun(overrides: Partial<CloudAgentRun> = {}): CloudAgentRun {
 
 function event(sequence: number, value: AgentEventEnvelope['event']): AgentEventEnvelope {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: 'conversation-1',
     turnId: 'turn-1',
     sequence,
