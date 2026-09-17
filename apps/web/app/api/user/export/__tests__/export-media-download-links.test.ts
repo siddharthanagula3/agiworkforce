@@ -101,6 +101,7 @@ describe('the export hands back reachable media, not private storage keys', () =
             width: 512,
             height: 512,
             source_surface: 'web',
+            temporary_chat: false,
             created_at: '2026-03-01T00:00:00.000Z',
             deleted_at: null,
           },
