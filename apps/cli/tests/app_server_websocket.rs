@@ -103,6 +103,108 @@ async fn cli_websocket_requires_an_explicit_token_instead_of_printing_one() {
     assert!(!stderr.contains("Generated app-server auth token"));
 }
 
+#[tokio::test]
+async fn every_connected_client_sees_a_thread_another_client_deleted() {
+    let workspace = tempdir().expect("workspace");
+    let home = tempdir().expect("home");
+    trust_workspace(workspace.path(), home.path()).await;
+    let workspace_root = workspace
+        .path()
+        .canonicalize()
+        .expect("canonical workspace");
+    let sessions = home.path().join(".agiworkforce").join("managed_sessions");
+    std::fs::create_dir_all(&sessions).expect("session store");
+    std::fs::write(
+        sessions.join("shared-thread.jsonl"),
+        format!(
+            "{}\n",
+            json!({
+                "record_type": "header",
+                "version": 5,
+                "session_id": "shared-thread",
+                "created_at": "2026-09-17T00:00:00Z",
+                "updated_at": "2026-09-17T00:00:00Z",
+                "title": "Shared thread",
+                "workspace_root": workspace_root,
+            })
+        ),
+    )
+    .expect("seed a thread both clients can see");
+
+    let port = available_loopback_port();
+    let token = "app-server-readers-secret";
+    let mut child = Command::new(env!("CARGO_BIN_EXE_agi"))
+        .arg("app-server")
+        .arg("--listen")
+        .arg(format!("127.0.0.1:{port}"))
+        .arg("--auth-token")
+        .arg(token)
+        .current_dir(workspace.path())
+        .env("HOME", home.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("spawn websocket app-server");
+
+    let mut writer = connect_with_retry(port, token, &mut child).await;
+    let mut reader = connect_with_retry(port, token, &mut child).await;
+    for (client, name) in [
+        (&mut writer, "agi_writer_test"),
+        (&mut reader, "agi_reader_test"),
+    ] {
+        client
+            .send(Message::text(
+                json!({
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "clientInfo": { "name": name, "title": name, "version": "0.0.0" },
+                        "protocolVersion": DEVELOPER_SESSION_PROTOCOL_VERSION
+                    }
+                })
+                .to_string(),
+            ))
+            .await
+            .expect("send initialize");
+        let initialized = next_json(client).await;
+        assert_eq!(initialized["result"]["capabilities"]["threadDelete"], true);
+        assert_eq!(initialized["result"]["capabilities"]["reconnect"], true);
+        assert_eq!(initialized["result"]["capabilities"]["writerLease"], true);
+    }
+
+    writer
+        .send(Message::text(
+            json!({
+                "id": 2,
+                "method": "thread/delete",
+                "params": { "threadId": "shared-thread" }
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("send thread/delete");
+    let mut acknowledged = false;
+    while !acknowledged {
+        let frame = next_json(&mut writer).await;
+        if frame["id"] == 2 {
+            assert!(frame.get("error").is_none(), "{frame}");
+            assert_eq!(frame["result"]["acknowledged"], true);
+            acknowledged = true;
+        }
+    }
+
+    let seen = next_json(&mut reader).await;
+    assert_eq!(seen["method"], "thread/deleted");
+    assert_eq!(seen["params"]["threadId"], "shared-thread");
+    assert!(!sessions.join("shared-thread.jsonl").exists());
+
+    writer.close(None).await.expect("close writer");
+    reader.close(None).await.expect("close reader");
+    child.kill().await.expect("stop websocket app-server");
+}
+
 async fn trust_workspace(workspace: &std::path::Path, home: &std::path::Path) {
     // WebSocket is a headless developer entry point just like stdio. Reach the
     // transport assertions only after exercising the supported explicit trust

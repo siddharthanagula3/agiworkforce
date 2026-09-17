@@ -374,8 +374,7 @@ struct CliBrowserAuthorizer;
 
 impl BrowserAuthorizer for CliBrowserAuthorizer {
     fn is_interactive(&self) -> bool {
-        use std::io::IsTerminal;
-        std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+        crate::interactive::can_prompt()
     }
 
     fn open_url(&self, url: &str) -> bool {
@@ -610,8 +609,7 @@ pub async fn login_to_remote_server_for_client(
 /// middle of a turn. The engine's flow stays the single implementation.
 pub async fn login_to_remote_server(name: &str, config: &McpServerConfig) -> Result<()> {
     {
-        use std::io::IsTerminal;
-        if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+        if !crate::interactive::can_prompt() {
             bail!("`agi mcp login` needs an interactive terminal to open the browser");
         }
     }

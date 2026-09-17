@@ -1,6 +1,5 @@
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -135,7 +134,7 @@ fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
 /// stdin is not attached to a terminal (e.g. `agi exec ... </dev/null`, a
 /// piped/scripted invocation, or a CI runner).
 fn stdin_is_noninteractive() -> bool {
-    !std::io::stdin().is_terminal()
+    !crate::interactive::can_prompt()
 }
 
 async fn read_text_file_limited(

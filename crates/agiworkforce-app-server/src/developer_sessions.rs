@@ -10,10 +10,12 @@ use agiworkforce_protocol::developer_session::{
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
     SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
     SlashCommandRunResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
-    TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
+    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
+    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
     PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -84,6 +86,40 @@ pub trait DeveloperSessionHost: Send + Sync {
 
     async fn archive_thread(&self, params: ThreadIdParams)
         -> Result<(), DeveloperSessionHostError>;
+
+    /// Remove a thread and everything persisted with it. Irreversible, so a
+    /// user-facing caller confirms before sending it.
+    async fn delete_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported("thread/delete"))
+    }
+
+    /// Snapshot of a thread for a client that has just (re)connected: its
+    /// summary and, while a turn runs, the output and approvals it missed.
+    async fn reconnect_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<ThreadReconnectResponse, DeveloperSessionHostError> {
+        Err(unsupported("thread/reconnect"))
+    }
+
+    /// Give up this host's writer lease so another process may write at once.
+    async fn release_thread_writer(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported("thread/writer/release"))
+    }
+
+    /// Take the writer lease from whoever holds it, live or not.
+    async fn take_over_thread_writer(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        Err(unsupported("thread/writer/takeover"))
+    }
 
     async fn start_turn(
         &self,
@@ -252,6 +288,7 @@ pub enum DeveloperConnectionTrust {
 pub struct DeveloperSessionHostError {
     code: i32,
     message: String,
+    data: Option<serde_json::Value>,
 }
 
 impl DeveloperSessionHostError {
@@ -275,6 +312,18 @@ impl DeveloperSessionHostError {
         Self::new(-32603, message)
     }
 
+    /// Another live process holds the thread's writer lease.
+    pub fn writer_conflict(message: impl Into<String>, data: ThreadWriterConflictData) -> Self {
+        Self {
+            data: serde_json::to_value(data).ok(),
+            ..Self::new(THREAD_WRITER_CONFLICT_ERROR_CODE, message)
+        }
+    }
+
+    pub fn data(&self) -> Option<&serde_json::Value> {
+        self.data.as_ref()
+    }
+
     pub fn code(&self) -> i32 {
         self.code
     }
@@ -287,6 +336,7 @@ impl DeveloperSessionHostError {
         Self {
             code,
             message: message.into(),
+            data: None,
         }
     }
 }
@@ -452,6 +502,46 @@ impl DeveloperSessionProcessor {
                     .archive_thread(params)
                     .await
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::THREAD_DELETE => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .delete_thread(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::THREAD_RECONNECT => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .reconnect_thread(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_WRITER_RELEASE => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .release_thread_writer(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::THREAD_WRITER_TAKEOVER => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .take_over_thread_writer(params)
+                    .await
+                    .map(|thread| serde_json::to_value(ThreadStartResponse { thread }))
             }
             method::TURN_START => {
                 let params = match parse_params::<TurnStartParams>(&request) {
@@ -761,61 +851,66 @@ where
     let mut initialized = false;
     let mut host_shutdown = false;
 
-    loop {
-        tokio::select! {
-            line = lines.next_line() => {
-                let Some(line) = line? else {
-                    break;
-                };
-                if line.trim().is_empty() {
-                    continue;
-                }
-
-                let request = match serde_json::from_str::<AppServerRequest>(&line) {
-                    Ok(request) => request,
-                    Err(error) => {
-                        write_json_line(
-                            &mut writer,
-                            &AppServerResponse::failure(
-                                serde_json::Value::Null,
-                                -32700,
-                                format!("Parse error: {error}"),
-                            ),
-                        )
-                        .await?;
+    let transport_result: Result<()> = async {
+        loop {
+            tokio::select! {
+                line = lines.next_line() => {
+                    let Some(line) = line? else {
+                        return Ok(());
+                    };
+                    if line.trim().is_empty() {
                         continue;
                     }
-                };
-                let is_initialize = request.method == method::INITIALIZE;
-                let is_shutdown = request.method == method::SHUTDOWN;
-                let response = processor.process(request).await;
-                if is_initialize && response.error.is_none() {
-                    initialized = true;
-                }
-                write_json_line(&mut writer, &response).await?;
-                if is_shutdown && response.error.is_none() {
-                    host_shutdown = true;
-                    break;
-                }
-            }
-            notification = notifications.recv(), if initialized => {
-                match notification {
-                    Ok(notification) => write_json_line(&mut writer, &notification).await?,
-                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                        let warning = AppServerNotification::new(
-                            "server/warning",
-                            serde_json::json!({
-                                "code": "notification_lag",
-                                "skipped": skipped,
-                            }),
-                        )?;
-                        write_json_line(&mut writer, &warning).await?;
+
+                    let request = match serde_json::from_str::<AppServerRequest>(&line) {
+                        Ok(request) => request,
+                        Err(error) => {
+                            write_json_line(
+                                &mut writer,
+                                &AppServerResponse::failure(
+                                    serde_json::Value::Null,
+                                    -32700,
+                                    format!("Parse error: {error}"),
+                                ),
+                            )
+                            .await?;
+                            continue;
+                        }
+                    };
+                    let is_initialize = request.method == method::INITIALIZE;
+                    let is_shutdown = request.method == method::SHUTDOWN;
+                    let response = processor.process(request).await;
+                    if is_initialize && response.error.is_none() {
+                        initialized = true;
                     }
-                    Err(broadcast::error::RecvError::Closed) => break,
+                    if is_shutdown && response.error.is_none() {
+                        host_shutdown = true;
+                    }
+                    write_json_line(&mut writer, &response).await?;
+                    if host_shutdown {
+                        return Ok(());
+                    }
+                }
+                notification = notifications.recv(), if initialized => {
+                    match notification {
+                        Ok(notification) => write_json_line(&mut writer, &notification).await?,
+                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                            let warning = AppServerNotification::new(
+                                "server/warning",
+                                serde_json::json!({
+                                    "code": "notification_lag",
+                                    "skipped": skipped,
+                                }),
+                            )?;
+                            write_json_line(&mut writer, &warning).await?;
+                        }
+                        Err(broadcast::error::RecvError::Closed) => return Ok(()),
+                    }
                 }
             }
         }
     }
+    .await;
 
     if !host_shutdown {
         processor
@@ -824,8 +919,24 @@ where
             .await
             .map_err(anyhow::Error::new)?;
     }
-    writer.shutdown().await?;
-    Ok(())
+    match transport_result {
+        Err(error) if is_broken_pipe(&error) => Ok(()),
+        Err(error) => Err(error),
+        Ok(()) => match writer.shutdown().await {
+            Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+            other => other.map_err(anyhow::Error::new),
+        },
+    }
+}
+
+/// A client that closes its end of the pipe has gone away, the same as one
+/// that sends EOF: the host still has to be quiesced, and it is not an error.
+fn is_broken_pipe(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::BrokenPipe)
+    })
 }
 
 /// Run the typed developer-session app-server on process stdio.
@@ -892,6 +1003,12 @@ fn response_from_host_result(
             -32603,
             format!("Failed to serialize app-server response: {error}"),
         ),
-        Err(error) => AppServerResponse::failure(id, error.code(), error.message()),
+        Err(error) => {
+            let mut response = AppServerResponse::failure(id, error.code(), error.message());
+            if let Some(failure) = response.error.as_mut() {
+                failure.data = error.data;
+            }
+            response
+        }
     }
 }

@@ -655,6 +655,7 @@ impl AgentSession {
         // prompt can leave Local mode. The source file/session stays untouched.
         self.complete_pending_privacy_handoff(user_input)?;
         self.validate_privacy_boundary()?;
+        self.claim_writer_lease();
 
         // Auto sessions: classify this turn and re-resolve the route before
         // anything downstream reads `self.model` (compaction limits, request
@@ -1943,11 +1944,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             auto_approve_safe: self.session.auto_approve_safe,
             auto_approve_edits: self.session.permission_mode.auto_approves_edits(),
             quiet: self.session.quiet,
-            approval_callback: self
-                .session
-                .on_tool_approval
-                .as_ref()
-                .map(|sink| sink.0.clone()),
+            approval_callback: self.session.recorded_approval_callback(),
             privacy_mode: self.session.privacy_mode,
             workspace_root: self
                 .session
@@ -2076,16 +2073,14 @@ impl TurnHost for TurnHostAdapter<'_> {
                 },
             }
         } else if call.name.starts_with("mcp_") {
+            let approval_callback = self.session.recorded_approval_callback();
             match execute_mcp_tool(
                 &mut self.session.mcp_manager,
                 &call.name,
                 args.clone(),
                 self.session.privacy_mode,
                 !self.session.skip_permissions,
-                self.session
-                    .on_tool_approval
-                    .as_ref()
-                    .map(|sink| sink.0.clone()),
+                approval_callback,
             )
             .await
             {
@@ -2102,11 +2097,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 auto_approve_safe: self.session.auto_approve_safe,
                 auto_approve_edits: self.session.permission_mode.auto_approves_edits(),
                 quiet: self.session.quiet,
-                approval_callback: self
-                    .session
-                    .on_tool_approval
-                    .as_ref()
-                    .map(|sink| sink.0.clone()),
+                approval_callback: self.session.recorded_approval_callback(),
                 privacy_mode: self.session.privacy_mode,
                 workspace_root: self
                     .session
@@ -2392,6 +2383,15 @@ impl TurnHost for TurnHostAdapter<'_> {
                 }
             }
             TurnEvent::ToolStarted { id, name, args, .. } => {
+                let workspace_root = self
+                    .session
+                    .managed_session
+                    .as_ref()
+                    .and_then(|session| session.workspace_root.clone())
+                    .or_else(|| std::env::current_dir().ok());
+                if let Ok(mut activity) = self.session.session_activity.lock() {
+                    activity.tool_started(id, name, args, workspace_root.as_deref());
+                }
                 let raw_input = args.to_string();
                 let redacted_input = crate::agent_events::redact_args(&raw_input);
                 emit_tool_event(
@@ -2436,6 +2436,9 @@ impl TurnHost for TurnHostAdapter<'_> {
                         ts::code(name.as_str()),
                         status
                     );
+                }
+                if let Ok(mut activity) = self.session.session_activity.lock() {
+                    activity.tool_finished(id, *ok);
                 }
                 if self.session.json_events {
                     crate::agent_events::AgentEvent::ToolResult {

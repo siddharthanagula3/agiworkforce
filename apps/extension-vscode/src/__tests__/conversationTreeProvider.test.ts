@@ -104,6 +104,28 @@ describe('ConversationTreeProvider', () => {
     expect(changed).toHaveBeenCalledOnce();
   });
 
+  it('deletes through the owning runtime and drops the row', async () => {
+    const runtime = {
+      listThreads: vi.fn().mockResolvedValue({
+        threads: [thread('one', '2026-07-14T00:00:00Z', '/workspace/a')],
+      }),
+      deleteThread: vi.fn().mockResolvedValue(undefined),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
+    const changed = vi.fn();
+    provider.onDidChangeTreeData(changed);
+    await provider.getThreads();
+
+    await expect(provider.deleteThread('one')).resolves.toBe(true);
+    expect(runtime.deleteThread).toHaveBeenCalledWith('one');
+    expect(changed).toHaveBeenCalledOnce();
+    runtime.listThreads.mockResolvedValue({ threads: [] });
+    await expect(provider.deleteThread('missing')).resolves.toBe(false);
+  });
+
   it('forks through the owning runtime and routes the copy to the same one', async () => {
     // Fork leaves the original where it is, so the copy has to inherit its
     // runtime: a fork the tree cannot route is a session nothing can resume.

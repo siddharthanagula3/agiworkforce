@@ -901,6 +901,47 @@ describe('LocalRuntimeClient', () => {
     await client.dispose();
   });
 
+  it('deletes a thread only on a runtime that says it can', async () => {
+    const capabilities = {
+      threads: true,
+      turns: true,
+      streaming: true,
+      approvals: true,
+      tools: true,
+      mcp: true,
+      checkpoints: false,
+      worktrees: false,
+      models: true,
+    };
+    const capable = fakeRuntime(8, {
+      initializeExtra: { capabilities: { ...capabilities, threadDelete: true } },
+    });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: capable.spawn,
+    });
+    await client.deleteThread('thread-1');
+    expect(capable.requests.map((request) => request.method)).toEqual([
+      'initialize',
+      'thread/delete',
+    ]);
+    expect(capable.requests[1]?.params).toEqual({ threadId: 'thread-1' });
+    await client.dispose();
+
+    const older = fakeRuntime();
+    const olderClient = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: older.spawn,
+    });
+    await expect(olderClient.deleteThread('thread-1')).rejects.toThrow(/cannot delete/u);
+    expect(older.requests.map((request) => request.method)).toEqual(['initialize']);
+    await olderClient.dispose();
+  });
+
   it('reads and archives runtime-owned thread history', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({

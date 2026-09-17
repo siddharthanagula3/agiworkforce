@@ -133,6 +133,9 @@ const capabilitiesSchema = z.object({
   hooks: z.boolean().optional(),
   settings: z.boolean().optional(),
   commands: z.boolean().optional(),
+  threadDelete: z.boolean().optional(),
+  reconnect: z.boolean().optional(),
+  writerLease: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -868,6 +871,17 @@ export class LocalRuntimeClient {
   async archiveThread(threadId: string): Promise<void> {
     const connection = await this.readyConnection();
     await connection.request('thread/archive', { threadId });
+  }
+
+  async deleteThread(threadId: string): Promise<void> {
+    const connection = await this.readyConnection();
+    const { capabilities } = await this.initialize();
+    if (capabilities.threadDelete !== true) {
+      throw new Error(
+        'The installed AGI CLI cannot delete developer sessions. Update the AGI CLI, or archive the session instead.',
+      );
+    }
+    await connection.request('thread/delete', { threadId });
   }
 
   async startTurn(params: TurnStartParams): Promise<TurnSummary> {

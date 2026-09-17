@@ -171,6 +171,7 @@ dependencies = [
  "insta",
  "keyring",
  "libc",
+ "mime_guess",
  "nix 0.31.3",
  "notify 7.0.0",
  "once_cell",
