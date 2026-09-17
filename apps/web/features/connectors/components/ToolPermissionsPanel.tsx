@@ -16,6 +16,7 @@ import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { getDeclaredConnectorActions } from '@/lib/connectors/catalog';
 import { describeConnectorActions } from '../data/connectors';
+import { ConnectorCallLog } from './ConnectorCallLog';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 import {
   useToolPermissionsStore,
@@ -241,6 +242,10 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
                 </p>
               </div>
             )}
+
+            <div className="border-t border-border pt-3">
+              <ConnectorCallLog connectorId={permissionConnectorId} />
+            </div>
 
             <div className="flex justify-end border-t border-border pt-2">
               <Button

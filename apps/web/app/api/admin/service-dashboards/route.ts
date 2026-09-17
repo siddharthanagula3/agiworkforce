@@ -5,7 +5,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { SERVICE_DASHBOARDS, panelQuery } from '@/lib/observability/dashboards';
+import {
+  serviceDashboardViews,
+  type ServiceDashboardsReport,
+} from '@/lib/observability/dashboards';
 import { resolveOtelExportConfig } from '@/lib/observability/otel-config';
 
 const NO_STORE = 'private, no-store';
@@ -23,24 +26,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   await requirePlatformAdmin(request);
 
   const exporter = resolveOtelExportConfig(process.env);
-  return NextResponse.json(
-    {
-      metricsBackendConfigured: exporter !== null,
-      serviceName: exporter?.serviceName ?? null,
-      dashboards: SERVICE_DASHBOARDS.map((dashboard) => ({
-        id: dashboard.id,
-        title: dashboard.title,
-        panels: dashboard.panels.map((panel) => ({
-          id: panel.id,
-          title: panel.title,
-          metric: panel.metric,
-          aggregation: panel.aggregation,
-          query: panelQuery(panel),
-        })),
-      })),
-    },
-    { headers: { 'Cache-Control': NO_STORE } },
-  );
+  const report: ServiceDashboardsReport = {
+    metricsBackendConfigured: exporter !== null,
+    serviceName: exporter?.serviceName ?? null,
+    dashboards: serviceDashboardViews(),
+  };
+
+  return NextResponse.json(report, { headers: { 'Cache-Control': NO_STORE } });
 }
 
 export const GET = withErrorHandler(handleGet);

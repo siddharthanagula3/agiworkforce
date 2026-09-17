@@ -141,3 +141,37 @@ export function panelQuery(panel: DashboardPanel): string {
 export function dashboardPanels(): readonly DashboardPanel[] {
   return SERVICE_DASHBOARDS.flatMap((dashboard) => dashboard.panels);
 }
+
+export interface ServiceDashboardPanelView {
+  readonly id: string;
+  readonly title: string;
+  readonly metric: DashboardMetric;
+  readonly aggregation: PanelAggregation;
+  readonly query: string;
+}
+
+export interface ServiceDashboardView {
+  readonly id: string;
+  readonly title: string;
+  readonly panels: readonly ServiceDashboardPanelView[];
+}
+
+export interface ServiceDashboardsReport {
+  readonly metricsBackendConfigured: boolean;
+  readonly serviceName: string | null;
+  readonly dashboards: readonly ServiceDashboardView[];
+}
+
+export function serviceDashboardViews(): readonly ServiceDashboardView[] {
+  return SERVICE_DASHBOARDS.map((dashboard) => ({
+    id: dashboard.id,
+    title: dashboard.title,
+    panels: dashboard.panels.map((panel) => ({
+      id: panel.id,
+      title: panel.title,
+      metric: panel.metric,
+      aggregation: panel.aggregation,
+      query: panelQuery(panel),
+    })),
+  }));
+}

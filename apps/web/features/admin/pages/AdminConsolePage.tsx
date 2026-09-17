@@ -116,6 +116,22 @@ const ADMIN_CONTROLS: ReadonlyArray<{
     external: true,
   },
   {
+    name: 'Product metrics',
+    href: '/operator#product',
+    service: 'GET /api/admin/product-metrics',
+    detail:
+      'Active accounts, day 1/7/30 retention, paid conversion, churn, expansion, ARR, ARPU, gross margin, support cost and the answer-quality rates, over a window you choose. A ratio with no population reports nothing to measure rather than a zero.',
+    external: true,
+  },
+  {
+    name: 'Service dashboards',
+    href: '/operator#dashboards',
+    service: 'GET /api/admin/service-dashboards',
+    detail:
+      'Every shipped panel with the query that draws it, and whether a metrics backend is configured to answer it. With no exporter set it says so rather than drawing empty charts.',
+    external: true,
+  },
+  {
     name: 'Directory sync (SCIM 2.0)',
     href: '/admin/directory-sync',
     service: '/api/admin/directory-sync',
