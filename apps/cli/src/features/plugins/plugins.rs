@@ -65,7 +65,7 @@ impl ManifestFormat {
 
 /// Priority-ordered list of manifest paths to probe inside a plugin
 /// directory. The first path that exists + parses wins.
-const MANIFEST_PATHS: &[(ManifestFormat, &str)] = &[
+pub(crate) const MANIFEST_PATHS: &[(ManifestFormat, &str)] = &[
     (
         ManifestFormat::Agiworkforce,
         ".agiworkforce-plugin/plugin.json",
@@ -174,6 +174,10 @@ pub struct PluginManifest {
     /// shorthand).
     #[serde(default)]
     pub dependencies: Vec<String>,
+    #[serde(default)]
+    pub engines: HashMap<String, String>,
+    #[serde(default)]
+    pub publisher: Option<String>,
     /// Catch-all for unknown fields from Claude/Codex-format manifests.
     /// Logged at debug level; ignored otherwise so unknown fields don't
     /// fail load.
@@ -194,18 +198,175 @@ pub enum PluginSource {
 // AUDIT-FIX: H-16, supply-chain integrity claim required on install.
 pub enum PluginIntegrity {
     PinnedSha256(String),
+    PublisherSignature,
     UnsafeSkip,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PluginSignaturePolicy {
+    pub publishers: super::signature::TrustedPublishers,
+    pub require_signed: bool,
+    pub override_forbidden: bool,
+    pub unsafe_allow_unsigned: bool,
+}
+
+impl PluginSignaturePolicy {
+    pub fn from_sources(
+        config_toml: Option<&str>,
+        managed: &crate::features::hooks::managed::ManagedPluginPolicyState,
+        unsafe_allow_unsigned: bool,
+    ) -> Result<Self, String> {
+        use crate::features::hooks::managed::ManagedPluginPolicyState;
+
+        let publishers = super::signature::TrustedPublishers::from_config_toml(config_toml)?;
+        let configured_require = match config_toml {
+            Some(contents) => toml::from_str::<toml::Value>(contents)
+                .map_err(|error| format!("config.toml is not valid TOML: {error}"))?
+                .get("plugins")
+                .and_then(|plugins| plugins.get("require_signed"))
+                .map(|value| {
+                    value
+                        .as_bool()
+                        .ok_or_else(|| "plugins.require_signed must be true or false".to_string())
+                })
+                .transpose()?
+                .unwrap_or(false),
+            None => false,
+        };
+        let (managed_require, override_forbidden) = match managed {
+            ManagedPluginPolicyState::Absent => (false, false),
+            ManagedPluginPolicyState::Loaded(policy) => {
+                (policy.require_signed, !policy.allow_unsigned_override)
+            }
+            ManagedPluginPolicyState::Invalid(error) => {
+                eprintln!(
+                    "warning: managed plugin policy is invalid ({}); signed plugins are required",
+                    crate::terminal_text::sanitize_terminal_text(error)
+                );
+                (true, true)
+            }
+        };
+        Ok(Self {
+            publishers,
+            require_signed: configured_require || managed_require,
+            override_forbidden,
+            unsafe_allow_unsigned,
+        })
+    }
+
+    pub fn configured(unsafe_allow_unsigned: bool) -> Result<Self, String> {
+        let contents = super::registry::registry_config_path()
+            .filter(|path| path.exists())
+            .map(std::fs::read_to_string)
+            .transpose()
+            .map_err(|error| format!("failed to read config.toml: {error}"))?;
+        Self::from_sources(
+            contents.as_deref(),
+            &crate::features::hooks::managed::load_managed_plugin_policy(),
+            unsafe_allow_unsigned,
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PluginSignatureState {
+    Verified(String),
+    UnverifiedSignature(String),
+    Unsigned,
+}
+
+impl PluginSignatureState {
+    pub fn publisher(&self) -> Option<&str> {
+        match self {
+            Self::Verified(publisher) => Some(publisher),
+            _ => None,
+        }
+    }
+
+    pub fn label(&self) -> String {
+        match self {
+            Self::Verified(publisher) => format!("signed by {publisher}"),
+            Self::UnverifiedSignature(publisher) => {
+                format!("signature from {publisher} not verified")
+            }
+            Self::Unsigned => "unsigned".to_string(),
+        }
+    }
+}
+
+pub fn evaluate_plugin_signature(
+    target: &Path,
+    policy: &PluginSignaturePolicy,
+) -> Result<PluginSignatureState, String> {
+    use super::signature::{verify_plugin_signature, SignatureError};
+
+    let claimed_publisher = || {
+        load_manifest_for(target)
+            .and_then(|(manifest, _)| manifest.publisher)
+            .map(|publisher| publisher.trim().to_string())
+            .filter(|publisher| !publisher.is_empty())
+    };
+    let policy_refusal = |detail: String| -> Result<(), String> {
+        if !policy.require_signed {
+            eprintln!(
+                "WARNING: {detail}; the publisher is unverified. Set plugins.require_signed = true to refuse unsigned plugins."
+            );
+            return Ok(());
+        }
+        if policy.unsafe_allow_unsigned && !policy.override_forbidden {
+            eprintln!("WARNING: {detail}; installing anyway because of --unsafe-allow-unsigned.");
+            return Ok(());
+        }
+        if policy.override_forbidden {
+            Err(format!(
+                "{detail}, and managed settings require signed plugins with no override"
+            ))
+        } else {
+            Err(format!(
+                "{detail}, and plugins.require_signed is set; pass --unsafe-allow-unsigned to override"
+            ))
+        }
+    };
+
+    match verify_plugin_signature(target, &policy.publishers) {
+        Ok(verified) => Ok(PluginSignatureState::Verified(verified.publisher)),
+        Err(SignatureError::UntrustedPublisher(publisher)) => {
+            if !policy.publishers.is_empty() {
+                return Err(format!(
+                    "plugin is signed by '{publisher}', which is not in plugins.trusted_publishers"
+                ));
+            }
+            policy_refusal(format!(
+                "plugin is signed by '{publisher}' but no publisher keys are configured"
+            ))?;
+            Ok(PluginSignatureState::UnverifiedSignature(publisher))
+        }
+        Err(SignatureError::Unsigned) => {
+            if let Some(publisher) = claimed_publisher() {
+                if policy.publishers.has_publisher(&publisher) {
+                    return Err(format!(
+                        "plugin claims publisher '{publisher}', which has a trusted key, but carries no signature"
+                    ));
+                }
+            }
+            policy_refusal("plugin is unsigned".to_string())?;
+            Ok(PluginSignatureState::Unsigned)
+        }
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 pub struct PluginInstallRequest {
     pub source: PluginSource,
     pub name: String,
     pub integrity: PluginIntegrity, // AUDIT-FIX: H-16
+    pub signature: PluginSignaturePolicy,
 }
 pub enum PluginInstallOutcome {
     Installed {
         path: PathBuf,
         format: Option<ManifestFormat>,
+        signature: PluginSignatureState,
     },
     AlreadyInstalled {
         path: PathBuf,
@@ -394,7 +555,13 @@ impl PluginsManager {
                 .map(|m| sanitize_manifest_paths(&path, &name, "skills", &m.skills))
                 .unwrap_or_default();
 
-            let enabled = !disabled.contains(&name);
+            let compatibility_error = manifest
+                .as_ref()
+                .and_then(|m| check_plugin_compatibility(m).err());
+            if let Some(error) = &compatibility_error {
+                eprintln!("[plugins] plugin '{}' is disabled: {}", name, error);
+            }
+            let enabled = !disabled.contains(&name) && compatibility_error.is_none();
             self.plugins.push(LoadedPlugin {
                 config_name: name,
                 manifest_name: manifest.as_ref().and_then(|m| m.name.clone()),
@@ -410,7 +577,7 @@ impl PluginsManager {
                     .as_ref()
                     .map(|m| m.apps.clone())
                     .unwrap_or_default(),
-                error: None,
+                error: compatibility_error,
                 format,
                 manifest_commands,
                 manifest_agents,
@@ -723,20 +890,29 @@ impl PluginsManager {
             return PluginInstallOutcome::Failed { error };
         }
 
-        // AUDIT-FIX: H-16, verify integrity claim before accepting the plugin tree.
-        if let Err(error) = verify_plugin_integrity(&target, &req.integrity) {
-            let _ = std::fs::remove_dir_all(&target);
-            return PluginInstallOutcome::Failed { error };
-        }
+        let signature = match verify_plugin_provenance(&target, &req.integrity, &req.signature) {
+            Ok(state) => state,
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&target);
+                return PluginInstallOutcome::Failed { error };
+            }
+        };
 
         // Post-install: validate that the copied plugin has a recognized
         // manifest. If not, roll back the install + report which paths
         // we tried.
         match load_manifest_for(&target) {
-            Some((_, format)) => PluginInstallOutcome::Installed {
-                path: target,
-                format: Some(format),
-            },
+            Some((manifest, format)) => {
+                if let Err(error) = check_plugin_compatibility(&manifest) {
+                    let _ = std::fs::remove_dir_all(&target);
+                    return PluginInstallOutcome::Failed { error };
+                }
+                PluginInstallOutcome::Installed {
+                    path: target,
+                    format: Some(format),
+                    signature,
+                }
+            }
             None => {
                 let _ = std::fs::remove_dir_all(&target);
                 let tried: Vec<&str> = MANIFEST_PATHS.iter().map(|(_, p)| *p).collect();
@@ -748,9 +924,63 @@ impl PluginsManager {
     }
 }
 
+pub fn describe_plugin_signature(
+    target: &Path,
+    policy: &PluginSignaturePolicy,
+) -> Result<PluginSignatureState, String> {
+    use super::signature::{read_signature_document, verify_plugin_signature, SignatureError};
+
+    match verify_plugin_signature(target, &policy.publishers) {
+        Ok(verified) => Ok(PluginSignatureState::Verified(verified.publisher)),
+        Err(SignatureError::Unsigned) => Ok(PluginSignatureState::Unsigned),
+        Err(SignatureError::UntrustedPublisher(publisher)) => {
+            Ok(PluginSignatureState::UnverifiedSignature(publisher))
+        }
+        Err(error) => match read_signature_document(target) {
+            Ok(None) => Ok(PluginSignatureState::Unsigned),
+            _ => Err(error.to_string()),
+        },
+    }
+}
+
+pub fn verify_plugin_provenance(
+    target: &Path,
+    integrity: &PluginIntegrity,
+    signature: &PluginSignaturePolicy,
+) -> Result<PluginSignatureState, String> {
+    let state = evaluate_plugin_signature(target, signature)?;
+    if matches!(integrity, PluginIntegrity::PublisherSignature) && state.publisher().is_none() {
+        return Err(
+            "no integrity claim: an unsigned plugin needs --integrity sha256:<hex> (or --unsafe-no-integrity)"
+                .to_string(),
+        );
+    }
+    verify_plugin_integrity(target, integrity)?;
+    Ok(state)
+}
+
+pub fn check_plugin_compatibility(manifest: &PluginManifest) -> Result<(), String> {
+    let Some(range) = manifest.engines.get("agiworkforce") else {
+        return Ok(());
+    };
+    let requirement = semver::VersionReq::parse(range).map_err(|error| {
+        format!("manifest engines.agiworkforce '{range}' is not a valid version range: {error}")
+    })?;
+    let current = semver::Version::parse(env!("CARGO_PKG_VERSION"))
+        .map_err(|error| format!("CLI version is not semver: {error}"))?;
+    if requirement.matches(&current) {
+        Ok(())
+    } else {
+        Err(format!(
+            "plugin requires agiworkforce {range}, this CLI is {current}"
+        ))
+    }
+}
+
 // AUDIT-FIX: H-16, supply-chain integrity gate. SHA-256 is verified locally.
 fn verify_plugin_integrity(target: &Path, integrity: &PluginIntegrity) -> Result<(), String> {
     match integrity {
+        PluginIntegrity::PublisherSignature => Ok(()),
         PluginIntegrity::PinnedSha256(expected) => {
             let actual = hash_dir_tree_sha256(target).map_err(|e| e.to_string())?;
             if actual.eq_ignore_ascii_case(expected.trim_start_matches("sha256:")) {
@@ -1098,6 +1328,7 @@ mod tests {
             source: PluginSource::Local(source.path().to_path_buf()),
             name: "../evil".to_string(),
             integrity: PluginIntegrity::UnsafeSkip,
+            signature: PluginSignaturePolicy::default(),
         });
 
         match outcome {
@@ -1123,6 +1354,7 @@ mod tests {
             },
             name: "safe-plugin".to_string(),
             integrity: PluginIntegrity::UnsafeSkip,
+            signature: PluginSignaturePolicy::default(),
         });
         (home, outcome)
     }
@@ -1189,6 +1421,7 @@ mod tests {
             source: PluginSource::Local(source.path().to_path_buf()),
             name: "safe-plugin".to_string(),
             integrity: PluginIntegrity::UnsafeSkip,
+            signature: PluginSignaturePolicy::default(),
         });
 
         match outcome {
@@ -1271,6 +1504,302 @@ mod tests {
         assert_eq!(loaded.len(), 1, "stray no-manifest dir must not be loaded");
         assert_eq!(loaded[0].config_name, "real-plugin");
         assert!(loaded[0].format.is_some());
+    }
+
+    fn local_install(
+        source: &Path,
+        integrity: PluginIntegrity,
+        signature: PluginSignaturePolicy,
+    ) -> (tempfile::TempDir, PluginInstallOutcome) {
+        let home = tempfile::tempdir().unwrap();
+        let manager = PluginsManager {
+            global_dir: home.path().join("plugins"),
+            plugins: Vec::new(),
+        };
+        let outcome = manager.install(PluginInstallRequest {
+            source: PluginSource::Local(source.to_path_buf()),
+            name: "signed-plugin".to_string(),
+            integrity,
+            signature,
+        });
+        (home, outcome)
+    }
+
+    fn publisher_key() -> ed25519_dalek::SigningKey {
+        ed25519_dalek::SigningKey::from_bytes(&[42u8; 32])
+    }
+
+    fn trusting_acme() -> super::super::signature::TrustedPublishers {
+        let mut publishers = super::super::signature::TrustedPublishers::default();
+        publishers.insert("acme", publisher_key().verifying_key());
+        publishers
+    }
+
+    fn policy(publishers: super::super::signature::TrustedPublishers) -> PluginSignaturePolicy {
+        PluginSignaturePolicy {
+            publishers,
+            ..PluginSignaturePolicy::default()
+        }
+    }
+
+    fn required(override_forbidden: bool, unsafe_allow_unsigned: bool) -> PluginSignaturePolicy {
+        PluginSignaturePolicy {
+            require_signed: true,
+            override_forbidden,
+            unsafe_allow_unsigned,
+            ..PluginSignaturePolicy::default()
+        }
+    }
+
+    fn installed_state(outcome: PluginInstallOutcome) -> PluginSignatureState {
+        match outcome {
+            PluginInstallOutcome::Installed { signature, .. } => signature,
+            PluginInstallOutcome::Failed { error } => panic!("install failed: {error}"),
+            PluginInstallOutcome::AlreadyInstalled { .. } => panic!("unexpected existing install"),
+        }
+    }
+
+    fn refusal(outcome: PluginInstallOutcome) -> String {
+        match outcome {
+            PluginInstallOutcome::Failed { error } => error,
+            _ => panic!("install should have been refused"),
+        }
+    }
+
+    #[test]
+    fn an_unsigned_plugin_installs_by_default_and_reports_unsigned() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        let (_home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::UnsafeSkip,
+            policy(trusting_acme()),
+        );
+        assert_eq!(installed_state(outcome), PluginSignatureState::Unsigned);
+        assert_eq!(PluginSignatureState::Unsigned.label(), "unsigned");
+    }
+
+    #[test]
+    fn an_unsigned_plugin_is_refused_when_signatures_are_required() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        let (home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::UnsafeSkip,
+            required(false, false),
+        );
+        assert!(refusal(outcome).contains("--unsafe-allow-unsigned"));
+        assert!(!home.path().join("plugins").join("signed-plugin").exists());
+
+        let (_home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::UnsafeSkip,
+            required(false, true),
+        );
+        assert_eq!(installed_state(outcome), PluginSignatureState::Unsigned);
+    }
+
+    #[test]
+    fn a_managed_policy_can_forbid_the_unsigned_override() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        let (home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::UnsafeSkip,
+            required(true, true),
+        );
+        let error = refusal(outcome);
+        assert!(error.contains("managed settings"), "{error}");
+        assert!(!home.path().join("plugins").join("signed-plugin").exists());
+    }
+
+    #[test]
+    fn signature_policy_reads_config_and_managed_settings() {
+        use crate::features::hooks::managed::{ManagedPluginPolicy, ManagedPluginPolicyState};
+
+        let open =
+            PluginSignaturePolicy::from_sources(None, &ManagedPluginPolicyState::Absent, false)
+                .unwrap();
+        assert!(!open.require_signed && !open.override_forbidden);
+
+        let configured = PluginSignaturePolicy::from_sources(
+            Some("[plugins]\nrequire_signed = true\n"),
+            &ManagedPluginPolicyState::Absent,
+            true,
+        )
+        .unwrap();
+        assert!(configured.require_signed && !configured.override_forbidden);
+
+        let managed = PluginSignaturePolicy::from_sources(
+            None,
+            &ManagedPluginPolicyState::Loaded(ManagedPluginPolicy {
+                require_signed: true,
+                allow_unsigned_override: false,
+            }),
+            true,
+        )
+        .unwrap();
+        assert!(managed.require_signed && managed.override_forbidden);
+
+        let invalid = PluginSignaturePolicy::from_sources(
+            None,
+            &ManagedPluginPolicyState::Invalid("bad".to_string()),
+            true,
+        )
+        .unwrap();
+        assert!(invalid.require_signed && invalid.override_forbidden);
+
+        assert!(PluginSignaturePolicy::from_sources(
+            Some("[plugins]\nrequire_signed = \"yes\"\n"),
+            &ManagedPluginPolicyState::Absent,
+            false,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn an_unsigned_plugin_claiming_a_trusted_publisher_is_refused_even_with_the_flag() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_manifest(
+            source.path(),
+            r#"{"name":"impostor","version":"1.0.0","publisher":"acme"}"#,
+        );
+        let mut signature = policy(trusting_acme());
+        signature.unsafe_allow_unsigned = true;
+        let (home, outcome) = local_install(source.path(), PluginIntegrity::UnsafeSkip, signature);
+        let error = refusal(outcome);
+        assert!(error.contains("claims publisher 'acme'"), "{error}");
+        assert!(!home.path().join("plugins").join("signed-plugin").exists());
+    }
+
+    #[test]
+    fn a_signature_from_an_unlisted_publisher_is_refused_when_keys_are_configured() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        super::super::signature::sign_plugin(source.path(), "stranger", &publisher_key()).unwrap();
+        let (_home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::UnsafeSkip,
+            policy(trusting_acme()),
+        );
+        assert!(refusal(outcome).contains("not in plugins.trusted_publishers"));
+
+        let (_home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::UnsafeSkip,
+            PluginSignaturePolicy::default(),
+        );
+        assert_eq!(
+            installed_state(outcome),
+            PluginSignatureState::UnverifiedSignature("stranger".to_string())
+        );
+    }
+
+    #[test]
+    fn plugin_install_accepts_a_trusted_signature_as_the_integrity_claim() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        super::super::signature::sign_plugin(source.path(), "acme", &publisher_key()).unwrap();
+        let (_home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::PublisherSignature,
+            PluginSignaturePolicy {
+                require_signed: true,
+                ..policy(trusting_acme())
+            },
+        );
+        assert_eq!(
+            installed_state(outcome),
+            PluginSignatureState::Verified("acme".to_string())
+        );
+    }
+
+    #[test]
+    fn a_tampered_signature_is_always_refused() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        super::super::signature::sign_plugin(source.path(), "acme", &publisher_key()).unwrap();
+        std::fs::write(source.path().join("injected.sh"), "curl evil").unwrap();
+        for signature in [
+            policy(trusting_acme()),
+            PluginSignaturePolicy {
+                unsafe_allow_unsigned: true,
+                ..policy(trusting_acme())
+            },
+        ] {
+            let (home, outcome) =
+                local_install(source.path(), PluginIntegrity::UnsafeSkip, signature);
+            assert!(refusal(outcome).contains("does not verify"));
+            assert!(!home.path().join("plugins").join("signed-plugin").exists());
+        }
+    }
+
+    #[test]
+    fn plugin_install_keeps_the_pinned_sha256_check_for_signed_plugins() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        super::super::signature::sign_plugin(source.path(), "acme", &publisher_key()).unwrap();
+        let (_home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::PinnedSha256(format!("sha256:{}", "0".repeat(64))),
+            policy(trusting_acme()),
+        );
+        assert!(refusal(outcome).contains("integrity mismatch"));
+    }
+
+    #[test]
+    fn unsigned_plugin_with_signature_as_only_claim_is_refused() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        let (_home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::PublisherSignature,
+            PluginSignaturePolicy::default(),
+        );
+        assert!(refusal(outcome).contains("no integrity claim"));
+    }
+
+    #[test]
+    fn plugin_compatibility_checks_the_engines_range() {
+        let mut manifest = PluginManifest::default();
+        assert!(check_plugin_compatibility(&manifest).is_ok());
+        manifest
+            .engines
+            .insert("agiworkforce".to_string(), ">=9999.0.0".to_string());
+        assert!(check_plugin_compatibility(&manifest)
+            .unwrap_err()
+            .contains("requires agiworkforce"));
+        manifest.engines.insert(
+            "agiworkforce".to_string(),
+            format!("^{}", env!("CARGO_PKG_VERSION")),
+        );
+        assert!(check_plugin_compatibility(&manifest).is_ok());
+        manifest
+            .engines
+            .insert("agiworkforce".to_string(), "not a range".to_string());
+        assert!(check_plugin_compatibility(&manifest).is_err());
+    }
+
+    #[test]
+    fn an_incompatible_plugin_loads_disabled_with_its_reason() {
+        let home = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        write_test_manifest(
+            &plugins_dir.join("future-plugin"),
+            r#"{"name":"future-plugin","engines":{"agiworkforce":">=9999.0.0"}}"#,
+        );
+        let mut manager = PluginsManager {
+            global_dir: plugins_dir,
+            plugins: Vec::new(),
+        };
+        let loaded = manager.load_all(None).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert!(!loaded[0].enabled);
+        assert!(loaded[0]
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("requires agiworkforce"));
     }
 
     #[cfg(unix)]

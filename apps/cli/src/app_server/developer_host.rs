@@ -1846,7 +1846,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 Err(poisoned) => poisoned.into_inner().clone(),
             };
             let mut session = session.lock().await;
-            session.finalize_cancelled_turn(&partial);
+            session.cancel_turn(&partial).await;
             persist_error = session.persist_managed_session().err();
         }
         if let Some(error) = process_shutdown_error {
@@ -2208,7 +2208,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 Err(poisoned) => poisoned.into_inner().clone(),
             };
             let mut session = session.lock().await;
-            session.finalize_cancelled_turn(&partial);
+            session.cancel_turn(&partial).await;
             if let Err(error) = session.persist_managed_session() {
                 first_persist_error.get_or_insert(error);
             }

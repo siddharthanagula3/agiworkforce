@@ -87,6 +87,7 @@ export interface SkillRequirementFailure {
   code: typeof SKILL_REQUIREMENTS_UNMET_CODE;
   message: string;
   missingTools: readonly string[];
+  missingMcpServers: readonly string[];
 }
 
 export function selectedSkillRequirementFailure(
@@ -94,13 +95,18 @@ export function selectedSkillRequirementFailure(
   offeredToolNames: ReadonlySet<string>,
 ): SkillRequirementFailure | null {
   if (!selected) return null;
-  const missingTools =
-    describeSkillUnavailability(selected, { availableTools: offeredToolNames })?.missingTools ?? [];
-  if (missingTools.length === 0) return null;
+  const unavailability = describeSkillUnavailability(selected, {
+    availableTools: offeredToolNames,
+  });
+  const missingTools = unavailability?.missingTools ?? [];
+  const missingMcpServers = unavailability?.missingMcpServers ?? [];
+  if (missingTools.length === 0 && missingMcpServers.length === 0) return null;
+  const needs = [...missingTools, ...missingMcpServers.map((server) => `the ${server} connector`)];
   return {
     code: SKILL_REQUIREMENTS_UNMET_CODE,
-    message: `The ${selected.name} skill needs these turned on first: ${missingTools.join(', ')}.`,
+    message: `The ${selected.name} skill needs these turned on first: ${needs.join(', ')}.`,
     missingTools,
+    missingMcpServers,
   };
 }
 

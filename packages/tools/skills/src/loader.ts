@@ -1,4 +1,3 @@
-
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -37,13 +36,15 @@ function extractMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
     const tools = asStringArray(r['tools']);
     const env = asStringArray(r['env']);
     const config = asStringArray(r['config']);
-    if (bins || anyBins || tools || env || config) {
+    const mcp = asStringArray(r['mcp']);
+    if (bins || anyBins || tools || env || config || mcp) {
       meta.requires = {};
       if (bins) meta.requires.bins = bins;
       if (anyBins) meta.requires.anyBins = anyBins;
       if (tools) meta.requires.tools = tools;
       if (env) meta.requires.env = env;
       if (config) meta.requires.config = config;
+      if (mcp) meta.requires.mcp = mcp;
     }
   }
   return meta;

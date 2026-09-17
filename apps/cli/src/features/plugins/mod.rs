@@ -16,6 +16,8 @@ pub mod plugins;
 /// never shadow the loader's own type.
 pub mod registry;
 
+pub mod signature;
+
 // Flatten: re-export everything from the inner module so that
 // `crate::features::plugins::PluginsManager` works without an extra segment,
 // and lib.rs can `pub use features::plugins::plugins as plugins;` cleanly.

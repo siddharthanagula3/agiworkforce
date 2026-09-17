@@ -316,6 +316,63 @@ describe('catalog discovery carries the SSRF egress policy', () => {
   });
 });
 
+describe('workspace MCP host allowlist', () => {
+  it('does not dial a custom connector on a host the workspace has not approved', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('from public.organization_members')) {
+        return Promise.resolve([{ organization_id: ORGANIZATION_ID }]);
+      }
+      if (sql.includes('from public.organization_connector_policies')) {
+        return Promise.resolve([
+          {
+            organization_id: ORGANIZATION_ID,
+            allowed_connectors: [],
+            blocked_connectors: [],
+            allow_custom_connectors: true,
+            allowed_plugins: [],
+            blocked_plugins: [],
+            allowed_mcp_hosts: ['*.corp.example'],
+            updated_by_user_id: null,
+            updated_at: '2026-09-17T00:00:00.000Z',
+          },
+        ]);
+      }
+      if (sql.includes('from user_custom_connectors')) {
+        return Promise.resolve([
+          {
+            id: 'row-unapproved',
+            short_id: 'aaaaaaaaaa',
+            name: 'Unapproved',
+            url: 'https://mcp.elsewhere.example/mcp',
+            transport: 'streamable-http',
+            auth_header_enc: null,
+          },
+          {
+            id: 'row-approved',
+            short_id: 'bbbbbbbbbb',
+            name: 'Approved',
+            url: 'https://tools.corp.example/mcp',
+            transport: 'streamable-http',
+            auth_header_enc: null,
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    mockBuildMcpToolCatalog.mockResolvedValue({
+      catalog: { version: 1, generatedAt: 0, servers: {}, tools: [] },
+      handles: [],
+    });
+
+    await loadUserConnectorToolDefs('user-host-policy', { organizationId: ORGANIZATION_ID });
+
+    const dialled = mockBuildMcpToolCatalog.mock.calls.map((call) => JSON.stringify(call[0]));
+    expect(dialled.some((config) => config.includes('tools.corp.example'))).toBe(true);
+    expect(dialled.some((config) => config.includes('mcp.elsewhere.example'))).toBe(false);
+  });
+});
+
 describe('organization workspace scope', () => {
   it('does not expose shared connector tools for a forged captured workspace', async () => {
     mockIsGitHubAppConfigured.mockReturnValue(false);

@@ -13,7 +13,11 @@ const {
   installDirectoryPluginMock,
   uninstallDirectoryInstallationMock,
   recordWorkspaceAuditEventMock,
+  pluginPolicyMock,
+  marketplaceEntryMock,
 } = vi.hoisted(() => ({
+  pluginPolicyMock: vi.fn(),
+  marketplaceEntryMock: vi.fn(),
   authUserMock: vi.fn(),
   csrfMock: vi.fn(),
   rateLimitMock: vi.fn(),
@@ -47,7 +51,11 @@ vi.mock('@/lib/services/plugin-marketplace-installation-service', () => ({
 vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   isMissingPluginMarketplaceSchema: (error: unknown) =>
     (error as { code?: string } | null)?.code === '42P01',
-  getMarketplaceEntryForUser: async () => null,
+  getMarketplaceEntryForUser: marketplaceEntryMock,
+}));
+vi.mock('@/lib/services/connector-policy-gate', () => ({
+  evaluateConnectorPolicyForUser: vi.fn(),
+  evaluatePluginPolicyForUser: pluginPolicyMock,
 }));
 vi.mock('@/features/plugins/server/directory/install', () => ({
   installDirectoryPlugin: installDirectoryPluginMock,
@@ -127,6 +135,13 @@ beforeEach(() => {
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
   getNeonDbMock.mockReturnValue({ query: vi.fn() });
+  marketplaceEntryMock.mockResolvedValue(null);
+  pluginPolicyMock.mockResolvedValue({
+    allowed: true,
+    code: 'ungoverned',
+    reason: '',
+    organizationId: null,
+  });
 });
 
 describe('GET /api/plugins/marketplace-installations', () => {
@@ -146,6 +161,39 @@ describe('GET /api/plugins/marketplace-installations', () => {
 });
 
 describe('POST /api/plugins/marketplace-installations (install)', () => {
+  it('refuses a marketplace entry whose plugin the workspace policy forbids', async () => {
+    marketplaceEntryMock.mockResolvedValue({ id: ENTRY_ID, pluginKey: 'acme-support-bundle' });
+    pluginPolicyMock.mockResolvedValue({
+      allowed: false,
+      code: 'plugin_blocked',
+      reason: 'Your workspace administrator has blocked the "research-pack" plugin.',
+      organizationId: 'org-1',
+    });
+    const response = await POST(
+      post('/api/plugins/marketplace-installations', { entryId: ENTRY_ID }),
+    );
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('PLUGIN_NOT_PERMITTED');
+    expect(pluginPolicyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginKey: 'acme-support-bundle' }),
+    );
+    expect(installMarketplaceEntryMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a directory plugin the workspace policy forbids', async () => {
+    pluginPolicyMock.mockResolvedValue({
+      allowed: false,
+      code: 'plugin_blocked',
+      reason: 'Your workspace administrator has blocked the "research-pack" plugin.',
+      organizationId: 'org-1',
+    });
+    const response = await POST(
+      post('/api/plugins/marketplace-installations', { pluginId: 'research-pack' }),
+    );
+    expect(response.status).toBe(403);
+    expect(installDirectoryPluginMock).not.toHaveBeenCalled();
+  });
+
   it('installs a registered marketplace entry and returns 201', async () => {
     installMarketplaceEntryMock.mockResolvedValue(INSTALLATION);
     const response = await POST(

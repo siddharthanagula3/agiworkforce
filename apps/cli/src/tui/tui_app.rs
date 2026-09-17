@@ -5258,7 +5258,7 @@ async fn send_message_with_prompt(
             // and reconcile session history so the next turn stays a valid
             // user→assistant sequence.
             let partial = app.stream_buffer.clone();
-            app.session.finalize_cancelled_turn(&partial);
+            app.session.cancel_turn(&partial).await;
             if !partial.is_empty() {
                 app.chat_messages.push(ChatMessage {
                     role: ChatRole::Assistant,

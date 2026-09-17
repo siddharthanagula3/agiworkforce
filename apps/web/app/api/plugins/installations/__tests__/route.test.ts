@@ -10,7 +10,9 @@ const {
   setWebPluginEnabledMock,
   uninstallWebPluginMock,
   recordWorkspaceAuditEventMock,
+  pluginPolicyMock,
 } = vi.hoisted(() => ({
+  pluginPolicyMock: vi.fn(),
   authUserMock: vi.fn(),
   csrfMock: vi.fn(),
   rateLimitMock: vi.fn(),
@@ -29,6 +31,10 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
 vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: recordWorkspaceAuditEventMock,
+}));
+vi.mock('@/lib/services/connector-policy-gate', () => ({
+  evaluateConnectorPolicyForUser: vi.fn(),
+  evaluatePluginPolicyForUser: pluginPolicyMock,
 }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   installWebPlugin: installWebPluginMock,
@@ -88,6 +94,12 @@ beforeEach(() => {
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
   getNeonDbMock.mockReturnValue({ query: vi.fn() });
+  pluginPolicyMock.mockResolvedValue({
+    allowed: true,
+    code: 'ungoverned',
+    reason: '',
+    organizationId: null,
+  });
 });
 
 describe('GET /api/plugins/installations', () => {
@@ -125,6 +137,25 @@ describe('POST /api/plugins/installations (install)', () => {
         detail: expect.objectContaining({ resourceId: 'research-pack', version: '1.0.0' }),
       }),
     );
+  });
+
+  it('refuses a plugin the workspace policy forbids before installing it', async () => {
+    pluginPolicyMock.mockResolvedValue({
+      allowed: false,
+      code: 'plugin_blocked',
+      reason: 'Your workspace administrator has blocked the "research-pack" plugin.',
+      organizationId: 'org-1',
+    });
+    const response = await POST(post({ pluginId: 'research-pack' }));
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error.code).toBe('PLUGIN_NOT_PERMITTED');
+    expect(body.error.message).toContain('blocked');
+    expect(pluginPolicyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', pluginKey: 'research-pack' }),
+    );
+    expect(installWebPluginMock).not.toHaveBeenCalled();
+    expect(recordWorkspaceAuditEventMock).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid plugin id with 400 and never installs', async () => {
