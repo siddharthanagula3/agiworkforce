@@ -94,16 +94,113 @@ describe('compact composer controls', () => {
     );
   });
 
-  it('opens the controls and actions sheet from the single direct composer control', () => {
+  // Mode, effort and model are three sibling run controls. Model already opened
+  // an inline popover while the other two left the webview for a native
+  // QuickPick that relocated focus and showed the current value only as
+  // placeholder text. One interaction model, and the active value is checked.
+  it('opens mode and effort inline, with the live value checked', () => {
+    bootWebview();
+    const summary = document.getElementById('controlsSummary');
+    const popover = document.getElementById('controlsPopover');
+
+    expect(summary?.getAttribute('aria-haspopup')).toBe('menu');
+    expect(popover?.classList.contains('open')).toBe(false);
+
+    summary?.click();
+
+    expect(popover?.classList.contains('open')).toBe(true);
+    expect(summary?.getAttribute('aria-expanded')).toBe('true');
+
+    const checked = Array.from(popover?.querySelectorAll('[aria-checked="true"]') ?? []).map(
+      (node) => node.querySelector('.model-popover__label')?.textContent,
+    );
+    expect(checked).toEqual(['Auto safe operations', 'Medium']);
+  });
+
+  it('asks the host to change mode and effort rather than setting them itself', () => {
     const { postMessage } = bootWebview();
+    document.getElementById('controlsSummary')?.click();
     postMessage.mockClear();
 
-    document.getElementById('controlsSummary')?.click();
-    expect(postMessage).toHaveBeenLastCalledWith({
-      type: 'openActionSheet',
-      payload: { scope: 'composer' },
-    });
+    const plan = Array.from(
+      document.querySelectorAll('#controlsPopover .model-popover__option'),
+    ).find((node) => node.textContent?.startsWith('Plan mode')) as HTMLElement | undefined;
+    plan?.click();
 
-    expect(document.getElementById('plusMenuActions')).toBeNull();
+    expect(postMessage).toHaveBeenLastCalledWith({ type: 'setMode', payload: { mode: 'plan' } });
+    expect(document.getElementById('controlsPopover')?.classList.contains('open')).toBe(false);
+  });
+
+  it('follows the host back, not the click, when consent refuses the mode', () => {
+    bootWebview();
+    document.getElementById('controlsSummary')?.click();
+    const bypass = Array.from(
+      document.querySelectorAll('#controlsPopover .model-popover__option'),
+    ).find((node) => node.textContent?.startsWith('Bypass permissions')) as HTMLElement | undefined;
+    bypass?.click();
+
+    postHostMessage('modeChanged', { mode: 'auto' });
+    document.getElementById('controlsSummary')?.click();
+
+    const checked = Array.from(
+      document.querySelectorAll('#controlsPopover [aria-checked="true"] .model-popover__label'),
+    ).map((node) => node.textContent);
+    expect(checked).toContain('Auto safe operations');
+    expect(checked).not.toContain('Bypass permissions');
+  });
+
+  it('offers no effort levels for a model that takes none', () => {
+    bootWebview();
+    postHostMessage('effortChanged', { effort: 'medium', supportsEffort: false });
+    document.getElementById('controlsSummary')?.click();
+
+    const popover = document.getElementById('controlsPopover');
+    expect(popover?.textContent).toContain('This model does not take a reasoning effort.');
+    expect(popover?.querySelectorAll('[data-control-key="effort"]').length).toBe(0);
+    expect(popover?.querySelectorAll('[data-control-key="mode"]').length).toBe(4);
+  });
+
+  // Same contract the plus menu already honours: opening lands on the first
+  // item, Escape closes and hands focus back to the opener.
+  it('lands focus on the live value, then gives it back on Escape', () => {
+    bootWebview();
+    const summary = document.getElementById('controlsSummary');
+    const popover = document.getElementById('controlsPopover');
+
+    summary?.click();
+    expect(document.activeElement).toBe(
+      popover?.querySelector('#controlsPopover .model-popover__option'),
+    );
+
+    popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(popover?.classList.contains('open')).toBe(false);
+    expect(document.activeElement).toBe(summary);
+  });
+
+  it('walks the levels with the arrow keys', () => {
+    bootWebview();
+    document.getElementById('controlsSummary')?.click();
+    const popover = document.getElementById('controlsPopover');
+    const items = Array.from(popover?.querySelectorAll('[role^="menuitem"]') ?? []);
+
+    popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(document.activeElement).toBe(items[1]);
+
+    popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    expect(document.activeElement).toBe(items[0]);
+
+    popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    expect(document.activeElement).toBe(items[items.length - 1]);
+  });
+
+  it('closes on a click outside it', () => {
+    bootWebview();
+    const summary = document.getElementById('controlsSummary');
+    const popover = document.getElementById('controlsPopover');
+
+    summary?.click();
+    expect(popover?.classList.contains('open')).toBe(true);
+    document.body.click();
+    expect(popover?.classList.contains('open')).toBe(false);
   });
 });

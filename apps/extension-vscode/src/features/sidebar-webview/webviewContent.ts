@@ -2418,6 +2418,7 @@ export function getWebviewContent(
 
     <!-- Model picker popover -->
     <div class="model-popover" id="modelPopover" role="menu" aria-label="Select model"></div>
+    <div class="model-popover" id="controlsPopover" role="menu" aria-label="Mode and reasoning effort"></div>
 
     <!-- Composer card -->
     <div class="composer-card" id="composerCard">
@@ -2516,6 +2517,7 @@ export function getWebviewContent(
     const modelSelect = document.getElementById('modelSelect');
     const modelPill = document.getElementById('modelPill');
     const modelPopoverEl = document.getElementById('modelPopover');
+    const controlsPopoverEl = document.getElementById('controlsPopover');
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const plusMenuBrowse = document.getElementById('plusMenuBrowse');
@@ -3498,6 +3500,94 @@ export function getWebviewContent(
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
 
+    var MODE_OPTIONS = [
+      { value: 'ask', label: 'Ask before edits', description: 'Confirm every edit before it runs' },
+      { value: 'auto', label: 'Auto safe operations', description: 'Safe reads run automatically; writes and commands require approval' },
+      { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
+      { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
+    ];
+    var EFFORT_OPTIONS = [
+      { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
+      { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
+      { value: 'high', label: 'High', description: 'Extended reasoning, slower, higher quality' },
+      { value: 'max', label: 'Max', description: 'Maximum reasoning budget' }
+    ];
+
+    function closeControlsPopover() {
+      if (!controlsPopoverEl) return;
+      controlsPopoverEl.classList.remove('open');
+      if (controlsSummary) controlsSummary.setAttribute('aria-expanded', 'false');
+    }
+
+    function appendControlsGroup(title, description, options, current, messageType, key) {
+      var group = document.createElement('div');
+      group.className = 'model-popover__group';
+      var groupTitle = document.createElement('div');
+      groupTitle.className = 'model-popover__group-title';
+      groupTitle.textContent = title;
+      group.appendChild(groupTitle);
+      if (description) {
+        var groupDescription = document.createElement('div');
+        groupDescription.className = 'model-popover__group-description';
+        groupDescription.textContent = description;
+        group.appendChild(groupDescription);
+      }
+      controlsPopoverEl.appendChild(group);
+
+      for (var i = 0; i < options.length; i++) {
+        var choice = options[i];
+        var active = choice.value === current;
+        var option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'model-popover__option' + (active ? ' is-active' : '');
+        option.setAttribute('role', 'menuitemradio');
+        option.setAttribute('aria-checked', String(active));
+        option.dataset.controlValue = choice.value;
+        option.dataset.controlMessage = messageType;
+        option.dataset.controlKey = key;
+
+        var label = document.createElement('span');
+        label.className = 'model-popover__label';
+        label.textContent = choice.label;
+        option.appendChild(label);
+
+        var description2 = document.createElement('span');
+        description2.className = 'model-popover__description';
+        description2.textContent = choice.description;
+        option.appendChild(description2);
+
+        option.addEventListener('click', function(event) {
+          var target = event.currentTarget;
+          var payload = {};
+          payload[target.dataset.controlKey] = target.dataset.controlValue;
+          // The host re-checks consent and echoes the value it accepted, so the
+          // menu never paints a selection the host refused.
+          closeControlsPopover();
+          if (controlsSummary) controlsSummary.focus();
+          vscode.postMessage({ type: target.dataset.controlMessage, payload: payload });
+        });
+
+        controlsPopoverEl.appendChild(option);
+      }
+    }
+
+    function openControlsPopover() {
+      if (!controlsPopoverEl) return;
+      controlsPopoverEl.innerHTML = '';
+      appendControlsGroup('Mode', '', MODE_OPTIONS, activeMode, 'setMode', 'mode');
+      appendControlsGroup(
+        'Reasoning effort',
+        activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
+        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeEffort,
+        'setEffort',
+        'effort'
+      );
+      controlsPopoverEl.classList.add('open');
+      if (controlsSummary) controlsSummary.setAttribute('aria-expanded', 'true');
+      focusMenuItem(controlsPopoverEl, 0);
+    }
+
     function closeModelPopover() {
       if (!modelPopoverEl) return;
       modelPopoverEl.classList.remove('open');
@@ -3650,6 +3740,13 @@ export function getWebviewContent(
       if (column > 0) payload.column = column;
       vscode.postMessage({ type: 'openPathReference', payload: payload });
     }
+
+    document.addEventListener('click', function(ev) {
+      if (!controlsPopoverEl || !controlsPopoverEl.classList.contains('open')) return;
+      var node = ev.target;
+      if (node && node.closest && (node.closest('#controlsPopover') || node.closest('#controlsSummary'))) return;
+      closeControlsPopover();
+    });
 
     document.addEventListener('click', function(ev) {
       var target = ev.target;
@@ -4290,6 +4387,7 @@ export function getWebviewContent(
       plusBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         closeModelPopover();
+        closeControlsPopover();
         var isOpen = plusMenu.classList.contains('open');
         plusMenu.classList.toggle('open', !isOpen);
         plusBtn.setAttribute('aria-expanded', String(!isOpen));
@@ -4374,6 +4472,7 @@ export function getWebviewContent(
         if (modelPopoverEl && modelPopoverEl.classList.contains('open')) {
           closeModelPopover();
         } else {
+          closeControlsPopover();
           if (plusMenu) {
             plusMenu.classList.remove('open');
             if (plusBtn) plusBtn.setAttribute('aria-expanded', 'false');
@@ -4400,8 +4499,29 @@ export function getWebviewContent(
     }
 
     if (controlsSummary) {
-      controlsSummary.addEventListener('click', () => {
-        vscode.postMessage({ type: 'openActionSheet', payload: { scope: 'composer' } });
+      controlsSummary.setAttribute('aria-haspopup', 'menu');
+      controlsSummary.setAttribute('aria-expanded', 'false');
+      if (controlsPopoverEl) {
+        wireMenuKeyboard(controlsPopoverEl, controlsSummary, closeControlsPopover);
+      }
+      controlsSummary.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown' && controlsPopoverEl && controlsPopoverEl.classList.contains('open')) {
+          e.preventDefault();
+          focusMenuItem(controlsPopoverEl, 0);
+        }
+      });
+      controlsSummary.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (controlsPopoverEl && controlsPopoverEl.classList.contains('open')) {
+          closeControlsPopover();
+          return;
+        }
+        closeModelPopover();
+        if (plusMenu) {
+          plusMenu.classList.remove('open');
+          if (plusBtn) plusBtn.setAttribute('aria-expanded', 'false');
+        }
+        openControlsPopover();
       });
     }
 
