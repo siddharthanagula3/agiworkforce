@@ -725,6 +725,41 @@
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 207,
       "reason": "account erasure deletes device_registrations rows by user_id; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0207 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0207 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 194,
+      "reason": "the workspace erasure inventory classifies the workspace spend alerts 0194 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0194 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0194 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 200,
+      "reason": "the workspace erasure inventory classifies the permission grid tables 0200 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0200 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0200 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 201,
+      "reason": "the workspace erasure inventory classifies the policy layer and revision tables 0201 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0201 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0201 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 202,
+      "reason": "the workspace erasure inventory classifies the retrieval index tables 0202 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0202 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0202 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 205,
+      "reason": "the workspace erasure inventory classifies the domain retention policy and sweep tables 0205 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0205 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0205 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 206,
+      "reason": "the workspace erasure inventory classifies the workspace admin API keys 0206 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 207,
+      "reason": "the workspace erasure inventory classifies the device registrations 0207 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0207 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0207 is applied."
     }
   ]
 }
