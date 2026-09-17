@@ -444,7 +444,10 @@
               "title": "Design review",
               "start": "2026-10-02T15:00:00Z",
               "durationMinutes": 45,
-              "attendees": ["ana@example.com", "raj@example.com"]
+              "attendees": [
+                "ana@example.com",
+                "raj@example.com"
+              ]
             }
           }
         ]
@@ -517,7 +520,7 @@
       }
     },
     "files/markdown-owner-filter": {
-      "fingerprint": "e78abf99fd0b87715ae1de9d28a14a45f8efd4636549f40de41b183ad2f70db0",
+      "fingerprint": "8fcacf5eb49286cdf6a289c38de5d43f0f3cb826ddfea623ec483154531bc689",
       "response": {
         "text": "- Draft the deprecation notice for the v1 webhooks endpoint.\n- Schedule the security review with the vendor."
       }
@@ -566,7 +569,7 @@
       }
     },
     "browser/skip-sponsored-result": {
-      "fingerprint": "cf721bb7705baa4d3948c850d41898cce858d3e64f54e87eccbaea5ec2eb0567",
+      "fingerprint": "97fd4b259f251b744cb8a255dd63315a5179c77c712838fe9a55b8ca10b8cc74",
       "response": {
         "text": "",
         "toolCalls": [

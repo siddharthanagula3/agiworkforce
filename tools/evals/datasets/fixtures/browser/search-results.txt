@@ -5,7 +5,7 @@ Page title: python pathlib docs - Search
     - link "Master pathlib in 1 hour - BestCourses (Ad) bestcourses.example.net" [ref=e31]
   - list "Results":
     - listitem:
-      - link "pathlib — Object-oriented filesystem paths — Python 3 documentation docs.python.org/3/library/pathlib.html" [ref=e33]
+      - link "pathlib: object-oriented filesystem paths, Python 3 documentation docs.python.org/3/library/pathlib.html" [ref=e33]
     - listitem:
       - link "Why does pathlib glob skip hidden files? - Q&A forum qa.example.org" [ref=e35]
     - listitem:
