@@ -16,6 +16,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
 }));
 
 import { createCloudAgentEventJournal } from '../cloud-agent-event-journal';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const TARGET = {
   db: {} as never,
@@ -25,7 +26,7 @@ const TARGET = {
 
 function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: 'conversation-1',
     turnId: 'turn-1',
     sequence,
@@ -40,8 +41,7 @@ function textDelta(sequence: number): AgentEventEnvelope {
 
 function batchedEnvelopes(call: number): AgentEventEnvelope[] {
   const input = appendCloudAgentEvents.mock.calls[call]?.[1] as
-    | { envelopes: AgentEventEnvelope[] }
-    | undefined;
+    { envelopes: AgentEventEnvelope[] } | undefined;
   return input?.envelopes ?? [];
 }
 

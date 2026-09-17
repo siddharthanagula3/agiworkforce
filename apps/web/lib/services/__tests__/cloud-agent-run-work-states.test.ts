@@ -12,6 +12,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   CloudAgentRunListPageSchema,
   CloudAgentRunSnapshotPageSchema,
+  AGENT_EVENT_SCHEMA_VERSION,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { notifyAgentRunEvent } from '../agent-notification-service';
@@ -76,7 +77,7 @@ const PAUSE_CHECKPOINT_ROW = {
 };
 
 const base: Omit<AgentEventEnvelope, 'sequence' | 'event'> = {
-  schemaVersion: 4,
+  schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
   sessionId: SESSION_ID,
   turnId: TURN_ID,
   emittedAtMs: 1_757_800_000_000,

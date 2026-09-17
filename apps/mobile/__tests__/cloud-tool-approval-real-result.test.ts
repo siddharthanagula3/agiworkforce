@@ -75,6 +75,7 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -153,7 +154,7 @@ describe('resolveToolApproval, durable server-owned checkpoint', () => {
 
   it('resumes a recursive approval with the same run id and no transcript replay', async () => {
     const activityBase = {
-      schemaVersion: 4 as const,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION as const,
       sessionId: 'session-approval-1',
       turnId: 'turn-approval-1',
     };

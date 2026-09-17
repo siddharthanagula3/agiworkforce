@@ -12,7 +12,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRoutingSlotModel, INTERACTIVE_CARD_REQUEST_KEY } from '@agiworkforce/types';
+import {
+  getRoutingSlotModel,
+  INTERACTIVE_CARD_REQUEST_KEY,
+  AGENT_EVENT_SCHEMA_VERSION,
+} from '@agiworkforce/types';
 
 const chromeMock = vi.hoisted(() => {
   const localStore: Record<string, unknown> = {};
@@ -1196,7 +1200,7 @@ describe('streamFreeChat, model routing', () => {
   it('emits the validated run handle and canonical activity event', async () => {
     const runId = '11111111-1111-4111-8111-111111111111';
     const envelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'conversation-1',
       turnId: 'turn-1',
       sequence: 0,
@@ -1278,7 +1282,7 @@ describe('streamFreeChat, model routing', () => {
             },
             events: [
               {
-                schemaVersion: 4,
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                 sessionId: 'conversation-1',
                 turnId: 'turn-1',
                 sequence: 0,
@@ -1286,7 +1290,7 @@ describe('streamFreeChat, model routing', () => {
                 event: { type: 'text-delta', delta: 'Hello world' },
               },
               {
-                schemaVersion: 4,
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                 sessionId: 'conversation-1',
                 turnId: 'turn-1',
                 sequence: 1,

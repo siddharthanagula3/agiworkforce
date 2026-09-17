@@ -10,6 +10,7 @@ vi.mock('../agent-notification-service', () => ({
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   CloudAgentApprovalCheckpointExpiredError,
   CloudAgentDeviceMismatchError,
@@ -84,7 +85,7 @@ const CHECKPOINT_ROW = {
 };
 
 const base: Omit<AgentEventEnvelope, 'sequence' | 'event'> = {
-  schemaVersion: 4,
+  schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
   sessionId: SESSION_ID,
   turnId: TURN_ID,
   emittedAtMs: 1_757_800_000_000,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
+import { parseAgentEventDelta, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/cloud-contracts';
 import {
   createAgentEventStreamEmitter,
   createPublicTextDeltaProjector,
@@ -31,7 +31,7 @@ describe('createAgentEventStreamEmitter', () => {
     expect(payload['model']).toBe('gpt-test');
     expect(choices[0]?.index).toBe(0);
     expect(envelope).toEqual({
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'conversation-1',
       turnId: 'request-1',
       sequence: 0,

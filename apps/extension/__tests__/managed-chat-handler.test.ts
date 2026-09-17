@@ -4,6 +4,7 @@ import {
   getPickerModels,
   resolveModelEffort,
   type Effort,
+  AGENT_EVENT_SCHEMA_VERSION,
 } from '@agiworkforce/types';
 import {
   createChromeManagedStreamKey,
@@ -141,7 +142,7 @@ describe('executeChromeManagedChat', () => {
             {
               type: 'agent-event',
               envelope: {
-                schemaVersion: 4,
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                 sessionId: 'session-1',
                 turnId: 'turn-1',
                 sequence: 1,

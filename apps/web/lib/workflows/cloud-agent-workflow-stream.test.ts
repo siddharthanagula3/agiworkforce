@@ -3,11 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import { projectCloudAgentWorkflowChunk } from './cloud-agent-workflow-stream';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 describe('cloud agent workflow stream projection', () => {
   it('drops legacy wire data and projects canonical public text into one replayable event', () => {
     const envelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'session-1',
       turnId: 'turn-1',
       sequence: 3,
@@ -37,7 +38,7 @@ describe('cloud agent workflow stream projection', () => {
           {
             delta: {
               x_agent_event: {
-                schemaVersion: 4,
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                 sessionId: 'session-1',
                 turnId: 'turn-1',
                 sequence: 4,
@@ -124,7 +125,7 @@ describe('cloud agent workflow stream projection', () => {
 
   it('preserves the original interleaving of tool status and canonical agent events', () => {
     const envelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'session-1',
       turnId: 'turn-1',
       sequence: 7,
