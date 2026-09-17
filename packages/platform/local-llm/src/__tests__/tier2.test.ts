@@ -61,7 +61,10 @@ describe('tier2: LLMModule loading', () => {
 
     const first = tier2LoadModel(DEFAULT_PRESET);
     const second = tier2LoadModel(DEFAULT_PRESET);
-    expect(mockFromModelName).toHaveBeenCalledOnce();
+    // The native load cannot start synchronously: the download-consent hook is
+    // awaited first. What dedup promises is one native load for two callers,
+    // not that it begins in the same tick.
+    await vi.waitFor(() => expect(mockFromModelName).toHaveBeenCalledOnce());
 
     resolveLoad(mockInstance);
     await Promise.all([first, second]);
@@ -93,6 +96,9 @@ describe('tier2: LLMModule loading', () => {
     );
 
     const pending = tier2LoadModel(DEFAULT_PRESET);
+    // resolveLoad is only assigned once the mock is actually invoked, so
+    // releasing before that leaves this promise forever pending.
+    await vi.waitFor(() => expect(mockFromModelName).toHaveBeenCalled());
     tier2Release();
     resolveLoad(lateInstance);
     await pending;
