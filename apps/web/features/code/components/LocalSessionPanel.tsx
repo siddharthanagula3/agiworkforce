@@ -1,13 +1,22 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ChevronLeft, Square, TerminalSquare } from '@agiworkforce/icons';
+import {
+  ArrowUp,
+  ChevronLeft,
+  Code2,
+  ListChecks,
+  Square,
+  TerminalSquare,
+} from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 import type {
   DeveloperRuntimeModels,
   LocalDeveloperSession,
   DeveloperSessionGroup,
 } from '@agiworkforce/local-runtime-contract';
+import { openWorkspaceInEditor } from '@/features/desktop-host';
+import { toUserMessage } from '@/lib/user-error-message';
 import { CODE_LIMITS } from '../code-surface';
 import {
   LOCAL_CODE_COPY,
@@ -25,6 +34,7 @@ import {
   type LocalFailureAction,
 } from '../local-code';
 import { useLocalSession, type LocalSessionState } from '../hooks/use-local-session';
+import { useLocalTests } from '../hooks/use-local-tests';
 import { LocalModelChip } from './LocalModelChip';
 import { CodeTranscriptBody } from './CodeTranscript';
 import styles from '../CloudCodePage.module.css';
@@ -107,6 +117,9 @@ export function LocalSessionPanel({
   onClose,
 }: LocalSessionPanelProps) {
   const state = useLocalSession(session);
+  const tests = useLocalTests(session.rootId);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const testsRunning = tests.status === 'running';
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
   const [model, setModel] = useState(session.model ?? '');
@@ -165,6 +178,35 @@ export function LocalSessionPanel({
         <span className={styles['headerChip']}>
           <span className={styles['headerChipText']}>{localSessionContext(session, group)}</span>
         </span>
+        <div className={styles['headerActions']}>
+          <button
+            type="button"
+            className={`${styles['headerButton']} ${testsRunning ? styles['headerButtonActive'] : ''}`}
+            aria-label={testsRunning ? LOCAL_CODE_COPY.stopTests : LOCAL_CODE_COPY.runTests}
+            title={testsRunning ? LOCAL_CODE_COPY.stopTests : LOCAL_CODE_COPY.runTests}
+            onClick={() => (testsRunning ? tests.stop() : void tests.run())}
+          >
+            {testsRunning ? (
+              <Spinner size="sm" aria-hidden="true" />
+            ) : (
+              <ListChecks size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+            )}
+          </button>
+          <button
+            type="button"
+            className={styles['headerButton']}
+            aria-label={LOCAL_CODE_COPY.openInEditor}
+            title={LOCAL_CODE_COPY.openInEditor}
+            onClick={() => {
+              setEditorError(null);
+              openWorkspaceInEditor(session.rootId).catch((cause: unknown) =>
+                setEditorError(toUserMessage(cause, LOCAL_CODE_COPY.editorFailed)),
+              );
+            }}
+          >
+            <Code2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+          </button>
+        </div>
       </header>
 
       <div className={styles['body']}>
@@ -233,6 +275,34 @@ export function LocalSessionPanel({
               {state.error !== null && (
                 <div className={styles['notice']} role="alert">
                   <span>{state.error}</span>
+                </div>
+              )}
+
+              {editorError !== null && (
+                <div className={styles['notice']} role="alert">
+                  <span>{editorError}</span>
+                </div>
+              )}
+
+              {(testsRunning || tests.message !== null) && (
+                <div
+                  className={styles['notice']}
+                  role={tests.status === 'failed' ? 'alert' : 'status'}
+                  data-testid="local-tests-notice"
+                >
+                  <div className={styles['testsNoticeBody']}>
+                    <span>
+                      {testsRunning && tests.command !== null
+                        ? LOCAL_CODE_COPY.runningTests(tests.command)
+                        : tests.message}
+                    </span>
+                    {tests.output !== '' && (
+                      <details>
+                        <summary>{LOCAL_CODE_COPY.testOutput}</summary>
+                        <pre className={styles['activityOutput']}>{tests.output}</pre>
+                      </details>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

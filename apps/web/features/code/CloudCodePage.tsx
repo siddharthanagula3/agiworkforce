@@ -846,7 +846,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
             }
           });
         }}
-        onAddFolder={() => void local.addFolder()}
+        onAddFolder={() => void local.addFolder('folder')}
+        onAddRepository={() => void local.addFolder('repository')}
       />
     ) : null,
   };

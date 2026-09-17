@@ -7,9 +7,9 @@ use agiworkforce_agent_core::context::{
     SummaryRequest, DEFAULT_SUMMARY_INSTRUCTION,
 };
 use agiworkforce_agent_core::{
-    run_turn, Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, Prepared,
-    PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost,
-    TurnParams, TurnPhase, MAX_AGENTIC_ITERATIONS,
+    run_turn, CancelFuture, Completion, DispatchMode, ExecFuture, ExecResult, LoopControl,
+    Prepared, PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolCancellation, ToolClass,
+    TurnEvent, TurnHost, TurnParams, TurnPhase, MAX_AGENTIC_ITERATIONS,
 };
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
@@ -1514,6 +1514,23 @@ impl TurnHostAdapter<'_> {
     }
 }
 
+fn declared_tool_timeout(tool_name: &str, mode: DispatchMode) -> Option<std::time::Duration> {
+    match mode {
+        DispatchMode::Parallel => crate::runtime::tool_catalog::tool_timeout(tool_name),
+        DispatchMode::Sequential => None,
+    }
+}
+
+fn declared_tool_cancellation(tool_name: &str, mode: DispatchMode) -> Option<CancelFuture> {
+    let timeout = declared_tool_timeout(tool_name, mode)?;
+    Some(Box::pin(async move {
+        tokio::time::sleep(timeout).await;
+        ToolCancellation::TimedOut {
+            after_ms: timeout.as_millis() as u64,
+        }
+    }))
+}
+
 #[async_trait]
 impl TurnHost for TurnHostAdapter<'_> {
     async fn complete(
@@ -1969,6 +1986,10 @@ impl TurnHost for TurnHostAdapter<'_> {
                 },
             }
         })
+    }
+
+    fn tool_cancellation(&self, call: &PreparedCall, mode: DispatchMode) -> Option<CancelFuture> {
+        declared_tool_cancellation(&call.name, mode)
     }
 
     async fn finish_parallel_tool(
@@ -2497,6 +2518,23 @@ impl TurnHost for TurnHostAdapter<'_> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn a_parallel_call_is_cancelled_at_its_declared_timeout() {
+        let declared = crate::runtime::tool_catalog::tool_timeout("web_fetch")
+            .expect("web_fetch declares a timeout");
+        assert_eq!(
+            declared_tool_timeout("web_fetch", DispatchMode::Parallel),
+            Some(declared)
+        );
+        assert_eq!(
+            declared_tool_timeout("web_fetch", DispatchMode::Sequential),
+            None,
+            "a sequential call can be waiting on an approval prompt"
+        );
+        assert!(declared_tool_cancellation("todo_read", DispatchMode::Parallel).is_none());
+        assert!(declared_tool_cancellation("web_fetch", DispatchMode::Parallel).is_some());
+    }
 
     /// Regression: the completion after a tool call streamed through a sink
     /// that fell back to `print!`, so under the full-screen TUI the model's
@@ -3220,6 +3258,14 @@ mod tests {
 
         fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
             self.adapter.parallel_future(prepared)
+        }
+
+        fn tool_cancellation(
+            &self,
+            call: &PreparedCall,
+            mode: DispatchMode,
+        ) -> Option<CancelFuture> {
+            self.adapter.tool_cancellation(call, mode)
         }
 
         async fn finish_parallel_tool(

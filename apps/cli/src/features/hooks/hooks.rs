@@ -1187,7 +1187,26 @@ pub async fn run_hooks(
 
 /// Execute a single hook command.
 pub(crate) fn hook_requires_sandbox(hook: &Hook) -> bool {
-    hook.source == HookSource::Plugin && !crate::sandbox::sandbox_disabled()
+    hook_sandbox_required(
+        hook.source,
+        crate::sandbox::sandbox_settings(),
+        crate::sandbox::sandbox_disabled(),
+    )
+}
+
+fn hook_sandbox_required(
+    source: HookSource,
+    settings: crate::sandbox::SandboxSettings,
+    sandbox_disabled: bool,
+) -> bool {
+    if sandbox_disabled {
+        return false;
+    }
+    match source {
+        HookSource::Plugin => true,
+        HookSource::User => settings.sandbox_user_hooks,
+        HookSource::Managed => false,
+    }
 }
 
 async fn run_hook_process(hook: &Hook, input_json: &str) -> std::io::Result<std::process::Output> {
@@ -1481,17 +1500,19 @@ mod editing_tests {
     }
 
     #[test]
-    fn only_plugin_hooks_require_the_sandbox() {
-        let mut hook: Hook = serde_json::from_str(r#"{"command":"true"}"#).unwrap();
+    fn plugin_hooks_always_and_user_hooks_on_opt_in_require_the_sandbox() {
+        let hook: Hook = serde_json::from_str(r#"{"command":"true"}"#).unwrap();
         assert_eq!(hook.source, HookSource::User);
-        assert!(!hook_requires_sandbox(&hook));
-        hook.source = HookSource::Managed;
-        assert!(!hook_requires_sandbox(&hook));
-        hook.source = HookSource::Plugin;
-        assert_eq!(
-            hook_requires_sandbox(&hook),
-            !crate::sandbox::sandbox_disabled()
-        );
+        let default = crate::sandbox::SandboxSettings::default();
+        let opted_in = crate::sandbox::SandboxSettings {
+            sandbox_user_hooks: true,
+            ..default
+        };
+        assert!(!hook_sandbox_required(HookSource::User, default, false));
+        assert!(hook_sandbox_required(HookSource::User, opted_in, false));
+        assert!(!hook_sandbox_required(HookSource::Managed, opted_in, false));
+        assert!(hook_sandbox_required(HookSource::Plugin, default, false));
+        assert!(!hook_sandbox_required(HookSource::Plugin, opted_in, true));
     }
 
     #[cfg(target_os = "macos")]

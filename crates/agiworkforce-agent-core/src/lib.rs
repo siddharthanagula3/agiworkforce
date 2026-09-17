@@ -172,6 +172,31 @@ pub struct ExecResult {
 /// engine can drive the whole batch through `join_all`.
 pub type ExecFuture = Pin<Box<dyn Future<Output = ExecResult> + Send>>;
 
+/// Why one tool call stopped before it produced a result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ToolCancellation {
+    TimedOut { after_ms: u64 },
+    Cancelled,
+}
+
+impl ToolCancellation {
+    pub fn into_result(self, tool_name: &str) -> ExecResult {
+        let output = match self {
+            Self::TimedOut { after_ms } => {
+                format!("Tool '{tool_name}' timed out after {after_ms} ms and was cancelled.")
+            }
+            Self::Cancelled => format!("Tool '{tool_name}' was cancelled before it finished."),
+        };
+        ExecResult { ok: false, output }
+    }
+}
+
+/// Resolves when one tool call must stop. Dropping the losing execution
+/// future is the cancellation, so a host's executor must release its work on
+/// drop.
+pub type CancelFuture = Pin<Box<dyn Future<Output = ToolCancellation> + Send>>;
+
 /// Whether the engine should keep looping or stop, as decided by a host approval
 /// prompt (runaway / content-loop confirmation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -374,5 +399,11 @@ pub trait TurnHost: Send {
     /// stop flag so a mid-turn stop halts the loop without an extra round-trip.
     fn is_cancelled(&self) -> bool {
         false
+    }
+
+    /// The signal that cancels one prepared call: its declared timeout, a
+    /// per-call stop, or both. `None` lets the call run to completion.
+    fn tool_cancellation(&self, _call: &PreparedCall, _mode: DispatchMode) -> Option<CancelFuture> {
+        None
     }
 }

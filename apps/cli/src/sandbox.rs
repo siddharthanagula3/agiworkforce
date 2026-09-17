@@ -166,7 +166,107 @@ pub fn set_sandbox_disabled(disabled: bool) {
 }
 
 pub fn sandbox_disabled() -> bool {
-    SANDBOX_DISABLED.load(Ordering::Relaxed) || std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok()
+    let requested = SANDBOX_DISABLED.load(Ordering::Relaxed)
+        || std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok();
+    requested && !sandbox_settings().forced
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SandboxSettings {
+    pub forced: bool,
+    pub scrub_environment: bool,
+    pub sandbox_user_hooks: bool,
+    pub sandbox_mcp_servers: bool,
+}
+
+static SANDBOX_SETTINGS: std::sync::OnceLock<SandboxSettings> = std::sync::OnceLock::new();
+
+pub fn sandbox_settings() -> SandboxSettings {
+    *SANDBOX_SETTINGS.get_or_init(|| {
+        resolve_sandbox_settings(
+            &crate::features::hooks::managed::load_managed_sandbox_policy(),
+            |name| std::env::var_os(name).is_some(),
+        )
+    })
+}
+
+pub fn resolve_sandbox_settings(
+    managed: &crate::features::hooks::managed::ManagedSandboxPolicyState,
+    user_opted_in: impl Fn(&str) -> bool,
+) -> SandboxSettings {
+    use crate::features::hooks::managed::ManagedSandboxPolicyState;
+    let user = SandboxSettings {
+        forced: false,
+        scrub_environment: user_opted_in("AGIWORKFORCE_SANDBOX_SCRUB_ENV"),
+        sandbox_user_hooks: user_opted_in("AGIWORKFORCE_SANDBOX_HOOKS"),
+        sandbox_mcp_servers: user_opted_in("AGIWORKFORCE_SANDBOX_MCP"),
+    };
+    let managed = match managed {
+        ManagedSandboxPolicyState::Absent => return user,
+        ManagedSandboxPolicyState::Invalid(error) => {
+            eprintln!(
+                "{} managed sandbox policy is invalid ({}); every sandbox control is enforced",
+                crate::terminal_style::danger_header("warning:"),
+                crate::terminal_text::sanitize_terminal_text(error)
+            );
+            return SandboxSettings {
+                forced: true,
+                scrub_environment: true,
+                sandbox_user_hooks: true,
+                sandbox_mcp_servers: true,
+            };
+        }
+        ManagedSandboxPolicyState::Loaded(policy) => policy,
+    };
+    SandboxSettings {
+        forced: managed.forced,
+        scrub_environment: managed.scrub_environment || user.scrub_environment,
+        sandbox_user_hooks: managed.sandbox_user_hooks || user.sandbox_user_hooks,
+        sandbox_mcp_servers: managed.sandbox_mcp_servers || user.sandbox_mcp_servers,
+    }
+}
+
+fn apply_environment_policy(command: &mut tokio::process::Command, scrub: bool) {
+    if !scrub {
+        return;
+    }
+    command.env_clear();
+    for name in agiworkforce_mcp::INHERITED_ENV_ALLOWLIST {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+}
+
+/// Rewrite a program and its arguments so the sandbox backend launches it.
+/// The program is exec'd directly, without a shell in between.
+pub fn sandboxed_program(
+    manager: &SandboxManager,
+    program: &str,
+    args: &[String],
+) -> Result<(String, Vec<String>)> {
+    match manager.sandbox_type {
+        SandboxType::MacosSeatbelt => {
+            let mut wrapped = vec!["-p".to_string(), seatbelt_profile(manager, None)?];
+            wrapped.push(program.to_string());
+            wrapped.extend(args.iter().cloned());
+            Ok(("sandbox-exec".to_string(), wrapped))
+        }
+        SandboxType::LinuxBubblewrap => {
+            let mut wrapped = bubblewrap_prefix(manager)?;
+            wrapped.push(program.to_string());
+            wrapped.extend(args.iter().cloned());
+            Ok(("bwrap".to_string(), wrapped))
+        }
+        SandboxType::None => Err(anyhow::anyhow!(
+            "{}",
+            missing_sandbox_message(std::env::consts::OS)
+        )),
+        _ => Err(anyhow::anyhow!(
+            "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
+            manager.sandbox_type.name()
+        )),
+    }
 }
 
 /// Quote one argv element for a POSIX shell.
@@ -360,6 +460,12 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
 }
 
 fn bubblewrap_args(manager: &SandboxManager, command: &str) -> Result<Vec<String>> {
+    let mut args = bubblewrap_prefix(manager)?;
+    args.extend(["sh".to_string(), "-c".to_string(), command.to_string()]);
+    Ok(args)
+}
+
+fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
     if !manager.workspace_dir.is_absolute() {
         anyhow::bail!(
             "sandbox workspace must be absolute: {:?}",
@@ -413,12 +519,7 @@ fn bubblewrap_args(manager: &SandboxManager, command: &str) -> Result<Vec<String
             .to_string();
         args.extend(["--bind".to_string(), root.clone(), root]);
     }
-    args.extend([
-        "--".to_string(),
-        "sh".to_string(),
-        "-c".to_string(),
-        command.to_string(),
-    ]);
+    args.push("--".to_string());
     Ok(args)
 }
 
@@ -445,6 +546,25 @@ pub(crate) async fn execute_sandboxed_with_input(
     cwd: Option<&Path>,
     stdin: Option<Vec<u8>>,
     timeout: Option<std::time::Duration>,
+) -> Result<std::process::Output> {
+    execute_sandboxed_in_environment(
+        manager,
+        command,
+        cwd,
+        stdin,
+        timeout,
+        sandbox_settings().scrub_environment,
+    )
+    .await
+}
+
+async fn execute_sandboxed_in_environment(
+    manager: &SandboxManager,
+    command: &str,
+    cwd: Option<&Path>,
+    stdin: Option<Vec<u8>>,
+    timeout: Option<std::time::Duration>,
+    scrub_environment: bool,
 ) -> Result<std::process::Output> {
     let mut cmd = tokio::process::Command::new("sh");
     cmd.arg("-c").arg(command);
@@ -476,6 +596,7 @@ pub(crate) async fn execute_sandboxed_with_input(
             let profile =
                 seatbelt_profile(manager, scratch_dir.as_ref().map(tempfile::TempDir::path))?;
             let mut scmd = tokio::process::Command::new("sandbox-exec");
+            apply_environment_policy(&mut scmd, scrub_environment);
             scmd.arg("-p")
                 .arg(&profile)
                 .arg("sh")
@@ -498,6 +619,7 @@ pub(crate) async fn execute_sandboxed_with_input(
         }
         SandboxType::LinuxBubblewrap => {
             let mut bcmd = tokio::process::Command::new("bwrap");
+            apply_environment_policy(&mut bcmd, scrub_environment);
             let bwrap_args = bubblewrap_args(manager, command)?;
             bcmd.args(&bwrap_args);
             if let Some(dir) = cwd {
@@ -520,6 +642,142 @@ pub(crate) async fn execute_sandboxed_with_input(
             "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
             manager.sandbox_type.name()
         )),
+    }
+}
+
+#[cfg(test)]
+mod environment_and_policy_tests {
+    use super::*;
+    use crate::features::hooks::managed::{ManagedSandboxPolicy, ManagedSandboxPolicyState};
+
+    #[test]
+    fn user_opt_ins_apply_without_a_managed_policy_and_cannot_force() {
+        let settings = resolve_sandbox_settings(&ManagedSandboxPolicyState::Absent, |name| {
+            name == "AGIWORKFORCE_SANDBOX_HOOKS"
+        });
+        assert!(settings.sandbox_user_hooks);
+        assert!(!settings.scrub_environment);
+        assert!(!settings.sandbox_mcp_servers);
+        assert!(!settings.forced);
+        assert_eq!(
+            resolve_sandbox_settings(&ManagedSandboxPolicyState::Absent, |_| false),
+            SandboxSettings::default()
+        );
+    }
+
+    #[test]
+    fn a_managed_policy_forces_and_a_user_cannot_turn_its_controls_off() {
+        let managed = ManagedSandboxPolicyState::Loaded(ManagedSandboxPolicy {
+            forced: true,
+            scrub_environment: true,
+            sandbox_user_hooks: false,
+            sandbox_mcp_servers: true,
+        });
+        let settings =
+            resolve_sandbox_settings(&managed, |name| name == "AGIWORKFORCE_SANDBOX_HOOKS");
+        assert_eq!(
+            settings,
+            SandboxSettings {
+                forced: true,
+                scrub_environment: true,
+                sandbox_user_hooks: true,
+                sandbox_mcp_servers: true,
+            }
+        );
+    }
+
+    #[test]
+    fn an_unreadable_managed_policy_enforces_every_control() {
+        let settings = resolve_sandbox_settings(
+            &ManagedSandboxPolicyState::Invalid("bad json".to_string()),
+            |_| false,
+        );
+        assert!(settings.forced);
+        assert!(settings.scrub_environment);
+        assert!(settings.sandbox_user_hooks);
+        assert!(settings.sandbox_mcp_servers);
+    }
+
+    #[test]
+    fn a_scrubbed_command_keeps_only_the_allowlist() {
+        let mut command = tokio::process::Command::new("env");
+        apply_environment_policy(&mut command, true);
+        for (name, _) in command.as_std().get_envs() {
+            let name = name.to_string_lossy();
+            assert!(
+                agiworkforce_mcp::INHERITED_ENV_ALLOWLIST.contains(&name.as_ref()),
+                "{name} survived the scrub"
+            );
+        }
+        let mut inherited = tokio::process::Command::new("env");
+        apply_environment_policy(&mut inherited, false);
+        assert_eq!(inherited.as_std().get_envs().count(), 0);
+    }
+
+    #[test]
+    fn a_wrapped_program_runs_directly_under_either_backend() {
+        let workspace = std::env::temp_dir()
+            .canonicalize()
+            .unwrap()
+            .join("agi-wrap");
+        let mut manager = SandboxManager::full_auto(workspace).with_network(NetworkPolicy::Allow);
+        let args = vec!["--stdio".to_string(), "a b".to_string()];
+
+        manager.sandbox_type = SandboxType::MacosSeatbelt;
+        let (program, wrapped) = sandboxed_program(&manager, "npx", &args).unwrap();
+        assert_eq!(program, "sandbox-exec");
+        assert_eq!(wrapped[0], "-p");
+        assert!(wrapped[1].contains("(deny default)"));
+        assert_eq!(&wrapped[2..], &["npx", "--stdio", "a b"]);
+
+        manager.sandbox_type = SandboxType::LinuxBubblewrap;
+        let (program, wrapped) = sandboxed_program(&manager, "npx", &args).unwrap();
+        assert_eq!(program, "bwrap");
+        let separator = wrapped.iter().position(|arg| arg == "--").unwrap();
+        assert_eq!(&wrapped[separator + 1..], &["npx", "--stdio", "a b"]);
+
+        manager.sandbox_type = SandboxType::None;
+        assert!(sandboxed_program(&manager, "npx", &args).is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn a_scrubbed_sandboxed_command_cannot_read_the_parent_environment() {
+        if SandboxType::detect() == SandboxType::None
+            || std::env::var_os("CARGO_PKG_NAME").is_none()
+        {
+            return;
+        }
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_path = workspace.path().canonicalize().unwrap();
+        let manager =
+            SandboxManager::for_command_execution(workspace_path.clone(), NetworkPolicy::Deny)
+                .unwrap();
+        let scrubbed = execute_sandboxed_in_environment(
+            &manager,
+            "env",
+            Some(&workspace_path),
+            None,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+        let scrubbed = String::from_utf8_lossy(&scrubbed.stdout);
+        assert!(!scrubbed.contains("CARGO_PKG_NAME="), "{scrubbed}");
+        assert!(scrubbed.contains("PATH="), "{scrubbed}");
+
+        let inherited = execute_sandboxed_in_environment(
+            &manager,
+            "env",
+            Some(&workspace_path),
+            None,
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+        assert!(String::from_utf8_lossy(&inherited.stdout).contains("CARGO_PKG_NAME="));
     }
 }
 

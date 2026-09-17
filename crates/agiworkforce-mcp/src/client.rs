@@ -49,6 +49,23 @@ pub(crate) enum TransportConn {
     },
 }
 
+/// The parent variables a scrubbed child process keeps: enough to find
+/// binaries, a home directory, a locale and a terminal, and nothing that
+/// carries a credential or injects a library.
+pub const INHERITED_ENV_ALLOWLIST: &[&str] = &[
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TMPDIR",
+    "TERM",
+    "SHELL",
+    "XDG_RUNTIME_DIR",
+];
+
 /// A running MCP server connection over one of the three transports.
 pub struct McpClient {
     pub(crate) server_name: String,
@@ -216,20 +233,7 @@ impl McpClient {
 
         cmd.env_clear();
 
-        const ALLOWED_FROM_PARENT: &[&str] = &[
-            "PATH",
-            "HOME",
-            "USER",
-            "LOGNAME",
-            "LANG",
-            "LC_ALL",
-            "LC_CTYPE",
-            "TMPDIR",
-            "TERM",
-            "SHELL",
-            "XDG_RUNTIME_DIR",
-        ];
-        for var in ALLOWED_FROM_PARENT {
+        for var in INHERITED_ENV_ALLOWLIST {
             if let Ok(val) = std::env::var(var) {
                 cmd.env(var, val);
             }

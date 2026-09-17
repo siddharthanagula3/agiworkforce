@@ -404,6 +404,21 @@ svg + .menuRowLabel {
   color: var(--chat-text-primary);
 }
 
+.testsNoticeBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+}
+
+.testsNoticeBody pre {
+  overflow: auto;
+  max-height: 240px;
+  font-family: var(--chat-font-mono);
+  font-size: 12px;
+}
+
 .headerButtonActive {
   background: var(--chat-surface-hover);
   color: var(--chat-text-primary);

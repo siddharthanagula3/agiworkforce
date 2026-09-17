@@ -55,6 +55,14 @@ pub enum ApprovalRequestKind {
         tool_name: String,
         primary_argument: String,
     },
+    ComputerUse {
+        action: String,
+        target: String,
+    },
+    Network {
+        tool_name: String,
+        destination: String,
+    },
 }
 
 /// A single approval prompt waiting for the user.

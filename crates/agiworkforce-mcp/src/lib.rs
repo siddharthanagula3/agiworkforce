@@ -43,7 +43,7 @@ pub mod security;
 mod jsonrpc;
 mod transport;
 
-pub use client::McpClient;
+pub use client::{INHERITED_ENV_ALLOWLIST, McpClient};
 pub use config::{McpTimeouts, OAuthConfig, TransportConfig};
 pub use elicitation::{
     AutoDeclineHandler, ElicitationAction, ElicitationHandler, ElicitationMode, ElicitationRequest,

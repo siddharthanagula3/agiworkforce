@@ -175,14 +175,13 @@ pub(super) async fn execute_run_command(
         command_process.arg("-c").arg(command);
         crate::process_tree::output(command_process, None, Some(COMMAND_TIMEOUT)).await
     } else {
+        let network =
+            sandbox_network_policy(command, require_confirmation, approval_callback).await;
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let cmd = command.to_string();
         let sandbox_result = async move {
-            let mgr = crate::sandbox::SandboxManager::for_command_execution(
-                cwd.clone(),
-                crate::sandbox::NetworkPolicy::Deny,
-            )
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let mgr = crate::sandbox::SandboxManager::for_command_execution(cwd.clone(), network)
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
             crate::sandbox::execute_sandboxed_with_timeout(
                 &mgr,
                 &cmd,
@@ -266,10 +265,133 @@ pub(super) async fn execute_run_command(
     }
 }
 
+fn command_requests_network(command: &str) -> bool {
+    crate::safety::split_segments(command)
+        .iter()
+        .any(|segment| {
+            let mut words = segment.split_whitespace();
+            let program = crate::safety::approval::strip_path(words.next().unwrap_or(""));
+            let mut action = "";
+            while let Some(word) = words.next() {
+                if matches!(word, "-c" | "-C") {
+                    words.next();
+                } else if !word.starts_with('-') {
+                    action = word;
+                    break;
+                }
+            }
+            match program {
+                "curl" | "wget" => true,
+                "git" => matches!(action, "clone" | "fetch" | "pull" | "push" | "ls-remote"),
+                "npm" | "pnpm" | "yarn" | "bun" => {
+                    matches!(
+                        action,
+                        "install" | "i" | "add" | "ci" | "update" | "upgrade"
+                    )
+                }
+                "pip" | "pip3" => matches!(action, "install" | "download"),
+                "cargo" => matches!(action, "fetch" | "install" | "update" | "add" | "search"),
+                "go" => matches!(action, "get" | "install"),
+                _ => false,
+            }
+        })
+}
+
+async fn sandbox_network_policy(
+    command: &str,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> crate::sandbox::NetworkPolicy {
+    if !require_confirmation || !command_requests_network(command) {
+        return crate::sandbox::NetworkPolicy::Deny;
+    }
+    let summary = "This command needs the network, which the sandbox blocks.";
+    let request = ApprovalRequest::new(
+        ApprovalRequestKind::Network {
+            tool_name: "run_command".to_string(),
+            destination: "the network".to_string(),
+        },
+        summary,
+        vec![describe_command(command)],
+    );
+    let allowed = match request_approval(approval_callback, request).await {
+        Some(decision) => approval_allows(decision),
+        None => Confirm::new()
+            .with_prompt(format!("{summary} Allow network access for it?"))
+            .default(false)
+            .interact()
+            .unwrap_or(false),
+    };
+    if allowed {
+        crate::sandbox::NetworkPolicy::Allow
+    } else {
+        crate::sandbox::NetworkPolicy::Deny
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn network_needing_commands_are_recognised_through_chains() {
+        for command in [
+            "git clone https://example.invalid/repo.git",
+            "cd app && pnpm install",
+            "curl -s https://example.invalid",
+            "/usr/bin/git -c x=y fetch origin",
+            "pip3 install requests",
+        ] {
+            assert!(command_requests_network(command), "{command}");
+        }
+        for command in [
+            "git status",
+            "cargo test",
+            "ls -la",
+            "npm test",
+            "echo curl",
+        ] {
+            assert!(!command_requests_network(command), "{command}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_network_command_asks_for_network_and_keeps_it_denied_unless_approved() {
+        let seen: Arc<Mutex<Vec<ApprovalRequestKind>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorder = Arc::clone(&seen);
+        let callback: ApprovalCallback = Arc::new(move |request| {
+            let recorder = Arc::clone(&recorder);
+            Box::pin(async move {
+                recorder.lock().expect("seen lock").push(request.kind);
+                ApprovalDecision::Deny
+            })
+        });
+
+        let denied = sandbox_network_policy("git pull", true, Some(&callback)).await;
+        assert_eq!(denied, crate::sandbox::NetworkPolicy::Deny);
+        assert_eq!(
+            *seen.lock().expect("seen lock"),
+            vec![ApprovalRequestKind::Network {
+                tool_name: "run_command".to_string(),
+                destination: "the network".to_string(),
+            }]
+        );
+
+        let allow: ApprovalCallback = Arc::new(|_| Box::pin(async { ApprovalDecision::AllowOnce }));
+        assert_eq!(
+            sandbox_network_policy("git pull", true, Some(&allow)).await,
+            crate::sandbox::NetworkPolicy::Allow
+        );
+        assert_eq!(
+            sandbox_network_policy("git status", true, Some(&allow)).await,
+            crate::sandbox::NetworkPolicy::Deny
+        );
+        assert_eq!(
+            sandbox_network_policy("git pull", false, Some(&allow)).await,
+            crate::sandbox::NetworkPolicy::Deny
+        );
+    }
 
     #[tokio::test]
     async fn unsafe_command_uses_approval_callback() {

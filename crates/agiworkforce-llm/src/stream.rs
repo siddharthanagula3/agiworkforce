@@ -1949,6 +1949,12 @@ mod responses_request_tests {
             owner: String::new(),
             permission_class: String::new(),
             diagnostic_tags: Vec::new(),
+            stable_id: String::new(),
+            contract_version: 0,
+            capability: String::new(),
+            timeout_ms: None,
+            result_schema: None,
+            error_schema: None,
         }];
         let request = ChatRequest {
             model: "registry-selected-reasoning-model",
@@ -2093,6 +2099,12 @@ mod anthropic_request_tests {
             owner: String::new(),
             permission_class: String::new(),
             diagnostic_tags: Vec::new(),
+            stable_id: String::new(),
+            contract_version: 0,
+            capability: String::new(),
+            timeout_ms: None,
+            result_schema: None,
+            error_schema: None,
         }];
         let mut req = base_request(&messages);
         req.tools = Some(&tools);
@@ -2158,6 +2170,12 @@ mod anthropic_request_tests {
             owner: String::new(),
             permission_class: String::new(),
             diagnostic_tags: Vec::new(),
+            stable_id: String::new(),
+            contract_version: 0,
+            capability: String::new(),
+            timeout_ms: None,
+            result_schema: None,
+            error_schema: None,
         }];
         let mut req = base_request(&messages);
         req.max_tokens = 0;
@@ -2236,6 +2254,12 @@ mod anthropic_request_tests {
             owner: String::new(),
             permission_class: String::new(),
             diagnostic_tags: Vec::new(),
+            stable_id: String::new(),
+            contract_version: 0,
+            capability: String::new(),
+            timeout_ms: None,
+            result_schema: None,
+            error_schema: None,
         }];
         let mut req = base_request(&messages);
         req.tools = Some(&tools);

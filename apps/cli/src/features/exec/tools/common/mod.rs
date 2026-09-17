@@ -16,7 +16,7 @@ pub(super) const TRUNCATION_HEAD_LINES: usize = 30;
 pub(super) const TRUNCATION_TAIL_LINES: usize = 30;
 pub(super) const MAX_FILE_LINES: usize = 2_000;
 pub(super) const MAX_LINE_LENGTH: usize = 2_000;
-pub(super) const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+pub(crate) const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub(super) fn validate_file_path(path_str: &str) -> std::result::Result<PathBuf, String> {
     crate::path_security::validate_workspace_path(path_str)

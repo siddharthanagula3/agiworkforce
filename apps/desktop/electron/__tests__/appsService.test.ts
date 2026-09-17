@@ -6,10 +6,12 @@ import type { WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
 
 const openPath = vi.fn<(target: string) => Promise<string>>();
 const showItemInFolder = vi.fn<(target: string) => void>();
+const openExternal = vi.fn<(url: string) => Promise<void>>();
 
-vi.mock('electron', () => ({ shell: { openPath, showItemInFolder } }));
+vi.mock('electron', () => ({ shell: { openPath, showItemInFolder, openExternal } }));
 
-const { openWithDefaultApplication, revealInFileManager } = await import('../runtime/appsService');
+const { editorFileUrl, openInEditor, openWithDefaultApplication, revealInFileManager } =
+  await import('../runtime/appsService');
 const { PathRefused } = await import('../runtime/pathGuard');
 
 let sandbox: string;
@@ -31,6 +33,29 @@ afterAll(async () => {
 beforeEach(() => {
   openPath.mockReset().mockResolvedValue('');
   showItemInFolder.mockReset();
+  openExternal.mockReset().mockResolvedValue(undefined);
+});
+
+describe('openInEditor', () => {
+  it('builds a vscode file link that survives spaces, hashes and drive letters', () => {
+    expect(editorFileUrl('/Users/me/My Repo#2')).toBe('vscode://file/Users/me/My%20Repo%232');
+    expect(editorFileUrl('C:\\Users\\me\\repo')).toBe('vscode://file/C:/Users/me/repo');
+  });
+
+  it('hands the approved folder to the vscode handler', async () => {
+    await expect(openInEditor(root)).resolves.toEqual({ path: '', opened: true });
+    expect(openExternal).toHaveBeenCalledWith(editorFileUrl(sandbox));
+  });
+
+  it('says what to do when no editor claims the link', async () => {
+    openExternal.mockRejectedValue(new Error('no handler'));
+    await expect(openInEditor(root)).rejects.toBeInstanceOf(PathRefused);
+  });
+
+  it('does not open a folder that no longer exists', async () => {
+    await expect(openInEditor({ ...root, path: path.join(sandbox, 'missing') })).rejects.toThrow();
+    expect(openExternal).not.toHaveBeenCalled();
+  });
 });
 
 describe('openWithDefaultApplication', () => {

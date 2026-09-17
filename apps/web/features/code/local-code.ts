@@ -19,7 +19,21 @@ import type { CodeApprovalPrompt, CodeTranscriptItem } from './code-transcript';
 export const LOCAL_CODE_COPY = {
   heading: 'On this device',
   addFolder: 'Add a folder',
+  addRepository: 'Add a repository',
   addingFolder: 'Choosing…',
+  runTests: 'Run tests',
+  stopTests: 'Stop tests',
+  runningTests: (command: string): string => `Running ${command}`,
+  testsPassed: (command: string): string => `${command} passed.`,
+  testsFailed: (command: string, exitCode: number | null): string =>
+    exitCode === null ? `${command} was stopped.` : `${command} failed with exit code ${exitCode}.`,
+  testsTimedOut: (command: string): string => `${command} ran past its time limit and was stopped.`,
+  testsNotFound:
+    'No test command found here. Add a test script to package.json, or a Cargo.toml, go.mod or pyproject.toml.',
+  testsCouldNotStart: 'The tests could not be started.',
+  testOutput: 'Test output',
+  openInEditor: 'Open in VS Code',
+  editorFailed: 'VS Code could not be opened.',
   newSessionPrefix: 'New session in',
   empty: 'No coding sessions on this device yet.',
   emptyNoFolders: 'No folder on this device is open to AGI yet.',
@@ -497,4 +511,43 @@ export function sharedUnavailableLine(groups: readonly DeveloperSessionGroup[]):
   if (!first) return null;
   const same = messages.every((value) => value?.message === first.message);
   return same ? `${first.message} ${first.hint}` : null;
+}
+
+const NPM_PLACEHOLDER_TEST = 'no test specified';
+
+function packageTestScript(packageJson: string | null): string | null {
+  if (packageJson === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(packageJson);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const scripts = (parsed as { scripts?: unknown }).scripts;
+    if (!scripts || typeof scripts !== 'object') return null;
+    const test = (scripts as Record<string, unknown>)['test'];
+    return typeof test === 'string' && !test.includes(NPM_PLACEHOLDER_TEST) ? test : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The command that runs this project's own tests, read from the files at the
+ * top of the folder, or null when the folder does not declare one.
+ */
+export function detectTestCommand(
+  topLevelNames: readonly string[],
+  packageJson: string | null,
+): string | null {
+  const has = (name: string) => topLevelNames.includes(name);
+  if (packageTestScript(packageJson) !== null) {
+    if (has('pnpm-lock.yaml')) return 'pnpm test';
+    if (has('yarn.lock')) return 'yarn test';
+    if (has('bun.lock') || has('bun.lockb')) return 'bun run test';
+    return 'npm test';
+  }
+  if (has('Cargo.toml')) return 'cargo test';
+  if (has('go.mod')) return 'go test ./...';
+  if (has('pyproject.toml') || has('pytest.ini') || has('tox.ini') || has('setup.cfg')) {
+    return 'pytest';
+  }
+  return null;
 }

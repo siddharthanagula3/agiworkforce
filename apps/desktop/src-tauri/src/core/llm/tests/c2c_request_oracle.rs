@@ -720,6 +720,12 @@ fn crate_tool(name: &str, parameters: Value) -> agiworkforce_llm::ToolDefinition
         owner: String::new(),
         permission_class: String::new(),
         diagnostic_tags: Vec::new(),
+        stable_id: String::new(),
+        contract_version: 0,
+        capability: String::new(),
+        timeout_ms: None,
+        result_schema: None,
+        error_schema: None,
     }
 }
 

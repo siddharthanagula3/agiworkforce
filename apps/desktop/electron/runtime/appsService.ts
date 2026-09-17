@@ -68,3 +68,24 @@ export async function revealInFileManager(
   shell.showItemInFolder(resolved.absolute);
   return { path: resolved.relative, opened: true };
 }
+
+export function editorFileUrl(absolute: string): string {
+  const segments = absolute.split(/[\\/]+/).filter((segment) => segment !== '');
+  const encoded = segments.map((segment) =>
+    /^[A-Za-z]:$/.test(segment) ? segment : encodeURIComponent(segment),
+  );
+  return `vscode://file/${encoded.join('/')}`;
+}
+
+export async function openInEditor(root: WorkspaceRoot): Promise<ApplicationOpenResult> {
+  await fs.stat(root.path);
+  try {
+    await shell.openExternal(editorFileUrl(root.path));
+  } catch {
+    throw new PathRefused(
+      'io-error',
+      'VS Code did not open. Install VS Code, open it once so it can register vscode:// links, then try again.',
+    );
+  }
+  return { path: '', opened: true };
+}

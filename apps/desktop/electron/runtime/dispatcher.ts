@@ -5,6 +5,7 @@ import {
   LocalInferenceRefused,
   ShellCommandRefused,
   assertLocalTurnCarriesNoAttachments,
+  isWorkspaceRootKind,
   runtimeFailure,
   runtimeSuccess,
   type DesktopCapability,
@@ -40,7 +41,8 @@ import {
   planBrowserCommand,
   type BrowserCommandPlan,
 } from '../browser/commandGate';
-import { openWithDefaultApplication, revealInFileManager } from './appsService';
+import { openInEditor, openWithDefaultApplication, revealInFileManager } from './appsService';
+import { WORKSPACE_PICKER_COPY, grantPickedRoot } from './workspacePicker';
 import {
   ComputerUseRefused,
   captureRegion,
@@ -104,7 +106,6 @@ import {
 import {
   findContainingRoot,
   getRoot,
-  grantRoot,
   listRoots,
   revokeRoot,
   setRootGit,
@@ -307,6 +308,11 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     capability: 'application.control',
     reason: 'Opening a file here hands it to whichever app your Mac opens that kind of file with.',
   },
+  app_open_in_editor: {
+    capability: 'application.control',
+    reason:
+      'Opening this folder in VS Code hands it to that editor, which can run its own tasks and extensions here.',
+  },
   app_reveal_path: {
     capability: 'filesystem.read',
     reason: 'The agent wants to show a file from this folder in your file manager.',
@@ -372,11 +378,19 @@ async function snapshotFor(root: WorkspaceRoot): Promise<WorkspaceSnapshot> {
   return { root: getRoot(root.id) ?? root, git };
 }
 
-async function pickRoot(window: BrowserWindow | null): Promise<WorkspaceRoot> {
+async function pickRoot(window: BrowserWindow | null, args: Args): Promise<WorkspaceRoot> {
+  const kind = args['kind'] ?? 'folder';
+  if (!isWorkspaceRootKind(kind)) {
+    throw new InvalidArguments('"kind" must be "folder" or "repository".');
+  }
+  const copy = WORKSPACE_PICKER_COPY[kind];
   const options = {
-    title: 'Choose a project folder',
-    properties: ['openDirectory' as const, 'createDirectory' as const],
-    buttonLabel: 'Approve folder',
+    title: copy.title,
+    properties:
+      kind === 'repository'
+        ? ['openDirectory' as const]
+        : ['openDirectory' as const, 'createDirectory' as const],
+    buttonLabel: copy.buttonLabel,
   };
   const result = window
     ? await dialog.showOpenDialog(window, options)
@@ -384,9 +398,9 @@ async function pickRoot(window: BrowserWindow | null): Promise<WorkspaceRoot> {
 
   const selected = result.filePaths[0];
   if (result.canceled || !selected) {
-    throw new Cancelled('No folder was chosen.');
+    throw new Cancelled(copy.cancelled);
   }
-  return grantRoot(selected);
+  return grantPickedRoot(selected, kind);
 }
 
 class Cancelled extends Error {}
@@ -587,7 +601,7 @@ async function execute(
 ): Promise<unknown> {
   switch (command) {
     case 'workspace_pick_root':
-      return pickRoot(window);
+      return pickRoot(window, args);
     case 'workspace_list_roots':
       return listRoots();
     case 'workspace_revoke_root': {
@@ -656,6 +670,8 @@ async function execute(
       return openWithDefaultApplication(resolveRoot(args), requireString(args, 'path'));
     case 'app_reveal_path':
       return revealInFileManager(resolveRoot(args), requireString(args, 'path'));
+    case 'app_open_in_editor':
+      return openInEditor(resolveRoot(args));
     case 'clipboard_read':
       return readClipboard();
     case 'local_model_servers':

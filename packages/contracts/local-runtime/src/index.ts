@@ -77,11 +77,12 @@ export type {
   BrowserPairingState,
 } from './browser-bridge';
 
-export { WORKSPACE_COMMANDS } from './workspace';
+export { WORKSPACE_COMMANDS, WORKSPACE_ROOT_KINDS, isWorkspaceRootKind } from './workspace';
 export type {
   WorkspaceCommand,
   WorkspaceGitState,
   WorkspaceRoot,
+  WorkspaceRootKind,
   WorkspaceSnapshot,
 } from './workspace';
 

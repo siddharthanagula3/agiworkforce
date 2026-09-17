@@ -276,6 +276,33 @@ pub struct McpPromptArgument {
 // ---------------------------------------------------------------------------
 
 /// Convert the CLI's manifest config shape into the engine's transport config.
+fn sandboxed_transport_config(config: &McpServerConfig) -> Result<TransportConfig> {
+    let transport = to_transport_config(config);
+    if !crate::sandbox::sandbox_settings().sandbox_mcp_servers || crate::sandbox::sandbox_disabled()
+    {
+        return Ok(transport);
+    }
+    let workspace = std::env::current_dir().context("MCP sandbox needs a working directory")?;
+    let manager = crate::sandbox::SandboxManager::for_command_execution(
+        workspace,
+        crate::sandbox::NetworkPolicy::Allow,
+    )?;
+    wrap_stdio_transport(&manager, transport)
+}
+
+fn wrap_stdio_transport(
+    manager: &crate::sandbox::SandboxManager,
+    transport: TransportConfig,
+) -> Result<TransportConfig> {
+    match transport {
+        TransportConfig::Stdio { command, args, env } => {
+            let (command, args) = crate::sandbox::sandboxed_program(manager, &command, &args)?;
+            Ok(TransportConfig::Stdio { command, args, env })
+        }
+        remote => Ok(remote),
+    }
+}
+
 fn to_transport_config(config: &McpServerConfig) -> TransportConfig {
     match config.as_transport() {
         McpTransport::Stdio { command, args, env } => TransportConfig::Stdio { command, args, env },
@@ -685,7 +712,8 @@ impl McpConnection {
         config: &McpServerConfig,
         elicitation: Arc<dyn ElicitationHandler>,
     ) -> Result<Self> {
-        let transport = to_transport_config(config);
+        let transport = sandboxed_transport_config(config)
+            .with_context(|| format!("MCP server '{name}' must run sandboxed"))?;
         let timeouts = McpTimeouts::default();
         let hooks = build_client_hooks(elicitation);
         let client = McpClient::connect(name, transport, timeouts.clone(), hooks).await?;
@@ -1301,6 +1329,19 @@ impl McpManager {
                 owner: format!("mcp:{}", t.server_name),
                 permission_class: "external".to_string(),
                 diagnostic_tags: vec!["mcp".to_string(), t.server_name.clone()],
+                stable_id: crate::runtime::tool_catalog::mcp_tool_stable_id(
+                    &t.server_name,
+                    &t.original_name,
+                ),
+                contract_version: agiworkforce_protocol::tool_primitive::TOOL_CONTRACT_VERSION,
+                capability: crate::runtime::tool_catalog::capability_label(
+                    agiworkforce_protocol::agent_events::AgentEventToolCategory::Mcp,
+                ),
+                timeout_ms: Some(McpTimeouts::default().call_tool.as_millis() as u64),
+                result_schema: Some(
+                    agiworkforce_protocol::tool_primitive::tool_result_json_schema(),
+                ),
+                error_schema: Some(agiworkforce_protocol::tool_primitive::tool_error_json_schema()),
             })
             .collect()
     }
@@ -1637,6 +1678,45 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_sandboxed_stdio_server_launches_through_the_backend_and_keeps_its_env() {
+        let mut manager =
+            crate::sandbox::SandboxManager::full_auto(std::env::temp_dir().canonicalize().unwrap());
+        manager.sandbox_type = crate::sandbox::SandboxType::MacosSeatbelt;
+        let env = HashMap::from([("TOKEN".to_string(), "server-scoped".to_string())]);
+        let wrapped = wrap_stdio_transport(
+            &manager,
+            TransportConfig::Stdio {
+                command: "uvx".to_string(),
+                args: vec!["mcp-server-git".to_string()],
+                env: env.clone(),
+            },
+        )
+        .unwrap();
+        let TransportConfig::Stdio {
+            command,
+            args,
+            env: wrapped_env,
+        } = wrapped
+        else {
+            panic!("stdio stays stdio");
+        };
+        assert_eq!(command, "sandbox-exec");
+        assert_eq!(&args[args.len() - 2..], &["uvx", "mcp-server-git"]);
+        assert_eq!(wrapped_env, env);
+
+        let remote = wrap_stdio_transport(
+            &manager,
+            TransportConfig::Http {
+                url: "https://mcp.example.invalid".to_string(),
+                headers: HashMap::new(),
+                oauth: None,
+            },
+        )
+        .unwrap();
+        assert!(matches!(remote, TransportConfig::Http { .. }));
+    }
+
     /// The VS Code extension over `agi app-server` loaded 11 MCP servers and
     /// DeepSeek refused the turn:
     /// `Invalid 'tools[12].function.name': string does not match pattern`.
@@ -1654,6 +1734,13 @@ mod tests {
         let definitions = manager.tool_definitions(crate::agent::PrivacyMode::Byok);
         assert_eq!(definitions.len(), 1);
         assert_eq!(definitions[0].name, "mcp__brave-search__search_web");
+        assert_eq!(
+            definitions[0].stable_id,
+            "agiworkforce.mcp.brave-search.search.web"
+        );
+        assert_eq!(definitions[0].capability, "mcp");
+        assert!(definitions[0].timeout_ms.is_some());
+        assert!(definitions[0].error_schema.is_some());
 
         let openai = openai_function_tools_json(&definitions);
         let responses = openai_responses_function_tools_json(&definitions);

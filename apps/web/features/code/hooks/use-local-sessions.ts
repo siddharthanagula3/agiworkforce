@@ -5,6 +5,7 @@ import type {
   DeveloperRuntimeModels,
   LocalDeveloperSession,
   DeveloperSessionGroup,
+  WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import {
   listDeveloperModels,
@@ -25,7 +26,7 @@ export interface LocalSessionsState {
   error: string | null;
   unavailable: string | null;
   refresh: () => void;
-  addFolder: () => Promise<void>;
+  addFolder: (kind?: WorkspaceRootKind) => Promise<void>;
   startSession: (rootId: string, model?: string) => Promise<LocalDeveloperSession | null>;
   modelsFor: (rootId: string) => DeveloperRuntimeModels | null;
 }
@@ -112,18 +113,21 @@ export function useLocalSessions(): LocalSessionsState {
     };
   }, [groups]);
 
-  const addFolder = useCallback(async () => {
-    setAdding(true);
-    setError(null);
-    try {
-      await pickWorkspaceRoot();
-      refresh();
-    } catch (cause: unknown) {
-      setError(toUserMessage(cause, LOCAL_CODE_COPY.startFailed));
-    } finally {
-      setAdding(false);
-    }
-  }, [refresh]);
+  const addFolder = useCallback(
+    async (kind: WorkspaceRootKind = 'folder') => {
+      setAdding(true);
+      setError(null);
+      try {
+        await pickWorkspaceRoot(kind);
+        refresh();
+      } catch (cause: unknown) {
+        setError(toUserMessage(cause, LOCAL_CODE_COPY.startFailed));
+      } finally {
+        setAdding(false);
+      }
+    },
+    [refresh],
+  );
 
   const startSession = useCallback(
     async (rootId: string, model?: string) => {

@@ -19,6 +19,11 @@ import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache, watchAccountTierInvalidation } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
+import {
+  describeRemoteEnvironment,
+  nodeCliResolutionHost,
+  resolveCliPath,
+} from './platform/remoteEnvironment';
 import { ChatEditorPanel } from './providers/chatEditorPanel';
 import { setEditorUtilityChat } from './features/editor-utilities';
 import {
@@ -70,12 +75,16 @@ export function activate(context: vscode.ExtensionContext): void {
   const syncCodeLensProvider = providerState?.syncCodeLensProvider;
   const syncInlineCompletionProvider = providerState?.syncInlineCompletionProvider;
 
+  const remoteEnvironment = describeRemoteEnvironment(vscode.env.remoteName);
   const localRuntimes = new LocalRuntimePool(
     (cwd) =>
       new LocalRuntimeClient({
-        cliPath: () => Config.cliPath(),
+        cliPath: () => resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
         cwd,
         clientVersion: getExtensionVersion(),
+        ...(remoteEnvironment.kind === 'local'
+          ? {}
+          : { environmentLabel: remoteEnvironment.label }),
       }),
   );
   activeLocalRuntimes = localRuntimes;

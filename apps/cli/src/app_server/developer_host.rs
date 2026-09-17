@@ -1,7 +1,7 @@
 use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
 use agiworkforce_protocol::agent_events::{
     AgentEvent, AgentEventArtifactProduced, AgentEventProgressStatus, AgentEventProgressUpdate,
-    AgentEventToolCategory, AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
+    AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
 };
 use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
@@ -3121,7 +3121,7 @@ fn map_tool_event(event: crate::tui::app_event::TuiAppEvent) -> Option<AgentEven
         } => Some(AgentEvent::ToolExecutionStart(
             AgentEventToolExecutionStart {
                 tool_call_id: call_id,
-                category: classify_tool_category(&name),
+                category: crate::runtime::tool_catalog::tool_capability(&name),
                 name,
                 summary,
                 input,
@@ -3146,61 +3146,6 @@ fn map_tool_event(event: crate::tui::app_event::TuiAppEvent) -> Option<AgentEven
             }))
         }
         _ => None,
-    }
-}
-
-fn classify_tool_category(name: &str) -> AgentEventToolCategory {
-    let normalized = name.to_ascii_lowercase().replace(['-', ' '], "_");
-    if normalized.contains("web_search") || normalized == "search_web" {
-        AgentEventToolCategory::WebSearch
-    } else if normalized.contains("web_fetch")
-        || normalized.contains("fetch_url")
-        || normalized == "fetch"
-    {
-        AgentEventToolCategory::WebFetch
-    } else if normalized.contains("computer")
-        || normalized.contains("browser")
-        || normalized.contains("screenshot")
-    {
-        AgentEventToolCategory::ComputerUse
-    } else if normalized.contains("code_execution")
-        || normalized == "python"
-        || normalized == "javascript"
-    {
-        AgentEventToolCategory::CodeExecution
-    } else if normalized.contains("shell")
-        || normalized.contains("command")
-        || normalized == "bash"
-        || normalized == "exec"
-    {
-        AgentEventToolCategory::Shell
-    } else if normalized.contains("skill") {
-        AgentEventToolCategory::Skill
-    } else if normalized.contains("memory") {
-        AgentEventToolCategory::Memory
-    } else if normalized.contains("artifact") || normalized.contains("present_file") {
-        AgentEventToolCategory::Artifact
-    } else if normalized.contains("connector") {
-        AgentEventToolCategory::Connector
-    } else if normalized.contains("mcp") {
-        AgentEventToolCategory::Mcp
-    } else if [
-        "read",
-        "write",
-        "edit",
-        "patch",
-        "file",
-        "directory",
-        "list_dir",
-        "glob",
-        "grep",
-    ]
-    .iter()
-    .any(|fragment| normalized.contains(fragment))
-    {
-        AgentEventToolCategory::Filesystem
-    } else {
-        AgentEventToolCategory::Other
     }
 }
 
@@ -3546,6 +3491,7 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 mod tests {
     use super::*;
     use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
+    use agiworkforce_protocol::agent_events::AgentEventToolCategory;
     use agiworkforce_protocol::developer_session::TurnFailureAction;
     use tempfile::tempdir;
 

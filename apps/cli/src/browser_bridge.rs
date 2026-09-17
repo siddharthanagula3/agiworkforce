@@ -20,7 +20,7 @@ pub mod contract {
 }
 
 const STATE_TIMEOUT: Duration = Duration::from_millis(1_500);
-const COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
+pub(crate) const COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct BridgeFile {

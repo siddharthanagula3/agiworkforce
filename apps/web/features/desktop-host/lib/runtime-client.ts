@@ -9,6 +9,7 @@ import {
   type ClipboardSnapshot,
   type FileEntry,
   type FileBinaryContent,
+  type FileTextContent,
   type LocalChatMessage,
   type LocalChatResult,
   type LocalModel,
@@ -25,6 +26,7 @@ import {
   type ShellPolicy,
   type ShellRunResult,
   type WorkspaceRoot,
+  type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary } from '@agiworkforce/types';
 
@@ -55,8 +57,18 @@ export function listWorkspaceRoots(): Promise<WorkspaceRoot[]> {
   return invoke<WorkspaceRoot[]>('workspace_list_roots');
 }
 
-export function pickWorkspaceRoot(): Promise<WorkspaceRoot> {
-  return invoke<WorkspaceRoot>('workspace_pick_root');
+export function pickWorkspaceRoot(kind: WorkspaceRootKind = 'folder'): Promise<WorkspaceRoot> {
+  return kind === 'folder'
+    ? invoke<WorkspaceRoot>('workspace_pick_root')
+    : invoke<WorkspaceRoot>('workspace_pick_root', { kind });
+}
+
+export function openWorkspaceInEditor(rootId: string): Promise<ApplicationOpenResult> {
+  return invoke<ApplicationOpenResult>('app_open_in_editor', { rootId });
+}
+
+export function readWorkspaceText(rootId: string, path: string): Promise<FileTextContent> {
+  return invoke<FileTextContent>('file_read_text', { rootId, path });
 }
 
 export function revokeWorkspaceRoot(rootId: string): Promise<boolean> {

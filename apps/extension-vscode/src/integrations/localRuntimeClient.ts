@@ -73,14 +73,15 @@ export function cliAcquisitionHint(): string {
     : `The AGI CLI is not published yet, so there is no install command. Build it from source and set ${CLI_PATH_SETTING} to the resulting binary, which must report version ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer.`;
 }
 
-function describeSpawnFailure(cliPath: string, error: Error): Error {
+function describeSpawnFailure(cliPath: string, error: Error, environmentLabel?: string): Error {
   const code = (error as NodeJS.ErrnoException).code;
   const target = JSON.stringify(cliPath);
   const looksLikePath = cliPath.includes('/') || cliPath.includes('\\');
   if (code === 'ENOENT') {
+    const inside = environmentLabel === undefined ? '' : ` in ${environmentLabel}`;
     const where = looksLikePath
-      ? `No file exists at ${target}.`
-      : `${target} is not on the PATH this editor was launched with.`;
+      ? `No file exists at ${target}${inside}.`
+      : `${target} is not on the PATH this editor was launched with${inside}.`;
     return new Error(
       `${CLI_NOT_FOUND_MARKER}: The AGI CLI could not be started. ${where} ${cliAcquisitionHint()}`,
     );
@@ -797,6 +798,7 @@ export interface LocalRuntimeClientOptions {
   cliPath: string | (() => string);
   cwd: string;
   clientVersion: string;
+  environmentLabel?: string;
   spawn?: SpawnLocalRuntime;
   terminateProcessTree?: TerminateLocalRuntimeTree;
 }
@@ -1217,6 +1219,7 @@ export class LocalRuntimeClient {
       throw describeSpawnFailure(
         cliPath,
         error instanceof Error ? error : new Error(String(error)),
+        this.options.environmentLabel,
       );
     }
     this.stderrTail = '';
@@ -1248,7 +1251,7 @@ export class LocalRuntimeClient {
         resolveChildExit();
       }
       if (this.child === child && this.connection === connection) {
-        this.resetProcess(describeSpawnFailure(cliPath, error));
+        this.resetProcess(describeSpawnFailure(cliPath, error, this.options.environmentLabel));
       }
     });
     child.once('exit', (code, signal) => {

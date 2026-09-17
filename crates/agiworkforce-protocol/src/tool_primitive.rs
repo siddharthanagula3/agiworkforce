@@ -74,12 +74,24 @@ pub struct ToolAuthRequirement {
 #[ts(rename_all = "camelCase")]
 pub struct ToolDefinition {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub stable_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub contract_version: Option<u32>,
     pub description: String,
     #[ts(type = "Record<string, unknown>")]
     pub input_schema: serde_json::Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "Record<string, unknown>")]
     pub output_schema: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "Record<string, unknown>")]
+    pub error_schema: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub timeout_ms: Option<u64>,
     pub category: AgentEventToolCategory,
     pub action_class: ToolActionClass,
     pub auth: ToolAuthRequirement,
@@ -94,9 +106,13 @@ impl ToolDefinition {
     pub fn undeclared(name: String, description: String, input_schema: serde_json::Value) -> Self {
         Self {
             name,
+            stable_id: None,
+            contract_version: None,
             description,
             input_schema,
             output_schema: None,
+            error_schema: None,
+            timeout_ms: None,
             category: AgentEventToolCategory::Other,
             action_class: ToolActionClass::Write,
             auth: ToolAuthRequirement {
@@ -123,6 +139,45 @@ impl ToolDefinition {
     pub fn is_parallel_safe(&self) -> bool {
         self.declared && self.action_class == ToolActionClass::Read
     }
+}
+
+pub const TOOL_CONTRACT_VERSION: u32 = 1;
+
+pub fn tool_result_json_schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(ToolResult)).unwrap_or(serde_json::Value::Null)
+}
+
+pub fn tool_error_json_schema() -> serde_json::Value {
+    let mut schema = tool_result_json_schema();
+    if let Some(object) = schema.as_object_mut() {
+        object.insert(
+            "title".to_string(),
+            serde_json::Value::String("ToolError".to_string()),
+        );
+        object.insert(
+            "required".to_string(),
+            serde_json::json!(["callId", "tool", "status", "errorClass", "message"]),
+        );
+        if let Some(properties) = object
+            .get_mut("properties")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            properties.insert(
+                "status".to_string(),
+                serde_json::json!({ "const": "error" }),
+            );
+            properties.insert(
+                "errorClass".to_string(),
+                serde_json::to_value(schemars::schema_for!(ToolErrorClass).schema)
+                    .unwrap_or(serde_json::Value::Null),
+            );
+            properties.insert(
+                "message".to_string(),
+                serde_json::json!({ "type": "string" }),
+            );
+        }
+    }
+    schema
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -589,6 +644,38 @@ mod tests {
             .expect("serialize"),
             serde_json::json!(["policy_hard_block", "harness_limit"])
         );
+    }
+
+    #[test]
+    fn the_error_schema_requires_an_error_class_and_message() {
+        let schema = tool_error_json_schema();
+        let required = schema["required"].as_array().expect("required list");
+        for field in ["errorClass", "message", "status"] {
+            assert!(required.iter().any(|value| value == field), "{field}");
+        }
+        assert_eq!(schema["properties"]["status"]["const"], "error");
+        let classes = schema["properties"]["errorClass"]["enum"]
+            .as_array()
+            .expect("error class enum");
+        assert!(classes.iter().any(|value| value == "timeout"));
+        assert!(classes.iter().any(|value| value == "cancelled"));
+        assert!(tool_result_json_schema()["properties"]["callId"].is_object());
+    }
+
+    #[test]
+    fn a_registry_identity_round_trips_and_stays_optional_on_the_wire() {
+        let mut declared = definition(ToolActionClass::Read, true);
+        declared.stable_id = Some(String::from("agiworkforce.tool.web_search"));
+        declared.contract_version = Some(TOOL_CONTRACT_VERSION);
+        declared.timeout_ms = Some(30_000);
+        declared.output_schema = Some(tool_result_json_schema());
+        declared.error_schema = Some(tool_error_json_schema());
+        assert_round_trips(&declared);
+        let legacy =
+            serde_json::to_value(definition(ToolActionClass::Read, true)).expect("serialize");
+        for absent in ["stableId", "contractVersion", "errorSchema", "timeoutMs"] {
+            assert!(legacy.get(absent).is_none(), "{absent}");
+        }
     }
 
     #[test]
