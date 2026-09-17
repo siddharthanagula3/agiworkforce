@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-15
+Last updated: 2026-09-16
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -16,6 +16,128 @@ NON-BLOCKING.
 The founder's decisions of 2026-09-15 live in
 `docs/decisions/2026-09-15-founder-decisions.md`; the items they resolved were
 removed here and their engineering is tracked in `ACTIVE_ISSUES.md` (AGI-35).
+
+## [Deploy] Release the production deploy queue (F1, F2)
+
+**Why founder assistance is required**
+`production-web` requires the founder as reviewer. Run 34549878676 (2026-09-11) has waited for that approval since, and
+the `production-surfaces` concurrency group cancels every newer run behind it with zero jobs, so about 1,000 commits
+(390 touching web) are not live. Migrations 0183 to 0193 have a contested applied state, and deployed code writes
+columns from 0187 and 0189.
+**Exact action**
+
+1. Confirm in the Neon console (or `pnpm db:migrate -- status --target production`) whether 0183 to 0193 are applied; approve applying the missing ones in order.
+2. Cancel run 34549878676 and the two August runs still marked in progress (31290571636, 31283553796).
+3. Approve the next `deploy-production` run for the reviewed sha.
+
+**Where** GitHub Actions, `production-web` environment; Neon console.
+**Needed input** About fifteen minutes.
+**How to verify completion** The newest production-web deployment status is `success`; `/api/health` is healthy; the deployment aliased to agiworkforce.com is newer than 2026-09-11.
+**What remains after founder action** Signed-in production smoke (agent).
+**Impact** LAUNCH-BLOCKING (every fix since 2026-09-11, including 8 of the 11 cleared §127 blockers)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Release] GitHub environments and variables the release workflows read (F3, F4, F6 to F10)
+
+**Why founder assistance is required**
+Every release workflow is correct but reads configuration that does not exist: environments `macos-release`,
+`vscode-marketplace`, `chrome-web-store`, `mobile-store-release`, `production-fly` are missing, the repository has
+zero variables, and repository secrets cannot be listed with the agent token. This entry is the configuration half of
+"Cut signed releases", "Chrome Web Store public key", "Signed protocol-7 CLI release" and the mobile store entry.
+**Exact action**
+
+1. Run `gh secret list` with admin rights and share the names present.
+2. Create the five environments above, each allowing its tag pattern (`v-cloud-desktop-*`/`v-desktop-*`, `v-vscode-*`, `v-ext-*`, `v-mobile-*`).
+3. `macos-release`: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`; repository `VITE_CLERK_PUBLISHABLE_KEY`.
+4. Windows signing variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` and secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`.
+5. `vscode-marketplace`: `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`; an Open VSX token.
+6. Repository variables `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`; `chrome-web-store`: `CWS_PUBLISHER_ID`, `CWS_EXTENSION_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `CWS_SERVICE_ACCOUNT`.
+7. `mobile-store-release`: secrets `EXPO_TOKEN`, `ASC_API_KEY_ID`, `ASC_API_KEY_ISSUER_ID`, `ASC_API_PRIVATE_KEY_BASE64`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64`; variables `ASC_APP_ID`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`.
+8. `NPM_TOKEN` able to publish `@agiworkforce/cli`; make the Homebrew tap public or give the release job write access.
+
+**Where** GitHub repository settings (environments, secrets, variables); Apple, Azure, Microsoft Entra, Google Cloud, Expo, npm.
+**Needed input** Accounts and about two hours.
+**How to verify completion** Tags `v-cli-1.7.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-0.3.0`, `v-ext-1.2.0`, `v-mobile-1.2.0` each produce a green release run.
+**What remains after founder action** Pushing the tags and verifying each release (agent).
+**Impact** RELEASE-BLOCKING (CLI, both desktops, VS Code, Chrome, mobile)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Infra] Remote Control relay host points nowhere (F11)
+
+**Why founder assistance is required**
+The mobile app pins `wss://signaling.agiworkforce.com`, which returns Vercel DEPLOYMENT_NOT_FOUND; the healthy relay
+runs at `agiworkforce-signaling.fly.dev`. The Railway deploy job is skipped because `RAILWAY_PUBLIC_URL` is unset.
+**Exact action** Point `signaling.agiworkforce.com` at the Fly app (DNS plus Fly certificate), or set `RAILWAY_TOKEN` and `RAILWAY_PUBLIC_URL` and let the workflow deploy; set `SIGNALING_HTTP_URL` in Vercel production. Complete the `ALLOWED_ORIGINS` entry on the same deploy.
+**Where** DNS provider, Fly.io, Railway, Vercel.
+**Needed input** About twenty minutes.
+**How to verify completion** `curl https://signaling.agiworkforce.com/health` returns healthy JSON and a phone pairs with a desktop.
+**What remains after founder action** Pairing verification on both desktops (agent).
+**Impact** RELEASE-BLOCKING (Remote Control)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Production env] Error reporting, tracing, email, push and sign-in providers (F12)
+
+**Why founder assistance is required**
+Production (`vercel env ls production`, names only, 2026-09-16) has no Sentry DSN, OTel exporter endpoint, web push
+VAPID keys, email provider key or sender, `AGI_AUTH_PROVIDERS`, support widget flag or `PAGER_WEBHOOK_URL`. The code
+ships and silently does nothing without them.
+**Exact action** Create or confirm the vendor accounts and set: `NEXT_PUBLIC_SENTRY_DSN` and the Sentry release variables; `AGI_OTEL_EXPORTER_ENDPOINT`; `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`; `RESEND_API_KEY`, `AGI_NOTIFICATIONS_FROM_EMAIL`; enable Apple and Microsoft connections in Clerk and set `AGI_AUTH_PROVIDERS`; `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED=1`; `PAGER_WEBHOOK_URL`.
+**Where** Vercel project environment, Sentry, the tracing backend, Resend, Clerk.
+**Needed input** Vendor choices and about one hour.
+**How to verify completion** A test exception appears in Sentry with the release tag; a notification email arrives; the sign-in page shows Apple and Microsoft.
+**What remains after founder action** Live verification of each channel (agent).
+**Impact** FEATURE-BLOCKING (monitoring, notifications, enterprise sign-in)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [GitHub] Branch protection on main (F13)
+
+**Why founder assistance is required**
+`main` has no branch protection and no active ruleset, so guards in `repo-operability.yml` block nothing. Enable it
+after engineering brings CI below 10% red (currently 44%) so it does not stall every lane.
+**Exact action** Apply `.github/rulesets/main.json` (or an equivalent protection) requiring `CI complete` and the operability job.
+**Where** GitHub repository settings, Rules.
+**Needed input** Five minutes, when engineering reports CI is stable.
+**How to verify completion** `gh api repos/{owner}/{repo}/rulesets` lists an active ruleset for main.
+**What remains after founder action** Nothing.
+**Impact** NON-BLOCKING now, required for enterprise readiness
+**Status** WAITING ON ENGINEERING (CI stabilisation), then FOUNDER ACTION
+
+## [QA] Enterprise QA tenant usable by CI (F14)
+
+**Why founder assistance is required**
+46 of 53 web Playwright specs and the §130 enterprise smoke test need a real signed-in account, SSO and SCIM, and
+creating identity-provider tenants and CI credentials belongs to the account owner.
+**Exact action** Create a Clerk organization with a test SAML or OIDC IdP and SCIM token, a QA user credential that CI can sign in with, and add them as CI secrets.
+**Where** Clerk dashboard, a test IdP (for example an Okta or Entra developer tenant), GitHub secrets.
+**Needed input** About one hour.
+**How to verify completion** The authenticated Playwright job runs in CI and `web-e2e-ci-coverage.test.ts` asserts the specs run.
+**What remains after founder action** Wiring the specs and the smoke test into CI (agent).
+**Impact** FEATURE-BLOCKING (verification of every signed-in flow)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Compliance / vendors] Certification, pen test and infrastructure contracts (F15)
+
+**Why founder assistance is required**
+The founder chose full external scope on 2026-09-16. Contracts and budget are founder decisions.
+**Exact action** Select and sign: a SOC 2 auditor and compliance automation platform; an ISO 27001 certification body; a third-party pen-test firm; a paging vendor; a product analytics vendor; a cloud KMS for customer-managed keys; EU hosting (Neon EU project, Cloudflare R2 EU jurisdiction bucket, EU inference routes).
+**Where** Vendor contracts.
+**Needed input** Quotes and budget approval.
+**How to verify completion** Contracts signed; kickoff dates on the programme plan.
+**What remains after founder action** Waves 4 to 6 of `docs/work/enterprise-completion-plan-2026-09-16.md`.
+**Impact** RELEASE-BLOCKING for enterprise claims (§128)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Product] Three open decisions from the enterprise checklist (F16)
+
+**Why founder assistance is required**
+Product scope calls reserved for the founder.
+**Exact action** Decide: whether the web app becomes a Remote Control controller (today pairing "cannot be completed in a browser"); what Primary Owner can do that Owner cannot; whether paid plans offer a trial and for how long.
+**Where** Reply in chat; recorded in `docs/decisions/`.
+**Needed input** Three answers.
+**How to verify completion** A dated decision record exists.
+**What remains after founder action** Implementation in lanes E, G and H.
+**Impact** FEATURE-BLOCKING (respective rows)
+**Status** BLOCKED, FOUNDER DECISION REQUIRED
 
 ## [Billing / Stripe] Live-mode cutover, Team product and price cleanup
 
