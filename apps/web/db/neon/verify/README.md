@@ -16,7 +16,7 @@ said "writable by nobody through the application role" — see 0144.
 
 ```sh
 docker run -d --name agi-migtest -e POSTGRES_PASSWORD=test \
-  -e POSTGRES_DB=agitest -p 55433:5432 postgres:16-alpine
+  -e POSTGRES_DB=agitest -p 55433:5432 pgvector/pgvector:pg16
 ```
 
 ## Apply the chain the way the runner does

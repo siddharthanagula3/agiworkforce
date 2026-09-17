@@ -206,7 +206,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_DB: agiworkforce_test
           POSTGRES_USER: postgres
@@ -257,7 +257,7 @@ jobs:
     timeout-minutes: 120
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_DB: agiworkforce_test
           POSTGRES_USER: postgres
@@ -1026,7 +1026,7 @@ jobs:
     # kill the server first and hide it.
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_DB: agiworkforce_test
           POSTGRES_USER: postgres

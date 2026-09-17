@@ -125,7 +125,7 @@ for (const gate of [
   requireIncludes('package.json', gate);
 }
 requireIncludes('.github/workflows/ci.yml', 'pnpm check:protocol-types');
-requireIncludes('.github/workflows/ci.yml', 'image: postgres:16-alpine');
+requireIncludes('.github/workflows/ci.yml', 'image: pgvector/pgvector:pg16');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- apply --target ci');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- verify');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:rls-probe -- --target ci');
