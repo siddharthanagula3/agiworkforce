@@ -13,6 +13,16 @@ export function installsDisabledResponse(): NextResponse {
   );
 }
 
+const PLUGIN_NOT_PERMITTED_CODE = 'PLUGIN_NOT_PERMITTED';
+const PLUGIN_NOT_PERMITTED_STATUS = 403;
+
+export function pluginNotPermittedResponse(reason: string): NextResponse {
+  return NextResponse.json(
+    { error: { code: PLUGIN_NOT_PERMITTED_CODE, message: reason } },
+    { status: PLUGIN_NOT_PERMITTED_STATUS },
+  );
+}
+
 export function marketplaceUnavailableError(): AppError {
   return createError.capabilityUnavailable(MARKETPLACE_UNAVAILABLE_MESSAGE);
 }

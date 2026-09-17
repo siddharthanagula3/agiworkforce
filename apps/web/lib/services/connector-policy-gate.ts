@@ -7,7 +7,9 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
 import { readConnectorPolicySafely } from '@/lib/services/connector-policy-service';
 import {
   evaluateConnectorAccess,
+  evaluatePluginAccess,
   type ConnectorAccessDecision,
+  type ConnectorAccessPolicy,
 } from '@/lib/services/connector-policy-evaluator';
 
 /**
@@ -48,11 +50,9 @@ interface ScopedRequest {
   headers: { get(name: string): string | null };
 }
 
-export async function evaluateConnectorPolicyForUser(params: {
+interface WorkspacePolicyAsk {
   db: DatabaseAdapter;
   userId: string;
-  connectorId: string | null;
-  isCustom?: boolean;
   request?: ScopedRequest;
   /**
    * The active workspace, when the caller already has it.
@@ -62,15 +62,22 @@ export async function evaluateConnectorPolicyForUser(params: {
    * personal account and answers immediately; omitting it means resolve.
    */
   organizationId?: string | null;
-}): Promise<ConnectorPolicyGateResult> {
-  const { db, userId, connectorId } = params;
+}
+
+async function evaluateWorkspacePolicy(
+  params: WorkspacePolicyAsk,
+  subject: Record<string, unknown>,
+  refusal: string,
+  decide: (policy: ConnectorAccessPolicy) => ConnectorAccessDecision,
+): Promise<ConnectorPolicyGateResult> {
+  const { db, userId } = params;
   if (!userId) return UNGOVERNED;
   if (params.organizationId === null) return UNGOVERNED;
 
-  // Total, not merely fail-open at each await. A gate added to three live
-  // routes must not be able to turn any of them into a 500: whatever goes
-  // wrong here, the answer is the same one an ungoverned workspace gets, and
-  // the reason is logged.
+  // Total, not merely fail-open at each await. A gate added to live routes
+  // must not be able to turn any of them into a 500: whatever goes wrong here,
+  // the answer is the same one an ungoverned workspace gets, and the reason is
+  // logged.
   let organizationId: string | null = params.organizationId ?? null;
   try {
     organizationId ??= await resolveActiveOrganizationId(db, userId, params.request);
@@ -79,15 +86,9 @@ export async function evaluateConnectorPolicyForUser(params: {
     const policy = await readConnectorPolicySafely(db, organizationId);
     if (!policy) return { ...UNGOVERNED, organizationId };
 
-    const decision = evaluateConnectorAccess(policy, {
-      connectorId,
-      ...(params.isCustom === undefined ? {} : { isCustom: params.isCustom }),
-    });
+    const decision = decide(policy);
     if (!decision.allowed) {
-      logger.info(
-        { userId, organizationId, connectorId, code: decision.code },
-        '[connector-policy] workspace policy refused a connection before any credential was exchanged',
-      );
+      logger.info({ userId, organizationId, ...subject, code: decision.code }, refusal);
     }
     return { ...decision, organizationId };
   } catch (error) {
@@ -97,4 +98,35 @@ export async function evaluateConnectorPolicyForUser(params: {
     );
     return { ...UNGOVERNED, organizationId };
   }
+}
+
+export async function evaluateConnectorPolicyForUser(
+  params: WorkspacePolicyAsk & {
+    connectorId: string | null;
+    isCustom?: boolean;
+    url?: string | null;
+  },
+): Promise<ConnectorPolicyGateResult> {
+  return evaluateWorkspacePolicy(
+    params,
+    { connectorId: params.connectorId },
+    '[connector-policy] workspace policy refused a connection before any credential was exchanged',
+    (policy) =>
+      evaluateConnectorAccess(policy, {
+        connectorId: params.connectorId,
+        ...(params.isCustom === undefined ? {} : { isCustom: params.isCustom }),
+        ...(params.url ? { url: params.url } : {}),
+      }),
+  );
+}
+
+export async function evaluatePluginPolicyForUser(
+  params: WorkspacePolicyAsk & { pluginKey: string },
+): Promise<ConnectorPolicyGateResult> {
+  return evaluateWorkspacePolicy(
+    params,
+    { pluginKey: params.pluginKey },
+    '[connector-policy] workspace policy refused a plugin before it was installed',
+    (policy) => evaluatePluginAccess(policy, params.pluginKey),
+  );
 }

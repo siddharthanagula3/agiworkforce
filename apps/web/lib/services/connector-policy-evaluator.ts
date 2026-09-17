@@ -2,6 +2,9 @@ export interface ConnectorAccessPolicy {
   allowedConnectors: string[];
   blockedConnectors: string[];
   allowCustomConnectors: boolean;
+  allowedPlugins?: string[];
+  blockedPlugins?: string[];
+  allowedMcpHosts?: string[];
 }
 
 export type ConnectorAccessCode =
@@ -9,7 +12,10 @@ export type ConnectorAccessCode =
   | 'ungoverned'
   | 'connector_blocked'
   | 'connector_not_allowed'
-  | 'custom_connectors_disabled';
+  | 'custom_connectors_disabled'
+  | 'mcp_host_not_allowed'
+  | 'plugin_blocked'
+  | 'plugin_not_allowed';
 
 export interface ConnectorAccessDecision {
   allowed: boolean;
@@ -59,7 +65,7 @@ function has(list: readonly string[], value: string): boolean {
  */
 export function evaluateConnectorAccess(
   policy: ConnectorAccessPolicy | null,
-  ask: { connectorId: string | null; isCustom?: boolean },
+  ask: { connectorId: string | null; isCustom?: boolean; url?: string | null },
 ): ConnectorAccessDecision {
   if (!policy) return UNGOVERNED;
 
@@ -72,6 +78,11 @@ export function evaluateConnectorAccess(
       reason:
         'Your workspace administrator does not allow custom connectors. Use an approved integration from the catalog instead.',
     };
+  }
+
+  if (ask.isCustom && ask.url) {
+    const hostDecision = evaluateMcpHostAccess(policy, ask.url);
+    if (!hostDecision.allowed) return hostDecision;
   }
 
   if (has(policy.blockedConnectors, connector)) {
@@ -95,12 +106,74 @@ export function evaluateConnectorAccess(
   return ALLOWED;
 }
 
+export function mcpHostMatches(pattern: string, hostname: string): boolean {
+  const rule = normalize(pattern);
+  const host = hostname.trim().toLowerCase().replace(/\.$/, '');
+  if (!rule || !host) return false;
+  if (rule.startsWith('*.')) {
+    const suffix = rule.slice(1);
+    return host.endsWith(suffix) && host.length > suffix.length;
+  }
+  return host === rule;
+}
+
+export function evaluateMcpHostAccess(
+  policy: ConnectorAccessPolicy | null,
+  url: string,
+): ConnectorAccessDecision {
+  const hosts = policy?.allowedMcpHosts ?? [];
+  if (!policy) return UNGOVERNED;
+  if (hosts.length === 0) return ALLOWED;
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    hostname = '';
+  }
+  if (hostname && hosts.some((pattern) => mcpHostMatches(pattern, hostname))) return ALLOWED;
+  return {
+    allowed: false,
+    code: 'mcp_host_not_allowed',
+    reason: hostname
+      ? `Your workspace administrator only allows MCP servers on approved hosts, and "${hostname}" is not one of them.`
+      : 'Your workspace administrator only allows MCP servers on approved hosts.',
+  };
+}
+
+export function evaluatePluginAccess(
+  policy: ConnectorAccessPolicy | null,
+  pluginKey: string,
+): ConnectorAccessDecision {
+  if (!policy) return UNGOVERNED;
+  const plugin = normalize(pluginKey);
+  const allowedPlugins = policy.allowedPlugins ?? [];
+  if (has(policy.blockedPlugins ?? [], plugin)) {
+    return {
+      allowed: false,
+      code: 'plugin_blocked',
+      reason: `Your workspace administrator has blocked the "${pluginKey}" plugin.`,
+    };
+  }
+  if (has(allowedPlugins, plugin)) return ALLOWED;
+  if (allowedPlugins.length > 0) {
+    return {
+      allowed: false,
+      code: 'plugin_not_allowed',
+      reason: `Your workspace administrator restricts which plugins may be installed, and "${pluginKey}" is not on the approved list.`,
+    };
+  }
+  return ALLOWED;
+}
+
 /** True when the policy would deny at least one thing. */
 export function connectorPolicyRestrictsAnything(policy: ConnectorAccessPolicy | null): boolean {
   if (!policy) return false;
   return (
     policy.allowedConnectors.length > 0 ||
     policy.blockedConnectors.length > 0 ||
-    !policy.allowCustomConnectors
+    !policy.allowCustomConnectors ||
+    (policy.allowedPlugins?.length ?? 0) > 0 ||
+    (policy.blockedPlugins?.length ?? 0) > 0 ||
+    (policy.allowedMcpHosts?.length ?? 0) > 0
   );
 }

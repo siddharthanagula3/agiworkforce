@@ -6,6 +6,9 @@ import { logger } from '@/lib/logger';
 import type { ConnectorAccessPolicy } from './connector-policy-evaluator';
 
 export interface OrganizationConnectorPolicy extends ConnectorAccessPolicy {
+  allowedPlugins: string[];
+  blockedPlugins: string[];
+  allowedMcpHosts: string[];
   organizationId: string;
   updatedByUserId: string | null;
   updatedAt: string;
@@ -18,12 +21,16 @@ interface Row {
   allowed_connectors: string[];
   blocked_connectors: string[];
   allow_custom_connectors: boolean;
+  allowed_plugins: string[] | null;
+  blocked_plugins: string[] | null;
+  allowed_mcp_hosts: string[] | null;
   updated_by_user_id: string | null;
   updated_at: string | Date;
 }
 
 const COLUMNS = `organization_id, allowed_connectors, blocked_connectors,
-  allow_custom_connectors, updated_by_user_id, updated_at`;
+  allow_custom_connectors, allowed_plugins, blocked_plugins, allowed_mcp_hosts,
+  updated_by_user_id, updated_at`;
 
 function format(row: Row): OrganizationConnectorPolicy {
   return {
@@ -31,6 +38,9 @@ function format(row: Row): OrganizationConnectorPolicy {
     allowedConnectors: [...row.allowed_connectors],
     blockedConnectors: [...row.blocked_connectors],
     allowCustomConnectors: row.allow_custom_connectors,
+    allowedPlugins: [...(row.allowed_plugins ?? [])],
+    blockedPlugins: [...(row.blocked_plugins ?? [])],
+    allowedMcpHosts: [...(row.allowed_mcp_hosts ?? [])],
     updatedByUserId: row.updated_by_user_id,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   };
@@ -80,6 +90,9 @@ export interface ConnectorPolicyInput {
   allowedConnectors: string[];
   blockedConnectors: string[];
   allowCustomConnectors: boolean;
+  allowedPlugins: string[];
+  blockedPlugins: string[];
+  allowedMcpHosts: string[];
 }
 
 /** Whole-row write, for the reason the model policy gives: partial writes on interdependent lists silently carry or drop the fields nobody touched. */
@@ -92,12 +105,16 @@ export async function upsertConnectorPolicy(
   const [row] = await db.query<Row>(
     `insert into public.organization_connector_policies
        (organization_id, allowed_connectors, blocked_connectors,
-        allow_custom_connectors, updated_by_user_id)
-     values ($1, $2::text[], $3::text[], $4, $5)
+        allow_custom_connectors, allowed_plugins, blocked_plugins,
+        allowed_mcp_hosts, updated_by_user_id)
+     values ($1, $2::text[], $3::text[], $4, $5::text[], $6::text[], $7::text[], $8)
      on conflict (organization_id) do update set
        allowed_connectors      = excluded.allowed_connectors,
        blocked_connectors      = excluded.blocked_connectors,
        allow_custom_connectors = excluded.allow_custom_connectors,
+       allowed_plugins         = excluded.allowed_plugins,
+       blocked_plugins         = excluded.blocked_plugins,
+       allowed_mcp_hosts       = excluded.allowed_mcp_hosts,
        updated_by_user_id      = excluded.updated_by_user_id
      returning ${COLUMNS}`,
     [
@@ -105,6 +122,9 @@ export async function upsertConnectorPolicy(
       input.allowedConnectors,
       input.blockedConnectors,
       input.allowCustomConnectors,
+      input.allowedPlugins,
+      input.blockedPlugins,
+      input.allowedMcpHosts,
       updatedByUserId,
     ],
   );
@@ -123,6 +143,9 @@ export function diffConnectorPolicy(
     if (after.allowedConnectors.length > 0) changed.push('allowedConnectors');
     if (after.blockedConnectors.length > 0) changed.push('blockedConnectors');
     if (!after.allowCustomConnectors) changed.push('allowCustomConnectors');
+    if (after.allowedPlugins.length > 0) changed.push('allowedPlugins');
+    if (after.blockedPlugins.length > 0) changed.push('blockedPlugins');
+    if (after.allowedMcpHosts.length > 0) changed.push('allowedMcpHosts');
     return changed;
   }
   const same = (a: string[], b: string[]) =>
@@ -132,5 +155,8 @@ export function diffConnectorPolicy(
   if (before.allowCustomConnectors !== after.allowCustomConnectors) {
     changed.push('allowCustomConnectors');
   }
+  if (!same(before.allowedPlugins, after.allowedPlugins)) changed.push('allowedPlugins');
+  if (!same(before.blockedPlugins, after.blockedPlugins)) changed.push('blockedPlugins');
+  if (!same(before.allowedMcpHosts, after.allowedMcpHosts)) changed.push('allowedMcpHosts');
   return changed;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Ban, Check, PlugZap } from 'lucide-react';
+import { Ban, Check, PlugZap, X } from 'lucide-react';
 
 import {
   useConnectorPolicy,
@@ -49,6 +49,269 @@ function EffectiveChip({ state }: { state: Effective }) {
   );
 }
 
+const PLUGIN_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+const MCP_HOST_PATTERN =
+  /^(\*\.)?(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+
+const inputClass =
+  'min-w-0 flex-1 rounded-md border bg-transparent px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+const smallButtonClass =
+  'rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+
+function withEntry(list: string[], value: string): string[] {
+  const lower = value.trim().toLowerCase();
+  return list.some((entry) => entry.toLowerCase() === lower) ? list : [...list, lower];
+}
+
+function withoutEntry(list: string[], value: string): string[] {
+  const lower = value.toLowerCase();
+  return list.filter((entry) => entry.toLowerCase() !== lower);
+}
+
+function EntryList({
+  label,
+  entries,
+  empty,
+  destructive,
+  disabled,
+  onRemove,
+}: {
+  label: string;
+  entries: string[];
+  empty: string;
+  destructive?: boolean;
+  disabled: boolean;
+  onRemove: (entry: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-[12px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-3)' }}>
+        {label}
+      </p>
+      {entries.length === 0 ? (
+        <p className="text-xs" style={{ color: 'var(--text-3)' }}>
+          {empty}
+        </p>
+      ) : (
+        <ul className="flex flex-wrap gap-1.5" aria-label={label}>
+          {entries.map((entry) => (
+            <li
+              key={entry}
+              className="flex items-center gap-1 rounded-sm border py-0.5 pl-2 pr-0.5 text-xs"
+              style={{
+                borderColor: destructive ? 'currentColor' : 'var(--settings-border)',
+                color: destructive ? 'var(--settings-destructive-text)' : 'var(--text-1)',
+              }}
+            >
+              <span className="break-all">{entry}</span>
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label={`Remove ${entry} from ${label.toLowerCase()}`}
+                onClick={() => onRemove(entry)}
+                className="rounded-sm p-1 transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <X aria-hidden className="h-3 w-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PluginPolicySection({
+  draft,
+  canEdit,
+  onChange,
+}: {
+  draft: ConnectorPolicyLists;
+  canEdit: boolean;
+  onChange: (next: ConnectorPolicyLists) => void;
+}) {
+  const [value, setValue] = useState('');
+  const key = value.trim().toLowerCase();
+  const valid = PLUGIN_KEY_PATTERN.test(key);
+
+  const approve = () => {
+    onChange({
+      ...draft,
+      allowedPlugins: withEntry(draft.allowedPlugins, key),
+      blockedPlugins: withoutEntry(draft.blockedPlugins, key),
+    });
+    setValue('');
+  };
+  const block = () => {
+    onChange({
+      ...draft,
+      blockedPlugins: withEntry(draft.blockedPlugins, key),
+      allowedPlugins: withoutEntry(draft.allowedPlugins, key),
+    });
+    setValue('');
+  };
+
+  return (
+    <section style={cardStyle} aria-labelledby="plugins-heading">
+      <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
+        <h2
+          id="plugins-heading"
+          className="text-sm font-semibold"
+          style={{ color: 'var(--text-1)' }}
+        >
+          Plugins
+        </h2>
+        <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+          Checked when a member installs a plugin, from the directory, a marketplace or an upload.
+          Approving any plugin makes the approved list the only plugins members can install.
+        </p>
+      </div>
+      <div className="flex flex-col gap-4 px-5 py-4">
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (valid && canEdit) approve();
+          }}
+        >
+          <label htmlFor="plugin-policy-key" className="sr-only">
+            Plugin key
+          </label>
+          <input
+            id="plugin-policy-key"
+            value={value}
+            disabled={!canEdit}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="plugin-key"
+            autoComplete="off"
+            spellCheck={false}
+            className={inputClass}
+            style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+          />
+          <button
+            type="submit"
+            disabled={!canEdit || !valid}
+            className={smallButtonClass}
+            style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+          >
+            <Check aria-hidden className="mr-1 inline h-3 w-3" />
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={!canEdit || !valid}
+            onClick={block}
+            className={smallButtonClass}
+            style={{
+              borderColor: 'var(--settings-border)',
+              color: 'var(--settings-destructive-text)',
+            }}
+          >
+            <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+            Block
+          </button>
+        </form>
+        <EntryList
+          label="Approved plugins"
+          entries={draft.allowedPlugins}
+          empty="None approved, so every plugin that is not blocked can be installed."
+          disabled={!canEdit}
+          onRemove={(entry) =>
+            onChange({ ...draft, allowedPlugins: withoutEntry(draft.allowedPlugins, entry) })
+          }
+        />
+        <EntryList
+          label="Blocked plugins"
+          entries={draft.blockedPlugins}
+          empty="No plugins are blocked."
+          destructive
+          disabled={!canEdit}
+          onRemove={(entry) =>
+            onChange({ ...draft, blockedPlugins: withoutEntry(draft.blockedPlugins, entry) })
+          }
+        />
+      </div>
+    </section>
+  );
+}
+
+function McpHostPolicySection({
+  draft,
+  canEdit,
+  onChange,
+}: {
+  draft: ConnectorPolicyLists;
+  canEdit: boolean;
+  onChange: (next: ConnectorPolicyLists) => void;
+}) {
+  const [value, setValue] = useState('');
+  const host = value.trim().toLowerCase();
+  const valid = MCP_HOST_PATTERN.test(host);
+
+  return (
+    <section style={cardStyle} aria-labelledby="mcp-hosts-heading">
+      <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
+        <h2
+          id="mcp-hosts-heading"
+          className="text-sm font-semibold"
+          style={{ color: 'var(--text-1)' }}
+        >
+          MCP server hosts
+        </h2>
+        <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+          Limits which hosts a custom or shared MCP connector may reach. Checked when the connector
+          is added and every time it connects. Use *.example.com to approve every subdomain. With no
+          hosts listed, any public host is allowed.
+        </p>
+      </div>
+      <div className="flex flex-col gap-4 px-5 py-4">
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!valid || !canEdit) return;
+            onChange({ ...draft, allowedMcpHosts: withEntry(draft.allowedMcpHosts, host) });
+            setValue('');
+          }}
+        >
+          <label htmlFor="mcp-host-policy" className="sr-only">
+            MCP server host
+          </label>
+          <input
+            id="mcp-host-policy"
+            value={value}
+            disabled={!canEdit}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="mcp.example.com"
+            autoComplete="off"
+            spellCheck={false}
+            className={inputClass}
+            style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+          />
+          <button
+            type="submit"
+            disabled={!canEdit || !valid}
+            className={smallButtonClass}
+            style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+          >
+            <Check aria-hidden className="mr-1 inline h-3 w-3" />
+            Approve host
+          </button>
+        </form>
+        <EntryList
+          label="Approved hosts"
+          entries={draft.allowedMcpHosts}
+          empty="No host restriction."
+          disabled={!canEdit}
+          onRemove={(entry) =>
+            onChange({ ...draft, allowedMcpHosts: withoutEntry(draft.allowedMcpHosts, entry) })
+          }
+        />
+      </div>
+    </section>
+  );
+}
+
 function toggle(list: string[], value: string): string[] {
   const lower = value.toLowerCase();
   return list.some((entry) => entry.toLowerCase() === lower)
@@ -67,16 +330,23 @@ export function WorkspaceConnectorPolicy() {
       allowedConnectors: [...data.policy.allowedConnectors],
       blockedConnectors: [...data.policy.blockedConnectors],
       allowCustomConnectors: data.policy.allowCustomConnectors,
+      allowedPlugins: [...data.policy.allowedPlugins],
+      blockedPlugins: [...data.policy.blockedPlugins],
+      allowedMcpHosts: [...data.policy.allowedMcpHosts],
     });
   }, [data]);
 
   const dirty = useMemo(() => {
     if (!data || !draft) return false;
+    const sorted = (list: string[]) => [...list].map((s) => s.toLowerCase()).sort();
     const norm = (l: ConnectorPolicyLists) =>
       JSON.stringify({
-        a: [...l.allowedConnectors].map((s) => s.toLowerCase()).sort(),
-        b: [...l.blockedConnectors].map((s) => s.toLowerCase()).sort(),
+        a: sorted(l.allowedConnectors),
+        b: sorted(l.blockedConnectors),
         c: l.allowCustomConnectors,
+        p: sorted(l.allowedPlugins),
+        q: sorted(l.blockedPlugins),
+        h: sorted(l.allowedMcpHosts),
       });
     return norm(data.policy) !== norm(draft);
   }, [data, draft]);
@@ -128,8 +398,12 @@ export function WorkspaceConnectorPolicy() {
 
   const canEdit = data.canManagePolicy && !update.isPending;
   const restricted =
-    draft.allowedConnectors.length + draft.blockedConnectors.length > 0 ||
-    !draft.allowCustomConnectors;
+    draft.allowedConnectors.length +
+      draft.blockedConnectors.length +
+      draft.allowedPlugins.length +
+      draft.blockedPlugins.length +
+      draft.allowedMcpHosts.length >
+      0 || !draft.allowCustomConnectors;
 
   return (
     <div className="flex flex-col gap-6">
@@ -162,6 +436,10 @@ export function WorkspaceConnectorPolicy() {
           />
         </div>
       </section>
+
+      <McpHostPolicySection draft={draft} canEdit={canEdit} onChange={setDraft} />
+
+      <PluginPolicySection draft={draft} canEdit={canEdit} onChange={setDraft} />
 
       <section style={cardStyle} aria-labelledby="connectors-heading">
         <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
@@ -269,8 +547,8 @@ export function WorkspaceConnectorPolicy() {
         >
           <p className="max-w-xl text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             {restricted
-              ? 'Applied where the tool catalog is assembled, the one path chat, scheduled tasks, and cloud agent runs all share. A blocked connector is never offered to the model, so it cannot be called from any of them.'
-              : 'No restriction is in force. Members may use any integration, including custom endpoints.'}
+              ? 'Applied where the tool catalog is assembled, the one path chat, scheduled tasks, and cloud agent runs all share, and when a plugin is installed. A blocked connector is never offered to the model, so it cannot be called from any of them.'
+              : 'No restriction is in force. Members may use any integration and install any plugin, including custom endpoints.'}
           </p>
           <div className="flex items-center gap-3">
             {update.isError ? (
@@ -284,7 +562,7 @@ export function WorkspaceConnectorPolicy() {
               onClick={() => update.mutate(draft)}
               className="rounded-md bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             >
-              {update.isPending ? 'Saving…' : 'Save connector policy'}
+              {update.isPending ? 'Saving…' : 'Save policy'}
             </button>
           </div>
         </div>

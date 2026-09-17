@@ -30,6 +30,7 @@ fn config_for_event(event_name: &str) -> HooksConfig {
         blocking: false,
         matcher: None,
         if_condition: None,
+        source: agiworkforce_cli::hooks::HookSource::User,
     };
     let mut hooks = HashMap::new();
     hooks.insert(event_name.to_string(), vec![hook]);

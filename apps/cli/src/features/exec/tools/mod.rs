@@ -143,6 +143,56 @@ mod contract_mapping_tests {
         }
     }
 
+    #[tokio::test]
+    async fn a_permission_request_hook_sees_every_approval_and_can_deny_it() {
+        let scratch = tempfile::tempdir().unwrap();
+        let seen = scratch.path().join("seen.json");
+        let hook = |command: String| crate::hooks::Hook {
+            command,
+            args: Vec::new(),
+            timeout: 5,
+            blocking: true,
+            matcher: None,
+            if_condition: None,
+            source: crate::hooks::HookSource::User,
+        };
+        let mut hooks = std::collections::HashMap::new();
+        hooks.insert(
+            "PermissionRequest".to_string(),
+            vec![hook(format!("cat > '{}'", seen.display()))],
+        );
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: "rm -rf build".to_string(),
+            },
+            "Run rm -rf build?",
+            Vec::new(),
+        );
+        let observing = crate::hooks::HooksConfig { hooks };
+        assert_eq!(
+            permission_request_hook_denial(&observing, &request).await,
+            None
+        );
+        let payload: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&seen).unwrap()).unwrap();
+        assert_eq!(payload["event"], "PermissionRequest");
+        assert_eq!(payload["tool_name"], "run_command");
+        assert_eq!(payload["tool_args"]["command"], "rm -rf build");
+
+        let mut hooks = std::collections::HashMap::new();
+        hooks.insert(
+            "PermissionRequest".to_string(),
+            vec![hook(
+                "printf '%s' '{\"decision\":\"block\",\"reason\":\"no deletes\"}'".to_string(),
+            )],
+        );
+        let denying = crate::hooks::HooksConfig { hooks };
+        assert_eq!(
+            permission_request_hook_denial(&denying, &request).await,
+            Some(vec!["no deletes".to_string()])
+        );
+    }
+
     #[test]
     fn the_shared_shell_policy_verdict_maps_onto_the_contract() {
         assert_eq!(
@@ -578,8 +628,97 @@ pub(crate) async fn request_approval(
     approval_callback: Option<&ApprovalCallback>,
     request: ApprovalRequest,
 ) -> Option<ApprovalDecision> {
+    let hooks_config = crate::hooks::load_hooks_or_default();
+    if let Some(reasons) = permission_request_hook_denial(&hooks_config, &request).await {
+        eprintln!(
+            "{} {}",
+            crate::terminal_style::warning("Denied by PermissionRequest hook:"),
+            crate::terminal_text::sanitize_terminal_text(&reasons.join("; "))
+        );
+        return Some(ApprovalDecision::Deny);
+    }
     let callback = approval_callback?;
     Some(callback(request).await)
+}
+
+fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_json::Value) {
+    match kind {
+        ApprovalRequestKind::Exec { command } => {
+            ("run_command", serde_json::json!({ "command": command }))
+        }
+        ApprovalRequestKind::FileWrite { path } => {
+            ("write_file", serde_json::json!({ "path": path }))
+        }
+        ApprovalRequestKind::FileEdit { path } => {
+            ("edit_file", serde_json::json!({ "path": path }))
+        }
+        ApprovalRequestKind::Patch { files } => {
+            ("apply_patch", serde_json::json!({ "files": files }))
+        }
+        ApprovalRequestKind::LoopDetection { repeated_action } => (
+            "loop_detection",
+            serde_json::json!({ "action": repeated_action }),
+        ),
+        ApprovalRequestKind::McpTool {
+            server_name,
+            tool_name,
+        } => (
+            "mcp",
+            serde_json::json!({ "server": server_name, "tool": tool_name }),
+        ),
+        ApprovalRequestKind::McpElicitation { server_name } => (
+            "mcp_elicitation",
+            serde_json::json!({ "server": server_name }),
+        ),
+        ApprovalRequestKind::AskUser { question } => {
+            ("ask_user", serde_json::json!({ "question": question }))
+        }
+        ApprovalRequestKind::Hook { hook_name } => {
+            ("hook", serde_json::json!({ "hook": hook_name }))
+        }
+        ApprovalRequestKind::Subagent { name } => ("task", serde_json::json!({ "name": name })),
+        ApprovalRequestKind::TrustDirectory { path } => {
+            ("trust_directory", serde_json::json!({ "path": path }))
+        }
+        ApprovalRequestKind::WorkspacePolicy {
+            tool_name: _,
+            primary_argument,
+        } => (
+            "workspace_policy",
+            serde_json::json!({ "argument": primary_argument }),
+        ),
+    }
+}
+
+pub(crate) async fn permission_request_hook_denial(
+    hooks_config: &crate::hooks::HooksConfig,
+    request: &ApprovalRequest,
+) -> Option<Vec<String>> {
+    let (fallback_name, tool_args) = approval_request_tool(&request.kind);
+    let tool_name = match &request.kind {
+        ApprovalRequestKind::WorkspacePolicy { tool_name, .. } => tool_name.clone(),
+        ApprovalRequestKind::McpTool { tool_name, .. } => tool_name.clone(),
+        _ => fallback_name.to_string(),
+    };
+    let results = crate::hooks::run_hooks(
+        hooks_config,
+        crate::hooks::HookEvent::PermissionRequest,
+        &crate::hooks::HookInput {
+            event: crate::hooks::HookEvent::PermissionRequest.to_string(),
+            session_id: None,
+            model: None,
+            tool_name: Some(tool_name),
+            tool_args: Some(tool_args),
+            tool_output: None,
+            message: Some(request.summary.clone()),
+            tool_execution: None,
+        },
+    )
+    .await;
+    match crate::hooks::aggregate_results(&results) {
+        crate::hooks::HookAggregateOutcome::Blocked { reasons } => Some(reasons),
+        _ => None,
+    }
 }
 
 pub(crate) fn approval_allows(decision: ApprovalDecision) -> bool {

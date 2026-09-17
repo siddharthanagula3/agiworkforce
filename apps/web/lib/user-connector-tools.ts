@@ -20,6 +20,10 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
+import {
+  evaluateMcpHostAccess,
+  type ConnectorAccessPolicy,
+} from '@/lib/services/connector-policy-evaluator';
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import {
@@ -1757,17 +1761,37 @@ async function applyConnectorPolicy(
   return kept;
 }
 
+async function readCustomHostPolicy(organizationId: string): Promise<ConnectorAccessPolicy | null> {
+  try {
+    const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
+    return await readConnectorPolicySafely(getNeonDb(), organizationId);
+  } catch (error) {
+    logger.error(
+      { error, organizationId },
+      '[connector-policy] unavailable while dialling custom connectors',
+    );
+    return null;
+  }
+}
+
+function mcpHostPermitted(policy: ConnectorAccessPolicy | null, url: string): boolean {
+  return evaluateMcpHostAccess(policy, url).allowed;
+}
+
 async function connectorPolicyAllows(
   connectorId: string,
   organizationId: string | null,
   isCustom: boolean,
+  url?: string,
 ): Promise<boolean> {
   if (!organizationId) return true;
   try {
     const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
     const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
     const policy = await readConnectorPolicySafely(getNeonDb(), organizationId);
-    return policy ? evaluateConnectorAccess(policy, { connectorId, isCustom }).allowed : true;
+    return policy
+      ? evaluateConnectorAccess(policy, { connectorId, isCustom, ...(url ? { url } : {}) }).allowed
+      : true;
   } catch (error) {
     logger.error(
       { error, organizationId, connectorId },
@@ -2106,7 +2130,14 @@ export async function withUserConnectorMcpHandle<T>(
   }
 
   if (!descriptor) return null;
-  if (!(await connectorPolicyAllows(descriptor.connectorId, organizationId, descriptor.isCustom))) {
+  if (
+    !(await connectorPolicyAllows(
+      descriptor.connectorId,
+      organizationId,
+      descriptor.isCustom,
+      descriptor.url,
+    ))
+  ) {
     return null;
   }
 
@@ -2224,10 +2255,20 @@ export async function loadUserConnectorToolCatalog(
       });
     }
 
+    const customHostPolicy = organizationId
+      ? readCustomHostPolicy(organizationId)
+      : Promise.resolve(null);
     for (const row of customRows) {
       dials.push({
         member: true,
         load: async () => {
+          if (!mcpHostPermitted(await customHostPolicy, row.url)) {
+            logger.info(
+              { userId, organizationId, connectorRowId: row.id },
+              '[connector-policy] custom MCP host not approved; connector not dialled',
+            );
+            return [];
+          }
           const catalog = await buildCustomConnectorCatalog(userId, row);
           return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
         },
@@ -2238,6 +2279,7 @@ export async function loadUserConnectorToolCatalog(
       dials.push({
         member: true,
         load: async () => {
+          if (!mcpHostPermitted(await customHostPolicy, row.url)) return [];
           const catalog = await buildOrgSharedConnectorCatalog(row);
           return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
         },

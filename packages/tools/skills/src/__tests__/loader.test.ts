@@ -57,6 +57,8 @@ describe('loadSkillsFromDir, directory layout', () => {
         '    - gizmo-cli',
         '  tools:',
         '    - write_file',
+        '  mcp:',
+        '    - linear',
         '---',
         'body',
       ].join('\n'),
@@ -67,6 +69,7 @@ describe('loadSkillsFromDir, directory layout', () => {
     expect(skills[0]?.metadata.primaryEnv).toBe('GIZMO_API_KEY');
     expect(skills[0]?.metadata.requires?.bins).toEqual(['gizmo-cli']);
     expect(skills[0]?.metadata.requires?.tools).toEqual(['write_file']);
+    expect(skills[0]?.metadata.requires?.mcp).toEqual(['linear']);
   });
 
   it('uses a path-free fallback description when frontmatter omits one', async () => {
