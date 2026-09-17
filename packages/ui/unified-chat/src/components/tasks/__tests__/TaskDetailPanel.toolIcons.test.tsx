@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TaskDetailPanel } from '../TaskDetailPanel';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 afterEach(cleanup);
 
@@ -27,7 +28,7 @@ const run: CloudAgentRun = {
 
 function event(sequence: number, value: AgentEventEnvelope['event']): AgentEventEnvelope {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: 'conversation-1',
     turnId: 'turn-1',
     sequence,

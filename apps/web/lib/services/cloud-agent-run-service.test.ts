@@ -9,7 +9,7 @@ vi.mock('./agent-notification-service', () => ({
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
+import { TERMINAL_AGENT_TASK_STATES, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   APPROVAL_CHECKPOINT_TTL_HOURS,
@@ -66,7 +66,7 @@ function database(): DatabaseAdapter {
 }
 
 const envelope: AgentEventEnvelope = {
-  schemaVersion: 4,
+  schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
   sessionId: '0190a000-0000-7000-8000-000000000099',
   turnId: 'agi.chat.web.send.turn-1',
   sequence: 2,

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MINIMUM_SUPPORTED_RUNTIME_VERSION } from '@agiworkforce/types';
+import { MINIMUM_SUPPORTED_RUNTIME_VERSION, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import type {
   DeveloperSessionEvent,
   DeveloperSessionList,
@@ -603,7 +603,7 @@ describe('developer session runtime', () => {
 
     await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'read it' });
     children[0]?.notify('turn/agent_event', {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: thread.id,
       turnId: 'turn-1',
       sequence: 0,
@@ -618,7 +618,7 @@ describe('developer session runtime', () => {
       },
     });
     children[0]?.notify('turn/agent_event', {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: thread.id,
       turnId: 'turn-1',
       sequence: 1,

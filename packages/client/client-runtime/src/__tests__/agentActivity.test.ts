@@ -7,6 +7,7 @@ import {
   startAgentActivityLocally,
 } from '../agentActivity';
 import type { AgentActivityEntry, AgentActivityToolEntry } from '../agentActivity';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const UNAVAILABLE_PREFIX = 'Code execution is unavailable for this request';
 const UNAVAILABLE_PADDING_LENGTH = 100_000;
@@ -18,7 +19,7 @@ function isToolEntry(entry: AgentActivityEntry | undefined): entry is AgentActiv
 
 function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: 'session-1',
     turnId: 'turn-1',
     sequence,

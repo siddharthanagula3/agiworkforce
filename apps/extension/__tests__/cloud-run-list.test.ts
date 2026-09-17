@@ -4,6 +4,7 @@ import {
   ManagedCloudAgentRunAlreadyResumingError,
   ManagedCloudAgentRunApprovalExpiredError,
   managedCloudAgentRunPath,
+  AGENT_EVENT_SCHEMA_VERSION,
 } from '@agiworkforce/cloud-contracts';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -66,7 +67,7 @@ function awaitingApprovalRun(): CloudAgentRun {
 
 function textEvent(sequence: number, delta: string): AgentEventEnvelope {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: 'session-1',
     turnId: 'turn-1',
     sequence,
@@ -684,7 +685,7 @@ describe('side-panel cloud run list', () => {
       textEvent(0, 'Hel'),
       textEvent(1, 'lo'),
       {
-        schemaVersion: 4,
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
         sessionId: 'session-1',
         turnId: 'turn-1',
         sequence: 2,

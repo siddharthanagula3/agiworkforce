@@ -70,6 +70,7 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -252,7 +253,7 @@ describe('cloud send: canonical agent activity', () => {
   it('projects the validated event stream into durable message metadata', async () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       const base = {
-        schemaVersion: 4 as const,
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION as const,
         sessionId: 'session-mobile-activity',
         turnId: 'turn-mobile-activity',
       };
@@ -342,7 +343,7 @@ describe('cloud send: canonical agent activity', () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onDelta({
         x_agent_event: {
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'session-mobile-failure',
           turnId: 'turn-mobile-failure',
           sequence: 0,
@@ -387,7 +388,7 @@ describe('cloud send: canonical agent activity', () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks, signal) => {
       callbacks.onDelta({
         x_agent_event: {
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'session-mobile-cancel',
           turnId: 'turn-mobile-cancel',
           sequence: 0,

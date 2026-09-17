@@ -13,6 +13,7 @@ import {
 } from '../../test/modelCatalogFixtures';
 import type { ChatRuntime, StreamCallback } from '../../lib/runtime';
 import type { ModelInfo } from '../../lib/types';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const localModel: ModelInfo = {
   id: 'fixture-local-model',
@@ -182,7 +183,7 @@ describe('useChat, addMsg forwards the real fields on message creation', () => {
     emit({
       type: 'agent_event',
       envelope: {
-        schemaVersion: 4,
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
         sessionId: 'session-1',
         turnId: 'turn-1',
         sequence: 0,
@@ -205,7 +206,7 @@ describe('useChat, addMsg forwards the real fields on message creation', () => {
     emit({
       type: 'agent_event',
       envelope: {
-        schemaVersion: 4,
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
         sessionId: 'session-1',
         turnId: 'turn-1',
         sequence: 0,

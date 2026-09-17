@@ -12,6 +12,7 @@ vi.mock('./agent-notification-service', () => ({
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   saveCloudAgentApprovalCheckpoint,
   saveCloudAgentInputCheckpoint,
@@ -56,7 +57,7 @@ const CHECKPOINT_ROW = {
 };
 
 const envelope: AgentEventEnvelope = {
-  schemaVersion: 4,
+  schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
   sessionId: RUN_ROW.conversation_id,
   turnId: RUN_ROW.request_id,
   sequence: 3,

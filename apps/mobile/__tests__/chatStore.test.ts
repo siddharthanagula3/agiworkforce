@@ -126,7 +126,7 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { cancelMobileCloudAgentRun, streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import {
   SYNTHETIC_IMAGE_MODEL_ID,
@@ -946,7 +946,7 @@ describe('chatStore, streaming state', () => {
       const runId = '0190a000-0000-7000-8000-000000000099';
       const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
       const envelope = (sequence: number, delta: string) => ({
-        schemaVersion: 4 as const,
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION as const,
         sessionId: 'session-mobile-durable',
         turnId: 'turn-mobile-durable',
         sequence,

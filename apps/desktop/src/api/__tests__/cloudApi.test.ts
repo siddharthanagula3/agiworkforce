@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getModelsForProvider } from '@agiworkforce/types';
+import { getModelsForProvider, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import {
   CLOUD_MAX_CONVERSATIONS,
@@ -709,7 +709,7 @@ describe('cloudApi', () => {
 
   it('dispatches a retried canonical event and its text projection exactly once', async () => {
     const envelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'session-desktop-1',
       turnId: 'turn-desktop-1',
       sequence: 4,

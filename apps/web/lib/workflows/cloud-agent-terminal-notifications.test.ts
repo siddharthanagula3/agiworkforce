@@ -92,6 +92,7 @@ import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/req
 import { appendCloudAgentEvent } from '@/lib/services/cloud-agent-run-service';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 import { settleWorkflowInvocation } from './steps/settle-workflow-invocation';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CONVERSATION_ID = '0190a000-0000-7000-8000-000000000099';
@@ -171,7 +172,7 @@ function createFakeDatabase(): DatabaseAdapter {
 
 function taskStateEnvelope(sequence: number, state: AgentTaskState): AgentEventEnvelope {
   return {
-    schemaVersion: 4,
+    schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
     sessionId: CONVERSATION_ID,
     turnId: REQUEST_ID,
     sequence,

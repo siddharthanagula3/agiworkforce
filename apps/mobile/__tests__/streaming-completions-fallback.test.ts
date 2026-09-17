@@ -1,4 +1,5 @@
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
@@ -206,7 +207,7 @@ describe('completions stream fallback (RN null response.body)', () => {
   it('runtime-validates and forwards the canonical agent activity envelope', async () => {
     const { streamChat } = await loadStreamingService();
     const validEnvelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'session-mobile-1',
       turnId: 'turn-mobile-1',
       sequence: 0,
@@ -250,7 +251,7 @@ describe('completions stream fallback (RN null response.body)', () => {
   it('forwards a retried canonical text event exactly once', async () => {
     const { streamChat } = await loadStreamingService();
     const envelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'session-mobile-retry',
       turnId: 'turn-mobile-retry',
       sequence: 7,
@@ -300,7 +301,7 @@ describe('completions stream fallback (RN null response.body)', () => {
             delta: {
               content: 'Safe answer',
               x_agent_event: {
-                schemaVersion: 4,
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
                 sessionId: 'session-mobile-1',
                 turnId: 'turn-mobile-1',
                 sequence: -1,
@@ -391,7 +392,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
     const encoder = new TextEncoder();
     const lifecycleEnvelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'session-mobile-durable',
       turnId: 'turn-mobile-durable',
       sequence: 0,
@@ -399,7 +400,7 @@ describe('completions stream fallback (RN null response.body)', () => {
       event: { type: 'lifecycle', phase: 'started' },
     } as const;
     const recoveredTextEnvelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'session-mobile-durable',
       turnId: 'turn-mobile-durable',
       sequence: 1,
@@ -407,7 +408,7 @@ describe('completions stream fallback (RN null response.body)', () => {
       event: { type: 'text-delta', delta: ' recovered' },
     } as const;
     const stopEnvelope = {
-      schemaVersion: 4,
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: 'session-mobile-durable',
       turnId: 'turn-mobile-durable',
       sequence: 2,

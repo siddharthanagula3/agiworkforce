@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ManagedCloudAgentRunHttpError } from '@agiworkforce/cloud-contracts';
+import {
+  ManagedCloudAgentRunHttpError,
+  AGENT_EVENT_SCHEMA_VERSION,
+} from '@agiworkforce/cloud-contracts';
 import type {
   ManagedCloudAgentRunClient,
   ManagedCloudAgentRunReference,
@@ -74,7 +77,7 @@ describe('Chrome managed run control', () => {
       cancelRun: vi.fn(),
       followRun: vi.fn(async (_runId, options) => {
         await options?.onEvent?.({
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'session-1',
           turnId: 'turn-1',
           sequence: 0,
@@ -82,7 +85,7 @@ describe('Chrome managed run control', () => {
           event: { type: 'text-delta', delta: 'Hello' },
         });
         await options?.onEvent?.({
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'session-1',
           turnId: 'turn-1',
           sequence: 1,
@@ -95,7 +98,7 @@ describe('Chrome managed run control', () => {
           },
         });
         await options?.onEvent?.({
-          schemaVersion: 4,
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
           sessionId: 'session-1',
           turnId: 'turn-1',
           sequence: 2,
