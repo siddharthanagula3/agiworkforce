@@ -9,6 +9,9 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { readJsonBody } from '@/lib/read-json-body';
+import { isSearchSourceKind, SEARCH_SOURCE_KINDS } from '@agiworkforce/data-layer/search';
+import { createPostgresSearchProvider } from '@/lib/services/retrieval-search-service';
+import { toSearchDocumentResults } from '@/lib/services/retrieval-search-results';
 
 const PG_UNDEFINED_FUNCTION = '42883';
 
@@ -227,7 +230,21 @@ async function handleGet(request: NextRequest) {
     msgParams.push(endDate);
   }
 
-  const [sessionRows, projectRows, fileRows, messageRows] = await Promise.all([
+  const requestedKinds = url.searchParams.getAll('kind').filter(isSearchSourceKind);
+  const indexSearch = createPostgresSearchProvider({
+    db,
+    userId,
+    organizationId,
+    semantic: url.searchParams.get('mode') !== 'lexical',
+  }).search({
+    text: q,
+    kinds: requestedKinds.length > 0 ? requestedKinds : SEARCH_SOURCE_KINDS,
+    limit,
+    maxPerSource: 3,
+    match: 'all_terms',
+  });
+
+  const [sessionRows, projectRows, fileRows, messageRows, indexed] = await Promise.all([
     db.query<SessionRow>(
       `select id, title, created_at, updated_at
        from web_conversations
@@ -268,7 +285,9 @@ async function handleGet(request: NextRequest) {
        limit 100`,
       msgParams,
     ),
+    indexSearch,
   ]);
+  const documents = toSearchDocumentResults(indexed.hits);
 
   const sessionResults = sessionRows.map((s) => {
     const match = extractMatch(s.title ?? '', q);
@@ -352,6 +371,7 @@ async function handleGet(request: NextRequest) {
     messageMatches: messageResults.length,
     projectMatches: projectResults.length,
     fileMatches: fileResults.length,
+    documentMatches: documents.length,
   };
 
   const crossSiteNavigation = request.headers.get('sec-fetch-site') === 'cross-site';
@@ -370,6 +390,8 @@ async function handleGet(request: NextRequest) {
     results: allResults,
     projects: projectResults,
     files: fileResults,
+    documents,
+    semantic: indexed.semantic,
     stats,
   });
 }

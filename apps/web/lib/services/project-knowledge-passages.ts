@@ -19,33 +19,13 @@
  * it had room for is a regression, not an improvement.
  */
 
+import { DEFAULT_TEXT_WINDOW, windowText } from '@agiworkforce/data-layer/search';
+
 import { buildBm25Index, scoreBm25 } from '@/lib/support/agent/retrieval/bm25';
 import { tokenize } from '@/lib/support/agent/retrieval/tokenize';
 
-/**
- * Window size, in characters.
- *
- * Large enough to hold a whole idea, a few paragraphs or a table with its
- * heading, so a passage answers rather than teases. Small enough that several
- * fit in one file's budget, which is what lets an answer draw on two distant
- * parts of the same document.
- */
-export const PASSAGE_WINDOW_CHARS = 1_400;
-
-/**
- * Overlap between consecutive windows.
- *
- * A sentence that straddles a boundary is otherwise split across two passages
- * and matches neither well. One paragraph of overlap costs a tenth of the
- * budget and removes the class of miss entirely.
- */
-export const PASSAGE_OVERLAP_CHARS = 200;
-
-/** A window shorter than this is a fragment; it is folded into its neighbour. */
-const MIN_WINDOW_CHARS = 200;
-
-/** How far past a window's end to look for a paragraph or sentence break. */
-const BOUNDARY_SEARCH_CHARS = 300;
+export const PASSAGE_WINDOW_CHARS = DEFAULT_TEXT_WINDOW.windowChars;
+export const PASSAGE_OVERLAP_CHARS = DEFAULT_TEXT_WINDOW.overlapChars;
 
 export interface KnowledgePassage {
   /** Character offset of the passage in the extracted text, for provenance. */
@@ -69,33 +49,12 @@ export interface PassageSelection {
   totalChars: number;
 }
 
-function findBoundary(text: string, from: number, limit: number): number {
-  const window = text.slice(from, Math.min(text.length, from + BOUNDARY_SEARCH_CHARS));
-  const paragraph = window.indexOf('\n\n');
-  if (paragraph >= 0) return from + paragraph + 2;
-  const sentence = window.search(/[.!?]\s/);
-  if (sentence >= 0) return from + sentence + 2;
-  const space = window.indexOf(' ');
-  if (space >= 0) return from + space + 1;
-  return Math.min(limit, from);
-}
-
 /**
  * Cut the document into overlapping windows, preferring paragraph and sentence
  * breaks so a passage does not open mid-word.
  */
 export function windowDocument(content: string): KnowledgePassage[] {
-  const windows: KnowledgePassage[] = [];
-  let cursor = 0;
-  while (cursor < content.length) {
-    const target = cursor + PASSAGE_WINDOW_CHARS;
-    const end = target >= content.length ? content.length : findBoundary(content, target, target);
-    const text = content.slice(cursor, end);
-    if (text.trim()) windows.push({ start: cursor, end, text });
-    if (end >= content.length) break;
-    cursor = Math.max(end - PASSAGE_OVERLAP_CHARS, cursor + MIN_WINDOW_CHARS);
-  }
-  return windows;
+  return windowText(content, DEFAULT_TEXT_WINDOW);
 }
 
 /**

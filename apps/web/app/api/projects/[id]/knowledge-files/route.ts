@@ -26,18 +26,66 @@ import { recordModerationEvent } from '@/lib/moderation';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { ManagedCloudProjectKnowledgeRegisterRequestSchema } from '@agiworkforce/cloud-contracts';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import type { ProjectKnowledgeIndexState } from '@agiworkforce/types';
+import {
+  findProjectKnowledgeDocument,
+  readProjectKnowledgeIndexStates,
+} from '@/lib/services/retrieval-index-service';
+import { dispatchRetrievalIndexWorkflows } from '@/lib/workflows/start-retrieval-index-workflow';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-function projectKnowledgeResponse(row: Record<string, unknown>, projectId: string) {
+function projectKnowledgeResponse(
+  row: Record<string, unknown>,
+  projectId: string,
+  indexing: ProjectKnowledgeIndexState | null = null,
+) {
   const file = mapKnowledgeFileRow(row);
   return {
     ...file,
     storageUri: `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}`,
+    indexing,
   };
+}
+
+async function readIndexStates(
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
+  projectId: string,
+  fileIds: string[],
+): Promise<Map<string, ProjectKnowledgeIndexState>> {
+  try {
+    return await readProjectKnowledgeIndexStates(db, projectId, fileIds);
+  } catch (error) {
+    if (!isSchemaNotReady(error)) {
+      logger.warn({ error }, '[knowledge-files] index state read failed');
+    }
+    return new Map();
+  }
+}
+
+async function dispatchKnowledgeIndexing(
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
+  fileId: string,
+  ownerUserId: string,
+): Promise<void> {
+  try {
+    const document = await findProjectKnowledgeDocument(db, { fileId, ownerUserId });
+    if (!document) return;
+    await dispatchRetrievalIndexWorkflows([
+      {
+        documentId: document.id,
+        userId: document.user_id,
+        organizationId: document.organization_id,
+      },
+    ]);
+  } catch (error) {
+    if (!isSchemaNotReady(error)) {
+      logger.warn({ error, fileId }, '[knowledge-files] indexing was not dispatched');
+    }
+  }
 }
 
 async function purgeUploadedKnowledgeObject(
@@ -186,8 +234,16 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
     }
   }
 
+  const indexStates = await readIndexStates(
+    db,
+    projectId,
+    data.map((row) => String(row['id'] ?? '')).filter(Boolean),
+  );
+
   return NextResponse.json({
-    files: data.map((row) => projectKnowledgeResponse(row, projectId)),
+    files: data.map((row) =>
+      projectKnowledgeResponse(row, projectId, indexStates.get(String(row['id'] ?? '')) ?? null),
+    ),
     storage: { usedBytes, limitBytes },
   });
 }
@@ -470,7 +526,14 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     throw createError.internal('Failed to create knowledge file');
   }
 
-  return NextResponse.json({ file: projectKnowledgeResponse(data, projectId) }, { status: 201 });
+  const fileId = String(data['id'] ?? '');
+  await dispatchKnowledgeIndexing(db, fileId, userId);
+  const indexStates = await readIndexStates(db, projectId, [fileId]);
+
+  return NextResponse.json(
+    { file: projectKnowledgeResponse(data, projectId, indexStates.get(fileId) ?? null) },
+    { status: 201 },
+  );
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleListKnowledgeFiles));

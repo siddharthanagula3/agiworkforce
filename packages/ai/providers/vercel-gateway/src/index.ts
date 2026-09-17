@@ -173,3 +173,10 @@ export {
   type VercelGatewayCachingMode,
 } from './provider-options';
 export { createVercelGatewayUsageNormalizer, type VercelGatewayUsageNormalizer } from './usage';
+export {
+  createVercelGatewayEmbeddings,
+  VercelGatewayEmbeddingError,
+  type VercelGatewayEmbeddingRequest,
+  type VercelGatewayEmbeddingResult,
+  type VercelGatewayEmbeddingsConfig,
+} from './embeddings';

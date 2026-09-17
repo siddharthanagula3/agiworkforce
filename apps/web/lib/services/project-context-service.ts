@@ -6,6 +6,11 @@ import {
   type KnowledgePassage,
   type PassageStrategy,
 } from './project-knowledge-passages';
+import type { SearchHit } from '@agiworkforce/data-layer/search';
+import {
+  passagesFromIndexedHits,
+  retrieveIndexedKnowledgeHits,
+} from './project-knowledge-retrieval';
 import {
   anchorAt,
   anchorLocationAt,
@@ -170,8 +175,9 @@ export async function loadProjectContext(
     name: string;
     description: string | null;
     instructions: string | null;
+    organization_id?: string | null;
   }>(
-    `select id, name, description, instructions
+    `select id, name, description, instructions, organization_id
        from user_projects
       where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
       limit 1`,
@@ -301,6 +307,17 @@ export async function loadProjectContext(
     siblingChats.push({ title: candidate.title, preview });
   }
 
+  const query = params.currentUserQuery ?? '';
+  const indexedHits = await retrieveIndexedKnowledgeHits({
+    db,
+    userId: params.userId,
+    organizationId: project.organization_id ?? null,
+    query,
+    files: files
+      .filter((file) => (file.extracted_text?.trim().length ?? 0) > MAX_FILE_CONTENT_CHARS)
+      .map((file) => ({ fileId: file.id, extractedText: file.extracted_text ?? '' })),
+  });
+
   return {
     projectId: project.id,
     name: project.name,
@@ -327,7 +344,7 @@ export async function loadProjectContext(
         extractedText: file.extractedText,
         anchors: file.anchors,
       }))
-      .map(selectPassagesFor(params.currentUserQuery ?? '')),
+      .map(selectPassagesFor(query, indexedHits)),
     siblingChats,
   };
 }
@@ -343,7 +360,7 @@ export async function loadProjectContext(
  * The budget is spent in rank order, so the most relevant file gets first call
  * on it, exactly as the truncation it replaces did.
  */
-function selectPassagesFor(query: string) {
+function selectPassagesFor(query: string, indexedHits: ReadonlyMap<string, SearchHit[]>) {
   let remaining = MAX_TOTAL_FILE_CONTENT_CHARS;
   return (file: {
     fileId?: string | null;
@@ -355,7 +372,18 @@ function selectPassagesFor(query: string) {
     const content = file.extractedText?.trim();
     if (!content) return file;
     const budget = Math.min(MAX_FILE_CONTENT_CHARS, remaining);
-    const selection = selectKnowledgePassages({ content, query, budgetChars: budget });
+    const hits = file.fileId ? indexedHits.get(file.fileId) : undefined;
+    const retrieved =
+      hits && content.length > budget
+        ? passagesFromIndexedHits({
+            content,
+            leadingTrimmed:
+              (file.extractedText ?? '').length - (file.extractedText ?? '').trimStart().length,
+            hits,
+            budgetChars: budget,
+          })
+        : null;
+    const selection = retrieved ?? selectKnowledgePassages({ content, query, budgetChars: budget });
     remaining -= selection.passages.reduce((total, passage) => total + passage.text.length, 0);
     return { ...file, selection };
   };

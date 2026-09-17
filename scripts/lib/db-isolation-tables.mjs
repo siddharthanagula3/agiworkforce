@@ -68,4 +68,6 @@ export const USER_OWNED_TABLES = new Set([
   'organization_shared_sessions',
   'mcp_app_payloads',
   'mcp_task_bindings',
+  'retrieval_documents',
+  'retrieval_chunks',
 ]);

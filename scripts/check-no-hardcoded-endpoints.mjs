@@ -188,12 +188,6 @@ const BUDGETS = [
     why: 'HARD-003, OpenRouter model-list URL duplicated outside the ModelConfig table.',
   },
   {
-    file: 'apps/web/app/api/llm/v1/embeddings/route.ts',
-    max: 1,
-    residue: true,
-    why: 'HARD-005 follow-up, Google embeddings needs a Google entry in provider-endpoints.ts.',
-  },
-  {
     file: 'apps/web/app/api/media/image/generate/route.ts',
     max: 3,
     residue: true,
