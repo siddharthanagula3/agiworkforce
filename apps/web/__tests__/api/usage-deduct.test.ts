@@ -19,7 +19,11 @@ const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-auth-id' }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mockClerkAuth() }));
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: vi.fn().mockResolvedValue([{ account_status: 'active' }]) }),
+  getNeonDb: () => ({
+    query: vi.fn(async (sql: string) =>
+      /select account_status from profiles/.test(sql) ? [{ account_status: 'active' }] : [],
+    ),
+  }),
 }));
 
 const mockDeductCredits = vi.fn();

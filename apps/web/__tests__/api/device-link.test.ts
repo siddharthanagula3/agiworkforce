@@ -46,7 +46,9 @@ vi.mock('@shared/utils/env', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     execute: vi.fn().mockResolvedValue({}),
-    query: vi.fn().mockResolvedValue([{ account_status: 'active' }]),
+    query: vi.fn(async (sql: string) =>
+      /select account_status from profiles/.test(sql) ? [{ account_status: 'active' }] : [],
+    ),
   })),
 }));
 
