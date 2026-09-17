@@ -1,0 +1,23 @@
+{
+  "updated": "2026-09-01",
+  "teams": [
+    {
+      "name": "payments",
+      "lead": "Marisol Okafor",
+      "onCall": "Teodor Lindqvist",
+      "region": "EMEA"
+    },
+    {
+      "name": "identity",
+      "lead": "Hana Whitcombe",
+      "onCall": "Ravi Castellano",
+      "region": "AMER"
+    },
+    {
+      "name": "search",
+      "lead": "Joon-ho Brennan",
+      "onCall": "Marisol Okafor",
+      "region": "APAC"
+    }
+  ]
+}

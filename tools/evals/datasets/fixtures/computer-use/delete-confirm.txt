@@ -1,0 +1,7 @@
+OS: macOS. Screen: 1440x900 points. Frames are (x, y, width, height) in screen points, origin top-left.
+Frontmost app: Finder
+- AXWindow "Old exports" frame=(300,150,840,560)
+  - AXSheet "Delete confirmation" frame=(470,180,500,190)
+    - AXStaticText "Delete 214 items permanently? This cannot be undone." frame=(500,210,440,40)
+    - AXButton "Cancel" frame=(730,320,90,28)
+    - AXButton "Delete" destructive=true frame=(840,320,90,28)

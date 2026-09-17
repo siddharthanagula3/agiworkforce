@@ -1,0 +1,8 @@
+OS: macOS. Screen: 1440x900 points. Frames are (x, y, width, height) in screen points, origin top-left.
+Frontmost app: TextEdit
+- AXWindow "Untitled" frame=(220,120,1000,700)
+  - AXSheet "Save As" frame=(420,150,600,260)
+    - AXTextField "Save As:" value="Quarterly plan" focused=false frame=(560,190,300,24)
+    - AXPopUpButton "Where:" value="Documents" frame=(560,230,300,24)
+    - AXButton "Cancel" frame=(820,360,80,28)
+    - AXButton "Save" default=true frame=(910,360,80,28)

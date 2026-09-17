@@ -1,0 +1,199 @@
+{
+  "suite": "research",
+  "version": 1,
+  "passThreshold": 1,
+  "cases": [
+    {
+      "id": "research/grounded-summary",
+      "family": "summarise",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Summarise Northvale's 2025 growth in solar capacity and battery storage in two or three sentences. Use only the sources. Put the source number in square brackets, like [1], directly after each claim it supports.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Northvale Energy Report 2025",
+          "text": "Northvale installed 412 megawatts of new solar capacity in 2025, up from 290 megawatts in 2024. Most of the growth came from rooftop systems."
+        },
+        {
+          "id": "2",
+          "title": "Northvale Grid Operator bulletin, January 2026",
+          "text": "Battery storage connected to the Northvale grid reached 150 megawatts in December 2025, three times the level of a year earlier."
+        },
+        {
+          "id": "3",
+          "title": "Northvale Tourism Board annual review",
+          "text": "Northvale recorded 2.1 million visitors in 2025, a record for the region."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "citations",
+          "sources": ["1", "2", "3"],
+          "minDistinct": 2,
+          "required": [
+            {
+              "claim": "412",
+              "source": "1"
+            },
+            {
+              "claim": "150",
+              "source": "2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "research/conflicting-sources",
+      "family": "conflict",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "In what year did the Harbourside Clinic open? If the sources disagree, say so and give each year with its source. Use only the sources. Put the source number in square brackets, like [1], directly after each claim it supports.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "City council minutes, March 2020",
+          "text": "Members noted that the Harbourside Clinic, which opened in 2019, has already exceeded its planned patient numbers."
+        },
+        {
+          "id": "2",
+          "title": "Coastal Health Trust newsletter",
+          "text": "Since the Harbourside Clinic opened its doors in 2021, it has served more than 40,000 patients."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "citations",
+          "sources": ["1", "2"],
+          "minDistinct": 2,
+          "required": [
+            {
+              "claim": "2019",
+              "source": "1"
+            },
+            {
+              "claim": "2021",
+              "source": "2"
+            }
+          ]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["disagree", "conflict", "differ", "inconsistent"]
+        }
+      ]
+    },
+    {
+      "id": "research/not-in-sources",
+      "family": "abstain",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What was Lumen Freight's total revenue in 2025? Use only the sources. Put the source number in square brackets, like [1], directly after each claim it supports.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Lumen Freight fleet update",
+          "text": "Lumen Freight operated 640 trucks at the end of 2025, up from 580."
+        },
+        {
+          "id": "2",
+          "title": "Regional logistics news",
+          "text": "Lumen Freight opened a cross-dock depot in Tarrow in September 2025."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": [
+            "do not",
+            "does not",
+            "don't",
+            "doesn't",
+            "not mention",
+            "no information",
+            "not provided",
+            "not stated",
+            "not include"
+          ]
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["$", "million in revenue", "billion in revenue"]
+        }
+      ],
+      "notes": "The answer is absent from every source; a number here is fabricated."
+    },
+    {
+      "id": "research/multi-source-synthesis",
+      "family": "synthesise",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What was Orbit Labs' headcount at the end of 2025? Explain how you got it. Use only the sources. Put the source number in square brackets, like [1], directly after each claim it supports.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Orbit Labs 2024 annual report",
+          "text": "Orbit Labs ended 2024 with 120 employees."
+        },
+        {
+          "id": "2",
+          "title": "Orbit Labs hiring blog, December 2025",
+          "text": "We welcomed 35 new colleagues in 2025."
+        },
+        {
+          "id": "3",
+          "title": "Orbit Labs 2025 people report",
+          "text": "Twelve employees left the company during 2025. No other changes to headcount occurred."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": ["143"]
+        },
+        {
+          "kind": "citations",
+          "sources": ["1", "2", "3"],
+          "minDistinct": 3
+        }
+      ]
+    },
+    {
+      "id": "research/attribute-each-claim",
+      "family": "attribution",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Give the release date of the Kestrel 2 camera and its launch price, citing where each fact comes from. Use only the sources. Put the source number in square brackets, like [1], directly after each claim it supports.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Kestrel press release",
+          "text": "The Kestrel 2 camera goes on sale worldwide on 12 May 2026."
+        },
+        {
+          "id": "2",
+          "title": "Retail price list, spring 2026",
+          "text": "Kestrel 2 camera body: $499 at launch."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "citations",
+          "sources": ["1", "2"],
+          "minDistinct": 2,
+          "required": [
+            {
+              "claim": "(?:May|2026-05)",
+              "source": "1"
+            },
+            {
+              "claim": "(?:499|\\$499)",
+              "source": "2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

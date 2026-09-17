@@ -1,0 +1,159 @@
+{
+  "suite": "multilingual",
+  "version": 1,
+  "passThreshold": 1,
+  "cases": [
+    {
+      "id": "multilingual/reply-in-spanish",
+      "family": "reply-language",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Responde en español en dos frases: ¿por qué el cielo es azul?",
+      "checks": [
+        {
+          "kind": "language",
+          "expected": "es"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["luz", "dispers", "Rayleigh"]
+        }
+      ]
+    },
+    {
+      "id": "multilingual/translate-to-french",
+      "family": "translation",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Translate into French: \"The meeting has been moved to Thursday because the director is travelling.\"",
+      "checks": [
+        {
+          "kind": "language",
+          "expected": "fr"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["jeudi"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["réunion"]
+        }
+      ]
+    },
+    {
+      "id": "multilingual/reply-in-japanese",
+      "family": "reply-language",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "日本語で一文で答えてください：富士山の高さは何メートルですか？",
+      "checks": [
+        {
+          "kind": "language",
+          "expected": "ja"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["3776", "3,776", "３７７６"]
+        }
+      ]
+    },
+    {
+      "id": "multilingual/summarise-in-german",
+      "family": "summarisation",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Fasse den folgenden Text in einem Satz auf Deutsch zusammen:\n\n\"Die Stadtbibliothek verlängert ab Oktober ihre Öffnungszeiten. Montags bis freitags ist sie künftig bis 21 Uhr geöffnet, und am Samstag öffnet sie bereits um 9 Uhr. Die Änderung ist eine Reaktion auf eine Umfrage unter Studierenden.\"",
+      "checks": [
+        {
+          "kind": "language",
+          "expected": "de"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["Bibliothek"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["Öffnungszeiten", "geöffnet", "21 Uhr"]
+        }
+      ]
+    },
+    {
+      "id": "multilingual/answer-in-english-about-spanish",
+      "family": "cross-lingual",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Answer in English: what does this Spanish sentence mean? \"La biblioteca cierra a las ocho los domingos.\"",
+      "checks": [
+        {
+          "kind": "language",
+          "expected": "en"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["library"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["eight", "8"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["Sunday"]
+        }
+      ]
+    },
+    {
+      "id": "multilingual/reply-in-arabic",
+      "family": "reply-language",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "أجب باللغة العربية بجملة واحدة: ما هي عاصمة اليابان؟",
+      "checks": [
+        {
+          "kind": "language",
+          "expected": "ar"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["طوكيو"]
+        }
+      ]
+    },
+    {
+      "id": "multilingual/reply-in-chinese",
+      "family": "reply-language",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "请用中文一句话回答：水的化学式是什么？",
+      "checks": [
+        {
+          "kind": "language",
+          "expected": "zh"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["H2O", "H₂O"]
+        }
+      ]
+    },
+    {
+      "id": "multilingual/reply-in-hindi",
+      "family": "reply-language",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "हिंदी में एक वाक्य में उत्तर दें: भारत की राजधानी क्या है?",
+      "checks": [
+        {
+          "kind": "language",
+          "expected": "hi"
+        },
+        {
+          "kind": "includesAny",
+          "values": ["दिल्ली"]
+        }
+      ]
+    }
+  ]
+}

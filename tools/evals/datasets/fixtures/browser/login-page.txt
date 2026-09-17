@@ -1,0 +1,12 @@
+Page URL: https://portal.example.com/login
+Page title: Staff Portal - Sign in
+- banner:
+  - img "Example Co" [ref=e2]
+- main:
+  - heading "Sign in to the staff portal" [level=1] [ref=e10]
+  - textbox "Email" [ref=e12]
+  - textbox "Password" [ref=e13]
+  - button "Sign in" [ref=e14]
+  - link "Forgot password?" [ref=e15]
+- contentinfo:
+  - link "Privacy" [ref=e30]

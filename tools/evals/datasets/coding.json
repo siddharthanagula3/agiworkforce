@@ -1,0 +1,92 @@
+{
+  "suite": "coding",
+  "version": 1,
+  "passThreshold": 1,
+  "maxOutputTokens": 2048,
+  "cases": [
+    {
+      "id": "coding/fizzbuzz",
+      "family": "implementation",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Write a JavaScript ES module that exports `fizzbuzz(n)`. It returns an array of strings for the numbers 1 to n: \"Fizz\" for multiples of 3, \"Buzz\" for multiples of 5, \"FizzBuzz\" for multiples of both, otherwise the number as a string.\n\nReply with a single ```js code block containing the complete ES module and nothing else.",
+      "checks": [
+        {
+          "kind": "codeTests",
+          "module": "solution.mjs",
+          "tests": "import assert from 'node:assert/strict';\nimport { fizzbuzz } from './solution.mjs';\nassert.deepEqual(fizzbuzz(5), ['1', '2', 'Fizz', '4', 'Buzz']);\nassert.equal(fizzbuzz(15)[14], 'FizzBuzz');\nassert.deepEqual(fizzbuzz(0), []);\n"
+        }
+      ]
+    },
+    {
+      "id": "coding/parse-duration",
+      "family": "parsing",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Write a JavaScript ES module that exports `parseDuration(text)`. It parses strings made of one or more `<integer><unit>` parts with units h, m and s, in that order and each at most once (for example \"1h30m\", \"45s\", \"2h5s\"), and returns the total number of seconds. Any other input, including an empty string, throws a TypeError.\n\nReply with a single ```js code block containing the complete ES module and nothing else.",
+      "checks": [
+        {
+          "kind": "codeTests",
+          "module": "solution.mjs",
+          "tests": "import assert from 'node:assert/strict';\nimport { parseDuration } from './solution.mjs';\nassert.equal(parseDuration('1h30m'), 5400);\nassert.equal(parseDuration('45s'), 45);\nassert.equal(parseDuration('2h5s'), 7205);\nassert.throws(() => parseDuration(''), TypeError);\nassert.throws(() => parseDuration('5x'), TypeError);\nassert.throws(() => parseDuration('30m1h'), TypeError);\n"
+        }
+      ]
+    },
+    {
+      "id": "coding/group-by",
+      "family": "data-structures",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Write a JavaScript ES module that exports `groupBy(items, key)`. It returns a plain object mapping each distinct value of `item[key]` to the array of items with that value, keeping the original item order inside each group.\n\nReply with a single ```js code block containing the complete ES module and nothing else.",
+      "checks": [
+        {
+          "kind": "codeTests",
+          "module": "solution.mjs",
+          "tests": "import assert from 'node:assert/strict';\nimport { groupBy } from './solution.mjs';\nconst items = [{ t: 'a', n: 1 }, { t: 'b', n: 2 }, { t: 'a', n: 3 }];\nassert.deepEqual(groupBy(items, 't'), { a: [items[0], items[2]], b: [items[1]] });\nassert.deepEqual(groupBy([], 't'), {});\n"
+        }
+      ]
+    },
+    {
+      "id": "coding/fix-median",
+      "family": "debugging",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "This JavaScript ES module is buggy:\n\n```js\nexport function median(values) {\n  const sorted = values.sort();\n  return sorted[Math.floor(sorted.length / 2)];\n}\n```\n\nFix it so that `median` sorts numerically, averages the two middle values for an even count, does not modify the input array, and throws a RangeError for an empty array.\n\nReply with a single ```js code block containing the complete ES module and nothing else.",
+      "checks": [
+        {
+          "kind": "codeTests",
+          "module": "solution.mjs",
+          "tests": "import assert from 'node:assert/strict';\nimport { median } from './solution.mjs';\nassert.equal(median([3, 1, 2]), 2);\nassert.equal(median([10, 2, 30, 4]), 7);\nconst input = [5, 1, 3];\nmedian(input);\nassert.deepEqual(input, [5, 1, 3]);\nassert.throws(() => median([]), RangeError);\n"
+        }
+      ]
+    },
+    {
+      "id": "coding/lru-cache",
+      "family": "data-structures",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Write a JavaScript ES module that exports a class `LruCache`. `new LruCache(capacity)` creates a cache holding at most `capacity` entries. `get(key)` returns the value or undefined and marks the key as most recently used. `set(key, value)` inserts or updates the key, marks it most recently used, and evicts the least recently used entry when the cache is over capacity.\n\nReply with a single ```js code block containing the complete ES module and nothing else.",
+      "checks": [
+        {
+          "kind": "codeTests",
+          "module": "solution.mjs",
+          "tests": "import assert from 'node:assert/strict';\nimport { LruCache } from './solution.mjs';\nconst cache = new LruCache(2);\ncache.set('a', 1);\ncache.set('b', 2);\nassert.equal(cache.get('a'), 1);\ncache.set('c', 3);\nassert.equal(cache.get('b'), undefined);\nassert.equal(cache.get('a'), 1);\nassert.equal(cache.get('c'), 3);\ncache.set('a', 10);\ncache.set('d', 4);\nassert.equal(cache.get('c'), undefined);\nassert.equal(cache.get('a'), 10);\n"
+        }
+      ]
+    },
+    {
+      "id": "coding/compare-semver",
+      "family": "implementation",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Write a JavaScript ES module that exports `compareSemver(a, b)` for versions of the form MAJOR.MINOR.PATCH with non-negative integer parts. It returns -1 when a is lower, 1 when a is higher and 0 when they are equal, comparing each part numerically.\n\nReply with a single ```js code block containing the complete ES module and nothing else.",
+      "checks": [
+        {
+          "kind": "codeTests",
+          "module": "solution.mjs",
+          "tests": "import assert from 'node:assert/strict';\nimport { compareSemver } from './solution.mjs';\nassert.equal(compareSemver('1.10.0', '1.9.9'), 1);\nassert.equal(compareSemver('2.0.0', '10.0.0'), -1);\nassert.equal(compareSemver('3.4.5', '3.4.5'), 0);\nassert.equal(compareSemver('0.0.2', '0.0.10'), -1);\n"
+        }
+      ]
+    }
+  ]
+}

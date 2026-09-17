@@ -480,6 +480,27 @@ test('allows only exact model-registry owner and generated mirror paths', () => 
   assert.ok(!violations.some((violation) => violation.file === exactGenerated));
 });
 
+test('allows live eval measurement files but not other files beside them', () => {
+  const sandbox = createSandbox();
+  const filePaths = writeFiles(sandbox, {
+    'tools/evals/measurements/runs/measured.json': JSON.stringify({ modelKey: canonicalId }),
+    'tools/evals/measurements/baselines/lab__family.json': JSON.stringify({
+      modelKey: canonicalId,
+    }),
+    'tools/evals/measurements/recordings/measured.json': JSON.stringify({ modelKey: canonicalId }),
+    'tools/evals/measurements/notes.md': `measured ${canonicalId}\n`,
+    'tools/evals/measurements/runs/nested/measured.json': JSON.stringify({ modelKey: canonicalId }),
+    'tools/evals/datasets/chat.json': JSON.stringify({ model: canonicalId }),
+  });
+  const { violations } = scanModelIdFiles({ repoRoot: sandbox, filePaths, tokens });
+
+  assert.deepEqual(violations.map(({ file }) => file).sort(), [
+    'tools/evals/datasets/chat.json',
+    'tools/evals/measurements/notes.md',
+    'tools/evals/measurements/runs/nested/measured.json',
+  ]);
+});
+
 test('allows the compiler-owned skill analyzer registry but not sibling YAML files', () => {
   const sandbox = createSandbox();
   const generatedRegistry = MODEL_ID_OWNER_PATHS.find((relativePath) =>

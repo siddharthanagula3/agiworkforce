@@ -81,6 +81,12 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   'docs/work/openai-api-audit-and-plan-2026-09-16.md',
 ]);
 
+// Written only by `pnpm evals:live` from the compiled registry: a live eval
+// measurement is keyed by the model and route it measured, like probes.json.
+export const MODEL_ID_OWNER_PATTERNS = Object.freeze([
+  /^tools\/evals\/measurements\/(?:baselines|runs|recordings)\/[A-Za-z0-9._-]+\.json$/u,
+]);
+
 const OWNER_PATH_SET = new Set(MODEL_ID_OWNER_PATHS);
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
 const BINARY_EXTENSIONS = new Set([
@@ -441,7 +447,10 @@ export function findRetiredModelFamilyOccurrences(text) {
 
 export function isModelIdOwnerPath(repoRoot, filePath) {
   const relativePath = toPosixPath(path.relative(repoRoot, path.resolve(filePath)));
-  return OWNER_PATH_SET.has(relativePath);
+  return (
+    OWNER_PATH_SET.has(relativePath) ||
+    MODEL_ID_OWNER_PATTERNS.some((pattern) => pattern.test(relativePath))
+  );
 }
 
 const SKILLS_LOCK_PATH = 'skills-lock.json';

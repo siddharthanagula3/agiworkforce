@@ -1,0 +1,6 @@
+OS: macOS. Screen: 1440x900 points. Frames are (x, y, width, height) in screen points, origin top-left.
+Frontmost app: Web Browser
+- AXWindow "Release notes - Example" frame=(0,25,1440,875)
+  - AXTabGroup frame=(0,25,1440,38)
+    - AXRadioButton "Release notes - Example" selected=true frame=(80,30,220,30)
+  - AXWebArea "Release notes" frame=(0,100,1440,800)

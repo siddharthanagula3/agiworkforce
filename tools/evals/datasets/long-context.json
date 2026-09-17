@@ -1,0 +1,100 @@
+{
+  "suite": "long-context",
+  "version": 1,
+  "passThreshold": 1,
+  "maxOutputTokens": 64,
+  "cases": [
+    {
+      "id": "long-context/needle-20k-middle",
+      "family": "needle-retrieval",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "According to the document, what is the vault access code for the Hollin archive? Reply with the code only.",
+      "haystack": {
+        "seed": 11,
+        "targetChars": 20000,
+        "depth": 0.5,
+        "needle": "The vault access code for the Hollin archive is 7391-KESTREL."
+      },
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": ["7391-KESTREL"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 6
+        }
+      ]
+    },
+    {
+      "id": "long-context/needle-120k-early",
+      "family": "needle-retrieval",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "According to the document, who is the courier for the Marlow shipment? Reply with the name only.",
+      "haystack": {
+        "seed": 23,
+        "targetChars": 120000,
+        "depth": 0.1,
+        "needle": "The courier for the Marlow shipment is named Ingrid Solberg."
+      },
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": ["Ingrid Solberg"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 6
+        }
+      ]
+    },
+    {
+      "id": "long-context/needle-250k-third",
+      "family": "needle-retrieval",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "According to the document, who owns the budget for Project Larkspur? Reply with the name only.",
+      "haystack": {
+        "seed": 37,
+        "targetChars": 250000,
+        "depth": 0.33,
+        "needle": "Project Larkspur's budget owner is Priya Raman."
+      },
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": ["Priya Raman"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 6
+        }
+      ]
+    },
+    {
+      "id": "long-context/needle-400k-late",
+      "family": "needle-retrieval",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "According to the document, which locker holds the spare generator key? Reply with the locker number only.",
+      "haystack": {
+        "seed": 41,
+        "targetChars": 400000,
+        "depth": 0.9,
+        "needle": "The spare generator key is kept in locker 58 on level B2."
+      },
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": ["58"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 6
+        }
+      ]
+    }
+  ]
+}

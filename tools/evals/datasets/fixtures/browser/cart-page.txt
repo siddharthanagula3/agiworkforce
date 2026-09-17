@@ -1,0 +1,15 @@
+Page URL: https://shop.example.com/cart
+Page title: Your cart
+- main:
+  - heading "Your cart (2 items)" [level=1] [ref=e38]
+  - table "Cart items":
+    - row "Red mug":
+      - cell "Red mug"
+      - spinbutton "Quantity for Red mug" [value=1] [ref=e41]
+      - button "Remove Red mug" [ref=e42]
+    - row "Blue mug":
+      - cell "Blue mug"
+      - spinbutton "Quantity for Blue mug" [value=1] [ref=e44]
+      - button "Remove Blue mug" [ref=e45]
+  - button "Update cart" [ref=e50]
+  - button "Checkout" [ref=e51]

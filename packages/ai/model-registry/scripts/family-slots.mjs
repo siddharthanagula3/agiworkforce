@@ -27,6 +27,10 @@ const RETIRED_FILE = path.join(FAMILY_CATALOG_DIR, 'retired-models.json');
 const PROBES_FILE = path.join(FAMILY_CATALOG_DIR, 'probes.json');
 const ANSWERED_PROBE_OUTCOME = 'answered';
 const EVALUATION_FLOOR_STAGE = LIFECYCLE_STAGE.evaluated;
+const EVAL_GATE_SCRIPT = path.resolve(
+  PACKAGE_ROOT,
+  '../../../tools/evals/scripts/promotion-gate.mjs',
+);
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -167,6 +171,37 @@ export function lifecycleRefusals(modelKey, curation, probeFile, target) {
   return refusals;
 }
 
+/**
+ * The third claim a promotion makes is that the candidate is not worse than
+ * what it replaces. The eval gate compares the candidate's measured run with
+ * the family's measured baseline and refuses on any suite that regressed past
+ * tolerance, or when either measurement is missing.
+ */
+export function runEvalGate(familyId, modelKey, script = EVAL_GATE_SCRIPT) {
+  if (!fs.existsSync(script)) {
+    return { passed: false, detail: `eval gate script not found at ${script}` };
+  }
+  try {
+    execFileSync(process.execPath, [script, '--family', familyId, '--candidate', modelKey], {
+      stdio: 'pipe',
+      encoding: 'utf8',
+    });
+    return { passed: true, detail: '' };
+  } catch (error) {
+    return { passed: false, detail: String(error.stdout || error.stderr || error.message).trim() };
+  }
+}
+
+export function evalGateRefusals(targets, gate = runEvalGate) {
+  return targets.flatMap((decision) => {
+    const modelKey = decision.promotable.modelKey;
+    const verdict = gate(decision.familyId, modelKey);
+    return verdict.passed
+      ? []
+      : [`${modelKey} failed the eval gate for ${decision.familyId}:\n${verdict.detail}`];
+  });
+}
+
 function readProbeFile() {
   return fs.existsSync(PROBES_FILE) ? readJson(PROBES_FILE) : { probes: {} };
 }
@@ -215,9 +250,17 @@ async function promote(args) {
 
   const curation = readJson(CURATION_FILE);
   const probeFile = readProbeFile();
-  const refusals = targets.flatMap((decision) =>
-    lifecycleRefusals(decision.promotable.modelKey, curation, probeFile, LIFECYCLE_STAGE.promoted),
-  );
+  const refusals = [
+    ...targets.flatMap((decision) =>
+      lifecycleRefusals(
+        decision.promotable.modelKey,
+        curation,
+        probeFile,
+        LIFECYCLE_STAGE.promoted,
+      ),
+    ),
+    ...evalGateRefusals(targets),
+  ];
   if (refusals.length > 0) {
     for (const refusal of refusals) console.error(`[families] ✗ ${refusal}`);
     process.exitCode = 1;

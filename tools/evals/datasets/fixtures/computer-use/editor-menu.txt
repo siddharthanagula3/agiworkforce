@@ -1,0 +1,10 @@
+OS: macOS. Screen: 1440x900 points. Frames are (x, y, width, height) in screen points, origin top-left.
+Frontmost app: Sketchpad
+- AXMenuBar frame=(0,0,1440,25)
+  - AXMenuBarItem "Apple" frame=(10,0,34,25)
+  - AXMenuBarItem "Sketchpad" frame=(44,0,84,25)
+  - AXMenuBarItem "File" frame=(128,0,38,25)
+  - AXMenuBarItem "Edit" frame=(166,0,38,25)
+  - AXMenuBarItem "View" frame=(204,0,44,25)
+- AXWindow "poster-draft" frame=(100,60,1240,800)
+  - AXGroup "Canvas" frame=(300,120,840,700)

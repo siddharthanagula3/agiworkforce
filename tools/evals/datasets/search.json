@@ -1,0 +1,168 @@
+{
+  "suite": "search",
+  "version": 1,
+  "passThreshold": 1,
+  "cases": [
+    {
+      "id": "search/prefer-official-docs",
+      "family": "source-selection",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "How do I rotate an API key in Acme Cloud? Answer in two sentences and cite the URL of the result you relied on.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Rotate API keys - Acme Cloud Docs",
+          "url": "https://docs.acmecloud.example/security/rotate-keys",
+          "text": "To rotate a key, open Security settings, choose the key and select Rotate. The old key stays valid for 24 hours so you can update your applications."
+        },
+        {
+          "id": "2",
+          "title": "Help! key stopped working - Acme community forum",
+          "url": "https://forum.example.net/t/acme-key-help",
+          "text": "I think you have to delete the key and make a new one? Not sure, that's what worked for me last year."
+        },
+        {
+          "id": "3",
+          "title": "10 cloud tips for 2026",
+          "url": "https://blog.example.org/cloud-tips",
+          "text": "Tip 7: rotate your keys regularly. Every provider does it differently."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "citedUrls",
+          "allowed": [
+            "https://docs.acmecloud.example/security/rotate-keys",
+            "https://forum.example.net/t/acme-key-help",
+            "https://blog.example.org/cloud-tips"
+          ],
+          "required": ["https://docs.acmecloud.example/security/rotate-keys"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["Security settings", "Rotate"]
+        }
+      ]
+    },
+    {
+      "id": "search/prefer-latest-result",
+      "family": "recency",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What is the latest stable version of the Tessera database? Cite the URL you relied on.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Tessera 3.8 released (published 2025-11-04)",
+          "url": "https://tessera.example/releases/3-8",
+          "text": "Tessera 3.8 is now the latest stable release."
+        },
+        {
+          "id": "2",
+          "title": "Tessera 4.2 released (published 2026-08-19)",
+          "url": "https://tessera.example/releases/4-2",
+          "text": "Tessera 4.2 is now the latest stable release, replacing 4.1."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "citedUrls",
+          "allowed": [
+            "https://tessera.example/releases/4-2",
+            "https://tessera.example/releases/3-8"
+          ],
+          "required": ["https://tessera.example/releases/4-2"]
+        },
+        {
+          "kind": "includesAny",
+          "values": ["4.2"]
+        }
+      ]
+    },
+    {
+      "id": "search/no-invented-links",
+      "family": "grounding",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Give me two good resources for learning about sourdough starters, with links.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "How to make a sourdough starter",
+          "url": "https://bakery.example.com/sourdough-starter-guide",
+          "text": "A day-by-day guide to creating and maintaining a sourdough starter."
+        },
+        {
+          "id": "2",
+          "title": "Fermentation science: sourdough starters",
+          "url": "https://foodscience.example.edu/fermentation/starters",
+          "text": "How wild yeast and lactic acid bacteria interact in a starter culture."
+        },
+        {
+          "id": "3",
+          "title": "Starter jars on sale",
+          "url": "https://shop.example.com/starter-jars",
+          "text": "Glass jars for storing your starter, 20% off this week."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "citedUrls",
+          "allowed": [
+            "https://bakery.example.com/sourdough-starter-guide",
+            "https://foodscience.example.edu/fermentation/starters",
+            "https://shop.example.com/starter-jars"
+          ],
+          "required": [
+            "https://bakery.example.com/sourdough-starter-guide",
+            "https://foodscience.example.edu/fermentation/starters"
+          ]
+        }
+      ],
+      "notes": "Links that are not among the search results are fabricated, however plausible they look."
+    },
+    {
+      "id": "search/pick-answering-result",
+      "family": "ranking",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Which result answers the question 'what port does the Quillmail SMTP relay listen on'? Reply with its URL only.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Quillmail pricing",
+          "url": "https://quillmail.example/pricing",
+          "text": "Plans start at $9 per month for 10,000 messages."
+        },
+        {
+          "id": "2",
+          "title": "Relay ports - Quillmail docs",
+          "url": "https://quillmail.example/docs/relay-ports",
+          "text": "The SMTP relay listens on port 2525, with 587 available as a fallback."
+        },
+        {
+          "id": "3",
+          "title": "Introducing Quillmail",
+          "url": "https://quillmail.example/blog/launch",
+          "text": "Today we launch Quillmail, the friendly email relay."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "citedUrls",
+          "allowed": [
+            "https://quillmail.example/docs/relay-ports",
+            "https://quillmail.example/pricing",
+            "https://quillmail.example/blog/launch"
+          ],
+          "required": ["https://quillmail.example/docs/relay-ports"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 3
+        }
+      ]
+    }
+  ]
+}
