@@ -7,6 +7,7 @@ export const RETENTION_DOMAINS = [
   'connector_data',
   'remote_sessions',
   'notifications',
+  'research',
 ] as const;
 
 export type RetentionDomain = (typeof RETENTION_DOMAINS)[number];
@@ -20,6 +21,7 @@ export const RETENTION_DOMAIN_LABELS: Readonly<Record<RetentionDomain, string>> 
   connector_data: 'Revoked connector grants',
   remote_sessions: 'Ended remote device pairings',
   notifications: 'Notifications',
+  research: 'Research reports',
 });
 
 export const RETENTION_DAYS_MIN = 1;

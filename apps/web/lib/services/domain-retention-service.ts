@@ -339,6 +339,27 @@ export function createDomainSweepers(
                    )
                    returning id`,
     }),
+    // A research report outlives the chat that asked for it: it is saved, listed
+    // and reopened on its own, and only a report still attached to a live
+    // conversation is reached by that conversation's deletion. Swept on
+    // created_at rather than completed_at so a run that never finished is
+    // covered by the same window.
+    research: rowsOnlySweeper({
+      heldSql: `select count(*)::int as count from public.research_reports t
+                 where t.created_at < $2
+                   and exists (select 1 from public.organization_members m
+                                where m.organization_id = $1 and m.user_id = t.user_id)
+                   and t.user_id = any($3::text[])`,
+      deleteSql: `delete from public.research_reports
+                   where id in (
+                     select t.id from public.research_reports t
+                      where t.created_at < $2
+                        and ${memberScoped('t')}
+                      order by t.created_at asc
+                      limit $4
+                   )
+                   returning id`,
+    }),
   };
 }
 

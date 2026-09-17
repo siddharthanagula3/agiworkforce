@@ -20,6 +20,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { inspectConnectorToolDefs } from '@/lib/security/mcp-tool-inspection';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { recordConnectorCall } from '@/lib/services/infrastructure-cost';
+import { recordConnectorCallOutcome } from '@/lib/services/connector-call-log-service';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
@@ -2371,6 +2372,18 @@ export function makeUserConnectorExecutor(
 
     options?.signal?.throwIfAborted();
 
+    const startedAtMs = Date.now();
+    const log = (outcome: 'succeeded' | 'failed' | 'blocked'): void => {
+      recordConnectorCallOutcome(getNeonDb(), {
+        userId,
+        organizationId: organizationId ?? null,
+        connectorId: serverId,
+        toolName,
+        outcome,
+        durationMs: Date.now() - startedAtMs,
+      });
+    };
+
     const guarded = async (
       run: (safeArgs: Record<string, unknown>) => Promise<ConnectorExecResult>,
     ): Promise<ConnectorExecResult> => {
@@ -2382,6 +2395,7 @@ export function makeUserConnectorExecutor(
             connectorId: serverId,
             toolName,
           });
+          log(result.isError === true ? 'failed' : 'succeeded');
         }
         return result;
       };
@@ -2398,9 +2412,18 @@ export function makeUserConnectorExecutor(
         },
       });
       if (verdict.action === 'blocked') {
+        log('blocked');
         return { handled: true, content: verdict.message, isError: true };
       }
-      return meter(await run(verdict.value));
+      try {
+        return meter(await run(verdict.value));
+      } catch (error) {
+        // A connector that has stopped answering throws here rather than
+        // returning an error result, so the health signal would miss exactly
+        // the outage it exists to report if this were not logged.
+        log('failed');
+        throw error;
+      }
     };
 
     if (serverId === GITHUB_SERVER_ID) {

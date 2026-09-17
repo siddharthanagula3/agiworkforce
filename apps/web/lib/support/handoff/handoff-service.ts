@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { resolveSupportPriority } from './priority';
 import { getHandoffConfig, isValidEmail } from './config';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { buildHandoffAccountContext } from './account-context';
@@ -77,6 +79,7 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
 
   const { turns, droppedTurns } = normalizeTranscript(input.transcript);
   const accountContext = await buildHandoffAccountContext(input.ownerDb, input.ownerUserId);
+  const { priority, supportTier } = await resolveSupportPriority(getNeonDb(), input.ownerUserId);
 
   const availability = await resolveHumanAvailability({ skipCache: true });
 
@@ -101,6 +104,9 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
     pagePath: input.pagePath ?? null,
     locale: input.locale ?? null,
     waitExpiresAt,
+    priority,
+    supportTier,
+    diagnostics: input.diagnostics ?? null,
   });
 
   if (!row) {

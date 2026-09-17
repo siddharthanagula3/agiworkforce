@@ -58,7 +58,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 81 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 82 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -151,7 +151,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 127 of 239 database-backed hosted API route files. Counted against the 239 route files that reach the database; the other 97 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 112 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-17.',
+      'Partial: 128 of 241 database-backed hosted API route files. Counted against the 241 route files that reach the database; the other 102 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 113 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-17.',
   },
   {
     label: 'Authentication and CSRF',
@@ -316,6 +316,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-17',
+                        value:
+                          'Re-measured after the connector call log shipped. One table joined the enumerated erasure list, taking it from 81 to 82: every call a connector made on the account’s behalf, recording which connector, which tool, when, and whether it worked, never the arguments and never the result. It is deleted with the account and it is included in the export, because it is a record of what was done with a grant the account gave. It also decides a health state the connectors page could not show before: a connector whose recent calls have all failed is reported as not responding rather than as connected. One hosted route arrived with it, the read of that log, which reads as the caller, so the row-level-isolation count moved from 127 to 128 of 241 database-backed routes. Help search, the support ticket API and the diagnostics attachment shipped alongside it; those routes read a corpus or a ticket store rather than the tenant database, so the count of hosted routes touching no database moved from 97 to 102. Each figure is derived from the deciding source by a test, not maintained by hand.',
+                      },
                       {
                         label: '2026-09-17',
                         value:

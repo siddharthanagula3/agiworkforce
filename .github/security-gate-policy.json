@@ -1,5 +1,5 @@
 {
-  "description": "Single registry of every dependency and static-analysis gate in CI, the severity each one blocks at, and every exclusion from those gates. scripts/check-security-gates.mjs fails the build when CI and this file disagree. A gate whose step runs a chain rather than the tool directly names the chain step and says so in its tool field; what this registry guarantees is that the named step exists in the blocking workflow and is not continue-on-error, which holds either way.",
+  "description": "Single registry of every dependency, static-analysis and scanner gate in CI, the severity each one blocks at, and every exclusion from those gates. scripts/check-security-gates.mjs fails the build when CI and this file disagree. A gate whose step runs a chain rather than the tool directly names the chain step and says so in its tool field; what this registry guarantees is that the named step exists in the blocking workflow and is not continue-on-error, which holds either way. A gate defaults to the workflow field below and may override it: the container, IaC and DAST scanners need Docker and a booted application, so they run in their own workflow rather than on every pull request.",
   "workflow": ".github/workflows/ci.yml",
   "gates": [
     {
@@ -43,6 +43,38 @@
       "step": "LLM and repo operability checks",
       "tool": "scripts/check-secrets.mjs, reached through pnpm check:llm-operability",
       "blocksAt": "any-credential-shape"
+    },
+    {
+      "id": "iac-misconfiguration-scan",
+      "workflow": ".github/workflows/security-scanning.yml",
+      "job": "iac-scan",
+      "step": "IaC scan gate (unaccepted findings block the merge)",
+      "tool": "trivy config, gated by scripts/check-scan-findings.mjs",
+      "blocksAt": "high"
+    },
+    {
+      "id": "signaling-server-container-scan",
+      "workflow": ".github/workflows/security-scanning.yml",
+      "job": "signaling-server-image-scan",
+      "step": "Signaling server image gate (unaccepted findings block the merge)",
+      "tool": "trivy image, gated by scripts/check-scan-findings.mjs",
+      "blocksAt": "high"
+    },
+    {
+      "id": "web-container-scan",
+      "workflow": ".github/workflows/security-scanning.yml",
+      "job": "web-image-scan-and-dast",
+      "step": "Web image gate (unaccepted findings block the merge)",
+      "tool": "trivy image, gated by scripts/check-scan-findings.mjs",
+      "blocksAt": "high"
+    },
+    {
+      "id": "web-dast-baseline",
+      "workflow": ".github/workflows/security-scanning.yml",
+      "job": "web-image-scan-and-dast",
+      "step": "DAST gate (unaccepted alerts block the merge)",
+      "tool": "zap-baseline.py, gated by scripts/check-scan-findings.mjs",
+      "blocksAt": "medium"
     }
   ],
   "exclusions": [
@@ -88,6 +120,14 @@
       "reason": "Reviewed non-credential fixtures keyed on (path, format); an entry that stops matching fails the scan as stale.",
       "owner": "Platform lead",
       "tracking": "CRIT-017"
+    },
+    {
+      "id": "scanner-accepted-findings",
+      "kind": "allowlist-file",
+      "path": "scripts/scan-allowlist.json",
+      "reason": "Triaged Trivy and ZAP findings. Every entry carries an id, a scanner, a reason, an owner and an expiry that scripts/check-scan-findings.mjs enforces, and an entry that matches nothing fails as stale.",
+      "owner": "Platform lead",
+      "tracking": "SEC-§111"
     },
     {
       "id": "cargo-deny-advisory-ignores",

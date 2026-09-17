@@ -1,12 +1,7 @@
 export type ConnectorImplementation = 'first-party' | 'operator-configurable' | 'device-local';
 
 export type ConnectorAuthScheme =
-  | 'github-app'
-  | 'oauth2'
-  | 'api-key'
-  | 'connection-string'
-  | 'pat'
-  | 'device-local';
+  'github-app' | 'oauth2' | 'api-key' | 'connection-string' | 'pat' | 'device-local';
 
 export type ConnectorScopeSource =
   | 'first-party'
@@ -272,18 +267,28 @@ export type ConnectorHealth =
   | 'connected'
   | 'connectable'
   | 'needs-reauthorization'
+  | 'not-responding'
   | 'not-configured'
   | 'unsupported-here';
 
+/**
+ * `notResponding` is the only input here that is an observation rather than a
+ * configuration fact: it comes from the account's own recent calls to this
+ * connector (see connector-call-log-service). It ranks below reauthorization
+ * because an expired grant is the actionable cause of failures it would
+ * otherwise be reported as, and above `connected` because a connector that is
+ * authorized and refusing every call is not working, whatever the grant says.
+ */
 export function resolveConnectorHealth(input: {
   connectorId: string;
   available?: boolean;
   connected?: boolean;
   needsReauthorization?: boolean;
+  notResponding?: boolean;
 }): ConnectorHealth {
   const record = getConnectorCapability(input.connectorId);
   if (record && !record.surfaces.includes('cloud-web')) return 'unsupported-here';
   if (input.needsReauthorization) return 'needs-reauthorization';
-  if (input.connected) return 'connected';
+  if (input.connected) return input.notResponding === true ? 'not-responding' : 'connected';
   return input.available === true ? 'connectable' : 'not-configured';
 }

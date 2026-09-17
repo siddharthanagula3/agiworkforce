@@ -1,4 +1,5 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { collectDiagnostics } from '@/lib/support/diagnostics/collect';
 import {
   SUPPORT_HISTORY_LIMIT,
   UNAVAILABLE_PRESENCE,
@@ -514,6 +515,13 @@ export async function createHandoff(input: CreateHandoffInput): Promise<SupportH
     }
     if (input.contactEmail) payload['contactEmail'] = input.contactEmail;
     if (input.pagePath) payload['pagePath'] = input.pagePath;
+    // Collected here rather than asked for: build, environment, platform and the
+    // last few failures are the four things a support reply otherwise opens by
+    // asking. The server re-validates and re-redacts whatever this sends.
+    // The build and the environment are deliberately left null: they are server
+    // facts, and a browser that guessed at them would report the guess. The
+    // route fills them from the process that served the request.
+    payload['diagnostics'] = collectDiagnostics({ surface: 'web' });
     response = await fetch('/api/support/handoff', {
       method: 'POST',
       headers,

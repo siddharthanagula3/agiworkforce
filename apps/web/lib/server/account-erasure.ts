@@ -67,6 +67,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'desktop_devices', column: 'user_id' },
   { table: 'mobile_devices', column: 'user_id' },
   { table: 'device_registrations', column: 'user_id' },
+  { table: 'connector_call_events', column: 'user_id' },
   { table: 'event_trigger_events', column: 'user_id' },
   { table: 'event_triggers', column: 'user_id' },
   { table: 'background_jobs', column: 'user_id' },

@@ -1,3 +1,5 @@
+import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
+
 /**
  * @file types.ts
  * @module lib/support/handoff/types
@@ -31,11 +33,7 @@
 export type HandoffSurface = 'web-app' | 'marketing';
 
 export type HandoffReason =
-  | 'user_requested'
-  | 'hard_abstain'
-  | 'low_confidence'
-  | 'no_citation'
-  | 'action_refused';
+  'user_requested' | 'hard_abstain' | 'low_confidence' | 'no_citation' | 'action_refused';
 
 export type HandoffStatus =
   | 'waiting'
@@ -47,11 +45,7 @@ export type HandoffStatus =
   | 'undeliverable';
 
 export type HandoffAvailabilityReason =
-  | 'live'
-  | 'not_configured'
-  | 'disabled'
-  | 'no_agents_online'
-  | 'at_capacity';
+  'live' | 'not_configured' | 'disabled' | 'no_agents_online' | 'at_capacity';
 
 export interface HandoffFallbackChannel {
   channel: 'email';
@@ -100,6 +94,7 @@ export interface HandoffCreateRequest {
   conversationId?: string;
   pagePath?: string;
   locale?: string;
+  diagnostics?: SupportDiagnostics;
 }
 
 export interface HandoffNextStep {
