@@ -116,6 +116,7 @@ describe('GET /api/user/export scoped db binding', () => {
             model: 'test-model',
             project_id: null,
             pinned: false,
+            draft: null,
             created_at: '2026-02-01T00:00:00.000Z',
             updated_at: '2026-02-01T00:00:00.000Z',
             deleted_at: null,
