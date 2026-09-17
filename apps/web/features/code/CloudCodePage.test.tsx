@@ -2268,6 +2268,7 @@ describe('the model a local session starts on', () => {
     localHostModels = [reachable('qa-provider/first'), reachable('qa-provider/second')];
     render(<CloudCodePage api={createApi()} />);
 
+    await screen.findByRole('button', { name: 'Local · qa-project' });
     await user.click(await screen.findByRole('button', { name: /qa-provider\/first/ }));
     await user.click(await screen.findByRole('menuitemradio', { name: 'qa-provider/second' }));
 
