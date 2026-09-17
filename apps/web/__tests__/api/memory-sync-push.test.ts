@@ -137,6 +137,9 @@ describe('GET /api/memory/sync, back-compat status', () => {
     expect(body.hasMore).toBe(false);
     expect(body.memories).toHaveLength(1);
     const call = queryMock.mock.calls.find((c) => String(c[0]).includes('from user_memories'));
-    expect(String(call![0])).not.toContain('is_deleted = false');
+    const [, whereClause] = String(call![0]).split(/\bwhere\b/);
+    expect(whereClause).not.toContain('is_deleted = false');
+    expect(whereClause).toContain('organization_id is not distinct from $3::uuid');
+    expect(String(call![0])).toContain('not (is_deleted = false and superseded_by is null');
   });
 });

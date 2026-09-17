@@ -10,18 +10,26 @@ import type { UserMemoryRow } from '@/lib/server/neon-types';
 const MAX_MEMORY_CATEGORY_CHARS = 200;
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
+import {
+  activeMemoryPredicate,
+  parseMemoryExpiry,
+  workspaceMemoryPredicate,
+  writeConsolidatedMemory,
+  type ConsolidatedMemoryRow,
+} from '@/lib/services/managed-memory-context-service';
 
 type MemoryRow = UserMemoryRow & {
   pinned: boolean;
   project_id?: string | null;
   project_name?: string | null;
+  expires_at?: string | null;
 };
 
 async function handleGetMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -32,15 +40,17 @@ async function handleGetMemories(request: NextRequest) {
   let data: MemoryRow[];
   try {
     data = await db.query<MemoryRow>(
-      `select m.id, m.content, m.category, m.source, m.pinned, m.created_at, m.updated_at,
+      `select m.id, m.content, m.category, m.source, m.pinned, m.expires_at,
+              m.created_at, m.updated_at,
               to_jsonb(m)->>'project_id' as project_id,
               p.name as project_name
        from user_memories m
        left join user_projects p on p.id::text = to_jsonb(m)->>'project_id'
-       where m.user_id = $1 and m.is_deleted = false
+       where m.user_id = $1 and ${activeMemoryPredicate('m.')}
+         and ${workspaceMemoryPredicate(4, 'm.')}
        order by m.pinned desc, m.updated_at desc
        limit $2 offset $3`,
-      [userId, limit, offset],
+      [userId, limit, offset, organizationId ?? null],
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch memories');
@@ -58,6 +68,7 @@ async function handleGetMemories(request: NextRequest) {
       // reads as applying everywhere when it does not.
       projectId: m.project_id ?? null,
       projectName: m.project_name ?? null,
+      expiresAt: m.expires_at ?? null,
       createdAt: m.created_at,
       updatedAt: m.updated_at,
     })),
@@ -71,9 +82,15 @@ async function handleCreateMemory(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
-  let body: { content?: string; category?: string; source?: string; pinned?: boolean };
+  let body: {
+    content?: string;
+    category?: string;
+    source?: string;
+    pinned?: boolean;
+    expiresAt?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -106,22 +123,30 @@ async function handleCreateMemory(request: NextRequest) {
     }
   }
 
+  const expiry = parseMemoryExpiry(body.expiresAt);
+  if (!expiry.ok) {
+    throw createError.validation(expiry.message);
+  }
+
   const validSources = ['mobile', 'desktop', 'web', 'auto'];
   const source = validSources.includes(body.source ?? '') ? body.source : 'web';
 
   const content = body.content.trim();
   await assertMemoryWriteAllowed(db, { userId, content });
 
-  let row: MemoryRow;
+  let row: ConsolidatedMemoryRow;
   try {
-    const [inserted] = await db.query<MemoryRow>(
-      `insert into user_memories (user_id, content, category, source, pinned)
-       values ($1, $2, $3, $4, $5)
-       returning id, content, category, source, pinned, created_at, updated_at`,
-      [userId, content, body.category?.trim() ?? null, source, body.pinned === true],
-    );
-    if (!inserted) throw new Error('No row returned');
-    row = inserted;
+    const written = await writeConsolidatedMemory(db, {
+      userId,
+      content,
+      category: body.category?.trim() ?? null,
+      source: source ?? 'web',
+      pinned: body.pinned === true,
+      organizationId: organizationId ?? null,
+      expiresAt: expiry.expiresAt ?? null,
+    });
+    if (!written) throw new Error('No row returned');
+    row = written;
   } catch (error) {
     logger.error({ error, userId }, 'Failed to create memory');
     throw createError.internal('Failed to create memory');
@@ -135,11 +160,15 @@ async function handleCreateMemory(request: NextRequest) {
         category: row.category,
         source: row.source,
         pinned: row.pinned,
+        expiresAt: row.expires_at ?? null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },
+      merged: row.outcome === 'merged',
+      supersededIds: row.superseded_ids ?? [],
+      supersededBy: row.superseded_by ?? null,
     },
-    { status: 201 },
+    { status: row.outcome === 'merged' ? 200 : 201 },
   );
 }
 

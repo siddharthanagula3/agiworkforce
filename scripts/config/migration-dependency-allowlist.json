@@ -645,6 +645,26 @@
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 200,
       "reason": "the account erasure inventory classifies the permission grid tables 0200 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0200 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0200 is applied."
+    },
+    {
+      "file": "apps/web/app/api/memory/[id]/route.ts",
+      "migration": 203,
+      "reason": "the single-memory read and update return and set the expiry and superseded columns 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
+    },
+    {
+      "file": "apps/web/app/api/memory/route.ts",
+      "migration": 203,
+      "reason": "the memory list filters out expired and superseded rows and returns the expiry column 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 203,
+      "reason": "the export reads expires_at of other tables, and the checker pairs that name with user_memories, which 0203 gives an expires_at column; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/managed-memory-context-service.ts",
+      "migration": 203,
+      "reason": "memory reads, the consolidating write and the expiry sweep use the expires_at, superseded_by and superseded_at columns 0203 adds on user_memories; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0203 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0203 is applied."
     }
   ]
 }

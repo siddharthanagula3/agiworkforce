@@ -5,12 +5,16 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
+import {
+  activeMemoryPredicate,
+  workspaceMemoryPredicate,
+} from '@/lib/services/managed-memory-context-service';
 
 async function handleSearchMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const url = new URL(request.url);
   const query = url.searchParams.get('q')?.trim();
@@ -30,10 +34,11 @@ async function handleSearchMemories(request: NextRequest) {
     data = await db.query<UserMemoryRow>(
       `select id, content, category, source, created_at, updated_at
        from user_memories
-       where user_id = $1 and is_deleted = false and content ilike $2
+       where user_id = $1 and ${activeMemoryPredicate()} and content ilike $2
+         and ${workspaceMemoryPredicate(3)}
        order by updated_at desc
        limit 20`,
-      [userId, `%${escapedQuery}%`],
+      [userId, `%${escapedQuery}%`, organizationId ?? null],
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to search memories');
