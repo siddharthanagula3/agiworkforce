@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { initSandboxRepository, sandboxGit } from './lib/sandbox-git.mjs';
 
 import {
   analyzeMockFactory,
@@ -37,8 +38,8 @@ function writeFiles(root, files) {
 }
 
 function initGitRepo(root) {
-  execFileSync('git', ['init', '--quiet'], { cwd: root });
-  execFileSync('git', ['add', '.'], { cwd: root });
+  initSandboxRepository(root);
+  sandboxGit(root, ['add', '.']);
 }
 
 test('flags a vi.mock factory that omits a real export the subject imports', () => {

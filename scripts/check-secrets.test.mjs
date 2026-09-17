@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { initSandboxRepository, sandboxGit } from './lib/sandbox-git.mjs';
 
 const SCANNER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'check-secrets.mjs');
 
@@ -48,7 +49,7 @@ const url = (password, host) => shape('postgres', '://', 'admin', ':', password,
 function scan(files, allowlist) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'secret-scan-'));
   try {
-    execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'ignore' });
+    initSandboxRepository(dir, { stdio: 'ignore' });
     const written = { ...files };
     if (allowlist) written['scripts/secret-scan-allowlist.json'] = JSON.stringify(allowlist);
     for (const [rel, body] of Object.entries(written)) {
@@ -276,7 +277,14 @@ test('the CI gate runs this suite before it can report a pass', () => {
   );
   assert.ok(gate.endsWith('node scripts/check-secrets.mjs'), `check:secrets got: ${gate}`);
   const ci = fs.readFileSync(path.join(repo, '.github/workflows/ci.yml'), 'utf8');
-  assert.match(ci, /^ +run: pnpm check:secrets$/m);
+  const direct = /^ +run: pnpm check:secrets$/m.test(ci);
+  const viaChain =
+    /^ +run: pnpm check:llm-operability$/m.test(ci) &&
+    (pkg.scripts['check:llm-operability'] ?? '').includes('pnpm check:secrets');
+  assert.ok(
+    direct || viaChain,
+    'ci.yml must reach the secret scan, either as its own step or through check:llm-operability',
+  );
 });
 
 // This product holds keys for providers the table did not name, which is not a
