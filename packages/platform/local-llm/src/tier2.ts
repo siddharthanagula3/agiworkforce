@@ -103,10 +103,13 @@ export async function tier2LoadModel(
   const LLMModule = getLLMModuleClass();
   if (!LLMModule) throw new Error('react-native-executorch not available');
 
-  await options?.ensureDownloadAllowed?.();
-
   const loadGeneration = ++_loadGeneration;
   _loadPromise = (async () => {
+    // Registering the promise before the first await is what makes the
+    // `_loadPromise` guard above a real one. Awaiting the download consent
+    // out here let a second concurrent caller past that guard and start its
+    // own native load.
+    await options?.ensureDownloadAllowed?.();
     if (_instance) {
       _instance.delete();
       _instance = null;
