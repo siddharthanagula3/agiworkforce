@@ -27,7 +27,10 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
 });
 
 import { CloudCodeNotFoundError } from '@/lib/services/cloud-code-session-service';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { GET } from './route';
+
+const db = createDatabaseAdapterFake();
 
 const SESSION_ID = '22222222-2222-4222-8222-222222222222';
 const SESSION = {
@@ -60,7 +63,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockRateLimit.mockResolvedValue(null);
   mockE2bReady.mockReturnValue(true);
-  mockGetUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1', organizationId: null });
+  mockGetUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
   mockReadFile.mockResolvedValue({ session: SESSION, bytes: new TextEncoder().encode('hello') });
 });
 
@@ -70,7 +73,7 @@ describe('GET /notebook/files/[...path]', () => {
 
     expect(response.status).toBe(200);
     expect(mockReadFile).toHaveBeenCalledWith(
-      {},
+      db,
       { userId: 'user-1', organizationId: null },
       SESSION_ID,
       'output.bin',
@@ -84,7 +87,7 @@ describe('GET /notebook/files/[...path]', () => {
   it('joins a nested path back together for the service call', async () => {
     await GET(getRequest('nested/output.bin'), context(['nested', 'output.bin']));
     expect(mockReadFile).toHaveBeenCalledWith(
-      {},
+      db,
       { userId: 'user-1', organizationId: null },
       SESSION_ID,
       'nested/output.bin',

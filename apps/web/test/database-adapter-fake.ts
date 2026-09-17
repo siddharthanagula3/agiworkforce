@@ -21,3 +21,23 @@ export function createDatabaseAdapterFake(
   };
   return adapter;
 }
+
+/**
+ * A caller who holds a seat in `organizationId` and nothing else: membership
+ * reads name that organization, and every other read (settings, policy, billing
+ * contract, spend limit) finds no row. Workspace policy gates fail closed on a
+ * read they cannot parse, so a test that scopes a request to an organization
+ * needs the membership answer rather than a stub that returns undefined.
+ */
+export function createWorkspaceMemberDatabaseFake(
+  organizationId: string,
+  overrides: Partial<DatabaseAdapter> = {},
+): DatabaseAdapter {
+  return createDatabaseAdapterFake({
+    query: (async (sql: string) =>
+      /from public\.organization_members\b/.test(sql)
+        ? [{ organization_id: organizationId }]
+        : []) as DatabaseAdapter['query'],
+    ...overrides,
+  });
+}

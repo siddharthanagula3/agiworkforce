@@ -29,6 +29,13 @@ vi.mock('@/lib/cors', () => ({
 vi.mock('@/lib/error-handler', () => ({
   withErrorHandler: <T extends (...a: unknown[]) => unknown>(handler: T) => handler,
 }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  return {
+    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    getNeonDb: () => createDatabaseAdapterFake(),
+  };
+});
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
