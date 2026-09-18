@@ -28,7 +28,13 @@ export const metadata = buildMetadata({
   path: '/help',
 });
 
-export default function HelpPage() {
+export default async function HelpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
+  const { q } = await searchParams;
+  const initialQuery = (Array.isArray(q) ? q[0] : q)?.slice(0, 200) ?? '';
   const { collections, articleCount } = supportCollectionIndex();
 
   return (
@@ -51,7 +57,7 @@ export default function HelpPage() {
             <h2 className="agi-ds-h2" id="agi-help-search-title">
               Search everything we have written.
             </h2>
-            <HelpSearch />
+            <HelpSearch initialQuery={initialQuery} />
           </Stack>
         </Section>
 

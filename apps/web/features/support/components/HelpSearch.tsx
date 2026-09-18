@@ -19,10 +19,10 @@ type SearchState =
 const DEBOUNCE_MS = 250;
 const MIN_QUERY_LENGTH = 2;
 
-export function HelpSearch() {
+export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
   const inputId = useId();
   const statusId = useId();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [state, setState] = useState<SearchState>({ kind: 'idle' });
   const inFlight = useRef<AbortController | null>(null);
 

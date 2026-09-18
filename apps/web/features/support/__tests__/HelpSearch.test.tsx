@@ -65,6 +65,18 @@ describe('HelpSearch', () => {
     expect(await screen.findByText('1 page matches.')).toBeInTheDocument();
   });
 
+  it('searches a query it was opened with, so a contextual link lands on the answer', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ query: 'permissions', corpus: 'available', results: [] }),
+    );
+
+    render(<HelpSearch initialQuery="permissions" />);
+
+    expect(screen.getByLabelText('Search the help centre')).toHaveValue('permissions');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('q=permissions');
+  });
+
   it('says nothing covers it, and where to go instead, rather than showing a blank panel', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ query: 'zzz', corpus: 'available', results: [] }));
 
