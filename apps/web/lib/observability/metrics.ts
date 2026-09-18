@@ -33,6 +33,19 @@ export const METRIC_NAME = {
   queueStuck: 'agi.queue.stuck',
   routingDecisions: 'agi.routing.decisions',
   configurationState: 'agi.configuration.state',
+  completions: 'agi.completions',
+  falseSuccess: 'agi.completion.false_success',
+  // The media instruments live in media-telemetry.ts, which imports span.ts,
+  // which imports this file. Importing them back would be a cycle that leaves
+  // this object half built, so the names are restated and
+  // metrics.media-names.test.ts fails the moment the two lists disagree.
+  mediaGenerations: 'agi.media.generations',
+  mediaGenerationDuration: 'agi.media.generation.duration',
+  mediaAttempts: 'agi.media.attempts',
+  mediaAttemptDuration: 'agi.media.attempt.duration',
+  mediaCallbacks: 'agi.media.callbacks',
+  mediaPolls: 'agi.media.polls',
+  mediaSafety: 'agi.media.safety',
 } as const;
 
 export type FailureKind =
@@ -73,6 +86,8 @@ interface Instruments {
   readonly queueStuck: Gauge;
   readonly routingDecisions: Counter;
   readonly configurationState: Gauge;
+  readonly completions: Counter;
+  readonly falseSuccess: Counter;
 }
 
 let cached: { provider: MeterProvider; instruments: Instruments } | null = null;
@@ -99,6 +114,8 @@ function instruments(): Instruments {
     queueStuck: meter.createGauge(METRIC_NAME.queueStuck),
     routingDecisions: meter.createCounter(METRIC_NAME.routingDecisions),
     configurationState: meter.createGauge(METRIC_NAME.configurationState),
+    completions: meter.createCounter(METRIC_NAME.completions),
+    falseSuccess: meter.createCounter(METRIC_NAME.falseSuccess),
   };
   cached = { provider, instruments: created };
   return created;
@@ -315,7 +332,120 @@ export function recordNotificationDelivery(input: {
   if (input.outcome === 'failed') recordFailure('notification', input.reason);
 }
 
-const TOOL_FAILURE_STATUS = 'failed';
+export type CompletionStatus = 'completed' | 'failed' | 'cancelled' | 'partial';
+
+export type CompletionKind = 'turn' | 'tool' | 'task';
+
+export interface CompletionEvidence {
+  reportedStatus: string;
+  error?: unknown;
+  errorType?: string | null | undefined;
+  httpStatus?: number | null | undefined;
+  output?: unknown;
+  outputRequired?: boolean;
+}
+
+export interface ResolvedCompletion {
+  status: CompletionStatus;
+  reportedStatus: string;
+  falseSuccess: boolean;
+  reason: string | null;
+}
+
+const REPORTED_SUCCESS = new Set([
+  'completed',
+  'complete',
+  'done',
+  'finished',
+  'ok',
+  'success',
+  'succeeded',
+]);
+
+const REPORTED_CANCELLED = new Set(['cancelled', 'canceled', 'aborted', 'stopped']);
+
+const REPORTED_FAILED = new Set([
+  'blocked',
+  'denied',
+  'error',
+  'errored',
+  'failed',
+  'rejected',
+  'timed_out',
+  'timeout',
+]);
+
+const CLIENT_ERROR_STATUS = 400;
+
+function hasError(evidence: CompletionEvidence): boolean {
+  if (evidence.error !== undefined && evidence.error !== null) return true;
+  return typeof evidence.errorType === 'string' && evidence.errorType.length > 0;
+}
+
+function hasOutput(output: unknown): boolean {
+  if (output === undefined || output === null) return false;
+  if (typeof output === 'string') return output.trim().length > 0;
+  if (Array.isArray(output)) return output.length > 0;
+  if (typeof output === 'object') return Object.keys(output as object).length > 0;
+  return true;
+}
+
+/**
+ * What actually happened, which is not what the caller called it. A reported
+ * success that carries an error, an error status code, or no output it was
+ * required to produce is not a completion, and the disagreement is counted so a
+ * surface that keeps claiming Done over a failed call is visible.
+ */
+export function resolveCompletion(evidence: CompletionEvidence): ResolvedCompletion {
+  const reported = evidence.reportedStatus.trim().toLowerCase();
+  const claimedSuccess = REPORTED_SUCCESS.has(reported);
+  const resolve = (status: CompletionStatus, reason: string | null): ResolvedCompletion => ({
+    status,
+    reportedStatus: evidence.reportedStatus,
+    falseSuccess: claimedSuccess && status !== 'completed',
+    reason,
+  });
+
+  if (REPORTED_CANCELLED.has(reported)) return resolve('cancelled', null);
+  if (hasError(evidence)) return resolve('failed', 'error_present');
+  if (typeof evidence.httpStatus === 'number' && evidence.httpStatus >= CLIENT_ERROR_STATUS) {
+    return resolve('failed', `http_${evidence.httpStatus}`);
+  }
+  if (REPORTED_FAILED.has(reported)) return resolve('failed', 'reported_failed');
+  if (!claimedSuccess) return resolve('partial', 'unrecognized_status');
+  if (evidence.outputRequired && !hasOutput(evidence.output)) {
+    return resolve('partial', 'no_output');
+  }
+  return resolve('completed', null);
+}
+
+/**
+ * The completion status a user sees, recorded next to the status the code
+ * reported. Infrastructure success is not the same signal and is not recorded
+ * here.
+ */
+export function recordCompletion(input: {
+  kind: CompletionKind;
+  surface: string;
+  evidence: CompletionEvidence;
+  category?: string | undefined;
+}): ResolvedCompletion {
+  const resolved = resolveCompletion(input.evidence);
+  const attributes = clean({
+    [OBSERVABILITY_ATTRIBUTE.completionKind]: input.kind,
+    [OBSERVABILITY_ATTRIBUTE.completionStatus]: resolved.status,
+    [OBSERVABILITY_ATTRIBUTE.completionReportedStatus]: resolved.reportedStatus,
+    [OBSERVABILITY_ATTRIBUTE.completionReason]: resolved.reason ?? undefined,
+    [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+    [OBSERVABILITY_ATTRIBUTE.toolCategory]: input.category,
+  });
+  const recorded = instruments();
+  recorded.completions.add(1, attributes);
+  if (resolved.falseSuccess) {
+    recorded.falseSuccess.add(1, attributes);
+  }
+  return resolved;
+}
 
 const CATEGORY_FAILURE_KIND: Readonly<Record<string, FailureKind>> = {
   mcp: 'mcp',
@@ -328,7 +458,12 @@ export function recordToolOutcome(input: {
   status: string;
   durationMs?: number | undefined;
   remote?: boolean;
-}): void {
+  surface?: string | undefined;
+  error?: unknown;
+  errorType?: string | null | undefined;
+  output?: unknown;
+  outputRequired?: boolean;
+}): ResolvedCompletion {
   const attributes = clean({
     [OBSERVABILITY_ATTRIBUTE.toolCategory]: input.category,
     [OBSERVABILITY_ATTRIBUTE.toolStatus]: input.status,
@@ -338,12 +473,27 @@ export function recordToolOutcome(input: {
   if (input.durationMs !== undefined) {
     recorded.toolDuration.record(nonNegative(input.durationMs), attributes);
   }
-  if (input.status !== TOOL_FAILURE_STATUS) return;
+
+  const resolved = recordCompletion({
+    kind: 'tool',
+    surface: input.surface ?? 'unknown',
+    category: input.category,
+    evidence: {
+      reportedStatus: input.status,
+      error: input.error,
+      errorType: input.errorType,
+      output: input.output,
+      ...(input.outputRequired === undefined ? {} : { outputRequired: input.outputRequired }),
+    },
+  });
+
+  if (resolved.status !== 'failed') return resolved;
   recordFailure('tool', input.category);
   if (input.remote) {
     recordFailure('remote', input.category);
-    return;
+    return resolved;
   }
   const specific = CATEGORY_FAILURE_KIND[input.category];
   if (specific) recordFailure(specific, input.category);
+  return resolved;
 }

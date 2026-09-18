@@ -1,9 +1,10 @@
 import { OBSERVABILITY_ATTRIBUTE } from './attributes';
+import { MEDIA_ATTRIBUTE } from './media-telemetry';
 import { METRIC_NAME } from './metrics';
 
 export type DashboardMetric = (typeof METRIC_NAME)[keyof typeof METRIC_NAME];
 
-export type PanelAggregation = 'rate' | 'ratio' | 'p50' | 'p95' | 'max';
+export type PanelAggregation = 'rate' | 'ratio' | 'p50' | 'p95' | 'p99' | 'max';
 
 export interface DashboardPanel {
   readonly id: string;
@@ -22,7 +23,11 @@ export interface ServiceDashboard {
 }
 
 const RATE_WINDOW = '5m';
-const HISTOGRAM_QUANTILE: Readonly<Record<'p50' | 'p95', string>> = { p50: '0.5', p95: '0.95' };
+const HISTOGRAM_QUANTILE: Readonly<Record<'p50' | 'p95' | 'p99', string>> = {
+  p50: '0.5',
+  p95: '0.95',
+  p99: '0.99',
+};
 
 export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
   {
@@ -49,6 +54,15 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         title: 'Request latency p95',
         metric: METRIC_NAME.httpDuration,
         aggregation: 'p95',
+        groupBy: ['http_request_method'],
+      },
+      // p95 hides the tail a p99 shows: the slowest one request in a hundred is
+      // where a timeout budget is actually spent.
+      {
+        id: 'request-latency-p99',
+        title: 'Request latency p99',
+        metric: METRIC_NAME.httpDuration,
+        aggregation: 'p99',
         groupBy: ['http_request_method'],
       },
     ],
@@ -152,6 +166,13 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion)],
       },
       {
+        id: 'latency-p99-by-release',
+        title: 'Request latency p99 by release',
+        metric: METRIC_NAME.httpDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion)],
+      },
+      {
         id: 'configuration-completeness',
         title: 'Configuration completeness',
         metric: METRIC_NAME.configurationState,
@@ -180,6 +201,124 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         metric: METRIC_NAME.queueStuck,
         aggregation: 'max',
         groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
+      },
+    ],
+  },
+  {
+    id: 'provider-and-model',
+    title: 'Provider and model',
+    panels: [
+      {
+        id: 'turn-rate-by-provider-model',
+        title: 'Turns by provider and model',
+        metric: METRIC_NAME.routingDecisions,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.providerName),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel),
+        ],
+      },
+      {
+        id: 'no-route-ratio-by-provider-model',
+        title: 'Share with no route, by provider and model',
+        metric: METRIC_NAME.routingDecisions,
+        aggregation: 'ratio',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.providerName),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel),
+        ],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.routingStatus)]: 'unavailable' },
+      },
+      {
+        id: 'span-latency-p99-by-provider',
+        title: 'Span latency p99 by provider',
+        metric: METRIC_NAME.spanDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.providerName)],
+      },
+    ],
+  },
+  {
+    id: 'completion-truth',
+    title: 'Completion truth',
+    panels: [
+      {
+        id: 'false-success-rate',
+        title: 'Completions reported as success that were not',
+        metric: METRIC_NAME.falseSuccess,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.completionKind),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.completionReason),
+        ],
+      },
+      {
+        id: 'completion-status-rate',
+        title: 'Completions by resolved status',
+        metric: METRIC_NAME.completions,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.completionStatus),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.surface),
+        ],
+      },
+      {
+        id: 'tool-latency-p99',
+        title: 'Tool latency p99 by category',
+        metric: METRIC_NAME.toolDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.toolCategory)],
+      },
+    ],
+  },
+  {
+    id: 'media-generation',
+    title: 'Media generation',
+    panels: [
+      {
+        id: 'media-generation-rate',
+        title: 'Generations by kind and provider',
+        metric: METRIC_NAME.mediaGenerations,
+        aggregation: 'rate',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.provider)],
+      },
+      {
+        id: 'media-generation-failure-ratio',
+        title: 'Failed share of generations',
+        metric: METRIC_NAME.mediaGenerations,
+        aggregation: 'ratio',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.provider)],
+        match: { [attributeKey(MEDIA_ATTRIBUTE.outcome)]: 'failed' },
+      },
+      {
+        id: 'media-generation-latency-p95',
+        title: 'Generation latency p95',
+        metric: METRIC_NAME.mediaGenerationDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind)],
+      },
+      {
+        id: 'media-generation-latency-p99',
+        title: 'Generation latency p99',
+        metric: METRIC_NAME.mediaGenerationDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind)],
+      },
+      {
+        id: 'media-poll-rate',
+        title: 'Job polls by outcome',
+        metric: METRIC_NAME.mediaPolls,
+        aggregation: 'rate',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.outcome)],
+      },
+      // A provider callback that stops arriving is invisible in the generation
+      // rate: the job simply stays open until the poller settles it.
+      {
+        id: 'media-callback-rate',
+        title: 'Provider callbacks by outcome',
+        metric: METRIC_NAME.mediaCallbacks,
+        aggregation: 'rate',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.outcome)],
       },
     ],
   },
