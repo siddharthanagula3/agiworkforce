@@ -1,16 +1,20 @@
+import Link from 'next/link';
+
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
-import { HelpSearch } from '@/features/support/components/HelpSearch';
 import {
-  BYOK_SURFACES,
-  DESKTOP_LOCAL_RUNTIMES,
-  MARKETING,
-  SURFACE_STATUS,
-} from '@/lib/marketing-constants';
+  Button,
+  ButtonRow,
+  Ledger,
+  Prose,
+  Section,
+  Stack,
+} from '@/features/marketing/components/system';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { HelpSearch } from '@/features/support/components/HelpSearch';
+import { BYOK_SURFACES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { supportCollectionIndex } from './collections';
 
 const HERO_FACTS = [
   `Catalog: ${MARKETING.models.display} models, ${MARKETING.providers.display} providers`,
@@ -19,12 +23,14 @@ const HERO_FACTS = [
 ];
 
 export const metadata = buildMetadata({
-  title: 'Help: quick links into the product',
-  description: 'Quick links into the parts of the product most people ask about.',
+  title: 'Help: every collection in the help centre',
+  description: 'Search the help centre, or browse every collection we have written.',
   path: '/help',
 });
 
 export default function HelpPage() {
+  const { collections, articleCount } = supportCollectionIndex();
+
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
@@ -34,7 +40,7 @@ export default function HelpPage() {
           eyebrow="Help"
           title="Get unstuck, fast."
           em="fast."
-          lede="The six things people ask about most, each one link away. For anything else, email contact@agiworkforce.com. A real human reads it."
+          lede="Search everything we have written, or browse it by collection. For anything else, email contact@agiworkforce.com. A real human reads it."
           ctas={[]}
         />
 
@@ -49,51 +55,35 @@ export default function HelpPage() {
           </Stack>
         </Section>
 
-        <Section id="common" labelledBy="agi-help-common-title" rule>
+        <Section id="collections" labelledBy="agi-help-collections-title" rule>
           <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-help-common-title">
-              Start with the page that answers it.
+            <h2 className="agi-ds-h2" id="agi-help-collections-title">
+              Browse every collection.
             </h2>
-            <LinkGrid
-              items={[
-                {
-                  meta: 'Install',
-                  title: 'Get the apps',
-                  href: '/download',
-                  body: 'The Desktop installer for macOS opens once a signed release is published; Windows is not published. The CLI page carries the current agi install guide.',
-                },
-                {
-                  meta: 'BYOK',
-                  title: 'Add your API key',
-                  href: '/byok',
-                  body: `Bring your own provider keys on ${BYOK_SURFACES.label}. The CLI has a published release; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion} The key stays in the local runtime and requests go straight to your provider.`,
-                },
-                {
-                  meta: 'Local',
-                  title: 'Run offline',
-                  href: '/local',
-                  body: `Desktop supports ${DESKTOP_LOCAL_RUNTIMES.label}; CLI supports its documented local integrations. After setup, Local inference is offline-capable with no AGI key or quota.`,
-                },
-                {
-                  meta: 'Models',
-                  title: 'Switch models',
-                  href: '/providers',
-                  body: `${MARKETING.models.display} models across ${MARKETING.providers.display} providers, switchable mid-conversation.`,
-                },
-                {
-                  meta: 'Terminal',
-                  title: 'Use the CLI',
-                  href: '/cli',
-                  body: 'A Rust-native developer agent: resumable sessions, sandboxed execution, offline-capable.',
-                },
-                {
-                  meta: 'Plans',
-                  title: 'See pricing',
-                  href: '/pricing',
-                  body: 'Local and BYOK are free. Managed cloud is open by default (metered). Current details live on the pricing page.',
-                },
-              ]}
-            />
+            <Prose>
+              {`${articleCount} collections, grouped the way the product is. Where a surface differs, the collection says so: bring your own provider keys on ${BYOK_SURFACES.label}. The CLI has a published release; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion}`}
+            </Prose>
+            {collections.length > 0 ? (
+              <Ledger
+                caption="Help collections"
+                rows={collections.map((collection) => ({
+                  label: collection.label,
+                  value: collection.articles.map((article, index) => (
+                    <span key={article.docId}>
+                      {index > 0 ? ' · ' : null}
+                      <Link href={article.href} className="agi-ds-link">
+                        {article.title}
+                      </Link>
+                    </span>
+                  )),
+                }))}
+              />
+            ) : (
+              <Prose>
+                The collection index is not loading right now. Email contact@agiworkforce.com and a
+                human will answer.
+              </Prose>
+            )}
           </Stack>
         </Section>
 

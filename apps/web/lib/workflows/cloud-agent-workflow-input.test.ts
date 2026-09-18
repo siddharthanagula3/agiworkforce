@@ -449,4 +449,30 @@ describe('cloud agent workflow input', () => {
 
     expect(parseCloudAgentWorkflowInput(input).continuation?.invocationContinuation).toBe(false);
   });
+
+  it('carries the prompt cache scope the request processor resolved', () => {
+    const processed = makeProcessed();
+    const promptCacheScope: Required<
+      NonNullable<ProcessedRequest['llmRequest']['promptCacheScope']>
+    > = {
+      organizationId: '0190a000-0000-7000-8000-000000000006',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      privacyClass: 'zero_retention',
+      promptVersion: 'prompt-2026-09-01',
+    };
+    processed.llmRequest.usePromptCache = false;
+    processed.llmRequest.promptCacheScope = promptCacheScope;
+
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed,
+      mcpTools: tools,
+      approvalMode: 'manual',
+    });
+
+    expect(input.processed.llmRequest.promptCacheScope).toEqual(promptCacheScope);
+    expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
+  });
 });

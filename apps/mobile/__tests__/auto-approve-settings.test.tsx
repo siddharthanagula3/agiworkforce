@@ -58,6 +58,7 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 const READ_ONLY = TOOL_APPROVAL_POLICY_OPTIONS.find(
   (option) => option.policy === 'auto_approve_read_only',
 )!;
+const AUTONOMOUS = TOOL_APPROVAL_POLICY_OPTIONS.find((option) => option.policy === 'autonomous')!;
 
 function rowLabel(option: (typeof TOOL_APPROVAL_POLICY_OPTIONS)[number]): string {
   return `${option.label}. ${option.description.replace(/[.。]+$/, '')}`;
@@ -76,7 +77,7 @@ describe('Action approvals settings screen', () => {
   it('offers exactly the policies the server accepts', () => {
     const { getByLabelText, queryByText } = render(<AutoApproveScreen />);
 
-    expect(TOOL_APPROVAL_POLICIES).toHaveLength(2);
+    expect(TOOL_APPROVAL_POLICIES).toHaveLength(3);
     for (const option of TOOL_APPROVAL_POLICY_OPTIONS) {
       expect(getByLabelText(rowLabel(option))).toBeTruthy();
     }
@@ -91,6 +92,14 @@ describe('Action approvals settings screen', () => {
     expect(useSettingsStore.getState().toolApprovalPolicy).toBe('auto_approve_read_only');
     expect(mockFetchNamespace).not.toHaveBeenCalled();
     expect(mockSaveNamespace).not.toHaveBeenCalled();
+  });
+
+  it('offers the autonomous policy as its own row', () => {
+    const { getByLabelText } = render(<AutoApproveScreen />);
+
+    fireEvent.press(getByLabelText(rowLabel(AUTONOMOUS)));
+
+    expect(useSettingsStore.getState().toolApprovalPolicy).toBe('autonomous');
   });
 
   it('loads and writes the account default through the server preference namespace', async () => {

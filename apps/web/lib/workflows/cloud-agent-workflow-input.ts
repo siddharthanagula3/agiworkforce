@@ -15,6 +15,7 @@ import type {
   ResumeInputResponse,
   ToolApprovalDecision,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
+import type { PromptCachePrivacyClass, PromptCacheScope } from '@agiworkforce/types';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { FreeTrialReservation } from '@/lib/services/free-trial-service';
 import type { ManagedUsageRequestReservation } from '@/lib/services/managed-usage-request-service';
@@ -51,6 +52,28 @@ const messageSchemaCoversLlmRequest: SameKeys<
 > = true;
 void messageSchemaCoversLlmRequest;
 
+const PROMPT_CACHE_PRIVACY_CLASSES = ['standard', 'temporary', 'zero_retention'] as const;
+const promptCachePrivacyClassesCoverType: SameKeys<
+  Record<PromptCachePrivacyClass, true>,
+  Record<(typeof PROMPT_CACHE_PRIVACY_CLASSES)[number], true>
+> = true;
+void promptCachePrivacyClassesCoverType;
+
+const PromptCacheScopeSchema = z
+  .object({
+    organizationId: z.string().nullable().optional(),
+    userId: z.string().nullable().optional(),
+    workspaceId: z.string().nullable().optional(),
+    privacyClass: z.enum(PROMPT_CACHE_PRIVACY_CLASSES).optional(),
+    promptVersion: z.string().nullable().optional(),
+  })
+  .strict();
+const promptCacheScopeSchemaCoversScope: SameKeys<
+  z.infer<typeof PromptCacheScopeSchema>,
+  PromptCacheScope
+> = true;
+void promptCacheScopeSchemaCoversScope;
+
 const LlmRequestSchema = z
   .object({
     model: z.string().min(1),
@@ -64,6 +87,7 @@ const LlmRequestSchema = z
     thinking: ThinkingConfigSchema.optional(),
     effort: z.string().optional(),
     usePromptCache: z.boolean().optional(),
+    promptCacheScope: PromptCacheScopeSchema.optional(),
   })
   .strict();
 const llmRequestSchemaCoversProcessedRequest: SameKeys<

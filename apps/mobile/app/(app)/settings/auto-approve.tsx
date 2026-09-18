@@ -1,6 +1,12 @@
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Shield, ShieldCheck, SlidersHorizontal, type LucideIcon } from 'lucide-react-native';
+import {
+  Shield,
+  ShieldCheck,
+  ShieldOff,
+  SlidersHorizontal,
+  type LucideIcon,
+} from 'lucide-react-native';
 import {
   TOOL_APPROVAL_POLICY_OPTIONS,
   toolApprovalPolicyOption,
@@ -14,6 +20,7 @@ import { useThemeColors } from '@/src/ui/theme';
 const POLICY_ICONS: Record<ToolApprovalPolicy, LucideIcon> = {
   ask_every_time: Shield,
   auto_approve_read_only: ShieldCheck,
+  autonomous: ShieldOff,
 };
 
 const RECOMMENDED_POLICY: ToolApprovalPolicy = 'ask_every_time';
