@@ -56,6 +56,15 @@ import {
   type GitHubPullRequest,
 } from '@/lib/github-app';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
+import {
+  buildCloudCodePullRequestBody,
+  buildValidationSummary,
+  cloudCodeTaskMetrics,
+  verifyTaskCompletion,
+  type CloudCodeCompletionVerdict,
+  type CloudCodeTaskMetrics,
+  type CloudCodeValidationSummary,
+} from './cloud-code-result';
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_HARNESS_CREDENTIAL_LENGTH = 4_000;
@@ -2122,25 +2131,34 @@ const MAX_PULL_REQUEST_BODY_LENGTH = 60_000;
 const PULL_REQUEST_EXISTS_MARKER = 'a pull request already exists';
 const PULL_REQUEST_NO_COMMITS_MARKER = 'no commits between';
 const GITHUB_UNPROCESSABLE_STATUS = 422;
-const PULL_REQUEST_FALLBACK_BODY = 'Opened from an AGI Code session.';
 
-async function lastTurnSummary(
+export interface CloudCodeSessionResult {
+  goal: string;
+  summary: CloudCodeValidationSummary;
+  verdict: CloudCodeCompletionVerdict;
+  metrics: CloudCodeTaskMetrics;
+}
+
+/**
+ * What this session can prove it did. The model's own closing message is not
+ * read here on purpose: it is the one input that can claim a validation that
+ * never ran, and every caller of this treats the verdict as authoritative.
+ */
+export async function readCloudCodeSessionResult(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   sessionId: string,
-): Promise<string> {
-  const scoped = ownerSql(owner, 2);
-  const rows = await db.query<{ final_message: string | null; goal: string }>(
-    `select final_message, goal
-       from cloud_code_agent_turns
-      where session_id = $1 and ${scoped.clause}
-      order by created_at desc
-      limit 1`,
-    [sessionId, ...scoped.params],
-  );
-  const row = rows[0];
-  const summary = row?.final_message?.trim() || row?.goal?.trim() || '';
-  return (summary || PULL_REQUEST_FALLBACK_BODY).slice(0, MAX_PULL_REQUEST_BODY_LENGTH);
+): Promise<CloudCodeSessionResult> {
+  const turns = await listCloudCodeAgentTurns(db, owner, sessionId);
+  const summary = buildValidationSummary(turns);
+  const lastTurn = turns[turns.length - 1];
+  const verdict = verifyTaskCompletion({ stopReason: lastTurn?.stopReason ?? null, summary });
+  return {
+    goal: lastTurn?.goal ?? '',
+    summary,
+    verdict,
+    metrics: cloudCodeTaskMetrics({ turns, summary, verdict }),
+  };
 }
 
 async function recordPullRequest(
@@ -2214,15 +2232,28 @@ export async function openCloudCodeSessionPullRequest(
     session.repositoryBranch ??
     (await getGitHubRepositoryDefaultBranch(token, parsed.owner, parsed.repo));
 
+  const result = await readCloudCodeSessionResult(db, owner, sessionId);
+  logger.info(
+    { sessionId, ...result.metrics },
+    'Cloud Code session pull request opened from verified results',
+  );
+
   let pullRequest: GitHubPullRequest;
   try {
     pullRequest = await createGitHubPullRequest(token, {
       owner: parsed.owner,
       repo: parsed.repo,
       title: session.title,
-      body: await lastTurnSummary(db, owner, sessionId),
+      body: buildCloudCodePullRequestBody({
+        goal: result.goal,
+        summary: result.summary,
+        verdict: result.verdict,
+      }).slice(0, MAX_PULL_REQUEST_BODY_LENGTH),
       head: session.workingBranch,
       base,
+      // Work that cannot back its own "done" claim opens as a draft rather
+      // than asking for a review it has not earned.
+      draft: !result.verdict.complete,
     });
   } catch (error) {
     if (!(error instanceof GitHubPullRequestError)) throw error;

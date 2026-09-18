@@ -7,6 +7,11 @@ import {
   executeCodeAsShellCommand,
   cloudCodeAgentToolDefs,
 } from '../cloud-code-agent-tools';
+import {
+  buildCloudCodePullRequestBody,
+  buildValidationSummary,
+  verifyTaskCompletion,
+} from '../cloud-code-result';
 
 describe('classifyCommandRisk', () => {
   it('allows read-only, workspace-scoped commands to run unattended', () => {
@@ -185,5 +190,37 @@ describe('version probes', () => {
     expect(classifyCommandRisk('node --version extra').risk).toBe('requires_approval');
     expect(classifyCommandRisk('node --eval').risk).toBe('requires_approval');
     expect(classifyCommandRisk('rustc --emit=obj').risk).toBe('requires_approval');
+  });
+});
+
+describe('a step that exited nonzero can never be claimed as a pass', () => {
+  const failedTestRun = {
+    steps: [
+      {
+        index: 0,
+        toolName: CLOUD_CODE_RUN_COMMAND_TOOL,
+        label: 'pnpm test',
+        output: 'All green, honestly\n[exit 1]',
+        isError: true,
+      },
+      {
+        index: 1,
+        toolName: 'write_file',
+        label: 'write_file src/fix.ts',
+        output: 'ok',
+        isError: false,
+      },
+    ],
+  };
+
+  it('blocks the completion claim and prints the failure in the pull request body', () => {
+    const summary = buildValidationSummary([failedTestRun]);
+    const verdict = verifyTaskCompletion({ stopReason: 'done', summary });
+
+    expect(verdict.complete).toBe(false);
+    const body = buildCloudCodePullRequestBody({ goal: 'make it green', summary, verdict });
+    expect(body).not.toMatch(/Tests: passed/);
+    expect(body).toContain('- Tests: failed (`pnpm test`, exit 1)');
+    expect(body).not.toContain('All green, honestly');
   });
 });

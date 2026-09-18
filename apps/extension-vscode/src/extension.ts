@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
-import { registerContextHandoffUriHandler } from './features/context-handoff';
+import {
+  PULL_CLOUD_TASK_COMMAND,
+  parseCloudTaskHandoffQuery,
+  pullCloudResultIntoCheckout,
+  registerContextHandoffUriHandler,
+  resolveGitCheckoutHost,
+} from './features/context-handoff';
 import { Config } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
@@ -124,6 +130,22 @@ export function activate(context: vscode.ExtensionContext): void {
       };
     }),
   );
+
+  runBoot('cloud-task-pull', () => {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(PULL_CLOUD_TASK_COMMAND, async (argument: unknown) => {
+        const query = typeof argument === 'string' ? argument : '';
+        const handoff = parseCloudTaskHandoffQuery(query);
+        if (handoff === null) {
+          void vscode.window.showWarningMessage(
+            'AGI Workforce: open a cloud task first, this command needs the task it should bring in.',
+          );
+          return;
+        }
+        await pullCloudResultIntoCheckout(handoff, await resolveGitCheckoutHost());
+      }),
+    );
+  });
 
   setEditorUtilityChat(
     sidebarProvider === undefined

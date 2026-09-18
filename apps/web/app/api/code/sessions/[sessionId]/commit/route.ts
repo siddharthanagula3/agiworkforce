@@ -15,6 +15,7 @@ import {
   CloudCodeValidationError,
   commitAndPushCloudCodeSession,
   isCloudCodeSchemaUnavailable,
+  readCloudCodeSessionResult,
 } from '@/lib/services/cloud-code-session-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
@@ -87,15 +88,21 @@ async function handleCommit(request: NextRequest, context: RouteContext) {
   if (accessGateResponse) return accessGateResponse;
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
   try {
-    return NextResponse.json(
-      await commitAndPushCloudCodeSession(
-        db,
-        { userId, organizationId },
-        sessionId,
-        planTier,
-        body['message'],
-      ),
+    const owner = { userId, organizationId };
+    const pushed = await commitAndPushCloudCodeSession(
+      db,
+      owner,
+      sessionId,
+      planTier,
+      body['message'],
     );
+    // What the pushed branch can actually prove, so no caller has to take a
+    // "done" from the model's own words.
+    const result = await readCloudCodeSessionResult(db, owner, sessionId);
+    return NextResponse.json({
+      ...pushed,
+      validation: { summary: result.summary, verdict: result.verdict, metrics: result.metrics },
+    });
   } catch (error) {
     rethrowCloudCodeError(error);
   }
