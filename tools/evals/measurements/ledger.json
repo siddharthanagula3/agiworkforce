@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "path": "baselines/deepseek__deepseek-flash.json",
+      "digest": "d2d8398aca80c98daf3be9d8723219b6722d0f1f35dca49505ae5467a89e35de",
+      "runId": null,
+      "modelKey": "deepseek-v4-flash",
+      "routeId": "deepseek/deepseek-v4-flash",
+      "measuredAt": "2026-09-18",
+      "familyId": "deepseek/deepseek-flash",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0,
+          "completeness": null,
+          "met": false,
+          "measuredAt": "2026-09-18"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.36363636363636365,
+          "completeness": null,
+          "met": false,
+          "measuredAt": "2026-09-18"
+        },
+        "chat": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "coding": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "reasoning": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "research": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "search": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "tools": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "structured-output": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "long-context": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "files": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "browser": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "computer-use": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "multilingual": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        }
+      }
+    },
+    {
+      "path": "recordings/deepseek-v4-flash.json",
+      "digest": "e77f8563fff3b7c0bf873202a645a256f3eadb4b0a4977951b9d11486f140538",
+      "runId": null,
+      "modelKey": "deepseek-v4-flash",
+      "routeId": "deepseek/deepseek-v4-flash",
+      "measuredAt": "2026-09-18"
+    },
+    {
+      "path": "runs/deepseek-v4-flash.json",
+      "digest": "a483498491acd48cf1c2825aa1639e5753873eea5b6bc3e91ed6f8567491ca81",
+      "runId": null,
+      "modelKey": "deepseek-v4-flash",
+      "routeId": "deepseek/deepseek-v4-flash",
+      "measuredAt": "2026-09-18",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.9166666666666666,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0,
+          "completeness": null,
+          "met": false,
+          "measuredAt": "2026-09-18"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.36363636363636365,
+          "completeness": null,
+          "met": false,
+          "measuredAt": "2026-09-18"
+        },
+        "chat": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "coding": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "reasoning": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "research": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "search": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "tools": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "structured-output": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "long-context": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "files": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "browser": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "computer-use": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        },
+        "multilingual": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": null,
+          "met": true,
+          "measuredAt": "2026-09-18"
+        }
+      }
+    }
+  ]
+}

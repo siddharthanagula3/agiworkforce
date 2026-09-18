@@ -88,6 +88,22 @@ has been applied yet and the two can be applied in either order.
 
 ## Verify
 
+Before applying, check that every context the ruleset requires is still a job
+name in `ci.yml`. A required check that no job reports leaves every pull request
+waiting forever, which looks identical to a stuck runner:
+
+```bash
+comm -23 \
+  <(jq -r '.rules[] | select(.type=="required_status_checks")
+           | .parameters.required_status_checks[].context' .github/rulesets/main.json | sort -u) \
+  <(grep -E '^ {4}name: ' .github/workflows/ci.yml | sed -E 's/^[[:space:]]*name: //' | sort -u)
+```
+
+Empty output means every required context exists. As of 2026-09-18 the only
+required context is `CI complete`, the aggregate job at `ci.yml:1403`.
+
+After applying:
+
 ```bash
 gh api repos/:owner/:repo/rulesets
 gh api repos/:owner/:repo/environments \
@@ -107,8 +123,21 @@ its secrets are one `workflow_dispatch` away from any pushable ref.
   any lane fails or is cancelled, so requiring it requires every lane. It is the
   only status check worth requiring: every other job is conditional on the change
   scope, and a required check that does not run leaves the pull request waiting
-  forever.
+  forever. A new lane needs no change here: `contracts` was added in `e59e523ac`
+  and joined the aggregate by being listed under its `needs`, which is the only
+  place a lane has to be registered.
 - Force-push and branch deletion denied.
+
+Two contexts that are deliberately NOT required:
+
+- `evals-quality`, posted by `.github/workflows/evals.yml` on every main commit.
+  It reports whether every committed eval baseline met its own corpus threshold,
+  and `.github/workflows/model-probe.yml` refuses a canary advance without it.
+  It is a release gate, not a merge gate; requiring it would block every merge
+  for as long as a baseline suite is under its threshold, which is the state
+  today and is a model decision rather than a property of the branch.
+- `staging-web`, posted by `.github/workflows/deploy-staging.yml`. It gates the
+  production promotion of a commit that has already merged.
 
 `.github/workflows/ci.yml` carries `paths-ignore` for `docs/**`, `*.md` and
 `.github/ISSUE_TEMPLATE/**`. A pull request touching only those paths never

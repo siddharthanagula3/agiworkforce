@@ -1,5 +1,19 @@
 {
   "schemaVersion": 1,
+  "release": {
+    "policyVersion": 1,
+    "records": [
+      {
+        "version": 1,
+        "artifact": "routing_policy",
+        "id": "auto",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the Auto routing policy as it served when the staged-release ledger landed; no slot carries a canary or a shadow",
+        "bootstrap": "records what was already serving. An internal and a canary stage for it would be runs that never happened, exactly as the lifecycle shortcuts say"
+      }
+    ]
+  },
   "auto": {
     "kind": "routing_policy",
     "defaultAlias": "auto",
