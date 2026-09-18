@@ -18,6 +18,8 @@ import {
   lockdownTenant,
   type TenantLockdownInput,
 } from '@/lib/feature-flags/tenant-lockdown';
+import { validateOrganizationKeySetup } from '@/lib/server/organization-encryption-keys';
+import { CMEK_PROVIDER_IDS, type CmekKeyDescriptor, type CmekProviderId } from '@/lib/crypto/cmek';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_REASON_LENGTH = 1000;
@@ -43,6 +45,44 @@ function parseLockdownBody(body: unknown): TenantLockdownInput | AppError {
     organizationId,
     reason: reason.trim(),
     secondApproverUserId: secondApproverUserId.trim(),
+  };
+}
+
+const MAX_KEY_URI_LENGTH = 2048;
+
+function parseKeySetupBody(
+  body: unknown,
+): { organizationId: string; descriptor: CmekKeyDescriptor } | AppError {
+  const { organizationId, provider, keyUri, region } = (body ?? {}) as {
+    organizationId?: string;
+    provider?: string;
+    keyUri?: string;
+    region?: string;
+  };
+  if (typeof organizationId !== 'string' || !UUID_PATTERN.test(organizationId)) {
+    return createError.badRequest('organizationId is required and must be a workspace id');
+  }
+  if (
+    typeof provider !== 'string' ||
+    !(CMEK_PROVIDER_IDS as readonly string[]).includes(provider)
+  ) {
+    return createError.badRequest(`provider must be one of ${CMEK_PROVIDER_IDS.join(', ')}`);
+  }
+  if (typeof keyUri !== 'string' || !keyUri.trim() || keyUri.length > MAX_KEY_URI_LENGTH) {
+    return createError.badRequest(
+      `keyUri is required and must be at most ${MAX_KEY_URI_LENGTH} characters`,
+    );
+  }
+  if (typeof region !== 'string' || !region.trim() || region.length > 64) {
+    return createError.badRequest('region is required');
+  }
+  return {
+    organizationId,
+    descriptor: {
+      provider: provider as CmekProviderId,
+      keyUri: keyUri.trim(),
+      region: region.trim(),
+    },
   };
 }
 
@@ -406,10 +446,44 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      case 'validate-encryption-key': {
+        const input = parseKeySetupBody(await readJsonBody(request));
+        if (isAppError(input)) return errorResponse(input);
+
+        // Read-only on purpose: a workspace can fix its grant and try again
+        // without a half-provisioned association left in the table.
+        const validation = await validateOrganizationKeySetup(
+          getNeonDb(),
+          input.organizationId,
+          input.descriptor,
+        );
+
+        await logSecurityEvent({
+          userId: adminUserId,
+          eventType: 'admin_action',
+          severity: validation.ok ? 'low' : 'medium',
+          endpoint: '/api/admin/security?action=validate-encryption-key',
+          details: {
+            action,
+            organizationId: input.organizationId,
+            keyProvider: input.descriptor.provider,
+            region: input.descriptor.region,
+            outcome: validation.ok ? 'usable' : 'not usable',
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          organization_id: input.organizationId,
+          usable: validation.ok,
+          checks: validation.checks,
+        });
+      }
+
       default:
         return errorResponse(
           createError.badRequest(
-            'Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user, lockdown-tenant, lift-tenant-lockdown',
+            'Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user, lockdown-tenant, lift-tenant-lockdown, validate-encryption-key',
           ),
         );
     }

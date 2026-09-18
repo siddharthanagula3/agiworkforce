@@ -91,6 +91,10 @@ function SectionHeading({ id, title, caption }: { id: string; title: string; cap
   );
 }
 
+function invoiceLabel(invoice: EnterpriseInvoiceSummary): string {
+  return invoice.invoiceNumber ?? `the invoice for ${formatDate(invoice.periodStart)}`;
+}
+
 function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
   if (invoices.length === 0) {
     return (
@@ -101,15 +105,33 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-xs" style={{ borderCollapse: 'collapse' }}>
+      <table
+        className="w-full text-left text-xs"
+        style={{ borderCollapse: 'collapse' }}
+        aria-labelledby="enterprise-invoices-heading"
+      >
+        <caption className="sr-only">
+          Invoices issued on this enterprise contract, newest first, with the period, due date,
+          status and amount of each.
+        </caption>
         <thead>
           <tr style={{ color: 'var(--text-3)' }}>
-            <th className="px-5 py-2 font-medium">Invoice</th>
-            <th className="px-5 py-2 font-medium">Period</th>
-            <th className="px-5 py-2 font-medium">Due</th>
-            <th className="px-5 py-2 font-medium">Status</th>
-            <th className="px-5 py-2 text-right font-medium">Amount</th>
-            <th className="px-5 py-2 text-right font-medium">
+            <th scope="col" className="px-5 py-2 font-medium">
+              Invoice
+            </th>
+            <th scope="col" className="px-5 py-2 font-medium">
+              Period
+            </th>
+            <th scope="col" className="px-5 py-2 font-medium">
+              Due
+            </th>
+            <th scope="col" className="px-5 py-2 font-medium">
+              Status
+            </th>
+            <th scope="col" className="px-5 py-2 text-right font-medium">
+              Amount
+            </th>
+            <th scope="col" className="px-5 py-2 text-right font-medium">
               <span className="sr-only">Links</span>
             </th>
           </tr>
@@ -120,9 +142,13 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
               key={invoice.invoiceNumber ?? `invoice-${index}`}
               style={{ borderTop: '1px solid var(--settings-border)' }}
             >
-              <td className="px-5 py-2.5" style={{ color: 'var(--text-1)' }}>
+              <th
+                scope="row"
+                className="px-5 py-2.5 font-normal"
+                style={{ color: 'var(--text-1)' }}
+              >
                 {invoice.invoiceNumber ?? 'Pending number'}
-              </td>
+              </th>
               <td className="whitespace-nowrap px-5 py-2.5" style={{ color: 'var(--text-2)' }}>
                 {formatDate(invoice.periodStart)} to {formatDate(invoice.periodEnd)}
               </td>
@@ -144,6 +170,7 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
                     href={invoice.hostedInvoiceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={`View ${invoiceLabel(invoice)}, opens in a new tab`}
                     className="underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     style={{ color: 'var(--text-1)' }}
                   >
@@ -155,6 +182,7 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
                     href={invoice.invoicePdfUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={`Download ${invoiceLabel(invoice)} as PDF, opens in a new tab`}
                     className="ml-3 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     style={{ color: 'var(--text-1)' }}
                   >
@@ -187,7 +215,7 @@ export function WorkspaceEnterpriseContract() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div role="alert" style={{ ...cardStyle, padding: 20 }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load the enterprise contract
         </p>
@@ -245,7 +273,7 @@ export function WorkspaceEnterpriseContract() {
         <SectionHeading
           id="enterprise-invoices-heading"
           title="Invoices"
-          caption="The most recent invoices on this contract, newest first."
+          caption="The most recent invoices on this contract, newest first. Older invoices stay with the billing provider and are reachable from any invoice link below."
         />
         <InvoiceTable invoices={data?.invoices ?? []} />
       </section>

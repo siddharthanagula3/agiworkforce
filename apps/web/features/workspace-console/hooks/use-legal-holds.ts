@@ -35,12 +35,26 @@ export interface RetentionSweepRecord {
   createdAt: string;
 }
 
+export interface RetentionBacklog {
+  organizationId: string;
+  enforced: boolean;
+  retentionDays: number | null;
+  cutoff: string | null;
+  pendingDeletions: number;
+  heldFromDeletion: number;
+  perRunCeiling: number;
+  runsRemaining: number;
+  lastSweptAt: string | null;
+  estimatedCompletionAt: string | null;
+}
+
 export interface LegalHoldsResult {
   organizationId: string;
   currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
   canManageHolds: boolean;
   holds: LegalHold[];
   sweeps: RetentionSweepRecord[];
+  backlog: RetentionBacklog;
 }
 
 export const LEGAL_HOLDS_QUERY_KEY = ['workspace', 'legal-holds'] as const;
