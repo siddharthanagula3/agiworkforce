@@ -32,6 +32,9 @@
   "content_security_policy": {
     "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://agiworkforce.com https://api.agiworkforce.com https://gateway.agiworkforce.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   },
+  "storage": {
+    "managed_schema": "managed-schema.json"
+  },
   "background": {
     "service_worker": "src/background.js",
     "type": "module"

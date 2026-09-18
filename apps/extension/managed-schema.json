@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-03/schema#",
+  "type": "object",
+  "properties": {
+    "agi_admin_site_policy": {
+      "title": "AGI site policy",
+      "description": "Sites AGI may act on, and what it may do there. A blocklist entry always wins over any allow, including a site the person approved for themselves. While an allowlist entry exists, only listed sites are reachable. Each rule names an exact origin (https://example.com) or a host and its subdomains (https://*.example.com); the scheme and port must match. Omitting capabilities applies the rule to all of them. A document this schema rejects, or one AGI cannot read, stops AGI acting on every site until it is fixed.",
+      "type": "object",
+      "properties": {
+        "version": {
+          "title": "Policy version",
+          "description": "A positive integer. Raise it whenever the lists change.",
+          "type": "integer"
+        },
+        "blocklist": {
+          "title": "Blocked sites",
+          "description": "Rules that deny. Checked before anything that allows.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "title": "Origin or wildcard host",
+                "description": "https://example.com or https://*.example.com",
+                "type": "string"
+              },
+              "capabilities": {
+                "title": "What the rule covers",
+                "description": "Any of automation, upload, download. Omit to cover all three.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["automation", "upload", "download"]
+                }
+              }
+            }
+          }
+        },
+        "allowlist": {
+          "title": "Allowed sites",
+          "description": "Rules that permit, and, while any exist, the outer bound: a site outside them is unreachable however the person's own approved-sites list reads.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "title": "Origin or wildcard host",
+                "description": "https://example.com or https://*.example.com",
+                "type": "string"
+              },
+              "capabilities": {
+                "title": "What the rule covers",
+                "description": "Any of automation, upload, download. Omit to cover all three.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["automation", "upload", "download"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

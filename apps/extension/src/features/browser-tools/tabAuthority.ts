@@ -1,9 +1,9 @@
-import { SITE_ALLOWLIST_STORAGE_KEY } from '../../background/policy';
 import {
   browserControlConsentRequiredMessage,
   hasBrowserControlConsent,
 } from '../computer-use/browserControlConsent';
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
+import { assertSiteAccess } from '../site-policy/store';
 
 export const SITE_NOT_APPROVED_FOR_BROWSER_TOOLS =
   'is not on your AGI Workforce approved-sites list. Open the extension options, ' +
@@ -15,21 +15,11 @@ export interface AuthorizedTab {
   readonly url: string;
 }
 
-async function readSiteAllowlist(): Promise<ReadonlySet<string>> {
-  try {
-    const result = await chrome.storage.local.get([SITE_ALLOWLIST_STORAGE_KEY]);
-    const list = result[SITE_ALLOWLIST_STORAGE_KEY];
-    if (Array.isArray(list)) return new Set(list as string[]);
-  } catch {
-    return new Set<string>();
-  }
-  return new Set<string>();
-}
-
 /**
  * The gate every download, console and network capability passes before it
  * touches a tab, held to the same bar as click and type: the tab's live origin
- * must be on the site allowlist AND carry the separate browser-control grant.
+ * must be admitted by the site policy AND carry the separate browser-control
+ * grant.
  *
  * It reads the tab's URL at call time rather than trusting a caller-supplied
  * origin, so a tab that navigated off an approved origin after the panel
@@ -48,10 +38,7 @@ export async function authorizeBrowserToolTab(tabId: number): Promise<Authorized
   const origin = normalizeApprovedSiteOrigin(new URL(url).origin);
   if (!origin) throw new Error('Only http and https tabs are supported.');
 
-  const allowlist = await readSiteAllowlist();
-  if (!allowlist.has(origin)) {
-    throw new Error(`"${origin}" ${SITE_NOT_APPROVED_FOR_BROWSER_TOOLS}`);
-  }
+  await assertSiteAccess(url, 'automation', `"${origin}" ${SITE_NOT_APPROVED_FOR_BROWSER_TOOLS}`);
 
   let granted = false;
   try {
