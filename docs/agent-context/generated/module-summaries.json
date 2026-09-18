@@ -243,6 +243,12 @@
       "purpose": "Typed transport from the desktop renderer to the privileged Rust host."
     },
     {
+      "name": "@agiworkforce/ide-runtime",
+      "path": "packages/client/ide-runtime",
+      "kind": "package",
+      "purpose": "IDE-neutral CodeSession runtime: selection, diagnostics, diff and terminal/process shapes an editor integration adapts its host objects into. Imports no editor SDK."
+    },
+    {
       "name": "@agiworkforce/sync",
       "path": "packages/client/sync",
       "kind": "package",
@@ -259,6 +265,12 @@
       "path": "packages/contracts/compliance",
       "kind": "package",
       "purpose": "Provider disclosure and jurisdiction policy used by the published legal set."
+    },
+    {
+      "name": "@agiworkforce/context",
+      "path": "packages/contracts/context",
+      "kind": "package",
+      "purpose": "Canonical taxonomy for every class of context a turn can carry: provenance, authorship and trust as typed fields. Pure classification; performs no I/O."
     },
     {
       "name": "@agiworkforce/licensing",
