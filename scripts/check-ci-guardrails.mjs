@@ -463,7 +463,11 @@ requireIncludes(
 );
 requireIncludes(
   'apps/web/lib/releases/github-desktop-releases.ts',
-  "DESKTOP_RELEASE_CHANNELS = ['stable', 'beta', 'nightly']",
+  'DESKTOP_RELEASE_CHANNELS = RELEASE_CHANNELS',
+);
+requireIncludes(
+  'apps/web/lib/feature-flags/flag-definition.ts',
+  "RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const",
 );
 requireIncludes(
   '.github/workflows/release-desktop.yml',

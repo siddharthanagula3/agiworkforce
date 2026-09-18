@@ -5,7 +5,10 @@ import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
   FIRST_REVERSIBLE_MIGRATION,
+  UNMARKED_DESTRUCTIVE_BASELINE,
   declaredObjects,
+  destructiveMarkerErrors,
+  expandContractErrors,
   reversalErrors,
   unreversedObjects,
 } from '../../../../scripts/check-neon-migrations.mjs';
@@ -26,9 +29,29 @@ function sqlFiles(directory: string): string[] {
     .sort();
 }
 
-const reversibleMigrations = sqlFiles(migrationsDir).filter(
+const allMigrations = sqlFiles(migrationsDir);
+const reversibleMigrations = allMigrations.filter(
   (filename) => Number(filename.slice(0, 4)) >= FIRST_REVERSIBLE_MIGRATION,
 );
+
+// Destructive and expand/contract cover the whole corpus, not only the
+// reversible window: a reversal restores the schema, never the rows.
+describe('destructive and expand/contract contract', () => {
+  it.each(allMigrations)('%s declares what it destroys', (filename) => {
+    const sql = readFileSync(join(migrationsDir, filename), 'utf8');
+
+    expect(destructiveMarkerErrors(filename, sql)).toEqual([]);
+    expect(expandContractErrors(filename, sql)).toEqual([]);
+  });
+
+  it('holds the unmarked baseline frozen at the migrations that predate the marker', () => {
+    const baseline = [...UNMARKED_DESTRUCTIVE_BASELINE] as string[];
+
+    expect(baseline.length).toBeLessThanOrEqual(34);
+    for (const filename of baseline) expect(allMigrations).toContain(filename);
+    expect(baseline.filter((filename) => Number(filename.slice(0, 4)) > 253)).toEqual([]);
+  });
+});
 
 describe('down migration contract', () => {
   it('runs its checks when invoked through a symlinked path', () => {

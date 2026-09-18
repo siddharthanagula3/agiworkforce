@@ -54,6 +54,23 @@ function isSkippableValue(target, value) {
   return Boolean(target.plaintextValue?.test(value));
 }
 
+/**
+ * Who is running the patch. An unattended rotation records the workflow actor;
+ * a hand-run one has to name a person, because a ledger row that says only
+ * 'scripts/reencrypt.mjs' cannot answer who decided to rewrite the column.
+ */
+export function resolveOperator(env = process.env) {
+  const operator = env['AGI_DB_OPERATOR'] ?? env['GITHUB_ACTOR'] ?? '';
+  const trimmed = operator.trim();
+  if (trimmed.length === 0) {
+    throw new Error(
+      'AGI_DB_OPERATOR must name the person or system running this rotation. Writing to a ' +
+        'production table without one is a manual DB patch with no audit.',
+    );
+  }
+  return trimmed.slice(0, 200);
+}
+
 export async function reencryptTarget({
   target,
   ring,
@@ -61,6 +78,7 @@ export async function reencryptTarget({
   apply = false,
   format = 'preserve',
   batchSize = DEFAULT_BATCH_SIZE,
+  audit = null,
 }) {
   const activeId = ring.active.id;
   const columns = target.secretColumns;
@@ -112,10 +130,18 @@ export async function reencryptTarget({
     }
   }
 
+  if (apply && audit) await audit(outcome);
   return outcome;
 }
 
-export async function recordKeyRotationAudit({ client, name, target, keyVersion, outcome }) {
+export async function recordKeyRotationAudit({
+  client,
+  name,
+  target,
+  keyVersion,
+  outcome,
+  operator = null,
+}) {
   const details = {
     resourceType: 'encryption_key',
     resource_type: 'encryption_key',
@@ -123,7 +149,14 @@ export async function recordKeyRotationAudit({ client, name, target, keyVersion,
     resource_id: name,
     resourceName: target.table,
     keyVersion,
-    count: outcome.rewritten,
+    // A stamped row was written too: counting only rewrites reports 0 for a
+    // sweep that touched every row in the table.
+    count: outcome.rewritten + outcome.stamped,
+    rewritten: outcome.rewritten,
+    stamped: outcome.stamped,
+    scanned: outcome.scanned,
+    plaintextSkipped: outcome.plaintext,
+    operator,
     source: 'scripts/reencrypt.mjs',
   };
   await client.query(
@@ -173,6 +206,7 @@ async function main(argv) {
   const args = parseArgs(argv);
   const names = args.target === 'all' ? Object.keys(REENCRYPT_TARGETS) : [args.target];
   assertFormatSupported(names, args.format);
+  const operator = args.apply ? resolveOperator() : null;
 
   const databaseUrl = process.env['NEON_DATABASE_URL'] ?? process.env['DATABASE_URL'];
   if (!databaseUrl) {
@@ -192,16 +226,16 @@ async function main(argv) {
       client,
       apply: args.apply,
       format: args.format,
+      audit: (written) =>
+        recordKeyRotationAudit({
+          client,
+          name,
+          target,
+          keyVersion: ring.active.id,
+          outcome: written,
+          operator,
+        }),
     });
-    if (args.apply) {
-      await recordKeyRotationAudit({
-        client,
-        name,
-        target,
-        keyVersion: ring.active.id,
-        outcome,
-      });
-    }
     console.log(
       `${args.apply ? 'rotated' : 'would rotate'} ${name} -> key ${ring.active.id}: ` +
         `scanned=${outcome.scanned} rewritten=${outcome.rewritten} ` +
