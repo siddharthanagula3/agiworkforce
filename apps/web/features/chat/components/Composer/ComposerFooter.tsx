@@ -50,6 +50,13 @@ import {
   type AIModel,
 } from '@shared/stores/model-store';
 import { StyleSelector } from './StyleSelector';
+import { ModelCompatibilityNotice } from './ModelCompatibilityNotice';
+import {
+  evaluateModelCompatibility,
+  type ContextSizedMessage,
+  type ModelCompatibilityFinding,
+} from './model-compatibility';
+import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -744,6 +751,12 @@ interface ComposerFooterProps {
   inline?: boolean;
   /** Extra classes applied to the outer element (e.g. flex order / ml-auto). */
   className?: string;
+  /** Images staged in the composer but not yet sent, for the compatibility check. */
+  pendingImageCount?: number;
+  /** A tool control (search, connectors, code execution) is armed for the next turn. */
+  toolsArmed?: boolean;
+  /** What those armed controls are called, for the compatibility copy. */
+  toolsLabel?: string;
 }
 
 export function ComposerFooter({
@@ -754,12 +767,19 @@ export function ComposerFooter({
   showStyleSelector = true,
   inline = false,
   className,
+  pendingImageCount = 0,
+  toolsArmed = false,
+  toolsLabel,
 }: ComposerFooterProps) {
   const effortPanelId = useId();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
+  const [pendingSwitch, setPendingSwitch] = useState<{
+    model: AIModel;
+    findings: ModelCompatibilityFinding[];
+  } | null>(null);
   const [providerAvailability, setProviderAvailability] = useState<
     Record<string, ProviderAvailability>
   >({});
@@ -811,6 +831,7 @@ export function ComposerFooter({
     setOpen(false);
     setSearchQuery('');
     setCatalogueOpen(false);
+    setPendingSwitch(null);
   }, []);
 
   const closeCatalogue = useCallback(() => {
@@ -913,6 +934,49 @@ export function ComposerFooter({
   );
   const [modelChangePending, setModelChangePending] = useState(false);
 
+  const conversationMessages = useChatStore((s) => s.messages);
+  const compatibilityRequest = useMemo(() => {
+    const messages: ContextSizedMessage[] = conversationMessages.map((message) => ({
+      role: message.role === 'system' ? 'system' : message.role,
+      content: typeof message.content === 'string' ? message.content : '',
+      ...(message.attachments && message.attachments.length > 0
+        ? { multimodal_content: message.attachments }
+        : {}),
+    }));
+    const historyImages = conversationMessages.some((message) =>
+      (message.attachments ?? []).some((attachment) => attachment.type === 'image'),
+    );
+    const historyTools = conversationMessages.some(
+      (message) =>
+        message.metadata?.webSearchRequested === true || (message.metadata?.tools?.length ?? 0) > 0,
+    );
+    return {
+      messages,
+      hasImages: historyImages || pendingImageCount > 0,
+      needsTools: toolsArmed || historyTools,
+      ...(toolsLabel ? { toolLabel: toolsLabel } : {}),
+    };
+  }, [conversationMessages, pendingImageCount, toolsArmed, toolsLabel]);
+
+  const selectedCompatibility = useMemo(
+    () => evaluateModelCompatibility(selectedModelId, compatibilityRequest),
+    [selectedModelId, compatibilityRequest],
+  );
+
+  // Every substitution the server disclosed on the last served turn is repeated
+  // here, so the footer never shows a model the reply did not come from.
+  const substitutionNotice = useMemo(() => {
+    for (let i = conversationMessages.length - 1; i >= 0; i--) {
+      const message = conversationMessages[i];
+      if (!message || message.role !== 'assistant' || message.isStreaming) continue;
+      const reason = message.fallbackReason;
+      if (!reason) return null;
+      const servedBy = message.model ? findSelectableModel(message.model)?.name : null;
+      return describeFallbackReason(reason, servedBy ?? message.model ?? null);
+    }
+    return null;
+  }, [conversationMessages]);
+
   useEffect(() => () => {}, []);
 
   const localModels = useLocalModels(open);
@@ -968,9 +1032,22 @@ export function ComposerFooter({
         closeModelPopover();
         return;
       }
+      const { findings } = evaluateModelCompatibility(model.id, compatibilityRequest);
+      const blocking = findings.filter((finding) => finding.code !== 'unknown_model');
+      if (blocking.length > 0) {
+        setPendingSwitch({ model, findings: blocking });
+        return;
+      }
       void commitModel(model.id);
     },
-    [selectedModelId, commitModel, closeModelPopover, localSelection, leaveLocalModel],
+    [
+      selectedModelId,
+      commitModel,
+      closeModelPopover,
+      localSelection,
+      leaveLocalModel,
+      compatibilityRequest,
+    ],
   );
 
   const lockedDisplayModel =
@@ -1234,6 +1311,43 @@ export function ComposerFooter({
               );
               const body = (
                 <TooltipProvider>
+                  {pendingSwitch && (
+                    <div className="shrink-0 space-y-2 border-b border-[var(--chat-border)] p-3">
+                      <p className="text-xs font-medium text-foreground">
+                        {`Switch to ${pendingSwitch.model.name}?`}
+                      </p>
+                      {pendingSwitch.findings.map((finding) => (
+                        <p
+                          key={finding.code}
+                          className="text-xs"
+                          data-compatibility-code={finding.code}
+                          style={{ color: 'var(--chat-warning-fg)' }}
+                        >
+                          {finding.message}
+                        </p>
+                      ))}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground"
+                          onClick={() => {
+                            const target = pendingSwitch.model;
+                            setPendingSwitch(null);
+                            void commitModel(target.id);
+                          }}
+                        >
+                          Switch anyway
+                        </button>
+                        <button
+                          type="button"
+                          className="h-8 rounded-md px-3 text-xs font-medium text-muted-foreground hover:bg-muted/60"
+                          onClick={() => setPendingSwitch(null)}
+                        >
+                          {`Keep ${selectedModel.name}`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {catalogueOpen ? (
                     <ModelCatalogue
                       entries={catalogue.entries}
@@ -1361,6 +1475,12 @@ export function ComposerFooter({
                         </>
                       )}
                     </div>
+                  )}
+                  {!catalogueOpen && !pendingSwitch && (
+                    <ModelCompatibilityNotice
+                      findings={selectedCompatibility.findings}
+                      substitutionNotice={substitutionNotice}
+                    />
                   )}
                   {!catalogueOpen && priorTurnsHoldCache(assistantTurnCount, selectedModelId) && (
                     <p className="shrink-0 border-t border-[var(--chat-border)] px-3 py-1.5 text-xs text-muted-foreground">

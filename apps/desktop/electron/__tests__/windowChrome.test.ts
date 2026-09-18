@@ -3,6 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseShellTokens, readShellTokens } from '../shellTokens.mjs';
 import {
+  pageBackgroundColor,
+  titleBarChrome,
+  titleStripHeight,
   trafficLightPosition,
   windowButtonsTrailingEdge,
   windowButtonsTrailingGutter,
@@ -74,5 +77,25 @@ describe('traffic light position', () => {
 
     expect(tall.y - short.y).toBe(12);
     expect(tall.x).toBe(short.x);
+  });
+});
+
+describe('the native frame each platform keeps', () => {
+  it('hands macOS the inset title bar and places the buttons in the strip', () => {
+    const chrome = titleBarChrome('darwin');
+
+    expect(chrome.titleBarStyle).toBe('hiddenInset');
+    expect(chrome.trafficLightPosition).toEqual(trafficLightPosition(titleStripHeight()));
+  });
+
+  it('leaves every other platform its own frame rather than drawing one', () => {
+    expect(titleBarChrome('win32')).toEqual({});
+    expect(titleBarChrome('linux')).toEqual({});
+  });
+
+  it('paints a ground colour for each appearance, and not the same one twice', () => {
+    expect(pageBackgroundColor(true)).toMatch(/^#[0-9a-f]{6}$/u);
+    expect(pageBackgroundColor(false)).toMatch(/^#[0-9a-f]{6}$/u);
+    expect(pageBackgroundColor(true)).not.toBe(pageBackgroundColor(false));
   });
 });
