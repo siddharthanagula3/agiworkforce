@@ -168,6 +168,8 @@ export interface ToolEntry {
   /** Which machine a device step is waiting on. */
   deviceName?: string;
   requiresApproval?: boolean;
+  /** Recorded decision. False means the user denied the call and it never ran. */
+  approved?: boolean;
   args?: string;
   parameters?: Record<string, unknown>;
   parallelGroup?: string;
@@ -206,6 +208,12 @@ function findConnectRequest(tool: ToolEntry): ConnectorConnectRequest | null {
 interface EntryGroup {
   parallelGroup?: string;
   entries: ToolEntry[];
+}
+
+// A denied call carries `failed` so the model is told it did not happen.
+// Counting it as a failure tells the user their own decision broke something.
+function isDeniedToolEntry(tool: ToolEntry): boolean {
+  return tool.approved === false;
 }
 
 function stableId(tool: ToolEntry, index: number): string {
@@ -553,8 +561,10 @@ function buildToolAnnouncement(tools: ToolEntry[]): string {
     return `Running: ${humanizeToolName(running.name, running.args, running.parameters, running.statusPhrase)}`;
   }
 
-  const failed = tools.filter((t) => t.status === 'failed').length;
+  const denied = tools.filter(isDeniedToolEntry).length;
+  const failed = tools.filter((t) => t.status === 'failed' && !isDeniedToolEntry(t)).length;
   if (failed > 0) return `${failed} tool ${failed === 1 ? 'call' : 'calls'} failed`;
+  if (denied > 0) return `You denied ${denied} tool ${denied === 1 ? 'call' : 'calls'}`;
 
   if (tools.some((t) => t.status === 'pending')) return 'Tool calls queued';
   return 'Tool run complete';
@@ -578,7 +588,11 @@ function ToolTimeline({
 
   const hasRunning = useMemo(() => tools.some((t) => t.status === 'running'), [tools]);
   const hasAwaiting = useMemo(() => tools.some((t) => t.status === 'awaiting_approval'), [tools]);
-  const errorCount = useMemo(() => tools.filter((t) => t.status === 'failed').length, [tools]);
+  const errorCount = useMemo(
+    () => tools.filter((t) => t.status === 'failed' && !isDeniedToolEntry(t)).length,
+    [tools],
+  );
+  const deniedCount = useMemo(() => tools.filter(isDeniedToolEntry).length, [tools]);
   const hasConnectRequest = useMemo(
     () => tools.some((t) => findConnectRequest(t) !== null),
     [tools],
@@ -639,6 +653,7 @@ function ToolTimeline({
         >
           <span>{summary}</span>
           {errorCount > 0 && <span className="text-rose-400 text-xs">{errorCount} failed</span>}
+          {deniedCount > 0 && <span className="text-xs">{deniedCount} denied</span>}
           <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
         </button>
       </div>
@@ -677,6 +692,7 @@ function ToolTimeline({
               {errorCount > 0 && (
                 <span className="text-rose-400 ml-1.5 text-xs">{errorCount} failed</span>
               )}
+              {deniedCount > 0 && <span className="ml-1.5 text-xs">{deniedCount} denied</span>}
             </>
           )}
         </span>
@@ -777,7 +793,11 @@ function ToolTimeline({
                         parameters: buildParameters(tool.args, tool.parameters),
                         result: tool.result,
                         error: tool.error,
-                        requiresApproval: tool.requiresApproval,
+                        // Only while the decision is still open. A stored entry
+                        // keeps this flag, and the card reads it as "waiting for
+                        // your approval" long after the call ran.
+                        requiresApproval:
+                          tool.status === 'awaiting_approval' ? tool.requiresApproval : undefined,
                         ...(tool.deviceName
                           ? {
                               deviceStep: {
@@ -853,6 +873,7 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
       p.error !== n.error ||
       p.result !== n.result ||
       p.requiresApproval !== n.requiresApproval ||
+      p.approved !== n.approved ||
       p.toolCallId !== n.toolCallId
     ) {
       return false;

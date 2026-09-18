@@ -45,8 +45,10 @@ import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
 import { withSseHeartbeat } from '../../../lib/sse-heartbeat';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { loadConnectorToolPermissions } from '../../../lib/connector-tool-permissions';
-import { loadToolApprovalPolicy } from '../../../lib/tool-approval-policy';
+import { loadToolApprovalPolicy, policyAutoApprovesTool } from '../../../lib/tool-approval-policy';
 import { applySecretHandlingToTexts } from '../../../lib/secret-handling-gate';
+import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
+import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 
 // Same tool loop as the completions route, same limit; a literal because Next reads it statically.
 export const maxDuration = 300;
@@ -238,6 +240,15 @@ async function handlePausedRunResume(
     }
   }
 
+  const toolApprovalPolicy = await loadToolApprovalPolicy(db, userId);
+
+  // The checkpoint froze the client's pre-substitution tool list, so a native
+  // search the first leg withdrew returns unless it is withdrawn again here.
+  processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
+    approvalRequired: !policyAutoApprovesTool(toolApprovalPolicy, WEB_SEARCH_TOOL),
+    genericBackendConfigured: webSearchBackendConfigured(),
+  });
+
   let turn;
   try {
     turn = await runCloudAgentTurn({
@@ -247,7 +258,7 @@ async function handlePausedRunResume(
       processed,
       mcpTools: discovery.mcpTools,
       approvalMode: 'manual',
-      toolApprovalPolicy: await loadToolApprovalPolicy(db, userId),
+      toolApprovalPolicy,
       connectorPermissions: discovery.permissions,
       onDurableUnavailable: 'inline',
       signal: request.signal,
