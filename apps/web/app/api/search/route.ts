@@ -12,6 +12,11 @@ import { readJsonBody } from '@/lib/read-json-body';
 import { isSearchSourceKind, SEARCH_SOURCE_KINDS } from '@agiworkforce/data-layer/search';
 import { createPostgresSearchProvider } from '@/lib/services/retrieval-search-service';
 import { toSearchDocumentResults } from '@/lib/services/retrieval-search-results';
+import {
+  buildNewChatHref,
+  quoteForNewChatDraft,
+  type NewChatSourceKind,
+} from '@features/chat/lib/new-chat-entry';
 
 const PG_UNDEFINED_FUNCTION = '42883';
 
@@ -80,6 +85,17 @@ type SuggestionRow = {
 };
 
 const CONTEXT_LENGTH = 50;
+
+function newChatHrefFor(
+  kind: NewChatSourceKind,
+  id: string,
+  match: { matched: string; before: string; after: string },
+): string {
+  return buildNewChatHref({
+    source: { kind, id },
+    draft: quoteForNewChatDraft(`${match.before}${match.matched}${match.after}`),
+  });
+}
 
 function extractMatch(
   text: string,
@@ -287,7 +303,13 @@ async function handleGet(request: NextRequest) {
     ),
     indexSearch,
   ]);
-  const documents = toSearchDocumentResults(indexed.hits);
+  const documents = toSearchDocumentResults(indexed.hits).map((doc) => ({
+    ...doc,
+    newChatHref: buildNewChatHref({
+      source: { kind: 'document', id: doc.sourceId },
+      draft: quoteForNewChatDraft(doc.snippet),
+    }),
+  }));
 
   const sessionResults = sessionRows.map((s) => {
     const match = extractMatch(s.title ?? '', q);
@@ -301,6 +323,7 @@ async function handleGet(request: NextRequest) {
       matchedText: match.matched,
       contextBefore: match.before,
       contextAfter: match.after,
+      newChatHref: newChatHrefFor('conversation', s.id, match),
     };
   });
 
@@ -318,6 +341,7 @@ async function handleGet(request: NextRequest) {
       matchedText: match.matched,
       contextBefore: match.before,
       contextAfter: match.after,
+      newChatHref: newChatHrefFor('message', m.id, match),
     };
   });
 
@@ -334,6 +358,7 @@ async function handleGet(request: NextRequest) {
       matchedText: match.matched,
       contextBefore: match.before,
       contextAfter: match.after,
+      newChatHref: newChatHrefFor('project', p.id, match),
     };
   });
 
@@ -353,6 +378,7 @@ async function handleGet(request: NextRequest) {
       matchedText: match.matched,
       contextBefore: match.before,
       contextAfter: match.after,
+      newChatHref: newChatHrefFor('file', f.id, match),
     };
   });
 
