@@ -40,6 +40,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'shared_sessions', column: 'owner_id' },
   { table: 'cloud_agent_runs', column: 'user_id' },
   { table: 'cloud_code_sessions', column: 'user_id' },
+  { table: 'work_plans', column: 'user_id' },
   { table: 'user_memories', column: 'user_id' },
   { table: 'user_settings', column: 'user_id' },
   { table: 'user_projects', column: 'user_id' },
@@ -187,6 +188,8 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   support_access_events:
     'Append-only break-glass trail (0229), hash-chained on previous_hash. actor_user_id is the support agent who acted, not the subject, and deleting a row breaks the chain verifySupportAccessTrail verifies.',
   cloud_code_agent_turns: 'Cascades from cloud_code_sessions.',
+  work_plan_steps: 'Cascades from work_plans (0237) on (plan_id, user_id).',
+  work_plan_revisions: 'Cascades from work_plans (0237) on (plan_id, user_id).',
   managed_usage_request_extensions: 'Cascades from managed_usage_requests.',
   free_daily_usage_reservations: 'Cascades from profiles.',
   identities:
@@ -271,32 +274,64 @@ async function releaseDataVideoErasureFence(userId: string, fenceToken: string):
   }
 }
 
-async function sealAndCheckVideoJobsForErasure(
+/**
+ * The image half of this fence has no profile columns of its own. 0226 gave
+ * image jobs a cascade from managed_usage_requests rather than video's RESTRICT,
+ * so nothing blocks the delete, but a job still queued or still owing a
+ * settlement is unfinished paid work, and erasing the account mid-flight
+ * abandons it exactly as it would for video. The job row's own status and
+ * settlement columns are the whole signal: an image idempotency key comes from
+ * the caller's header, so there is no server-side key pattern to match, and no
+ * image settlement writes managed_usage_finalization metadata.
+ */
+const VIDEO_JOB_TABLE = 'video_generation_jobs';
+const IMAGE_JOB_TABLE = 'image_generation_jobs';
+
+const IMAGE_JOB_BLOCKING = `
+         exists (
+           select 1
+             from public.image_generation_jobs
+            where user_id = $1
+              and (
+                status in ('queued', 'processing')
+                or billing_settlement_status = 'pending'
+              )
+         )`;
+
+async function sealAndCheckMediaJobsForErasure(
   userId: string,
   scope: 'account' | 'data',
 ): Promise<{
   blocked: boolean;
+  blockedBy?: string;
   error?: string;
   dataFenceToken?: string;
 }> {
   const db = getNeonDb();
-  let provisioned = false;
+  let videoProvisioned = false;
+  let imageProvisioned = false;
   try {
-    const schema = await db.query<{ provisioned: boolean }>(
-      `select to_regclass('public.video_generation_jobs') is not null as provisioned`,
+    const schema = await db.query<{ video: boolean; image: boolean }>(
+      `select to_regclass('public.video_generation_jobs') is not null as video,
+              to_regclass('public.image_generation_jobs') is not null as image`,
     );
-    provisioned = schema[0]?.provisioned === true;
+    videoProvisioned = schema[0]?.video === true;
+    imageProvisioned = schema[0]?.image === true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error({ userId, error: message }, 'Could not inspect durable video erasure schema');
+    logger.error({ userId, error: message }, 'Could not inspect durable media erasure schema');
     return { blocked: true, error: message };
   }
-  if (!provisioned) return { blocked: false };
+  if (!videoProvisioned && !imageProvisioned) return { blocked: false };
 
   let dataFenceToken: string | undefined;
   try {
-    const fenced =
-      scope === 'account'
+    // The fence columns arrived with the video migration, so there is nothing to
+    // seal until it is applied. An image-only deployment still gets the blocking
+    // check below.
+    const fenced = !videoProvisioned
+      ? [{ id: userId }]
+      : scope === 'account'
         ? await db.query<{ id: string }>(
             `update public.profiles
                 set deletion_requested_at = coalesce(deletion_requested_at, now()),
@@ -343,8 +378,7 @@ async function sealAndCheckVideoJobsForErasure(
       };
     }
 
-    const rows = await db.query<{ has_blocking: boolean }>(
-      `select (
+    const videoBlocking = `
          exists (
            select 1
              from public.video_generation_jobs
@@ -392,20 +426,34 @@ async function sealAndCheckVideoJobsForErasure(
                      and alert_job.incident_alert_status = 'delivered'
                 )
               )
-         )
-       ) as has_blocking`,
+         )`;
+
+    const rows = await db.query<{ video_blocking: boolean; image_blocking: boolean }>(
+      `select (${videoProvisioned ? videoBlocking : 'false'}
+       ) as video_blocking,
+              (${imageProvisioned ? IMAGE_JOB_BLOCKING : 'false'}
+       ) as image_blocking`,
       [userId],
     );
-    const blocked = rows[0]?.has_blocking === true;
+    const blockedBy = rows[0]?.video_blocking
+      ? VIDEO_JOB_TABLE
+      : rows[0]?.image_blocking
+        ? IMAGE_JOB_TABLE
+        : null;
+    const blocked = blockedBy !== null;
     if (blocked && dataFenceToken) {
       await releaseDataVideoErasureFence(userId, dataFenceToken);
       dataFenceToken = undefined;
     }
-    return { blocked, ...(dataFenceToken ? { dataFenceToken } : {}) };
+    return {
+      blocked,
+      ...(blockedBy ? { blockedBy } : {}),
+      ...(dataFenceToken ? { dataFenceToken } : {}),
+    };
   } catch (error) {
     if (dataFenceToken) await releaseDataVideoErasureFence(userId, dataFenceToken);
     const message = error instanceof Error ? error.message : String(error);
-    logger.error({ userId, error: message }, 'Could not prove video jobs terminal before erasure');
+    logger.error({ userId, error: message }, 'Could not prove media jobs terminal before erasure');
     return { blocked: true, error: message };
   }
 }
@@ -667,8 +715,8 @@ export async function eraseUserAccountData(
     );
     return heldReport(userId, legalHold.error);
   }
-  const videoGate = await sealAndCheckVideoJobsForErasure(userId, options.scope ?? 'account');
-  if (videoGate.blocked) {
+  const mediaGate = await sealAndCheckMediaJobsForErasure(userId, options.scope ?? 'account');
+  if (mediaGate.blocked) {
     return {
       userId,
       mediaObjectsDeleted: 0,
@@ -683,10 +731,10 @@ export async function eraseUserAccountData(
       cacheKeysDeleted: 0,
       cacheKeysFailed: 0,
       tables: {
-        video_generation_jobs: {
+        [mediaGate.blockedBy ?? VIDEO_JOB_TABLE]: {
           deleted: false,
           retainedForRetry: true,
-          ...(videoGate.error ? { error: videoGate.error } : {}),
+          ...(mediaGate.error ? { error: mediaGate.error } : {}),
         },
         [PROFILE_TABLE]: { deleted: false, retainedForRetry: true },
       },
@@ -798,8 +846,8 @@ export async function eraseUserAccountData(
       profileRetained,
     };
   } finally {
-    if (videoGate.dataFenceToken) {
-      await releaseDataVideoErasureFence(userId, videoGate.dataFenceToken);
+    if (mediaGate.dataFenceToken) {
+      await releaseDataVideoErasureFence(userId, mediaGate.dataFenceToken);
     }
   }
 }
