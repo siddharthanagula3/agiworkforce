@@ -36,7 +36,7 @@ function serveWorkspace(
   overrides: { organization?: unknown; deletion?: unknown } = {},
   writeResponse: Response = jsonResponse({ message: 'Workspace deletion scheduled.' }),
 ) {
-  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+  fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
     if (init?.method && init.method !== 'GET') return writeResponse;
     return jsonResponse({
       organization: overrides.organization ?? WORKSPACE,

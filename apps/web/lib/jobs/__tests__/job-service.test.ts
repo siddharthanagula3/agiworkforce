@@ -3,6 +3,8 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 vi.mock('server-only', () => ({}));
 
+import { runWithTraceContext } from '@/lib/observability/trace-context';
+
 import { computeJobBackoffSeconds, JOB_QUEUE_POLICIES } from '../job-queues';
 import {
   PermanentJobError,
@@ -31,6 +33,12 @@ function database(
     dispose: vi.fn(),
   } as unknown as DatabaseAdapter;
 }
+
+const TRACE = {
+  traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+  spanId: '00f067aa0ba902b7',
+  sampled: true,
+};
 
 const jobRow = {
   id: 'job-1',
@@ -95,6 +103,34 @@ describe('enqueueJob', () => {
         payload: {},
       }),
     ).rejects.toThrow('8-255 characters');
+  });
+
+  it('stores the enqueuer trace in the payload so the worker can parent onto it', async () => {
+    const query = vi.fn().mockResolvedValue([{ id: 'job-3', status: 'queued' }]);
+
+    await runWithTraceContext(TRACE, () =>
+      enqueueJob(database(query), {
+        kind: 'email.schedule-completed',
+        payload: { runId: 'run-1' },
+      }),
+    );
+
+    const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    const payload = JSON.parse(params[4] as string) as Record<string, unknown>;
+    expect(payload['runId']).toBe('run-1');
+    expect(payload['traceparent']).toBe(`00-${TRACE.traceId}-${TRACE.spanId}-01`);
+  });
+
+  it('leaves the payload alone outside a trace', async () => {
+    const query = vi.fn().mockResolvedValue([{ id: 'job-4', status: 'queued' }]);
+
+    await enqueueJob(database(query), {
+      kind: 'email.schedule-completed',
+      payload: { runId: 'run-2' },
+    });
+
+    const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(JSON.parse(params[4] as string)).toEqual({ runId: 'run-2' });
   });
 
   it('refuses to hand back a job filed under another subject', async () => {

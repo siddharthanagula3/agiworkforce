@@ -9,7 +9,8 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const rlsWithOrg = vi.fn(() => ({ tag: 'rls-adapter' }) as unknown as DatabaseAdapter);
-const rlsWithUser = vi.fn((_jwt: string) => ({ withOrg: rlsWithOrg }));
+const rlsUserQuery = vi.fn(async () => []);
+const rlsWithUser = vi.fn((_jwt: string) => ({ withOrg: rlsWithOrg, query: rlsUserQuery }));
 vi.mock('@agiworkforce/data-layer', () => ({
   createDatabaseClient: vi.fn(() => ({ withUser: rlsWithUser })),
 }));
@@ -241,7 +242,8 @@ describe('getCurrentUserRlsDb', () => {
     const scoped = await getCurrentUserRlsDb();
 
     expect(scoped?.userId).toBe('user_1');
-    expect(scoped?.db).toBe(rlsWithUser.mock.results[0]?.value);
+    await scoped?.db.query('select 1');
+    expect(rlsUserQuery).toHaveBeenCalledWith('select 1', undefined);
     expect(rlsWithUser).toHaveBeenCalledWith('jwt-token');
     expect(rlsWithOrg).not.toHaveBeenCalled();
   });

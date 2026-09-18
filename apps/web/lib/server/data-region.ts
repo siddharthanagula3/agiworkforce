@@ -15,6 +15,7 @@ import {
 } from '@agiworkforce/compliance';
 
 import { logger } from '@/lib/logger';
+import { traceDatabaseAdapter } from '@/lib/observability/database-span';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { SERVICE_POOL_TUNING } from '@/lib/server/db-pool-tuning';
 import { reportDatabaseConnectionError } from '@/lib/server/db-connection-error';
@@ -70,12 +71,14 @@ export function getRegionDb(
   const runtime = regionRuntime(region, env);
   const existing = regionPools.get(runtime.region);
   if (existing) return existing;
-  const created = createDatabaseClient({
-    applicationName: `agi-web-${runtime.region}`,
-    connectionString: runtime.databaseUrl,
-    onConnectionError: reportDatabaseConnectionError,
-    ...SERVICE_POOL_TUNING,
-  });
+  const created = traceDatabaseAdapter(
+    createDatabaseClient({
+      applicationName: `agi-web-${runtime.region}`,
+      connectionString: runtime.databaseUrl,
+      onConnectionError: reportDatabaseConnectionError,
+      ...SERVICE_POOL_TUNING,
+    }),
+  );
   regionPools.set(runtime.region, created);
   return created;
 }
