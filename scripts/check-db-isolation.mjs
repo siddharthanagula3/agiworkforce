@@ -291,6 +291,68 @@ const ALLOWLIST = [
       'the policed exports of video-generation-jobs.ts above.',
   },
   {
+    match: /lib\/server\/image-generation-jobs\.ts$/,
+    tables: ['image_generation_jobs', 'image_generation_job_assets'],
+    functions: [
+      'deferImageGenerationJobFailure',
+      'failImageGenerationJob',
+      'completeImageGenerationJob',
+      'listImageGenerationJobAssetIds',
+    ],
+    reason:
+      'the attempt workers, the same shape as video-generation-jobs.ts above: every update is ' +
+      'keyed by `claim_token = $2 and claim_expires_at > now()`, and the only statement that ' +
+      'issues a live claim token is claimImageGenerationJobAttempt, whose update carries ' +
+      '`and user_id = $2`. The capability IS the owner constraint, and the worker holding it has ' +
+      'no request subject of its own. listImageGenerationJobAssetIds is reached only from ' +
+      'imageJobDeliveredImages, which is handed a job the media/image routes already read under ' +
+      'getImageGenerationJob(userId). createImageGenerationJob, getImageGenerationJob, ' +
+      'getImageGenerationJobByIdempotencyKey, claimImageGenerationJobAttempt, ' +
+      'requeueImageGenerationJob, requestImageGenerationCancellation and ' +
+      'closeCancelledImageGenerationJob carry user_id and stay policed.',
+  },
+  {
+    match: /lib\/server\/support-access-service\.ts$/,
+    tables: ['support_access_grants'],
+    functions: [
+      'loadGrantForUpdate',
+      'approveSupportAccess',
+      'denySupportAccess',
+      'revokeSupportAccess',
+      'expireStaleSupportAccessGrants',
+    ],
+    reason:
+      'break-glass decisions, reached only from api/admin/support-access/route.ts, which calls ' +
+      'requirePlatformAdmin() before every action. The decider is deliberately NOT the owner of ' +
+      'the row: approveSupportAccess refuses an actor equal to requested_by_user_id and ' +
+      'support_access_grants_needs_a_second_approver refuses it again in the database, so ' +
+      'constraining these updates by the actor would defeat the second-operator control they ' +
+      'exist for. Each targets the grant id the same transaction just took `for update` and ' +
+      're-states the status it must still be in. expireStaleSupportAccessGrants is a time-based ' +
+      'sweep over approved grants past expires_at. requestSupportAccess, listSupportAccessGrants ' +
+      'and findLiveSupportAccessGrant carry organization_id and stay policed.',
+  },
+  {
+    match: /lib\/server\/identity-account\.ts$/,
+    tables: ['identities'],
+    reason:
+      'the identity bridge runs BEFORE a principal exists: TOUCH stamps last_authenticated_at on ' +
+      'the row keyed by (provider, subject), which is the identity the caller just authenticated ' +
+      'as and the only subject there is at that point. The account id an owner predicate would ' +
+      'name is exactly what this file exists to resolve, and RESOLVE reaches the same row by the ' +
+      'same pair. LINK stays policed on its user_id.',
+  },
+  {
+    match: /api\/settings\/team\/invitations\/invitation-email\.ts$/,
+    tables: ['organizations'],
+    reason:
+      'readOrganizationName reads `name` where `id = $1`, which for organizations IS the tenant, ' +
+      'the same reasoning as lib/server/data-region.ts above. Both callers ' +
+      '(invitations/route.ts and invitations/[invitationId]/route.ts) prove admin membership of ' +
+      'that workspace through requireTeamAdminAccess and requireOrgAdmin before naming it, and ' +
+      'the name goes into the invitation email for that same workspace.',
+  },
+  {
     match: /lib\/services\/plugin-marketplace-service\.ts$/,
     tables: ['plugin_marketplace_sources', 'plugin_marketplace_entries'],
     functions: ['registerMarketplaceSource', 'refreshMarketplaceSource', 'replaceSourceEntries'],

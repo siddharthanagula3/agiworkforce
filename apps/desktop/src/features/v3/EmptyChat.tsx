@@ -1,6 +1,6 @@
 import { BookOpen, Clock3, FilePlus2 } from 'lucide-react';
-import { useChatStore } from '@agiworkforce/unified-chat';
-import { BrandedGreeting } from '../chat/BrandedGreeting';
+import { BrandedGreeting, useChatStore } from '@agiworkforce/unified-chat';
+import { selectUser, useUnifiedAuthStore } from '../../stores/auth';
 import { FirstRunChecklist, type FirstRunChecklistItem } from './FirstRunChecklist';
 
 interface EmptyChatProps {
@@ -36,6 +36,7 @@ export function EmptyChat({
   hasConnectedTools = false,
 }: EmptyChatProps) {
   const setDraftContent = useChatStore((state) => state.setDraftContent);
+  const user = useUnifiedAuthStore(selectUser);
   const blockedOnLocalModel = Boolean(onSetUpLocalModel) && needsLocalModelSetup;
 
   const checklistItems: FirstRunChecklistItem[] = [];
@@ -70,7 +71,11 @@ export function EmptyChat({
 
   return (
     <div className="flex w-full flex-col items-center justify-center gap-7 px-6 pb-6">
-      <BrandedGreeting workspaceLabel={workspaceLabel} onSelectWorkspace={onSelectWorkspace} />
+      <BrandedGreeting
+        userName={user?.name ?? null}
+        workspaceLabel={workspaceLabel}
+        onSelectWorkspace={onSelectWorkspace}
+      />
 
       <FirstRunChecklist items={checklistItems} />
 

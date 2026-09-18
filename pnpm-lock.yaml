@@ -1000,6 +1000,9 @@ importers:
       '@agiworkforce/compliance':
         specifier: workspace:*
         version: link:../../packages/contracts/compliance
+      '@agiworkforce/context':
+        specifier: workspace:*
+        version: link:../../packages/contracts/context
       '@agiworkforce/data-layer':
         specifier: workspace:*
         version: link:../../packages/platform/data-layer
