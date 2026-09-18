@@ -1,4 +1,27 @@
-import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
+import {
+  BYOK_SURFACES,
+  DESKTOP_LOCAL_RUNTIMES,
+  MARKETING,
+  SURFACE_STATUS,
+  AVAILABLE_NOW_LABEL,
+} from '@/lib/marketing-constants';
+
+const SURFACE_NAMES: Record<keyof typeof SURFACE_STATUS, string> = {
+  web: 'the web app',
+  desktop: 'Desktop',
+  cli: 'the CLI',
+  mobile: 'Mobile',
+  vscode: 'VS Code',
+  chrome: 'Chrome',
+};
+
+const PUBLISHED_SURFACES = (Object.keys(SURFACE_STATUS) as (keyof typeof SURFACE_STATUS)[]).filter(
+  (surface) => SURFACE_STATUS[surface] === AVAILABLE_NOW_LABEL,
+);
+
+const PUBLISHED_SURFACE_LIST = PUBLISHED_SURFACES.map((surface) => SURFACE_NAMES[surface]).join(
+  ' and ',
+);
 
 export interface FAQ {
   id: string;
@@ -24,8 +47,7 @@ export const STATIC_FAQS: FAQ[] = [
     id: 'faq-001',
     category: 'getting-started',
     question: 'How do I add my first AI provider key?',
-    answer:
-      'Go to Settings > Providers, click "Add provider", select your provider, and paste your API key. The key is stored encrypted and never sent to our servers.',
+    answer: `Provider keys are accepted on ${BYOK_SURFACES.label}. On the CLI, run "agi login" and paste the key; in VS Code, run "AGI Workforce: Set API Key". The key is stored encrypted on your machine. ${BYOK_SURFACES.exclusion}`,
     display_order: 1,
     is_published: true,
   },
@@ -33,7 +55,7 @@ export const STATIC_FAQS: FAQ[] = [
     id: 'faq-002',
     category: 'getting-started',
     question: 'Which AI providers are supported?',
-    answer: `AGI supports 10+ provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and custom OpenAI-compatible endpoints. Desktop Local mode supports ${DESKTOP_LOCAL_RUNTIMES.label}. The in-product catalog is the current source of truth.`,
+    answer: `AGI supports ${MARKETING.providers.display} provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and custom OpenAI-compatible endpoints. Desktop Local mode supports ${DESKTOP_LOCAL_RUNTIMES.label}. The in-product catalog is the current source of truth.`,
     display_order: 2,
     is_published: true,
   },
@@ -68,8 +90,7 @@ export const STATIC_FAQS: FAQ[] = [
     id: 'faq-006',
     category: 'features',
     question: 'Can I use AGI on multiple devices?',
-    answer:
-      'Yes. Your conversations sync across web, desktop, mobile, and browser extension when you are signed in.',
+    answer: `Conversations belong to your account rather than to one device, so any signed-in surface opens the same history. ${PUBLISHED_SURFACE_LIST} are published today; Desktop, Mobile, VS Code and Chrome are not released yet, and the download page takes your address for the platform you want.`,
     display_order: 6,
     is_published: true,
   },
@@ -82,7 +103,7 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     title: 'Getting started with AGI',
     slug: 'getting-started',
     excerpt: 'Learn how to set up AGI and start your first conversation.',
-    content: `# Getting started with AGI\n\n1. Create an account at agiworkforce.com.\n2. Choose Local, BYOK, or managed Cloud.\n3. Start a new chat and confirm the visible route label.\n\nFor Desktop Local mode, install a supported runtime (${DESKTOP_LOCAL_RUNTIMES.label}) and model; no AGI API key is needed.`,
+    content: `# Getting started with AGI\n\n1. Create an account with Google, GitHub, or an email address and a password. Managed cloud is open by default, so there is no waitlist and no invite code.\n2. Start a new chat and confirm the visible route label, which names where the answer came from.\n3. Leave the model on Auto, or pick one by name from the control under the composer.\n\nThe web app runs on your AGI account. Local mode and BYOK live on the developer surfaces: ${BYOK_SURFACES.label} accept provider keys, and Desktop Local mode runs a model on your own machine through a supported runtime (${DESKTOP_LOCAL_RUNTIMES.label}) with no AGI API key at all.`,
     views: 1240,
   },
   {
@@ -91,8 +112,7 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     title: 'Connecting AI providers',
     slug: 'connecting-providers',
     excerpt: 'Step-by-step guide to adding provider API keys.',
-    content:
-      '# Connecting AI providers\n\nAGI supports BYOK (bring your own key) for all cloud providers.\n\n## Anthropic\n1. Create an API key at console.anthropic.com.\n2. Paste the key in Settings > Providers > Anthropic.\n\n## OpenAI\n1. Create an API key at platform.openai.com.\n2. Paste the key in Settings > Providers > OpenAI.',
+    content: `# Connecting AI providers\n\nAGI supports BYOK (bring your own key) for cloud providers on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.exclusion}\n\n## On the CLI\n1. Create an API key with your provider.\n2. Run "agi login" and paste it, then "agi auth-status" to confirm every configured provider.\n\n## In VS Code\n1. Run "AGI Workforce: Set API Key" and paste it.\n2. Run "AGI Workforce: Select Model" to choose what answers. "AGI Workforce: Clear API Key" removes it.`,
     views: 875,
   },
   {
