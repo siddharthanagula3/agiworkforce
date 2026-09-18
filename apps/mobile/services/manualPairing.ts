@@ -1,7 +1,8 @@
-import { WS_URL } from '@/lib/constants';
+import { isRelayPairingCode, PAIRING_CODE_LENGTH } from '@agiworkforce/types';
+import { API_URL, WS_URL } from '@/lib/constants';
+import { getAuthHeaders } from '@/services/authSession';
 import { secureFetch } from '@/services/secureFetch';
 
-const CURRENT_PAIRING_CODE_PATTERN = /^[A-Z0-9]{12}$/;
 const PAIR_TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 const HEX_64_PATTERN = /^[a-fA-F0-9]{64}$/;
 
@@ -22,8 +23,7 @@ const LEGACY_PAYLOAD_PREFIX = 'agiw:';
 export const PAIRING_UPDATE_REQUIRED_MESSAGE =
   'This QR code was made by an older Desktop version. Update AGI Workforce on Desktop, generate a new code, and scan it again.';
 
-export const PAIRING_SECRET_REQUIRED_MESSAGE =
-  'The 12-character code alone can no longer secure this connection. Scan the QR code on Desktop, or use Copy pairing link and paste it here.';
+export const PAIRING_SECRET_REQUIRED_MESSAGE = `The ${PAIRING_CODE_LENGTH}-character code alone can no longer secure this connection. Scan the QR code on Desktop, or use Copy pairing link and paste it here.`;
 
 export interface ParsedPairingPayload {
   code: string;
@@ -151,24 +151,36 @@ function parseClaimResponse(value: unknown, expectedCode: string): ManualPairing
 
 export async function claimManualPairingToken(rawCode: string): Promise<ManualPairingClaim> {
   const code = normalizePairingInput(rawCode).toUpperCase();
-  if (!CURRENT_PAIRING_CODE_PATTERN.test(code)) {
-    throw new Error('Enter the 12-character pairing code shown on Desktop.');
+  if (!isRelayPairingCode(code)) {
+    throw new Error(`Enter the ${PAIRING_CODE_LENGTH}-character pairing code shown on Desktop.`);
   }
 
-  const response = await secureFetch(
-    `${signalingHttpBaseUrl()}/pairings/${encodeURIComponent(code)}/claim`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'mobile' }),
+  // The relay mints a pair token for whoever asks, and it cannot tell one
+  // account from another, so the claim goes through the gateway that already
+  // knows who is signed in here.
+  const response = await secureFetch(`${API_URL}/api/pair/claim`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(await getAuthHeaders()),
     },
-  );
+    body: JSON.stringify({ code }),
+  });
   if (!response.ok) {
     if (response.status === 404) {
       throw new Error('That pairing code is invalid or expired. Generate a new code on Desktop.');
     }
     if (response.status === 409) {
       throw new Error('That pairing code is already connected to a phone.');
+    }
+    if (response.status === 403) {
+      throw new Error(
+        'That pairing code belongs to a different account. Sign in as that account on Desktop, or generate a code here.',
+      );
+    }
+    if (response.status === 401) {
+      throw new Error('Sign in on this phone before pairing it with Desktop.');
     }
     throw new Error('Manual pairing is temporarily unavailable. Please try again.');
   }

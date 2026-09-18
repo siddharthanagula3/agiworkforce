@@ -4,6 +4,10 @@ jest.mock('@/services/secureFetch', () => ({
   secureFetch: (...args: unknown[]) => mockSecureFetch(...args),
 }));
 
+jest.mock('@/services/authSession', () => ({
+  getAuthHeaders: jest.fn(async () => ({ Authorization: 'Bearer phone-session' })),
+}));
+
 import {
   claimManualPairingToken,
   normalizePairingInput,
@@ -103,7 +107,10 @@ describe('Manual companion pairing', () => {
     expect(signalingHttpBaseUrl('ws://localhost:4000/ws')).toBe('http://localhost:4000');
   });
 
-  it('exchanges a formatted code without sending account credentials', async () => {
+  // The relay cannot tell one account from another, so the claim goes to the
+  // gateway that already knows who is signed in on this phone. Claiming
+  // straight from the relay is what let a scanned QR join another account.
+  it('claims through the authenticated gateway, never straight from the relay', async () => {
     mockSecureFetch.mockResolvedValue({
       ok: true,
       status: 200,
@@ -119,14 +126,21 @@ describe('Manual companion pairing', () => {
       code: 'ABCDEFGHIJKL',
       pairToken: 'a'.repeat(64),
     });
-    expect(mockSecureFetch).toHaveBeenCalledWith(
-      'https://signaling.agiworkforce.com/pairings/ABCDEFGHIJKL/claim',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'mobile' }),
-      },
-    );
+
+    const [url, init] = mockSecureFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://agiworkforce.com/api/pair/claim');
+    expect(url).not.toContain('signaling');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer phone-session');
+    expect(JSON.parse(String(init.body))).toEqual({ code: 'ABCDEFGHIJKL' });
+  });
+
+  it('says whose pairing it is when the code belongs to another account', async () => {
+    mockSecureFetch.mockResolvedValueOnce({ ok: false, status: 403, json: jest.fn() });
+    await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow('different account');
+
+    mockSecureFetch.mockResolvedValueOnce({ ok: false, status: 401, json: jest.fn() });
+    await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow('Sign in on this phone');
   });
 
   it('fails clearly for expired codes and malformed service responses', async () => {
@@ -136,6 +150,18 @@ describe('Manual companion pairing', () => {
       json: jest.fn(),
     });
     await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow('invalid or expired');
+  });
+
+  it('refuses a code Desktop could not have shown before it reaches the relay', async () => {
+    mockSecureFetch.mockClear();
+
+    await expect(claimManualPairingToken('ABCDEFGHIJK')).rejects.toThrow(
+      'Enter the 12-character pairing code shown on Desktop.',
+    );
+    await expect(claimManualPairingToken('ABCDEFGHIJKLM')).rejects.toThrow(
+      'Enter the 12-character pairing code shown on Desktop.',
+    );
+    expect(mockSecureFetch).not.toHaveBeenCalled();
 
     mockSecureFetch.mockResolvedValueOnce({
       ok: true,

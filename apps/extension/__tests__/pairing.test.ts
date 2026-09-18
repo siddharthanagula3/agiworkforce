@@ -414,9 +414,17 @@ describe('pairing code helpers', () => {
   it('normalizes what a user types off the Desktop screen', () => {
     expect(normalizePairingCode(' abcd-2345 ')).toBe('ABCD2345');
     expect(isValidPairingCode('abcd 2345')).toBe(true);
-    expect(isValidPairingCode('ABCD234')).toBe(true);
     expect(isValidPairingCode('ABCD')).toBe(false);
     expect(isValidPairingCode('ABCDI345')).toBe(false);
+  });
+
+  // Desktop mints exactly eight characters (PAIR_CODE_LEN in
+  // integrations/realtime/websocket_server.rs). Accepting six to twelve let a
+  // code that cannot exist reach the bridge before it was refused.
+  it('accepts only the length Desktop mints', () => {
+    expect(isValidPairingCode('ABCD2345')).toBe(true);
+    expect(isValidPairingCode('ABCD234')).toBe(false);
+    expect(isValidPairingCode('ABCD23456')).toBe(false);
   });
 });
 

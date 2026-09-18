@@ -10,6 +10,7 @@ use super::capture::{capture_screen_full, capture_screen_region};
 use super::computer_use::{require_consent, run_when_consented};
 use super::settings_v2::SettingsServiceState;
 use super::AppDatabase;
+use crate::automation::computer_use::{record_clipboard_read_decision, PermissionDecision};
 use crate::automation::screen::{perform_ocr, OcrResult};
 use crate::{
     automation::{
@@ -667,11 +668,30 @@ async fn drag_drop_now(
     Ok(())
 }
 
+/// The clipboard holds password-manager output and recovery codes, so a read is
+/// a sensitive observe action: it carries the same consent gate as a screen read
+/// and spends a one-shot grant, never leaving the permission standing open.
 #[tauri::command]
-pub async fn automation_clipboard_get() -> Result<String, String> {
-    let service = global_service().map_err(|e| e.to_string())?;
+pub async fn automation_clipboard_get(
+    app: AppHandle,
+    settings: State<'_, SettingsServiceState>,
+) -> Result<String, AGIError> {
+    run_when_consented(
+        async {
+            require_consent(&app, &settings)
+                .await
+                .map_err(AGIError::PermissionError)
+        },
+        read_clipboard_text(),
+    )
+    .await
+}
+
+async fn read_clipboard_text() -> Result<String, AGIError> {
+    let service = global_service()?;
     let mut clipboard = service.clipboard.lock().await;
-    clipboard.get_text().map_err(|err| err.to_string())
+    record_clipboard_read_decision(PermissionDecision::AllowOnce);
+    clipboard.get_text().map_err(AGIError::from)
 }
 
 #[tauri::command]
@@ -1059,7 +1079,6 @@ mod tests {
         "automation_find_elements",
         "automation_get_value",
         "automation_get_text",
-        "automation_clipboard_get",
         "automation_clipboard_set",
         "automation_ocr",
         "overlay_emit_click",

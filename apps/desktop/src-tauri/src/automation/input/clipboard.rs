@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use arboard::Clipboard;
 
+use crate::automation::computer_use::claim_clipboard_read;
 use crate::automation::os_lock::lock_os_automation;
 
 pub struct ClipboardManager {
@@ -31,7 +32,10 @@ impl ClipboardManager {
             .ok_or_else(|| anyhow!("Clipboard not available"))
     }
 
+    /// Refuses before the clipboard is opened, so a denied read leaves no copy
+    /// of the contents anywhere in the process.
     pub fn get_text(&mut self) -> Result<String> {
+        claim_clipboard_read().map_err(|denial| anyhow!(denial))?;
         let _lock = lock_os_automation()?;
         self.get_clipboard()?
             .get_text()
@@ -73,8 +77,12 @@ impl Default for ClipboardManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::automation::computer_use::{
+        record_clipboard_read_decision, revoke_clipboard_read, PermissionDecision,
+    };
 
     #[test]
+    #[serial_test::serial]
     fn test_clipboard_set_get() {
         if std::env::var("CI").is_ok() {
             return;
@@ -83,8 +91,24 @@ mod tests {
         let test_text = "Hello, cross-platform clipboard!";
 
         clipboard.set_text(test_text).unwrap();
+        record_clipboard_read_decision(PermissionDecision::AllowOnce);
         let retrieved = clipboard.get_text().unwrap();
+        revoke_clipboard_read();
 
         assert_eq!(retrieved, test_text);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn a_read_the_user_never_allowed_never_reaches_the_clipboard() {
+        revoke_clipboard_read();
+        let mut clipboard = ClipboardManager::default();
+
+        let error = clipboard
+            .get_text()
+            .expect_err("an ungranted read is refused");
+        assert!(error
+            .to_string()
+            .contains("Reading the clipboard is denied"));
     }
 }

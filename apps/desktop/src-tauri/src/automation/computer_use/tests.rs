@@ -794,3 +794,65 @@ mod zoom_tests {
         assert_eq!(parsed.scale_factor, 2.0);
     }
 }
+
+mod clipboard_permission_tests {
+    use super::*;
+    use crate::automation::input::ClipboardManager;
+
+    /// The grant is process-wide, so these cases cannot run beside each other
+    /// or beside anything else that reads the clipboard.
+    #[test]
+    #[serial_test::serial]
+    fn a_clipboard_read_without_consent_is_denied() {
+        revoke_clipboard_read();
+
+        assert!(!clipboard_read_is_allowed());
+        let denial = claim_clipboard_read().expect_err("an ungranted read is refused");
+        assert_eq!(denial, CLIPBOARD_READ_DENIED);
+
+        let mut clipboard = ClipboardManager::default();
+        let error = clipboard
+            .get_text()
+            .expect_err("the manager refuses an ungranted read");
+        assert!(error
+            .to_string()
+            .contains("Reading the clipboard is denied"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn an_allow_once_answer_covers_exactly_one_read() {
+        revoke_clipboard_read();
+        record_clipboard_read_decision(PermissionDecision::AllowOnce);
+
+        assert!(claim_clipboard_read().is_ok());
+        assert!(
+            claim_clipboard_read().is_err(),
+            "a single approval must not authorise a second read"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn an_always_allow_answer_holds_until_it_is_revoked() {
+        revoke_clipboard_read();
+        record_clipboard_read_decision(PermissionDecision::AlwaysAllow);
+
+        assert!(claim_clipboard_read().is_ok());
+        assert!(claim_clipboard_read().is_ok());
+
+        revoke_clipboard_read();
+        assert!(claim_clipboard_read().is_err());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn a_denial_leaves_no_grant_behind() {
+        revoke_clipboard_read();
+        record_clipboard_read_decision(PermissionDecision::AlwaysAllow);
+        record_clipboard_read_decision(PermissionDecision::Deny);
+
+        assert!(!clipboard_read_is_allowed());
+        assert!(claim_clipboard_read().is_err());
+    }
+}

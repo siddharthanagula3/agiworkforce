@@ -3,6 +3,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { isRelayPairingCode, normalizePairingCode } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -16,29 +17,27 @@ import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
-const DEFAULT_TTL_SECONDS = 300;
 
-const initiateSchema = z
-  .object({
-    desktopId: z.string().uuid().optional(),
-    ttlSeconds: z.number().int().min(30).max(900).optional(),
-    initiator: z.enum(['desktop', 'mobile']).optional(),
-  })
-  .strict();
+const claimSchema = z.object({ code: z.string().min(1).max(64) }).strict();
 
-const signalingResponseSchema = z.object({
+const signalingClaimSchema = z.object({
   code: z.string(),
+  role: z.literal('mobile'),
+  pairToken: z.string().min(1),
   expiresAt: z.number(),
-  expiresIn: z.number(),
-  httpUrl: z.string(),
   wsUrl: z.string(),
-  qrData: z.string(),
-  pairTokens: z.object({
-    desktop: z.string(),
-    mobile: z.string(),
-  }),
 });
 
+/**
+ * The phone's half of a pairing, claimed on its behalf.
+ *
+ * The relay cannot tell one account from another: it has no verifier for a user
+ * token and its only trust anchor is the internal secret. So the account is
+ * established here, where the session already is, and the relay is told which
+ * account it is minting for. It refuses when that is not the account the
+ * pairing was created for, which is what stops a scanned QR from joining a
+ * stranger's desktop.
+ */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
@@ -82,67 +81,81 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     body = {};
   }
 
-  const parsed = initiateSchema.safeParse(body ?? {});
+  const parsed = claimSchema.safeParse(body ?? {});
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid pairing request' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid pairing code' }, { status: 400 });
   }
-  const { desktopId, ttlSeconds, initiator = 'mobile' } = parsed.data;
+
+  const code = normalizePairingCode(parsed.data.code);
+  if (!isRelayPairingCode(code)) {
+    return NextResponse.json({ error: 'Invalid pairing code' }, { status: 400 });
+  }
 
   let signalingResponse: Response;
   try {
-    signalingResponse = await fetch(`${signalingUrl.replace(/\/+$/, '')}/pairings`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${signalingSecret}`,
+    signalingResponse = await fetch(
+      `${signalingUrl.replace(/\/+$/, '')}/pairings/${encodeURIComponent(code)}/claim`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${signalingSecret}`,
+        },
+        body: JSON.stringify({ role: 'mobile', accountId: userId }),
+        signal: AbortSignal.timeout(SIGNALING_TIMEOUT_MS),
       },
-      body: JSON.stringify({
-        ttlSeconds: ttlSeconds ?? DEFAULT_TTL_SECONDS,
-        metadata: { userId, desktopId: desktopId ?? null, initiator },
-      }),
-      signal: AbortSignal.timeout(SIGNALING_TIMEOUT_MS),
-    });
+    );
   } catch (error) {
-    logger.error({ error }, 'Signaling server unreachable while creating a pairing');
+    logger.error({ error }, 'Signaling server unreachable while claiming a pairing');
     return NextResponse.json({ error: 'Signaling server unavailable' }, { status: 503 });
   }
 
   if (!signalingResponse.ok) {
+    // The relay's refusals are the user's answer, not an internal fault: the
+    // pairing is gone, already has a phone, or belongs to another account.
+    if (signalingResponse.status === 404) {
+      return NextResponse.json({ error: 'pairing_not_found' }, { status: 404 });
+    }
+    if (signalingResponse.status === 409) {
+      return NextResponse.json({ error: 'pairing_role_in_use' }, { status: 409 });
+    }
+    if (signalingResponse.status === 403) {
+      await recordWorkspaceAuditEvent(db, request, {
+        userId,
+        eventType: 'remote_pairing_initiated',
+        outcome: 'failure',
+        detail: {
+          resourceType: 'remote_pairing',
+          resourceId: code,
+          source: 'mobile',
+          status: 'claim_rejected',
+        },
+      });
+      return NextResponse.json({ error: 'pairing_belongs_to_another_account' }, { status: 403 });
+    }
     logger.error(
       { status: signalingResponse.status },
-      'Signaling server refused the pairing request',
+      'Signaling server refused the pairing claim',
     );
-    return NextResponse.json({ error: 'Failed to create pairing session' }, { status: 502 });
+    return NextResponse.json({ error: 'Failed to claim pairing session' }, { status: 502 });
   }
 
-  const payload = signalingResponseSchema.safeParse(
-    await signalingResponse.json().catch(() => null),
-  );
+  const payload = signalingClaimSchema.safeParse(await signalingResponse.json().catch(() => null));
   if (!payload.success) {
-    logger.error('Signaling server returned an unrecognised pairing payload');
+    logger.error('Signaling server returned an unrecognised claim payload');
     return NextResponse.json({ error: 'Invalid response from signaling server' }, { status: 502 });
   }
-
-  const { code, expiresAt, expiresIn, httpUrl, wsUrl, pairTokens } = payload.data;
-
-  const peerToken = initiator === 'desktop' ? pairTokens.mobile : pairTokens.desktop;
 
   await recordWorkspaceAuditEvent(db, request, {
     userId,
     eventType: 'remote_pairing_initiated',
     detail: {
       resourceType: 'remote_pairing',
-      ...(desktopId ? { resourceId: desktopId } : {}),
-      source: initiator,
+      resourceId: code,
+      source: 'mobile',
+      status: 'claimed',
     },
   });
 
-  return NextResponse.json({
-    code,
-    expiresAt,
-    expiresIn,
-    qrData: `agiw:${code}:${peerToken}`,
-    signaling: { httpUrl, wsUrl },
-    pairTokens,
-  });
+  return NextResponse.json(payload.data);
 }

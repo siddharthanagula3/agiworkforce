@@ -38,6 +38,7 @@ mod action_executor;
 pub mod anthropic_agent;
 mod app_permissions;
 pub mod approval;
+pub mod clipboard_permission;
 pub mod confirmation;
 pub mod consent;
 pub mod control;
@@ -60,6 +61,10 @@ pub use app_permissions::{
     ALWAYS_BLOCKED_BUNDLE_IDS, ALWAYS_BLOCKED_URL_HOSTS,
 };
 pub use approval::{action_class, action_tool_name, approval_request};
+pub use clipboard_permission::{
+    claim_clipboard_read, clipboard_read_is_allowed, record_clipboard_read_decision,
+    revoke_clipboard_read, CLIPBOARD_READ_DENIED,
+};
 pub use confirmation::{ConfirmationOutcome, CONFIRMATION_TIMEOUT_SECS};
 pub use consent::{ComputerUseConsent, CONSENT_SETTINGS_KEY, CONSENT_VERSION};
 pub use control::{ControlState, DialogResponse};
