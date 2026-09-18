@@ -1176,6 +1176,35 @@
         "tools/skill-vetting/src/skillspector/cli.py",
         "tools/skill-vetting/verify.sh"
       ]
+    },
+    {
+      "path": "packages/client/ide-runtime",
+      "kind": "package",
+      "canonicalOwner": "Client platform",
+      "consumers": ["apps/extension-vscode"],
+      "deployability": "cross-surface-client-library",
+      "trustBoundary": "IDE session, diff and diagnostics contract over the CLI app server",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/client/ide-runtime/src/index.ts",
+        "packages/client/ide-runtime/src/session.ts",
+        "packages/client/ide-runtime/src/__tests__"
+      ]
+    },
+    {
+      "path": "packages/contracts/context",
+      "kind": "package",
+      "canonicalOwner": "Cloud platform",
+      "consumers": ["apps/web", "packages/platform/context-engine"],
+      "deployability": "cross-surface-client-library",
+      "trustBoundary": "typed context source taxonomy: provenance, authorship and trust classification, no I/O",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/contracts/context/src/index.ts",
+        "packages/contracts/context/package.json"
+      ]
     }
   ]
 }

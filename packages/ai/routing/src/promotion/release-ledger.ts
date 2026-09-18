@@ -203,7 +203,7 @@ export function currentRelease(
   id: string,
 ): ReleaseRecord | null {
   const history = recordsFor(ledger, artifact, id);
-  return history.length === 0 ? null : history[history.length - 1];
+  return history[history.length - 1] ?? null;
 }
 
 /**
@@ -302,9 +302,9 @@ export function planRollback(
       refusals: [`${key} is not in the release ledger`],
     };
   }
-  const from = history[history.length - 1];
-  const to = history[history.length - 2];
-  if (to === undefined) {
+  const from = history[history.length - 1] ?? null;
+  const to = history[history.length - 2] ?? null;
+  if (from === null || to === null) {
     return {
       from,
       to: null,
