@@ -556,6 +556,16 @@ export { selectArtifacts, selectActiveArtifact, selectArtifactById } from './sto
 
 export { BrandedGreeting } from './components/BrandedGreeting';
 export type { BrandedGreetingProps } from './components/BrandedGreeting';
+export {
+  GREETING_BAND_GROUP,
+  GREETING_TIME_BANDS,
+  greetingFirstName,
+  greetingHeadline,
+  greetingTimeBand,
+  greetingVariantIndex,
+  resolveGreetingHeadline,
+} from './lib/greeting';
+export type { GreetingGroup, GreetingTimeBand } from './lib/greeting';
 export { AdvancedEmptyState } from './components/AdvancedEmptyState';
 export type { AdvancedEmptyStateProps } from './components/AdvancedEmptyState';
 export {
@@ -587,8 +597,6 @@ export type {
   ShortcutItem,
   ShortcutSection,
 } from './components/KeyboardShortcutsOverlay';
-export { ChatStream } from './components/ChatStream';
-export type { ChatStreamProps } from './components/ChatStream';
 export { ChatInputToolbar, PlanModeToggle } from './components/ChatInputToolbar';
 export type { ChatInputToolbarProps, PlanModeToggleProps } from './components/ChatInputToolbar';
 export { SlashCommandMenu } from './components/SlashCommandMenu';

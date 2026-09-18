@@ -1,101 +1,77 @@
-import React, { useMemo } from 'react';
-import { Sparkles } from 'lucide-react';
+import { useMemo } from 'react';
+import { AgiMark } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
-
-interface GreetingTemplate {
-  headline: (name: string | null) => string;
-  subline: string;
-}
-
-const MORNING_GREETINGS: GreetingTemplate[] = [
-  {
-    headline: (name) => (name ? `Good morning, ${name}` : 'Good morning'),
-    subline: 'What are we accomplishing today?',
-  },
-  {
-    headline: (name) => (name ? `Rise and shine, ${name}` : 'Rise and shine'),
-    subline: 'Your AI workforce is ready to start the day.',
-  },
-];
-
-const AFTERNOON_GREETINGS: GreetingTemplate[] = [
-  {
-    headline: (name) => (name ? `Good afternoon, ${name}` : 'Good afternoon'),
-    subline: 'What can we get done?',
-  },
-  {
-    headline: (name) => (name ? `Hi ${name}` : 'Hello'),
-    subline: 'Your AI workforce is standing by.',
-  },
-];
-
-const EVENING_GREETINGS: GreetingTemplate[] = [
-  {
-    headline: (name) => (name ? `Good evening, ${name}` : 'Good evening'),
-    subline: 'Working late? Your workforce never sleeps.',
-  },
-  {
-    headline: (name) => (name ? `Hi ${name}` : 'Hello'),
-    subline: 'What shall we tackle tonight?',
-  },
-];
-
-function getGreeting(name: string | null): { headline: string; subline: string } {
-  const hour = new Date().getHours();
-
-  let pool: GreetingTemplate[];
-  if (hour >= 5 && hour < 12) {
-    pool = MORNING_GREETINGS;
-  } else if (hour >= 12 && hour < 18) {
-    pool = AFTERNOON_GREETINGS;
-  } else {
-    pool = EVENING_GREETINGS;
-  }
-
-  const index = new Date().getMinutes() % pool.length;
-  const template = pool[index] ?? pool[0]!;
-
-  return {
-    headline: template.headline(name),
-    subline: template.subline,
-  };
-}
+import { resolveGreetingHeadline } from '../lib/greeting';
 
 export interface BrandedGreetingProps {
+  headline?: string;
   userName?: string | null;
+  busy?: boolean;
+  workspaceLabel?: string | null;
+  onSelectWorkspace?: () => void;
   className?: string;
 }
 
-export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ userName = null, className }) => {
-  const firstName = useMemo(() => {
-    if (!userName) return null;
-    return userName.split(' ')[0] ?? null;
-  }, [userName]);
-
-  const { headline, subline } = useMemo(() => getGreeting(firstName), [firstName]);
+export function BrandedGreeting({
+  headline,
+  userName = null,
+  busy = false,
+  workspaceLabel = null,
+  onSelectWorkspace,
+  className,
+}: BrandedGreetingProps) {
+  const resolvedHeadline = useMemo(
+    () => headline ?? resolveGreetingHeadline(new Date(), userName),
+    [headline, userName],
+  );
+  const workspace = workspaceLabel?.trim() || null;
 
   return (
-    <div className={cn('flex flex-col items-center gap-3 text-center select-none', className)}>
-      {/* Animated brand icon */}
+    <div
+      className={cn(
+        'flex w-full max-w-[760px] flex-col items-center gap-5 px-4 text-center',
+        className,
+      )}
+    >
       <div
-        className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500/20 to-indigo-500/10 border border-violet-500/20"
         aria-hidden="true"
+        className="flex h-10 w-10 items-center justify-center rounded-full"
+        role="presentation"
       >
-        <Sparkles className="h-6 w-6 text-violet-400 animate-pulse" />
+        <AgiMark size={28} spinning={busy} />
       </div>
 
-      {/* Headline */}
-      <h1 className="text-2xl font-semibold text-foreground tracking-tight leading-tight">
-        {headline}
+      <h1
+        className="text-[28px] font-normal leading-[36px] tracking-tight"
+        style={{
+          color: 'var(--chat-text-primary)',
+          fontFamily: 'var(--chat-font-display)',
+        }}
+        aria-label={workspace ? `What should we build in ${workspace}?` : undefined}
+      >
+        {workspace ? (
+          <>
+            What should we build in{' '}
+            {onSelectWorkspace ? (
+              <button
+                type="button"
+                onClick={onSelectWorkspace}
+                className="rounded-sm underline decoration-[var(--chat-text-muted)] underline-offset-4 transition-colors hover:text-[var(--chat-accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+                aria-label={`Change workspace from ${workspace}`}
+              >
+                {workspace}
+              </button>
+            ) : (
+              <span className="underline decoration-[var(--chat-text-muted)] underline-offset-4">
+                {workspace}
+              </span>
+            )}
+            ?
+          </>
+        ) : (
+          resolvedHeadline
+        )}
       </h1>
-
-      {/* Branded sub-tagline */}
-      <p className="text-sm text-muted-foreground font-medium">{subline}</p>
-
-      {/* Platform tagline */}
-      <p className="text-xs text-muted-foreground font-normal italic mt-1">
-        Beyond one model. Beyond one surface. AGI in your hands.
-      </p>
     </div>
   );
-};
+}

@@ -21,7 +21,6 @@ import type {
   MessageArtifactProjection,
 } from '../lib/types';
 
-import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
 import {
   ChatInput,
@@ -879,8 +878,9 @@ export function ChatInterface({
             className,
           )}
         >
-          {/* Left: collapsible sidebar */}
-          {sidebarSlot !== undefined ? sidebarSlot : <Sidebar />}
+          {/* Left: the host's navigation rail. Web mounts @agiworkforce/ui's
+              Sidebar, desktop its own; the package never ships a fourth one. */}
+          {sidebarSlot}
 
           {/* Center: main content, wrapped in ErrorBoundary to catch render errors.
               Hidden when an artifact is open in fullscreen mode. */}
