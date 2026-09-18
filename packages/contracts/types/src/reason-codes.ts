@@ -345,6 +345,25 @@ export interface CapabilityDenialRemedy {
 
 export const CAPABILITY_DENIAL_TELEMETRY_EVENT = 'capability_denied';
 
+/**
+ * The span and metric dimensions a denial is recorded under. They live beside
+ * the taxonomy so web, desktop, mobile and the CLI name the cause identically
+ * and a dashboard can split refusals by concept without a per-surface mapping.
+ */
+export const CAPABILITY_DENIAL_ATTRIBUTE = {
+  reason: 'agi.denial.reason',
+  decidedBy: 'agi.denial.decided_by',
+  errorCode: 'agi.denial.error_code',
+  capabilityId: 'agi.denial.capability_id',
+  policySource: 'agi.denial.policy_source',
+  requiredPlan: 'agi.denial.required_plan',
+  requiredPermission: 'agi.denial.required_permission',
+  requiredConnector: 'agi.denial.required_connector',
+} as const;
+
+export type CapabilityDenialAttribute =
+  (typeof CAPABILITY_DENIAL_ATTRIBUTE)[keyof typeof CAPABILITY_DENIAL_ATTRIBUTE];
+
 export interface CapabilityDenialTelemetry extends CapabilityDenialRemedy {
   event: typeof CAPABILITY_DENIAL_TELEMETRY_EVENT;
   reason: CapabilityDenialReason;
@@ -378,4 +397,34 @@ export function capabilityDenialTelemetry(
       ? { requiredConnector: context.requiredConnector }
       : {}),
   };
+}
+
+/**
+ * The same denial as span attributes. It carries the cause and the remedy,
+ * never the copy, and omits an absent field rather than emitting an empty
+ * string that would open its own series.
+ */
+export function capabilityDenialAttributes(
+  denial: CapabilityDenialTelemetry,
+): Readonly<Record<CapabilityDenialAttribute, string>> {
+  const attributes: Partial<Record<CapabilityDenialAttribute, string>> = {
+    [CAPABILITY_DENIAL_ATTRIBUTE.reason]: denial.reason,
+    [CAPABILITY_DENIAL_ATTRIBUTE.decidedBy]: denial.decidedBy,
+    [CAPABILITY_DENIAL_ATTRIBUTE.errorCode]: denial.errorCode,
+  };
+  if (denial.capabilityId) {
+    attributes[CAPABILITY_DENIAL_ATTRIBUTE.capabilityId] = denial.capabilityId;
+  }
+  if (denial.policySource) {
+    attributes[CAPABILITY_DENIAL_ATTRIBUTE.policySource] = denial.policySource;
+  }
+  if (denial.requiredPlan)
+    attributes[CAPABILITY_DENIAL_ATTRIBUTE.requiredPlan] = denial.requiredPlan;
+  if (denial.requiredPermission) {
+    attributes[CAPABILITY_DENIAL_ATTRIBUTE.requiredPermission] = denial.requiredPermission;
+  }
+  if (denial.requiredConnector) {
+    attributes[CAPABILITY_DENIAL_ATTRIBUTE.requiredConnector] = denial.requiredConnector;
+  }
+  return Object.freeze(attributes) as Readonly<Record<CapabilityDenialAttribute, string>>;
 }

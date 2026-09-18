@@ -1,7 +1,10 @@
 import {
+  BILLING_PLAN_PRICING,
   isBillingPlanTier,
   isByokPlanTier,
+  isFreeOfChargePlanTier,
   isLocalOnlyPlanTier,
+  isPerSeatBillingPlan,
   type BillingInterval,
   type BillingPlanTier,
 } from '@agiworkforce/types';
@@ -25,13 +28,15 @@ function registerPrice(
   if (normalizedId) mapping[normalizedId] = entry;
 }
 
-const STRIPE_BILLED_TIERS = new Set<BillingPlanTier>([
-  'basic',
-  'pro',
-  'max',
-  'max_15x',
-  'enterprise',
-]);
+// Derived from the catalogue rather than listed here, so a new paid tier is
+// billable the day it is priced. Team is excluded on purpose: its seats are
+// provisioned from the named Team Price envs, and a generic override naming it
+// would mint seats no Price sold.
+const STRIPE_BILLED_TIERS: ReadonlySet<BillingPlanTier> = new Set(
+  (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[]).filter(
+    (tier) => isValidPlanTier(tier) && !isFreeOfChargePlanTier(tier) && !isPerSeatBillingPlan(tier),
+  ),
+);
 
 function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   const mapping: Record<string, PriceMappingEntry> = {};
@@ -185,13 +190,8 @@ export function getMappingStatus(): {
   tiers: Record<string, string[]>;
 } {
   const mapping = getTierMapping();
-  const tiers: Record<string, string[]> = {
-    basic: [],
-    pro: [],
-    max: [],
-    max_15x: [],
-    enterprise: [],
-  };
+  const tiers: Record<string, string[]> = {};
+  for (const tier of STRIPE_BILLED_TIERS) tiers[tier] = [];
 
   for (const [priceId, entry] of Object.entries(mapping)) {
     const tier = entry.tier;

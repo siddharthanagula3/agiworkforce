@@ -68,11 +68,21 @@ const VALUE_PATTERNS: readonly RegExp[] = [
 // camel-cased name like systemPrompt survives the segment rules below.
 const NEVER_LOGGED_KEYS = new Set<string>(FIELDS_NEVER_LOGGED.map((field) => field.toLowerCase()));
 
+// camelCase is a word boundary too. Without this split, bearerToken, privateKey
+// and refreshToken reached telemetry intact while bearer_token was redacted.
+function keySegments(key: string): string[] {
+  return key
+    .replace(/([a-z0-9])([A-Z])/gu, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .filter(Boolean);
+}
+
 function isDeniedKey(key: string): boolean {
   const lower = key.toLowerCase();
   if (NEVER_LOGGED_KEYS.has(lower.replace(/[^a-z0-9]+/gu, ''))) return true;
   if (DENIED_KEY_SUBSTRINGS.some((needle) => lower.includes(needle))) return true;
-  const segments = lower.split(/[^a-z0-9]+/u).filter(Boolean);
+  const segments = keySegments(key);
   const final = segments[segments.length - 1];
   return final !== undefined && DENIED_FINAL_SEGMENTS.has(final);
 }
