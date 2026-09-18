@@ -3,6 +3,12 @@ import {
   hasBrowserControlConsent,
 } from '../computer-use/browserControlConsent';
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
+import {
+  profileGateFor,
+  readBrowserPermissionProfiles,
+  readBrowserProfileScope,
+  type SitePermissionPolicyStorage,
+} from '../options/site-permission-policy';
 import { assertSiteAccess } from '../site-policy/store';
 
 export const SITE_NOT_APPROVED_FOR_BROWSER_TOOLS =
@@ -13,6 +19,39 @@ export interface AuthorizedTab {
   readonly tabId: number;
   readonly origin: string;
   readonly url: string;
+  /** The permission profile this tab runs under, when the person holds any. */
+  readonly profileId: string | null;
+}
+
+function localStorageArea(): SitePermissionPolicyStorage {
+  return {
+    get: (key) => chrome.storage.local.get(key) as Promise<Record<string, unknown>>,
+    set: (items) => chrome.storage.local.set(items),
+  };
+}
+
+/**
+ * A profile is a durable grant with an expiry, not the live tab. Holding one
+ * makes it the authority for this origin; holding none leaves the site policy
+ * and the per-origin browser-control grant deciding, which is what they did
+ * before profiles existed.
+ */
+async function profileForTab(
+  url: string,
+  storage: SitePermissionPolicyStorage,
+): Promise<string | null> {
+  const [profiles, viewer] = await Promise.all([
+    readBrowserPermissionProfiles(storage),
+    readBrowserProfileScope(storage),
+  ]);
+  const decision = profileGateFor(profiles, viewer, {
+    url,
+    capability: 'automation',
+    nowMs: Date.now(),
+  });
+  if (!decision) return null;
+  if (!decision.allowed) throw new Error(decision.message);
+  return decision.profile.id;
 }
 
 /**
@@ -25,7 +64,10 @@ export interface AuthorizedTab {
  * origin, so a tab that navigated off an approved origin after the panel
  * rendered fails here instead of leaking the new origin's page data.
  */
-export async function authorizeBrowserToolTab(tabId: number): Promise<AuthorizedTab> {
+export async function authorizeBrowserToolTab(
+  tabId: number,
+  storage: SitePermissionPolicyStorage = localStorageArea(),
+): Promise<AuthorizedTab> {
   let tab: chrome.tabs.Tab;
   try {
     tab = await chrome.tabs.get(tabId);
@@ -48,5 +90,7 @@ export async function authorizeBrowserToolTab(tabId: number): Promise<Authorized
   }
   if (!granted) throw new Error(browserControlConsentRequiredMessage(origin));
 
-  return { tabId, origin, url };
+  const profileId = await profileForTab(url, storage);
+
+  return { tabId, origin, url, profileId };
 }

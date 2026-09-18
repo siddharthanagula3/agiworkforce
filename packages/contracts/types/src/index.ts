@@ -291,6 +291,31 @@ export {
 } from './browser-selection';
 
 export {
+  BROWSER_PROFILE_CAPABILITIES,
+  BROWSER_PROFILE_REFUSALS,
+  authorizeProfileRequest,
+  findVisibleProfile,
+  isBrowserProfileCapability,
+  liveSessionsOnProfile,
+  normalizeProfileSite,
+  profileAdmits,
+  profileIsLive,
+  profilesVisibleTo,
+  revokeProfile,
+  revokeProfileAndEndSessions,
+  sameProfileScope,
+  selectProfileForRequest,
+  type BrowserPermissionProfile,
+  type BrowserProfileCapability,
+  type BrowserProfileDecision,
+  type BrowserProfileRefusal,
+  type BrowserProfileRequest,
+  type BrowserProfileScope,
+  type BrowserProfileSession,
+  type ProfileRevocationEffect,
+} from './browser-permission-profile';
+
+export {
   AUTOMATION_OUTCOME_STATUSES,
   AUTOMATION_SURFACES,
   UNVERIFIED_SUCCESS_REASON,

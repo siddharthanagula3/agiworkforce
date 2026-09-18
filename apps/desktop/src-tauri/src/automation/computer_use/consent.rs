@@ -158,6 +158,15 @@ pub fn process_scope() -> &'static ConsentScope {
     &PROCESS_SCOPE
 }
 
+static CONSENT_IS_LIVE: AtomicBool = AtomicBool::new(false);
+
+/// The last verified answer to "has this installation accepted computer use",
+/// for callers with no settings handle. Only a verified grant sets it, and any
+/// read that fails verification clears it, so it never outlives the grant.
+pub fn consent_is_live() -> bool {
+    CONSENT_IS_LIVE.load(Ordering::SeqCst)
+}
+
 static PROMPTS_ON_SCREEN: AtomicUsize = AtomicUsize::new(0);
 
 /// True while a native consent prompt is waiting for the user's answer.
@@ -215,9 +224,13 @@ pub fn load_consent(scope: &ConsentScope, service: &SettingsService) -> Computer
         .filter(|sealed| grant_matches(scope, &sealed.record, &sealed.grant));
 
     match sealed {
-        Some(sealed) => sealed.record,
+        Some(sealed) => {
+            CONSENT_IS_LIVE.store(sealed.record.is_valid(), Ordering::SeqCst);
+            sealed.record
+        }
         None => {
             scope.forget_grants_issued_here();
+            CONSENT_IS_LIVE.store(false, Ordering::SeqCst);
             ComputerUseConsent::not_accepted()
         }
     }
@@ -243,6 +256,7 @@ pub fn persist_consent(
     if consent.is_valid() {
         scope.issued.store(true, Ordering::SeqCst);
     }
+    CONSENT_IS_LIVE.store(consent.is_valid(), Ordering::SeqCst);
     Ok(())
 }
 
@@ -250,6 +264,7 @@ pub fn persist_consent(
 /// unusable, so a caller that copied the sealed row cannot write it back.
 pub fn revoke_consent(scope: &ConsentScope, service: &SettingsService) -> Result<(), ConsentError> {
     scope.rotate();
+    CONSENT_IS_LIVE.store(false, Ordering::SeqCst);
     service.delete(CONSENT_SETTINGS_KEY)?;
     Ok(())
 }
@@ -309,7 +324,18 @@ fn grant_matches(scope: &ConsentScope, consent: &ComputerUseConsent, grant: &str
 mod tests {
     use super::*;
     use rusqlite::Connection;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, MutexGuard};
+
+    /// The cached answer and the prompt counter are process-wide.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    fn serial() -> MutexGuard<'static, ()> {
+        let guard = SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        CONSENT_IS_LIVE.store(false, Ordering::SeqCst);
+        guard
+    }
 
     fn settings_service() -> SettingsService {
         let conn = Connection::open_in_memory().expect("in-memory settings database");
@@ -381,12 +407,14 @@ mod tests {
 
     #[test]
     fn unset_consent_loads_as_not_accepted() {
+        let _serial = serial();
         let service = settings_service();
         assert!(!load_consent(&ConsentScope::new(), &service).is_valid());
     }
 
     #[test]
     fn persisted_consent_round_trips_through_settings() {
+        let _serial = serial();
         let service = settings_service();
         let scope = ConsentScope::new();
         persist_consent(&scope, &service, &ComputerUseConsent::accept()).expect("persist consent");
@@ -401,6 +429,7 @@ mod tests {
 
     #[test]
     fn stale_version_and_malformed_records_load_as_not_accepted() {
+        let _serial = serial();
         let service = settings_service();
         let scope = ConsentScope::new();
         let mut stale = ComputerUseConsent::accept();
@@ -424,6 +453,7 @@ mod tests {
     /// that row was byte-identical to a real acceptance.
     #[test]
     fn a_consent_row_written_without_the_install_grant_is_not_consent() {
+        let _serial = serial();
         let service = settings_service();
         write_unbound_row(
             &service,
@@ -438,6 +468,7 @@ mod tests {
 
     #[test]
     fn a_forged_grant_string_is_not_consent() {
+        let _serial = serial();
         let service = settings_service();
         write_unbound_row(
             &service,
@@ -457,6 +488,7 @@ mod tests {
     /// with cannot be lifted onto an acceptance.
     #[test]
     fn a_grant_cannot_be_moved_between_records() {
+        let _serial = serial();
         let service = settings_service();
         let scope = ConsentScope::new();
         persist_consent(&scope, &service, &ComputerUseConsent::not_accepted())
@@ -485,6 +517,7 @@ mod tests {
     /// usable afterwards.
     #[test]
     fn a_copied_grant_cannot_be_replayed_after_a_revocation() {
+        let _serial = serial();
         let service = settings_service();
         let scope = ConsentScope::new();
         persist_consent(&scope, &service, &ComputerUseConsent::accept()).expect("persist consent");
@@ -503,6 +536,7 @@ mod tests {
     /// it too.
     #[test]
     fn a_grant_deleted_through_settings_cannot_be_written_back() {
+        let _serial = serial();
         let service = settings_service();
         let scope = ConsentScope::new();
         persist_consent(&scope, &service, &ComputerUseConsent::accept()).expect("persist consent");
@@ -515,10 +549,40 @@ mod tests {
         assert!(!load_consent(&scope, &service).is_valid());
     }
 
+    /// The cached answer is derived only from a verified grant, so the caller
+    /// with no settings handle cannot be told "accepted" by a row nobody
+    /// verified, and a revocation clears it at once.
+    #[test]
+    fn the_cached_answer_follows_the_verified_grant_and_nothing_else() {
+        let _serial = serial();
+        let service = settings_service();
+        let scope = ConsentScope::new();
+
+        write_unbound_row(
+            &service,
+            serde_json::json!({
+                "accepted": true,
+                "accepted_at": "2026-08-21T00:00:00Z",
+                "version": CONSENT_VERSION,
+            }),
+        );
+        load_consent(&scope, &service);
+        assert!(!consent_is_live());
+
+        persist_consent(&scope, &service, &ComputerUseConsent::accept()).expect("persist consent");
+        assert!(consent_is_live());
+        load_consent(&scope, &service);
+        assert!(consent_is_live());
+
+        revoke_consent(&scope, &service).expect("revoke consent");
+        assert!(!consent_is_live());
+    }
+
     /// A grant is sealed to one process, so a row that survives on disk does
     /// not hand the next launch desktop control without asking again.
     #[test]
     fn a_grant_does_not_verify_under_another_scope() {
+        let _serial = serial();
         let service = settings_service();
         let first_run = ConsentScope::new();
         persist_consent(&first_run, &service, &ComputerUseConsent::accept())
