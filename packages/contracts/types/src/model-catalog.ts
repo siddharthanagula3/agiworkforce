@@ -26,6 +26,7 @@ import {
   type ProviderId,
 } from './design-system/provider-display';
 import {
+  getRetiredModelRecord,
   lifecycleStageAtOrAfter,
   modelRegistry,
   type LifecycleStage,
@@ -1192,6 +1193,53 @@ export function getModelMetadataById(modelId: string | null | undefined): ModelM
   }
 
   return modelsCatalog.models[canonicalModelId] ?? null;
+}
+
+/**
+ * What a model that is no longer offered was, for a message written while it
+ * still was. This is deliberately narrower than `ModelMetadata`: a retirement
+ * record keeps identity and capability, never price or routing, so a reader can
+ * be told the name without anything inventing a number.
+ */
+export interface RetiredModelMetadata {
+  id: string;
+  name: string;
+  provider?: string;
+  developer?: string;
+  contextWindow?: number | null;
+  retiredOn?: string;
+  replacedBy?: string | null;
+  /** False for an id retired before retirements carried a snapshot. */
+  metadataPreserved: boolean;
+}
+
+export function getRetiredModelMetadataById(
+  modelId: string | null | undefined,
+): RetiredModelMetadata | null {
+  const raw = typeof modelId === 'string' ? modelId.trim() : '';
+  if (!raw) return null;
+  const record = getRetiredModelRecord(raw) ?? getRetiredModelRecord(normalizeModelId(raw) ?? raw);
+  if (!record) return null;
+  return {
+    id: record.id,
+    name: record.displayName ?? record.id,
+    metadataPreserved: record.metadataPreserved,
+    ...(record.provider === undefined ? {} : { provider: record.provider }),
+    ...(record.developer === undefined ? {} : { developer: record.developer }),
+    ...(record.contextWindow === undefined ? {} : { contextWindow: record.contextWindow }),
+    ...(record.retiredOn === undefined ? {} : { retiredOn: record.retiredOn }),
+    ...(record.replacedBy === undefined ? {} : { replacedBy: record.replacedBy }),
+  };
+}
+
+/**
+ * The name to show for a model id on a stored row: the live catalogue first,
+ * the retirement record next, and the raw id only when neither knows it.
+ */
+export function modelDisplayNameById(modelId: string | null | undefined): string | null {
+  const raw = typeof modelId === 'string' ? modelId.trim() : '';
+  if (!raw) return null;
+  return getModelMetadataById(raw)?.name ?? getRetiredModelMetadataById(raw)?.name ?? raw;
 }
 
 const TEXT_PRODUCING_MODEL_TYPES: ReadonlySet<ModelType> = new Set([

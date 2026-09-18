@@ -342,7 +342,29 @@ export type AuditEventType =
   | 'event_trigger_deleted'
   | 'background_job_retried'
   | 'feature_flag_changed'
-  | 'feature_flag_override_changed';
+  | 'feature_flag_override_changed'
+  /**
+   * The identity events a user is notified about. They are distinct from the
+   * credential they changed: a rotated password and a replaced passkey are not
+   * the same answer to "how did they get in".
+   */
+  | 'password_changed'
+  | 'email_changed'
+  | 'passkey_added'
+  | 'passkey_removed'
+  | 'new_location_sign_in'
+  | 'account_recovery_requested'
+  /**
+   * The risk engine fired, the account holder said they were compromised, and
+   * the guided response finished. All three are separate: a signal that nobody
+   * acted on and a contained account are different states.
+   */
+  | 'risk_signal_detected'
+  | 'account_compromise_reported'
+  | 'account_compromise_contained'
+  | 'admin_delegation_granted'
+  | 'admin_delegation_revoked'
+  | 'admin_delegation_refused';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 

@@ -15,6 +15,8 @@ import {
   Gavel,
   BarChart3,
   CreditCard,
+  Server,
+  Terminal,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -85,6 +87,18 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         label: 'Connectors',
         icon: PlugZap,
         hint: 'Approved integrations',
+      },
+      {
+        href: '/workspace/code',
+        label: 'Code',
+        icon: Terminal,
+        hint: 'GitHub, MCP servers, desktop sync, review',
+      },
+      {
+        href: '/workspace/mcp',
+        label: 'MCP servers',
+        icon: Server,
+        hint: 'Servers this workspace publishes to its members',
       },
       {
         href: '/workspace/sharing',

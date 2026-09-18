@@ -256,6 +256,7 @@ import {
   type MediaPaywallRecoveryAction,
 } from '@/lib/hooks/useMediaGeneration';
 import { classifyTaskLocally } from '@agiworkforce/routing';
+import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
 import {
   IMAGE_MODELS,
   resolveImageGenerationRequestOptions,
@@ -3091,19 +3092,27 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       meta?: SendMeta,
     ): false | typeof SEND_GUARD_BLOCKED | void => {
       const resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
+      let outgoingContent = content;
 
       // Natural-language image requests use the existing media harness even
       // when the user has not manually toggled Image mode. This interception
       // must happen before the chat-completions route because media models use
-      // provider media endpoints, not text-chat adapters.
+      // provider media endpoints, not text-chat adapters. A diagram, chart or
+      // vector is not raster work: it stays a chat turn the Artifacts system
+      // renders, rather than a picture of a diagram.
       if (!attachments?.length && classifyTaskLocally(content, []).type === 'image_generation') {
-        const defaultImageModel = IMAGE_MODELS[0];
-        if (defaultImageModel) {
-          handleGenerateImage(content, {
-            aspectRatio: 'auto',
-            modelId: defaultImageModel.id,
-          });
-          return;
+        const visualRoute = routeVisualRequest({ prompt: content, hasSourceImage: false });
+        if (visualRoute.destination === 'artifact') {
+          outgoingContent = visualRoute.prompt;
+        } else {
+          const defaultImageModel = IMAGE_MODELS[0];
+          if (defaultImageModel) {
+            handleGenerateImage(content, {
+              aspectRatio: 'auto',
+              modelId: defaultImageModel.id,
+            });
+            return;
+          }
         }
       }
 
@@ -3112,12 +3121,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         conversation: displayedConversation,
         messages: displayedMessages,
         targetModelId: activeModelId,
-        outgoingContent: content,
+        outgoingContent,
         startCeremony: (request) => {
           setPendingByokHandoff({
             sourceConversationId: request.sourceConversationId,
             conversationTitle: request.conversationTitle,
-            content,
+            content: outgoingContent,
             attachments,
             meta: resolvedMeta,
             candidates: request.candidates,
@@ -3132,7 +3141,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           // is already set by the time this synchronous call returns -- long
           // before the returned promise itself settles. `void` here is
           // discarding the eventual resolution, not this synchronous decision.
-          void sendContent(content, { attachments, meta: resolvedMeta });
+          void sendContent(outgoingContent, { attachments, meta: resolvedMeta });
         },
       });
 

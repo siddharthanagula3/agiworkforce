@@ -4,7 +4,16 @@ vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
+  query: vi.fn(),
   getKeyValueStore: vi.fn(),
+  trackAuditedProductEvent: vi.fn(),
+}));
+
+vi.mock('@/lib/server/product-analytics', () => ({
+  trackAuditedProductEvent: mocks.trackAuditedProductEvent,
+}));
+vi.mock('./server/product-analytics', () => ({
+  trackAuditedProductEvent: mocks.trackAuditedProductEvent,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -14,10 +23,10 @@ vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ execute: mocks.execute })),
+  getNeonDb: vi.fn(() => ({ execute: mocks.execute, query: mocks.query })),
 }));
 vi.mock('./server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ execute: mocks.execute })),
+  getNeonDb: vi.fn(() => ({ execute: mocks.execute, query: mocks.query })),
 }));
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
 vi.mock('./server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
@@ -29,8 +38,11 @@ import {
 } from '@agiworkforce/key-value';
 
 import {
+  auditEnvelopeFields,
+  auditRetentionClassFor,
   consumePendingSecurityAnomalyCheck,
   logSecurityEvent,
+  recordAuditEvent,
   SECURITY_EVENT_ACTIVITY_REDIS_KEY,
   sanitizeAuditDetail,
 } from './security-audit';
@@ -45,6 +57,7 @@ function asKeyValueStore(client: unknown): KeyValueStore {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.execute.mockResolvedValue(undefined);
+  mocks.query.mockResolvedValue({ rows: [] });
   mocks.getKeyValueStore.mockReturnValue(null);
 });
 
@@ -120,5 +133,52 @@ describe('sanitizeAuditDetail', () => {
     expect(detail['changedKeys']).toEqual(['ipAllowList']);
     expect(detail['ipAllowListBefore']).toEqual(['10.0.0.0/8']);
     expect(detail['ipAllowListAfter']).toEqual(['10.0.0.0/8', '192.168.1.0/24']);
+  });
+});
+
+describe('audit envelope', () => {
+  it('classifies an export as compliance and a login as security', () => {
+    expect(auditRetentionClassFor('data_exported')).toBe('compliance');
+    expect(auditRetentionClassFor('login')).toBe('security');
+  });
+
+  it('carries the caller-supplied correlation and causation ids', () => {
+    expect(
+      auditEnvelopeFields({
+        eventType: 'login',
+        correlationId: 'req_1',
+        causationId: 'evt_0',
+        operationRef: '1:req_1:op_a:att_b',
+      }),
+    ).toEqual({
+      schema_version: 1,
+      retention_class: 'security',
+      correlation_id: 'req_1',
+      causation_id: 'evt_0',
+      operation_ref: '1:req_1:op_a:att_b',
+    });
+  });
+
+  it('writes the envelope into both the security row and the enterprise row', async () => {
+    await recordAuditEvent({
+      eventType: 'data_exported',
+      userId: 'user_1',
+      organizationId: 'org_1',
+      correlationId: 'req_2',
+    });
+
+    const securityDetails = JSON.parse(String(mocks.execute.mock.calls[0]?.[1]?.[6]));
+    expect(securityDetails).toMatchObject({
+      schema_version: 1,
+      retention_class: 'compliance',
+      correlation_id: 'req_2',
+    });
+
+    const enterpriseMetadata = JSON.parse(String(mocks.query.mock.calls[0]?.[1]?.[8]));
+    expect(enterpriseMetadata).toMatchObject({
+      schema_version: 1,
+      retention_class: 'compliance',
+      correlation_id: 'req_2',
+    });
   });
 });
