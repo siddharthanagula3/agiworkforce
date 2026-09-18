@@ -25,6 +25,7 @@ import {
 } from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
+import { isApplePlatform } from '../platformKeys';
 import { Spinner } from '../primitives/Spinner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/Tooltip';
 import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
@@ -100,6 +101,20 @@ const DEFAULT_EXPANDED: SidebarTemporalGroup[] = ['today', 'yesterday', 'thisWee
 const COLLAPSED_RAIL_WIDTH = 52;
 const TOOLTIP_DELAY_MS = 200;
 const ROW_FOCUSABLE_SELECTOR = 'a, button';
+
+// Not Cmd/Ctrl+K: the command palette claims that in the capture phase, so it
+// never reaches search. Exported so the key binding and this badge cannot drift.
+export const OPEN_SEARCH_SHORTCUT = {
+  key: 'F',
+  ctrl: true,
+  meta: true,
+  shift: true,
+} as const;
+
+export function openSearchShortcutLabel(isMac: boolean = isApplePlatform()): string {
+  const { key, shift } = OPEN_SEARCH_SHORTCUT;
+  return isMac ? `${shift ? '⇧' : ''}⌘${key}` : `${shift ? 'Shift+' : ''}Ctrl+${key}`;
+}
 
 export function Sidebar(props: SidebarProps) {
   const {
@@ -549,11 +564,10 @@ export function Sidebar(props: SidebarProps) {
             className="flex w-full items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
           >
             <Search className="h-4 w-4" />
-            {/* No shortcut badge: Cmd/Ctrl+K is claimed by the command palette
-                in the capture phase, so it never reaches this dialog, and no
-                other binding opens it. Advertising one sent the reader to a
-                different surface than the row they pressed. */}
             <span>{tCommon('search', 'Search')}</span>
+            <kbd className="ml-auto rounded border border-[hsl(var(--border))] px-1.5 py-0.5 font-sans text-xs leading-none text-[hsl(var(--muted-foreground))]">
+              {openSearchShortcutLabel()}
+            </kbd>
           </button>
         </div>
 

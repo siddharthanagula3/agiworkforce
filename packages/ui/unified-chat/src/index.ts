@@ -108,7 +108,12 @@ export type {
 } from './lib/slashCommands';
 export { useChatStore } from './stores/chatStore';
 export { useModelStore as useChatModelStore } from './stores/modelStore';
-export { useUIStore as useChatUIStore } from './stores/uiStore';
+export {
+  useUIStore as useChatUIStore,
+  MIN_SIDE_PANEL_WIDTH,
+  MAX_SIDE_PANEL_WIDTH,
+  clampSidePanelWidth,
+} from './stores/uiStore';
 export { useProjectStore as useChatProjectStore } from './stores/projectStore';
 export { useSettingsStore as useChatSettingsStore } from './stores/settingsStore';
 export { useArtifactStore as useChatArtifactStore } from './stores/artifactStore';

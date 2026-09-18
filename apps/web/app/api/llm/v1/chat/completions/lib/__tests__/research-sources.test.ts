@@ -12,6 +12,9 @@ import {
   researchFileSourceUrl,
   researchFileSourcesFromHits,
   researchFileSourcesPrompt,
+  MAX_RESEARCH_CONNECTOR_SOURCES,
+  researchConnectorDirective,
+  resolveResearchConnectorPolicy,
 } from '../research-sources';
 
 function hit(overrides: Partial<SearchHit>): SearchHit {
@@ -146,5 +149,50 @@ describe('research file sources', () => {
 
   it('says nothing when the account has no matching material', () => {
     expect(researchFileSourcesPrompt([])).toBe('');
+  });
+});
+
+describe('connectors as research sources', () => {
+  const available = new Set(['notion', 'google-drive']);
+
+  it('keeps the connectors the account can actually reach, in the chosen order', () => {
+    expect(resolveResearchConnectorPolicy(['google-drive', 'notion'], available)).toEqual({
+      allowed: ['google-drive', 'notion'],
+      refused: [],
+    });
+  });
+
+  it('refuses a connector this account is not offered rather than dropping it quietly', () => {
+    expect(resolveResearchConnectorPolicy(['notion', 'slack'], available)).toEqual({
+      allowed: ['notion'],
+      refused: ['slack'],
+    });
+  });
+
+  it('asks for each connector once however many times it was named', () => {
+    expect(resolveResearchConnectorPolicy(['notion', 'notion'], available).allowed).toEqual([
+      'notion',
+    ]);
+  });
+
+  it('caps how many connectors one run may read', () => {
+    const many = Array.from({ length: MAX_RESEARCH_CONNECTOR_SOURCES + 3 }, (_, i) => `c${i}`);
+    const policy = resolveResearchConnectorPolicy(many, new Set(many));
+
+    expect(policy.allowed).toHaveLength(MAX_RESEARCH_CONNECTOR_SOURCES);
+  });
+
+  it('names the chosen apps and the refused ones in the gathering directive', () => {
+    const directive = researchConnectorDirective(
+      resolveResearchConnectorPolicy(['notion', 'slack'], available),
+    );
+
+    expect(directive).toContain('notion');
+    expect(directive).toContain('slack');
+    expect(directive).toContain('not connected');
+  });
+
+  it('says nothing when the reader chose no connector', () => {
+    expect(researchConnectorDirective(resolveResearchConnectorPolicy([], available))).toBe('');
   });
 });

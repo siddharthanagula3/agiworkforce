@@ -1,4 +1,10 @@
-export { Sidebar, MOBILE_NAV_DRAWER_WIDTH, type SidebarProps } from './Sidebar';
+export {
+  Sidebar,
+  MOBILE_NAV_DRAWER_WIDTH,
+  OPEN_SEARCH_SHORTCUT,
+  openSearchShortcutLabel,
+  type SidebarProps,
+} from './Sidebar';
 export { SessionItem, type SessionItemProps, type SessionItemHandlers } from './SessionItem';
 export { Menu, MenuItem, MenuSeparator, type MenuProps, type MenuItemProps } from './Menu';
 export {

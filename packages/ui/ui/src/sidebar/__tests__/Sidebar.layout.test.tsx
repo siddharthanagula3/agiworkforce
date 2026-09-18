@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
-import { Sidebar } from '../Sidebar';
+import { Sidebar, openSearchShortcutLabel } from '../Sidebar';
 
 const ROOT_SELECTOR = 'nav[style*="width"]';
 
@@ -32,12 +32,14 @@ describe('Sidebar root layout', () => {
     expect(root?.className).toContain('inset-auto');
   });
 
-  it('badges the Search row with no shortcut, because none opens it', () => {
-    // Cmd/Ctrl+K is taken by the command palette in the capture phase, so the
-    // badge sent the reader to a different surface than the row they pressed.
+  it('badges the Search row with the binding that actually opens it', () => {
+    // Cmd/Ctrl+K is taken by the command palette in the capture phase, so a
+    // badge naming it sent the reader to a different surface than the row they
+    // pressed. Shift+Cmd/Ctrl+F is the binding the shortcut table now defines.
     renderSidebar();
-    const search = screen.getByRole('button', { name: 'Search' });
+    const search = screen.getByRole('button', { name: /^Search/ });
     expect(within(search).queryAllByText(/^(⌘|Ctrl|K)$/)).toHaveLength(0);
+    expect(within(search).getAllByText(openSearchShortcutLabel())).toHaveLength(1);
   });
 
   it('transitions only its width, not every animatable property', () => {

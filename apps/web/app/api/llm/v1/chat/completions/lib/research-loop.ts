@@ -164,6 +164,9 @@ export type ResearchPhase =
 /** Planned search queries the planning turn may commit to. */
 const PLAN_MIN_STEPS = 3;
 const PLAN_MAX_STEPS = 6;
+// Deliberately not derived from PLAN_MAX_STEPS: that bounds how many queries a
+// run may plan, not how many times one step may be re-asked in other words.
+export const DEFAULT_RESEARCH_MAX_QUERY_REWRITES = 4;
 /** One planned query description is capped so a runaway plan cannot bloat SSE. */
 const MAX_PLAN_QUERY_CHARS = 300;
 /**
@@ -1036,6 +1039,42 @@ function queryOverlap(a: string, b: string): number {
 /** The share of a planned query's words a drop line must name to be about it. */
 export const DROP_MATCH_THRESHOLD = 0.5;
 
+// A run with no plan has nothing to deviate from, so nothing there counts as a
+// rewrite and the budget never bites.
+export function isQueryRewrite(query: string, plannedQueries: readonly string[]): boolean {
+  if (!query.trim() || plannedQueries.length === 0) return false;
+  return !plannedQueries.some((planned) => queryOverlap(query, planned) >= DROP_MATCH_THRESHOLD);
+}
+
+export interface QueryRewriteBudget {
+  readonly used: number;
+  /** True when this query may run; false once the rewrite allowance is spent. */
+  admit(query: string, plannedQueries: readonly string[]): boolean;
+}
+
+export function createQueryRewriteBudget(limit: number): QueryRewriteBudget {
+  let used = 0;
+  return {
+    get used() {
+      return used;
+    },
+    admit(query, plannedQueries) {
+      if (!isQueryRewrite(query, plannedQueries)) return true;
+      if (used >= limit) return false;
+      used += 1;
+      return true;
+    },
+  };
+}
+
+export function queryRewriteBudgetExhaustedMessage(limit: number): string {
+  return (
+    `This run has already rewritten its planned queries ${limit} times. ` +
+    'Search one of the planned queries as written, or drop it on the record with ' +
+    `${DROP_MARKER} <query>: <reason>.`
+  );
+}
+
 /**
  * Which of this round's planned steps the round actually searched.
  *
@@ -1226,6 +1265,13 @@ export async function* runResearchLoop(
 
   const domainPolicy = options.domainPolicy ?? null;
   const sources = new SourceAggregator(domainPolicy);
+  const maxQueryRewrites = envInt(
+    'AGI_RESEARCH_MAX_QUERY_REWRITES',
+    DEFAULT_RESEARCH_MAX_QUERY_REWRITES,
+    0,
+    12,
+  );
+  const rewriteBudget = createQueryRewriteBudget(maxQueryRewrites);
   let totalSearches = 0;
   let totalFetches = 0;
   let iteration = 0;
@@ -1599,13 +1645,41 @@ export async function* runResearchLoop(
 
       if (runtimeSearchAvailable && isWebSearchTool(call.name)) {
         const runBudgetReached = totalSearches + roundCounts.searches >= maxSearches;
-        if (runBudgetReached || roundCounts.searches >= WEB_SEARCH_MAX_CALLS_PER_TURN) {
+        const searchBudgetReached =
+          runBudgetReached || roundCounts.searches >= WEB_SEARCH_MAX_CALLS_PER_TURN;
+        const plannedQueries = plan
+          .filter((step) => step.id.startsWith('plan-'))
+          .map((step) => step.description);
+        const rewritesBefore = rewriteBudget.used;
+        const rewriteAdmitted =
+          searchBudgetReached ||
+          rewriteBudget.admit(
+            typeof call.args['query'] === 'string' ? call.args['query'] : '',
+            plannedQueries,
+          );
+        if (!searchBudgetReached && (rewriteBudget.used > rewritesBefore || !rewriteAdmitted)) {
+          logger.info(
+            { rewrites: rewriteBudget.used, maxQueryRewrites, admitted: rewriteAdmitted },
+            '[research-loop] search rewrote a planned query',
+          );
+        }
+        if (searchBudgetReached) {
           content = await applyToolResultSecretPolicy(
             _billing.userId,
             call.name,
             webSearchBudgetExhaustedMessage(
               runBudgetReached ? maxSearches : WEB_SEARCH_MAX_CALLS_PER_TURN,
             ),
+          );
+          isError = true;
+          yield encoder.encode(
+            toolResultEvent(call.id, call.name, content, isError, responseModel),
+          );
+        } else if (!rewriteAdmitted) {
+          content = await applyToolResultSecretPolicy(
+            _billing.userId,
+            call.name,
+            queryRewriteBudgetExhaustedMessage(maxQueryRewrites),
           );
           isError = true;
           yield encoder.encode(

@@ -179,6 +179,7 @@ interface SendMessageOptions {
   attachments?: Attachment[];
   conversationId?: string;
   webSearch?: boolean;
+  searchRequested?: boolean;
   webFetch?: boolean;
   codeExecution?: boolean;
   officeCreation?: boolean;
@@ -3291,6 +3292,7 @@ export function useChatStream(): UseChatStreamReturn {
               temperature: options.temperature,
               max_tokens: options.maxTokens,
               web_search: options.webSearch || options.research || undefined,
+              search_requested: options.searchRequested || undefined,
               web_fetch: options.webFetch || undefined,
               research: options.research || undefined,
               research_sources:

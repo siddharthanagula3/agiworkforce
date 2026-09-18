@@ -1,13 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { annotateActiveSpan } from '@/lib/observability/span';
 
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
   classifyAttachedSearchTool,
+  detectFreshnessIntent,
   nativeSearchToolName,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
   substituteGatedWebSearchTool,
 } from './required-search';
+
+vi.mock('@/lib/observability/span', () => ({ annotateActiveSpan: vi.fn() }));
 import { WEB_SEARCH_TOOL, webSearchToolDef } from './web-search-tool';
 
 const GENERIC_TOOL = webSearchToolDef();
@@ -25,6 +30,10 @@ const UNRELATED_TOOL = {
 
 describe('resolveWebSearchRequirement', () => {
   const base = { webSearchEnabled: undefined, agiWorkRun: false, researchTask: false };
+
+  beforeEach(() => {
+    vi.mocked(annotateActiveSpan).mockClear();
+  });
 
   it('offers but never forces a search when search is merely switched on', () => {
     expect(
@@ -73,9 +82,75 @@ describe('resolveWebSearchRequirement', () => {
         webSearchEnabled: false,
         agiWorkRun: true,
         researchTask: true,
+        searchRequested: true,
         userMessage: 'search the web for today news',
       }),
     ).toEqual({ required: false, source: null });
+  });
+
+  it('requires a search when the turn asked for Search mode outright', () => {
+    expect(
+      resolveWebSearchRequirement({
+        ...base,
+        searchRequested: true,
+        userMessage: 'summarise the EU AI Act',
+      }),
+    ).toEqual({ required: true, source: 'explicit_mode' });
+  });
+
+  it('requires a search for a date-sensitive question no keyword in the list matches', () => {
+    expect(
+      resolveWebSearchRequirement({ ...base, userMessage: 'what happened yesterday in Lagos' }),
+    ).toEqual({ required: true, source: 'freshness' });
+    expect(
+      resolveWebSearchRequirement({ ...base, userMessage: 'who won the Bundesliga match' }),
+    ).toEqual({ required: true, source: 'freshness' });
+  });
+
+  it('records the decision and its source on the active span', () => {
+    resolveWebSearchRequirement({ ...base, userMessage: 'what happened yesterday in Lagos' });
+    expect(annotateActiveSpan).toHaveBeenCalledWith({
+      'web_search.required': true,
+      'web_search.source': 'freshness',
+    });
+
+    resolveWebSearchRequirement({ ...base, userMessage: 'rewrite this paragraph' });
+    expect(annotateActiveSpan).toHaveBeenLastCalledWith({
+      'web_search.required': false,
+      'web_search.source': 'none',
+    });
+  });
+});
+
+describe('detectFreshnessIntent', () => {
+  const now = new Date('2026-09-18T00:00:00Z');
+
+  it.each([
+    'what happened today in Lagos',
+    'what happened yesterday in Lagos',
+    'who won the election results',
+    'is the newest iPhone out yet',
+    'give me the exchange rate for the yen',
+    'what shipped last week',
+    'what is the weather in Oslo',
+  ])('treats %j as date sensitive', (message) => {
+    expect(detectFreshnessIntent(message, now)).toBe(true);
+  });
+
+  it.each([
+    'rewrite this paragraph',
+    'explain how a red-black tree rebalances',
+    'what happened in 1994',
+    'compare these two drafts',
+    '',
+  ])('leaves %j alone', (message) => {
+    expect(detectFreshnessIntent(message, now)).toBe(false);
+  });
+
+  it('treats the current and coming year as date sensitive, older years as settled', () => {
+    expect(detectFreshnessIntent('best laptops 2026', now)).toBe(true);
+    expect(detectFreshnessIntent('best laptops 2027', now)).toBe(true);
+    expect(detectFreshnessIntent('best laptops 2021', now)).toBe(false);
   });
 });
 
