@@ -10,6 +10,12 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getClientIp, recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import {
+  assertWorkspaceRevisionUnchanged,
+  readExpectedWorkspaceRevision,
+  readWorkspaceRevision,
+  withWorkspaceRevisionHeaders,
+} from '@/lib/server/workspace-revision';
 import { readJsonBody } from '@/lib/read-json-body';
 import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
@@ -76,6 +82,7 @@ export interface OrganizationPolicyResponse {
   canManagePolicy: boolean;
   currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
   policy: AdminPolicy;
+  revision: number;
 }
 
 function dedupe<T>(values: T[]): T[] {
@@ -166,7 +173,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   const effective = await getEffectiveOrganizationPolicy(db, membership.organizationId);
-  const permissions = await resolveOrganizationPermissions(membership.organizationId, userId);
+  const [permissions, revision] = await Promise.all([
+    resolveOrganizationPermissions(membership.organizationId, userId),
+    readWorkspaceRevision(db, membership.organizationId),
+  ]);
 
   const payload: OrganizationPolicyResponse = {
     organizationId: membership.organizationId,
@@ -174,9 +184,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     canManagePolicy: permissions.has('policy.manage'),
     currentUserRole: membership.role,
     policy: effective.policy,
+    revision,
   };
 
-  return NextResponse.json(payload);
+  return withWorkspaceRevisionHeaders(NextResponse.json(payload), revision) as NextResponse;
 }
 
 async function handlePatch(request: NextRequest): Promise<NextResponse | Response> {
@@ -197,11 +208,17 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
       .asUserSafe();
   }
 
+  const expectedRevision = readExpectedWorkspaceRevision(request);
   const body = await readJsonBody(request);
   const parsed = PolicyPatchSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.validation('Invalid workspace policy', parsed.error.issues);
   }
+
+  // Read the revision before the merge below, so the policy this patch is
+  // layered onto is the one the caller saw. A concurrent save moves the counter
+  // and this write is refused rather than silently erasing it.
+  await assertWorkspaceRevisionUnchanged(db, membership.organizationId, expectedRevision);
 
   // Merge onto the CURRENT effective policy, never onto the table's column
   // defaults. A patch that touches one field must not materialize a row whose
@@ -268,15 +285,17 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     },
   });
 
+  const revision = await readWorkspaceRevision(db, membership.organizationId);
   const payload: OrganizationPolicyResponse = {
     organizationId: membership.organizationId,
     configured: true,
     canManagePolicy: true,
     currentUserRole: membership.role,
     policy,
+    revision,
   };
 
-  return NextResponse.json(payload);
+  return withWorkspaceRevisionHeaders(NextResponse.json(payload), revision) as NextResponse;
 }
 
 export const GET = withErrorHandler(handleGet);

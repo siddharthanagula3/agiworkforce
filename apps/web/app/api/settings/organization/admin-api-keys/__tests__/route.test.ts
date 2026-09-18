@@ -41,6 +41,7 @@ import { DELETE, GET, POST } from '../route';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const KEY_ID = '22222222-2222-4222-8222-222222222222';
+const PRINCIPAL_ID = '33333333-3333-4333-8333-333333333333';
 
 function keyRow(over: Record<string, unknown> = {}) {
   return {
@@ -49,6 +50,7 @@ function keyRow(over: Record<string, unknown> = {}) {
     name: 'SIEM',
     key_prefix: 'agiadm_AbCdEf12',
     scopes: ['audit.read'],
+    service_principal_id: PRINCIPAL_ID,
     created_by: 'user-1',
     created_at: '2026-09-17T00:00:00.000Z',
     expires_at: null,
@@ -58,13 +60,68 @@ function keyRow(over: Record<string, unknown> = {}) {
   };
 }
 
-function bind(role: string) {
+function principalRow(over: Record<string, unknown> = {}) {
+  return {
+    id: PRINCIPAL_ID,
+    organization_id: ORG,
+    name: 'SIEM',
+    description: null,
+    max_scopes: ['audit.read'],
+    created_by_user_id: 'user-1',
+    created_at: '2026-09-17T00:00:00.000Z',
+    disabled_at: null,
+    ...over,
+  };
+}
+
+interface IdempotencyRecord {
+  status: string;
+  request_fingerprint: string;
+  response_status: number | null;
+  response_body: unknown;
+}
+
+const idempotency = new Map<string, IdempotencyRecord>();
+
+function bind(role: string, principal: Record<string, unknown> | null = principalRow()) {
   permissionRole.value = role;
-  mockQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+  mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
     if (/from public\.user_settings/i.test(sql)) return [{ organization_id: ORG }];
     if (/from public\.organization_members/i.test(sql)) return [{ organization_id: ORG, role }];
+    if (/insert into public\.admin_request_idempotency/i.test(sql)) {
+      const key = `${params[1]}|${params[2]}`;
+      if (idempotency.has(key)) return [];
+      idempotency.set(key, {
+        status: 'in_progress',
+        request_fingerprint: String(params[3]),
+        response_status: null,
+        response_body: null,
+      });
+      return [{ organization_id: ORG }];
+    }
+    if (/update public\.admin_request_idempotency/i.test(sql)) {
+      const row = idempotency.get(`${params[1]}|${params[2]}`);
+      if (row) {
+        row.status = 'completed';
+        row.response_status = Number(params[3]);
+        row.response_body = JSON.parse(String(params[4]));
+      }
+      return [];
+    }
+    if (/from public\.admin_request_idempotency/i.test(sql)) {
+      const row = idempotency.get(`${params[1]}|${params[2]}`);
+      return row ? [row] : [];
+    }
+    if (/insert into public\.organization_service_principals/i.test(sql)) {
+      return [principalRow({ name: params[1], max_scopes: params[3] })];
+    }
+    if (/from public\.organization_service_principals/i.test(sql)) {
+      return principal ? [principal] : [];
+    }
     if (/insert into public\.organization_admin_api_keys/i.test(sql)) {
-      return [keyRow({ key_prefix: params[2], scopes: params[4] })];
+      return [
+        keyRow({ key_prefix: params[2], scopes: params[4], service_principal_id: params[5] }),
+      ];
     }
     if (/update public\.organization_admin_api_keys/i.test(sql)) {
       return [keyRow({ revoked_at: '2026-09-17T01:00:00.000Z' })];
@@ -74,15 +131,18 @@ function bind(role: string) {
   });
 }
 
-function send(method: string, body: unknown): Request {
+function send(method: string, body: unknown, headers: Record<string, string> = {}): Request {
   return new Request('https://app.test/api/settings/organization/admin-api-keys', {
     method,
     body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
   });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  idempotency.clear();
+});
 
 describe('/api/settings/organization/admin-api-keys', () => {
   it('lists keys without their hashes for a role with identity.read', async () => {
@@ -143,6 +203,117 @@ describe('/api/settings/organization/admin-api-keys', () => {
     );
 
     expect(res.status).toBe(403);
+  });
+
+  it('gives every key a service principal of its own rather than the creator identity', async () => {
+    bind('owner');
+
+    const res = await POST(
+      send('POST', { name: 'SIEM', scopes: ['audit.read'], expiresInDays: null }) as never,
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body.servicePrincipal).toMatchObject({ id: PRINCIPAL_ID, maxScopes: ['audit.read'] });
+    expect(body.record.servicePrincipalId).toBe(PRINCIPAL_ID);
+    const insert = mockQuery.mock.calls.find(([sql]) =>
+      /insert into public\.organization_service_principals/i.test(String(sql)),
+    );
+    expect((insert?.[1] as unknown[])[3]).toEqual(['audit.read']);
+  });
+
+  it('refuses a scope above the named principal ceiling and mints nothing', async () => {
+    bind('owner', principalRow({ max_scopes: ['billing.read'] }));
+
+    const res = await POST(
+      send('POST', {
+        name: 'SIEM',
+        scopes: ['audit.read'],
+        expiresInDays: null,
+        servicePrincipalId: PRINCIPAL_ID,
+      }) as never,
+    );
+
+    expect(res.status).toBe(403);
+    expect(
+      mockQuery.mock.calls.some(([sql]) =>
+        /insert into public\.organization_admin_api_keys/i.test(String(sql)),
+      ),
+    ).toBe(false);
+  });
+
+  it('refuses a key for a disabled principal', async () => {
+    bind('owner', principalRow({ disabled_at: '2026-09-18T00:00:00.000Z' }));
+
+    const res = await POST(
+      send('POST', {
+        name: 'SIEM',
+        scopes: ['audit.read'],
+        expiresInDays: null,
+        servicePrincipalId: PRINCIPAL_ID,
+      }) as never,
+    );
+
+    expect(res.status).toBe(403);
+  });
+
+  it('replays the first response when the same Idempotency-Key is retried', async () => {
+    bind('owner');
+    const body = { name: 'SIEM', scopes: ['audit.read'], expiresInDays: null };
+    const headers = { 'Idempotency-Key': 'retry-key-0001' };
+
+    const first = await POST(send('POST', body, headers) as never);
+    const firstBody = await first.json();
+    const second = await POST(send('POST', body, headers) as never);
+    const secondBody = await second.json();
+
+    expect(first.status).toBe(201);
+    expect(first.headers.get('Idempotency-Replayed')).toBe('false');
+    expect(second.status).toBe(201);
+    expect(second.headers.get('Idempotency-Replayed')).toBe('true');
+    expect(secondBody.key).toBe(firstBody.key);
+    const inserts = mockQuery.mock.calls.filter(([sql]) =>
+      /insert into public\.organization_admin_api_keys/i.test(String(sql)),
+    );
+    expect(inserts).toHaveLength(1);
+    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the same Idempotency-Key used for a different key request', async () => {
+    bind('owner');
+    const headers = { 'Idempotency-Key': 'retry-key-0001' };
+
+    await POST(
+      send('POST', { name: 'SIEM', scopes: ['audit.read'], expiresInDays: null }, headers) as never,
+    );
+    const res = await POST(
+      send(
+        'POST',
+        { name: 'Other', scopes: ['audit.read'], expiresInDays: null },
+        headers,
+      ) as never,
+    );
+
+    expect(res.status).toBe(409);
+  });
+
+  it('refuses an unusable Idempotency-Key before doing any work', async () => {
+    bind('owner');
+
+    const res = await POST(
+      send(
+        'POST',
+        { name: 'SIEM', scopes: ['audit.read'], expiresInDays: null },
+        {
+          'Idempotency-Key': 'short',
+        },
+      ) as never,
+    );
+
+    expect(res.status).toBe(400);
+    expect(
+      mockQuery.mock.calls.some(([sql]) => /insert into public\.organization/i.test(String(sql))),
+    ).toBe(false);
   });
 
   it('revokes a key and records it', async () => {
