@@ -27,7 +27,7 @@ vi.mock('@/lib/support/tickets/service', async () => {
   };
 });
 
-import { GET, POST } from '../[ticketId]/escalate/route';
+import { GET, POST } from '../route';
 import { TicketClosedError, TicketNotFoundError } from '@/lib/support/tickets/service';
 import { createError } from '@/lib/errors';
 
