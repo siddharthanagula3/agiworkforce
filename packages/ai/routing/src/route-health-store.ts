@@ -41,7 +41,7 @@ export interface RouteHealthKeyValueStore {
  * ranking reads the `route` scope and has no way to see a shadow event, rather
  * than relying on every future reader remembering to filter one out.
  */
-export type RouteHealthScope = 'route' | 'provider' | 'credential' | 'shadow';
+export type RouteHealthScope = 'route' | 'provider' | 'credential' | 'shadow' | 'quality';
 
 export type RouteBreakerState = 'closed' | 'degraded' | 'open' | 'half_open';
 
@@ -132,12 +132,14 @@ const ROUTE_EVENTS_KEY_PREFIX = 'agi-rhealth:events';
 const PROVIDER_EVENTS_KEY_PREFIX = 'agi-rhealth:provider';
 const CREDENTIAL_EVENTS_KEY_PREFIX = 'agi-rhealth:credential-cooldown';
 const SHADOW_EVENTS_KEY_PREFIX = 'agi-rhealth:shadow';
+const QUALITY_EVENTS_KEY_PREFIX = 'agi-rhealth:quality';
 
 const EVENTS_KEY_PREFIX_BY_SCOPE: Readonly<Record<RouteHealthScope, string>> = {
   route: ROUTE_EVENTS_KEY_PREFIX,
   provider: PROVIDER_EVENTS_KEY_PREFIX,
   credential: CREDENTIAL_EVENTS_KEY_PREFIX,
   shadow: SHADOW_EVENTS_KEY_PREFIX,
+  quality: QUALITY_EVENTS_KEY_PREFIX,
 };
 
 const EVENT_FIELD_NOW = 'nowMs';
@@ -204,6 +206,7 @@ const DEFAULT_CONFIG_BY_SCOPE: Readonly<Record<RouteHealthScope, RouteHealthConf
   provider: DEFAULT_ROUTE_HEALTH_CONFIG,
   credential: DEFAULT_CREDENTIAL_COOLDOWN_CONFIG,
   shadow: DEFAULT_MODEL_LOCKOUT_CONFIG,
+  quality: DEFAULT_MODEL_LOCKOUT_CONFIG,
 };
 
 type EnvironmentSource = Readonly<Record<string, string | undefined>>;
@@ -626,11 +629,278 @@ export function buildRouteHealthSnapshot(
   };
 }
 
+export const ROUTE_QUALITY_WINDOW_ENV = 'AGI_ROUTE_QUALITY_WINDOW_MS';
+export const ROUTE_QUALITY_MIN_SAMPLES_ENV = 'AGI_ROUTE_QUALITY_MIN_SAMPLES';
+export const ROUTE_QUALITY_FLOOR_ENV = 'AGI_ROUTE_QUALITY_FLOOR';
+export const ROUTE_RELIABILITY_FLOOR_ENV = 'AGI_ROUTE_RELIABILITY_FLOOR';
+export const ROUTE_RELIABILITY_MIN_SAMPLES_ENV = 'AGI_ROUTE_RELIABILITY_MIN_SAMPLES';
+
+const QUALITY_WINDOW_MINUTES = 60;
+const DEFAULT_QUALITY_MIN_SAMPLES = 20;
+const DEFAULT_QUALITY_FLOOR = 0.8;
+const DEFAULT_RELIABILITY_FLOOR = 0.9;
+const DEFAULT_RELIABILITY_MIN_SAMPLES = 20;
+const PERFECT_SCORE = 1;
+
+/**
+ * What a route got WRONG in an answer it delivered successfully. None of these
+ * is an endpoint failure: the provider responded, on time, with a 200.
+ */
+export const ROUTE_QUALITY_FAULTS = ['refused', 'truncated', 'empty', 'schema_invalid'] as const;
+
+export type RouteQualityFault = (typeof ROUTE_QUALITY_FAULTS)[number];
+
+export interface RouteQualityObservation {
+  readonly faults?: readonly RouteQualityFault[];
+  /** A grader's score in [0, 1] when one measured this answer. */
+  readonly score?: number;
+}
+
+export interface RouteQualityEvent extends RouteQualityObservation {
+  readonly nowMs: number;
+}
+
+export interface RouteQualityConfig {
+  readonly observationWindowMs: number;
+  /**
+   * Below this, a route is not judged at all. Eval samples are noisy and a
+   * route flapped into fallback on three bad answers is a worse outage than the
+   * quality drop it was reacting to.
+   */
+  readonly minSamples: number;
+  readonly qualityFloor: number;
+}
+
+export const DEFAULT_ROUTE_QUALITY_CONFIG: RouteQualityConfig = {
+  observationWindowMs: QUALITY_WINDOW_MINUTES * MINUTE_MS,
+  minSamples: DEFAULT_QUALITY_MIN_SAMPLES,
+  qualityFloor: DEFAULT_QUALITY_FLOOR,
+};
+
+export interface RouteQualitySnapshot {
+  readonly sampleCount: number;
+  readonly refusalRate: number;
+  readonly truncationRate: number;
+  readonly emptyRate: number;
+  readonly schemaFailureRate: number;
+  /** Mean answer score in [0, 1]; 1 when nothing has been observed. */
+  readonly qualityScore: number;
+  /** True only with enough samples to mean something. */
+  readonly degraded: boolean;
+  readonly belowFloor: boolean;
+}
+
+export function resolveRouteQualityConfig(
+  environment: EnvironmentSource = processEnvironment(),
+): RouteQualityConfig {
+  return {
+    observationWindowMs: readPositiveInteger(
+      environment,
+      ROUTE_QUALITY_WINDOW_ENV,
+      DEFAULT_ROUTE_QUALITY_CONFIG.observationWindowMs,
+      MINIMUM_WINDOW_MS,
+    ),
+    minSamples: readPositiveInteger(
+      environment,
+      ROUTE_QUALITY_MIN_SAMPLES_ENV,
+      DEFAULT_ROUTE_QUALITY_CONFIG.minSamples,
+      MINIMUM_THRESHOLD,
+    ),
+    qualityFloor: readRate(
+      environment,
+      ROUTE_QUALITY_FLOOR_ENV,
+      DEFAULT_ROUTE_QUALITY_CONFIG.qualityFloor,
+    ),
+  };
+}
+
+export function healthyRouteQualitySnapshot(): RouteQualitySnapshot {
+  return {
+    sampleCount: 0,
+    refusalRate: 0,
+    truncationRate: 0,
+    emptyRate: 0,
+    schemaFailureRate: 0,
+    qualityScore: PERFECT_SCORE,
+    degraded: false,
+    belowFloor: false,
+  };
+}
+
+function isQualityFault(value: unknown): value is RouteQualityFault {
+  return typeof value === 'string' && (ROUTE_QUALITY_FAULTS as readonly string[]).includes(value);
+}
+
+export function encodeRouteQualityEvent(
+  observation: RouteQualityObservation,
+  nowMs: number,
+  nonce: string,
+): string {
+  const faults = (observation.faults ?? []).filter(isQualityFault);
+  return JSON.stringify({
+    [EVENT_FIELD_NOW]: nowMs,
+    faults,
+    ...(typeof observation.score === 'number' && Number.isFinite(observation.score)
+      ? { score: observation.score }
+      : {}),
+    [EVENT_FIELD_NONCE]: nonce,
+  });
+}
+
+function parseRouteQualityEvent(raw: unknown): RouteQualityEvent | undefined {
+  const parsed = typeof raw === 'string' ? safeJsonParse(raw) : raw;
+  if (!parsed || typeof parsed !== 'object') return undefined;
+  const record = parsed as Record<string, unknown>;
+  const nowMs = toNumber(record[EVENT_FIELD_NOW]);
+  if (nowMs === undefined) return undefined;
+  const faults = Array.isArray(record['faults']) ? record['faults'].filter(isQualityFault) : [];
+  const score = toNumber(record['score']);
+  return {
+    nowMs,
+    faults,
+    ...(score !== undefined
+      ? { score: Math.min(RATE_MAXIMUM, Math.max(RATE_MINIMUM, score)) }
+      : {}),
+  };
+}
+
+export function parseRouteQualityEvents(raw: unknown): readonly RouteQualityEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const events: RouteQualityEvent[] = [];
+  for (const item of raw) {
+    const event = parseRouteQualityEvent(item);
+    if (event) events.push(event);
+  }
+  return events.sort((left, right) => left.nowMs - right.nowMs);
+}
+
+/**
+ * An answer with no grader score counts as perfect unless it carried a fault,
+ * so a route only sinks on evidence: a graded score, or an answer that refused,
+ * truncated, came back empty or broke its schema.
+ */
+function answerScore(event: RouteQualityEvent): number {
+  if (typeof event.score === 'number') return event.score;
+  return (event.faults ?? []).length > 0 ? 0 : PERFECT_SCORE;
+}
+
+export function buildRouteQualitySnapshot(
+  rawEvents: readonly RouteQualityEvent[],
+  nowMs: number,
+  config: RouteQualityConfig = DEFAULT_ROUTE_QUALITY_CONFIG,
+): RouteQualitySnapshot {
+  const events = rawEvents.filter((event) => event.nowMs > nowMs - config.observationWindowMs);
+  if (events.length === 0) return healthyRouteQualitySnapshot();
+
+  const rateOf = (fault: RouteQualityFault): number =>
+    events.filter((event) => (event.faults ?? []).includes(fault)).length / events.length;
+  const qualityScore =
+    events.reduce((total, event) => total + answerScore(event), 0) / events.length;
+  const belowFloor = qualityScore < config.qualityFloor;
+
+  return {
+    sampleCount: events.length,
+    refusalRate: rateOf('refused'),
+    truncationRate: rateOf('truncated'),
+    emptyRate: rateOf('empty'),
+    schemaFailureRate: rateOf('schema_invalid'),
+    qualityScore,
+    degraded: belowFloor && events.length >= config.minSamples,
+    belowFloor,
+  };
+}
+
+export function isRouteQualityDegraded(snapshot: RouteQualitySnapshot | undefined): boolean {
+  return snapshot?.degraded === true;
+}
+
+/**
+ * The route's overall standing: endpoint health and answer quality are separate
+ * questions, and a route that responds perfectly while answering badly has to
+ * read as degraded rather than as healthy.
+ */
+export function routeServingState(
+  health: RouteHealthSnapshot | undefined,
+  quality: RouteQualitySnapshot | undefined,
+  degradeAtFailures: number,
+): RouteBreakerState {
+  const state = routeBreakerStateWithDegradeBand(health, degradeAtFailures);
+  if (state !== 'closed') return state;
+  return isRouteQualityDegraded(quality) ? 'degraded' : 'closed';
+}
+
+export interface RouteReliabilityConfig {
+  readonly reliabilityFloor: number;
+  readonly minSamples: number;
+}
+
+export const DEFAULT_ROUTE_RELIABILITY_CONFIG: RouteReliabilityConfig = {
+  reliabilityFloor: DEFAULT_RELIABILITY_FLOOR,
+  minSamples: DEFAULT_RELIABILITY_MIN_SAMPLES,
+};
+
+export function resolveRouteReliabilityConfig(
+  environment: EnvironmentSource = processEnvironment(),
+): RouteReliabilityConfig {
+  return {
+    reliabilityFloor: readRate(
+      environment,
+      ROUTE_RELIABILITY_FLOOR_ENV,
+      DEFAULT_ROUTE_RELIABILITY_CONFIG.reliabilityFloor,
+    ),
+    minSamples: readPositiveInteger(
+      environment,
+      ROUTE_RELIABILITY_MIN_SAMPLES_ENV,
+      DEFAULT_ROUTE_RELIABILITY_CONFIG.minSamples,
+      MINIMUM_THRESHOLD,
+    ),
+  };
+}
+
+export interface RouteReliabilityObservation {
+  readonly sampleCount?: number;
+  readonly successRate?: number | null;
+}
+
+export interface RouteFallbackReading {
+  readonly sampleCount: number;
+  /** Fraction of observed turns this route did not serve. `null` with no samples. */
+  readonly fallbackRate: number | null;
+  readonly reliabilityFloor: number;
+  readonly belowReliabilityFloor: boolean;
+}
+
+/**
+ * The named metric above the single-route breaker config: every observation
+ * that is not a success rotated the turn onto another route, so its complement
+ * is the rate at which this route hands work away.
+ */
+export function routeFallbackReading(
+  observed: RouteReliabilityObservation | undefined,
+  config: RouteReliabilityConfig = DEFAULT_ROUTE_RELIABILITY_CONFIG,
+): RouteFallbackReading {
+  const sampleCount = observed?.sampleCount ?? 0;
+  const successRate = observed?.successRate;
+  if (sampleCount <= 0 || typeof successRate !== 'number') {
+    return {
+      sampleCount,
+      fallbackRate: null,
+      reliabilityFloor: config.reliabilityFloor,
+      belowReliabilityFloor: false,
+    };
+  }
+  const fallbackRate = Math.min(RATE_MAXIMUM, Math.max(RATE_MINIMUM, PERFECT_SCORE - successRate));
+  return {
+    sampleCount,
+    fallbackRate,
+    reliabilityFloor: config.reliabilityFloor,
+    belowReliabilityFloor:
+      sampleCount >= config.minSamples && successRate < config.reliabilityFloor,
+  };
+}
+
 export type RouteHealthStoreFailure =
-  | 'store_unavailable'
-  | 'read_abandoned'
-  | 'read_failed'
-  | 'write_failed';
+  'store_unavailable' | 'read_abandoned' | 'read_failed' | 'write_failed';
 
 export interface RouteHealthStoreFailureEvent {
   failure: RouteHealthStoreFailure;
@@ -642,6 +912,7 @@ export interface RouteHealthStoreFailureEvent {
 export interface RouteHealthStoreOptions {
   store: RouteHealthKeyValueStore | null;
   configs?: Partial<Record<RouteHealthScope, RouteHealthConfig>>;
+  qualityConfig?: RouteQualityConfig;
   configFor?: (scope: RouteHealthScope, id: string) => RouteHealthConfig | undefined;
   /** Returns `null` when the read outlived the caller's request-path budget. */
   boundedRead?: <T>(read: Promise<T>) => Promise<T | null>;
@@ -651,6 +922,7 @@ export interface RouteHealthStoreOptions {
 
 export interface RouteHealthStore {
   readonly configs: Readonly<Record<RouteHealthScope, RouteHealthConfig>>;
+  readonly qualityConfig: RouteQualityConfig;
   recordOutcome(
     scope: RouteHealthScope,
     id: string,
@@ -662,6 +934,11 @@ export interface RouteHealthStore {
     ids: readonly string[],
     nowMs?: number,
   ): Promise<Readonly<Record<string, RouteHealthSnapshot>>>;
+  recordQuality(id: string, observation: RouteQualityObservation, nowMs?: number): Promise<void>;
+  qualitySnapshots(
+    ids: readonly string[],
+    nowMs?: number,
+  ): Promise<Readonly<Record<string, RouteQualitySnapshot>>>;
 }
 
 function defaultNonce(): string {
@@ -685,7 +962,9 @@ export function createRouteHealthStore(options: RouteHealthStoreOptions): RouteH
     provider: options.configs?.provider ?? DEFAULT_CONFIG_BY_SCOPE.provider,
     credential: options.configs?.credential ?? DEFAULT_CONFIG_BY_SCOPE.credential,
     shadow: options.configs?.shadow ?? DEFAULT_CONFIG_BY_SCOPE.shadow,
+    quality: options.configs?.quality ?? DEFAULT_CONFIG_BY_SCOPE.quality,
   };
+  const qualityConfig = options.qualityConfig ?? DEFAULT_ROUTE_QUALITY_CONFIG;
   const nonce = options.nonce ?? defaultNonce;
 
   const resolveConfig = (scope: RouteHealthScope, id: string): RouteHealthConfig =>
@@ -700,6 +979,72 @@ export function createRouteHealthStore(options: RouteHealthStoreOptions): RouteH
 
   return {
     configs,
+    qualityConfig,
+
+    async recordQuality(id, observation, nowMs = Date.now()): Promise<void> {
+      const store = options.store;
+      if (!store) {
+        report({ failure: 'store_unavailable', scope: 'quality', ids: [id] });
+        return;
+      }
+      const key = routeHealthEventsKey('quality', id);
+      try {
+        await store
+          .batch()
+          .sortedAdd(key, {
+            score: nowMs,
+            member: encodeRouteQualityEvent(observation, nowMs, nonce()),
+          })
+          .sortedRemoveByScore(key, EVENTS_RANGE_MIN, nowMs - qualityConfig.observationWindowMs)
+          .expire(
+            key,
+            Math.ceil(qualityConfig.observationWindowMs / MS_PER_SECOND) + EVENT_TTL_BUFFER_SECONDS,
+          )
+          .exec();
+      } catch (error) {
+        report({ failure: 'write_failed', scope: 'quality', ids: [id], error });
+      }
+    },
+
+    async qualitySnapshots(ids, nowMs = Date.now()) {
+      if (ids.length === 0) return {};
+      const store = options.store;
+      const healthy = (): Record<string, RouteQualitySnapshot> =>
+        Object.fromEntries(ids.map((id) => [id, healthyRouteQualitySnapshot()]));
+      if (!store) {
+        report({ failure: 'store_unavailable', scope: 'quality', ids });
+        return healthy();
+      }
+      try {
+        const batch = store.batch();
+        for (const id of ids) {
+          batch.sortedRangeByScore(
+            routeHealthEventsKey('quality', id),
+            nowMs - qualityConfig.observationWindowMs,
+            EVENTS_RANGE_MAX,
+          );
+        }
+        const exec = batch.exec();
+        const read = options.boundedRead ? await options.boundedRead(exec) : await exec;
+        if (read === null) {
+          report({ failure: 'read_abandoned', scope: 'quality', ids });
+          return healthy();
+        }
+        const results = read as unknown[];
+        const snapshots: Record<string, RouteQualitySnapshot> = {};
+        ids.forEach((id, index) => {
+          snapshots[id] = buildRouteQualitySnapshot(
+            parseRouteQualityEvents(results[index]),
+            nowMs,
+            qualityConfig,
+          );
+        });
+        return snapshots;
+      } catch (error) {
+        report({ failure: 'read_failed', scope: 'quality', ids, error });
+        return healthy();
+      }
+    },
 
     async recordOutcome(scope, id, outcome, nowMs = Date.now()): Promise<void> {
       const store = options.store;

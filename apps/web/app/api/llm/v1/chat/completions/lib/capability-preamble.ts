@@ -3,22 +3,17 @@ import 'server-only';
 import { isValidIanaTimeZone } from '@agiworkforce/types';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
+import {
+  CHAT_SYSTEM_PROMPT_ID,
+  chatSystemPromptSection,
+  chatSystemPromptSections,
+  type ChatSystemPromptSections,
+} from '@/lib/prompts/chat-system-prompt';
+import { resolvePrompt, type ResolvePromptOptions } from '@/lib/prompts/prompt-registry';
+
 const TIME_CONTEXT_GRANULARITY_MS = 60_000;
 
-const TOOL_DESCRIPTIONS: Record<string, string> = {
-  web_search: 'search the live web and cite what you find',
-  search_maps: 'open a real map search card for places or nearby categories',
-  web_fetch: 'fetch a specific URL and read its contents',
-  url_fetch: 'fetch a specific URL and read its contents',
-  execute_code:
-    'run code in a sandboxed Linux environment with a real file system and a network connection',
-  write_file: 'write a file into that sandbox',
-  create_folder: 'create a folder in that sandbox',
-  create_office_file: 'produce .docx, .pptx, .xlsx, .pdf and .csv files',
-  skill: 'load a skill: a packaged set of instructions for a specific kind of task',
-  code_execution: 'run code in a hosted sandbox and read back its real output',
-  code_interpreter: 'run code in a hosted sandbox and read back its real output',
-};
+const TOOL_SECTION_PREFIX = 'tool.';
 
 const CODE_EXECUTION_TOOL_NAMES = ['execute_code', 'code_execution', 'code_interpreter'];
 
@@ -100,6 +95,8 @@ export interface CapabilityPreambleInput {
    * the files.
    */
   attachmentSandboxPaths?: readonly string[];
+  /** Selects the prompt version; absent, the manifest pin serves. */
+  promptSelection?: ResolvePromptOptions;
 }
 
 function roundDownToGranularity(instant: Date, granularityMs: number): Date {
@@ -131,7 +128,37 @@ function formatLocalInstant(now: Date, timeZone: string | undefined): string | n
   return `${year}-${month}-${day} ${hour}:${minute}:${second} (${timeZone})`;
 }
 
+/**
+ * The chat system prompt this turn serves, resolved through the manifest so the
+ * version is stamped rather than implied by whatever the builder holds.
+ */
+export function resolveChatSystemPrompt(options: ResolvePromptOptions = {}): {
+  version: number;
+  stamp: string;
+  sections: ChatSystemPromptSections;
+} {
+  const resolved = resolvePrompt(CHAT_SYSTEM_PROMPT_ID, options);
+  return {
+    version: resolved.version,
+    stamp: resolved.stamp,
+    sections: chatSystemPromptSections(resolved.version),
+  };
+}
+
+export function capabilityPreambleStamp(options: ResolvePromptOptions = {}): string {
+  return resolvePrompt(CHAT_SYSTEM_PROMPT_ID, options).stamp;
+}
+
+function describeTool(sections: ChatSystemPromptSections, name: string): string {
+  const description = chatSystemPromptSection(sections, `${TOOL_SECTION_PREFIX}${name}`);
+  return description ? `- ${name}, ${description}` : `- ${name}`;
+}
+
 export function buildCapabilityPreamble(input: CapabilityPreambleInput): string | null {
+  const { sections } = resolveChatSystemPrompt(input.promptSelection ?? {});
+  const section = (key: string, values?: Readonly<Record<string, string>>) =>
+    chatSystemPromptSection(sections, key, values);
+
   const now = roundDownToGranularity(input.now ?? new Date(), TIME_CONTEXT_GRANULARITY_MS);
   const currentUtcTimestamp = now.toISOString();
   const browserLocalInstant = formatLocalInstant(now, input.timeZone);
@@ -150,120 +177,47 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
       : [];
 
   const timeContext =
-    `The current UTC date and time is ${currentUtcTimestamp}. ` +
+    section('time_utc', { utc: currentUtcTimestamp }) +
     (browserLocalInstant
-      ? `The user's browser reports ${input.timeZone}; at this same instant its local ` +
-        `date and time is ${browserLocalInstant}. Use that local calendar date for ` +
-        '"today" unless the user specifies a different place or time zone. '
+      ? section('time_local', {
+          timeZone: input.timeZone ?? '',
+          localInstant: browserLocalInstant,
+        })
       : '') +
-    `When the user asks for ` +
-    '"today", a date, or a time in a named place or time zone, derive that place\'s ' +
-    'local calendar date and time from this instant; never reuse the UTC calendar date ' +
-    'as though it were local. Your training data has a cutoff, so treat anything ' +
-    'time-sensitive as potentially stale and verify it before stating it as current.';
+    section('time_rules');
 
-  const sections: string[] = ['You are AGI Workforce, an AI assistant.'];
+  const blocks: string[] = [section('identity'), section('instruction_precedence')];
 
   if (toolNames.length > 0) {
-    const described = toolNames.map((name) => {
-      const description = TOOL_DESCRIPTIONS[name];
-      return description ? `- ${name}, ${description}` : `- ${name}`;
-    });
-
-    sections.push(
-      ['Tools available to you on this turn:', ...described].join('\n'),
-      'These tools are real and available right now. If the user asks for something ' +
-        'one of them covers, call it rather than describing what you would do. Never tell ' +
-        'the user you lack web access, a sandbox, a file system, or the ability to run code ' +
-        'when the corresponding tool is listed above. Do not claim a capability that is not ' +
-        'listed, if you cannot do something, say so plainly and say why.',
+    blocks.push(
+      [section('tools_heading'), ...toolNames.map((name) => describeTool(sections, name))].join(
+        '\n',
+      ),
+      section('tools_reality'),
     );
 
-    if (hasSearch) {
-      sections.push(
-        'Web search is already enabled. For current, changing, niche, or uncertain facts, ' +
-          'search before answering and cite the sources you used. The user does not need to ' +
-          'ask you to enable search or select a search mode first.',
-      );
-    }
-
-    if (hasSearch || hasFetch) {
-      sections.push(
-        'The app numbers the sources of this turn in the order the tools returned them, and ' +
-          "lists them under your answer. Cite a claim by putting that source's number in " +
-          'brackets, e.g. [1], immediately after the sentence it supports, or by writing the ' +
-          'claim as a markdown link straight to that source URL; the app turns either form ' +
-          'into a clickable citation. Reuse the same number for a source cited again. Every ' +
-          'claim you took from a search result or a fetched page carries a marker, including ' +
-          'when there is only one source and including when you already named the outlet in ' +
-          'the sentence: naming an outlet in prose or italics is not a citation. Do not end ' +
-          'the answer with a Sources, References or bibliography section, and do not renumber ' +
-          'or reorder the list yourself.',
-      );
-    }
-
-    if (hasCodeExecution) {
-      sections.push(
-        'Code execution is already enabled. When the user asks you to run, compute, test, or ' +
-          'verify something, run it with that tool and report the output you actually got. ' +
-          'Never tell the user you cannot execute code on this turn, and never present code ' +
-          'you did not run as though you had run it.',
-      );
-    }
+    if (hasSearch) blocks.push(section('search'));
+    if (hasSearch || hasFetch) blocks.push(section('citations'));
+    if (hasCodeExecution) blocks.push(section('code_execution'));
 
     if (stagedAttachmentPaths.length > 0) {
-      const list = stagedAttachmentPaths.map((path) => `- ${path}`).join('\n');
-      sections.push(
+      blocks.push(
         [
-          'The files attached to this message are already in the sandbox, at these paths:',
-          list,
-          'Open them straight from those paths when you run code. Do not re-create an ' +
-            'attached file with write_file, do not paste its contents into code, and do not ' +
-            'ask the user to upload it again. The sandbox starts in the folder holding them, ' +
-            'so the bare file name works too.',
+          section('staged_attachments_heading'),
+          stagedAttachmentPaths.map((path) => `- ${path}`).join('\n'),
+          section('staged_attachments_rules'),
         ].join('\n'),
       );
     }
 
-    if (hasFileCreation) {
-      sections.push(
-        'When the user asks for a downloadable file or a finished deliverable, create the ' +
-          'actual file with the available sandbox/file tools instead of pasting a mockup or ' +
-          'only explaining how to make it. Files created or changed through these tools are ' +
-          'collected after the turn and attached as downloads; supported visual and document ' +
-          'formats also appear in the Artifacts panel. Briefly name the completed files in ' +
-          'your final answer. Do not claim that you cannot attach files when these tools are listed.',
-      );
-    }
+    if (hasFileCreation) blocks.push(section('file_creation'));
   } else {
-    sections.push(
-      'No tools are available on this turn: you cannot browse the web, run code, or read ' +
-        'or write files. If the user asks for one of those, say so plainly rather than ' +
-        'pretending to have done it, and answer from your own knowledge where you can.',
-    );
+    blocks.push(section('no_tools'));
   }
 
-  if (input.codeExecutionUnavailable) {
-    sections.push(
-      'The user turned "Run code" on for this turn, but no code-execution tool could be ' +
-        'attached for the model handling it, so you cannot actually run anything. Tell the ' +
-        'user that plainly before you answer, and name the limit: code execution is not ' +
-        'available for the model this turn was routed to. Write code if it helps, but ' +
-        'present it as code you have not run, never report output, results, or timings as ' +
-        'though you had executed it.',
-    );
-  }
+  if (input.codeExecutionUnavailable) blocks.push(section('code_execution_unavailable'));
+  if (input.researchUnavailable) blocks.push(section('research_unavailable'));
 
-  if (input.researchUnavailable) {
-    sections.push(
-      'The user turned "Deep Research" on for this turn, but the model handling it cannot ' +
-        'run the research loop, so no multi-step search, source gathering, or citation pass ' +
-        'happened. Tell the user that plainly before you answer, and name the limit: Deep ' +
-        'Research is not available for the model this turn was routed to. Answer from your ' +
-        'own knowledge if you can, and never present the result as researched, sourced, or ' +
-        'cited when it was not.',
-    );
-  }
-
-  return `${sections.join('\n\n')}${SYSTEM_PROMPT_CACHE_BOUNDARY}${timeContext}`;
+  const body = blocks.filter((block) => block.length > 0).join('\n\n');
+  return `${body}${SYSTEM_PROMPT_CACHE_BOUNDARY}${timeContext}`;
 }

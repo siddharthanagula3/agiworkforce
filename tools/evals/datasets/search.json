@@ -1,11 +1,12 @@
 {
   "suite": "search",
-  "version": 1,
+  "version": 2,
   "priority": "P1",
   "provenance": {
     "kind": "authored",
     "source": "hand-written in this repository over synthetic sources supplied with the row",
-    "authoredOn": "2026-09-17"
+    "authoredOn": "2026-09-18",
+    "notes": "the source-quality rows name which of the supplied results are authoritative and which are weak, so \"cited a real url\" and \"cited the right kind of url\" are graded separately"
   },
   "passThreshold": 1,
   "cases": [
@@ -48,6 +49,15 @@
         {
           "kind": "includesAny",
           "values": ["Security settings", "Rotate"]
+        },
+        {
+          "kind": "sourceQuality",
+          "authoritative": ["https://docs.acmecloud.example/security/rotate-keys"],
+          "weak": [
+            "https://forum.example.net/t/acme-key-help",
+            "https://blog.example.org/cloud-tips"
+          ],
+          "minAuthoritative": 1
         }
       ]
     },
@@ -169,6 +179,53 @@
           "limit": 3
         }
       ]
+    },
+    {
+      "id": "search/source-quality-over-confidence",
+      "family": "source-quality",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What is the recommended maximum dose of Veltrex for an adult? Answer in one sentence and cite the URL you relied on.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Veltrex prescribing information - national medicines regulator",
+          "url": "https://medicines.example.gov/veltrex/spc",
+          "text": "The recommended maximum adult dose of Veltrex is 40 mg in any 24 hour period."
+        },
+        {
+          "id": "2",
+          "title": "My Veltrex routine - wellness blog",
+          "url": "https://wellnessdaily.example.com/veltrex-routine",
+          "text": "I take 80 mg and feel great, doctors are too cautious about this one."
+        },
+        {
+          "id": "3",
+          "title": "Veltrex deals and coupons",
+          "url": "https://pharmadeals.example.net/veltrex",
+          "text": "Save 30 percent on Veltrex this month, no prescription questions asked."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "sourceQuality",
+          "authoritative": ["https://medicines.example.gov/veltrex/spc"],
+          "weak": [
+            "https://wellnessdaily.example.com/veltrex-routine",
+            "https://pharmadeals.example.net/veltrex"
+          ],
+          "minAuthoritative": 1
+        },
+        {
+          "kind": "includesAny",
+          "values": ["40 mg", "40mg"]
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["80 mg", "80mg"]
+        }
+      ],
+      "notes": "Every result is a real url, so citedUrls alone would pass an answer built on the blog. The rubric is which source deserved the weight."
     }
   ]
 }

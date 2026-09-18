@@ -25,6 +25,8 @@ export {
   CannotRetryError,
   FallbackTriggeredError,
   EmptyProviderResponseError,
+  RouteBudgetExhaustedError,
+  ROUTE_BUDGET_EXHAUSTED_ERROR_NAME,
   classifyError,
   isErrorCategory,
   toStreamErrorClassification,

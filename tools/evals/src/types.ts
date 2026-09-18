@@ -79,6 +79,27 @@ export type Check =
       readonly allowed: readonly string[];
       readonly required: readonly string[];
     }
+  | {
+      /**
+       * Which of the results the answer leaned on, separately from whether the
+       * URL was real. `citedUrls` asks "did you invent this link"; this asks
+       * "of the real links, did you pick the one worth trusting".
+       */
+      readonly kind: 'sourceQuality';
+      readonly authoritative: readonly string[];
+      readonly weak: readonly string[];
+      readonly minAuthoritative?: number;
+    }
+  | {
+      /**
+       * Nothing outside the supplied sources may appear in the answer, by url
+       * or by citation marker. Research that reaches past its brief is wrong
+       * even when what it reached for is true.
+       */
+      readonly kind: 'sourceRestriction';
+      readonly sources: readonly string[];
+      readonly urls?: readonly string[];
+    }
   | { readonly kind: 'language'; readonly expected: LanguageCode };
 
 export type CheckKind = Check['kind'];
@@ -160,6 +181,12 @@ export interface EvalCase {
   readonly attachments?: readonly EvalAttachment[];
   readonly sources?: readonly EvalSource[];
   readonly haystack?: EvalHaystack;
+  /**
+   * Registry capability names this row needs, e.g. `imageInput`. A target
+   * without one skips the row with a recorded reason rather than failing it,
+   * which is what makes a mixed-modality corpus safe to run everywhere.
+   */
+  readonly requires?: readonly string[];
 }
 
 /**

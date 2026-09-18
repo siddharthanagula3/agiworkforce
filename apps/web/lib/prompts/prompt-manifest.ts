@@ -3,6 +3,11 @@ import { MEMORY_FACT_EXTRACTION_SYSTEM_PROMPT } from '@agiworkforce/agent-core';
 import { PRODUCT_NAME } from '@/lib/legal-constants';
 import { SUPPORT_SYSTEM_PROMPT } from '@/lib/support/agent/prompt/system-prompt';
 
+import {
+  CHAT_SYSTEM_PROMPT_MANIFEST_VERSIONS,
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+} from './chat-system-prompt';
+
 /**
  * Every prompt the product sends to a model, with an id and a version.
  *
@@ -104,6 +109,11 @@ const SAFETY_UNTRUSTED_CONTEXT_V1 = [
 ].join('\n\n');
 
 export const PROMPT_MANIFEST = {
+  'chat.system': {
+    kind: 'product',
+    pinnedVersion: CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+    versions: CHAT_SYSTEM_PROMPT_MANIFEST_VERSIONS,
+  },
   'support.system': {
     kind: 'support',
     pinnedVersion: 1,

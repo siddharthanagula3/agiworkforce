@@ -1,11 +1,12 @@
 {
   "suite": "files",
-  "version": 1,
+  "version": 2,
   "priority": "P1",
   "provenance": {
     "kind": "authored",
-    "source": "hand-written in this repository over the fixture documents in datasets/fixtures/files",
-    "authoredOn": "2026-09-17"
+    "source": "hand-written in this repository over the fixture documents in datasets/fixtures/files, including a generated bar-chart PNG and a generated one-page invoice PDF",
+    "authoredOn": "2026-09-18",
+    "notes": "quarterly-bars.png and supplier-invoice.pdf are synthetic fixtures generated in this repository; no customer document is used"
   },
   "passThreshold": 1,
   "cases": [
@@ -122,6 +123,78 @@
         {
           "kind": "exactAnswer",
           "expected": "3"
+        }
+      ]
+    },
+    {
+      "id": "files/image-bar-chart",
+      "family": "image",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "The attached image is a bar chart with four bars in a single row. Counting from the left, which bar is the tallest? Reply with 'Answer: <number>'.",
+      "attachments": [
+        {
+          "fixture": "files/quarterly-bars.png",
+          "mediaType": "image/png"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "2"
+        }
+      ],
+      "notes": "The bars are 60, 120, 40 and 85 pixels tall; a model that cannot see the image has a one-in-four chance, which the rest of the suite does not carry.",
+      "requires": ["imageInput"]
+    },
+    {
+      "id": "files/pdf-invoice-total",
+      "family": "pdf",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Using the attached invoice, what is the total due? Reply with 'Answer: <number>'.",
+      "attachments": [
+        {
+          "fixture": "files/supplier-invoice.pdf",
+          "mediaType": "application/pdf"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "1275.00"
+        },
+        {
+          "kind": "maxWords",
+          "limit": 6
+        }
+      ],
+      "notes": "The subtotal equals the total because freight is zero; a model reading the wrong line lands on 515.00, the largest single line."
+    },
+    {
+      "id": "files/pdf-detail-not-in-summary",
+      "family": "pdf",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "From the attached invoice, how many onsite install units were billed, and at what unit price? Reply as '<units> at <price>'.",
+      "attachments": [
+        {
+          "fixture": "files/supplier-invoice.pdf",
+          "mediaType": "application/pdf"
+        }
+      ],
+      "checks": [
+        {
+          "kind": "includesAll",
+          "values": ["4", "70"]
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["515", "240"]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 8
         }
       ]
     }

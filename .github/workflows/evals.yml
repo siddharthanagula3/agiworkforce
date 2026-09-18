@@ -129,6 +129,13 @@ jobs:
       - name: Every product prompt is covered or accounted for
         run: node tools/evals/scripts/prompt-coverage.mjs
 
+      # The corpora hold no customer personal data, which is a fact about who
+      # has written the rows so far rather than about the files. A row pasted
+      # from a real conversation, ticket or document would be a copy of
+      # someone's data in git forever, sent to a provider on every run.
+      - name: No personal data in the eval corpora
+        run: node tools/evals/scripts/pii-scan.mjs
+
       # Fails closed on the evidence the promotion gate depends on: a baseline
       # that is malformed, replayed rather than measured, or left behind by a
       # family slot that no longer exists is a gate that would wave a promotion
