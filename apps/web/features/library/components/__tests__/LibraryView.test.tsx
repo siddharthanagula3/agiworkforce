@@ -410,6 +410,40 @@ describe('library hand-off actions', () => {
     );
   });
 
+  it('remixes a saved image into the composer in image mode with its own prompt', async () => {
+    const image = makeItem({
+      id: '33333333-3333-4333-8333-333333333333',
+      file_name: 'render.png',
+      mime_type: 'image/png',
+      kind: 'image',
+      prompt: 'one flat cobalt circle on white',
+    });
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse([]);
+      if (url.startsWith('/api/files/')) {
+        return {
+          ok: true,
+          status: 200,
+          blob: async () => new Blob(['png'], { type: 'image/png' }),
+        } as Response;
+      }
+      return pageResponse([image]);
+    });
+
+    render(<LibraryView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for render.png' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remix' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/chat'));
+    expect(takeStagedLibraryAttachments()?.[0]?.type).toBe('image/png');
+    const toggles = useChatStore.getState().getComposerToggles(PENDING_CONVERSATION_KEY);
+    expect(toggles.imageMode).toBe(true);
+    expect(useChatStore.getState().getDraftContent(PENDING_CONVERSATION_KEY)).toBe(
+      'one flat cobalt circle on white',
+    );
+  });
+
   it('uploads the stored bytes into the picked project as a project file', async () => {
     stubAsset([item], [PROJECT]);
     render(<LibraryView />);

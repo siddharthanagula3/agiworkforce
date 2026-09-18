@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CircleAlert, X } from '@agiworkforce/icons';
+import { Spinner } from '@agiworkforce/ui';
 
 import { cn } from '@shared/lib/utils';
 import { useVoiceSession, type VoiceTranscriptTurn } from '@features/chat/hooks/use-voice-session';
@@ -20,6 +21,7 @@ const LABEL = {
   sending: 'Sending',
   cancelSending: 'Do not send that',
   retry: 'Try again',
+  reconnecting: 'Reconnecting, attempt',
 } as const;
 
 const ESCAPE = 'Escape';
@@ -119,28 +121,38 @@ export function VoiceModeSurface({
     />
   );
 
-  const notice =
-    status === VOICE_SESSION_STATUS.error ? (
-      <div
-        role="alert"
-        data-testid="voice-error"
-        className="flex items-center gap-2 text-sm text-[var(--chat-destructive-text)]"
+  const notice = session.reconnecting ? (
+    <div
+      role="status"
+      data-testid="voice-reconnecting"
+      className="flex items-center gap-2 text-sm text-[var(--chat-text-secondary)]"
+    >
+      <Spinner size="sm" className="h-4 w-4 shrink-0" />
+      <span className="min-w-0">
+        {LABEL.reconnecting} {session.reconnectAttempt} of {session.reconnectMaxAttempts}
+      </span>
+    </div>
+  ) : status === VOICE_SESSION_STATUS.error ? (
+    <div
+      role="alert"
+      data-testid="voice-error"
+      className="flex items-center gap-2 text-sm text-[var(--chat-destructive-text)]"
+    >
+      <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">{error}</span>
+      <button
+        type="button"
+        onClick={retry}
+        className="shrink-0 rounded-full px-2 py-1 font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
       >
-        <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="min-w-0">{error}</span>
-        <button
-          type="button"
-          onClick={retry}
-          className="shrink-0 rounded-full px-2 py-1 font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
-        >
-          {LABEL.retry}
-        </button>
-      </div>
-    ) : muted && status === VOICE_SESSION_STATUS.muted ? (
-      <p data-testid="voice-muted-hint" className="text-sm text-[var(--chat-text-muted)]">
-        {session.mutedHint}
-      </p>
-    ) : null;
+        {LABEL.retry}
+      </button>
+    </div>
+  ) : muted && status === VOICE_SESSION_STATUS.muted ? (
+    <p data-testid="voice-muted-hint" className="text-sm text-[var(--chat-text-muted)]">
+      {session.mutedHint}
+    </p>
+  ) : null;
 
   const sendingChip = pendingUtterance ? (
     <div

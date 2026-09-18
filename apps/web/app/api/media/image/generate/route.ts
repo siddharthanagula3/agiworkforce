@@ -46,6 +46,7 @@ import {
   createImageGenerationJob,
   getImageGenerationJobByIdempotencyKey,
   isImageJobStoreReady,
+  IMAGE_JOB_CLAIM_SECONDS,
   IMAGE_JOB_LEASE_SECONDS,
   type ImageGenerationJob,
   type ImageGenerationPlan,
@@ -70,6 +71,7 @@ import {
   runImageGenerationJobAttempt,
   type ImageJobInlineEdit,
 } from '../lib/image-job-executor';
+import { scheduleImageGenerationJobDrive } from '../lib/image-job-drive-queue';
 
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -864,6 +866,13 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   if (wantsAsync) {
     const detachedJob = job;
+    if (jobStoreReady) {
+      await scheduleImageGenerationJobDrive({
+        db: scopedDb,
+        job: detachedJob,
+        delaySeconds: IMAGE_JOB_CLAIM_SECONDS,
+      });
+    }
     after(async () => {
       try {
         await runImageGenerationJobAttempt({ db: scopedDb, job: detachedJob, inlineEdit });

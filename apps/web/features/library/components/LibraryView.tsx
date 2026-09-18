@@ -21,7 +21,10 @@ import { CONTENT_OVERLAY_ROOT_ID } from '@shared/components/layout/WebAppShell';
 import { libraryItemToFile } from '@features/chat/components/Composer/ComposerFilesMenu';
 import { createWebCloudPublisher } from '@features/chat/components/artifacts/publishArtifactClient';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
-import { stageLibraryItemForNewChat } from '../lib/library-chat-handoff';
+import {
+  stageLibraryItemForImageRemix,
+  stageLibraryItemForNewChat,
+} from '../lib/library-chat-handoff';
 
 export { iconKindFor, generatedFileFromLibraryItem } from '@agiworkforce/unified-chat';
 
@@ -165,6 +168,10 @@ export function LibraryView() {
       },
       addToWork: async (item) => {
         await stageLibraryItemForNewChat(item, { workMode: 'agiwork' });
+        router.push(NEW_CHAT_PATH);
+      },
+      remixItem: async (item) => {
+        await stageLibraryItemForImageRemix(item);
         router.push(NEW_CHAT_PATH);
       },
       addToProject: async (item, folder) => {
