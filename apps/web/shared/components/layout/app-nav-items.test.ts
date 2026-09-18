@@ -133,3 +133,31 @@ describe('app rail · workspace feature controls', () => {
     expect(ids).toContain('schedules');
   });
 });
+
+describe('app rail · Study', () => {
+  it('offers Study as its own destination', () => {
+    const study = APP_NAV_DESTINATIONS.find((destination) => destination.id === 'study');
+    expect(study).toMatchObject({ href: '/chat/study', hideable: true });
+  });
+
+  it('is the active entry on its own route, and Chat is not', () => {
+    const chat = APP_NAV_DESTINATIONS.find((destination) => destination.id === 'chat-home');
+    const study = APP_NAV_DESTINATIONS.find((destination) => destination.id === 'study');
+    expect(study?.isActive('/chat/study')).toBe(true);
+    expect(chat?.isActive('/chat/study')).toBe(false);
+  });
+
+  it('does not claim a conversation route', () => {
+    const study = APP_NAV_DESTINATIONS.find((destination) => destination.id === 'study');
+    expect(study?.isActive('/chat/abc')).toBe(false);
+  });
+
+  it('can be hidden from the rail like every other optional destination', () => {
+    const ids = buildAppNavItems({
+      pathname: '/chat',
+      navigate: vi.fn(),
+      hiddenIds: ['study'],
+    }).map((item) => item.id);
+    expect(ids).not.toContain('study');
+  });
+});

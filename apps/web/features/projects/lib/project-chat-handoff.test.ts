@@ -41,6 +41,7 @@ const meta: Required<ComposerSendMeta> = {
   codeExecutionEnabled: true,
   officeCreationEnabled: true,
   researchEnabled: true,
+  searchRequested: true,
   styleInstruction: 'Use a concise project brief.',
   skillName: 'Planning',
   mcpContext: { resources: [{ connectorId: 'connector-1', uri: 'mcp://brief' }] },
