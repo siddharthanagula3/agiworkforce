@@ -19,6 +19,7 @@ import {
   extractPdfAttachmentContent,
   PdfAttachmentUnreadableError,
 } from '@/lib/server/pdf-attachment-content';
+import { untrustedDocumentText } from '@/lib/server/untrusted-document-text';
 import { withSpan } from '@/lib/observability/span';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { mapWithConcurrency } from './tool-loop';
@@ -104,13 +105,16 @@ function attachmentContextHeader(filename: string, mimeType: string): Attachment
  * part so every route that has a document channel keeps the filename with it.
  */
 function textDocumentParts(filename: string, text: string): AttachmentReferencePart[] {
+  // Fenced here rather than in the extractors: project knowledge anchors offsets
+  // into the raw extracted text, and a preamble would shift every one of them.
+  const fenced = untrustedDocumentText(filename, text);
   return [
     {
       type: 'file',
       file: {
         filename,
         mime_type: 'text/plain',
-        file_data: `data:text/plain;base64,${Buffer.from(text, 'utf8').toString('base64')}`,
+        file_data: `data:text/plain;base64,${Buffer.from(fenced, 'utf8').toString('base64')}`,
       },
     },
   ];

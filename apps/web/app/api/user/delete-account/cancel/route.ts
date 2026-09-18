@@ -5,12 +5,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
@@ -39,9 +38,9 @@ export async function POST(request: NextRequest) {
   }
 
   let userId: string;
+  let db: DatabaseAdapter;
   try {
-    const authResult = await getClerkAuthUser(request);
-    userId = authResult.userId;
+    ({ db, userId } = await getUserScopedDb(request, { resolveOrganization: false }));
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
@@ -49,7 +48,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
   }
 
-  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
   const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
 
   try {

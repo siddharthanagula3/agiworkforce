@@ -44,4 +44,14 @@ describe('client-visible flags', () => {
       variants: { 'composer.voice': 'treatment' },
     });
   });
+
+  it('never exposes another surface rollout ring; the ring gate answers for this one', () => {
+    const visible = clientVisibleFlags({
+      'rollout.mobile.beta.new_composer': evaluation('rollout.mobile.beta.new_composer', 'on'),
+      'composer.voice': evaluation('composer.voice', 'on'),
+    });
+
+    expect(Object.keys(visible.enabled)).toEqual(['composer.voice']);
+    expect(Object.keys(visible.variants)).toEqual(['composer.voice']);
+  });
 });

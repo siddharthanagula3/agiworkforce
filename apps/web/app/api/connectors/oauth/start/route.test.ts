@@ -11,18 +11,26 @@ const mocks = vi.hoisted(() => {
   return {
     authUser: vi.fn(),
     createPending: vi.fn(),
+    listAccounts: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
     ConnectorOAuthStoreUnavailableError,
   };
 });
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a) }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async (...a: unknown[]) => {
+    const { userId } = (await mocks.authUser(...a)) as { userId: string };
+    return { db: { query: vi.fn(), execute: vi.fn() }, userId, organizationId: null };
+  },
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
+  listConnectorAccounts: (...a: unknown[]) => mocks.listAccounts(...a),
   ConnectorOAuthStoreUnavailableError: mocks.ConnectorOAuthStoreUnavailableError,
   createPendingAuthorization: (...a: unknown[]) => mocks.createPending(...a),
   upsertConnectorOAuthGrant: vi.fn(),
@@ -63,6 +71,7 @@ function request(query: string): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+  mocks.listAccounts.mockResolvedValue([]);
   mocks.createPending.mockResolvedValue(undefined);
   for (const key of ENV_KEYS) delete process.env[key];
   process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] = 'https://app.example.com';
@@ -189,6 +198,57 @@ describe('GET /api/connectors/oauth/start', () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ status: 'unavailable' });
+  });
+
+  it('names the widened scope as a re-consent instead of inheriting it', async () => {
+    configureLinear();
+    mocks.listAccounts.mockResolvedValue([
+      { connectorId: 'linear', grantedScopes: ['read'], accountKey: 'default' },
+    ]);
+
+    const response = await GET(request('?connectorId=linear&mode=json'));
+
+    await expect(response.json()).resolves.toMatchObject({
+      status: 'scope_reconsent',
+      addedScopes: ['write'],
+    });
+  });
+
+  it('is not a re-consent when the stored grant already covers what is declared', async () => {
+    configureLinear();
+    mocks.listAccounts.mockResolvedValue([
+      { connectorId: 'linear', grantedScopes: ['read', 'write'], accountKey: 'default' },
+    ]);
+
+    const body = (await (await GET(request('?connectorId=linear&mode=json'))).json()) as {
+      status?: string;
+    };
+
+    expect(body.status).toBeUndefined();
+  });
+
+  it('never requests a scope above the reviewed ceiling', async () => {
+    process.env['CONNECTOR_OAUTH_PROVIDERS_JSON'] = JSON.stringify({
+      providers: [
+        {
+          connectorId: 'linear',
+          displayName: 'Linear',
+          authorizationUrl: 'https://auth.example.com/authorize',
+          tokenUrl: 'https://auth.example.com/token',
+          mcpUrl: 'https://mcp.example.com/mcp',
+          scopes: ['read', 'admin:everything'],
+        },
+      ],
+    });
+    process.env['CONNECTOR_OAUTH_LINEAR_CLIENT_ID'] = 'client-id-value';
+    process.env['CONNECTOR_OAUTH_LINEAR_CLIENT_SECRET'] = 'client-secret-value';
+    __resetConnectorOAuthRegistryCacheForTests();
+
+    await GET(request('?connectorId=linear&mode=json'));
+
+    expect(mocks.createPending).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedScopes: ['read'] }),
+    );
   });
 
   it('refuses when the deployment has no callback origin configured', async () => {

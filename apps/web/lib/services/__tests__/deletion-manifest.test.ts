@@ -22,7 +22,9 @@ import {
 
 import {
   RETENTION_MATRIX,
+  accountErasureProgress,
   resolveDeletionStatus,
+  scheduledDeletionProgress,
   storesOutlivingTheirSubject,
   unclassifiedStores,
   type RetentionEntry,
@@ -186,5 +188,89 @@ describe('deletion reports four states, not two', () => {
       storesCleared: 84,
     });
     expect(outcome.status).toBe('complete');
+  });
+});
+
+describe('accountErasureProgress', () => {
+  const report = {
+    userId: 'user-1',
+    mediaObjectsDeleted: 0,
+    mediaObjectsFailed: 0,
+    mediaRowsDeleted: 0,
+    backupObjectsDeleted: 0,
+    backupObjectsFailed: 0,
+    knowledgeObjectsDeleted: 0,
+    knowledgeObjectsFailed: 0,
+    avatarObjectsDeleted: 0,
+    avatarObjectsFailed: 0,
+    cacheKeysDeleted: 0,
+    cacheKeysFailed: 0,
+    tables: {} as Record<string, Record<string, unknown>>,
+    anonymized: {} as Record<string, Record<string, unknown>>,
+    complete: true,
+    profileRetained: false,
+  };
+
+  function erasable(): string {
+    const entry = RETENTION_MATRIX.find(
+      (candidate) => candidate.kind === 'table' && candidate.deletionPath !== null,
+    );
+    expect(entry).toBeDefined();
+    return entry?.store as string;
+  }
+
+  it('counts a store the matrix knows and ignores one it does not', () => {
+    const store = erasable();
+    const progress = accountErasureProgress({
+      ...report,
+      tables: { [store]: { deleted: true }, not_a_store_in_the_matrix: { deleted: true } },
+    } as never);
+
+    expect(progress.storesAttempted).toBe(1);
+    expect(progress.storesCleared).toBe(1);
+    expect(resolveDeletionStatus(progress).status).toBe('complete');
+  });
+
+  it('does not count a store the erasure skipped because the schema has no such table', () => {
+    const progress = accountErasureProgress({
+      ...report,
+      tables: { [erasable()]: { deleted: false, skipped: true } },
+    } as never);
+
+    expect(progress.storesAttempted).toBe(0);
+    expect(resolveDeletionStatus(progress).status).toBe('pending');
+  });
+
+  it('carries a failed store and an unfreed object through to partial', () => {
+    const progress = accountErasureProgress({
+      ...report,
+      tables: { [erasable()]: { deleted: false, error: 'boom' } },
+      mediaObjectsFailed: 2,
+      cacheKeysFailed: 1,
+    } as never);
+
+    expect(progress.storesFailed).toBe(1);
+    expect(progress.objectsFailed).toBe(3);
+    expect(resolveDeletionStatus(progress).status).toBe('partial');
+  });
+
+  it('reads a retained legal-hold row as a hold, which blocks the whole deletion', () => {
+    const progress = accountErasureProgress({
+      ...report,
+      tables: { legal_holds: { deleted: false, retainedForRetry: true, error: 'held' } },
+    } as never);
+
+    expect(progress.activeLegalHolds).toBe(1);
+    expect(resolveDeletionStatus(progress).status).toBe('blocked');
+  });
+
+  it('claims no hold for a deletion that has only been scheduled', () => {
+    const progress = scheduledDeletionProgress('2026-09-19T00:00:00.000Z');
+
+    expect(progress.storesAttempted).toBe(0);
+    expect(resolveDeletionStatus(progress)).toEqual({
+      status: 'pending',
+      reason: 'Deletion is scheduled for 2026-09-19T00:00:00.000Z and has not started.',
+    });
   });
 });

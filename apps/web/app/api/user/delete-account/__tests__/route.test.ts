@@ -56,7 +56,8 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-vi.mock('@/lib/server/account-erasure', () => ({
+vi.mock('@/lib/server/account-erasure', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/account-erasure')>()),
   eraseUserAccountData: (...args: unknown[]) => mockEraseUserAccountData(...args),
 }));
 
@@ -70,7 +71,15 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
+import { recordAuditEvent } from '@/lib/security-audit';
+
 import { DELETE } from '../route';
+
+function auditDetail(): Record<string, unknown> {
+  const call = vi.mocked(recordAuditEvent).mock.calls.at(-1)?.[0] as
+    { detail?: Record<string, unknown> } | undefined;
+  return call?.detail ?? {};
+}
 
 function deleteRequest(url = 'http://localhost:3000/api/user/delete-account') {
   return new Request(url, {
@@ -87,8 +96,18 @@ const completeErasure = {
   mediaObjectsDeleted: 0,
   mediaObjectsFailed: 0,
   mediaRowsDeleted: 0,
-  tables: {},
+  backupObjectsDeleted: 0,
+  backupObjectsFailed: 0,
+  knowledgeObjectsDeleted: 0,
+  knowledgeObjectsFailed: 0,
+  avatarObjectsDeleted: 0,
+  avatarObjectsFailed: 0,
+  cacheKeysDeleted: 0,
+  cacheKeysFailed: 0,
+  tables: { web_conversations: { deleted: true } },
+  anonymized: {},
   complete: true,
+  profileRetained: false,
 };
 
 function subscription(overrides: Record<string, unknown> = {}) {
@@ -228,6 +247,10 @@ describe('DELETE /api/user/delete-account', () => {
     expect(body.scheduledFor).toBeTruthy();
     expect(mockEraseUserAccountData).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
+    expect(auditDetail()).toMatchObject({
+      status: 'pending',
+      reason: expect.stringContaining(body.scheduledFor),
+    });
   });
 
   it('erases immediately only when the deletion columns are missing (42703)', async () => {
@@ -240,6 +263,27 @@ describe('DELETE /api/user/delete-account', () => {
     expect(body.scheduledFor).toBeUndefined();
     expect(mockEraseUserAccountData).toHaveBeenCalledWith('user_deleting');
     expect(mockDeleteUser).toHaveBeenCalledWith('user_deleting');
+    expect(auditDetail()).toMatchObject({ status: 'complete' });
+  });
+
+  it('records a legal hold as blocked rather than as a deletion that happened', async () => {
+    mockExecute.mockRejectedValue(pgError('42703'));
+    mockEraseUserAccountData.mockResolvedValue({
+      ...completeErasure,
+      tables: {
+        legal_holds: {
+          deleted: false,
+          retainedForRetry: true,
+          error: 'Subject is under an active legal hold; data preserved.',
+        },
+      },
+      complete: false,
+    });
+
+    const response = await DELETE(deleteRequest());
+
+    expect(response.status).toBe(500);
+    expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 
   it('does not hard-delete on a transient database error', async () => {

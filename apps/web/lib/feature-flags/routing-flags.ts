@@ -1,5 +1,6 @@
 import type { FlagEvaluation } from './evaluate-flags';
 import { PROVIDER_FLAG_PREFIX, TENANT_LOCKDOWN_FLAG_KEY } from './kill-switches';
+import { ROLLOUT_FLAG_PREFIX } from './rollout-rings';
 
 export const ROUTING_FLAG_PREFIX = 'routing.';
 
@@ -51,11 +52,16 @@ export function routingFlagInputs(
  * Which supplier carries a model, and which workspace an operator has isolated,
  * are ours rather than the client's: both are held back here, while capability
  * switches go out, since every surface has to know what it may still offer.
+ *
+ * Rollout rings are held back too. They are per surface and per release channel,
+ * so the raw evaluation names every other surface's staged builds; the caller
+ * reads its own through the ring gate instead.
  */
 const SERVER_ONLY_FLAG_PREFIXES: readonly string[] = [
   ROUTING_FLAG_PREFIX,
   PROVIDER_FLAG_PREFIX,
   TENANT_LOCKDOWN_FLAG_KEY,
+  ROLLOUT_FLAG_PREFIX,
 ];
 
 export function clientVisibleFlags(evaluations: Readonly<Record<string, FlagEvaluation>>): {

@@ -242,6 +242,30 @@ describe('TauriRuntime', () => {
     expect(instructions).toBeUndefined();
   });
 
+  it('orders the local prompt by the shared precedence, agent instruction above the account one', async () => {
+    personalizationMock.current = {
+      ...neutralPersonalization(),
+      formality: 5,
+    };
+
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
+      model: FIXTURE_MODEL_ID,
+      systemPrompt: 'AGENT-BLOCK-MARKER',
+    });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    const instructions =
+      (sendCall?.[1] as { request: { customInstructions?: string } } | undefined)?.request
+        .customInstructions ?? '';
+
+    expect(instructions.indexOf('AGENT-BLOCK-MARKER')).toBeGreaterThanOrEqual(0);
+    expect(instructions.indexOf('AGENT-BLOCK-MARKER')).toBeLessThan(
+      instructions.indexOf('<personalization>'),
+    );
+  });
+
   it('loads the composer-selected skill and sends its instructions to the native chat command', async () => {
     const baseInvoke = invokeMock.getMockImplementation()!;
     invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {

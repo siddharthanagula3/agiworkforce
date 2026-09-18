@@ -22,6 +22,7 @@ import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useSettingsStore } from '../stores/settingsStore';
 import { personalizationToPrompt } from '../features/chat/personalizationToPrompt';
+import { ACCOUNT_INSTRUCTION, orderLocalPromptBlocks } from '../lib/context-precedence';
 import { triggerCloudSyncAfterTurn } from '../lib/cloudSyncTrigger';
 import {
   resolveDesktopChatOwnerId,
@@ -940,7 +941,13 @@ export class TauriRuntime implements ChatRuntime {
       useSettingsStore.getState().personalization,
     );
     const mergedCustomInstructions =
-      [personalizationBlock, systemPrompt].filter((s) => s && s.trim()).join('\n\n') || undefined;
+      orderLocalPromptBlocks([
+        { entry: ACCOUNT_INSTRUCTION, text: personalizationBlock ?? '' },
+        { entry: 'agent_instruction', text: systemPrompt ?? '' },
+      ])
+        .map((block) => block.text)
+        .filter((text) => text.trim())
+        .join('\n\n') || undefined;
 
     try {
       const resolvedModelCapabilities = resolveModelCapabilities(model);
