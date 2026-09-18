@@ -9,7 +9,6 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { deleteCustomRole, updateCustomRole } from '@/lib/services/organization-role-service';
 import { requireWorkspaceConsolePermission } from '../../workspace-access';
 import { CustomRoleSchema } from '../role-schema';
@@ -34,14 +33,14 @@ async function handleUpdate(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const roleId = await parseRoleId(context);
-  const { userId, organizationId, access } = await requireWorkspaceConsolePermission(
+  const { db, userId, organizationId, access } = await requireWorkspaceConsolePermission(
     request,
     'roles.manage',
     'Your workspace role does not allow managing roles.',
   );
   const input = await readValidatedJsonBody(request, CustomRoleSchema, 'Invalid role');
 
-  const role = await updateCustomRole(getNeonDb(), {
+  const role = await updateCustomRole(db, {
     roleId,
     organizationId,
     name: input.name,
@@ -78,13 +77,13 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const roleId = await parseRoleId(context);
-  const { userId, organizationId, access } = await requireWorkspaceConsolePermission(
+  const { db, userId, organizationId, access } = await requireWorkspaceConsolePermission(
     request,
     'roles.manage',
     'Your workspace role does not allow managing roles.',
   );
 
-  await deleteCustomRole(getNeonDb(), {
+  await deleteCustomRole(db, {
     organizationId,
     roleId,
     actorPermissions: access.permissions,

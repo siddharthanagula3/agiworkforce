@@ -383,7 +383,12 @@ describe('PATCH /api/settings/team/[memberId] writes member_role_changed', () =>
       if (/pg_advisory_xact_lock/.test(sql)) return [];
       if (ENTERPRISE_WRITER.test(sql)) return [{ record_enterprise_audit_event: 'row-uuid' }];
       if (/organization_member_permissions/.test(sql)) {
-        return [{ permissions: [...BUILT_IN_ORGANIZATION_ROLES.primary_owner.permissions] }];
+        return [
+          {
+            role: 'owner',
+            permissions: [...BUILT_IN_ORGANIZATION_ROLES.primary_owner.permissions],
+          },
+        ];
       }
       if (/from public\.organization_members/.test(sql)) {
         const calls = mockQuery.mock.calls.filter(([s]) =>

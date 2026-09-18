@@ -1,34 +1,38 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WorkspaceSummary } from '@agiworkforce/types';
 
 const state = vi.hoisted(() => ({
-  activeOrganizationId: null as string | null,
-  workspaces: [] as Array<{
-    id: string;
-    name: string;
-    slug: string;
-    role: 'owner' | 'admin' | 'member' | 'viewer';
-    joinedAt: string;
-  }>,
+  activeWorkspaceId: null as string | null,
+  scope: 'personal' as 'personal' | 'organization',
+  workspaces: [] as WorkspaceSummary[],
+  isLoading: false,
+  isError: false,
   mutate: vi.fn(),
+  refetch: vi.fn(),
 }));
 
-vi.mock('@/features/settings/hooks/use-settings-queries', () => ({
-  useOrganizationOverview: () => ({
-    data: {
-      organization: null,
-      activeOrganizationId: state.activeOrganizationId,
-      workspaces: state.workspaces,
-      access: {},
-    },
-    isLoading: false,
-    isError: false,
-    refetch: vi.fn(),
+vi.mock('@/features/workspaces/hooks/use-workspaces', () => ({
+  useAccountWorkspaces: () => ({
+    data:
+      state.isLoading || state.isError
+        ? undefined
+        : {
+            workspaces: state.workspaces,
+            activeWorkspaceId: state.activeWorkspaceId,
+            activeOrganizationId: state.activeWorkspaceId,
+            scope: state.scope,
+          },
+    isLoading: state.isLoading,
+    isError: state.isError,
+    refetch: state.refetch,
   }),
-  useSwitchWorkspace: () => ({ mutate: state.mutate, isPending: false }),
+  useSelectWorkspace: () => ({ mutate: state.mutate, isPending: false }),
 }));
 
 vi.mock('@agiworkforce/ui', () => ({
+  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Spinner: () => <span role="status">Loading</span>,
   DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DropdownMenuSeparator: () => <hr />,
   DropdownMenuItem: ({
@@ -52,10 +56,28 @@ vi.mock('@agiworkforce/ui', () => ({
 
 import { WorkspaceMenuItems } from './WorkspaceMenuItems';
 
+const ORG_ONE = '11111111-1111-4111-8111-111111111111';
+const ORG_TWO = '22222222-2222-4222-8222-222222222222';
+
+function organizationWorkspace(id: string, name: string, role: string): WorkspaceSummary {
+  return {
+    id,
+    kind: 'organization',
+    organizationId: id,
+    name,
+    slug: name.toLowerCase().replace(/\s+/g, '-'),
+    isPrimary: true,
+    role,
+  };
+}
+
 describe('WorkspaceMenuItems', () => {
   beforeEach(() => {
-    state.activeOrganizationId = null;
+    state.activeWorkspaceId = null;
+    state.scope = 'personal';
     state.workspaces = [];
+    state.isLoading = false;
+    state.isError = false;
     vi.clearAllMocks();
   });
 
@@ -63,40 +85,60 @@ describe('WorkspaceMenuItems', () => {
     const onManage = vi.fn();
     render(<WorkspaceMenuItems onManage={onManage} />);
 
-    expect(screen.getByRole('button', { name: /Personal Selected/i })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Personal Only you Selected/i })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Manage workspaces' }));
     expect(onManage).toHaveBeenCalledOnce();
     expect(state.mutate).not.toHaveBeenCalled();
   });
 
-  it('lists every membership and switches only when the target is different', () => {
-    state.activeOrganizationId = '11111111-1111-4111-8111-111111111111';
+  it('separates personal from enterprise scope and names the role in each', () => {
+    state.scope = 'organization';
+    state.activeWorkspaceId = ORG_ONE;
     state.workspaces = [
-      {
-        id: '11111111-1111-4111-8111-111111111111',
-        name: 'Current Team',
-        slug: 'current-team',
-        role: 'owner',
-        joinedAt: '2026-08-11T00:00:00.000Z',
-      },
-      {
-        id: '22222222-2222-4222-8222-222222222222',
-        name: 'Invited Team',
-        slug: 'invited-team',
-        role: 'member',
-        joinedAt: '2026-08-11T00:00:00.000Z',
-      },
+      organizationWorkspace(ORG_ONE, 'Current Team', 'owner'),
+      organizationWorkspace(ORG_TWO, 'Invited Team', 'member'),
     ];
 
     render(<WorkspaceMenuItems onManage={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Current Team Selected/i }));
+    expect(screen.getByText('Enterprise')).toBeVisible();
+    expect(screen.getByRole('button', { name: /Current Team owner Selected/i })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Personal Only you$/i })).toBeVisible();
+  });
+
+  it('switches only when the target is a different workspace', () => {
+    state.scope = 'organization';
+    state.activeWorkspaceId = ORG_ONE;
+    state.workspaces = [
+      organizationWorkspace(ORG_ONE, 'Current Team', 'owner'),
+      organizationWorkspace(ORG_TWO, 'Invited Team', 'member'),
+    ];
+
+    render(<WorkspaceMenuItems onManage={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Current Team owner Selected/i }));
     expect(state.mutate).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Invited Team' }));
-    expect(state.mutate).toHaveBeenCalledWith('22222222-2222-4222-8222-222222222222');
+    fireEvent.click(screen.getByRole('button', { name: /Invited Team member/i }));
+    expect(state.mutate).toHaveBeenCalledWith(ORG_TWO);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Personal' }));
+    fireEvent.click(screen.getByRole('button', { name: /Personal Only you/i }));
     expect(state.mutate).toHaveBeenCalledWith(null);
+  });
+
+  it('offers a retry rather than an empty list when the workspaces cannot be read', () => {
+    state.isError = true;
+    render(<WorkspaceMenuItems onManage={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /Personal/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try loading workspaces again' }));
+    expect(state.refetch).toHaveBeenCalledOnce();
+  });
+
+  it('announces loading to a screen reader instead of spinning silently', () => {
+    state.isLoading = true;
+    render(<WorkspaceMenuItems onManage={vi.fn()} />);
+
+    expect(screen.getByRole('status')).toBeVisible();
   });
 });

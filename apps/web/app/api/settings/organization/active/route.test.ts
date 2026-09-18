@@ -10,11 +10,12 @@ const { mockQuery, mockExecute, mockTransaction } = vi.hoisted(() => ({
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
-}));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ transaction: mockTransaction })),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { transaction: mockTransaction },
+    userId: 'user-1',
+    organizationId: null,
+  })),
 }));
 
 import { PUT } from './route';
