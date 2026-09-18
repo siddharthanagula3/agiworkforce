@@ -4,6 +4,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { SidebarProvider } from '../features/sidebar-webview/sidebarProvider';
+import { registerChatRetryCommand } from '../features/chat/retry';
 import {
   cliProbeMessage,
   describeRemoteEnvironment,
@@ -2255,6 +2256,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
   );
+
+  registerChatRetryCommand(context, {
+    transcript: () => sidebarProvider.chatTranscript(),
+    isStreaming: () => sidebarProvider.chatTurnInFlight(),
+    resend: (text, references) => sidebarProvider.resendInChat(text, references),
+  });
 
   if (failedCommandIds.length > 0) {
     console.error(

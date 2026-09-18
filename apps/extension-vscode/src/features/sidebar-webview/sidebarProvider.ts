@@ -10,6 +10,7 @@ import { parseWebviewMessage } from '../../protocol/webviewMessages';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { resolveTierSync } from '../../integrations/tierResolver';
 import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
+import { type ChatTurn } from '../chat/retry';
 import { AttentionState } from './attentionBadge';
 
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
@@ -156,12 +157,29 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     void this._deliverComposerDraft();
   }
 
-  public askInChat(text: string): void {
+  public askInChat(text: string, references: WorkspaceFileReference[] = []): void {
     this._pendingComposerDraft = {
       type: 'composerDraft',
-      payload: { text, references: [], submit: true },
+      payload: { text, references, submit: true },
     };
     void this._deliverComposerDraft();
+  }
+
+  public chatTranscript(): readonly ChatTurn[] {
+    return this._stateManager.chatTranscript();
+  }
+
+  public chatTurnInFlight(): boolean {
+    return this._stateManager.turnInFlight();
+  }
+
+  /**
+   * Resending through the composer is what makes the retried turn carry the
+   * model, mode and browse setting the composer holds now.
+   */
+  public resendInChat(text: string, references: readonly WorkspaceFileReference[]): void {
+    this.reveal();
+    this.askInChat(text, [...references]);
   }
 
   private async _deliverComposerDraft(): Promise<void> {

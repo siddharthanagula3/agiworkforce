@@ -52,6 +52,7 @@ import {
   recordAccountIdentityTier,
   resolveTier,
 } from '../../integrations/tierResolver';
+import { type ChatTurn } from '../chat/retry';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
@@ -597,6 +598,7 @@ export class ChatStateManager {
   private _inFlightSend?: PendingChatSend;
   private readonly _steeringSends = new Set<PendingChatSend>();
   private _loadedConversation?: ConversationLoadedPayload;
+  private _lastUserTurn?: ChatTurn;
   private _mode: AgentMode | undefined;
   private _effort: DeveloperReasoningEffort | undefined;
   private _meterCollapsed = false;
@@ -860,6 +862,7 @@ export class ChatStateManager {
         await this._interruptActiveTurn();
         delete this._thread;
         delete this._loadedConversation;
+        delete this._lastUserTurn;
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
         this._sessionApprovals.clear();
@@ -896,6 +899,7 @@ export class ChatStateManager {
         await this._interruptActiveTurn();
         delete this._thread;
         delete this._loadedConversation;
+        delete this._lastUserTurn;
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
         this._sessionApprovals.clear();
@@ -1651,6 +1655,7 @@ export class ChatStateManager {
       this._conversationEpoch++;
       this._dropQueuedSends('Queued follow-up cancelled when another session was opened.');
       this._pendingAttachments.splice(0);
+      delete this._lastUserTurn;
       this._thread = {
         id: resumed.id,
         cwd: resolved.cwd,
@@ -1914,8 +1919,25 @@ export class ChatStateManager {
     this._editorContextListeners.length = 0;
   }
 
+  /**
+   * The resumed transcript plus what this session sent, for a retry to pick
+   * the last user turn out of. Assistant text is not kept here.
+   */
+  chatTranscript(): readonly ChatTurn[] {
+    const loaded: ChatTurn[] = (this._loadedConversation?.messages ?? []).map((message) => ({
+      role: message.role,
+      text: message.text,
+    }));
+    return this._lastUserTurn === undefined ? loaded : [...loaded, this._lastUserTurn];
+  }
+
+  turnInFlight(): boolean {
+    return this._turnLifecycleActive || this._activeTurn !== undefined;
+  }
+
   resetConversation(): void {
     this._resumeAttemptSeq++;
+    delete this._lastUserTurn;
     this._conversationEpoch++;
     this._dismissedEditorContext.clear();
     this._sessionApprovals.clear();
@@ -2194,6 +2216,7 @@ export class ChatStateManager {
       editorContext: resolveEditorContext(this._dismissedEditorContext),
     };
     this._dismissedEditorContext.clear();
+    this._lastUserTurn = { role: 'user', text, references: request.references };
     this.pushEditorContext();
 
     if (this._turnLifecycleActive) {

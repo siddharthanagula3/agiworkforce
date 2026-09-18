@@ -83,3 +83,14 @@ export function sweepRouteAuditCoverage(appRoot: string): RouteAuditCoverage[] {
 export function isAudited(coverage: RouteAuditCoverage): boolean {
   return coverage.emits.length > 0;
 }
+
+/**
+ * The app root whose route tree can be swept. Null where only the build was
+ * deployed, since the sweep reads route sources rather than a cached answer.
+ */
+export function resolveAuditCoverageRoot(cwd: string): string | null {
+  for (const candidate of [cwd, join(cwd, 'apps/web')]) {
+    if (existsSync(join(candidate, 'app/api'))) return candidate;
+  }
+  return null;
+}

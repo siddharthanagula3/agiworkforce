@@ -79,6 +79,11 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "agi-workforce.retryLastMessage",
+        "title": "AGI Workforce: Retry Last Message",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "agi-workforce.openSettings",
         "title": "AGI Workforce: Open Settings",
         "icon": "$(settings-gear)"
