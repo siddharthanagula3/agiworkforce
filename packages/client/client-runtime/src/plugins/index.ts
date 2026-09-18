@@ -22,8 +22,11 @@ export type {
 } from './packageScan';
 
 export {
+  PLUGIN_SHIPPED_PUBLISHER_KIND,
+  PLUGIN_SHIPPED_SOURCE,
   PLUGIN_SIGNATURE_ALGORITHMS,
   isPluginSha256,
+  isPluginShippedWithProduct,
   isPluginSignatureAlgorithm,
   pluginIntegrityVerdict,
   pluginSignaturePayload,
@@ -32,5 +35,6 @@ export type {
   PluginIntegrityClaim,
   PluginIntegrityCode,
   PluginIntegrityVerdict,
+  PluginPackageProvenance,
   PluginSignatureAlgorithm,
 } from './signature';

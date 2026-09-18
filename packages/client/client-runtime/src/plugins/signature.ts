@@ -1,7 +1,17 @@
+import type { PluginPublisherKind, PluginSourceKind } from '@agiworkforce/types';
+
 export const PLUGIN_SIGNATURE_ALGORITHMS = ['ed25519'] as const;
 export type PluginSignatureAlgorithm = (typeof PLUGIN_SIGNATURE_ALGORITHMS)[number];
 
-export interface PluginIntegrityClaim {
+export const PLUGIN_SHIPPED_SOURCE: PluginSourceKind = 'builtin';
+export const PLUGIN_SHIPPED_PUBLISHER_KIND: PluginPublisherKind = 'first-party';
+
+export interface PluginPackageProvenance {
+  source: PluginSourceKind | null;
+  publisherKind: PluginPublisherKind | null;
+}
+
+export interface PluginIntegrityClaim extends PluginPackageProvenance {
   pluginId: string;
   version: string;
   sha256: string | null;
@@ -9,8 +19,20 @@ export interface PluginIntegrityClaim {
   signatureAlgorithm: string | null;
 }
 
+/**
+ * A builtin first-party pack is distributed inside the product build, so the
+ * build is its publisher. Every other provenance needs a publisher signature.
+ */
+export function isPluginShippedWithProduct(provenance: PluginPackageProvenance): boolean {
+  return (
+    provenance.source === PLUGIN_SHIPPED_SOURCE &&
+    provenance.publisherKind === PLUGIN_SHIPPED_PUBLISHER_KIND
+  );
+}
+
 export type PluginIntegrityCode =
   | 'verified'
+  | 'shipped_with_product'
   | 'hash_missing'
   | 'hash_mismatch'
   | 'signature_missing'
@@ -54,6 +76,12 @@ export function pluginIntegrityVerdict(
   switch (code) {
     case 'verified':
       return { ok: true, code, reason: `The ${pluginId} package matches its signed digest.` };
+    case 'shipped_with_product':
+      return {
+        ok: true,
+        code,
+        reason: `The ${pluginId} pack ships with this build, so the release itself is its publisher.`,
+      };
     case 'hash_missing':
       return {
         ok: false,

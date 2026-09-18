@@ -124,6 +124,8 @@ export async function installWebPlugin(
   await assertPluginPackageInstallable(db, {
     pluginId: found.entry.id,
     version: found.entry.version,
+    source: found.entry.source,
+    publisherKind: found.entry.publisher.kind,
     sha256: found.entry.integrity.sha256,
     signature: found.entry.integrity.signature,
     signatureAlgorithm: found.entry.integrity.signatureAlgorithm,

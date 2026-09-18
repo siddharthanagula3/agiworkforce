@@ -7,6 +7,16 @@
 -- `signature` NULL so a null could never read as verified. A published row must
 -- now carry a digest AND a signature, so a null cannot reach an install path.
 --
+-- The one exemption is provenance, not a hole: a `builtin` `first-party` pack is
+-- distributed inside the product build (0109's
+-- plugin_registry_entries_web_pack_is_embedded already requires exactly that
+-- shape, with the manifest embedded and no artifact URL), so the release is its
+-- publisher and there is no external artifact for a detached signature to cover.
+-- The five shipped packs are those rows. Every other source is signed, scanned
+-- and permission-reviewed. isPluginShippedWithProduct in
+-- packages/client/client-runtime/src/plugins/signature.ts is the same rule for
+-- the runtime verdict.
+--
 -- Depends: 0096 (plugin_registry_entries, plugin_installations),
 --          0184 (plugin_marketplace_installations)
 
@@ -27,7 +37,9 @@ alter table public.plugin_registry_entries
   drop constraint if exists plugin_registry_entries_published_is_signed;
 alter table public.plugin_registry_entries
   add constraint plugin_registry_entries_published_is_signed check (
-    status <> 'published' or (sha256 is not null and signature is not null)
+    status <> 'published'
+    or (source = 'builtin' and publisher_kind = 'first-party')
+    or (sha256 is not null and signature is not null)
   );
 
 alter table public.plugin_installations
@@ -107,10 +119,19 @@ commit;
 -- =============================================================================
 -- VERIFICATION, run MANUALLY on a throwaway Neon BRANCH before production.
 -- =============================================================================
--- -- 1. No existing published row is left unsigned (all seeded rows are preview):
+-- -- 1. No published row outside the shipped builtin packs is left unsigned:
 -- --    SELECT count(*) FROM public.plugin_registry_entries
--- --     WHERE status = 'published' AND (sha256 IS NULL OR signature IS NULL);
+-- --     WHERE status = 'published'
+-- --       AND NOT (source = 'builtin' AND publisher_kind = 'first-party')
+-- --       AND (sha256 IS NULL OR signature IS NULL);
 -- --    EXPECT: 0   (a nonzero result means this migration would have failed)
+--
+-- -- 1b. The exemption covers only the five shipped packs and nothing else:
+-- --    SELECT id FROM public.plugin_registry_entries
+-- --     WHERE status = 'published' AND source = 'builtin'
+-- --       AND publisher_kind = 'first-party' AND signature IS NULL ORDER BY id;
+-- --    EXPECT: data-pack, engineering-pack, presentations-pack, research-pack,
+-- --            writing-pack
 --
 -- -- 2. A signature without an algorithm is refused:
 -- --    UPDATE public.plugin_registry_entries SET signature = 'x' WHERE id = 'research-pack';
