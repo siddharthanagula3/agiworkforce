@@ -30,9 +30,13 @@ function asKeyValueStore(client: unknown): KeyValueStore {
 import {
   AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY,
   AUDIT_STREAM_BATCH,
+  AUDIT_STREAM_CONTINUITY_ALERT_MINUTES,
+  auditStreamContinuity,
   AUDIT_STREAM_FAILURE_CEILING,
   deleteAuditDestination,
   setAuditDestinationEnabled,
+  AUDIT_STREAM_SCHEMA,
+  AUDIT_STREAM_SCHEMA_VERSION,
   drainAuditDestination,
   generateSigningSecret,
   hasActiveAuditStreamDestinations,
@@ -347,6 +351,43 @@ describe('drainAuditDestination', () => {
     expect(advanced, 'the cursor must advance after a 2xx').toBeDefined();
   });
 
+  it('names the schema on the envelope and on every exported record', async () => {
+    const h = harness();
+    await drainAuditDestination(h.db, ORG, { now: NOW, fetchImpl: h.fetchImpl });
+
+    const [, init] = (h.fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [
+      string,
+      RequestInit & { body: string },
+    ];
+    const payload = JSON.parse(init.body) as {
+      schema: string;
+      schemaVersion: number;
+      events: Array<Record<string, unknown>>;
+    };
+
+    expect(payload.schema).toBe(AUDIT_STREAM_SCHEMA);
+    expect(payload.schemaVersion).toBe(AUDIT_STREAM_SCHEMA_VERSION);
+    expect(payload.events.length).toBeGreaterThan(0);
+    for (const event of payload.events) {
+      expect(event['schema_version']).toBe(AUDIT_STREAM_SCHEMA_VERSION);
+    }
+  });
+
+  it('keeps the fields an already-configured receiver parses', async () => {
+    const h = harness();
+    await drainAuditDestination(h.db, ORG, { now: NOW, fetchImpl: h.fetchImpl });
+
+    const [, init] = (h.fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0] as [
+      string,
+      RequestInit & { body: string },
+    ];
+    const payload = JSON.parse(init.body) as Record<string, unknown>;
+
+    expect(payload['organizationId']).toBe(ORG);
+    expect(payload['deliveredAt']).toBe(NOW.toISOString());
+    expect(Array.isArray(payload['events'])).toBe(true);
+  });
+
   it('HOLDS the cursor when delivery fails, so events are retried not dropped', async () => {
     // A stream that drops events on a transient error is worse than one that
     // repeats them: a receiver can deduplicate on the event id and cannot
@@ -459,5 +500,88 @@ describe('drainAuditDestination', () => {
     for (const [, params] of h.query.mock.calls) {
       expect((params as unknown[])[0]).toBe(ORG);
     }
+  });
+});
+
+describe('audit continuity through a SIEM outage', () => {
+  function continuityDb(rows: Record<string, unknown>[]): {
+    db: DatabaseAdapter;
+    query: ReturnType<typeof vi.fn>;
+  } {
+    const query = vi.fn(async () => rows);
+    return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
+  }
+
+  it('reports the backlog a failing destination is holding rather than silence', async () => {
+    const { db } = continuityDb([
+      {
+        organization_id: ORG,
+        buffered: '250',
+        oldest_undelivered_at: '2026-08-23T09:00:00.000Z',
+        consecutive_failures: 7,
+      },
+    ]);
+
+    const [continuity] = await auditStreamContinuity(db, NOW);
+
+    expect(continuity?.buffered).toBe(250);
+    expect(continuity?.eventsRetained).toBe(true);
+    expect(continuity?.behindMinutes).toBe(180);
+    expect(continuity?.alerting).toBe(true);
+  });
+
+  it('does not alert while the receiver is only briefly behind', async () => {
+    const { db } = continuityDb([
+      {
+        organization_id: ORG,
+        buffered: '3',
+        oldest_undelivered_at: new Date(
+          NOW.getTime() - (AUDIT_STREAM_CONTINUITY_ALERT_MINUTES - 5) * 60_000,
+        ).toISOString(),
+        consecutive_failures: 1,
+      },
+    ]);
+
+    const [continuity] = await auditStreamContinuity(db, NOW);
+
+    expect(continuity?.alerting).toBe(false);
+  });
+
+  it('reports a caught-up destination as holding nothing', async () => {
+    const { db } = continuityDb([
+      {
+        organization_id: ORG,
+        buffered: '0',
+        oldest_undelivered_at: null,
+        consecutive_failures: 0,
+      },
+    ]);
+
+    const [continuity] = await auditStreamContinuity(db, NOW);
+
+    expect(continuity?.buffered).toBe(0);
+    expect(continuity?.behindMinutes).toBeNull();
+    expect(continuity?.alerting).toBe(false);
+  });
+
+  it('counts only events past the destination cursor, not the whole audit log', async () => {
+    const { db, query } = continuityDb([]);
+
+    await auditStreamContinuity(db, NOW);
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('d.last_delivered_at is null');
+    expect(sql).toContain('(e.created_at, e.id) > (d.last_delivered_at, d.last_delivered_id)');
+    expect(sql).toContain('d.enabled = true');
+  });
+
+  it('a failed delivery reports what it buffered instead of dropping it', async () => {
+    const h = harness({ responseStatus: 503, events: [event(1), event(2), event(3)] });
+
+    const result = await drainAuditDestination(h.db, ORG, { now: NOW, fetchImpl: h.fetchImpl });
+
+    expect(result.status).toBe('failed');
+    expect(result.buffered).toBe(3);
+    expect(result.delivered).toBe(0);
   });
 });

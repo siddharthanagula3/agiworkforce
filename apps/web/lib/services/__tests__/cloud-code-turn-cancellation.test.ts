@@ -5,13 +5,44 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@/lib/e2b/runtime', () => ({
+  getE2BExecutor: vi.fn(),
+  revokeE2BSessionCredentials: vi.fn(),
+}));
+vi.mock('@/lib/e2b/session-store', () => ({
+  MANAGED_CLOUD_E2B_TENANT_ID: 'managed-cloud',
+  managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
+}));
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  buildServerProviderAdapter: vi.fn(() => ({ stream: vi.fn() })),
+  resolveProviderFromModel: vi.fn(() => 'anthropic'),
+}));
+vi.mock('@/lib/services/cloud-code-agent-runner', () => ({
+  createCloudCodeToolRunner: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../managed-usage-request-service')>()),
+  fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
+  reserveManagedUsageRequest: vi.fn(async () => ({ userId: 'user-1', leaseToken: 'lease-1' })),
+  reserveManagedUsageProviderStep: vi.fn(async () => ({})),
+  markManagedUsageProviderStarted: vi.fn(async () => undefined),
+  finalizeManagedUsageRequest: vi.fn(async () => ({})),
+}));
+vi.mock('../cloud-code-session-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../cloud-code-session-service')>()),
+  claimCloudCodeSessionForRun: vi.fn(async () => ({ leaseToken: 'lease-1' })),
+  releaseCloudCodeSessionAfterRun: vi.fn(async () => ({ state: 'ready' })),
+}));
 
+import { getE2BExecutor, revokeE2BSessionCredentials } from '@/lib/e2b/runtime';
 import {
   cloudCodeToolRetrySafety,
   runCloudCodeAgentTurn,
   type CloudCodeToolRunner,
 } from '../cloud-code-agent-loop';
 import {
+  CLOUD_CODE_TURN_CANCELLATION,
+  executePersistedAgentTurn,
   isCloudCodeTurnCancellationRequested,
   requestCloudCodeTurnCancellation,
 } from '../cloud-code-agent-service';
@@ -20,6 +51,15 @@ import { CloudCodeConflictError } from '../cloud-code-session-service';
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const TURN_ID = '22222222-2222-4222-8222-222222222222';
 const OWNER = { userId: 'user-1', organizationId: null };
+
+beforeEach(() => {
+  vi.mocked(revokeE2BSessionCredentials).mockResolvedValue({
+    sandboxId: 'sbx-1',
+    killed: 2,
+    survived: 0,
+    gateCacheCleared: true,
+  });
+});
 
 function streamOf(chunks: StreamChunk[]): AsyncIterable<StreamChunk> {
   return {
@@ -165,6 +205,8 @@ describe('requestCloudCodeTurnCancellation', () => {
       turnId: TURN_ID,
       requestedAt: '2026-09-07T20:00:00.000Z',
       durable: false,
+      processesStopped: 2,
+      credentialsRevoked: true,
     });
     expect(queries[0]?.sql).toContain('cancel_requested_at = coalesce(cancel_requested_at, now())');
     expect(queries[0]?.sql).toContain('user_id = $2');
@@ -233,6 +275,143 @@ describe('requestCloudCodeTurnCancellation', () => {
         TURN_ID,
       ),
     ).resolves.toBe(false);
+  });
+});
+
+describe('a stop reaches the sandbox, not just the turn row', () => {
+  function db() {
+    return {
+      query: vi.fn(async (sql: string) => {
+        if (/from public\.cloud_agent_runs/.test(sql)) return [];
+        return [{ id: TURN_ID, idempotency_key: 'k-12345678', cancel_requested_at: new Date(0) }];
+      }),
+    };
+  }
+
+  it('kills the sandbox processes the turn had in flight', async () => {
+    await requestCloudCodeTurnCancellation(db() as never, OWNER, SESSION_ID);
+
+    expect(revokeE2BSessionCredentials).toHaveBeenCalledWith({
+      tenantId: 'managed-cloud',
+      userId: 'user-1',
+      resource: { kind: 'code_session', id: SESSION_ID },
+    });
+  });
+
+  it('still records the stop when the sandbox cannot be reached', async () => {
+    vi.mocked(revokeE2BSessionCredentials).mockRejectedValueOnce(new Error('sandbox gone'));
+
+    const result = await requestCloudCodeTurnCancellation(db() as never, OWNER, SESSION_ID);
+
+    expect(result.turnId).toBe(TURN_ID);
+    expect(result.processesStopped).toBe(0);
+    expect(result.credentialsRevoked).toBe(false);
+  });
+
+  it('does not claim to have recalled what is already outside the sandbox', () => {
+    expect(CLOUD_CODE_TURN_CANCELLATION.partialOutputRetained).toBe(true);
+    expect(CLOUD_CODE_TURN_CANCELLATION.cannotBeStopped).toContain(
+      'a branch the turn already pushed, or a pull request it already opened',
+    );
+  });
+});
+
+describe('a turn that stops short leaves its work reviewable', () => {
+  const WORKSPACE = '/workspace/repo';
+  const DIRTY_STATUS = ' M src/index.ts\n?? src/new.ts\n';
+
+  function gitResult(stdout: string) {
+    return { ok: true, output: stdout, stdout, stderr: '', exitCode: 0 };
+  }
+
+  function executor(status: string) {
+    return {
+      pause: vi.fn(async () => undefined),
+      dispose: vi.fn(async () => undefined),
+      git: {
+        status: vi.fn(async () => gitResult(status)),
+        add: vi.fn(async () => gitResult('')),
+        commit: vi.fn(async () => gitResult('committed')),
+      },
+    };
+  }
+
+  function turnDb() {
+    const writes: { sql: string; params: unknown[] }[] = [];
+    return {
+      writes,
+      adapter: {
+        query: vi.fn(async (sql: string, params: unknown[]) => {
+          writes.push({ sql, params });
+          return [{ id: TURN_ID, step_index: 0 }];
+        }),
+      },
+    };
+  }
+
+  async function runStoppedTurn(sandbox: ReturnType<typeof executor>) {
+    const aborted = new AbortController();
+    aborted.abort();
+    const db = turnDb();
+    vi.mocked(getE2BExecutor).mockResolvedValue(sandbox as never);
+
+    const outcome = await executePersistedAgentTurn({
+      db: db.adapter as never,
+      owner: OWNER,
+      session: {
+        networkAccess: 'none',
+        runtimeId: null,
+        workspacePath: WORKSPACE,
+        repositoryUrl: 'https://github.test/acme/repo.git',
+      },
+      sessionId: SESSION_ID,
+      turnId: TURN_ID,
+      goal: 'do the thing',
+      model: 'a-model',
+      provider: 'anthropic',
+      planTier: 'pro',
+      idempotencyKey: 'k-12345678',
+      signal: aborted.signal,
+      priorMessages: [],
+    });
+    return { outcome, db };
+  }
+
+  it('commits what it changed before the sandbox is handed back', async () => {
+    const sandbox = executor(DIRTY_STATUS);
+    const { outcome } = await runStoppedTurn(sandbox);
+
+    expect(sandbox.git.add).toHaveBeenCalledWith({ path: WORKSPACE, all: true });
+    expect(sandbox.git.commit).toHaveBeenCalledWith(
+      expect.objectContaining({ path: WORKSPACE, message: expect.stringContaining(TURN_ID) }),
+    );
+    const commitOrder = sandbox.git.commit.mock.invocationCallOrder[0] ?? 0;
+    const pauseOrder = sandbox.pause.mock.invocationCallOrder[0] ?? 0;
+    expect(commitOrder).toBeLessThan(pauseOrder);
+    expect(outcome.stopReason).toBe('cancelled');
+  });
+
+  it('tells the reader the partial work is still there', async () => {
+    const { outcome } = await runStoppedTurn(executor(DIRTY_STATUS));
+
+    expect(outcome.errorMessage).toContain('2 files');
+    expect(outcome.errorMessage).toContain('still there to review');
+  });
+
+  it('commits nothing when the turn changed nothing', async () => {
+    const sandbox = executor('');
+    const { outcome } = await runStoppedTurn(sandbox);
+
+    expect(sandbox.git.commit).not.toHaveBeenCalled();
+    expect(outcome.errorMessage).not.toContain('still there to review');
+  });
+
+  it('never reports a stopped turn as a success', async () => {
+    const { outcome, db } = await runStoppedTurn(executor(DIRTY_STATUS));
+
+    expect(outcome.stopReason).toBe('cancelled');
+    const terminal = db.writes.find((write) => /set state = \$2/.test(write.sql));
+    expect(terminal?.params[1]).toBe('cancelled');
   });
 });
 

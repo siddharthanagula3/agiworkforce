@@ -27,9 +27,12 @@ const SKIP_DIRS = new Set([
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.rs', '.ts', '.tsx']);
 const MANIFEST_BASENAMES = new Set(['package.json', 'Cargo.toml']);
+// A guard and its test have to spell out the shapes they reject.
 const EXEMPT_FILES = new Set([
   'scripts/check-llm-failure-guardrails.mjs',
   'scripts/check-llm-failure-guardrails.test.mjs',
+  'scripts/check-test-integrity.mjs',
+  'scripts/check-test-integrity.test.mjs',
 ]);
 const EXEMPT_PATH_PREFIXES = [];
 const TAXONOMY_PATH = 'docs/agent-context/llm-failure-taxonomy.json';
@@ -47,6 +50,31 @@ const TEST_THEATER_PATTERNS = [
   {
     regex: /\bassert!\s*\(\s*true\s*\)/g,
     label: 'assert!(true)',
+  },
+  {
+    regex:
+      /\bexpect\s*\(\s*(true|false|0|1|''|"")\s*\)\s*\.\s*(?:toBe|toEqual|toStrictEqual)\s*\(\s*\1\s*\)/g,
+    label: 'a literal compared against itself asserts nothing about the code under test',
+  },
+  {
+    regex: /\bexpect\s*\(\s*(?:true|1)\s*\)\s*\.\s*(?:toBeTruthy|toBeDefined)\s*\(/g,
+    label: 'expect(<truthy literal>).toBeTruthy() asserts nothing',
+  },
+  {
+    regex: /\bassert_eq!\s*\(\s*([\w.]+)\s*,\s*\1\s*[,)]/g,
+    label: 'assert_eq! compares a value against itself',
+  },
+  {
+    regex: /\.\s*(?:toEqual|toBe|toStrictEqual)\s*\(\s*expect\s*\.\s*anything\s*\(\s*\)\s*\)/g,
+    label: 'toEqual(expect.anything()) accepts every value but undefined and null',
+  },
+  {
+    regex: /\.\s*length\s*\)\s*\.\s*toBeGreaterThanOrEqual\s*\(\s*0\s*\)/g,
+    label: 'a length is never below zero, so this assertion passes on an empty result',
+  },
+  {
+    regex: /\.\s*toContain\s*\(\s*(?:''|"")\s*\)/g,
+    label: 'every string contains the empty string',
   },
 ];
 
