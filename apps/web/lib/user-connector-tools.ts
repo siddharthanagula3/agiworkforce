@@ -67,6 +67,7 @@ import {
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { resolveToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
 export const MAX_CONNECTOR_TOOLS_PER_USER = 32;
@@ -2356,6 +2357,41 @@ export async function loadUserConnectorToolCatalog(
     );
     return { tools: [], dropped: [], limit };
   }
+}
+
+export interface ResearchConnectorSource {
+  connectorId: string;
+  label: string;
+  toolNames: string[];
+}
+
+/**
+ * The connected apps a research run may read from.
+ *
+ * Derived from the catalog the chat tools are built from, so a connector that
+ * the workspace policy, the per-tool permissions or the plan ceiling already
+ * removed is not reachable through research either. Only read-class tools
+ * qualify: research reads, it never acts.
+ */
+export function researchConnectorSources(
+  catalog: UserConnectorToolCatalog,
+): ResearchConnectorSource[] {
+  const byConnector = new Map<string, ResearchConnectorSource>();
+  for (const tool of catalog.tools) {
+    if (tool.origin !== 'connector') continue;
+    if (resolveToolMetadata(tool.qualifiedName).actionClass !== 'read') continue;
+    const existing = byConnector.get(tool.serverId);
+    if (existing) {
+      existing.toolNames.push(tool.qualifiedName);
+      continue;
+    }
+    byConnector.set(tool.serverId, {
+      connectorId: tool.serverId,
+      label: tool.serverLabel ?? tool.serverId,
+      toolNames: [tool.qualifiedName],
+    });
+  }
+  return [...byConnector.values()];
 }
 
 export function makeUserConnectorExecutor(

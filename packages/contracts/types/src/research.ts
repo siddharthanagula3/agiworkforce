@@ -84,6 +84,78 @@ export interface ResearchQuery {
   provider?: string;
 }
 
+/**
+ * Where a research run is allowed to read from. One run mixes any number of
+ * them: sites, the account's own files, and connected apps.
+ */
+export const RESEARCH_SOURCE_KINDS = ['web', 'files', 'connector'] as const;
+export type ResearchSourceKind = (typeof RESEARCH_SOURCE_KINDS)[number];
+
+export interface ResearchSource {
+  kind: ResearchSourceKind;
+  /** A hostname for `web`, a connector id for `connector`, empty for `files`. */
+  id: string;
+  label: string;
+  /** A site the run must never read. Only meaningful on a `web` source. */
+  excluded?: boolean;
+}
+
+/** The selection as the chat request carries it. */
+export interface ResearchSourceRequest {
+  files: boolean;
+  allowDomains: string[];
+  denyDomains: string[];
+  connectors: string[];
+}
+
+export const FILES_RESEARCH_SOURCE: ResearchSource = {
+  kind: 'files',
+  id: '',
+  label: 'My files, chats and reports',
+};
+
+export function researchSourceKey(
+  source: Pick<ResearchSource, 'kind' | 'id' | 'excluded'>,
+): string {
+  return `${source.kind}:${source.excluded ? 'not:' : ''}${source.id}`;
+}
+
+export function addResearchSource(
+  sources: readonly ResearchSource[],
+  source: ResearchSource,
+): ResearchSource[] {
+  const key = researchSourceKey(source);
+  if (sources.some((existing) => researchSourceKey(existing) === key)) return [...sources];
+  return [...sources, source];
+}
+
+export function removeResearchSource(
+  sources: readonly ResearchSource[],
+  key: string,
+): ResearchSource[] {
+  return sources.filter((source) => researchSourceKey(source) !== key);
+}
+
+/**
+ * An empty selection is an unrestricted web run, which is what a reader who
+ * answers nothing asked for. Adding one site narrows the run to it.
+ */
+export function researchSourceRequest(sources: readonly ResearchSource[]): ResearchSourceRequest {
+  const request: ResearchSourceRequest = {
+    files: false,
+    allowDomains: [],
+    denyDomains: [],
+    connectors: [],
+  };
+  for (const source of sources) {
+    if (source.kind === 'files') request.files = true;
+    else if (source.kind === 'connector') request.connectors.push(source.id);
+    else if (source.excluded) request.denyDomains.push(source.id);
+    else request.allowDomains.push(source.id);
+  }
+  return request;
+}
+
 export interface ResearchStep {
   id: string;
 
@@ -111,12 +183,7 @@ export interface ResearchStep {
 }
 
 export type ResearchReportStatus =
-  | 'pending'
-  | 'researching'
-  | 'synthesizing'
-  | 'completed'
-  | 'interrupted'
-  | 'failed';
+  'pending' | 'researching' | 'synthesizing' | 'completed' | 'interrupted' | 'failed';
 
 /** Every valid {@link ResearchReportStatus}, in lifecycle order. */
 export const RESEARCH_REPORT_STATUSES: readonly ResearchReportStatus[] = [

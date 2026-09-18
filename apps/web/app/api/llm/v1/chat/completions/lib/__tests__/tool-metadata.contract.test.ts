@@ -67,7 +67,9 @@ describe('web tool metadata declares through the shared contract', () => {
       connectorId: 'github',
       scopes: [],
     });
-    expect(definition.retrySafety).toBe('unknown');
+    // Retrying a posted comment posts it twice, so the send declares its own
+    // safety rather than falling through to the unknown default.
+    expect(definition.retrySafety).toBe('at_most_once');
   });
 
   it('renders an undeclared operator tool with the unknown-tool defaults', () => {

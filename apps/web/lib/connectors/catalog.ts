@@ -256,6 +256,34 @@ export function allowsPresentTenseCopy(connectorId: string): boolean {
 }
 
 /**
+ * How a connector reaches the thing it acts on. The ordering is the product
+ * rule: a structured API beats driving a browser, and driving a browser beats
+ * moving the pointer over whatever happens to be on screen.
+ */
+export const CONNECTOR_EXECUTION_CHANNELS = ['connector', 'browser', 'automation'] as const;
+export type ConnectorExecutionChannel = (typeof CONNECTOR_EXECUTION_CHANNELS)[number];
+
+// Only the connectors that drive a user interface rank below `connector`. A
+// local filesystem, shell or model runtime is a structured API like any other.
+const CHANNEL_BY_CONNECTOR: Readonly<Record<string, ConnectorExecutionChannel>> = Object.freeze({
+  'browser-automation': 'browser',
+  'screen-vision': 'automation',
+});
+
+export function getConnectorExecutionChannel(connectorId: string): ConnectorExecutionChannel {
+  return CHANNEL_BY_CONNECTOR[connectorId] ?? 'connector';
+}
+
+export function isChannelPreferredOver(
+  channel: ConnectorExecutionChannel,
+  other: ConnectorExecutionChannel,
+): boolean {
+  return (
+    CONNECTOR_EXECUTION_CHANNELS.indexOf(channel) < CONNECTOR_EXECUTION_CHANNELS.indexOf(other)
+  );
+}
+
+/**
  * Fails closed for an id nobody registered: an unknown connector has no actions
  * declared here, so it is never treated as one whose list can be shown up front.
  */
