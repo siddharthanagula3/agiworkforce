@@ -13,6 +13,7 @@ import {
 import { scrubAttributes } from '@agiworkforce/observability';
 
 import { OBSERVABILITY_ATTRIBUTE, deploymentAttributes } from './attributes';
+import { boundAttributes } from './cardinality';
 import { SPAN_DOMAIN_ATTRIBUTE, TRACER_NAME } from './otel-span-bridge';
 
 export const METRIC_NAME = {
@@ -122,9 +123,10 @@ function instruments(): Instruments {
 }
 
 // Release identity is a dimension of every series, not of the few call sites
-// that remember to pass it.
+// that remember to pass it. boundAttributes is the second half: scrubbing masks
+// a secret inside a value, it does not stop the value being unique per request.
 function clean(attributes: Readonly<Record<string, unknown>>): Attributes {
-  return scrubAttributes({ ...deploymentAttributes(), ...attributes });
+  return boundAttributes(scrubAttributes({ ...deploymentAttributes(), ...attributes }));
 }
 
 function nonNegative(durationMs: number): number {

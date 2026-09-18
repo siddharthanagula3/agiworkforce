@@ -46,6 +46,13 @@ jobs:
           node --test scripts/lib/rollout/release-guards.test.mjs
           node --test scripts/lib/rollout/channels.test.mjs
 
+      # A migration that cannot be reversed, or destroys rows without saying
+      # so, must not reach a released version number.
+      - name: Refuse a version whose migrations skip the safety guard
+        run: |
+          node --test scripts/check-neon-migrations.test.mjs
+          node scripts/check-neon-migrations.mjs
+
       - name: Resolve the release channel this tag publishes to
         id: channel
         env:
@@ -375,6 +382,56 @@ jobs:
           done
           ls -R dist/cli/
 
+      - name: Download signed checksums
+        uses: actions/download-artifact@v8
+        with:
+          path: archives
+          name: signed-cli-release-assets
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # The signature covers the archives. npm publishes the binaries from a
+      # separate artifact, so nothing signed them until they were compared.
+      - name: Verify the npm binaries against the signed archives
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --bundle archives/SHA256SUMS.sigstore.json \
+            --certificate-identity "https://github.com/${REPOSITORY}/.github/workflows/release-cli.yml@refs/tags/${RELEASE_TAG}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            archives/SHA256SUMS
+          (cd archives && sha256sum -c SHA256SUMS)
+          for archive in archives/agiworkforce-*.tar.gz archives/agiworkforce-*.zip; do
+            [ -e "$archive" ] || continue
+            platform=$(basename "$archive")
+            platform=${platform#agiworkforce-}
+            platform=${platform%.tar.gz}
+            platform=${platform%.zip}
+            platform=${platform/windows-/win32-}
+            work="$RUNNER_TEMP/verify/$platform"
+            mkdir -p "$work"
+            case "$archive" in
+              *.tar.gz) tar -xzf "$archive" -C "$work" ;;
+              *.zip) unzip -q -o "$archive" -d "$work" ;;
+            esac
+            for binary in "$work"/*; do
+              staged="dist/cli/$platform/bin/$(basename "$binary")"
+              if [ ! -f "$staged" ]; then
+                echo "ERROR: $archive ships $(basename "$binary") but $staged is not staged for npm" >&2
+                exit 1
+              fi
+              if [ "$(sha256sum < "$binary")" != "$(sha256sum < "$staged")" ]; then
+                echo "ERROR: $staged differs from the signed archive $archive" >&2
+                exit 1
+              fi
+            done
+          done
+
       - name: Test CLI npm wrapper
         run: npm test --prefix apps/cli/npm
 
@@ -405,6 +462,25 @@ jobs:
         with:
           path: archives
           name: signed-cli-release-assets
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # The assets crossed the artifact store since signing, so the signature
+      # is checked again where they are published.
+      - name: Verify the signed checksums before publishing them
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --bundle archives/SHA256SUMS.sigstore.json \
+            --certificate-identity "https://github.com/${REPOSITORY}/.github/workflows/release-cli.yml@refs/tags/${RELEASE_TAG}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            archives/SHA256SUMS
+          (cd archives && sha256sum -c SHA256SUMS)
 
       - name: Get version
         id: version

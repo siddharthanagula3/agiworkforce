@@ -134,7 +134,9 @@ describe('tool outcome metrics', () => {
   it('scrubs a secret-shaped error type before it becomes a metric attribute', async () => {
     recordFailure('worker', 'sk-live-abcdefghijklmnopqrstuvwxyz');
     const [point] = await points(METRIC_NAME.failures);
-    expect(point?.attributes['error.type']).toBe('[redacted]');
+    // Scrubbing masks the secret, then the cardinality bound refuses what is
+    // left: neither the secret nor its redaction opens a series of its own.
+    expect(point?.attributes['error.type']).toBe('unclassified');
   });
 });
 
