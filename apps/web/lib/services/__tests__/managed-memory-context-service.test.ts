@@ -1,3 +1,4 @@
+import { contextSource } from '@agiworkforce/context';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
@@ -12,9 +13,11 @@ describe('loadManagedMemoryContext', () => {
   it('loads only active memories owned by the authenticated user', async () => {
     const query = vi.fn().mockResolvedValue([
       {
+        id: 'mem-1',
         content: 'I prefer concise answers.',
         category: 'preference',
         pinned: true,
+        updated_at: '2026-09-17T08:00:00.000Z',
       },
     ]);
 
@@ -25,6 +28,13 @@ describe('loadManagedMemoryContext', () => {
         content: 'I prefer concise answers.',
         category: 'preference',
         pinned: true,
+        source: contextSource({
+          sourceClass: 'account_memory',
+          locator: 'user_memories/mem-1',
+          recordId: 'mem-1',
+          ownerUserId: 'user-1',
+          capturedAt: '2026-09-17T08:00:00.000Z',
+        }),
       },
     ]);
     expect(query.mock.calls[0]?.[0]).toMatch(/user_id = \$1[\s\S]*is_deleted = false/);
