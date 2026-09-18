@@ -6,6 +6,10 @@ import {
   OBJECT_STORAGE_PRIVATE_BUCKET_ENV,
   OBJECT_STORAGE_SECRET_ACCESS_KEY_ENV,
 } from '@agiworkforce/object-storage/config';
+import {
+  describeOptionalFeatureDecisions,
+  validateOptionalFeatureConfig,
+} from './config/optional-features';
 import { getAllRegisteredPriceIds } from './price-tier-mapping';
 import { STRIPE_PRICE_IDS } from './pricing';
 
@@ -453,6 +457,7 @@ export function validateEnvironment(): ValidationResult {
     validateEmailPseudonymPepper(),
     validateSandboxOriginConfigured(),
     validateGeneratedMediaStorage(),
+    validateOptionalFeatureConfig(),
   ];
 
   const allErrors = results.flatMap((r) => r.errors);
@@ -466,6 +471,10 @@ export function validateEnvironment(): ValidationResult {
 }
 
 export function logValidationResults(result: ValidationResult): void {
+  for (const decision of describeOptionalFeatureDecisions()) {
+    console.debug(`[optional-feature] ${decision}`);
+  }
+
   if (result.valid) {
     console.debug('✅ Environment validation passed');
   } else {
