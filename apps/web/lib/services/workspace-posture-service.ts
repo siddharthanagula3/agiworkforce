@@ -8,6 +8,8 @@ import {
   type OrganizationKeyStatus,
 } from '@/lib/server/organization-encryption-keys';
 import { readOrganizationRegion, type OrganizationRegionState } from '@/lib/server/data-region';
+import { retentionEnforcement } from '@/lib/server/retention/enforcement';
+import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
 import { DATA_REGIONS, DEFAULT_DATA_REGION } from '@agiworkforce/compliance';
 
 /**
@@ -159,6 +161,7 @@ export async function readWorkspacePosture(
     policy,
     keyStatus,
     regionState,
+    plan,
   ] = await Promise.all([
     db.query<OrgRow>(
       'select name, licensed_seats, seats_consumed from public.organizations where id = $1 limit 1',
@@ -273,6 +276,7 @@ export async function readWorkspacePosture(
     getEffectiveOrganizationPolicy(db, organizationId),
     readOrganizationKeyStatus(db, organizationId),
     readOrganizationRegion(db, organizationId),
+    resolveOrganizationEntitlementPlan(organizationId),
   ]);
 
   const org = orgRows[0] ?? null;
@@ -315,6 +319,11 @@ export async function readWorkspacePosture(
       modelPolicy.blocked_models
     : 0;
   const { configured, policy: effectivePolicy } = policy;
+  const retention = retentionEnforcement({
+    plan,
+    retentionDays: effectivePolicy.retentionDays,
+    retentionEnforced: effectivePolicy.retentionEnforced,
+  });
 
   const groups: PostureGroup[] = [
     {
@@ -561,14 +570,18 @@ export async function readWorkspacePosture(
         {
           id: 'retention',
           label: 'Retention',
-          value: effectivePolicy.retentionEnforced
+          value: retention.enforced
             ? `${effectivePolicy.retentionDays} days, enforced`
-            : `${effectivePolicy.retentionDays} days, not enforced`,
-          state: effectivePolicy.retentionEnforced ? 'ok' : 'attention',
-          enforcement: effectivePolicy.retentionEnforced ? 'enforced' : 'stated',
-          detail: effectivePolicy.retentionEnforced
+            : retention.required
+              ? `${effectivePolicy.retentionDays} days, required by your plan and not yet enforced`
+              : `${effectivePolicy.retentionDays} days, not enforced`,
+          state: retention.enforced ? 'ok' : 'attention',
+          enforcement: retention.enforced ? 'enforced' : 'stated',
+          detail: retention.enforced
             ? `A nightly sweep permanently deletes workspace conversations with no activity for ${effectivePolicy.retentionDays} days. Records under legal hold are withheld, and every sweep is written to an evidence trail an admin can read.`
-            : 'The window is recorded as this workspace’s position and nothing is deleted. Treat it as a stated policy, not as deletion you can evidence to an auditor, until an owner turns enforcement on.',
+            : retention.required
+              ? 'Your plan carries a retention commitment, so this window is not a preference. Nothing is deleted until an owner turns enforcement on, and until then the commitment is not one you could evidence to an auditor.'
+              : 'The window is recorded as this workspace\u2019s position and nothing is deleted. Treat it as a stated policy, not as deletion you can evidence to an auditor, until an owner turns enforcement on.',
           href: '/workspace/policy',
         },
         {

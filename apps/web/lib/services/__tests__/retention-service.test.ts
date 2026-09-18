@@ -6,6 +6,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   isSwept,
   listLegalHolds,
+  readRetentionBacklog,
   releaseLegalHold,
   sweepOrganizationRetention,
   RETENTION_SWEEP_BATCH,
@@ -310,5 +311,101 @@ describe('legal holds', () => {
     const h = harness();
     await releaseLegalHold(h.db, ORG, 'some-id', 'user-admin');
     expect(String(h.query.mock.calls[0]?.[0])).toContain('released_at is null');
+  });
+});
+
+interface BacklogFixture {
+  policy?: { retention_days: number; retention_enforced: boolean } | null;
+  holds?: Record<string, unknown>[];
+  pending?: number;
+  held?: number;
+  sweeps?: { created_at: string }[];
+}
+
+function backlogHarness(fixture: BacklogFixture = {}) {
+  const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+    const text = String(sql);
+    if (/from public\.organization_admin_policies/i.test(text)) {
+      return fixture.policy === undefined
+        ? [{ retention_days: 90, retention_enforced: true }]
+        : fixture.policy
+          ? [fixture.policy]
+          : [];
+    }
+    if (/from public\.legal_holds/i.test(text)) return fixture.holds ?? [];
+    if (/from public\.web_conversations/i.test(text)) {
+      return [{ pending: fixture.pending ?? 0, held: fixture.held ?? 0 }];
+    }
+    if (/from public\.organization_retention_sweeps/i.test(text)) return fixture.sweeps ?? [];
+    return [];
+  });
+  return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
+}
+
+describe('readRetentionBacklog', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reports nothing pending for a workspace that never opted in', async () => {
+    const h = backlogHarness({ policy: null });
+
+    const backlog = await readRetentionBacklog(h.db, ORG, { now: NOW });
+
+    expect(backlog.enforced).toBe(false);
+    expect(backlog.pendingDeletions).toBe(0);
+    expect(backlog.estimatedCompletionAt).toBeNull();
+  });
+
+  it('reports the backlog the sweep will need more than one run to clear', async () => {
+    const ceiling = RETENTION_SWEEP_BATCH * RETENTION_SWEEP_MAX_BATCHES;
+    const h = backlogHarness({
+      pending: ceiling * 2 + 1,
+      sweeps: [
+        { created_at: '2026-08-22T04:20:00.000Z' },
+        { created_at: '2026-08-21T04:20:00.000Z' },
+      ],
+    });
+
+    const backlog = await readRetentionBacklog(h.db, ORG, { now: NOW });
+
+    expect(backlog.perRunCeiling).toBe(ceiling);
+    expect(backlog.pendingDeletions).toBe(ceiling * 2 + 1);
+    expect(backlog.runsRemaining).toBe(3);
+    expect(backlog.lastSweptAt).toBe('2026-08-22T04:20:00.000Z');
+    expect(backlog.estimatedCompletionAt).toBe('2026-08-25T04:20:00.000Z');
+  });
+
+  it('gives no completion estimate from a single sweep, rather than inventing a cadence', async () => {
+    const h = backlogHarness({ pending: 10, sweeps: [{ created_at: '2026-08-22T04:20:00.000Z' }] });
+
+    const backlog = await readRetentionBacklog(h.db, ORG, { now: NOW });
+
+    expect(backlog.runsRemaining).toBe(1);
+    expect(backlog.estimatedCompletionAt).toBeNull();
+  });
+
+  it('counts everything as held while an organization-wide hold is active', async () => {
+    const h = backlogHarness({
+      holds: [hold({ scope: 'organization', subject_user_id: null })],
+      pending: 40,
+      held: 2,
+    });
+
+    const backlog = await readRetentionBacklog(h.db, ORG, { now: NOW });
+
+    expect(backlog.pendingDeletions).toBe(0);
+    expect(backlog.heldFromDeletion).toBe(42);
+    expect(backlog.runsRemaining).toBe(0);
+  });
+
+  it('measures the backlog against the same cutoff the sweep deletes by', async () => {
+    const h = backlogHarness({ pending: 1 });
+
+    const backlog = await readRetentionBacklog(h.db, ORG, { now: NOW });
+
+    expect(backlog.cutoff).toBe(new Date(NOW.getTime() - 90 * 86_400_000).toISOString());
+    const call = h.query.mock.calls.find(([sql]) =>
+      /from public\.web_conversations/i.test(String(sql)),
+    )!;
+    expect(call[1]?.[1]).toBe(backlog.cutoff);
   });
 });

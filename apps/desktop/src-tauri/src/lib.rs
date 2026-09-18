@@ -75,8 +75,8 @@ pub mod data;
 pub mod features;
 pub mod integrations;
 pub mod sys;
-pub mod upgrade;
 pub mod ui;
+pub mod upgrade;
 
 #[cfg(test)]
 pub mod tests;
