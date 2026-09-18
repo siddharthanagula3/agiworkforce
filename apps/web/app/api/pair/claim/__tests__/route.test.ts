@@ -49,7 +49,10 @@ function relayClaim() {
 }
 
 function relayReturns(status: number, body: unknown) {
-  const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));
+  const fetchMock = vi.fn(
+    async (_url: string | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify(body), { status }),
+  );
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
