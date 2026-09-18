@@ -1,9 +1,77 @@
 {
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
-  "documentCount": 8,
-  "chunkCount": 37,
+  "documentCount": 40,
+  "chunkCount": 209,
   "documents": [
+    {
+      "id": "account-security",
+      "title": "Passkeys, two-factor and active sessions",
+      "path": "/security",
+      "category": "account",
+      "tags": [
+        "passkey",
+        "two factor",
+        "2fa",
+        "mfa",
+        "totp",
+        "authenticator",
+        "backup codes",
+        "recovery codes",
+        "change password",
+        "forgot password",
+        "sessions",
+        "log out all devices",
+        "revoke session",
+        "api keys"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/account-security.md",
+      "chunks": [
+        {
+          "id": "account-security#0",
+          "ordinal": 0,
+          "heading": "Signing in",
+          "headingPath": "Passkeys, two-factor and active sessions › Signing in",
+          "text": "Sign in with the email you registered, with Google or GitHub if you signed up\nthat way, or with a passkey. \"Sign in with a passkey\" appears where your browser\nand device support one. If a sign-in or verification email has not arrived,\ncheck the spam folder before requesting another."
+        },
+        {
+          "id": "account-security#1",
+          "ordinal": 1,
+          "heading": "Second factors",
+          "headingPath": "Passkeys, two-factor and active sessions › Second factors",
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in; an authenticator app code (TOTP) with recovery backup codes is the\nsupported second factor. Hardware security keys, SMS MFA and trusted-device\nlists are not part of the current account contract, so they are not offered\nrather than silently ignored.\n\nKeep the backup codes somewhere separate from the phone holding the\nauthenticator. At sign-in the second-factor screen accepts either the\nauthenticator code or one of your backup codes."
+        },
+        {
+          "id": "account-security#2",
+          "ordinal": 2,
+          "heading": "Password",
+          "headingPath": "Passkeys, two-factor and active sessions › Password",
+          "text": "The same page changes your password. A password that fails the common-password\ncheck is refused with \"That password is too common.\" A forgotten password is\nreset from the sign-in screen with **Forgot password?**."
+        },
+        {
+          "id": "account-security#3",
+          "ordinal": 3,
+          "heading": "Active sessions",
+          "headingPath": "Passkeys, two-factor and active sessions › Active sessions",
+          "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
+        },
+        {
+          "id": "account-security#4",
+          "ordinal": 4,
+          "heading": "Your identifiers",
+          "headingPath": "Passkeys, two-factor and active sessions › Your identifiers",
+          "text": "Settings, Account shows your **User ID**, and an **Organization ID** when the\naccount belongs to a workspace. Support asks for these when investigating an\nissue; they identify the account, they are not secrets that grant access."
+        },
+        {
+          "id": "account-security#5",
+          "ordinal": 5,
+          "heading": "API keys",
+          "headingPath": "Passkeys, two-factor and active sessions › API keys",
+          "text": "API keys are managed from Settings, Account under **API keys**. Regenerating a\nkey invalidates the previous one immediately, so update anything using it."
+        }
+      ]
+    },
     {
       "id": "accounts-and-sign-in",
       "title": "Accounts and signing in",
@@ -51,6 +119,200 @@
           "heading": "Getting a human",
           "headingPath": "Accounts and signing in › Getting a human",
           "text": "A real person reads contact@agiworkforce.com. The support page lists what is covered\nfor each plan."
+        }
+      ]
+    },
+    {
+      "id": "agi-work",
+      "title": "Run a task with AGI Work",
+      "path": "/agi-work",
+      "category": "work",
+      "tags": [
+        "agi work",
+        "work",
+        "agent",
+        "task",
+        "autonomous",
+        "session dock",
+        "outputs",
+        "progress",
+        "sources",
+        "approvals",
+        "work history",
+        "deliverables"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/agi-work.md",
+      "chunks": [
+        {
+          "id": "agi-work#0",
+          "ordinal": 0,
+          "heading": "What AGI Work is",
+          "headingPath": "Run a task with AGI Work › What AGI Work is",
+          "text": "AGI Work is the mode for a task rather than a question: you describe a\nmulti-step job and what it should deliver, and the session plans, works and\nproduces files. The composer switches between **Chat**, for quick questions and\nconversation, and **AGI Work**, where the placeholder asks you to describe a\nmulti-step task and what it should deliver."
+        },
+        {
+          "id": "agi-work#1",
+          "ordinal": 1,
+          "heading": "Watching a session",
+          "headingPath": "Run a task with AGI Work › Watching a session",
+          "text": "A running session opens a dock beside the conversation with four sections:\n\n- **Progress**: the steps the session planned. Before it plans, the section says\n  steps appear once the session plans its work.\n- **Sources**: the pages the session reads as it searches.\n- **Outputs**: the files the session produced, each with **Open** and\n  **Download**.\n- **Context**: the connectors the session used, empty until one is called.\n\nA plain chat gets the same dock titled **Chat details**, listing the files\ncreated in that chat, and does not claim to be a Work session."
+        },
+        {
+          "id": "agi-work#2",
+          "ordinal": 2,
+          "heading": "Approvals during a session",
+          "headingPath": "Run a task with AGI Work › Approvals during a session",
+          "text": "What a session may do on its own follows your tool-approval default. On the\ndefault, **Ask before every action**, every connector, plugin and tool action\nwaits for you, reads included. If you switched to **Run read-only actions\nwithout asking**, the session shows a notice saying so: read-only actions run\nwithout asking, and anything that writes, runs code, searches the web, or\nreaches outside AGI, including your connectors, pauses for your approval."
+        },
+        {
+          "id": "agi-work#3",
+          "ordinal": 3,
+          "heading": "Finding past sessions",
+          "headingPath": "Run a task with AGI Work › Finding past sessions",
+          "text": "**Work history** at the tasks page lists previous sessions. Opening one and\nchoosing to run it again loads that session's goal into a new AGI Work chat for\nyou to review and send, rather than re-running it unattended."
+        },
+        {
+          "id": "agi-work#4",
+          "ordinal": 4,
+          "heading": "Availability",
+          "headingPath": "Run a task with AGI Work › Availability",
+          "text": "AGI Work is one of the features a workspace administrator can turn off for a\nmanaged workspace, and higher-capacity work is a paid-plan feature. The pricing\npage carries the current details."
+        }
+      ]
+    },
+    {
+      "id": "artifacts",
+      "title": "Artifacts: documents and code AGI writes for you",
+      "path": "/chat/artifacts",
+      "category": "chat",
+      "tags": [
+        "artifact",
+        "artifacts",
+        "canvas",
+        "document",
+        "code",
+        "preview",
+        "publish artifact",
+        "unpublish",
+        "duplicate",
+        "fullscreen",
+        "save to project",
+        "version conflict"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/artifacts.md",
+      "chunks": [
+        {
+          "id": "artifacts#0",
+          "ordinal": 0,
+          "heading": "What an artifact is",
+          "headingPath": "Artifacts: documents and code AGI writes for you › What an artifact is",
+          "text": "When an answer produces a document, a piece of code or a rendered page rather\nthan a paragraph, it opens as an artifact in a panel beside the conversation.\nThe panel can be opened and closed from the conversation, or with\nShift+Cmd/Ctrl+A, and has a fullscreen view."
+        },
+        {
+          "id": "artifacts#1",
+          "ordinal": 1,
+          "heading": "Editing one",
+          "headingPath": "Artifacts: documents and code AGI writes for you › Editing one",
+          "text": "Edits you make in the panel are saved as new versions, and earlier versions can\nbe restored. **Duplicate** makes an independent copy, confirmed with\n\"Duplicated. Edits here no longer touch the original.\" **Save to project** files\nit into a project's knowledge.\n\nIf someone else changed the same artifact first, the panel keeps your work and\nsays so: their version is shown and your edit is kept as the latest version.\nNothing is silently discarded."
+        },
+        {
+          "id": "artifacts#2",
+          "ordinal": 2,
+          "heading": "Getting a copy out",
+          "headingPath": "Artifacts: documents and code AGI writes for you › Getting a copy out",
+          "text": "**Copy artifact** puts the source on the clipboard. **Download file** and\n**Download image** save it. From the Library, an artifact exports as PDF or\nWord."
+        },
+        {
+          "id": "artifacts#3",
+          "ordinal": 3,
+          "heading": "Publishing",
+          "headingPath": "Artifacts: documents and code AGI writes for you › Publishing",
+          "text": "Publishing an artifact gives it a link. The audience works like a shared\nconversation: anyone with the link, or your workspace only, and the panel\nconfirms which is in force. Changing it later asks first (\"Make this public\nagain?\", \"Limit this to your workspace?\").\n\nSettings holds a **Published artifacts** list with **Unpublish artifact** on\neach one. Unpublishing stops the link working."
+        },
+        {
+          "id": "artifacts#4",
+          "ordinal": 4,
+          "heading": "When a preview will not render",
+          "headingPath": "Artifacts: documents and code AGI writes for you › When a preview will not render",
+          "text": "\"Inline preview unavailable\" or \"Image preview unavailable\" means the panel\ncannot render that content in place, not that the artifact is damaged. Download\nit and open it locally."
+        }
+      ]
+    },
+    {
+      "id": "billing-and-plans",
+      "title": "Plans, upgrading, and cancelling",
+      "path": "/pricing",
+      "category": "billing",
+      "tags": [
+        "billing",
+        "plan",
+        "upgrade",
+        "downgrade",
+        "cancel",
+        "cancel subscription",
+        "invoice",
+        "receipt",
+        "payment method",
+        "card",
+        "billing portal",
+        "app store",
+        "google play",
+        "seats",
+        "renewal"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/billing-and-plans.md",
+      "chunks": [
+        {
+          "id": "billing-and-plans#0",
+          "ordinal": 0,
+          "heading": "Where billing lives",
+          "headingPath": "Plans, upgrading, and cancelling › Where billing lives",
+          "text": "Settings, Billing shows your current plan, when the period ends, your payment\nmethod, your invoices and your credit balance. **Manage billing** opens the\nbilling portal where the card and the subscription itself are changed."
+        },
+        {
+          "id": "billing-and-plans#1",
+          "ordinal": 1,
+          "heading": "Upgrading",
+          "headingPath": "Plans, upgrading, and cancelling › Upgrading",
+          "text": "**Upgrade plan** lists the plans available to you and starts checkout. Local\nmode and BYOK are free and need no plan at all. Managed cloud plans differ in\nusage capacity and in which features they include: projects, custom MCP\nconnections, concurrent responses, sandboxes, connector tools and scheduled\ntasks all scale with the plan. The pricing page carries the current prices,\nregional prices and per-plan limits."
+        },
+        {
+          "id": "billing-and-plans#2",
+          "ordinal": 2,
+          "heading": "Cancelling",
+          "headingPath": "Plans, upgrading, and cancelling › Cancelling",
+          "text": "On a plan billed through the web, **Cancel plan** in Settings, Billing opens the\nbilling portal at the cancellation flow. Once cancellation is scheduled the\nperiod row changes from \"Renews on\" to \"Cancels on\", and access continues to\nthat date."
+        },
+        {
+          "id": "billing-and-plans#3",
+          "ordinal": 3,
+          "heading": "Subscriptions bought in an app store",
+          "headingPath": "Plans, upgrading, and cancelling › Subscriptions bought in an app store",
+          "text": "If the subscription was bought through Apple or Google, AGI cannot change it.\nThe page says so and points you at the store: \"Change or cancel this\nsubscription with Apple before starting web billing\", and the equivalent for\nGoogle Play. Cancel there first if you want to move to web billing."
+        },
+        {
+          "id": "billing-and-plans#4",
+          "ordinal": 4,
+          "heading": "Plans your organization pays for",
+          "headingPath": "Plans, upgrading, and cancelling › Plans your organization pays for",
+          "text": "On a workspace-managed plan the controls are read-only: \"This plan is managed by\nyour organization. Contact an administrator to change it\", and invoices are\nprovided by the organization rather than shown here."
+        },
+        {
+          "id": "billing-and-plans#5",
+          "ordinal": 5,
+          "heading": "Invoices",
+          "headingPath": "Plans, upgrading, and cancelling › Invoices",
+          "text": "Invoices appear once you are billed on a paid plan. Before the first cycle\ncloses the list says so rather than showing an error."
+        },
+        {
+          "id": "billing-and-plans#6",
+          "ordinal": 6,
+          "heading": "When billing will not let you change plans",
+          "headingPath": "Plans, upgrading, and cancelling › When billing will not let you change plans",
+          "text": "- \"Billing ownership is not verified. Refresh your account before changing\n  plans.\" Reload and sign in again.\n- \"Resolve the current billing status in Manage billing before changing plans.\"\n  A payment needs attention first; the payment-failure page lists what to check."
         }
       ]
     },
@@ -125,6 +387,131 @@
       ]
     },
     {
+      "id": "chat-basics",
+      "title": "Start, steer and manage a chat",
+      "path": "/chat",
+      "category": "chat",
+      "tags": [
+        "chat",
+        "new chat",
+        "conversation",
+        "compose",
+        "send message",
+        "edit message",
+        "regenerate",
+        "retry",
+        "branch",
+        "variant",
+        "rename",
+        "archive",
+        "delete chat",
+        "thinking",
+        "response style"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/chat-basics.md",
+      "chunks": [
+        {
+          "id": "chat-basics#0",
+          "ordinal": 0,
+          "heading": "Start a new chat",
+          "headingPath": "Start, steer and manage a chat › Start a new chat",
+          "text": "Open the chat surface and type. A new conversation begins with the first\nmessage you send; nothing is created before that. Shift+Cmd/Ctrl+O starts a new\nconversation from anywhere in the app. Cmd/Ctrl+B shows or hides the sidebar."
+        },
+        {
+          "id": "chat-basics#1",
+          "ordinal": 1,
+          "heading": "Choose how the answer is written",
+          "headingPath": "Start, steer and manage a chat › Choose how the answer is written",
+          "text": "The composer carries a **Response style** control with Default, Concise,\nDetailed, Technical and Creative, plus a response-length control. You can save\nyour own style by naming it and giving it an instruction, or by pasting a\nwriting sample for AGI to match. Custom styles can be edited and deleted from\nthe same menu."
+        },
+        {
+          "id": "chat-basics#2",
+          "ordinal": 2,
+          "heading": "Attach files and tools",
+          "headingPath": "Start, steer and manage a chat › Attach files and tools",
+          "text": "The **+** button beside the composer attaches files, adds a project or folder as\nscope, and lists your connectors. Typing `/` opens the command menu:\n`/search` searches the web, `/think` asks for extended reasoning, `/image`\ngenerates an image, `/code` runs code in a sandbox. `/browser`, `/terminal` and\n`/database` appear only on surfaces whose capabilities allow them."
+        },
+        {
+          "id": "chat-basics#3",
+          "ordinal": 3,
+          "heading": "Change a message after you sent it",
+          "headingPath": "Start, steer and manage a chat › Change a message after you sent it",
+          "text": "Hover a message to reveal its actions. You can edit your own message and send\nit again, copy a response, give a good or bad rating, and regenerate the answer.\nShift+Cmd/Ctrl+R regenerates the last response and Shift+Cmd/Ctrl+C copies it.\nRegenerating keeps the earlier answer as a variant; the pager under the message\nsteps between variants, and a variant can be deleted from there."
+        },
+        {
+          "id": "chat-basics#4",
+          "ordinal": 4,
+          "heading": "Rename, archive and delete",
+          "headingPath": "Start, steer and manage a chat › Rename, archive and delete",
+          "text": "The conversation title menu renames a chat. Archiving moves it out of the\nsidebar without deleting anything, and Settings holds an **Archived chats** list\nthat restores or permanently deletes them. A deleted chat goes to **Recently\ndeleted** in Settings, where it can be put back or removed for good."
+        },
+        {
+          "id": "chat-basics#5",
+          "ordinal": 5,
+          "heading": "When a chat will not load",
+          "headingPath": "Start, steer and manage a chat › When a chat will not load",
+          "text": "The failure notice says \"Chat could not be displayed\" and offers **Try again**.\nIf the browser is offline it says \"You are offline\" instead. In both cases your\nmessages are already saved, so retrying or opening a different conversation\nloses nothing."
+        }
+      ]
+    },
+    {
+      "id": "chrome-extension",
+      "title": "The Chrome extension",
+      "path": "/chrome-extension",
+      "category": "surfaces",
+      "tags": [
+        "chrome",
+        "browser extension",
+        "browser companion",
+        "side panel",
+        "capture page",
+        "screenshot",
+        "tabs",
+        "browser automation",
+        "computer use"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/chrome-extension.md",
+      "chunks": [
+        {
+          "id": "chrome-extension#0",
+          "ordinal": 0,
+          "heading": "Availability",
+          "headingPath": "The Chrome extension › Availability",
+          "text": "The Chrome extension, AGI Browser Companion, is not published yet. The Chrome\npage carries its status and a notify list; there is no Web Store listing to\ninstall from today."
+        },
+        {
+          "id": "chrome-extension#1",
+          "ordinal": 1,
+          "heading": "What it is being built to do",
+          "headingPath": "The Chrome extension › What it is being built to do",
+          "text": "It opens AGI in a browser side panel next to the page you are reading, with a\nkeyboard command to open the panel and another to capture the current page into\nthe conversation. Its host permissions are limited to agiworkforce.com, the AGI\nAPI and localhost, so it talks to AGI and to nothing else by default."
+        },
+        {
+          "id": "chrome-extension#2",
+          "ordinal": 2,
+          "heading": "Browser automation",
+          "headingPath": "The Chrome extension › Browser automation",
+          "text": "The composer's `/browser` command exists only on surfaces whose capabilities\nallow browser automation, which is what the extension provides. Anything that\ndrives a page is a write action under the approval rules: on the default\nsetting it asks before every action, and even on the read-only-auto setting it\nstill asks, because driving a browser is not a read."
+        },
+        {
+          "id": "chrome-extension#3",
+          "ordinal": 3,
+          "heading": "Managed cloud from the extension",
+          "headingPath": "The Chrome extension › Managed cloud from the extension",
+          "text": "Managed cloud access from the Chrome extension is part of the higher paid tiers.\nThe extension does not accept provider keys: web, mobile, desktop and Chrome all\nrun on your AGI account, while BYOK is a CLI and VS Code capability."
+        },
+        {
+          "id": "chrome-extension#4",
+          "ordinal": 4,
+          "heading": "Until it ships",
+          "headingPath": "The Chrome extension › Until it ships",
+          "text": "The web app runs in the same browser and covers everything except the\npage-capture and side-panel workflow."
+        }
+      ]
+    },
+    {
       "id": "connectors-and-mcp",
       "title": "Connectors and MCP",
       "path": "/connectors",
@@ -182,6 +569,55 @@
       ]
     },
     {
+      "id": "delete-your-account",
+      "title": "Delete your account, or cancel a scheduled deletion",
+      "path": "/privacy",
+      "category": "account",
+      "tags": [
+        "delete account",
+        "close account",
+        "erase",
+        "deletion",
+        "cancel deletion",
+        "undo deletion",
+        "permanently delete",
+        "account erasure",
+        "remove my data"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/delete-your-account.md",
+      "chunks": [
+        {
+          "id": "delete-your-account#0",
+          "ordinal": 0,
+          "heading": "How deletion works",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › How deletion works",
+          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and all associated data are permanently deleted, you are\nsigned out now, and erasure runs 24 hours after you confirm.\n\nAfter you confirm, the dialog shows the exact date and time your data is erased,\nand you are signed out when you continue."
+        },
+        {
+          "id": "delete-your-account#1",
+          "ordinal": 1,
+          "heading": "Changing your mind",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › Changing your mind",
+          "text": "The 24 hours are a real cancellation window, not a formality. Sign back in\nbefore the deadline and Settings, Account shows **Account deletion scheduled**\nwith the erasure time and a **Cancel deletion** button. Cancelling keeps the\naccount active and removes nothing.\n\nOnce the window closes the button is gone and the page says the cancellation\nwindow has closed and erasure is already underway."
+        },
+        {
+          "id": "delete-your-account#2",
+          "ordinal": 2,
+          "heading": "Before you confirm",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › Before you confirm",
+          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf a paid subscription is attached, cancel or let it lapse separately; billing\nis handled in the billing portal, not by the deletion flow."
+        },
+        {
+          "id": "delete-your-account#3",
+          "ordinal": 3,
+          "heading": "Deleting conversations without deleting the account",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › Deleting conversations without deleting the account",
+          "text": "Settings, Privacy has narrower options: **Archive all chats**, which moves every\nchat out of the sidebar and can be undone from Archived chats, and **Delete all\nchats**, which permanently deletes every active and archived conversation. Both\nask first and name what they do."
+        }
+      ]
+    },
+    {
       "id": "desktop-and-cli",
       "title": "Desktop app and CLI",
       "path": "/cli",
@@ -232,6 +668,177 @@
       ]
     },
     {
+      "id": "enterprise-security",
+      "title": "Security review of AGI for an enterprise",
+      "path": "/enterprise",
+      "category": "administration",
+      "tags": [
+        "enterprise",
+        "security review",
+        "questionnaire",
+        "soc 2",
+        "hipaa",
+        "certification",
+        "audit export",
+        "siem",
+        "trust ledger",
+        "data residency",
+        "procurement",
+        "evaluation"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/enterprise-security.md",
+      "chunks": [
+        {
+          "id": "enterprise-security#0",
+          "ordinal": 0,
+          "heading": "Evaluate before you sign anything",
+          "headingPath": "Security review of AGI for an enterprise › Evaluate before you sign anything",
+          "text": "Local mode and BYOK need no contract, no trial and no seat, so a reviewer can\nrun the product on their own hardware while procurement is still reading. In\nLocal mode nothing reaches AGI infrastructure at all, which makes it the\ncheapest way to assess behaviour without a data-processing conversation."
+        },
+        {
+          "id": "enterprise-security#1",
+          "ordinal": 1,
+          "heading": "What is claimed, and what is not",
+          "headingPath": "Security review of AGI for an enterprise › What is claimed, and what is not",
+          "text": "Claims are dated on the trust ledger rather than asserted in prose. Two things\nare stated plainly there and worth knowing before you write a questionnaire:\n\n- HIPAA-covered workflows are not offered today.\n- No certification body is engaged and no certification date is claimed.\n  Anything on the roadmap stays on the roadmap with no date until there is one.\n\nRead the ledger for the current state rather than a sales page, and send the\nquestionnaire; terms are negotiated against your procurement rather than by\nclick-through."
+        },
+        {
+          "id": "enterprise-security#2",
+          "ordinal": 2,
+          "heading": "Controls an administrator actually has",
+          "headingPath": "Security review of AGI for an enterprise › Controls an administrator actually has",
+          "text": "- Local, BYOK and managed cloud allowed or refused per workspace.\n- Public share links and phone sync switched off server side, not by asking\n  people not to use them.\n- Retention windows, enforced when the workspace owner turns them on, with a\n  record of what retention deleted and legal holds that suspend it.\n- Feature, model and connector policy, with exceptions scoped to a role, a\n  group or a person.\n- The route each answer took, printed on every reply, so a claim about where a\n  request went is checkable rather than trusted."
+        },
+        {
+          "id": "enterprise-security#3",
+          "ordinal": 3,
+          "heading": "Audit evidence",
+          "headingPath": "Security review of AGI for an enterprise › Audit evidence",
+          "text": "The audit trail is an append-only table, newest first, one event per line,\nstreamed as it is read. An administrator downloads it as JSONL, or has signed\nbatches drained to a SIEM endpoint every thirty minutes."
+        },
+        {
+          "id": "enterprise-security#4",
+          "ordinal": 4,
+          "heading": "Data residency",
+          "headingPath": "Security review of AGI for an enterprise › Data residency",
+          "text": "Hosted data lives in the United States. EU and UK residency hosting is on the\nroadmap and is not available today. Local conversations never leave the device\nin the first place, which is the residency answer for the strictest cases."
+        }
+      ]
+    },
+    {
+      "id": "export-your-data",
+      "title": "Export a copy of your data",
+      "path": "/privacy",
+      "category": "account",
+      "tags": [
+        "export",
+        "download my data",
+        "json export",
+        "gdpr",
+        "dsar",
+        "data request",
+        "consent record",
+        "correct my data",
+        "portability",
+        "backup conversations"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/export-your-data.md",
+      "chunks": [
+        {
+          "id": "export-your-data#0",
+          "ordinal": 0,
+          "heading": "Self-service export",
+          "headingPath": "Export a copy of your data › Self-service export",
+          "text": "Settings, Privacy carries **Download all your conversations as JSON**. The\nexport runs in the browser and downloads a single file named for the day you\nran it. It is a self-service download, not a request you wait on."
+        },
+        {
+          "id": "export-your-data#1",
+          "ordinal": 1,
+          "heading": "What else you can ask for",
+          "headingPath": "Export a copy of your data › What else you can ask for",
+          "text": "The privacy requests page is the formal rights path: review your consent record,\nor ask AGI to access, correct or erase your data. Settings links to it directly\nso you do not have to find it from a policy page."
+        },
+        {
+          "id": "export-your-data#2",
+          "ordinal": 2,
+          "heading": "Files and generated media",
+          "headingPath": "Export a copy of your data › Files and generated media",
+          "text": "Uploads and generated media are listed in your Library, and in Settings under\nthe data section, where individual items can be reviewed or deleted. They are\ncovered by the same rights path as conversations."
+        },
+        {
+          "id": "export-your-data#3",
+          "ordinal": 3,
+          "heading": "Before you delete your account",
+          "headingPath": "Export a copy of your data › Before you delete your account",
+          "text": "Export first. Account deletion erases conversations and account data, and the\nexport cannot be run afterwards. See the account deletion article for the\ntiming and the cancellation window."
+        }
+      ]
+    },
+    {
+      "id": "files-and-attachments",
+      "title": "Attach files to a chat",
+      "path": "/chat",
+      "category": "files",
+      "tags": [
+        "attach",
+        "attachment",
+        "upload",
+        "file",
+        "pdf",
+        "image",
+        "docx",
+        "xlsx",
+        "pptx",
+        "csv",
+        "drag and drop",
+        "paste",
+        "screenshot",
+        "too large",
+        "unsupported file"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/files-and-attachments.md",
+      "chunks": [
+        {
+          "id": "files-and-attachments#0",
+          "ordinal": 0,
+          "heading": "Attaching a file",
+          "headingPath": "Attach files to a chat › Attaching a file",
+          "text": "Use the **+** button beside the composer, drag files onto the conversation, or\npaste them from the clipboard. Attachments appear as previews above the\ncomposer, and each one can be removed before you send."
+        },
+        {
+          "id": "files-and-attachments#1",
+          "ordinal": 1,
+          "heading": "What a chat can read",
+          "headingPath": "Attach files to a chat › What a chat can read",
+          "text": "Images (PNG, JPEG, GIF, WebP), PDFs, plain text and Markdown, CSV, JSON and\nnotebooks, HTML, CSS, XML, and Word, Excel and PowerPoint documents. Source\nfiles in common languages are accepted as text."
+        },
+        {
+          "id": "files-and-attachments#2",
+          "ordinal": 2,
+          "heading": "When a file does not go with the message",
+          "headingPath": "Attach files to a chat › When a file does not go with the message",
+          "text": "The composer refuses a file rather than sending your message without it, and the\noutgoing turn carries a line naming the file and the reason, so the model knows\nan attachment is missing instead of inventing its contents. The reasons you can\nsee are:\n\n- larger than this chat can send\n- not a file type this chat can read\n- this message already carries as many files as it can\n- this conversation has reached its attachment limit\n- removed from your Library, so attach it again\n- could not be loaded, so attach it again\n\nIf a file is refused for size, convert or split it; if it is refused for type,\npaste the contents as text instead."
+        },
+        {
+          "id": "files-and-attachments#3",
+          "ordinal": 3,
+          "heading": "Where attachments end up",
+          "headingPath": "Attach files to a chat › Where attachments end up",
+          "text": "Files you attach in an ordinary chat are stored in your **Library**, where you\ncan find, preview, re-attach or delete them. Files attached in a temporary chat\nare deliberately kept out of the Library."
+        },
+        {
+          "id": "files-and-attachments#4",
+          "ordinal": 4,
+          "heading": "Files AGI creates",
+          "headingPath": "Attach files to a chat › Files AGI creates",
+          "text": "Generated images, documents and other outputs appear in the conversation and in\nthe Library alongside your uploads. In an AGI Work session they also collect in\nthe session dock under **Outputs**, with **Open** and **Download** on each one."
+        }
+      ]
+    },
+    {
       "id": "getting-started",
       "title": "Getting started with AGI",
       "path": "/help",
@@ -275,6 +882,255 @@
           "heading": "Where to go next",
           "headingPath": "Getting started with AGI › Where to go next",
           "text": "The help index links the six things people ask about most. The FAQ covers the\nreasoning behind the trust boundaries."
+        }
+      ]
+    },
+    {
+      "id": "install-desktop-and-mobile",
+      "title": "Installing the desktop and mobile apps",
+      "path": "/download",
+      "category": "surfaces",
+      "tags": [
+        "install",
+        "download",
+        "desktop app",
+        "macos",
+        "windows",
+        "linux",
+        "dmg",
+        "installer",
+        "mobile app",
+        "ios",
+        "android",
+        "release notes",
+        "signature",
+        "notarized",
+        "get notified"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/install-desktop-and-mobile.md",
+      "chunks": [
+        {
+          "id": "install-desktop-and-mobile#0",
+          "ordinal": 0,
+          "heading": "What is published today",
+          "headingPath": "Installing the desktop and mobile apps › What is published today",
+          "text": "The web app and the CLI are available now. The desktop app, the mobile app, the\nVS Code extension and the Chrome extension are not published yet. The download\npage lists each platform with its status and a notify list: \"You're on the list.\nWe'll email you when a platform has a verified installer to download.\"\n\nThis page will not give you an install command for something that does not have\na release. Anything else would be a broken link dressed as a guide."
+        },
+        {
+          "id": "install-desktop-and-mobile#1",
+          "ordinal": 1,
+          "heading": "When a desktop installer is published",
+          "headingPath": "Installing the desktop and mobile apps › When a desktop installer is published",
+          "text": "Desktop installers are published as release assets: notarized and stapled `.dmg`\nfiles for macOS, one per architecture for Apple silicon and Intel, signed with a\nDeveloper ID and assessed the way your Mac would assess them. Release assets are\nserved from the AGI download hosts and GitHub releases, and the download API\nrefuses anything else.\n\nStable, beta and nightly are separate release tags. The download page reads\nstable."
+        },
+        {
+          "id": "install-desktop-and-mobile#2",
+          "ordinal": 2,
+          "heading": "Verifying what you downloaded",
+          "headingPath": "Installing the desktop and mobile apps › Verifying what you downloaded",
+          "text": "Each release carries a checksum, and the CLI checksums carry a Sigstore\nsignature. Check the file you downloaded against the published checksum before\nrunning it; the download page shows a verification session end to end."
+        },
+        {
+          "id": "install-desktop-and-mobile#3",
+          "ordinal": 3,
+          "heading": "What desktop adds once it ships",
+          "headingPath": "Installing the desktop and mobile apps › What desktop adds once it ships",
+          "text": "Desktop is the surface for Local mode through Ollama, LM Studio, llama.cpp and\nvLLM, for BYOK provider keys encrypted at rest behind a master password, and for\noffline operation with no managed-cloud dependency."
+        },
+        {
+          "id": "install-desktop-and-mobile#4",
+          "ordinal": 4,
+          "heading": "Mobile",
+          "headingPath": "Installing the desktop and mobile apps › Mobile",
+          "text": "There is no published mobile release, so Mobile Local mode is not publicly\noffered yet. Use the web app on a phone browser in the meantime; the chat\nsurface, Library, projects and settings all work at phone width."
+        },
+        {
+          "id": "install-desktop-and-mobile#5",
+          "ordinal": 5,
+          "heading": "In the meantime",
+          "headingPath": "Installing the desktop and mobile apps › In the meantime",
+          "text": "Everything in this help centre that is not marked desktop-only or CLI-only works\nin the web app today, on any modern browser, signed in with the same account."
+        }
+      ]
+    },
+    {
+      "id": "install-the-cli",
+      "title": "Install and set up the CLI",
+      "path": "/cli",
+      "category": "surfaces",
+      "tags": [
+        "cli",
+        "install cli",
+        "agi command",
+        "terminal",
+        "agi login",
+        "auth-status",
+        "list-models",
+        "exec",
+        "resume",
+        "fork",
+        "sandbox",
+        "homebrew",
+        "npm",
+        "cargo",
+        "checksum"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/install-the-cli.md",
+      "chunks": [
+        {
+          "id": "install-the-cli#0",
+          "ordinal": 0,
+          "heading": "Getting the binary",
+          "headingPath": "Install and set up the CLI › Getting the binary",
+          "text": "The download page carries the current release assets for the `agi` command, one\nper architecture, with checksums that carry a Sigstore signature. The CLI page\ncarries the current install route for your platform.\n\nAn npm wrapper is published as `@agiworkforce/cli`. It runs only the matching\n`@agiworkforce/cli-<platform>` package, a bundled binary, or the path you set in\n`AGI_CLI_BINARY_PATH`; it never falls back to some other `agi` that happens to\nbe on your PATH. A shell installer and a Homebrew tap are planned and not\npublished yet, so no command is listed for them.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
+        },
+        {
+          "id": "install-the-cli#1",
+          "ordinal": 1,
+          "heading": "First run",
+          "headingPath": "Install and set up the CLI › First run",
+          "text": "```\nagi login          # OAuth, or paste a provider API key\nagi auth-status    # every configured provider, and how it authenticates\nagi --list-models  # what you can actually route to right now\nagi exec \"what files are in this directory?\"\nagi                # the interactive terminal UI\n```\n\n`agi init` creates `~/.agiworkforce/`, and `agi onboarding` walks the first-time\nsetup."
+        },
+        {
+          "id": "install-the-cli#2",
+          "ordinal": 2,
+          "heading": "Sessions",
+          "headingPath": "Install and set up the CLI › Sessions",
+          "text": "Sessions are resumable. `agi resume` continues a previous session, `agi fork`\nbranches one, `agi session` inspects them, and `agi history` browses past\nsessions. Local sessions never silently leave your device."
+        },
+        {
+          "id": "install-the-cli#3",
+          "ordinal": 3,
+          "heading": "Running work",
+          "headingPath": "Install and set up the CLI › Running work",
+          "text": "`agi exec` runs a one-shot prompt and is the form to use in CI. `agi review`\nreviews changes, `agi apply` applies the latest diff as a git patch, and\n`agi sandbox` runs work under the platform sandbox (Seatbelt, bubblewrap,\nLandlock or a Windows restricted token, depending on the OS).\n\nA fallback chain is a comma-separated model list, tried in order, so a cloud\nmodel can fall back to a local one."
+        },
+        {
+          "id": "install-the-cli#4",
+          "ordinal": 4,
+          "heading": "Trust boundaries in the terminal",
+          "headingPath": "Install and set up the CLI › Trust boundaries in the terminal",
+          "text": "In the terminal UI, `/privacy-mode` shows the active trust boundary, and moving\nto BYOK is an explicit `/continue-with-byok` step, never automatic. There is no\n`agi cloud` command: managed runs use the normal model path and fail closed\nwithout an explicit route."
+        },
+        {
+          "id": "install-the-cli#5",
+          "ordinal": 5,
+          "heading": "Managed cloud from the CLI",
+          "headingPath": "Install and set up the CLI › Managed cloud from the CLI",
+          "text": "Managed cloud access from the CLI is part of the higher paid tiers. Local mode\nand BYOK work on any account, including one with no subscription at all. The\npricing page carries the current details."
+        },
+        {
+          "id": "install-the-cli#6",
+          "ordinal": 6,
+          "heading": "When something is wrong",
+          "headingPath": "Install and set up the CLI › When something is wrong",
+          "text": "`agi auth-status` is the first check: it lists every configured provider, so a\nmissing or expired credential shows up there rather than as a failed run.\n`agi features` and `agi execpolicy` report what this build allows."
+        }
+      ]
+    },
+    {
+      "id": "keyboard-shortcuts",
+      "title": "Keyboard shortcuts",
+      "path": "/chat",
+      "category": "chat",
+      "tags": [
+        "keyboard",
+        "shortcut",
+        "shortcuts",
+        "hotkey",
+        "cmd k",
+        "ctrl k",
+        "new chat shortcut",
+        "toggle sidebar",
+        "escape",
+        "regenerate shortcut",
+        "disable shortcut"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/keyboard-shortcuts.md",
+      "chunks": [
+        {
+          "id": "keyboard-shortcuts#0",
+          "ordinal": 0,
+          "heading": "The list",
+          "headingPath": "Keyboard shortcuts › The list",
+          "text": "On macOS use Cmd where this says Ctrl.\n\n| Shortcut     | What it does            |\n| ------------ | ----------------------- |\n| Ctrl+K       | Open search             |\n| Ctrl+/       | Show keyboard shortcuts |\n| Shift+Ctrl+O | New conversation        |\n| Ctrl+B       | Toggle sidebar          |\n| Escape       | Focus message composer  |\n| Shift+Ctrl+C | Copy last message       |\n| Shift+Ctrl+R | Regenerate last message |\n| Shift+Ctrl+A | Toggle artifacts panel  |"
+        },
+        {
+          "id": "keyboard-shortcuts#1",
+          "ordinal": 1,
+          "heading": "Why new chat is Shift and not plain Ctrl+N",
+          "headingPath": "Keyboard shortcuts › Why new chat is Shift and not plain Ctrl+N",
+          "text": "Ctrl+N and Cmd+N are reserved by the browser for a new window, so the page never\nreceives the keypress and nothing can be bound to it. Shift with O is what the\nother assistants use for the same reason."
+        },
+        {
+          "id": "keyboard-shortcuts#2",
+          "ordinal": 2,
+          "heading": "Turning one off",
+          "headingPath": "Keyboard shortcuts › Turning one off",
+          "text": "The shortcuts dialog, opened with Ctrl+/, has a switch per shortcut. A shortcut\nyou switch off stops firing, it does not merely look disabled, so a binding that\nclashes with something else in your setup can be released."
+        }
+      ]
+    },
+    {
+      "id": "library",
+      "title": "Find your files and artifacts in the Library",
+      "path": "/chat/library",
+      "category": "files",
+      "tags": [
+        "library",
+        "files",
+        "my files",
+        "artifacts",
+        "generated files",
+        "documents",
+        "uploads",
+        "recently deleted",
+        "restore file",
+        "download",
+        "grid view",
+        "list view",
+        "search files"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/library.md",
+      "chunks": [
+        {
+          "id": "library#0",
+          "ordinal": 0,
+          "heading": "What the Library holds",
+          "headingPath": "Find your files and artifacts in the Library › What the Library holds",
+          "text": "Everything you uploaded and everything AGI generated for you: documents,\ngenerated files and artifacts, in one list. The tabs across the top are **All**,\n**Images**, **Videos**, **Documents**, **Artifacts** and **Generated files**.\nSearch it by name, and switch between grid and list layout."
+        },
+        {
+          "id": "library#1",
+          "ordinal": 1,
+          "heading": "Working with an item",
+          "headingPath": "Find your files and artifacts in the Library › Working with an item",
+          "text": "Select a file to preview it. The viewer carries an **Ask about this file** box:\ntype a question there and it opens a new chat with the file attached and your\nquestion already written. From the item's own menu you can:\n\n- **Add to chat** or **Add to AGI Work**, which stages it for the next session.\n- Add it to a project, where it becomes project knowledge for every chat in\n  that project.\n- Export an artifact as PDF or Word.\n- Create a share link for an artifact.\n\nA file too large to preview in place says so and offers a download instead."
+        },
+        {
+          "id": "library#2",
+          "ordinal": 2,
+          "heading": "Deleting and restoring",
+          "headingPath": "Find your files and artifacts in the Library › Deleting and restoring",
+          "text": "Deleting moves an item to **Recently deleted**, where it stays restorable for 30\ndays before it is removed for good. **Delete permanently** erases the stored\nbytes now: nothing restores the file afterwards and anything linking to it stops\nresolving, so it asks first and says so."
+        },
+        {
+          "id": "library#3",
+          "ordinal": 3,
+          "heading": "Projects in the Library",
+          "headingPath": "Find your files and artifacts in the Library › Projects in the Library",
+          "text": "The Library also lists your projects as folders. Opening one goes to the\nproject; creating one takes you to the projects page."
+        },
+        {
+          "id": "library#4",
+          "ordinal": 4,
+          "heading": "If something is missing",
+          "headingPath": "Find your files and artifacts in the Library › If something is missing",
+          "text": "\"Nothing here matches that name. Try a shorter search.\" means the filter, not\nthe Library, is empty. Clear the search and the filter before concluding a file\nis gone. Files attached in a temporary chat never enter the Library by design."
         }
       ]
     },
@@ -385,6 +1241,331 @@
       ]
     },
     {
+      "id": "mcp-connections",
+      "title": "Connect a custom MCP server",
+      "path": "/connectors/mcp-directory",
+      "category": "connectors",
+      "tags": [
+        "mcp",
+        "model context protocol",
+        "custom mcp",
+        "mcp server",
+        "remote mcp",
+        "mcp url",
+        "auth token",
+        "tool discovery",
+        "mcp directory",
+        "mcp-server",
+        "scopes"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/mcp-connections.md",
+      "chunks": [
+        {
+          "id": "mcp-connections#0",
+          "ordinal": 0,
+          "heading": "What MCP is here",
+          "headingPath": "Connect a custom MCP server › What MCP is here",
+          "text": "MCP (Model Context Protocol) is how AGI talks to a tool server that is not one\nof the built-in connectors. A server exposes tools; AGI discovers them and can\ncall them on your behalf, under the same approval rules as any other connector."
+        },
+        {
+          "id": "mcp-connections#1",
+          "ordinal": 1,
+          "heading": "Adding one",
+          "headingPath": "Connect a custom MCP server › Adding one",
+          "text": "A custom MCP connection needs three things: a name to show it under, the\nserver's URL, and an auth token if the server requires one. AGI then queries the\nserver for its tools, showing \"Discovering live MCP capabilities…\" while it\ndoes.\n\nWhere a server offers an API key instead, AGI checks how that server accepts a\nkey before asking you for it, and offers **Test and save** so a bad key fails at\nthe point you paste it rather than mid-conversation."
+        },
+        {
+          "id": "mcp-connections#2",
+          "ordinal": 2,
+          "heading": "What the discovery results mean",
+          "headingPath": "Connect a custom MCP server › What the discovery results mean",
+          "text": "- A list of tools: discovery succeeded and those are what the server offers.\n- \"The server answered but lists no tools yet.\" The server is reachable but\n  exposes nothing, which is the server's state, not a connection failure.\n- \"Live tool discovery failed; showing known tools.\" AGI could not reach the\n  server this time and is listing what it saw before. Treat that list as stale.\n- \"Unavailable during discovery\": a tool the server declared but that could not\n  be resolved."
+        },
+        {
+          "id": "mcp-connections#3",
+          "ordinal": 3,
+          "heading": "Finding servers",
+          "headingPath": "Connect a custom MCP server › Finding servers",
+          "text": "The MCP connector directory is a searchable index of servers. While indexing is\nstill running it says so, because an incomplete search result would otherwise\nread as \"no such server\"."
+        },
+        {
+          "id": "mcp-connections#4",
+          "ordinal": 4,
+          "heading": "Permissions",
+          "headingPath": "Connect a custom MCP server › Permissions",
+          "text": "Connecting is not the same as granting scopes. A connector's scope list shows\nwhat it is allowed to reach, its tools see the context you send them, and you\ncan disconnect at any time. Per-tool approval works the same way as for built-in\nconnectors."
+        },
+        {
+          "id": "mcp-connections#5",
+          "ordinal": 5,
+          "heading": "Limits",
+          "headingPath": "Connect a custom MCP server › Limits",
+          "text": "How many custom MCP connections you can keep depends on your plan; the pricing\npage carries the current figures. A workspace administrator can restrict which\nconnectors a managed workspace permits."
+        },
+        {
+          "id": "mcp-connections#6",
+          "ordinal": 6,
+          "heading": "AGI as an MCP server",
+          "headingPath": "Connect a custom MCP server › AGI as an MCP server",
+          "text": "The CLI also runs the other way round: `agi mcp-server` exposes AGI to another\nMCP client, so the protocol works in both directions."
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "title": "What AGI remembers, and how to change it",
+      "path": "/features/memory",
+      "category": "chat",
+      "tags": [
+        "memory",
+        "remember",
+        "forget",
+        "persistent memory",
+        "past chats",
+        "memory settings",
+        "forget everything",
+        "import memory",
+        "project memory"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/memory.md",
+      "chunks": [
+        {
+          "id": "memory#0",
+          "ordinal": 0,
+          "heading": "The three memory switches",
+          "headingPath": "What AGI remembers, and how to change it › The three memory switches",
+          "text": "Settings, Memory carries three controls, each doing a different thing:\n\n- **Persistent memory**: \"Allow AGI to remember details across conversations.\"\n  With it off, nothing is carried from one conversation to the next.\n- **Search past chats**: \"Let AGI look up excerpts from your other\n  conversations when answering.\" This reads your history at answer time rather\n  than storing facts. It is never used in temporary chats.\n- **Allow memory generation from tool-assisted chats**: whether memories may be\n  created from chats that used tools, connectors, code or web search."
+        },
+        {
+          "id": "memory#1",
+          "ordinal": 1,
+          "heading": "Clearing memory",
+          "headingPath": "What AGI remembers, and how to change it › Clearing memory",
+          "text": "**Forget everything** deletes all remembered facts. It asks first, because the\nfacts cannot be recovered afterwards."
+        },
+        {
+          "id": "memory#2",
+          "ordinal": 2,
+          "heading": "Memory inside a project",
+          "headingPath": "What AGI remembers, and how to change it › Memory inside a project",
+          "text": "A project decides for itself whether it draws on account-wide memory. With \"Use\nmemories from outside this project\" on, chats there use what has been remembered\naccount-wide and anything learned there stays in that project. With it off,\nchats there use only that project's memories and nothing from your other chats\nis included."
+        },
+        {
+          "id": "memory#3",
+          "ordinal": 3,
+          "heading": "When memory is unavailable in a chat",
+          "headingPath": "What AGI remembers, and how to change it › When memory is unavailable in a chat",
+          "text": "If the composer says \"Turn on Memory in Settings > Capabilities to use it here\",\nthe capability is switched off for this surface rather than the feature being\nbroken. Turn it on there and reopen the chat."
+        },
+        {
+          "id": "memory#4",
+          "ordinal": 4,
+          "heading": "Temporary chats",
+          "headingPath": "What AGI remembers, and how to change it › Temporary chats",
+          "text": "A temporary chat neither reads memory nor writes to it. That is part of what\nmakes it temporary; see the temporary chats article."
+        }
+      ]
+    },
+    {
+      "id": "models-and-reasoning",
+      "title": "Pick a model, and control how hard it thinks",
+      "path": "/models",
+      "category": "models",
+      "tags": [
+        "model picker",
+        "choose model",
+        "auto",
+        "switch model",
+        "extended thinking",
+        "reasoning effort",
+        "thinking budget",
+        "vision",
+        "image output",
+        "video output",
+        "tools",
+        "model unavailable",
+        "retired model",
+        "prompt cache"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/models-and-reasoning.md",
+      "chunks": [
+        {
+          "id": "models-and-reasoning#0",
+          "ordinal": 0,
+          "heading": "Picking a model by name",
+          "headingPath": "Pick a model, and control how hard it thinks › Picking a model by name",
+          "text": "The model control under the composer lists every model your plan and trust mode\nmake available, grouped and searchable by name. Each entry carries what it can\ndo: **Vision**, **Tools**, **Search**, **Image output**, **Video output**,\n**Reasoning**. Models on your own machine appear under **On this device**.\n\nLeaving the control on **Auto** picks the best model for each message. An\nexplicit choice is never silently replaced with a different provider."
+        },
+        {
+          "id": "models-and-reasoning#1",
+          "ordinal": 1,
+          "heading": "What the badges mean",
+          "headingPath": "Pick a model, and control how hard it thinks › What the badges mean",
+          "text": "- **Upgrade**: the model exists but your plan does not include it.\n- **Coming soon, not yet available**: it is in the catalogue but not live.\n- **Unavailable right now**: it is live but not answering at the moment.\n- **Auto (free) · community models, capacity varies**: the free routing lane,\n  whose capacity is not guaranteed."
+        },
+        {
+          "id": "models-and-reasoning#2",
+          "ordinal": 2,
+          "heading": "Thinking and effort",
+          "headingPath": "Pick a model, and control how hard it thinks › Thinking and effort",
+          "text": "How reasoning is controlled depends on the model. Some have no reasoning\ncontrol, some always reason, some expose an on/off **Extended thinking**\nswitch, some a thinking budget, and some a set of effort levels. The control\nunder the composer says which applies: \"Always on for this model\", \"Extended\nthinking is off for this model\", or an effort picker whose hint is \"Higher\neffort thinks longer before it answers.\""
+        },
+        {
+          "id": "models-and-reasoning#3",
+          "ordinal": 3,
+          "heading": "Switching mid-conversation",
+          "headingPath": "Pick a model, and control how hard it thinks › Switching mid-conversation",
+          "text": "Within the same trust boundary you can switch models in the middle of a\nconversation; the provider label updates before the next request. The control\nwarns that switching here starts a new prompt cache, so the next message is\nprocessed fresh.\n\nMoving between Local, BYOK and managed cloud is different: it is always an\nexplicit continuation with context selection, a payload preview, your consent,\nand a visible destination label."
+        },
+        {
+          "id": "models-and-reasoning#4",
+          "ordinal": 4,
+          "heading": "A model that was retired",
+          "headingPath": "Pick a model, and control how hard it thinks › A model that was retired",
+          "text": "If a conversation was saved with a model that no longer exists, the chat says so\nin place: that model is no longer available, new messages will use the named\nreplacement, and you can pick a different one. The conversation is not lost and\nnothing is rewritten."
+        },
+        {
+          "id": "models-and-reasoning#5",
+          "ordinal": 5,
+          "heading": "How many there are",
+          "headingPath": "Pick a model, and control how hard it thinks › How many there are",
+          "text": "{{MARKETING.models.display}} models across {{MARKETING.providers.display}}\nprovider integrations. Providers ship and retire models constantly, so the\npicker in the product is the current source of truth, never a number in a\ndocument."
+        }
+      ]
+    },
+    {
+      "id": "privacy-controls",
+      "title": "Privacy controls in Settings",
+      "path": "/privacy",
+      "category": "privacy",
+      "tags": [
+        "privacy",
+        "data controls",
+        "telemetry",
+        "crash reports",
+        "training",
+        "retention",
+        "where is my data",
+        "encryption",
+        "sell data",
+        "anonymized usage"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/privacy-controls.md",
+      "chunks": [
+        {
+          "id": "privacy-controls#0",
+          "ordinal": 0,
+          "heading": "What is stored where",
+          "headingPath": "Privacy controls in Settings › What is stored where",
+          "text": "In Local mode on Desktop, CLI and VS Code, conversations stay on your device and\nare never uploaded. Managed cloud conversations are encrypted in transit and at\nrest. AGI does not sell your data, and does not use customer conversation\ncontent to train AGI-owned models."
+        },
+        {
+          "id": "privacy-controls#1",
+          "ordinal": 1,
+          "heading": "Diagnostics",
+          "headingPath": "Privacy controls in Settings › Diagnostics",
+          "text": "Crash reports and anonymised usage counts, with no message content, help fix\nbugs. They are disabled by default and can be turned off at any time in\nSettings, Privacy."
+        },
+        {
+          "id": "privacy-controls#2",
+          "ordinal": 2,
+          "heading": "Temporary chats",
+          "headingPath": "Privacy controls in Settings › Temporary chats",
+          "text": "\"Start new chats as temporary\" makes every new conversation temporary: not saved\nto your account or history, no memory, and attachments kept out of the Library.\nAn individual conversation can still be switched."
+        },
+        {
+          "id": "privacy-controls#3",
+          "ordinal": 3,
+          "heading": "Your data in the product",
+          "headingPath": "Privacy controls in Settings › Your data in the product",
+          "text": "Settings, Privacy gathers the controls in one place: shared links created from\nweb conversations, archived chats, recently deleted chats, bulk archive and\ndelete, the files and media you uploaded or AGI generated, memory preferences,\nthe JSON export, and the privacy requests page for consent and rights requests."
+        },
+        {
+          "id": "privacy-controls#4",
+          "ordinal": 4,
+          "heading": "Where managed cloud data is hosted",
+          "headingPath": "Privacy controls in Settings › Where managed cloud data is hosted",
+          "text": "Hosted data lives in the United States. EU and UK residency hosting is on the\nroadmap and is not available today. Local conversations never leave your device\nin the first place."
+        },
+        {
+          "id": "privacy-controls#5",
+          "ordinal": 5,
+          "heading": "Sessions and devices",
+          "headingPath": "Privacy controls in Settings › Sessions and devices",
+          "text": "Session management lives in Settings, Account rather than here: active sessions,\nrevoking one device, and logging out everywhere. The privacy page links across\nto it rather than duplicating the controls."
+        }
+      ]
+    },
+    {
+      "id": "projects",
+      "title": "Projects: group chats around shared context",
+      "path": "/chat/projects",
+      "category": "projects",
+      "tags": [
+        "project",
+        "projects",
+        "knowledge",
+        "sources",
+        "project instructions",
+        "project memory",
+        "knowledge files",
+        "indexing",
+        "google drive",
+        "duplicate project",
+        "delete project"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/projects.md",
+      "chunks": [
+        {
+          "id": "projects#0",
+          "ordinal": 0,
+          "heading": "What a project is",
+          "headingPath": "Projects: group chats around shared context › What a project is",
+          "text": "A project holds a set of conversations plus the context they share: a written\nset of instructions, uploaded knowledge files, and its own memory scope. Every\nchat you start inside a project inherits that context."
+        },
+        {
+          "id": "projects#1",
+          "ordinal": 1,
+          "heading": "Create one",
+          "headingPath": "Projects: group chats around shared context › Create one",
+          "text": "Open the projects page and create a project with a name and, optionally, a\ndescription answering \"What are you trying to achieve?\". Project settings then\ncarry four things:\n\n- **Description**: what the project is for.\n- **Instructions**: context and how AGI should respond here, for example\n  \"Respond in Spanish. Reference the latest documentation. Keep answers short.\"\n- **Memory**: a switch for \"Use memories from outside this project\". On, chats\n  here draw on what has been remembered account-wide and anything learned here\n  stays in this project. Off, chats here use only this project's memories and\n  nothing from your other chats is included.\n- **Files**: documents that provide context for every conversation in the\n  project."
+        },
+        {
+          "id": "projects#2",
+          "ordinal": 2,
+          "heading": "Add sources",
+          "headingPath": "Projects: group chats around shared context › Add sources",
+          "text": "**Add sources** takes files from your device, text you paste or type, and Google\nDrive where that connector is set up. A connector that is not connected yet\nshows **Connect in Settings** rather than failing silently.\n\nEach knowledge file reports its own state: **Indexing for search** while it is\nbeing processed, then either full indexing or **Keyword search only**, and\n**Not indexed** where it could not be processed. A file that is keyword-only is\nstill usable; it is matched by words rather than by meaning."
+        },
+        {
+          "id": "projects#3",
+          "ordinal": 3,
+          "heading": "Shared projects",
+          "headingPath": "Projects: group chats around shared context › Shared projects",
+          "text": "If you open a project someone else owns, the sources panel says the owner has\nnot added any sources yet and that only they can add or remove them. Ownership\nof sources does not transfer by sharing."
+        },
+        {
+          "id": "projects#4",
+          "ordinal": 4,
+          "heading": "Duplicate and delete",
+          "headingPath": "Projects: group chats around shared context › Duplicate and delete",
+          "text": "A project can be duplicated, which copies its setup into a new project.\n**Delete project** asks first, because the project and its configuration go\nwith it."
+        },
+        {
+          "id": "projects#5",
+          "ordinal": 5,
+          "heading": "Limits",
+          "headingPath": "Projects: group chats around shared context › Limits",
+          "text": "How many projects and how much knowledge storage you get depends on your plan.\nThe pricing page carries the current figures."
+        }
+      ]
+    },
+    {
       "id": "providers-and-models",
       "title": "Providers and models",
       "path": "/providers",
@@ -439,6 +1620,796 @@
           "heading": "Automatic routing",
           "headingPath": "Providers and models › Automatic routing",
           "text": "When the model selection is left on automatic, AGI picks a model for the task from\nthe models your plan and trust mode make available. An explicit model selection is\nnever silently replaced with a different provider."
+        }
+      ]
+    },
+    {
+      "id": "schedules-and-triggers",
+      "title": "Schedule a task, or run it on a trigger",
+      "path": "/chat/schedules",
+      "category": "work",
+      "tags": [
+        "schedule",
+        "scheduled task",
+        "cron",
+        "recurring",
+        "timezone",
+        "trigger",
+        "webhook",
+        "gmail",
+        "google calendar",
+        "github",
+        "run history",
+        "automation"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/schedules-and-triggers.md",
+      "chunks": [
+        {
+          "id": "schedules-and-triggers#0",
+          "ordinal": 0,
+          "heading": "Create a schedule",
+          "headingPath": "Schedule a task, or run it on a trigger › Create a schedule",
+          "text": "The schedules page creates a recurring task from four things: a name,\ninstructions describing the text task to run, a note on why it runs, and when it\nruns. A timezone is part of the schedule, so a daily brief fires at the local\nhour you meant. A schedule can be created active or saved inactive and switched\non later.\n\nSchedules can be filtered by project and by status, and each one has a run\nhistory you can open to see what happened on previous runs."
+        },
+        {
+          "id": "schedules-and-triggers#1",
+          "ordinal": 1,
+          "heading": "Triggers instead of a clock",
+          "headingPath": "Schedule a task, or run it on a trigger › Triggers instead of a clock",
+          "text": "A schedule can also be attached to an event:\n\n- **Gmail**, which fires when the mailbox changes and waits until the mailbox\n  watch is registered for it.\n- **Google Calendar**, which waits until the calendar watch is registered.\n- **GitHub**, which fires for the repositories your GitHub App installation\n  covers.\n- **Anything else**, through a signed webhook addressed to its own channel.\n\nA trigger that is still waiting for its watch to register says so rather than\nreporting itself as live."
+        },
+        {
+          "id": "schedules-and-triggers#2",
+          "ordinal": 2,
+          "heading": "What an unattended run means",
+          "headingPath": "Schedule a task, or run it on a trigger › What an unattended run means",
+          "text": "The form states it plainly: an unattended run can fail or be skipped, and\nbehaviour may change. Treat a scheduled task as something to check the history\nof, not something to rely on silently."
+        },
+        {
+          "id": "schedules-and-triggers#3",
+          "ordinal": 3,
+          "heading": "Editing and deleting",
+          "headingPath": "Schedule a task, or run it on a trigger › Editing and deleting",
+          "text": "Editing a schedule warns before discarding unsaved changes. **Delete Schedule**\nasks first, and deleting a trigger is a separate confirmation."
+        },
+        {
+          "id": "schedules-and-triggers#4",
+          "ordinal": 4,
+          "heading": "Limits",
+          "headingPath": "Schedule a task, or run it on a trigger › Limits",
+          "text": "How many scheduled tasks you can keep depends on your plan, and free and\nBYOK-only accounts have none. A workspace administrator can turn Schedules and\nEvent triggers off for a managed workspace. The pricing page carries the current\nper-plan figures."
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "title": "Search: the web, your chats and the help centre",
+      "path": "/chat",
+      "category": "search",
+      "tags": [
+        "search",
+        "web search",
+        "find a conversation",
+        "search messages",
+        "search history",
+        "search past chats",
+        "deep research",
+        "sources",
+        "citations",
+        "help search"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/search.md",
+      "chunks": [
+        {
+          "id": "search#0",
+          "ordinal": 0,
+          "heading": "Searching the web from a chat",
+          "headingPath": "Search: the web, your chats and the help centre › Searching the web from a chat",
+          "text": "There is no search switch to find. Managed web search is ambient: it stays on\nwhenever the selected model and deployment have a real search path, and turns\noff only when no such path exists. The composer states whether search is on for\nthe model you picked. `/search` in the composer states the intent explicitly for\na single message.\n\nManaged cloud search follows the chat and usage policy for your plan. In Local\nand BYOK the behaviour depends on the runtime and provider you selected."
+        },
+        {
+          "id": "search#1",
+          "ordinal": 1,
+          "heading": "Deep Research",
+          "headingPath": "Search: the web, your chats and the help centre › Deep Research",
+          "text": "**Deep Research** is a separate composer mode for multi-step investigation\nrather than a single answer. It is not available on every model: choosing one\nthat cannot do it says \"Deep Research isn't available for this model. Choose\nAuto or a model that supports Deep Research.\" Availability also depends on your\nplan, and an ineligible plan shows \"Upgrade to use Deep Research\"."
+        },
+        {
+          "id": "search#2",
+          "ordinal": 2,
+          "heading": "Finding your own conversations",
+          "headingPath": "Search: the web, your chats and the help centre › Finding your own conversations",
+          "text": "Cmd/Ctrl+K opens search across your messages and conversations. It searches\nmessage text as well as titles, filters by date, and marks results that came\nfrom a code session or a project source. Your recent searches are kept; clearing\nthem warns that it cannot be undone."
+        },
+        {
+          "id": "search#3",
+          "ordinal": 3,
+          "heading": "Letting AGI search your past chats",
+          "headingPath": "Search: the web, your chats and the help centre › Letting AGI search your past chats",
+          "text": "Settings, Memory holds **Search past chats**: \"Let AGI look up excerpts from\nyour other conversations when answering.\" It is never used in temporary chats."
+        },
+        {
+          "id": "search#4",
+          "ordinal": 4,
+          "heading": "Searching the help centre",
+          "headingPath": "Search: the web, your chats and the help centre › Searching the help centre",
+          "text": "The help page carries a search box over everything published here. It is plain\nkeyword retrieval over the published pages, with no model call, so it keeps\nworking even when the support assistant is off. If nothing matches, it says so\nrather than guessing, and points at contact@agiworkforce.com."
+        }
+      ]
+    },
+    {
+      "id": "sharing-conversations",
+      "title": "Share a conversation or an artifact",
+      "path": "/chat",
+      "category": "chat",
+      "tags": [
+        "share",
+        "share link",
+        "public link",
+        "workspace only",
+        "revoke",
+        "shared links",
+        "unpublish",
+        "published artifacts",
+        "export chat",
+        "pdf",
+        "docx"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/sharing-conversations.md",
+      "chunks": [
+        {
+          "id": "sharing-conversations#0",
+          "ordinal": 0,
+          "heading": "Create a share link",
+          "headingPath": "Share a conversation or an artifact › Create a share link",
+          "text": "Open the conversation's menu and choose **Share conversation**. Two audiences\nare offered:\n\n- **Anyone with the link**, described as best for a quick review.\n- **Share with workspace**, for longer collaboration, which limits the link to\n  members of your workspace.\n\nOnce the link exists the dialog confirms the audience: \"Anyone with the link can\nopen this now\", or \"Only your workspace can open this now\". Copy it from the\ndialog, or open the link to check what a reader sees."
+        },
+        {
+          "id": "sharing-conversations#1",
+          "ordinal": 1,
+          "heading": "Change or revoke a link",
+          "headingPath": "Share a conversation or an artifact › Change or revoke a link",
+          "text": "Switching the audience after the fact asks first, naming the change: \"Make this\nreadable by anyone with the link?\" or \"Limit this to your workspace?\".\n**Revoke share** removes access, and the confirmation says that anyone using the\nlink will immediately lose access."
+        },
+        {
+          "id": "sharing-conversations#2",
+          "ordinal": 2,
+          "heading": "Find every link you have created",
+          "headingPath": "Share a conversation or an artifact › Find every link you have created",
+          "text": "Settings, **Shared links** lists the links created from web conversations, with\nthe ones marked _Workspace only_ distinguished from public ones, and revokes any\nof them. Published artifacts have their own list in Settings with an\n**Unpublish artifact** action."
+        },
+        {
+          "id": "sharing-conversations#3",
+          "ordinal": 3,
+          "heading": "Export instead of sharing",
+          "headingPath": "Share a conversation or an artifact › Export instead of sharing",
+          "text": "The conversation menu also exports. From the Library, an artifact exports as PDF\nor Word. There is no spreadsheet export on web, so no xlsx option is offered\nrather than one that would fail after you picked it."
+        },
+        {
+          "id": "sharing-conversations#4",
+          "ordinal": 4,
+          "heading": "Chats you cannot share",
+          "headingPath": "Share a conversation or an artifact › Chats you cannot share",
+          "text": "A temporary chat cannot be shared while the control is on, because it is never\nsaved. Turn temporary chat off first."
+        }
+      ]
+    },
+    {
+      "id": "signing-up",
+      "title": "Create an account and send your first message",
+      "path": "/get-started",
+      "category": "getting-started",
+      "tags": [
+        "sign up",
+        "signup",
+        "create account",
+        "register",
+        "new account",
+        "google",
+        "github",
+        "oauth",
+        "verification code",
+        "terms",
+        "first message",
+        "first chat"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/signing-up.md",
+      "chunks": [
+        {
+          "id": "signing-up#0",
+          "ordinal": 0,
+          "heading": "Create the account",
+          "headingPath": "Create an account and send your first message › Create the account",
+          "text": "1. Open the sign-up page and enter the email address you want the account under.\n2. Choose how you sign up: **Continue with Google**, **Continue with GitHub**, or\n   an email address and a password.\n3. If you used email, confirm the code sent to your inbox. If the code has not\n   arrived, check the spam folder before requesting another.\n\nThere is no checkbox to tick. The sign-up screen states that by signing up you\nagree to the Terms of Use and acknowledge the Privacy Policy, and completing\nsign-up is the agreement."
+        },
+        {
+          "id": "signing-up#1",
+          "ordinal": 1,
+          "heading": "What you can do immediately",
+          "headingPath": "Create an account and send your first message › What you can do immediately",
+          "text": "Managed cloud is open by default. A new account can open the chat surface and\nsend a message straight away: there is no waitlist for managed cloud and no\ninvite code to redeem. Team and Enterprise tiers are the waitlisted ones."
+        },
+        {
+          "id": "signing-up#2",
+          "ordinal": 2,
+          "heading": "Send the first message",
+          "headingPath": "Create an account and send your first message › Send the first message",
+          "text": "Open the chat surface, type into the composer, and press Enter. The composer\nplaceholder reads \"Ask anything. Type / for commands\". Below the composer the\nmodel selector shows which model will answer; leaving it on **Auto** lets AGI\npick a model for each message from the ones your plan and trust mode allow."
+        },
+        {
+          "id": "signing-up#3",
+          "ordinal": 3,
+          "heading": "If sign-up does not complete",
+          "headingPath": "Create an account and send your first message › If sign-up does not complete",
+          "text": "- \"No account uses this email. Sign up instead.\" on a sign-in screen means the\n  address has never been registered. Sign up rather than resetting a password.\n- \"That password is too common.\" means the password was rejected against a\n  common-password list. Choose a longer, less common one.\n- A verification step the sign-up screen cannot render ends with \"This account\n  needs a verification step we cannot show here yet.\" Email\n  contact@agiworkforce.com and a person will unblock the account."
+        }
+      ]
+    },
+    {
+      "id": "temporary-chats",
+      "title": "Temporary chats",
+      "path": "/privacy",
+      "category": "chat",
+      "tags": [
+        "temporary chat",
+        "incognito",
+        "private chat",
+        "not saved",
+        "no history",
+        "off the record",
+        "end temporary chat",
+        "ephemeral"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/temporary-chats.md",
+      "chunks": [
+        {
+          "id": "temporary-chats#0",
+          "ordinal": 0,
+          "heading": "What a temporary chat does",
+          "headingPath": "Temporary chats › What a temporary chat does",
+          "text": "A temporary chat stays out of your history, your memory and your Library. It is\nnever written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary means AGI stores nothing, not that the outside world forgets."
+        },
+        {
+          "id": "temporary-chats#1",
+          "ordinal": 1,
+          "heading": "Turning it on",
+          "headingPath": "Temporary chats › Turning it on",
+          "text": "The composer carries a **Temporary chat** control for the conversation you are\nin. To make every new conversation temporary, turn on \"Start new chats as\ntemporary\" in Settings, Privacy."
+        },
+        {
+          "id": "temporary-chats#2",
+          "ordinal": 2,
+          "heading": "Ending one",
+          "headingPath": "Temporary chats › Ending one",
+          "text": "**End temporary chat** discards it. The confirmation states the consequence\nplainly: a temporary chat is never written to your history, so ending it is the\nend of it, every message goes on this device and any other, and nobody can\nreopen or restore it. Copy out anything you still need before you confirm."
+        },
+        {
+          "id": "temporary-chats#3",
+          "ordinal": 3,
+          "heading": "What you cannot do with one",
+          "headingPath": "Temporary chats › What you cannot do with one",
+          "text": "A temporary chat cannot be shared. The share control refuses with \"A temporary\nchat cannot be shared. Turn off temporary chat to keep it, then share it.\" Turn\nthe control off first, which starts saving the conversation, and then share it."
+        }
+      ]
+    },
+    {
+      "id": "tool-approvals",
+      "title": "Approvals: what a tool may do without asking",
+      "path": "/agent-permissions",
+      "category": "connectors",
+      "tags": [
+        "approval",
+        "approvals",
+        "permission",
+        "always allow",
+        "ask every time",
+        "auto approve",
+        "read only",
+        "tool permissions",
+        "deny tool",
+        "call log",
+        "reset permissions"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/tool-approvals.md",
+      "chunks": [
+        {
+          "id": "tool-approvals#0",
+          "ordinal": 0,
+          "heading": "The account-wide default",
+          "headingPath": "Approvals: what a tool may do without asking › The account-wide default",
+          "text": "Settings carries one **Default approval for tool actions** with two settings:\n\n- **Ask before every action.** Every connector, plugin and tool action waits for\n  your approval, including actions that only read data. This is the default.\n- **Run read-only actions without asking.** Actions that only read data, search\n  the web, fetch a page, or run code in the AGI sandbox run on their own.\n  Anything that writes, deletes, sends, buys, changes credentials, or runs on\n  your own machine still asks, and so does every connector tool AGI does not\n  know.\n\nThe setting syncs to your account, so it holds wherever you are signed in."
+        },
+        {
+          "id": "tool-approvals#1",
+          "ordinal": 1,
+          "heading": "Per-tool permissions",
+          "headingPath": "Approvals: what a tool may do without asking › Per-tool permissions",
+          "text": "Each connector has a **Tool Permissions** panel that overrides the default for\none tool at a time: **Always run without asking**, **Needs approval each time**,\nor **Never run this tool**. **Reset all to default** clears every override for\nthat connector and asks first."
+        },
+        {
+          "id": "tool-approvals#2",
+          "ordinal": 2,
+          "heading": "Approving in the moment",
+          "headingPath": "Approvals: what a tool may do without asking › Approving in the moment",
+          "text": "When a tool runs for the first time, AGI asks. Choosing **Always allow** saves\nthat verdict so the same tool can run without prompting again. A temporary chat\nignores saved \"Always allow\" verdicts and asks every time."
+        },
+        {
+          "id": "tool-approvals#3",
+          "ordinal": 3,
+          "heading": "Checking what ran",
+          "headingPath": "Approvals: what a tool may do without asking › Checking what ran",
+          "text": "**Recent calls** on a connector is its call log: what was called and when. A\nconnector that has never been called says so rather than showing an empty table\nthat could be read as a failure."
+        },
+        {
+          "id": "tool-approvals#4",
+          "ordinal": 4,
+          "heading": "Removing a connector clears its approvals",
+          "headingPath": "Approvals: what a tool may do without asking › Removing a connector clears its approvals",
+          "text": "Removing a connector deactivates it and clears its saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate."
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting: when something does not work",
+      "path": "/support",
+      "category": "troubleshooting",
+      "tags": [
+        "troubleshooting",
+        "not working",
+        "error",
+        "failed",
+        "broken",
+        "stuck",
+        "cannot send",
+        "no response",
+        "offline",
+        "retry",
+        "upgrade required",
+        "unavailable",
+        "contact support"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/troubleshooting.md",
+      "chunks": [
+        {
+          "id": "troubleshooting#0",
+          "ordinal": 0,
+          "heading": "Start here",
+          "headingPath": "Troubleshooting: when something does not work › Start here",
+          "text": "Most failures name themselves on screen. Read the message before changing\nanything: AGI distinguishes \"this is switched off\", \"your plan does not include\nthis\", \"this model cannot do this\" and \"this is broken\", and the fix is\ndifferent for each.\n\nCheck the status page before investigating your own account."
+        },
+        {
+          "id": "troubleshooting#1",
+          "ordinal": 1,
+          "heading": "A chat will not load",
+          "headingPath": "Troubleshooting: when something does not work › A chat will not load",
+          "text": "\"Chat could not be displayed\" with **Try again** is a render failure; your\nmessages are already saved, so retrying or opening another conversation loses\nnothing. \"You are offline\" means the browser lost its connection: reconnect and\ntry again."
+        },
+        {
+          "id": "troubleshooting#2",
+          "ordinal": 2,
+          "heading": "A message will not send",
+          "headingPath": "Troubleshooting: when something does not work › A message will not send",
+          "text": "- \"Your previous message was still starting, so this one is back here. Send it\n  again.\" Send it once more; nothing was lost.\n- \"Your queued message was not sent: you switched chats before the reply\n  finished.\" It was saved as a draft in the original chat. Its attachments were\n  not kept, so re-attach them.\n- A plan-limited refusal names the plan, not a fault. Check the usage view in\n  Settings for the current allowance and reset time."
+        },
+        {
+          "id": "troubleshooting#3",
+          "ordinal": 3,
+          "heading": "A file was not attached",
+          "headingPath": "Troubleshooting: when something does not work › A file was not attached",
+          "text": "The composer refuses a file instead of sending your message without it, and says\nwhy: too large, an unreadable type, too many files in one message, or the\nconversation's attachment limit. Convert, split, or paste the contents as text."
+        },
+        {
+          "id": "troubleshooting#4",
+          "ordinal": 4,
+          "heading": "A tool or connector did nothing",
+          "headingPath": "Troubleshooting: when something does not work › A tool or connector did nothing",
+          "text": "On the default approval setting every tool action waits for you, so a session\nthat looks stalled may be waiting on an approval. Check the approval prompt, the\nconnector's **Recent calls** log, and its per-tool permissions: a tool set to\n**Never run this tool** is refused by your own setting."
+        },
+        {
+          "id": "troubleshooting#5",
+          "ordinal": 5,
+          "heading": "A model is missing from the picker",
+          "headingPath": "Troubleshooting: when something does not work › A model is missing from the picker",
+          "text": "The badge says which case it is: **Upgrade** (your plan), **Coming soon, not yet\navailable** (not live yet), or **Unavailable right now** (live but not\nanswering). A workspace model policy can also remove models entirely, in which\ncase they do not appear at all."
+        },
+        {
+          "id": "troubleshooting#6",
+          "ordinal": 6,
+          "heading": "A retired model",
+          "headingPath": "Troubleshooting: when something does not work › A retired model",
+          "text": "A conversation saved with a model that no longer exists says so in place and\ncontinues on a named replacement. Nothing is lost, and you can pick a different\nmodel."
+        },
+        {
+          "id": "troubleshooting#7",
+          "ordinal": 7,
+          "heading": "Voice will not start",
+          "headingPath": "Troubleshooting: when something does not work › Voice will not start",
+          "text": "The message names the cause: microphone denied, no microphone available, the\nbrowser cannot open a voice connection, or the connection failed or dropped.\nGrant the microphone permission in site settings, or try again on a network that\nallows the connection."
+        },
+        {
+          "id": "troubleshooting#8",
+          "ordinal": 8,
+          "heading": "Still stuck",
+          "headingPath": "Troubleshooting: when something does not work › Still stuck",
+          "text": "Email contact@agiworkforce.com. A real person reads it. Include your **User ID**\nfrom Settings, Account, and the **Organization ID** too if the problem is\nworkspace-wide."
+        }
+      ]
+    },
+    {
+      "id": "usage-and-credits",
+      "title": "Usage limits, credits and top-ups",
+      "path": "/pricing",
+      "category": "billing",
+      "tags": [
+        "usage",
+        "limit",
+        "quota",
+        "capacity",
+        "allowance",
+        "reset",
+        "credits",
+        "top up",
+        "buy credits",
+        "overage",
+        "ran out",
+        "rate limit",
+        "out of capacity"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/usage-and-credits.md",
+      "chunks": [
+        {
+          "id": "usage-and-credits#0",
+          "ordinal": 0,
+          "heading": "How usage is measured",
+          "headingPath": "Usage limits, credits and top-ups › How usage is measured",
+          "text": "Managed cloud usage is metered. Each plan carries a capacity allowance, and the\nusage view in Settings shows how much of the current allowance you have used and\nwhen it resets, as a percentage and a reset time."
+        },
+        {
+          "id": "usage-and-credits#1",
+          "ordinal": 1,
+          "heading": "When the allowance runs out",
+          "headingPath": "Usage limits, credits and top-ups › When the allowance runs out",
+          "text": "Managed cloud requests stop until the allowance resets. Local mode and BYOK are\nunaffected, because they do not run on AGI-operated provider access: neither one\ndraws on a managed allowance."
+        },
+        {
+          "id": "usage-and-credits#2",
+          "ordinal": 2,
+          "heading": "Credits",
+          "headingPath": "Usage limits, credits and top-ups › Credits",
+          "text": "Credits are a prepaid balance you can buy and spend on managed usage, separate\nfrom the plan allowance. **Top-up purchase** takes a custom amount in whole\ndollars. The **Credit history** list shows every purchase, bonus and spend\nagainst the balance."
+        },
+        {
+          "id": "usage-and-credits#3",
+          "ordinal": 3,
+          "heading": "Keeping going past a limit",
+          "headingPath": "Usage limits, credits and top-ups › Keeping going past a limit",
+          "text": "Settings, Billing carries **Keep going after a usage limit**: \"Spend your\ncredits when a usage limit stops you.\" With no balance it says \"Buy credits\nabove to use this\", because the switch has nothing to spend. Turning it on means\nmanaged usage continues out of credits once the plan allowance is exhausted\nrather than stopping."
+        },
+        {
+          "id": "usage-and-credits#4",
+          "ordinal": 4,
+          "heading": "Concurrency, not just volume",
+          "headingPath": "Usage limits, credits and top-ups › Concurrency, not just volume",
+          "text": "Plans also differ in how many responses can be generating at once. Hitting that\nceiling is not the same as exhausting your allowance: it clears as soon as an\nin-flight response finishes."
+        },
+        {
+          "id": "usage-and-credits#5",
+          "ordinal": 5,
+          "heading": "Free routing",
+          "headingPath": "Usage limits, credits and top-ups › Free routing",
+          "text": "The free lane is offered as **Auto (free) · community models, capacity varies**.\nIts capacity is not guaranteed, which is what \"capacity varies\" means, so a free\nrequest can be refused when a paid one would not be."
+        }
+      ]
+    },
+    {
+      "id": "voice",
+      "title": "Talk to AGI: voice mode and dictation",
+      "path": "/chat",
+      "category": "voice",
+      "tags": [
+        "voice",
+        "voice mode",
+        "dictation",
+        "microphone",
+        "speech to text",
+        "transcript",
+        "voices",
+        "marin",
+        "mute",
+        "microphone denied",
+        "speak"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/voice.md",
+      "chunks": [
+        {
+          "id": "voice#0",
+          "ordinal": 0,
+          "heading": "Two different things",
+          "headingPath": "Talk to AGI: voice mode and dictation › Two different things",
+          "text": "**Dictation** turns speech into text in the composer. You review the transcript\nand press send, so nothing is sent until you send it.\n\n**Voice mode** is a spoken conversation: AGI listens and answers out loud, and a\ntranscript of both sides appears as you go."
+        },
+        {
+          "id": "voice#1",
+          "ordinal": 1,
+          "heading": "Dictation",
+          "headingPath": "Talk to AGI: voice mode and dictation › Dictation",
+          "text": "Turn it on in Settings, Voice: \"Turn speech into composer text with the\nmicrophone button. Review the transcript before sending.\" The same page sets the\nlanguage dictation transcribes into. With dictation off, the language control is\ndisabled because there is nothing to transcribe."
+        },
+        {
+          "id": "voice#2",
+          "ordinal": 2,
+          "heading": "Voice mode",
+          "headingPath": "Talk to AGI: voice mode and dictation › Voice mode",
+          "text": "Start it with the **Start voice mode** button in the composer. Voice settings\nchoose the spoken voice, how much intelligence a voice turn gets, and its\nlanguage, which can be left on **Auto-detect**. Several voices are offered,\nincluding Marin, Meridian, Gleam, Quartz, Ripple, Vesper, Willow, Stone, Delta,\nCinder, Beacon, Bossa and Tempo."
+        },
+        {
+          "id": "voice#3",
+          "ordinal": 3,
+          "heading": "When voice will not start",
+          "headingPath": "Talk to AGI: voice mode and dictation › When voice will not start",
+          "text": "The message names the cause:\n\n- \"Microphone access was denied. Allow the microphone to use voice mode.\"\n  Grant the microphone permission in your browser's site settings and retry.\n- \"No microphone is available in this browser.\" No input device was found.\n- \"This browser cannot open a voice connection.\" The browser does not support\n  the connection voice mode needs.\n- \"The voice connection could not be established.\" or \"The voice connection\n  dropped.\" A network problem; start the session again.\n\nSome embedded surfaces cannot record audio at all because the host blocks\nmicrophone access, so dictation and voice mode are unavailable there rather than\nfailing mid-session."
+        }
+      ]
+    },
+    {
+      "id": "vscode-extension",
+      "title": "The VS Code extension",
+      "path": "/vscode-extension",
+      "category": "surfaces",
+      "tags": [
+        "vs code",
+        "vscode",
+        "editor",
+        "extension",
+        "ide",
+        "explain selection",
+        "refactor",
+        "generate tests",
+        "fix issue",
+        "agent mode",
+        "sign in to cloud",
+        "local runtime"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/vscode-extension.md",
+      "chunks": [
+        {
+          "id": "vscode-extension#0",
+          "ordinal": 0,
+          "heading": "Availability",
+          "headingPath": "The VS Code extension › Availability",
+          "text": "The VS Code extension is not published yet. The VS Code page carries its status\nand a notify list; there is no marketplace listing to install from today, and\nthis page will not pretend otherwise."
+        },
+        {
+          "id": "vscode-extension#1",
+          "ordinal": 1,
+          "heading": "What it is being built to do",
+          "headingPath": "The VS Code extension › What it is being built to do",
+          "text": "The extension puts a chat sidebar and an editor chat panel in VS Code, backed by\nthe same account as the web app. Its commands cover the editor work you would\notherwise paste into a chat: **Explain Selection**, **Fix Issue**, **Refactor\nCode** and **Generate Tests**, plus diagnostics and code actions in the editor\nitself."
+        },
+        {
+          "id": "vscode-extension#2",
+          "ordinal": 2,
+          "heading": "Sessions and conversations",
+          "headingPath": "The VS Code extension › Sessions and conversations",
+          "text": "Conversations are listed in the sidebar and can be opened, forked, deleted and\nrefreshed, with a session history view, so a conversation started in the editor\nis the same kind of object as one started on the web."
+        },
+        {
+          "id": "vscode-extension#3",
+          "ordinal": 3,
+          "heading": "Trust modes in the editor",
+          "headingPath": "The VS Code extension › Trust modes in the editor",
+          "text": "VS Code is one of the two surfaces that accept your own provider keys. **Set API\nKey** and **Clear API Key** manage BYOK, **Select Model** chooses what answers,\nand **Restart Local Runtime** manages a model running on your machine. **Sign in\nto AGI Cloud** and **Sign out of AGI Cloud** control managed access separately,\nso the two trust boundaries stay distinct here as everywhere else."
+        },
+        {
+          "id": "vscode-extension#4",
+          "ordinal": 4,
+          "heading": "The CLI in the same environment",
+          "headingPath": "The VS Code extension › The CLI in the same environment",
+          "text": "**Check the CLI in This Environment** reports whether the `agi` command is\npresent and usable from the editor's environment, which is the first thing to\ncheck when an editor action that shells out fails."
+        },
+        {
+          "id": "vscode-extension#5",
+          "ordinal": 5,
+          "heading": "Until it ships",
+          "headingPath": "The VS Code extension › Until it ships",
+          "text": "Use the CLI in the VS Code integrated terminal. It is published, it accepts\nprovider keys, and `agi review` and `agi apply` cover the diff workflow."
+        }
+      ]
+    },
+    {
+      "id": "workspace-administration",
+      "title": "Administering a workspace",
+      "path": "/workspace",
+      "category": "administration",
+      "tags": [
+        "admin",
+        "administration",
+        "workspace console",
+        "members",
+        "seats",
+        "invite",
+        "audit log",
+        "usage analytics",
+        "sharing",
+        "legal hold",
+        "retention",
+        "api keys",
+        "spend limit"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/workspace-administration.md",
+      "chunks": [
+        {
+          "id": "workspace-administration#0",
+          "ordinal": 0,
+          "heading": "The workspace console",
+          "headingPath": "Administering a workspace › The workspace console",
+          "text": "A workspace is administered from its own console rather than from personal\nsettings. Its sections are:\n\n- **Overview**: the workspace's current posture at a glance.\n- **Members**: who belongs to the workspace, what role they hold, and how many\n  seats that consumes. Invitations and removals happen here.\n- **Roles**: built-in and custom roles, additional roles, and the roles a\n  directory group grants.\n- **Policy**: privacy modes, managed compute, sync surfaces, retention,\n  features and exceptions.\n- **Models**: which models and providers the workspace permits.\n- **Connectors**: which integrations the workspace permits.\n- **Identity**: single sign-on, domain verification and SCIM directory\n  provisioning.\n- **Sharing**: the projects, conversations, artifacts and connectors shared\n  across the workspace.\n- **Usage**: managed cloud spend by member, model and provider.\n- **Data**: legal holds, and the record of what retention has deleted.\n- **Audit**: administrative and policy events, with export and SIEM streaming.\n- **Billing**: plan, seats, and where workspace billing is managed."
+        },
+        {
+          "id": "workspace-administration#1",
+          "ordinal": 1,
+          "heading": "What members see",
+          "headingPath": "Administering a workspace › What members see",
+          "text": "Members do not see the console. A member on a workspace-managed plan sees\nread-only billing in their own settings, saying the plan is managed by the\norganization and to contact an administrator to change it."
+        },
+        {
+          "id": "workspace-administration#2",
+          "ordinal": 2,
+          "heading": "Directory provisioning",
+          "headingPath": "Administering a workspace › Directory provisioning",
+          "text": "SCIM 2.0 provisioning covers Users and Groups, so accounts and group membership\ncan be created, updated and deprovisioned from your identity provider rather\nthan by hand. Domain verification and single sign-on are configured on the same\npage."
+        },
+        {
+          "id": "workspace-administration#3",
+          "ordinal": 3,
+          "heading": "Audit and usage",
+          "headingPath": "Administering a workspace › Audit and usage",
+          "text": "The audit trail records administrative and policy events and can be exported or\nstreamed to a SIEM. Usage analytics attribute managed cloud spend to a member, a\nmodel and a provider, which is what you need to answer \"who spent this\" rather\nthan only \"how much\"."
+        },
+        {
+          "id": "workspace-administration#4",
+          "ordinal": 4,
+          "heading": "Getting help with a workspace",
+          "headingPath": "Administering a workspace › Getting help with a workspace",
+          "text": "Support asks for the **Organization ID** before anything workspace-wide. It is\nshown in Settings, Account beside your user ID when the account belongs to a\nworkspace."
+        }
+      ]
+    },
+    {
+      "id": "workspace-policy",
+      "title": "Workspace policy: features, models and exceptions",
+      "path": "/workspace/policy",
+      "category": "administration",
+      "tags": [
+        "policy",
+        "workspace policy",
+        "feature controls",
+        "disable feature",
+        "model policy",
+        "connector policy",
+        "reasoning effort",
+        "allowed countries",
+        "surfaces",
+        "retention",
+        "exceptions",
+        "override"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/workspace-policy.md",
+      "chunks": [
+        {
+          "id": "workspace-policy#0",
+          "ordinal": 0,
+          "heading": "What policy controls",
+          "headingPath": "Workspace policy: features, models and exceptions › What policy controls",
+          "text": "A workspace policy narrows what its members can do. Four things can be set:\n\n- **Feature access**: each of Work, Code, Research, Skills, Plugins, Hooks,\n  Browser, Computer use, Remote Control, Schedules, Event triggers and Projects\n  can be turned off for the workspace. All are on by default.\n- **Default model**: the model members start on.\n- **Highest reasoning level**: a ceiling on how hard a model may think, chosen\n  from none, minimal, low, medium, high, xhigh and max. Left unset, there is no\n  reasoning limit.\n- **Where work may run**: the countries and the surfaces the workspace permits.\n\nModel policy and connector policy have their own pages: which models and\nproviders are permitted, and which integrations are."
+        },
+        {
+          "id": "workspace-policy#1",
+          "ordinal": 1,
+          "heading": "Exceptions",
+          "headingPath": "Workspace policy: features, models and exceptions › Exceptions",
+          "text": "Policy can be overridden for a role, a directory group, or a single user, so one\nteam can keep a capability the rest of the workspace does not have. Where\nseveral overrides apply to the same person, the most restrictive value wins:\nan exception cannot be used to widen access past what the workspace itself\nallows."
+        },
+        {
+          "id": "workspace-policy#2",
+          "ordinal": 2,
+          "heading": "Retention and legal holds",
+          "headingPath": "Workspace policy: features, models and exceptions › Retention and legal holds",
+          "text": "The data page carries retention settings per domain and the record of what\nretention has already deleted, plus legal holds that suspend deletion for\nmaterial under investigation. A hold takes precedence over a retention window."
+        },
+        {
+          "id": "workspace-policy#3",
+          "ordinal": 3,
+          "heading": "Spend",
+          "headingPath": "Workspace policy: features, models and exceptions › Spend",
+          "text": "A workspace spend limit caps managed cloud consumption, and usage analytics\nattribute what was spent to a member, a model and a provider."
+        },
+        {
+          "id": "workspace-policy#4",
+          "ordinal": 4,
+          "heading": "Audit",
+          "headingPath": "Workspace policy: features, models and exceptions › Audit",
+          "text": "Policy changes are administrative events, so they land in the audit trail with\neverything else and can be exported or streamed to a SIEM. If you are asked to\nprove when a control was turned on, that is where the answer is."
+        },
+        {
+          "id": "workspace-policy#5",
+          "ordinal": 5,
+          "heading": "What members see",
+          "headingPath": "Workspace policy: features, models and exceptions › What members see",
+          "text": "A member does not see the console, but they do meet the policy: a feature turned\noff is absent rather than failing, and a model the workspace does not permit\ndoes not appear in the picker."
+        }
+      ]
+    },
+    {
+      "id": "workspace-roles-and-groups",
+      "title": "Roles, permissions and directory groups",
+      "path": "/workspace/roles",
+      "category": "administration",
+      "tags": [
+        "roles",
+        "permissions",
+        "owner",
+        "primary owner",
+        "admin",
+        "member",
+        "viewer",
+        "custom role",
+        "groups",
+        "directory group",
+        "scim groups",
+        "transfer ownership",
+        "seats"
+      ],
+      "updated": "2026-09-17",
+      "source": "content/support/workspace-roles-and-groups.md",
+      "chunks": [
+        {
+          "id": "workspace-roles-and-groups#0",
+          "ordinal": 0,
+          "heading": "The built-in roles",
+          "headingPath": "Roles, permissions and directory groups › The built-in roles",
+          "text": "- **Primary Owner**: the one person who can transfer ownership, delete the\n  workspace and manage its billing contract. It is not a role you assign; it\n  moves by transferring ownership.\n- **Owner**: everything an admin can do, plus single sign-on, directory group\n  roles and other owners.\n- **Admin**: manages members, roles, policy, directory sync and what is shared.\n- **Member**: opens what the workspace shares, and shares their own work into\n  it.\n- **Viewer**: read-only. Opens what the workspace shares, and cannot share, edit\n  or change settings."
+        },
+        {
+          "id": "workspace-roles-and-groups#1",
+          "ordinal": 1,
+          "heading": "What a permission grants",
+          "headingPath": "Roles, permissions and directory groups › What a permission grants",
+          "text": "Roles are built from named permissions, and the console spells each one out in\nplain language: invite, remove and change members; create roles and assign them;\nchange workspace policy, models and connectors; give directory groups roles and\nmanagers; manage directory sync; see and change single sign-on settings; read\nthe audit trail and usage; see the contract and invoices; share into the\nworkspace; change or withdraw anything shared; see members' workspace\nconversations and projects; rename the workspace.\n\nThree permissions belong to the Primary Owner alone and cannot be granted to\nanyone else: transfer ownership, delete the workspace, and manage the billing\ncontract."
+        },
+        {
+          "id": "workspace-roles-and-groups#2",
+          "ordinal": 2,
+          "heading": "Custom roles",
+          "headingPath": "Roles, permissions and directory groups › Custom roles",
+          "text": "Roles beyond the built-in five can be created and assigned. A person can hold\nmore than one role; where roles disagree about a restriction, the most\nrestrictive value wins."
+        },
+        {
+          "id": "workspace-roles-and-groups#3",
+          "ordinal": 3,
+          "heading": "Directory groups",
+          "headingPath": "Roles, permissions and directory groups › Directory groups",
+          "text": "A group synced from your identity provider can be given a role and a manager, so\nmembership of the group grants access rather than each account being changed by\nhand. Groups arrive through SCIM 2.0 provisioning alongside users."
+        },
+        {
+          "id": "workspace-roles-and-groups#4",
+          "ordinal": 4,
+          "heading": "Seats",
+          "headingPath": "Roles, permissions and directory groups › Seats",
+          "text": "Seats are consumed by membership and are shown against the plan on the people\npage. Removing a member frees the seat."
         }
       ]
     }
