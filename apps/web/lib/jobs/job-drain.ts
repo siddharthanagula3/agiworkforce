@@ -5,7 +5,9 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { captureWorkerFailure } from '@/lib/observability/error-capture';
+import { recordQueueDepth, recordQueueWait } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
+import { runWithCarriedTrace } from '@/lib/observability/trace-propagation';
 
 import { JOB_QUEUE_NAMES, JOB_QUEUE_POLICIES, isJobKind, type JobKind } from './job-queues';
 import {
@@ -14,6 +16,7 @@ import {
   completeJob,
   failJob,
   pruneFinishedJobs,
+  readJobQueueStats,
   reapExpiredJobLeases,
   type BackgroundJob,
 } from './job-service';
@@ -54,6 +57,14 @@ function jobTimeoutError(job: BackgroundJob): Error {
   return new Error(`Job ${job.kind} exceeded its time budget`);
 }
 
+async function recordQueueBacklog(db: DatabaseAdapter): Promise<void> {
+  for (const stats of await readJobQueueStats(db)) {
+    recordQueueDepth({ queue: stats.queue, status: 'queued', count: stats.queued });
+    recordQueueDepth({ queue: stats.queue, status: 'running', count: stats.running });
+    recordQueueDepth({ queue: stats.queue, status: 'dead', count: stats.dead });
+  }
+}
+
 async function runJob(
   db: DatabaseAdapter,
   handlers: JobHandlerRegistry,
@@ -72,28 +83,30 @@ async function runJob(
         { once: true },
       );
     });
-    const result = await withSpan(
-      'background_job.run',
-      {
-        domain: 'task',
-        kind: 'consumer',
-        attributes: {
-          [OBSERVABILITY_ATTRIBUTE.queueName]: job.queue,
-          [OBSERVABILITY_ATTRIBUTE.queueJobId]: job.id,
-          'job.kind': job.kind,
-          'job.attempt': job.attempts,
+    const result = await runWithCarriedTrace(job.payload, () =>
+      withSpan(
+        'background_job.run',
+        {
+          domain: 'task',
+          kind: 'consumer',
+          attributes: {
+            [OBSERVABILITY_ATTRIBUTE.queueName]: job.queue,
+            [OBSERVABILITY_ATTRIBUTE.queueJobId]: job.id,
+            'job.kind': job.kind,
+            'job.attempt': job.attempts,
+          },
         },
-      },
-      () =>
-        Promise.race([
-          handler({
-            job,
-            db,
-            signal: controller.signal,
-            isFinalAttempt: job.attempts >= job.maxAttempts,
-          }),
-          aborted,
-        ]),
+        () =>
+          Promise.race([
+            handler({
+              job,
+              db,
+              signal: controller.signal,
+              isFinalAttempt: job.attempts >= job.maxAttempts,
+            }),
+            aborted,
+          ]),
+      ),
     );
     const completed = await completeJob(db, job, result ?? null);
     return completed ? 'succeeded' : 'stale';
@@ -138,7 +151,11 @@ export async function drainBackgroundJobs(
         const claimed = await claimJobs(options.db, { queues: eligibleQueues, limit: available });
         summary.claimed += claimed.length;
         nothingClaimable = claimed.length === 0;
-        for (const job of claimed) track(job);
+        const claimedAt = now();
+        for (const job of claimed) {
+          recordQueueWait({ queue: job.queue, waitMs: claimedAt - Date.parse(job.runAfter) });
+          track(job);
+        }
       }
     }
 
@@ -175,6 +192,7 @@ export async function drainBackgroundJobs(
   }
 
   summary.pruned = await pruneFinishedJobs(options.db);
+  await recordQueueBacklog(options.db);
   logger.info(summary, 'Background job drain completed');
   return summary;
 }

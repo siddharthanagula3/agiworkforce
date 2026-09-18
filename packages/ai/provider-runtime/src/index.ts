@@ -102,3 +102,13 @@ export {
   type StreamFromProviderOptions,
   type StreamIdleWatchdogOptions,
 } from './client/streamFromProvider';
+
+export {
+  TRACEPARENT_HEADER,
+  installProviderTracer,
+  getProviderTracer,
+  withProviderSpan,
+  traceHeaders,
+  type ProviderCallDescriptor,
+  type ProviderTracer,
+} from './tracing';
