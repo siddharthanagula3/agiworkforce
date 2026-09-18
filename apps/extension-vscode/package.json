@@ -1188,6 +1188,7 @@
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
+    "@agiworkforce/ide-runtime": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/types": "workspace:*",
