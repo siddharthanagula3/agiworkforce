@@ -234,8 +234,9 @@ test('the production workflows fail closed unless the upstream CI run succeeded'
     '.github/workflows/deploy-signaling-server.yml',
     'utf8',
   );
+  const stagingWorkflow = fs.readFileSync('.github/workflows/deploy-staging.yml', 'utf8');
 
-  for (const workflow of [webWorkflow, signalingWorkflow]) {
+  for (const workflow of [webWorkflow, signalingWorkflow, stagingWorkflow]) {
     assert.match(workflow, /workflow_run:/);
     assert.match(workflow, /github\.event\.workflow_run\.conclusion == 'success'/);
     assert.match(workflow, /github\.event\.workflow_run\.event == 'push'/);

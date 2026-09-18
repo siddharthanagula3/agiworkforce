@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { listCanonicalModels } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -51,7 +52,7 @@ describe('a zero-retention turn is never cached, whatever the overrides say', ()
   });
 
   const REQUEST = {
-    model: 'gpt-5.6-sol',
+    model: listCanonicalModels().find((model) => model.provider === 'openai')?.id ?? '',
     system: 'stable preamble',
     messages: [{ role: 'user' as const, content: 'hi' }],
     promptCache: { organizationId: 'org_alpha', userId: 'user_alpha' },
