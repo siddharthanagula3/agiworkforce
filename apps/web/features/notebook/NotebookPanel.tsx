@@ -5,7 +5,7 @@ import { Download, Loader2, Play, Plus, Upload } from 'lucide-react';
 import type { CloudCodeSession, NotebookCellLanguage } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
 import { notebookApi, type NotebookApi, type NotebookFile } from './services/notebook-api';
-import { useNotebookCells } from './hooks/useNotebookCells';
+import { isRunnableCell, useNotebookCells } from './hooks/useNotebookCells';
 import { NotebookCellView } from './NotebookCellView';
 import styles from './NotebookPanel.module.css';
 
@@ -31,10 +31,13 @@ export function NotebookPanel({
   const {
     cells,
     runningCellId,
+    lastRun,
+    runAllError,
     addCell,
     removeCell,
     setCellCode,
     setCellLanguage,
+    setCellKind,
     runCell,
     runAll,
   } = useNotebookCells({ api, sessionId, onSession });
@@ -121,7 +124,15 @@ export function NotebookPanel({
         <button
           type="button"
           className={styles['toolbarButton']}
-          disabled={disabled || cells.every((cell) => !cell.code.trim())}
+          disabled={disabled}
+          onClick={() => addCell('markdown')}
+        >
+          <Plus size={13} /> Add markdown
+        </button>
+        <button
+          type="button"
+          className={styles['toolbarButton']}
+          disabled={disabled || !cells.some(isRunnableCell)}
           onClick={() => void handleRunAll()}
         >
           {runningAll ? <Loader2 className={styles['spin']} size={13} /> : <Play size={13} />}
@@ -140,6 +151,18 @@ export function NotebookPanel({
         />
       </div>
 
+      <p className={styles['runProvenance']} aria-live="polite">
+        {runAllError
+          ? runAllError
+          : lastRun
+            ? `Ran ${lastRun.cellCount} ${lastRun.cellCount === 1 ? 'cell' : 'cells'} ${
+                lastRun.fromTop ? 'from the top' : 'in place'
+              } at ${new Date(lastRun.finishedAt).toLocaleTimeString()}${
+                lastRun.completed ? '' : ', stopped at the first error'
+              }.`
+            : 'Cells you run by hand build on whatever ran before them. Run all executes every code cell from the top in one recorded run.'}
+      </p>
+
       <div className={styles['cells']}>
         {cells.map((cell, index) => (
           <NotebookCellView
@@ -153,6 +176,7 @@ export function NotebookPanel({
             onChangeLanguage={(cellId, language: NotebookCellLanguage) =>
               setCellLanguage(cellId, language)
             }
+            onChangeKind={setCellKind}
             onRun={(cellId) => void runCell(cellId)}
             onRunAndAdvance={handleRunAndAdvance}
             onRemove={removeCell}

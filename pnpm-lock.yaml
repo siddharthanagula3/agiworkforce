@@ -1003,6 +1003,9 @@ importers:
       '@agiworkforce/context':
         specifier: workspace:*
         version: link:../../packages/contracts/context
+      '@agiworkforce/context-engine':
+        specifier: workspace:*
+        version: link:../../packages/platform/context-engine
       '@agiworkforce/data-layer':
         specifier: workspace:*
         version: link:../../packages/platform/data-layer
@@ -2053,6 +2056,16 @@ importers:
       zustand:
         specifier: ^5.0.12
         version: 5.0.15(@types/react@19.3.0)(immer@11.1.18)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
+    devDependencies:
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.5)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(jsdom@20.0.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(msw@2.15.0(@types/node@24.13.5)(typescript@5.9.3))(vite@8.0.16(@types/node@24.13.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))
+
+  packages/platform/context-engine:
+    dependencies:
+      '@agiworkforce/context':
+        specifier: workspace:*
+        version: link:../../contracts/context
     devDependencies:
       vitest:
         specifier: ^4.1.11

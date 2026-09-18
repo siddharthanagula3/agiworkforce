@@ -31,6 +31,14 @@ const session: CloudCodeSession = {
 function createApi(overrides: Partial<NotebookApi> = {}): NotebookApi {
   return {
     execute: vi.fn(async () => ({ session, ok: true, outputs: [] as NotebookCellOutput[] })),
+    runAll: vi.fn(async () => ({
+      session,
+      runId: '22222222-2222-4222-8222-222222222222',
+      fromTop: true,
+      networkAccess: 'none' as const,
+      completed: true,
+      results: [],
+    })),
     listFiles: vi.fn(async () => ({ session, files: [] })),
     uploadFile: vi.fn(async () => ({
       session,
@@ -67,6 +75,7 @@ describe('NotebookPanel', () => {
 
     await waitFor(() =>
       expect(api.execute).toHaveBeenCalledWith(session.id, {
+        cellId: expect.any(String),
         code: 'print(1)',
         language: 'python',
       }),
@@ -137,6 +146,52 @@ describe('NotebookPanel', () => {
       'href',
       `/api/code/sessions/${session.id}/notebook/files/data.csv`,
     );
+  });
+
+  it('runs every code cell in one recorded run and reports what it covered', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      runAll: vi.fn(async () => ({
+        session,
+        runId: '22222222-2222-4222-8222-222222222222',
+        fromTop: true,
+        networkAccess: 'none' as const,
+        completed: true,
+        results: [{ cellId: 'unused', ok: true, outputs: [] as NotebookCellOutput[] }],
+      })),
+    });
+
+    render(<NotebookPanel sessionId={session.id} sessionReady api={api} onSession={vi.fn()} />);
+
+    await user.type(screen.getByLabelText('Cell 1 code'), '1 + 1');
+    await user.click(screen.getByRole('button', { name: /Run all/ }));
+
+    await waitFor(() => expect(api.runAll).toHaveBeenCalledTimes(1));
+    const input = (api.runAll as ReturnType<typeof vi.fn>).mock.calls[0]![1];
+    expect(input).toMatchObject({ fromTop: true });
+    expect(input.cells).toHaveLength(1);
+    expect(await screen.findByText(/Ran 1 cell from the top/)).toBeInTheDocument();
+  });
+
+  it('never sends a markdown cell to the sandbox and renders it instead', async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+
+    render(<NotebookPanel sessionId={session.id} sessionReady api={api} onSession={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Add markdown' }));
+    const notes = screen.getByLabelText('Cell 2 notes');
+    await user.type(notes, '# Method');
+
+    expect(screen.queryByRole('button', { name: 'Run cell 2' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Method' })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Cell 1 code'), '1 + 1');
+    await user.click(screen.getByRole('button', { name: /Run all/ }));
+    await waitFor(() => expect(api.runAll).toHaveBeenCalledTimes(1));
+    const input = (api.runAll as ReturnType<typeof vi.fn>).mock.calls[0]![1];
+    expect(input.cells).toHaveLength(1);
+    expect(input.cells[0].code).toBe('1 + 1');
   });
 
   it('disables cell controls while the session is not ready', () => {

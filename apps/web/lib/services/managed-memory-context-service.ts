@@ -11,6 +11,13 @@ import {
   type ContextSource,
   type ContextSourceClass,
 } from '@agiworkforce/context';
+import {
+  CLOSED_ORGANIZATION_CONTEXT_POLICY,
+  OPEN_ORGANIZATION_CONTEXT_POLICY,
+  type ContextCandidate,
+  type ContextSourceLoader,
+  type OrganizationContextPolicy,
+} from '@agiworkforce/context-engine';
 import type { PrivacyMode } from '@agiworkforce/types';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
 import { withSpan } from '@/lib/observability/span';
@@ -127,6 +134,44 @@ export async function organizationAllowsMemory(
   organizationId: string,
 ): Promise<boolean> {
   return (await loadOrganizationMemoryPolicy(db, organizationId)).allowMemory;
+}
+
+/**
+ * The workspace's say over every context source class, read from the one policy
+ * row that has gated Memory since 0164. A read failure closes every class for
+ * the same reason it closes Memory: a policy nobody could read is not consent.
+ */
+export async function loadOrganizationContextPolicy(
+  db: ManagedMemoryContextDb,
+  organizationId: string | null | undefined,
+): Promise<OrganizationContextPolicy> {
+  if (!organizationId) return OPEN_ORGANIZATION_CONTEXT_POLICY;
+  try {
+    const [row] = await db.query<{
+      allow_memory: boolean;
+      allow_connector_context: boolean;
+      allow_web_result_context: boolean;
+    }>(
+      `select allow_memory, allow_connector_context, allow_web_result_context
+         from organization_admin_policies
+        where organization_id = $1
+        limit 1`,
+      [organizationId],
+    );
+    if (!row) return CLOSED_ORGANIZATION_CONTEXT_POLICY;
+    return {
+      allowMemory: row.allow_memory === true,
+      allowPastChats: row.allow_memory === true,
+      allowConnectorResults: row.allow_connector_context === true,
+      allowWebResults: row.allow_web_result_context === true,
+    };
+  } catch (error) {
+    logger.error(
+      { error, organizationId },
+      '[managed-memory] organization context policy read failed; every source class closed',
+    );
+    return CLOSED_ORGANIZATION_CONTEXT_POLICY;
+  }
 }
 
 export async function organizationMemoryGate(
@@ -713,6 +758,45 @@ export async function loadManagedMemoryContext(
       }));
     },
   );
+}
+
+export interface ManagedMemoryContextLoader extends ContextSourceLoader {
+  itemFor(sourceId: string): ManagedMemoryContextItem | undefined;
+}
+
+/**
+ * Memory as one source the Context Resolution Engine resolves, rather than a
+ * call each surface makes for itself. The engine applies the permission, policy
+ * and budget checks; this only produces candidates.
+ */
+export function managedMemoryContextLoader(
+  db: ManagedMemoryContextDb,
+  params: {
+    userId: string;
+    organizationId?: string | null;
+    suppressedSources?: readonly MemorySource[];
+    scope?: MemoryScope;
+    policy?: ManagedMemoryPolicy;
+  },
+): ManagedMemoryContextLoader {
+  const items = new Map<string, ManagedMemoryContextItem>();
+  return {
+    sourceClass: 'account_memory',
+    budgetChars: MAX_TOTAL_MEMORY_CHARS,
+    async load(): Promise<ContextCandidate[]> {
+      items.clear();
+      const loaded = await loadManagedMemoryContext(db, params);
+      return loaded.map((memory) => {
+        items.set(memory.source.id, {
+          content: memory.content,
+          category: memory.category,
+          pinned: memory.pinned,
+        });
+        return { source: memory.source, text: memory.content };
+      });
+    },
+    itemFor: (sourceId) => items.get(sourceId),
+  };
 }
 
 /**

@@ -1205,6 +1205,22 @@
         "packages/contracts/context/src/index.ts",
         "packages/contracts/context/package.json"
       ]
+    },
+    {
+      "path": "packages/platform/context-engine",
+      "kind": "package",
+      "canonicalOwner": "Cloud platform",
+      "consumers": ["apps/web"],
+      "deployability": "server-only-library",
+      "trustBoundary": "the one engine every context source is resolved through: per-source permission and policy checks, per-source budgets, cross-source dedup, staleness, and a per-turn manifest that records identities and counts but never the context text",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/platform/context-engine/src/index.ts",
+        "packages/platform/context-engine/src/permissions.ts",
+        "packages/platform/context-engine/src/engine.ts",
+        "packages/platform/context-engine/src/__tests__"
+      ]
     }
   ]
 }

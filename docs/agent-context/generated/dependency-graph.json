@@ -11,6 +11,7 @@
       "@agiworkforce/cloud-contracts",
       "@agiworkforce/compliance",
       "@agiworkforce/context",
+      "@agiworkforce/context-engine",
       "@agiworkforce/data-layer",
       "@agiworkforce/design-tokens",
       "@agiworkforce/desktop",
@@ -93,6 +94,10 @@
       {
         "from": "@agiworkforce/compliance",
         "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/context-engine",
+        "to": "@agiworkforce/context"
       },
       {
         "from": "@agiworkforce/desktop-command-client",

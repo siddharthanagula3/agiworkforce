@@ -22,4 +22,7 @@ ALTER TABLE IF EXISTS public.search_history
 
 DROP TABLE IF EXISTS public.authentication_attempts;
 
+DELETE FROM public.schema_migrations
+ WHERE filename = '0251_authentication_and_search_outcomes.sql';
+
 COMMIT;

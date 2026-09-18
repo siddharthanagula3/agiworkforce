@@ -7,6 +7,16 @@ import { deleteStoredMedia } from '@/lib/server/media-storage';
 import { recordGeneratedArtifactBytes } from '@/lib/services/infrastructure-cost';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
+// A temporary chat's files are media assets like any other until their window
+// is up, so callers reach their retention through this module rather than a
+// second one they have to know about.
+export {
+  TEMPORARY_CHAT_RETENTION_DAYS,
+  TEMPORARY_FILE_RETENTION_CLAIM,
+  purgeTemporaryChatFiles,
+  type TemporaryChatFilePurge,
+} from '@/lib/server/temporary-files';
+
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -155,6 +165,9 @@ export async function isMediaAssetStoreReady(db: MediaAssetQueryClient): Promise
   }
 }
 
+// The flag is derived from the conversation, not trusted from the caller: a
+// generated file whose writer forgot to pass it would otherwise outlive by
+// months the chat that promised not to keep it.
 async function insertMediaAssetRow(
   db: MediaAssetQueryClient,
   p: InsertMediaAssetParams,
@@ -165,7 +178,11 @@ async function insertMediaAssetRow(
        (user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
         prompt, provider, model, width, height, source_surface, metadata,
         conversation_id, content_sha256, temporary_chat)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16,
+       $17::boolean or exists (
+         select 1 from public.web_conversations c
+          where c.id = $15::uuid and coalesce(c.is_temporary, false)
+       ))
      returning id`,
     [
       p.userId,
@@ -363,6 +380,7 @@ export async function listMediaAssets(
          from public.media_assets
         where user_id = $1
           and organization_id is not distinct from $2::uuid
+          and not temporary_chat
           and deleted_at is null ${kindClause}
         order by created_at desc
         limit ${limit}`,
@@ -696,6 +714,35 @@ export async function restoreMediaAsset(
          and organization_id is not distinct from $3::uuid
          and deleted_at is not null
          and deleted_at > now() - interval '30 days'
+       returning id`,
+      [id, userId, organizationId],
+    );
+    return rows.length > 0;
+  } catch (error) {
+    if (isSchemaNotReady(error)) return false;
+    throw error;
+  }
+}
+
+/**
+ * Takes one temporary-chat file out of the temporary chat and onto the ordinary
+ * Library clock. Explicit by construction: nothing clears the flag except a
+ * user asking for this file by id.
+ */
+export async function saveTemporaryChatAssetToLibrary(
+  userId: string,
+  id: string,
+  db: DatabaseAdapter,
+): Promise<boolean> {
+  try {
+    const organizationId = await resolveActiveOrganizationId(db, userId);
+    const rows = await db.query<{ id: string }>(
+      `update public.media_assets
+         set temporary_chat = false
+       where id = $1 and user_id = $2
+         and organization_id is not distinct from $3::uuid
+         and temporary_chat
+         and deleted_at is null
        returning id`,
       [id, userId, organizationId],
     );

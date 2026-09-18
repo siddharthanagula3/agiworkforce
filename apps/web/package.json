@@ -28,6 +28,7 @@
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/compliance": "workspace:*",
     "@agiworkforce/context": "workspace:*",
+    "@agiworkforce/context-engine": "workspace:*",
     "@agiworkforce/data-layer": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/i18n": "workspace:*",
