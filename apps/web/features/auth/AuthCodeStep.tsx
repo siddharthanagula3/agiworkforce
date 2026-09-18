@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { useAuthCopy } from './authCopy';
 import { AuthField } from './AuthField';
 import { AuthLegalFooter } from './AuthLegalFooter';
+import { AuthMethodPicker } from './AuthMethodPicker';
+import { AuthPhaseStatus } from './AuthPhaseStatus';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AuthSubmitButton } from './AuthSubmitButton';
+import { useCountdown } from './useCountdown';
 import {
   AUTH_COUNTDOWN_CLASS,
   AUTH_DETAIL_ROW_CLASS,
@@ -13,40 +17,48 @@ import {
   AUTH_QUIET_BUTTON_CLASS,
   AUTH_STEP_LINKS_CLASS,
 } from './authStyles';
-import { AUTH_CODE_LENGTH, AUTH_RESEND_COOLDOWN_SECONDS } from './authContract';
+import {
+  AUTH_CODE_LENGTH,
+  AUTH_RESEND_COOLDOWN_SECONDS,
+  type AuthMethodId,
+  type AuthPhase,
+} from './authContract';
 
-const HEADING = 'Check your inbox';
-const CODE_FIELD_LABEL = 'Code';
-const CONTINUE_LABEL = 'Continue';
 const DIGITS_ONLY = /\D/g;
-const COOLDOWN_TICK_MS = 1000;
+const NUMERIC_PATTERN = '[0-9]*';
 
 export function AuthCodeStep({
   email,
-  busy,
+  phase,
   error,
   fieldError,
+  resendBlockedSeconds = null,
+  methods = [],
   onSubmit,
   onResend,
   onEditEmail,
+  onChooseMethod,
 }: {
   email: string;
-  busy: boolean;
+  phase: AuthPhase;
   error: string | null;
   fieldError: string | null;
+  resendBlockedSeconds?: number | null;
+  methods?: readonly AuthMethodId[];
   onSubmit: (code: string) => void;
   onResend: () => void;
   onEditEmail: () => void;
+  onChooseMethod?: (method: AuthMethodId) => void;
 }) {
+  const copy = useAuthCopy();
   const [code, setCode] = useState('');
-  const [cooldown, setCooldown] = useState(AUTH_RESEND_COOLDOWN_SECONDS);
+  const [cooldown, setCooldown] = useCountdown(AUTH_RESEND_COOLDOWN_SECONDS);
   const submitted = useRef('');
+  const busy = phase !== 'idle';
 
   useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setTimeout(() => setCooldown((current) => current - 1), COOLDOWN_TICK_MS);
-    return () => clearTimeout(timer);
-  }, [cooldown]);
+    if (resendBlockedSeconds !== null) setCooldown(resendBlockedSeconds);
+  }, [resendBlockedSeconds, setCooldown]);
 
   useEffect(() => {
     if (busy || code.length !== AUTH_CODE_LENGTH || submitted.current === code) return;
@@ -56,12 +68,12 @@ export function AuthCodeStep({
 
   return (
     <AuthStepFrame
-      heading={HEADING}
+      heading={copy.text('flow.code.heading', 'Check your inbox')}
       detail={
         <div className={AUTH_DETAIL_ROW_CLASS}>
-          <span>We sent a code to {email}</span>
+          <span>{copy.text('flow.code.sentTo', 'We sent a code to {{email}}', { email })}</span>
           <button type="button" className={AUTH_QUIET_BUTTON_CLASS} onClick={onEditEmail}>
-            Edit
+            {copy.text('flow.edit', 'Edit')}
           </button>
         </div>
       }
@@ -74,11 +86,15 @@ export function AuthCodeStep({
         }}
       >
         <AuthField
-          label={CODE_FIELD_LABEL}
+          label={copy.text('flow.code.label', 'Code')}
           type="text"
           name="code"
           inputMode="numeric"
+          pattern={NUMERIC_PATTERN}
           autoComplete="one-time-code"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           autoFocus
           required
           maxLength={AUTH_CODE_LENGTH}
@@ -96,8 +112,10 @@ export function AuthCodeStep({
           </p>
         ) : null}
 
-        <AuthSubmitButton label={CONTINUE_LABEL} busy={busy} />
+        <AuthSubmitButton label={copy.text('flow.continue', 'Continue')} busy={busy} />
       </form>
+
+      <AuthPhaseStatus phase={phase} />
 
       <div className={AUTH_STEP_LINKS_CLASS}>
         <button
@@ -109,9 +127,15 @@ export function AuthCodeStep({
             onResend();
           }}
         >
-          {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+          {cooldown > 0
+            ? copy.text('flow.code.resendIn', 'Resend code in {{seconds}}s', { seconds: cooldown })
+            : copy.text('flow.code.resend', 'Resend code')}
         </button>
       </div>
+
+      {onChooseMethod ? (
+        <AuthMethodPicker methods={methods} disabled={busy} onChooseMethod={onChooseMethod} />
+      ) : null}
     </AuthStepFrame>
   );
 }

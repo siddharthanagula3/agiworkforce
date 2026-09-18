@@ -16,7 +16,7 @@ function renderStep(overrides: Partial<Parameters<typeof AuthEmailStep>[0]> = {}
     providers: PROVIDERS,
     switchUrl: '/signup',
     ready: true,
-    busy: false,
+    phase: 'idle' as const,
     error: null,
     fieldError: null,
     switchOffered: false,
@@ -107,7 +107,9 @@ describe('AuthEmailStep', () => {
       const onStartPasskey = vi.fn();
       renderStep({ passkeySignIn: true, onStartPasskey });
 
-      await userEvent.click(await screen.findByRole('button', { name: 'Sign in with a passkey' }));
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Sign in with a passkey or security key' }),
+      );
 
       expect(onStartPasskey).toHaveBeenCalledTimes(1);
       withPasskeySupport(false);
@@ -117,7 +119,9 @@ describe('AuthEmailStep', () => {
       withPasskeySupport(true);
       renderStep({ passkeySignIn: false, onStartPasskey: vi.fn() });
 
-      expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Sign in with a passkey or security key' }),
+      ).toBeNull();
       withPasskeySupport(false);
     });
 
@@ -125,7 +129,9 @@ describe('AuthEmailStep', () => {
       withPasskeySupport(false);
       renderStep({ passkeySignIn: true, onStartPasskey: vi.fn() });
 
-      expect(screen.queryByRole('button', { name: 'Sign in with a passkey' })).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Sign in with a passkey or security key' }),
+      ).toBeNull();
     });
   });
 });

@@ -2,15 +2,12 @@
 
 import { useState } from 'react';
 
+import { useAuthCopy } from './authCopy';
 import { AuthLegalFooter } from './AuthLegalFooter';
 import { AuthPasswordField } from './AuthPasswordField';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AuthSubmitButton } from './AuthSubmitButton';
 import { AUTH_ERROR_CLASS } from './authStyles';
-
-const HEADING = 'Set a new password';
-const PASSWORD_FIELD_LABEL = 'New password';
-const CONTINUE_LABEL = 'Continue';
 
 export function AuthNewPasswordStep({
   email,
@@ -25,12 +22,19 @@ export function AuthNewPasswordStep({
   fieldError: string | null;
   onSubmit: (password: string) => void;
 }) {
+  const copy = useAuthCopy();
   const [password, setPassword] = useState('');
 
   return (
     <AuthStepFrame
-      heading={HEADING}
-      detail={<p className="text-center">{`This account needs a new password for ${email}`}</p>}
+      heading={copy.text('flow.newPassword.heading', 'Set a new password')}
+      detail={
+        <p className="text-center">
+          {copy.text('flow.newPassword.detail', 'This account needs a new password for {{email}}', {
+            email,
+          })}
+        </p>
+      }
       footer={<AuthLegalFooter />}
     >
       <form
@@ -40,7 +44,8 @@ export function AuthNewPasswordStep({
         }}
       >
         <AuthPasswordField
-          label={PASSWORD_FIELD_LABEL}
+          label={copy.text('flow.newPassword.label', 'New password')}
+          name="new-password"
           value={password}
           error={fieldError}
           disabled={busy}
@@ -54,7 +59,7 @@ export function AuthNewPasswordStep({
           </p>
         ) : null}
 
-        <AuthSubmitButton label={CONTINUE_LABEL} busy={busy} />
+        <AuthSubmitButton label={copy.text('flow.continue', 'Continue')} busy={busy} />
       </form>
     </AuthStepFrame>
   );

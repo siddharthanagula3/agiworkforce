@@ -2,6 +2,7 @@
 
 import { Spinner } from '@agiworkforce/ui';
 
+import { useAuthCopy } from './authCopy';
 import { AUTH_PRIMARY_BUTTON_CLASS } from './authStyles';
 
 export function AuthSubmitButton({
@@ -13,6 +14,7 @@ export function AuthSubmitButton({
   busy?: boolean;
   disabled?: boolean;
 }) {
+  const copy = useAuthCopy();
   return (
     <button
       type="submit"
@@ -20,7 +22,7 @@ export function AuthSubmitButton({
       disabled={busy || disabled}
       aria-busy={busy || undefined}
     >
-      {busy ? <Spinner size="sm" aria-label="Working" /> : label}
+      {busy ? <Spinner size="sm" aria-label={copy.text('flow.working', 'Working')} /> : label}
     </button>
   );
 }

@@ -12,8 +12,10 @@ const signInState = vi.hoisted(() => ({
   resetPasswordEmailCode: { sendCode: vi.fn(), verifyCode: vi.fn(), submitPassword: vi.fn() },
   mfa: {
     sendPhoneCode: vi.fn(),
+    sendEmailCode: vi.fn(),
     verifyTOTP: vi.fn(),
     verifyPhoneCode: vi.fn(),
+    verifyEmailCode: vi.fn(),
     verifyBackupCode: vi.fn(),
   },
   sso: vi.fn(),
@@ -39,7 +41,8 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 import { useIdentityAuthClient } from '../identityAuthAdapter';
-import { ACCOUNT_ALREADY_EXISTS, NO_ACCOUNT_FOR_EMAIL, type AuthMode } from '../authContract';
+import type { AuthMode } from '../authContract';
+import { AUTH_ERROR_SOURCE_COPY } from '@/lib/auth/error-taxonomy.copy';
 
 const REDIRECTS = {
   completeUrl: '/login/complete?redirectTo=%2Fchat',
@@ -71,8 +74,10 @@ beforeEach(() => {
     signInState.resetPasswordEmailCode.verifyCode,
     signInState.resetPasswordEmailCode.submitPassword,
     signInState.mfa.sendPhoneCode,
+    signInState.mfa.sendEmailCode,
     signInState.mfa.verifyTOTP,
     signInState.mfa.verifyPhoneCode,
+    signInState.mfa.verifyEmailCode,
     signInState.mfa.verifyBackupCode,
     signInState.sso,
     signInState.passkey,
@@ -97,7 +102,10 @@ describe('identity auth adapter contract', () => {
     const result = await client('login').current.startWithEmail(EMAIL);
 
     expect(signInState.create).toHaveBeenCalledWith({ identifier: EMAIL });
-    expect(result).toEqual({ status: 'next', step: { kind: 'password', email: EMAIL } });
+    expect(result).toEqual({
+      status: 'next',
+      step: { kind: 'password', email: EMAIL, methods: ['password', 'email_code'] },
+    });
   });
 
   it('emails a code when the account has no password', async () => {
@@ -108,7 +116,7 @@ describe('identity auth adapter contract', () => {
     expect(signInState.emailCode.sendCode).toHaveBeenCalled();
     expect(result).toEqual({
       status: 'next',
-      step: { kind: 'code', email: EMAIL, purpose: 'sign_in' },
+      step: { kind: 'code', email: EMAIL, purpose: 'sign_in', methods: ['email_code'] },
     });
   });
 
@@ -124,7 +132,8 @@ describe('identity auth adapter contract', () => {
 
     expect(result).toEqual({
       status: 'failed',
-      message: NO_ACCOUNT_FOR_EMAIL,
+      kind: 'identifier_not_found',
+      message: AUTH_ERROR_SOURCE_COPY.identifier_not_found.message,
       field: 'email',
       switchMode: true,
     });
@@ -142,7 +151,8 @@ describe('identity auth adapter contract', () => {
 
     expect(result).toEqual({
       status: 'failed',
-      message: ACCOUNT_ALREADY_EXISTS,
+      kind: 'identifier_exists',
+      message: AUTH_ERROR_SOURCE_COPY.identifier_exists.message,
       field: 'email',
       switchMode: true,
     });
@@ -200,7 +210,11 @@ describe('identity auth adapter contract', () => {
 
     const result = await client('login').current.signInWithPasskey();
 
-    expect(result).toEqual({ status: 'failed', message: '' });
+    expect(result).toEqual({
+      status: 'failed',
+      kind: 'passkey_dismissed',
+      message: AUTH_ERROR_SOURCE_COPY.passkey_dismissed.message,
+    });
     expect(signInState.finalize).not.toHaveBeenCalled();
   });
 
@@ -216,6 +230,7 @@ describe('identity auth adapter contract', () => {
       step: {
         kind: 'second_factor',
         factor: { kind: 'authenticator', label: 'Authenticator code', hint: null },
+        alternatives: [],
       },
     });
   });
@@ -236,7 +251,7 @@ describe('identity auth adapter contract', () => {
     expect(signInState.resetPasswordEmailCode.sendCode).toHaveBeenCalled();
     expect(result).toEqual({
       status: 'next',
-      step: { kind: 'code', email: EMAIL, purpose: 'reset' },
+      step: { kind: 'code', email: EMAIL, purpose: 'reset', methods: [] },
     });
   });
 
@@ -288,14 +303,14 @@ describe('identity auth adapter contract', () => {
     });
   });
 
-  it('reports the provider message when a step fails', async () => {
+  it('answers a wrong password with our own copy rather than the vendor sentence', async () => {
     signInState.password.mockResolvedValue({
       error: {
         code: 'api_response_error',
         errors: [
           {
             code: 'form_password_incorrect',
-            longMessage: 'That password is not correct.',
+            longMessage: 'Password is incorrect. Try again, or use another method.',
             meta: { paramName: 'password' },
           },
         ],
@@ -306,8 +321,106 @@ describe('identity auth adapter contract', () => {
 
     expect(result).toEqual({
       status: 'failed',
-      message: 'That password is not correct.',
+      kind: 'credentials_invalid',
+      message: AUTH_ERROR_SOURCE_COPY.credentials_invalid.message,
       field: 'password',
+    });
+  });
+
+  it('keeps an unmodelled form-validation sentence, which is about the input given', async () => {
+    signInState.resetPasswordEmailCode.submitPassword.mockResolvedValue({
+      error: {
+        code: 'api_response_error',
+        errors: [
+          {
+            code: 'form_password_pwned',
+            longMessage: 'This password has been found in a breach.',
+            meta: { paramName: 'password' },
+          },
+        ],
+      },
+    });
+
+    const result = await client('login').current.submitNewPassword('hunter2');
+
+    expect(result).toEqual({
+      status: 'failed',
+      kind: 'unexpected',
+      message: 'This password has been found in a breach.',
+      field: 'password',
+    });
+  });
+
+  it('turns a rate limit into its own screen rather than an inline message', async () => {
+    signInState.create.mockResolvedValue({
+      error: { status: 429, code: 'too_many_requests', retryAfter: 42 },
+    });
+
+    const result = await client('login').current.startWithEmail(EMAIL);
+
+    expect(result).toEqual({
+      status: 'next',
+      step: { kind: 'notice', notice: 'rate_limited', retryAfterSeconds: 42 },
+    });
+  });
+
+  it('keeps a resend rate limit inline, where the resend control lives', async () => {
+    signInState.emailCode.sendCode.mockResolvedValue({
+      error: { status: 429, code: 'too_many_requests', retryAfter: 20 },
+    });
+
+    const result = await client('login').current.resendCode('sign_in');
+
+    expect(result).toEqual({
+      status: 'failed',
+      kind: 'rate_limited',
+      message: AUTH_ERROR_SOURCE_COPY.rate_limited.message,
+      retryAfterSeconds: 20,
+    });
+  });
+
+  it('hides an emailed second factor unless the deployment policy allows it', async () => {
+    signInState.supportedFirstFactors = [{ strategy: 'password' }];
+    signInState.status = 'needs_second_factor';
+    signInState.supportedSecondFactors = [{ strategy: 'email_code' }, { strategy: 'totp' }];
+
+    const guarded = await client('login').current.submitPassword('secret');
+    expect(guarded).toEqual({
+      status: 'next',
+      step: {
+        kind: 'second_factor',
+        factor: { kind: 'authenticator', label: 'Authenticator code', hint: null },
+        alternatives: [],
+      },
+    });
+
+    const permitted = renderHook(() =>
+      useIdentityAuthClient('login', REDIRECTS, { mfaEmailFallback: true }),
+    ).result;
+    const opened = await permitted.current.submitPassword('secret');
+    expect(opened).toEqual({
+      status: 'next',
+      step: {
+        kind: 'second_factor',
+        factor: { kind: 'authenticator', label: 'Authenticator code', hint: null },
+        alternatives: [{ kind: 'email', label: 'Emailed code', hint: null }],
+      },
+    });
+  });
+
+  it('sends a fresh code when the person switches to another second factor', async () => {
+    const factor = { kind: 'email', label: 'Emailed code', hint: null } as const;
+    signInState.supportedSecondFactors = [{ strategy: 'email_code' }];
+
+    const permitted = renderHook(() =>
+      useIdentityAuthClient('login', REDIRECTS, { mfaEmailFallback: true }),
+    ).result;
+    const result = await permitted.current.switchSecondFactor(factor);
+
+    expect(signInState.mfa.sendEmailCode).toHaveBeenCalled();
+    expect(result).toEqual({
+      status: 'next',
+      step: { kind: 'second_factor', factor, alternatives: [] },
     });
   });
 });

@@ -9,13 +9,14 @@ const EMAIL = 'person@example.com';
 function renderStep(overrides: Partial<Parameters<typeof AuthPasswordStep>[0]> = {}) {
   const props = {
     email: EMAIL,
-    busy: false,
+    phase: 'idle' as const,
     error: null,
     fieldError: null,
+    methods: ['email_code'] as const,
     onSubmit: vi.fn(),
     onEditEmail: vi.fn(),
     onForgotPassword: vi.fn(),
-    onUseCode: vi.fn(),
+    onChooseMethod: vi.fn(),
     ...overrides,
   };
   render(<AuthPasswordStep {...props} />);
@@ -53,14 +54,20 @@ describe('AuthPasswordStep', () => {
     expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text');
   });
 
-  it('offers a reset and a code as the two ways past a password', async () => {
+  it('offers a reset and the account\u2019s other factor as the ways past a password', async () => {
     const props = renderStep();
 
     await userEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Email me a code instead' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Email me a code' }));
 
     expect(props.onForgotPassword).toHaveBeenCalled();
-    expect(props.onUseCode).toHaveBeenCalled();
+    expect(props.onChooseMethod).toHaveBeenCalledWith('email_code');
+  });
+
+  it('hides the other-method affordance when the account has no other factor', () => {
+    renderStep({ methods: [] });
+
+    expect(screen.queryByTestId('auth-method-picker')).toBeNull();
   });
 
   it('reports a wrong password inline and marks the field invalid', () => {
@@ -71,7 +78,7 @@ describe('AuthPasswordStep', () => {
   });
 
   it('disables the button while a submission is in flight', () => {
-    renderStep({ busy: true });
+    renderStep({ phase: 'verifying' });
 
     const button = screen.getByRole('button', { name: /working/i });
     expect(button).toBeDisabled();

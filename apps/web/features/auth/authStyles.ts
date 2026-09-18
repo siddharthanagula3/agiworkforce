@@ -8,7 +8,8 @@ const HAIRLINE = 'border border-rule bg-transparent';
 export const AUTH_PAGE_CLASS = 'relative flex min-h-svh w-full flex-col bg-surface-elevated px-6';
 export const AUTH_BRAND_CLASS =
   'auth-inline absolute left-6 top-6 inline-flex items-center gap-2 text-base font-semibold tracking-[-0.01em] text-text-primary';
-export const AUTH_COLUMN_CLASS = 'mx-auto flex w-full max-w-[21.25rem] flex-col pt-30 pb-16';
+export const AUTH_COLUMN_CLASS =
+  'mx-auto flex w-full max-w-[21.25rem] flex-col pt-16 pb-16 sm:pt-30';
 export const AUTH_HEADING_CLASS =
   'text-center text-[2rem] font-bold leading-tight tracking-[-0.01em] text-text-primary';
 export const AUTH_BODY_CLASS = 'mt-8';
@@ -34,4 +35,7 @@ export const AUTH_FOOTER_LINK_CLASS =
 export const AUTH_FOOTER_SENTENCE_CLASS =
   'mt-18 text-balance text-center text-sm leading-relaxed text-text-muted';
 export const AUTH_STEP_LINKS_CLASS = 'mt-6 flex flex-col items-center gap-3';
+export const AUTH_STATUS_CLASS = 'mt-3 min-h-5 text-center text-sm text-text-muted';
+export const AUTH_BADGE_CLASS =
+  'rounded-full border border-rule px-2 py-0.5 text-xs font-medium text-text-muted';
 export const AUTH_DETAIL_ROW_CLASS = 'flex flex-wrap items-center justify-center gap-2';
