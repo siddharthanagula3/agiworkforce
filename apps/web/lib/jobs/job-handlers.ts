@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { driveImageGenerationJob } from '@/app/api/media/image/lib/image-job-drain';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 import {
@@ -168,4 +169,5 @@ export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
   'file-processing.purge-upload-object': purgeUploadObject,
   'research.settle-report-cost': settleResearchReportCost,
   'event-triggers.fire': fireEventTriggerJob,
+  'media-generation.image-attempt': driveImageGenerationJob,
 };

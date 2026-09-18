@@ -31,6 +31,7 @@ import {
   SlidersHorizontal,
   Trash2,
   Upload,
+  Wand2,
   X,
   ZoomIn,
   ZoomOut,
@@ -267,6 +268,9 @@ export interface LibraryTransport {
   nativeExportFormats?: readonly NativeExportFormat[];
   addToChat?: (item: LibraryItem) => Promise<void>;
   addToWork?: (item: LibraryItem) => Promise<void>;
+  /** Starts a new image generation from a saved image, seeded with its prompt.
+   *  Hosts with no image composer omit it and no Remix row is rendered. */
+  remixItem?: (item: LibraryItem) => Promise<void>;
   addToProject?: (item: LibraryItem, folder: LibraryFolder) => Promise<void>;
   shareArtifact?: (item: LibraryItem) => Promise<void>;
 }
@@ -552,7 +556,7 @@ export function LibraryView({
     [setRowError],
   );
 
-  const { addToChat, addToWork, addToProject, shareArtifact } = transport;
+  const { addToChat, addToWork, addToProject, remixItem, shareArtifact } = transport;
 
   const handleAddToChat = useMemo(
     () =>
@@ -568,6 +572,14 @@ export function LibraryView({
         ? (item: LibraryItem) => void runHostAction(item, 'Add to AGI Work', () => addToWork(item))
         : undefined,
     [addToWork, runHostAction],
+  );
+
+  const handleRemix = useMemo(
+    () =>
+      remixItem
+        ? (item: LibraryItem) => void runHostAction(item, 'Remix', () => remixItem(item))
+        : undefined,
+    [remixItem, runHostAction],
   );
 
   const handleChooseProject = useMemo(
@@ -724,6 +736,7 @@ export function LibraryView({
       onAddToChat: handleAddToChat,
       onAddToWork: handleAddToWork,
       onAddToProject: handleChooseProject,
+      onRemix: handleRemix,
       onShare: confirmShare,
     }),
     [
@@ -735,6 +748,7 @@ export function LibraryView({
       handleAddToChat,
       handleAddToWork,
       handleChooseProject,
+      handleRemix,
       confirmShare,
     ],
   );
@@ -1177,6 +1191,7 @@ interface RowActions {
   onAddToChat?: (item: LibraryItem) => void;
   onAddToWork?: (item: LibraryItem) => void;
   onAddToProject?: (item: LibraryItem) => void;
+  onRemix?: (item: LibraryItem) => void;
   onShare?: (item: LibraryItem) => void;
 }
 
@@ -1599,6 +1614,17 @@ function ItemMenu({
                 >
                   <Briefcase className="h-4 w-4" aria-hidden />
                   Add to AGI Work
+                </button>
+              ) : null}
+              {actions.onRemix && isImageItem(item) ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={MENU_ITEM_CLASS}
+                  onClick={choose(() => actions.onRemix?.(item))}
+                >
+                  <Wand2 className="h-4 w-4" aria-hidden />
+                  Remix
                 </button>
               ) : null}
               {actions.onAddToProject ? (

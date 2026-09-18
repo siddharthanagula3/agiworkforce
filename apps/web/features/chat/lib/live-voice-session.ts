@@ -7,6 +7,8 @@ const CSRF_HEADER = 'x-csrf-token';
 const ICE_GATHERING_TIMEOUT_MS = 10_000;
 const CLOSE_TIMEOUT_MS = 3_000;
 const DISCONNECT_GRACE_MS = 5_000;
+export const KEEPALIVE_INTERVAL_MS = 15_000;
+export const KEEPALIVE_TIMEOUT_MS = 60_000;
 const LEVEL_SAMPLE_MS = 50;
 const ASSISTANT_AUDIO_LEVEL = 0.03;
 const ASSISTANT_AUDIO_HOLD_MS = 350;
@@ -21,6 +23,8 @@ export const LIVE_SESSION_MESSAGE = {
   unsupported: 'This browser cannot open a voice connection.',
   connectionFailed: 'The voice connection could not be established.',
   connectionDropped: 'The voice connection dropped.',
+  reconnecting: 'The voice connection dropped. Reconnecting.',
+  reconnectFailed: 'The voice connection could not be restored.',
   sessionEnded: 'The voice session ended.',
   sessionRejected: 'The voice session could not be started.',
 } as const;
@@ -55,6 +59,9 @@ export interface LiveVoiceSessionCallbacks {
   onUsage: (seconds: number) => void;
   onClosed: (closed: LiveSessionClosed) => void;
   onError: (message: string) => void;
+  /** A transport drop of a started session, which a host can reconnect from.
+   *  Hosts without one get onError and the session stays down. */
+  onConnectionLost?: (message: string) => void;
 }
 
 export interface LiveVoiceSessionOptions {
@@ -150,6 +157,8 @@ export class LiveVoiceSession {
   private levelTimer: number | null = null;
   private settleTimer: number | null = null;
   private disconnectTimer: number | null = null;
+  private keepaliveTimer: number | null = null;
+  private lastInboundAt = Date.now();
   private lastAudioAt = 0;
   private speaking = false;
   private started = false;
@@ -318,26 +327,45 @@ export class LiveVoiceSession {
       const state = this.peer.connectionState;
       if (state === 'connected') {
         this.clearDisconnectTimer();
+        this.lastInboundAt = Date.now();
         return;
       }
       if (state === 'disconnected') {
         this.disconnectTimer ??= window.setTimeout(() => {
           this.disconnectTimer = null;
-          if (this.peer.connectionState === 'disconnected') this.fail();
+          if (this.peer.connectionState === 'disconnected') this.fail(true);
         }, DISCONNECT_GRACE_MS);
         return;
       }
-      if (state === 'failed' || state === 'closed') this.fail();
+      if (state === 'failed' || state === 'closed') this.fail(true);
     });
+    this.startKeepalive();
   }
 
-  private fail(): void {
+  /**
+   * A peer stuck in 'connected' with nothing arriving is the drop the connection
+   * state never reports, so liveness is any inbound event or inbound audio.
+   */
+  private startKeepalive(): void {
+    this.keepaliveTimer = window.setInterval(() => {
+      if (this.closing || this.disposed) return;
+      this.send({ type: 'session.ping' });
+      if (this.started && Date.now() - this.lastInboundAt > KEEPALIVE_TIMEOUT_MS) this.fail(true);
+    }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  private fail(recoverable = false): void {
     if (this.closing || this.disposed) return;
-    this.callbacks.onError(
-      this.started ? LIVE_SESSION_MESSAGE.connectionDropped : LIVE_SESSION_MESSAGE.connectionFailed,
-    );
+    const started = this.started;
+    const reconnect = recoverable && started && this.callbacks.onConnectionLost;
+    if (!reconnect) {
+      this.callbacks.onError(
+        started ? LIVE_SESSION_MESSAGE.connectionDropped : LIVE_SESSION_MESSAGE.connectionFailed,
+      );
+    }
     this.finalizeTurns();
     this.dispose();
+    if (reconnect) this.callbacks.onConnectionLost?.(LIVE_SESSION_MESSAGE.connectionDropped);
   }
 
   private watchRemoteAudio(remote: MediaStream): void {
@@ -354,7 +382,10 @@ export class LiveVoiceSession {
     this.levelTimer = window.setInterval(() => {
       analyser.getByteTimeDomainData(samples);
       const now = Date.now();
-      if (readAnalyserLevel(samples) >= ASSISTANT_AUDIO_LEVEL) this.lastAudioAt = now;
+      if (readAnalyserLevel(samples) >= ASSISTANT_AUDIO_LEVEL) {
+        this.lastAudioAt = now;
+        this.lastInboundAt = now;
+      }
       const active = now - this.lastAudioAt < ASSISTANT_AUDIO_HOLD_MS;
       if (active !== this.speaking) this.setSpeaking(active);
     }, LEVEL_SAMPLE_MS);
@@ -376,6 +407,7 @@ export class LiveVoiceSession {
   }
 
   private handleMessage(event: MessageEvent): void {
+    this.lastInboundAt = Date.now();
     let parsed: ServerEvent;
     try {
       parsed = JSON.parse(String(event.data)) as ServerEvent;
@@ -536,9 +568,11 @@ export class LiveVoiceSession {
 
   private stopTimers(): void {
     if (this.levelTimer !== null) window.clearInterval(this.levelTimer);
+    if (this.keepaliveTimer !== null) window.clearInterval(this.keepaliveTimer);
     if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);
     if (this.overlapTimer !== null) window.clearTimeout(this.overlapTimer);
     if (this.idleTimer !== null) window.clearTimeout(this.idleTimer);
+    this.keepaliveTimer = null;
     this.levelTimer = null;
     this.settleTimer = null;
     this.overlapTimer = null;

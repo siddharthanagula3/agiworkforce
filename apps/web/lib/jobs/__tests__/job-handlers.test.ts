@@ -301,6 +301,7 @@ describe('the registry', () => {
         'email.schedule-completed',
         'event-triggers.fire',
         'file-processing.purge-upload-object',
+        'media-generation.image-attempt',
         'notifications.schedule-completed',
         'research.settle-report-cost',
         'webhooks.audit-stream-delivery',

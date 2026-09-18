@@ -64,6 +64,14 @@ export const JOB_QUEUE_POLICIES = {
     leaseSeconds: 60,
     retainFinishedDays: 14,
   },
+  'media-generation': {
+    maxConcurrency: 3,
+    maxAttempts: 4,
+    backoffBaseSeconds: 30,
+    backoffMaxSeconds: 900,
+    leaseSeconds: 180,
+    retainFinishedDays: 7,
+  },
 } as const satisfies Record<string, JobQueuePolicy>;
 
 export type JobQueueName = keyof typeof JOB_QUEUE_POLICIES;
@@ -82,6 +90,7 @@ export const JOB_KINDS = {
   'file-processing.purge-upload-object': 'file-processing',
   'research.settle-report-cost': 'research',
   'event-triggers.fire': 'event-triggers',
+  'media-generation.image-attempt': 'media-generation',
 } as const satisfies Record<string, JobQueueName>;
 
 export type JobKind = keyof typeof JOB_KINDS;

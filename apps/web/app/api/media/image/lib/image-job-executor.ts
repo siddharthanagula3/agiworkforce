@@ -45,6 +45,7 @@ import {
   type GeneratedImage,
   type ImageEditContext,
 } from './image-generation-provider';
+import { scheduleImageGenerationJobDrive } from './image-job-drive-queue';
 
 export interface ImageJobInlineEdit {
   sourceBytes: Uint8Array;
@@ -147,13 +148,20 @@ async function closeAttemptAsFailed(input: {
 
   const attemptsLeft = input.job.attempts < input.job.maxAttempts;
   if (input.retryable && attemptsLeft) {
-    return deferImageGenerationJobFailure({
+    const retryAfterSeconds = input.retryAfterSeconds ?? IMAGE_ATTEMPT_BACKOFF_SECONDS;
+    const deferred = await deferImageGenerationJobFailure({
       db: input.db,
       jobId: input.job.id,
       claimToken: input.claimToken,
       publicError: input.publicError,
-      retryAfterSeconds: input.retryAfterSeconds ?? IMAGE_ATTEMPT_BACKOFF_SECONDS,
+      retryAfterSeconds,
     });
+    await scheduleImageGenerationJobDrive({
+      db: input.db,
+      job: deferred,
+      delaySeconds: retryAfterSeconds,
+    });
+    return deferred;
   }
 
   const settlement = await settleFailure(input.db, input.job, input.reason);
