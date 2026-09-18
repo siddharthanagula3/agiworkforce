@@ -133,6 +133,20 @@ describe('validating a workspace key before it is activated', () => {
     expect(mocks.validate).not.toHaveBeenCalled();
   });
 
+  it('answers 503 with Retry-After when the database is unreachable, not a bare 500', async () => {
+    // The one answer the gateway wrapper cannot shape, so it is the one worth
+    // holding onto through the move onto withErrorHandler.
+    mocks.validate.mockRejectedValue(new Error('fetch failed'));
+
+    const res = await POST(
+      req({ organizationId: ORG, provider: 'local', keyUri: 'local://a', region: 'us-east-1' }),
+    );
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('30');
+    expect(JSON.stringify(await res.json())).toMatch(/Database temporarily unavailable/);
+  });
+
   it('answers 404 to anyone who is not a platform operator', async () => {
     const { createError } = await import('@/lib/errors');
     mocks.requirePlatformAdmin.mockRejectedValue(createError.notFound('Not found'));
