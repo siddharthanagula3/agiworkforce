@@ -576,6 +576,59 @@ describe('shared LibraryView', () => {
     });
   });
 
+  describe('remixing a saved image', () => {
+    const IMAGE = {
+      ...ITEM,
+      id: 'asset-img',
+      file_name: 'image.jpg',
+      mime_type: 'image/jpeg',
+      kind: 'image',
+      previewable: true,
+      prompt: 'one flat cobalt circle on white',
+    };
+
+    it('hands the saved image to the host generator', async () => {
+      const remixItem = vi.fn(async () => {});
+      render(<LibraryView transport={makeTransport({ listPage: pageOf([IMAGE]), remixItem })} />);
+      await screen.findByText('one flat cobalt circle on white');
+
+      openRowMenu('image.jpg');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Remix' }));
+
+      await waitFor(() => expect(remixItem).toHaveBeenCalledWith(IMAGE));
+    });
+
+    it('offers Remix on an image only, and never on a document', async () => {
+      const remixItem = vi.fn(async () => {});
+      render(<LibraryView transport={makeTransport({ remixItem })} />);
+      await screen.findByText('quarterly-report.pdf');
+      openRowMenu('quarterly-report.pdf');
+
+      expect(screen.queryByRole('menuitem', { name: 'Remix' })).toBeNull();
+    });
+
+    it('renders no Remix row for a host with no image generator', async () => {
+      render(<LibraryView transport={makeTransport({ listPage: pageOf([IMAGE]) })} />);
+      await screen.findByText('one flat cobalt circle on white');
+      openRowMenu('image.jpg');
+
+      expect(screen.queryByRole('menuitem', { name: 'Remix' })).toBeNull();
+    });
+
+    it('shows a failed remix on the row instead of dropping it', async () => {
+      const remixItem = vi.fn(async () => {
+        throw new Error('Only an image can be remixed.');
+      });
+      render(<LibraryView transport={makeTransport({ listPage: pageOf([IMAGE]), remixItem })} />);
+      await screen.findByText('one flat cobalt circle on white');
+
+      openRowMenu('image.jpg');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Remix' }));
+
+      expect(await screen.findByText('Only an image can be remixed.')).toBeTruthy();
+    });
+  });
+
   describe('sharing an artifact from the library', () => {
     const ARTIFACT = {
       ...ITEM,

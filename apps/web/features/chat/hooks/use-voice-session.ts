@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { getCsrfToken } from '@/lib/client/csrf';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
@@ -45,6 +45,9 @@ export interface VoiceSessionController {
   reducedMotion: boolean;
   deviceName: string;
   backendBusy: boolean;
+  reconnecting: boolean;
+  reconnectAttempt: number;
+  reconnectMaxAttempts: number;
   mutedHint: string;
   enter: () => void;
   exit: () => void;
@@ -62,13 +65,97 @@ interface TranscriptSink {
 
 const NAVIGATION_HANDOFF_MS = 5_000;
 
+export const RECONNECT_MAX_ATTEMPTS = 3;
+export const RECONNECT_BASE_MS = 1_000;
+const RECONNECT_MAX_MS = 8_000;
+const RECONNECT_STABLE_MS = 30_000;
+const UNRECOVERABLE_START_CODES = new Set([
+  'microphone_denied',
+  'microphone_unavailable',
+  'unsupported',
+]);
+
 const controller = {
   session: null as LiveVoiceSession | null,
   starting: null as Promise<LiveVoiceSession> | null,
   conversation: null as Promise<string | null> | null,
   sink: null as TranscriptSink | null,
   handoff: null as number | null,
+  attempt: 0,
+  reconnectTimer: null as number | null,
+  stableTimer: null as number | null,
 };
+
+export interface VoiceReconnectState {
+  readonly active: boolean;
+  readonly attempt: number;
+}
+
+const NOT_RECONNECTING: VoiceReconnectState = { active: false, attempt: 0 };
+let reconnectState: VoiceReconnectState = NOT_RECONNECTING;
+const reconnectListeners = new Set<() => void>();
+
+function publishReconnectState(next: VoiceReconnectState): void {
+  reconnectState = next;
+  reconnectListeners.forEach((listener) => listener());
+}
+
+function subscribeToReconnectState(listener: () => void): () => void {
+  reconnectListeners.add(listener);
+  return () => {
+    reconnectListeners.delete(listener);
+  };
+}
+
+function clearReconnectTimers(): void {
+  if (controller.reconnectTimer !== null) window.clearTimeout(controller.reconnectTimer);
+  if (controller.stableTimer !== null) window.clearTimeout(controller.stableTimer);
+  controller.reconnectTimer = null;
+  controller.stableTimer = null;
+}
+
+function stopVoiceReconnect(): void {
+  clearReconnectTimers();
+  controller.attempt = 0;
+  if (reconnectState.active) publishReconnectState(NOT_RECONNECTING);
+}
+
+/**
+ * One more bounded attempt, or false when the budget is spent. The budget is
+ * what keeps a provider outage from re-reserving a live session on every drop.
+ */
+function scheduleVoiceReconnect(): boolean {
+  if (controller.attempt >= RECONNECT_MAX_ATTEMPTS) return false;
+  controller.attempt += 1;
+  publishReconnectState({ active: true, attempt: controller.attempt });
+  const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** (controller.attempt - 1));
+  if (controller.reconnectTimer !== null) window.clearTimeout(controller.reconnectTimer);
+  controller.reconnectTimer = window.setTimeout(() => {
+    controller.reconnectTimer = null;
+    useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.retry });
+  }, delay);
+  return true;
+}
+
+/** The network coming back is better evidence than the remaining backoff. */
+function retryVoiceReconnectNow(): void {
+  if (!reconnectState.active || controller.reconnectTimer === null) return;
+  window.clearTimeout(controller.reconnectTimer);
+  controller.reconnectTimer = null;
+  useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.retry });
+}
+
+function markVoiceReconnected(): void {
+  if (controller.reconnectTimer !== null) window.clearTimeout(controller.reconnectTimer);
+  controller.reconnectTimer = null;
+  if (reconnectState.active) publishReconnectState(NOT_RECONNECTING);
+  if (controller.attempt === 0) return;
+  if (controller.stableTimer !== null) window.clearTimeout(controller.stableTimer);
+  controller.stableTimer = window.setTimeout(() => {
+    controller.stableTimer = null;
+    controller.attempt = 0;
+  }, RECONNECT_STABLE_MS);
+}
 
 function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Promise<void> {
   return getCsrfToken()
@@ -106,6 +193,7 @@ export function endLiveVoiceSession(reason: string): void {
   controller.session = null;
   controller.starting = null;
   controller.conversation = null;
+  stopVoiceReconnect();
   useVoiceSessionStore.getState().setBackendBusy(false);
   if (starting) {
     void starting.then(
@@ -171,25 +259,47 @@ function startLiveVoiceSession(voice: string): Promise<LiveVoiceSession> {
       onError: (message) => {
         controller.session = null;
         store.setBackendBusy(false);
+        stopVoiceReconnect();
         store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
+      },
+      onConnectionLost: (message) => {
+        const dropped = controller.session;
+        controller.session = null;
+        store.setBackendBusy(false);
+        if (dropped) {
+          void settleSession(dropped, {
+            reason: 'connection_lost',
+            seconds: dropped.lastUsageSeconds,
+          });
+        }
+        const retrying = scheduleVoiceReconnect();
+        if (!retrying) stopVoiceReconnect();
+        store.dispatch({
+          type: VOICE_SESSION_EVENT.fail,
+          message: retrying ? message : LIVE_SESSION_MESSAGE.reconnectFailed,
+        });
       },
     },
   }).then(
     (session) => {
       controller.starting = null;
       controller.session = session;
+      markVoiceReconnected();
       void ensureConversation();
       return session;
     },
     (error: unknown) => {
       controller.starting = null;
-      store.dispatch({
-        type: VOICE_SESSION_EVENT.fail,
-        message:
-          error instanceof LiveVoiceSessionError
-            ? error.message
-            : LIVE_SESSION_MESSAGE.connectionFailed,
-      });
+      const message =
+        error instanceof LiveVoiceSessionError
+          ? error.message
+          : LIVE_SESSION_MESSAGE.connectionFailed;
+      const recoverable =
+        !(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code);
+      if (!(reconnectState.active && recoverable && scheduleVoiceReconnect())) {
+        stopVoiceReconnect();
+      }
+      store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
       throw error;
     },
   );
@@ -208,6 +318,11 @@ export function useVoiceSession({
   const backendBusy = useVoiceSessionStore((store) => store.backendBusy);
   const dispatch = useVoiceSessionStore((store) => store.dispatch);
   const reducedMotion = usePrefersReducedMotion();
+  const reconnect = useSyncExternalStore(
+    subscribeToReconnectState,
+    () => reconnectState,
+    () => NOT_RECONNECTING,
+  );
   const [deviceName, setDeviceName] = useState(() => controller.session?.microphoneLabel ?? '');
 
   const { status, muted } = state;
@@ -239,11 +354,41 @@ export function useVoiceSession({
     return undefined;
   }, [status, turnActive, dispatch]);
 
+  // A microphone granted after the refusal retries on its own, so the user does
+  // not have to find the control again once the browser prompt is answered.
+  useEffect(() => {
+    if (status !== VOICE_SESSION_STATUS.error) return undefined;
+    if (state.error !== LIVE_SESSION_MESSAGE.microphoneDenied) return undefined;
+    const permissions = navigator.permissions;
+    if (!permissions?.query) return undefined;
+    let granted: PermissionStatus | null = null;
+    let cancelled = false;
+    const onChange = () => {
+      if (granted?.state === 'granted') dispatch({ type: VOICE_SESSION_EVENT.retry });
+    };
+    void permissions.query({ name: 'microphone' as PermissionName }).then(
+      (result) => {
+        if (cancelled) return;
+        granted = result;
+        result.addEventListener('change', onChange);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+      granted?.removeEventListener('change', onChange);
+    };
+  }, [status, state.error, dispatch]);
+
   useEffect(() => {
     if (!active) return undefined;
     const onPageHide = () => endLiveVoiceSession('page_hidden');
     window.addEventListener('pagehide', onPageHide);
-    return () => window.removeEventListener('pagehide', onPageHide);
+    window.addEventListener('online', retryVoiceReconnectNow);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('online', retryVoiceReconnectNow);
+    };
   }, [active]);
 
   const enter = useCallback(() => {
@@ -286,6 +431,9 @@ export function useVoiceSession({
     reducedMotion,
     deviceName,
     backendBusy,
+    reconnecting: reconnect.active,
+    reconnectAttempt: reconnect.attempt,
+    reconnectMaxAttempts: RECONNECT_MAX_ATTEMPTS,
     mutedHint: MESSAGE.mutedHint,
     enter,
     exit,
