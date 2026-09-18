@@ -3,8 +3,6 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
-  verifyStep: vi.fn(),
-  claimTotpStep: vi.fn(),
   recordAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
 }));
 
@@ -24,16 +22,9 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/two-factor-replay', () => ({
-  claimTotpStep: (...args: unknown[]) => mocks.claimTotpStep(...args),
-}));
 vi.mock('@/features/settings/services/user-preferences', () => ({
-  verifyTOTPStep: (...args: unknown[]) => mocks.verifyStep(...args),
   generateBackupCodes: vi.fn(() => ['cccc-3333', 'dddd-4444']),
   hashBackupCode: vi.fn(async (code: string) => `hash:${code}`),
-}));
-vi.mock('@/lib/crypto/totp-envelope', () => ({
-  openTotpSecret: vi.fn(() => 'SECRET'),
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (event: Record<string, unknown>) => mocks.recordAuditEvent(event),
@@ -41,30 +32,44 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 
+process.env['CSRF_SECRET'] = 'backup-codes-step-up-secret-long-enough-here';
+
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant, resetStepUpSigningKeyCache } from '@/lib/server/step-up/grant-token';
 import { POST } from './route';
 
-const ROW = { totp_secret_enc: 'enc', enabled: true };
+const ROW = { enabled: true };
 
-function request(code: string) {
+function request(stepUpToken?: string) {
   return new NextRequest('http://localhost/api/settings/2fa/backup-codes', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code }),
+    headers: {
+      'content-type': 'application/json',
+      ...(stepUpToken ? { [STEP_UP_TOKEN_HEADER]: stepUpToken } : {}),
+    },
   });
+}
+
+function grant() {
+  return createStepUpGrant({
+    userId: 'user-1',
+    action: 'two_factor.regenerate_backup_codes',
+    resourceId: null,
+    method: 'totp',
+  }).token;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.claimTotpStep.mockResolvedValue(true);
+  resetStepUpSigningKeyCache();
 });
 
 describe('POST /api/settings/2fa/backup-codes', () => {
-  it('regenerates backup codes on a valid TOTP code', async () => {
+  it('regenerates backup codes once the second factor has been re-verified', async () => {
     mocks.query.mockResolvedValueOnce([ROW]);
-    mocks.verifyStep.mockResolvedValueOnce(58_000_000);
 
-    const response = await POST(request('123456'));
+    const response = await POST(request(grant()));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -72,20 +77,37 @@ describe('POST /api/settings/2fa/backup-codes', () => {
     });
   });
 
-  it('rejects an invalid TOTP code', async () => {
+  it('refuses a session that has not re-authenticated, and replaces nothing', async () => {
     mocks.query.mockResolvedValueOnce([ROW]);
-    mocks.verifyStep.mockResolvedValueOnce(null);
 
-    const response = await POST(request('000000'));
+    const response = await POST(request());
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'STEP_UP_REQUIRED',
+    );
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a proof minted for a different action', async () => {
+    mocks.query.mockResolvedValueOnce([ROW]);
+    const otherAction = createStepUpGrant({
+      userId: 'user-1',
+      action: 'two_factor.disable',
+      resourceId: null,
+      method: 'totp',
+    }).token;
+
+    const response = await POST(request(otherAction));
+
+    expect(response.status).toBe(403);
+    expect(mocks.query).toHaveBeenCalledTimes(1);
   });
 
   it('writes an audit row saying the backup codes were replaced, and how many', async () => {
     mocks.query.mockResolvedValueOnce([ROW]);
-    mocks.verifyStep.mockResolvedValueOnce(58_000_000);
 
-    await POST(request('123456'));
+    await POST(request(grant()));
 
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -98,39 +120,37 @@ describe('POST /api/settings/2fa/backup-codes', () => {
 
   it('never leaks a backup code into the audit detail', async () => {
     mocks.query.mockResolvedValueOnce([ROW]);
-    mocks.verifyStep.mockResolvedValueOnce(58_000_000);
 
-    await POST(request('123456'));
+    await POST(request(grant()));
 
-    const recorded = JSON.stringify(mocks.recordAuditEvent.mock.calls[0]?.[0] ?? {});
+    const recorded = JSON.stringify(mocks.recordAuditEvent.mock.calls.map((call) => call[0]) ?? {});
     expect(recorded).not.toContain('cccc-3333');
     expect(recorded).not.toContain('dddd-4444');
   });
 
-  it('writes no audit row when the TOTP code is refused', async () => {
+  it('writes no regeneration audit row when the challenge is refused', async () => {
     mocks.query.mockResolvedValueOnce([ROW]);
-    mocks.verifyStep.mockResolvedValueOnce(null);
 
-    await POST(request('000000')).catch(() => undefined);
+    await POST(request()).catch(() => undefined);
 
-    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'two_factor_backup_codes_regenerated' }),
+    );
   });
 
-  it('writes no audit row when the code is a replay', async () => {
-    mocks.query.mockResolvedValueOnce([ROW]);
-    mocks.verifyStep.mockResolvedValueOnce(58_000_000);
-    mocks.claimTotpStep.mockResolvedValueOnce(false);
+  it('refuses an account with 2FA off before it asks for a second factor', async () => {
+    mocks.query.mockResolvedValueOnce([]);
 
-    await POST(request('123456')).catch(() => undefined);
+    const response = await POST(request());
 
+    expect(response.status).toBe(400);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('exempts an organization owner from the mfa gate so regeneration stays reachable', async () => {
     mocks.query.mockResolvedValueOnce([ROW]);
-    mocks.verifyStep.mockResolvedValueOnce(58_000_000);
 
-    await POST(request('123456'));
+    await POST(request(grant()));
 
     expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
       mfaGateExemptForOwner: true,

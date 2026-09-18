@@ -5,7 +5,7 @@
  * @module features/settings/hooks/use-settings-queries
  */
 
-import { useCallback } from 'react';
+import { useCallback, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { signedOutRedirectUrl, useSignOut } from '@/lib/identity/client';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
@@ -29,6 +29,8 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 import { toUserMessage } from '@/lib/user-error-message';
+import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
+import { useStepUp } from './use-step-up';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -1263,31 +1265,36 @@ export function useInviteTeamMember(): UseMutationResult<
  */
 export type OrganizationOwnerRoleAfterTransfer = 'admin' | 'member' | 'viewer';
 
-export function useTransferOrganizationOwnership(): UseMutationResult<
+export type TransferOwnershipVariables = {
+  organizationId: string;
+  toUserId: string;
+  outgoingOwnerRole: OrganizationOwnerRoleAfterTransfer;
+};
+
+export type TransferOwnershipMutation = UseMutationResult<
   void,
   Error,
-  {
-    organizationId: string;
-    toUserId: string;
-    outgoingOwnerRole: OrganizationOwnerRoleAfterTransfer;
-  }
-> {
-  const queryClient = useQueryClient();
+  TransferOwnershipVariables
+> & {
+  /** The route answers 403 until a fresh second factor is proven; render this. */
+  stepUpDialog: ReactElement | null;
+};
 
-  return useMutation({
+export function useTransferOrganizationOwnership(): TransferOwnershipMutation {
+  const queryClient = useQueryClient();
+  const { withStepUp, dialog } = useStepUp();
+
+  const mutation = useMutation<void, Error, TransferOwnershipVariables>({
     mutationFn: async ({ organizationId, toUserId, outgoingOwnerRole }) => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-      const csrfToken = await getCsrfToken();
-      const response = await fetch('/api/settings/organization/transfer-ownership', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({ organizationId, toUserId, outgoingOwnerRole }),
-      });
+      const response = await withStepUp(
+        (headers) =>
+          sendAuthorizedJson(
+            '/api/settings/organization/transfer-ownership',
+            { method: 'POST', body: { organizationId, toUserId, outgoingOwnerRole } },
+            headers,
+          ),
+        organizationId,
+      );
       if (!response.ok) throw new Error(await readApiError(response));
     },
     onSuccess: (_, { organizationId }) => {
@@ -1295,8 +1302,13 @@ export function useTransferOrganizationOwnership(): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
       toast.success('Ownership transferred.');
     },
-    onError: (error: Error) => toast.error(toUserMessage(error, 'Failed to transfer ownership')),
+    onError: (error: Error) => {
+      if (isStepUpCancelled(error)) return;
+      toast.error(toUserMessage(error, 'Failed to transfer ownership'));
+    },
   });
+
+  return { ...mutation, stepUpDialog: dialog };
 }
 
 export function useRemoveTeamMember(): UseMutationResult<

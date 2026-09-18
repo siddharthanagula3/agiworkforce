@@ -17,16 +17,15 @@ import { Check, Copy, Download, Loader2, ShieldCheck, ShieldOff } from 'lucide-r
 import settingsService, {
   type TwoFactorStatus,
 } from '@features/settings/services/user-preferences';
-import { StepUpDialog } from '@/features/auth/StepUpDialog';
+import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
+import { useStepUp } from '@features/settings/hooks/use-step-up';
 
 type Stage =
   | { name: 'idle' }
   /** /setup returned · the user is scanning and about to submit a code. */
   | { name: 'enrolling'; secret: string; otpauthUrl: string; pendingBackupCodes: string[] }
   /** Server confirmed the change · these codes are visible exactly once. */
-  | { name: 'backup-codes'; codes: string[]; reason: 'enabled' | 'regenerated' }
-  | { name: 'disabling' }
-  | { name: 'regenerating' };
+  | { name: 'backup-codes'; codes: string[]; reason: 'enabled' | 'regenerated' };
 
 interface TwoFactorEnrollmentPanelProps {
   onStatusChange?: (status: TwoFactorStatus) => void;
@@ -45,6 +44,14 @@ function describeCodeFailure(error: string | undefined, status: number | undefin
       : 'The server rejected the request. Start the setup again to get a fresh secret.';
   }
   return error ?? 'The request failed.';
+}
+
+async function readRouteFailure(response: Response): Promise<string> {
+  const body = (await response.json().catch(() => null)) as {
+    error?: string | { message?: string };
+  } | null;
+  const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
+  return describeCodeFailure(message, response.status);
 }
 
 async function renderQrDataUri(otpauthUrl: string): Promise<string | null> {
@@ -67,9 +74,10 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
   const [acknowledged, setAcknowledged] = useState(false);
   const [copied, setCopied] = useState<'secret' | 'codes' | null>(null);
 
+  const { withStepUp, dialog: stepUpDialog } = useStepUp();
+
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
-  const regeneratedCodesRef = useRef<string[]>([]);
 
   const refreshStatus = useCallback(async () => {
     const { data, error } = await settingsService.get2FAStatus();
@@ -147,29 +155,52 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
     await refreshStatus();
   }, [stage, code, refreshStatus]);
 
-  const verifyDisable = useCallback(async (value: string) => {
-    const { success, error, status } = await settingsService.disable2FA(value);
-    return { ok: success, error: success ? undefined : describeCodeFailure(error, status), status };
-  }, []);
+  const handleDisable = useCallback(async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const response = await withStepUp((headers) =>
+        sendAuthorizedJson('/api/settings/2fa', { method: 'DELETE' }, headers),
+      );
+      if (!response.ok) {
+        setActionError(await readRouteFailure(response));
+        return;
+      }
+      resetFlow();
+      await refreshStatus();
+    } catch (error) {
+      if (!isStepUpCancelled(error)) {
+        setActionError(error instanceof Error ? error.message : 'The request failed.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [refreshStatus, resetFlow, withStepUp]);
 
-  const handleDisabled = useCallback(async () => {
-    resetFlow();
-    await refreshStatus();
-  }, [refreshStatus, resetFlow]);
-
-  const verifyRegenerate = useCallback(async (value: string) => {
-    const { backupCodes, error, status } = await settingsService.regenerateBackupCodes(value);
-    if (!backupCodes) return { ok: false, error: describeCodeFailure(error, status), status };
-    regeneratedCodesRef.current = backupCodes;
-    return { ok: true, status };
-  }, []);
-
-  const handleRegenerated = useCallback(async () => {
-    setCode('');
-    setAcknowledged(false);
-    setStage({ name: 'backup-codes', codes: regeneratedCodesRef.current, reason: 'regenerated' });
-    await refreshStatus();
-  }, [refreshStatus]);
+  const handleRegenerate = useCallback(async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const response = await withStepUp((headers) =>
+        sendAuthorizedJson('/api/settings/2fa/backup-codes', { method: 'POST' }, headers),
+      );
+      if (!response.ok) {
+        setActionError(await readRouteFailure(response));
+        return;
+      }
+      const { backup_codes: codes } = (await response.json()) as { backup_codes: string[] };
+      setCode('');
+      setAcknowledged(false);
+      setStage({ name: 'backup-codes', codes, reason: 'regenerated' });
+      await refreshStatus();
+    } catch (error) {
+      if (!isStepUpCancelled(error)) {
+        setActionError(error instanceof Error ? error.message : 'The request failed.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [refreshStatus, withStepUp]);
 
   const handleDismissBackupCodes = useCallback(async () => {
     resetFlow();
@@ -376,23 +407,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
           </div>
         ) : null}
 
-        <StepUpDialog
-          open={stage.name === 'disabling'}
-          action="two_factor.disable"
-          consequence="Two-factor authentication is switched off. Enter a current authenticator code, or one of your backup codes, to confirm."
-          verify={verifyDisable}
-          onCancel={resetFlow}
-          onSatisfied={handleDisabled}
-        />
-
-        <StepUpDialog
-          open={stage.name === 'regenerating'}
-          action="two_factor.regenerate_backup_codes"
-          consequence="Your existing backup codes stop working immediately. Enter a current authenticator code to confirm."
-          verify={verifyRegenerate}
-          onCancel={resetFlow}
-          onSatisfied={handleRegenerated}
-        />
+        {stepUpDialog}
 
         {/* ---------------------------------------------------------------- */}
         {/* Resting state                                                     */}
@@ -412,22 +427,16 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setCode('');
-                      setActionError(null);
-                      setStage({ name: 'regenerating' });
-                    }}
+                    disabled={busy}
+                    onClick={() => void handleRegenerate()}
                   >
                     Generate new backup codes
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setCode('');
-                      setActionError(null);
-                      setStage({ name: 'disabling' });
-                    }}
+                    disabled={busy}
+                    onClick={() => void handleDisable()}
                   >
                     Turn off two-factor
                   </Button>
