@@ -1,7 +1,27 @@
 export {
+  DEFAULT_PRIVATE_INDEX_SEARCH_MODE,
+  DEFAULT_SEARCH_RETRIEVAL_STRATEGY,
   RETRIEVAL_EMBEDDING_DIMENSIONS,
+  SEARCH_MODES,
+  SEARCH_MODE_DECLARATIONS,
+  SEARCH_RETRIEVAL_STRATEGIES,
   SEARCH_SOURCE_KINDS,
+  isSearchMode,
   isSearchSourceKind,
+  parseSearchRetrievalStrategy,
+  searchModeDeclaration,
+  searchModesByCorpus,
+  strategyUsesLexical,
+  strategyUsesSemantic,
+  type SearchAuthority,
+  type SearchCitationPolicy,
+  type SearchConsumer,
+  type SearchCorpus,
+  type SearchFreshness,
+  type SearchMode,
+  type SearchModeDeclaration,
+  type SearchResidency,
+  type SearchRetrievalStrategy,
   type EmbeddingProvider,
   type EmbeddingPurpose,
   type EmbeddingResult,
@@ -21,6 +41,14 @@ export {
   type SemanticSearchState,
   type TextWindow,
 } from './types';
+export {
+  SearchResidencyError,
+  assertSearchResidency,
+  searchResidencyDecision,
+  type SearchResidencyDecision,
+  type SearchResidencyRefusal,
+  type SearchResidencyState,
+} from './residency';
 export { DEFAULT_TEXT_WINDOW, windowText, type WindowOptions } from './chunk';
 export { createProviderRegistry } from './registry';
 export {

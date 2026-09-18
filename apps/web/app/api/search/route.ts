@@ -9,8 +9,19 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { readJsonBody } from '@/lib/read-json-body';
-import { isSearchSourceKind, SEARCH_SOURCE_KINDS } from '@agiworkforce/data-layer/search';
-import { createPostgresSearchProvider } from '@/lib/services/retrieval-search-service';
+import {
+  DEFAULT_SEARCH_RETRIEVAL_STRATEGY,
+  SearchResidencyError,
+  SEARCH_SOURCE_KINDS,
+  assertSearchResidency,
+  isSearchSourceKind,
+  parseSearchRetrievalStrategy,
+  type SearchResidencyState,
+} from '@agiworkforce/data-layer/search';
+import {
+  createPostgresSearchProvider,
+  resolveRetrievalResidency,
+} from '@/lib/services/retrieval-search-service';
 import { toSearchDocumentResults } from '@/lib/services/retrieval-search-results';
 import {
   buildNewChatHref,
@@ -86,6 +97,27 @@ type SuggestionRow = {
 
 const CONTEXT_LENGTH = 50;
 
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+
+/** The refusal reaches the reader, so it names the region and nothing else. */
+async function assertProductSearchRegion(
+  db: ScopedDb,
+  organizationId: string | null,
+): Promise<SearchResidencyState> {
+  const residency = await resolveRetrievalResidency({ db, organizationId });
+  try {
+    assertSearchResidency('product', residency);
+  } catch (error) {
+    if (!(error instanceof SearchResidencyError)) throw error;
+    throw createError.capabilityUnavailable(
+      error.origin
+        ? `Search for this workspace is served only from its data region (${error.origin}), which this deployment does not answer from.`
+        : 'Search is unavailable because this workspace’s data region could not be confirmed.',
+    );
+  }
+  return residency;
+}
+
 function newChatHrefFor(
   kind: NewChatSourceKind,
   id: string,
@@ -125,6 +157,7 @@ async function handleGet(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
+  const residency = await assertProductSearchRegion(db, organizationId);
 
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
@@ -247,17 +280,22 @@ async function handleGet(request: NextRequest) {
   }
 
   const requestedKinds = url.searchParams.getAll('kind').filter(isSearchSourceKind);
+  const strategy =
+    parseSearchRetrievalStrategy(url.searchParams.get('mode')) ?? DEFAULT_SEARCH_RETRIEVAL_STRATEGY;
   const indexSearch = createPostgresSearchProvider({
     db,
     userId,
     organizationId,
-    semantic: url.searchParams.get('mode') !== 'lexical',
+    semantic: true,
+    residency,
   }).search({
     text: q,
     kinds: requestedKinds.length > 0 ? requestedKinds : SEARCH_SOURCE_KINDS,
     limit,
     maxPerSource: 3,
     match: 'all_terms',
+    mode: 'private_knowledge',
+    strategy,
   });
 
   const [sessionRows, projectRows, fileRows, messageRows, indexed] = await Promise.all([
@@ -418,6 +456,8 @@ async function handleGet(request: NextRequest) {
     files: fileResults,
     documents,
     semantic: indexed.semantic,
+    strategy,
+    modes: { rows: 'product', documents: 'private_knowledge' },
     stats,
   });
 }
@@ -430,6 +470,8 @@ async function handlePost(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
+
+  await assertProductSearchRegion(db, organizationId);
 
   const body = await readJsonBody(request);
   const parsed = TrackSearchSchema.safeParse(body);

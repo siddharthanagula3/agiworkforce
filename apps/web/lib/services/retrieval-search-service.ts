@@ -2,18 +2,30 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  DEFAULT_PRIVATE_INDEX_SEARCH_MODE,
+  DEFAULT_SEARCH_RETRIEVAL_STRATEGY,
   SEARCH_SOURCE_KINDS,
+  assertSearchResidency,
   isSearchSourceKind,
   rerankCandidates,
+  searchModeDeclaration,
+  searchModesByCorpus,
+  strategyUsesLexical,
+  strategyUsesSemantic,
   type SearchCandidate,
   type SearchChunkMetadata,
+  type SearchMode,
   type SearchProvider,
   type SearchRequest,
+  type SearchResidencyState,
   type SearchResponse,
+  type SearchRetrievalStrategy,
   type SemanticSearchState,
 } from '@agiworkforce/data-layer/search';
+import { DEFAULT_DATA_REGION, normaliseDataRegion } from '@agiworkforce/compliance';
 
 import { logger } from '@/lib/logger';
+import { readOrganizationRegion } from '@/lib/server/data-region';
 import {
   embedTextsMetered,
   RetrievalEmbeddingError,
@@ -33,7 +45,11 @@ export interface RetrievalSearchScope {
   userId: string;
   organizationId: string | null;
   semantic: boolean;
+  env?: Record<string, string | undefined>;
+  residency?: SearchResidencyState;
 }
+
+const PRIVATE_INDEX_MODES = searchModesByCorpus('private_index');
 
 interface CandidateRow {
   chunk_id: string;
@@ -75,12 +91,52 @@ function toRank(value: string | number | null): number | null {
   return Number.isFinite(rank) ? rank : null;
 }
 
+function assertPrivateIndexMode(mode: SearchMode): void {
+  if (searchModeDeclaration(mode).corpus === 'private_index') return;
+  throw new Error(
+    `Search mode "${mode}" reads the ${searchModeDeclaration(mode).corpus} corpus and cannot be ` +
+      `served by the private index. Modes this provider serves: ${PRIVATE_INDEX_MODES.join(', ')}.`,
+  );
+}
+
+/**
+ * The workspace's pinned region against the region this deployment answers from.
+ * A handle that cannot be asked returns a null origin, which refuses.
+ */
+export async function resolveRetrievalResidency(input: {
+  db: RetrievalSearchScope['db'];
+  organizationId: string | null;
+  env?: Record<string, string | undefined>;
+}): Promise<SearchResidencyState> {
+  const env = input.env ?? process.env;
+  const executing = normaliseDataRegion(env['AGI_DATA_REGION']) ?? DEFAULT_DATA_REGION;
+  if (!input.organizationId) {
+    return { origin: executing, executing, provisioned: true, missing: [] };
+  }
+  // readOrganizationRegion reads one row through `query`, which every scoped
+  // handle carries even when it is narrower than the full adapter.
+  const state = await readOrganizationRegion(
+    input.db as DatabaseAdapter,
+    input.organizationId,
+    env,
+  );
+  return {
+    origin: state.effective,
+    executing,
+    provisioned: state.provisioned,
+    missing: state.missing,
+  };
+}
+
 async function queryEmbedding(
   scope: RetrievalSearchScope,
   request: SearchRequest,
   kinds: readonly string[],
+  strategy: SearchRetrievalStrategy,
 ): Promise<{ vector: string | null; state: SemanticSearchState }> {
-  if (!scope.semantic || !isFullAdapter(scope.db)) return { vector: null, state: 'unavailable' };
+  if (!scope.semantic || !strategyUsesSemantic(strategy) || !isFullAdapter(scope.db)) {
+    return { vector: null, state: 'unavailable' };
+  }
   const [indexed] = await scope.db.query<{ present: boolean }>(
     `select exists (
        select 1 from retrieval_chunks
@@ -175,15 +231,30 @@ function candidateSql(options: {
 export function createPostgresSearchProvider(scope: RetrievalSearchScope): SearchProvider {
   return {
     async search(request: SearchRequest): Promise<SearchResponse> {
+      const mode = request.mode ?? DEFAULT_PRIVATE_INDEX_SEARCH_MODE;
+      assertPrivateIndexMode(mode);
       const kinds = (request.kinds ?? SEARCH_SOURCE_KINDS).filter(isSearchSourceKind);
       if (kinds.length === 0 || request.limit <= 0) return { hits: [], semantic: 'unavailable' };
-      const tsQuery = buildTsQuery(request.text, request.match);
+      assertSearchResidency(
+        mode,
+        scope.residency ??
+          (await resolveRetrievalResidency({
+            db: scope.db,
+            organizationId: scope.organizationId,
+            ...(scope.env ? { env: scope.env } : {}),
+          })),
+      );
+
+      const strategy = request.strategy ?? DEFAULT_SEARCH_RETRIEVAL_STRATEGY;
+      const tsQuery = strategyUsesLexical(strategy)
+        ? buildTsQuery(request.text, request.match)
+        : null;
       const candidateLimit = Math.min(MAX_CANDIDATES, request.limit * CANDIDATE_MULTIPLIER);
 
       let rows: CandidateRow[];
       let semanticState: SemanticSearchState = 'unavailable';
       try {
-        const embedding = await queryEmbedding(scope, request, kinds);
+        const embedding = await queryEmbedding(scope, request, kinds, strategy);
         semanticState = embedding.state;
         if (!tsQuery && !embedding.vector) return { hits: [], semantic: semanticState };
         const params: unknown[] = [
