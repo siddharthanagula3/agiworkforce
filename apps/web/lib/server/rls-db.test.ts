@@ -39,7 +39,25 @@ vi.mock('@/lib/server/developer-token', () => ({
   isDeveloperTokenRevoked: vi.fn(async () => false),
 }));
 
-const serviceQuery = vi.fn(async () => [] as Record<string, unknown>[]);
+/**
+ * The two owner-connection reads made before a user scope exists: the identity
+ * bridge and the account lifecycle. Both answer with an unremarkable account.
+ */
+async function ownerConnectionAnswers(
+  sql: string = '',
+  params: unknown[] = [],
+): Promise<Record<string, unknown>[]> {
+  const statement = String(sql).toLowerCase();
+  if (statement.includes('left join public.identities')) {
+    return [{ identity_id: null, account_id: params[2] ?? null, erased: false }];
+  }
+  if (statement.includes('account_status')) {
+    return [{ account_status: null, deletion_scheduled_for: null, erased: false }];
+  }
+  return [];
+}
+
+const serviceQuery = vi.fn(ownerConnectionAnswers);
 const serviceExecute = vi.fn(async () => 0);
 const serviceTransaction = vi.fn(async (callback: (tx: DatabaseAdapter) => Promise<unknown>) =>
   callback({ query: serviceQuery, execute: serviceExecute } as unknown as DatabaseAdapter),
@@ -109,7 +127,7 @@ async function capture(promise: Promise<unknown>): Promise<unknown> {
 describe('getUserScopedDb with an API-key principal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    serviceQuery.mockResolvedValue([]);
+    serviceQuery.mockImplementation(ownerConnectionAnswers);
     mockVerifyKey.mockResolvedValue({
       id: 'key-1',
       user_id: API_KEY_USER,
@@ -232,7 +250,7 @@ describe('getCurrentUserRlsDb', () => {
 describe('tenant scope propagation onto the active trace context', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    serviceQuery.mockResolvedValue([]);
+    serviceQuery.mockImplementation(ownerConnectionAnswers);
     mockVerifyKey.mockResolvedValue({
       id: 'key-1',
       user_id: API_KEY_USER,
@@ -276,7 +294,7 @@ describe('tenant scope propagation onto the active trace context', () => {
 describe('getUserScopedDb on a cookie session', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    serviceQuery.mockResolvedValue([]);
+    serviceQuery.mockImplementation(ownerConnectionAnswers);
   });
 
   it('applies the workspace mfa gate and ip allow list the bearer path already applies', async () => {

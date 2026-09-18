@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { DeviceRenameRequestSchema } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -12,10 +13,62 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { notifyDeviceDisconnected } from '@/lib/services/account-activity-notifications';
+import { revokeDeviceRefreshCredentials } from '@/lib/server/refresh-token-family';
+import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import { resolveSessionsPrincipal } from '../../sessions/session-principal';
 import { isCredentialLinkMissing, isRegistryMissing } from '../schema-state';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `lost` finishes the credential family for good rather than merely revoking
+ * it; `logoutAll` is offered here because that is where the user already is.
+ */
+const UnlinkOptionsSchema = z
+  .object({
+    lost: z.boolean().optional(),
+    logoutAll: z.boolean().optional(),
+  })
+  .strict();
+
+interface UnlinkOptions {
+  lost: boolean;
+  logoutAll: boolean;
+}
+
+async function readUnlinkOptions(request: NextRequest): Promise<UnlinkOptions> {
+  const raw: unknown = await request.json().catch(() => null);
+  if (raw === null || raw === undefined) return { lost: false, logoutAll: false };
+
+  const parsed = UnlinkOptionsSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw createError.validation('Invalid unlink options', parsed.error.flatten());
+  }
+  return { lost: parsed.data.lost ?? false, logoutAll: parsed.data.logoutAll ?? false };
+}
+
+/**
+ * Its own statement, before the delete: deleting the row removes the record of
+ * the authorization, this removes the authorization.
+ */
+async function revokeRemoteControl(
+  db: DatabaseAdapter,
+  deviceId: string,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const affected = await db.execute(
+      `update device_registrations
+          set remote_enabled = false, updated_at = now()
+        where id = $1 and user_id = $2`,
+      [deviceId, userId],
+    );
+    return affected > 0;
+  } catch (error) {
+    if (isRegistryMissing(error)) return false;
+    throw error;
+  }
+}
 
 async function handleUnlink(
   request: NextRequest,
@@ -24,7 +77,7 @@ async function handleUnlink(
   const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await resolveSessionsPrincipal(request);
+  const { db, userId, currentSessionId } = await resolveSessionsPrincipal(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -33,8 +86,10 @@ async function handleUnlink(
   if (!UUID.test(deviceId)) {
     throw createError.validation('Invalid device ID');
   }
+  const options = await readUnlinkOptions(request);
 
   const registered = await readRegisteredDevice(db, deviceId, userId);
+  const remoteControlRevoked = registered ? await revokeRemoteControl(db, deviceId, userId) : false;
   const result = await db.transaction(async (tx) => {
     const owned = registered
       ? [registered]
@@ -48,30 +103,21 @@ async function handleUnlink(
     const device = owned[0];
     if (!device) return null;
 
-    // Revoke by family, not by row: rotation issues a fresh row per refresh, so
-    // targeting device_id alone would leave the newest credential of a family
-    // whose earlier rows were written before 0133 recorded the device.
     // Until 0133 lands there is no device_id to scope by. Revoking every family
     // on the account would sign out the user's other devices to unlink one, so
     // this unregisters and says plainly that no credential was revoked.
-    let revoked: Array<{ id: string }> = [];
+    let revoked = 0;
+    let compromiseRecorded = false;
     let credentialsRevocable = true;
     try {
-      revoked = await tx.query<{ id: string }>(
-        `update device_refresh_tokens
-            set revoked_at = coalesce(revoked_at, now())
-          where user_id = $2
-            and revoked_at is null
-            and (
-              family_id in (
-                select family_id from device_refresh_tokens
-                 where user_id = $2 and device_id = $1
-              )
-              or family_id = $3
-            )
-          returning id`,
-        [deviceId, userId, registered?.credentialFamilyId ?? null],
-      );
+      const outcome = await revokeDeviceRefreshCredentials(tx, {
+        userId,
+        deviceId,
+        credentialFamilyId: registered?.credentialFamilyId ?? null,
+        ...(options.lost ? { compromisedAs: 'device_lost' as const } : {}),
+      });
+      revoked = outcome.revoked;
+      compromiseRecorded = outcome.compromiseRecorded;
     } catch (error) {
       if (!isCredentialLinkMissing(error)) throw error;
       credentialsRevocable = false;
@@ -101,7 +147,8 @@ async function handleUnlink(
     return {
       kind: device.kind,
       name: device.name,
-      revokedCredentials: revoked.length,
+      revokedCredentials: revoked,
+      compromiseRecorded,
       credentialsRevocable,
       identitySessionId: registered?.identitySessionId ?? null,
     };
@@ -115,8 +162,18 @@ async function handleUnlink(
     ? await revokeIdentitySession(result.identitySessionId, userId)
     : false;
 
+  const loggedOutEverywhere = options.logoutAll
+    ? await endEverySession(db, userId, currentSessionId)
+    : null;
+
   logger.info(
-    { userId, kind: result.kind, revokedCredentials: result.revokedCredentials },
+    {
+      userId,
+      kind: result.kind,
+      revokedCredentials: result.revokedCredentials,
+      lost: options.lost,
+      logoutAll: options.logoutAll,
+    },
     'Linked device unlinked',
   );
 
@@ -127,21 +184,56 @@ async function handleUnlink(
     name: result.name,
   });
 
+  const source = options.lost ? 'lost_device' : 'unlink_device';
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'device_trust_revoked',
+    request,
+    detail: {
+      resourceType: `device:${result.kind}`,
+      resourceId: deviceId,
+      source,
+      trusted: false,
+      enabled: remoteControlRevoked ? false : undefined,
+    },
+  });
+
+  if (result.compromiseRecorded) {
+    await recordAuditEvent({
+      userId,
+      eventType: 'refresh_family_compromised',
+      request,
+      severity: 'critical',
+      detail: {
+        resourceType: `device:${result.kind}`,
+        resourceId: deviceId,
+        source,
+        reason: 'device_lost',
+        count: result.revokedCredentials,
+      },
+    });
+  }
+
   await recordAuditEvent({
     userId,
     eventType: 'session_revoked',
     request,
     detail: {
       resourceType: `device:${result.kind}`,
-      source: 'unlink_device',
-      count: result.revokedCredentials + (sessionRevoked ? 1 : 0),
+      source,
+      count:
+        result.revokedCredentials + (sessionRevoked ? 1 : 0) + (loggedOutEverywhere?.ended ?? 0),
     },
   });
 
   return NextResponse.json({
-    message: 'Device unlinked',
+    message: options.lost ? 'Device reported lost and unlinked' : 'Device unlinked',
     revokedCredentials: result.revokedCredentials + (sessionRevoked ? 1 : 0),
     credentialsRevoked: result.credentialsRevocable,
+    credentialFamilyCompromised: result.compromiseRecorded,
+    remoteControlRevoked,
+    ...(loggedOutEverywhere ? { loggedOutEverywhere } : {}),
   });
 }
 
@@ -241,6 +333,34 @@ async function readRegisteredDevice(
     if (isRegistryMissing(error)) return null;
     throw error;
   }
+}
+
+interface LogoutEverywhere {
+  ended: number;
+  failed: number;
+  incomplete: boolean;
+}
+
+// The caller's own session survives; every other session and refresh credential ends.
+async function endEverySession(
+  db: DatabaseAdapter,
+  userId: string,
+  currentSessionId: string | null,
+): Promise<LogoutEverywhere> {
+  const sweep = await revokeEveryOtherSession(getIdentityProvider(), userId, currentSessionId);
+  await db.execute(
+    `update device_refresh_tokens
+        set revoked_at = coalesce(revoked_at, now())
+      where user_id = $1
+        and revoked_at is null`,
+    [userId],
+  );
+
+  return {
+    ended: sweep.ended.length + sweep.alreadyGone.length,
+    failed: sweep.failed.length,
+    incomplete: sweep.incomplete,
+  };
 }
 
 async function revokeIdentitySession(sessionId: string, userId: string): Promise<boolean> {
