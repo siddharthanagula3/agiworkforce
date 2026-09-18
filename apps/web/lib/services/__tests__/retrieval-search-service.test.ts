@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { RETRIEVAL_EMBEDDING_DIMENSIONS, type SearchHit } from '@agiworkforce/data-layer/search';
+import {
+  RETRIEVAL_EMBEDDING_DIMENSIONS,
+  SearchResidencyError,
+  type SearchHit,
+} from '@agiworkforce/data-layer/search';
 
-const mocks = vi.hoisted(() => ({ embed: vi.fn() }));
+const mocks = vi.hoisted(() => ({ embed: vi.fn(), readRegion: vi.fn() }));
 
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
+vi.mock('@/lib/server/data-region', () => ({ readOrganizationRegion: mocks.readRegion }));
 vi.mock('@/lib/services/retrieval-embedding-service', async () => {
   class RetrievalEmbeddingError extends Error {
     constructor(
@@ -75,6 +80,14 @@ function scopedDb(options: { embeddingsPresent: boolean }) {
 
 beforeEach(() => {
   mocks.embed.mockReset();
+  mocks.readRegion.mockReset();
+  mocks.readRegion.mockResolvedValue({
+    effective: 'us',
+    requested: null,
+    requestedAt: null,
+    provisioned: true,
+    missing: [],
+  });
 });
 
 describe('buildTsQuery', () => {
@@ -151,6 +164,98 @@ describe('createPostgresSearchProvider', () => {
 
     expect(response.semantic).toBe('no_index');
     expect(mocks.embed).not.toHaveBeenCalled();
+  });
+
+  it('refuses a workspace pinned to a region this deployment cannot serve', async () => {
+    mocks.readRegion.mockResolvedValue({
+      effective: 'eu',
+      requested: null,
+      requestedAt: null,
+      provisioned: false,
+      missing: ['AGI_DATA_REGION_EU_DATABASE_URL'],
+    });
+    const { query, adapter } = scopedDb({ embeddingsPresent: true });
+
+    const refusal = await createPostgresSearchProvider({
+      db: adapter,
+      userId: 'user-1',
+      organizationId: 'org-eu',
+      semantic: true,
+    })
+      .search({ text: 'pricing', limit: 5 })
+      .catch((error: unknown) => error);
+
+    expect(refusal).toBeInstanceOf(SearchResidencyError);
+    expect((refusal as SearchResidencyError).refusal).toBe('region_not_provisioned');
+    expect(query).not.toHaveBeenCalled();
+    expect(mocks.embed).not.toHaveBeenCalled();
+  });
+
+  it('refuses a cross-region query instead of answering from the home region', async () => {
+    mocks.readRegion.mockResolvedValue({
+      effective: 'eu',
+      requested: null,
+      requestedAt: null,
+      provisioned: true,
+      missing: [],
+    });
+    const { query, adapter } = scopedDb({ embeddingsPresent: true });
+
+    const refusal = await createPostgresSearchProvider({
+      db: adapter,
+      userId: 'user-1',
+      organizationId: 'org-eu',
+      semantic: true,
+    })
+      .search({ text: 'pricing', limit: 5 })
+      .catch((error: unknown) => error);
+
+    expect((refusal as SearchResidencyError).refusal).toBe('cross_region');
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('reads the region once when the caller already resolved it', async () => {
+    const { adapter } = scopedDb({ embeddingsPresent: false });
+
+    await createPostgresSearchProvider({
+      db: adapter,
+      userId: 'user-1',
+      organizationId: 'org-1',
+      semantic: true,
+      residency: { origin: 'us', executing: 'us', provisioned: true, missing: [] },
+    }).search({ text: 'pricing', limit: 5 });
+
+    expect(mocks.readRegion).not.toHaveBeenCalled();
+  });
+
+  it('runs no embedding and no vector clause for a keyword-only strategy', async () => {
+    const { query, adapter } = scopedDb({ embeddingsPresent: true });
+
+    const response = await createPostgresSearchProvider({
+      db: adapter,
+      userId: 'user-1',
+      organizationId: null,
+      semantic: true,
+    }).search({ text: 'pricing', limit: 5, strategy: 'keyword' });
+
+    expect(response.semantic).toBe('unavailable');
+    expect(mocks.embed).not.toHaveBeenCalled();
+    const [sql] = query.mock.calls.at(-1) as unknown as [string];
+    expect(sql).toContain('lexical as (');
+    expect(sql).not.toContain('semantic as (');
+  });
+
+  it('refuses a mode the private index does not serve', async () => {
+    const { adapter } = scopedDb({ embeddingsPresent: false });
+
+    await expect(
+      createPostgresSearchProvider({
+        db: adapter,
+        userId: 'user-1',
+        organizationId: null,
+        semantic: true,
+      }).search({ text: 'pricing', limit: 5, mode: 'web' }),
+    ).rejects.toThrow(/public_web/);
   });
 
   it('returns nothing rather than failing before the index migration is applied', async () => {
