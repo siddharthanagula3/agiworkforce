@@ -54,6 +54,60 @@ export function formatDrift(scope, target, drift) {
     .join('\n');
 }
 
+// The contract is itself a config schema: a key required in one mode and
+// forbidden in the other is a defect no deployment reconciliation would surface.
+export function validateContractSchema(scope) {
+  const contract = contracts[scope];
+  if (!contract) throw new Error(`Unknown scope: ${scope}`);
+  const problems = [];
+
+  for (const mode of ['production', 'development']) {
+    const required = contract.required?.[mode] ?? [];
+    const duplicates = required.filter((name, index) => required.indexOf(name) !== index);
+    for (const name of new Set(duplicates)) {
+      problems.push(`${mode} lists ${name} more than once`);
+    }
+    for (const group of contract.requiredGroups?.[mode] ?? []) {
+      if (group.length < 2) problems.push(`${mode} group ${group.join('/')} has no alternative`);
+      for (const name of group) {
+        if (required.includes(name)) {
+          problems.push(`${name} is both required outright and one of a group in ${mode}`);
+        }
+      }
+    }
+  }
+
+  const forbidden = new Set([
+    ...(contract.productionForbiddenKeys ?? []),
+    ...Object.keys(contract.productionForbiddenValues ?? {}),
+  ]);
+  for (const name of contract.required?.production ?? []) {
+    if (forbidden.has(name)) problems.push(`${name} is required and forbidden in production`);
+  }
+
+  return problems;
+}
+
+// The contract is silent about optional keys, so a key production holds and
+// preview does not is only visible with the targets compared to each other.
+export function compareTargetParity(keysByTarget) {
+  const targets = Object.keys(keysByTarget);
+  const everywhere = new Set(targets.flatMap((target) => keysByTarget[target]));
+  const gaps = [];
+  for (const key of [...everywhere].sort()) {
+    const absent = targets.filter((target) => !keysByTarget[target].includes(key));
+    if (absent.length === 0 || absent.length === targets.length) continue;
+    gaps.push({ key, absent });
+  }
+  return gaps;
+}
+
+export function formatParityGaps(scope, gaps) {
+  return [`${scope} environments are not at parity:`]
+    .concat(gaps.map(({ key, absent }) => `- ${key} is not set in ${absent.join(', ')}`))
+    .join('\n');
+}
+
 export async function fetchProjectEnvKeys({
   token,
   projectId,
@@ -101,12 +155,13 @@ export async function pageOnDrift({ webhook, subject, text, fetchImpl = globalTh
 }
 
 function parseArgs(argv) {
-  const options = { scope: 'web', target: 'production' };
+  const options = { scope: 'web', target: 'production', parity: false };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--') continue;
     if (argument === '--scope') options.scope = argv[++index];
     else if (argument === '--target') options.target = argv[++index];
+    else if (argument === '--parity') options.parity = true;
     else throw new Error(`Unknown argument: ${argument}`);
   }
   if (!contracts[options.scope]) throw new Error(`Unknown scope: ${options.scope}`);
@@ -135,6 +190,38 @@ export async function run(argv = process.argv.slice(2), env = process.env, deps 
     });
   } catch (error) {
     console.error(error.message);
+    return 1;
+  }
+
+  if (options.parity) {
+    const keysByTarget = {};
+    for (const target of TARGETS) {
+      keysByTarget[target] =
+        target === options.target
+          ? present
+          : await fetchProjectEnvKeys({
+              token: env.VERCEL_TOKEN,
+              projectId: env.VERCEL_PROJECT_ID,
+              orgId: env.VERCEL_ORG_ID,
+              target,
+              fetchImpl,
+            });
+    }
+    const gaps = compareTargetParity(keysByTarget);
+    if (gaps.length > 0) {
+      console.error(formatParityGaps(options.scope, gaps));
+      return 1;
+    }
+    console.log(`${options.scope}: ${TARGETS.join(', ')} hold the same keys`);
+  }
+
+  const schemaProblems = validateContractSchema(options.scope);
+  if (schemaProblems.length > 0) {
+    console.error(
+      [`${options.scope} environment contract is not internally consistent:`]
+        .concat(schemaProblems.map((problem) => `- ${problem}`))
+        .join('\n'),
+    );
     return 1;
   }
 

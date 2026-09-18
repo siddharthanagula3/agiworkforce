@@ -3,11 +3,14 @@ import test from 'node:test';
 
 import {
   compareEnvKeys,
+  compareTargetParity,
   declaredContract,
   fetchProjectEnvKeys,
   formatDrift,
+  formatParityGaps,
   hasDrift,
   run,
+  validateContractSchema,
 } from './check-env-drift.mjs';
 
 const okResponse = (body) => ({ ok: true, status: 200, json: async () => body });
@@ -274,4 +277,31 @@ test('an unprovisioned artifact sandbox origin is production drift, not a silent
   });
   assert.deepEqual(drift.missing, ['NEXT_PUBLIC_SANDBOX_ORIGIN']);
   assert.equal(hasDrift(drift), true);
+});
+
+test('the shipped web contract is internally consistent', () => {
+  assert.deepEqual(validateContractSchema('web'), []);
+  assert.deepEqual(validateContractSchema('desktop'), []);
+  assert.deepEqual(validateContractSchema('mobile'), []);
+});
+
+test('a key set in one target and not another is a parity gap', () => {
+  const gaps = compareTargetParity({
+    production: ['DATABASE_URL', 'RESEND_API_KEY'],
+    preview: ['DATABASE_URL'],
+    development: ['DATABASE_URL', 'RESEND_API_KEY'],
+  });
+
+  assert.deepEqual(gaps, [{ key: 'RESEND_API_KEY', absent: ['preview'] }]);
+  assert.match(formatParityGaps('web', gaps), /RESEND_API_KEY is not set in preview/);
+});
+
+test('a key absent everywhere is not parity drift, it is a contract question', () => {
+  const gaps = compareTargetParity({
+    production: ['DATABASE_URL'],
+    preview: ['DATABASE_URL'],
+    development: ['DATABASE_URL'],
+  });
+
+  assert.deepEqual(gaps, []);
 });
