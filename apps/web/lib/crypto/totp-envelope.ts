@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { loadKeyRing, openEnvelope, sealEnvelope, type KeyRing } from './envelope';
+import { openEnvelope, sealEnvelope, type KeyRing } from './envelope';
+import {
+  PlatformKeyProviderUnavailableError,
+  platformKeyProviderId,
+  platformKeyRing,
+} from './platform-keys';
 
 const TOTP_KEY_ENV = 'TOTP_ENCRYPTION_KEY';
 const TOTP_LEGACY_LAYOUT = 'b64-iv-ct-tag';
@@ -26,15 +31,18 @@ function assertHighEntropyKeysource(value: string): void {
   }
 }
 
+// Under a KMS provider the environment holds an envelope, so the entropy checks
+// would be measuring ciphertext and belong to the env-backed provider alone.
 function totpKeyRing(): KeyRing {
   const raw = process.env[TOTP_KEY_ENV];
   if (!raw) {
     throw new Error(TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE);
   }
-  assertHighEntropyKeysource(raw);
+  if (platformKeyProviderId() === 'env') assertHighEntropyKeysource(raw);
   try {
-    return loadKeyRing(TOTP_KEY_ENV, { encoding: 'utf8' });
+    return platformKeyRing(TOTP_KEY_ENV, { encoding: 'utf8' });
   } catch (error) {
+    if (error instanceof PlatformKeyProviderUnavailableError) throw error;
     throw new Error(
       `${TOTP_KEY_ENV} must start with 32 single-byte characters; a multi-byte character ` +
         'yields the wrong AES-256 key length. Use a 64-character hex key.',

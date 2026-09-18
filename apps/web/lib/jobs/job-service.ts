@@ -1,6 +1,11 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  DEFAULT_DATA_REGION,
+  normaliseDataRegion,
+  type DataRegionId,
+} from '@agiworkforce/compliance';
 
 import {
   JOB_QUEUE_NAMES,
@@ -39,6 +44,8 @@ export interface BackgroundJob {
   lastError: string | null;
   deadReason: string | null;
   deadLetteredAt: string | null;
+  /** Stamped from the workspace's own pin at enqueue; null is the home region. */
+  originRegion: DataRegionId | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,13 +68,14 @@ interface JobRow extends Record<string, unknown> {
   last_error: string | null;
   dead_reason: string | null;
   dead_lettered_at: string | Date | null;
+  origin_region: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
 
 const JOB_COLUMNS = `id, queue, kind, user_id, organization_id, tenant_key, payload, priority, status,
   attempts, max_attempts, run_after, lease_expires_at, idempotency_key, last_error, dead_reason,
-  dead_lettered_at, created_at, updated_at`;
+  dead_lettered_at, origin_region, created_at, updated_at`;
 
 export class PermanentJobError extends Error {
   constructor(message: string) {
@@ -101,6 +109,7 @@ function mapJob(row: JobRow): BackgroundJob {
     lastError: row.last_error,
     deadReason: row.dead_reason,
     deadLetteredAt: iso(row.dead_lettered_at),
+    originRegion: normaliseDataRegion(row.origin_region),
     createdAt: iso(row.created_at) ?? '',
     updatedAt: iso(row.updated_at) ?? '',
   };
@@ -125,6 +134,8 @@ export interface EnqueueJobInput {
   idempotencyKey?: string | null;
   runAfter?: Date | null;
   maxAttempts?: number;
+  /** Omitted, the workspace's own pin decides, which a caller cannot get wrong. */
+  originRegion?: DataRegionId | null;
 }
 
 export interface EnqueuedJob {
@@ -150,8 +161,15 @@ export async function enqueueJob(
   const [inserted] = await db.query<{ id: string; status: BackgroundJobStatus }>(
     `insert into public.background_jobs (
        queue, kind, user_id, organization_id, payload, priority, max_attempts,
-       run_after, idempotency_key
-     ) values ($1, $2, $3, $4, $5::jsonb, $6, $7, coalesce($8::timestamptz, now()), $9)
+       run_after, idempotency_key, origin_region
+     ) values (
+       $1, $2, $3, $4, $5::jsonb, $6, $7, coalesce($8::timestamptz, now()), $9,
+       coalesce(
+         $10::text,
+         (select o.data_region from public.organizations o where o.id = $4::uuid),
+         $11::text
+       )
+     )
      on conflict (queue, idempotency_key) where idempotency_key is not null do nothing
      returning id, status`,
     [
@@ -164,6 +182,8 @@ export async function enqueueJob(
       maxAttempts,
       runAfter ? runAfter.toISOString() : null,
       idempotencyKey,
+      input.originRegion ?? null,
+      DEFAULT_DATA_REGION,
     ],
   );
   if (inserted) return { id: inserted.id, status: inserted.status, created: true };
@@ -182,6 +202,11 @@ export async function enqueueJob(
 export interface ClaimJobsOptions {
   queues?: readonly JobQueueName[];
   limit: number;
+  /**
+   * Named, the drain claims only work that originated there: a job carried out
+   * in another jurisdiction has left the region its workspace was promised.
+   */
+  region?: DataRegionId | null;
 }
 
 export async function claimJobs(
@@ -221,6 +246,10 @@ export async function claimJobs(
               where job.queue = slots.queue
                 and job.status = 'queued'
                 and job.run_after <= now()
+                and (
+                  $6::text is null
+                  or coalesce(job.origin_region, $7::text) = $6::text
+                )
               order by job.priority desc, job.run_after asc, job.id asc
               limit $4
            ) as candidate
@@ -267,8 +296,17 @@ export async function claimJobs(
        returning job.id, job.queue, job.kind, job.user_id, job.organization_id, job.tenant_key,
                  job.payload, job.priority, job.status, job.attempts, job.max_attempts,
                  job.run_after, job.lease_expires_at, job.idempotency_key, job.last_error,
-                 job.dead_reason, job.dead_lettered_at, job.created_at, job.updated_at`,
-      [queues, concurrency, leases, CANDIDATE_POOL_PER_QUEUE, limit],
+                 job.dead_reason, job.dead_lettered_at, job.origin_region, job.created_at,
+                 job.updated_at`,
+      [
+        queues,
+        concurrency,
+        leases,
+        CANDIDATE_POOL_PER_QUEUE,
+        limit,
+        options.region ?? null,
+        DEFAULT_DATA_REGION,
+      ],
     );
     return rows.map(mapJob).sort((left, right) => right.priority - left.priority);
   });

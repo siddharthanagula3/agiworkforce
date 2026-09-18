@@ -7,6 +7,7 @@ import {
   CustomerKeyRevokedError,
   CustomerKeyUnavailableError,
   createCustomerKeyRingResolver,
+  SupportAccessRequiredError,
   createLocalCmekProvider,
   platformTenantKeyRing,
   resolveOrganizationKeyRing,
@@ -239,5 +240,90 @@ describe('which ring an organization gets', () => {
         env: PLATFORM_ENV,
       }),
     ).rejects.toBeInstanceOf(CustomerKeyUnavailableError);
+  });
+});
+
+describe('an operator has no standing of its own', () => {
+  const gateError = new Error('no approved, unexpired grant covers it');
+
+  it('refuses a support principal outright when no gate is wired', async () => {
+    await expect(
+      resolveOrganizationKeyRing(
+        'org-a',
+        {
+          loadRecord: async () => null,
+          resolveCustomerRing: createCustomerKeyRingResolver({}),
+          platformEnvName: PLATFORM_KEY_ENV,
+          env: PLATFORM_ENV,
+        },
+        { kind: 'support', userId: 'user_support_a', scope: 'conversations' },
+      ),
+    ).rejects.toBeInstanceOf(SupportAccessRequiredError);
+  });
+
+  it('closes the platform-key bypass: a non-CMEK tenant is unreadable without a grant', async () => {
+    const deps = {
+      loadRecord: async () => null,
+      resolveCustomerRing: createCustomerKeyRingResolver({}),
+      platformEnvName: PLATFORM_KEY_ENV,
+      env: PLATFORM_ENV,
+      assertSupportAccess: async () => {
+        throw gateError;
+      },
+    };
+
+    const tenantRing = await resolveOrganizationKeyRing('org-a', deps);
+    expect(tenantRing.source).toBe('platform_derived');
+    const sealed = sealEnvelope(tenantRing.ring, 'the tenant plaintext');
+
+    await expect(
+      resolveOrganizationKeyRing('org-a', deps, {
+        kind: 'support',
+        userId: 'user_support_a',
+        scope: 'conversations',
+      }),
+    ).rejects.toBe(gateError);
+    expect(sealed).not.toContain('the tenant plaintext');
+  });
+
+  it('gates the customer-managed path on the same grant', async () => {
+    const provider = localProvider();
+    const { record } = await recordFor(provider);
+
+    await expect(
+      resolveOrganizationKeyRing(
+        'org-a',
+        {
+          loadRecord: async () => record,
+          resolveCustomerRing: createCustomerKeyRingResolver({ local: provider }),
+          platformEnvName: PLATFORM_KEY_ENV,
+          env: PLATFORM_ENV,
+          assertSupportAccess: async () => {
+            throw gateError;
+          },
+        },
+        { kind: 'support', userId: 'user_support_a', scope: 'conversations' },
+      ),
+    ).rejects.toBe(gateError);
+  });
+
+  it('serves a support principal the grant covers, and says which key source it used', async () => {
+    const seen: Array<{ organizationId: string; scope: string }> = [];
+    const resolved = await resolveOrganizationKeyRing(
+      'org-a',
+      {
+        loadRecord: async () => null,
+        resolveCustomerRing: createCustomerKeyRingResolver({}),
+        platformEnvName: PLATFORM_KEY_ENV,
+        env: PLATFORM_ENV,
+        assertSupportAccess: async (organizationId, principal) => {
+          seen.push({ organizationId, scope: principal.scope });
+        },
+      },
+      { kind: 'support', userId: 'user_support_a', scope: 'conversations' },
+    );
+
+    expect(resolved.source).toBe('platform_derived');
+    expect(seen).toEqual([{ organizationId: 'org-a', scope: 'conversations' }]);
   });
 });
