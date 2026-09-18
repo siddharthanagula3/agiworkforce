@@ -192,6 +192,7 @@ vi.mock('@agiworkforce/unified-chat', async () => {
           : null,
       ),
     QuickChips: () => React.createElement('div', { 'data-testid': 'quick-chips' }),
+    BrandedGreeting: () => React.createElement('div', { 'data-testid': 'branded-greeting' }),
     LocalByokHandoffDialog: (props: { open: boolean }) =>
       props.open
         ? React.createElement(
