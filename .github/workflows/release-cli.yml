@@ -358,6 +358,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          # set-commits below reads the range between the previous tag and this
+          # one out of the local clone.
+          fetch-depth: 0
 
       - name: Download signed release assets
         uses: actions/download-artifact@v8
@@ -378,3 +382,29 @@ jobs:
           files: archives/*
           draft: false
           prerelease: ${{ needs.validate-version.outputs.prerelease }}
+
+      # apps/cli/src/crash_reports.rs sends `agiworkforce-cli@<CARGO_PKG_VERSION>`
+      # as the release, so that exact string is what a crash arrives under and
+      # what has to exist here for the version to mean anything in Sentry.
+      #
+      # There is no debug-file upload and there should not be one: the panic
+      # hook sends `file:line:column` from std::panic::Location and deliberately
+      # nothing else, no addresses and no payload, so a crash is already at
+      # source level. What it lacks is the commit range, which set-commits adds.
+      - name: Register and finalize the Sentry release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_CLI }}
+          SENTRY_RELEASE: agiworkforce-cli@${{ steps.version.outputs.VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
+            echo "::warning::Sentry is unconfigured; $SENTRY_RELEASE will not be segmented in Sentry"
+            exit 0
+          fi
+          npm install --global @sentry/cli@2.58.6
+          sentry-cli releases new "$SENTRY_RELEASE"
+          sentry-cli releases set-commits "$SENTRY_RELEASE" --local --ignore-missing
+          sentry-cli releases finalize "$SENTRY_RELEASE"
