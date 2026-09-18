@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use once_cell::sync::Lazy;
 
 use crate::safety::DANGEROUS_COMMANDS;
+use crate::secret_redaction::redact_tool_output;
 use crate::terminal_style as ts;
 
 pub(super) static SCRIPT_RE: Lazy<regex::Regex> =
@@ -38,7 +39,7 @@ pub(super) fn print_tool_status(tool_name: &str, display: &str) {
     eprintln!(
         "  {} {}",
         ts::accent_header(format!("[{}]", tool_name)),
-        ts::muted(display)
+        ts::muted(redact_tool_output(display))
     );
 }
 
@@ -50,6 +51,10 @@ pub(super) fn print_tool_status_unless_quiet(tool_name: &str, display: &str, qui
 }
 
 pub(super) fn describe_command(command: &str) -> String {
+    redact_tool_output(&describe_command_shape(command))
+}
+
+fn describe_command_shape(command: &str) -> String {
     let trimmed = command.trim();
     let first_word = trimmed.split_whitespace().next().unwrap_or("");
     let base = first_word.rsplit('/').next().unwrap_or(first_word);
@@ -132,7 +137,11 @@ pub(super) fn tool_size_cap(tool_name: &str) -> usize {
     crate::runtime::tool_catalog::tool_result_size_cap(tool_name).unwrap_or(MAX_OUTPUT_BYTES)
 }
 
+/// Every tool funnels its model-facing output through here, so this is the one
+/// place credential material is scrubbed before it reaches the transcript, the
+/// model, or the overflow file saved under the config directory.
 pub(super) fn truncate_output_with_save(tool_name: &str, output: String) -> String {
+    let output = redact_tool_output(&output);
     let lines: Vec<&str> = output.lines().collect();
     let max_bytes = tool_size_cap(tool_name);
     let needs_truncation = output.len() > max_bytes || lines.len() > MAX_OUTPUT_LINES;
@@ -270,10 +279,46 @@ pub(super) fn truncate_line(line: &str) -> String {
         line.to_string()
     } else {
         // Truncate on a char boundary: slicing `&line[..MAX_LINE_LENGTH]` on a
-        // raw byte index can land mid-codepoint and panic. `chars().take(..)`
-        // bounds by chars (mirrors `cap_chars`/`skip_chars` above), keeping the
-        // result a valid &str without panicking on multibyte input.
+        // raw byte index can land mid-codepoint and panic.
         let truncated: String = line.chars().take(MAX_LINE_LENGTH).collect();
         format!("{truncated}... [truncated]")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{describe_command, truncate_output_with_save};
+
+    #[test]
+    fn every_tools_output_is_redacted_before_it_reaches_the_model_or_the_saved_file() {
+        let output = truncate_output_with_save(
+            "run_command",
+            "Exit code: 0\nANTHROPIC_API_KEY=sk-ant-api03-0123456789abcdefghijklmnop\nok\n"
+                .to_string(),
+        );
+
+        assert!(!output.contains("sk-ant-api03-0123456789abcdefghijklmnop"));
+        assert!(output.contains("[REDACTED_ANTHROPIC_KEY]"));
+        assert!(output.contains("Exit code: 0"));
+        assert!(output.contains("ok"));
+    }
+
+    #[test]
+    fn a_command_summary_never_carries_the_credential_it_was_given() {
+        let summary = describe_command(
+            "git push https://agi:ghp_0123456789abcdefghijklmnopqrstuvwx@github.com/acme/app.git",
+        );
+
+        assert!(!summary.contains("ghp_0123456789abcdefghijklmnopqrstuvwx"));
+        assert!(summary.contains("[CREDENTIALS_REDACTED]"));
+    }
+
+    #[test]
+    fn redaction_does_not_truncate_output_that_fits() {
+        let plain = "line one\nline two".to_string();
+        assert_eq!(
+            truncate_output_with_save("run_command", plain.clone()),
+            plain
+        );
     }
 }

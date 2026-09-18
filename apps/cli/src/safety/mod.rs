@@ -1,10 +1,14 @@
 #![allow(dead_code)]
 
 pub(crate) mod approval;
+pub(crate) mod argv;
 pub(crate) mod command_shape;
 mod dangerous_commands;
+pub(crate) mod filesystem_effect;
+pub(crate) mod network_target;
 
-pub use dangerous_commands::DANGEROUS_COMMANDS;
+pub use dangerous_commands::{bypasses_git_hooks, git_hook_bypass_reason, DANGEROUS_COMMANDS};
+pub(crate) use filesystem_effect::classify_filesystem_effect;
 
 #[allow(unused_imports)]
 use approval::{
@@ -300,6 +304,14 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
 
     // `git`, enhanced subcommand validation.
     if base_cmd == "git" {
+        // Turning the repository's hooks off is its own category. It rides on
+        // an otherwise ordinary command, so the subcommand classifier below
+        // would read `git commit --no-verify` as the `git commit` a user
+        // already allowed, when it is every check the repository owns being
+        // skipped.
+        if bypasses_git_hooks(trimmed) {
+            return CommandSafety::Dangerous;
+        }
         return demote_safe_on_redirection(classify_git(trimmed), trimmed);
     }
 
@@ -1170,6 +1182,29 @@ mod tests {
             CommandSafety::Safe
         );
         assert_eq!(classify_command("git branch -a -v"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn a_hook_bypass_is_classified_apart_from_the_command_it_rides_on() {
+        // `git commit` is an ordinary write; the same command with the hooks
+        // turned off is not, and the classifier must not collapse the two.
+        assert_eq!(
+            classify_command("git commit --no-verify -m wip"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("git push --no-verify origin main"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("git -c core.hooksPath=/dev/null commit -m wip"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(classify_command("git status"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("git commit -m wip"),
+            CommandSafety::Unknown
+        );
     }
 
     #[test]

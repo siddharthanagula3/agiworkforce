@@ -1563,9 +1563,12 @@ mod tests {
             SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.last(),
             Some(&MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION)
         );
-        assert!(
-            MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION <= LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION
-        );
+        const {
+            assert!(
+                MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION
+                    <= LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION
+            )
+        };
         assert_eq!(
             SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.first(),
             Some(&DEVELOPER_SESSION_PROTOCOL_VERSION),

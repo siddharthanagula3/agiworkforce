@@ -264,7 +264,7 @@ fn auth_checks() -> Vec<DoctorCheck> {
             let mut details = Vec::new();
             for entry in statuses {
                 details.push(format!(
-                    "{}: {} ({}){}",
+                    "{}: {} ({}){}, {}",
                     entry.provider,
                     entry.status,
                     entry.auth_type,
@@ -273,6 +273,10 @@ fn auth_checks() -> Vec<DoctorCheck> {
                         .as_ref()
                         .map(|value| format!(", {value}"))
                         .unwrap_or_default(),
+                    entry
+                        .last_used
+                        .as_deref()
+                        .unwrap_or("never used since the trail began"),
                 ));
             }
             vec![check(

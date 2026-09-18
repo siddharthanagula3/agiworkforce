@@ -3895,15 +3895,19 @@ pub async fn run_main() -> Result<()> {
                     println!("No authentication configured.");
                     println!("Run `agi login` to authenticate.");
                 } else {
-                    println!("{:<18} {:<10} {:<12} Expires", "Provider", "Type", "Status");
-                    println!("{}", "-".repeat(60));
+                    println!(
+                        "{:<18} {:<10} {:<12} {:<14} Last used",
+                        "Provider", "Type", "Status", "Expires"
+                    );
+                    println!("{}", "-".repeat(76));
                     for s in &statuses {
                         println!(
-                            "{:<18} {:<10} {:<12} {}",
+                            "{:<18} {:<10} {:<12} {:<14} {}",
                             s.provider,
                             s.auth_type,
                             s.status,
                             s.expires_in.as_deref().unwrap_or("-"),
+                            s.last_used.as_deref().unwrap_or("never"),
                         );
                     }
                 }

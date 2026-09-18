@@ -143,8 +143,70 @@ pub(super) const GIT_BRANCH_READONLY_FLAGS: &[&str] = &[
 pub(super) const GIT_GLOBAL_OPTIONS_WITH_VALUE: &[&str] =
     &["-C", "--git-dir", "--work-tree", "--namespace"];
 
+/// Flags that turn a repository's own git hooks off.
+///
+/// Bypassing them is its own approval category. The hooks are the checks the
+/// repository runs on every commit, push or rewrite, and a command that skips
+/// them is not the command a user allowed when they allowed the command it
+/// rides on: `git commit` and `git commit --no-verify` differ by every check
+/// the repository owns.
+pub const GIT_HOOK_BYPASS_FLAGS: &[&str] = &["--no-verify", "--no-post-rewrite"];
+
+/// The config key that relocates the hook directory. Pointing it at an empty
+/// path is a hook bypass with no flag in sight.
+const GIT_HOOKS_PATH_CONFIG_PREFIX: &str = "core.hookspath=";
+
+/// True when the command turns the repository's hooks off, by flag or by
+/// config override.
+pub fn bypasses_git_hooks(command: &str) -> bool {
+    command.split_whitespace().any(|token| {
+        GIT_HOOK_BYPASS_FLAGS.contains(&token)
+            || token
+                .trim_start_matches("--config=")
+                .to_ascii_lowercase()
+                .starts_with(GIT_HOOKS_PATH_CONFIG_PREFIX)
+    })
+}
+
+/// What a person is being asked to allow when a command bypasses the hooks.
+pub fn git_hook_bypass_reason() -> &'static str {
+    "This runs git with the repository's hooks turned off, so the checks it runs on every commit, \
+     push or rewrite are skipped."
+}
+
 /// `mv` targeting these is dangerous.
 pub(super) const SYSTEM_PATHS: &[&str] = &[
     "/bin", "/sbin", "/usr", "/etc", "/var", "/System", "/Library", "/boot", "/dev", "/proc",
     "/sys", "/opt",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hook_bypass_is_recognised_by_flag_and_by_config() {
+        assert!(bypasses_git_hooks("git commit --no-verify -m wip"));
+        assert!(bypasses_git_hooks("git push --no-verify origin main"));
+        assert!(bypasses_git_hooks("git rebase --no-verify main"));
+        assert!(bypasses_git_hooks("git commit --amend --no-post-rewrite"));
+        assert!(bypasses_git_hooks(
+            "git -c core.hooksPath=/dev/null commit -m wip"
+        ));
+        assert!(bypasses_git_hooks(
+            "git --config=core.hookspath= commit -m wip"
+        ));
+    }
+
+    #[test]
+    fn an_ordinary_git_command_does_not_read_as_a_hook_bypass() {
+        assert!(!bypasses_git_hooks("git commit -m 'no verify needed'"));
+        assert!(!bypasses_git_hooks("git status --short"));
+        assert!(!bypasses_git_hooks("git -c core.pager=cat log"));
+    }
+
+    #[test]
+    fn the_bypass_reason_names_what_is_skipped() {
+        assert!(git_hook_bypass_reason().contains("hooks turned off"));
+    }
+}
