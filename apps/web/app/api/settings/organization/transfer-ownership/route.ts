@@ -12,6 +12,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import { resolveUserPersonalPlanTier } from '@/lib/services/org-entitlements';
@@ -43,6 +44,15 @@ async function handleTransfer(request: NextRequest) {
   if (toUserId === userId) {
     throw createError.validation('You are already the owner of this organization');
   }
+
+  await requireStepUp({
+    userId,
+    action: 'organization.transfer_ownership',
+    resourceId: organizationId,
+    organizationId,
+    request,
+    endpoint: '/api/settings/organization/transfer-ownership',
+  });
 
   const db = getNeonDb();
   const access = await requireTeamAdminAccess(db, userId, organizationId);

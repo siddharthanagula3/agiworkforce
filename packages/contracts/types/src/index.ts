@@ -146,6 +146,7 @@ export * from './suite-contracts';
 export * from './lifecycle-status';
 
 export * from './provider-state';
+export * from './sync';
 
 export * from './dependency-registry';
 
