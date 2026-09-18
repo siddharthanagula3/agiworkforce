@@ -3,10 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  execute: vi.fn(async (..._args: unknown[]) => undefined),
   csrf: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   scopedDb: vi.fn(async (..._args: unknown[]) => ({
-    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    db: {
+      query: (...args: unknown[]) => mocks.query(...args),
+      execute: (...args: unknown[]) => mocks.execute(...args),
+    },
     userId: 'user-1',
     organizationId: null,
   })),
@@ -39,7 +43,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 
-const { POST, GET } = await import('./route');
+const { POST, GET, PATCH } = await import('./route');
 
 const TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -92,7 +96,10 @@ describe('POST /api/artifacts/publish', () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.query.mockResolvedValue([publishRow()]);
     mocks.scopedDb.mockResolvedValue({
-      db: { query: (...args: unknown[]) => mocks.query(...args) },
+      db: {
+        query: (...args: unknown[]) => mocks.query(...args),
+        execute: (...args: unknown[]) => mocks.execute(...args),
+      },
       userId: 'user-1',
       organizationId: null,
     });
@@ -243,7 +250,10 @@ describe('GET /api/artifacts/publish', () => {
     vi.clearAllMocks();
     mocks.rateLimit.mockResolvedValue(null);
     mocks.scopedDb.mockResolvedValue({
-      db: { query: (...args: unknown[]) => mocks.query(...args) },
+      db: {
+        query: (...args: unknown[]) => mocks.query(...args),
+        execute: (...args: unknown[]) => mocks.execute(...args),
+      },
       userId: 'user-1',
       organizationId: null,
     });
@@ -300,5 +310,165 @@ describe('GET /api/artifacts/publish', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { message: 'Artifact publishing is not configured in this environment yet.' },
     });
+  });
+});
+
+function versionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'ver-1',
+    version: 1,
+    title: 'Dashboard',
+    kind: 'html',
+    language: null,
+    content: '<h1>v1</h1>',
+    created_at: '2026-08-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function routeVersionQueries(handlers: {
+  ownership?: unknown[];
+  newest?: unknown[];
+  history?: unknown[];
+  target?: unknown[];
+  insertedVersion?: unknown[];
+}) {
+  return async (sql: unknown, ..._rest: unknown[]) => {
+    const text = String(sql);
+    if (text.includes('select id, artifact_id, conversation_id')) return handlers.ownership ?? [];
+    if (text.includes('insert into public.published_artifact_versions')) {
+      return handlers.insertedVersion ?? [{ version: 3 }];
+    }
+    if (text.includes('from public.published_artifact_versions')) {
+      if (text.includes('and version = $3')) return handlers.target ?? [];
+      if (text.includes('limit 1')) return handlers.newest ?? [];
+      return handlers.history ?? [];
+    }
+    if (isInsert(sql)) return [publishRow()];
+    return [{ other_published: 0, owned_conversations: 1 }];
+  };
+}
+
+describe('published artifact version history', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.csrf.mockResolvedValue(null);
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.scopedDb.mockResolvedValue({
+      db: {
+        query: (...args: unknown[]) => mocks.query(...args),
+        execute: (...args: unknown[]) => mocks.execute(...args),
+      },
+      userId: 'user-1',
+      organizationId: null,
+    });
+  });
+
+  it('publishing twice keeps the earlier version retrievable', async () => {
+    mocks.query.mockImplementation(
+      routeVersionQueries({ newest: [], insertedVersion: [{ version: 1 }] }),
+    );
+    const first = await POST(postRequest(VALID_BODY));
+    expect((await first.json()).version).toBe(1);
+
+    mocks.query.mockImplementation(
+      routeVersionQueries({
+        newest: [versionRow()],
+        insertedVersion: [{ version: 2 }],
+      }),
+    );
+    const second = await POST(postRequest({ ...VALID_BODY, content: '<h1>v2</h1>' }));
+    expect((await second.json()).version).toBe(2);
+
+    const [, params] = mocks.query.mock.calls
+      .filter(([sql]) => String(sql).includes('insert into public.published_artifact_versions'))
+      .at(-1) as [string, unknown[]];
+    expect(params[2]).toBe(2);
+    expect(params[7]).toBe('ver-1');
+
+    mocks.query.mockImplementation(
+      routeVersionQueries({
+        ownership: [{ id: 'row-1', artifact_id: 'artifact-1', conversation_id: null }],
+        history: [versionRow({ id: 'ver-2', version: 2, content: '<h1>v2</h1>' }), versionRow()],
+      }),
+    );
+    const listed = await GET(
+      new NextRequest(`https://agiworkforce.com/api/artifacts/publish?versionsOf=${TOKEN}`),
+    );
+    const body = await listed.json();
+    expect(body.versions.map((entry: { version: number }) => entry.version)).toEqual([2, 1]);
+    expect(body.versions[1].content).toBe('<h1>v1</h1>');
+  });
+
+  it('does not append a version when the republish says the same thing', async () => {
+    mocks.query.mockImplementation(routeVersionQueries({ newest: [versionRow({ version: 4 })] }));
+    const response = await POST(postRequest({ ...VALID_BODY, content: '<h1>v1</h1>' }));
+
+    expect((await response.json()).version).toBe(4);
+    expect(
+      mocks.query.mock.calls.some(([sql]) =>
+        String(sql).includes('insert into public.published_artifact_versions'),
+      ),
+    ).toBe(false);
+  });
+
+  it('restores an earlier version as a new version without changing the share url', async () => {
+    mocks.query.mockImplementation(
+      routeVersionQueries({
+        ownership: [{ id: 'row-1', artifact_id: 'artifact-1', conversation_id: null }],
+        target: [versionRow()],
+        newest: [versionRow({ id: 'ver-2', version: 2, content: '<h1>v2</h1>' })],
+        insertedVersion: [{ version: 3 }],
+      }),
+    );
+
+    const response = await PATCH(
+      new NextRequest('https://agiworkforce.com/api/artifacts/publish', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: TOKEN, version: 1 }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ token: TOKEN, restoredFrom: 1, version: 3 });
+    expect(body.shareUrl).toContain(`/shared-artifact/${TOKEN}`);
+
+    const [, params] = insertCall();
+    expect(params[7]).toBe('<h1>v1</h1>');
+  });
+
+  it('answers 404 for a version that is not in the history', async () => {
+    mocks.query.mockImplementation(
+      routeVersionQueries({
+        ownership: [{ id: 'row-1', artifact_id: 'artifact-1', conversation_id: null }],
+        target: [],
+      }),
+    );
+
+    const response = await PATCH(
+      new NextRequest('https://agiworkforce.com/api/artifacts/publish', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: TOKEN, version: 9 }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+  });
+
+  it('refuses a cross-site restore before reading anything', async () => {
+    mocks.csrf.mockResolvedValue(NextResponse.json({ error: 'csrf' }, { status: 403 }));
+    const response = await PATCH(
+      new NextRequest('https://agiworkforce.com/api/artifacts/publish', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: TOKEN, version: 1 }),
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 });

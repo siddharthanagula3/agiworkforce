@@ -28,6 +28,32 @@ vi.mock('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts', () => 
 }));
 
 import { persistAssistantTurn } from './assistant-turn-persistence';
+import { searchCitationId, sourceContentVersion } from '@agiworkforce/types';
+
+const PROVENANCE = {
+  providerId: 'provider_native_search',
+  retrievedAt: '2026-09-18T12:00:00.000Z',
+  indexedAt: null,
+  delivery: 'indexed' as const,
+  freshness: { publishedAt: null, ageDays: null, class: 'unknown' as const },
+};
+function src(input: { url: string; title: string; snippet: string }) {
+  return {
+    ...input,
+    id: searchCitationId({ url: input.url }),
+    contentVersion: sourceContentVersion(input),
+    provenance: PROVENANCE,
+  };
+}
+function cite(input: { url: string; title: string }) {
+  return {
+    type: 'url_citation' as const,
+    ...input,
+    id: searchCitationId({ url: input.url }),
+    contentVersion: sourceContentVersion({ ...input, snippet: '' }),
+    provenance: PROVENANCE,
+  };
+}
 import type { ProcessedRequest } from './request-processor';
 
 const processed = {
@@ -39,8 +65,8 @@ const processed = {
 } as unknown as ProcessedRequest;
 
 const SOURCES = [
-  { url: 'https://anthropic.com/news', title: 'Anthropic news', snippet: 'a snippet' },
-  { url: 'https://claude.com/pricing', title: 'Pricing', snippet: '' },
+  src({ url: 'https://anthropic.com/news', title: 'Anthropic news', snippet: 'a snippet' }),
+  src({ url: 'https://claude.com/pricing', title: 'Pricing', snippet: '' }),
 ];
 
 function persistedMetadata(): Record<string, unknown> {
@@ -118,8 +144,8 @@ describe('an assistant turn persists the sources it cited', () => {
 });
 
 const CITATIONS = [
-  { type: 'url_citation' as const, url: 'https://reuters.com/a', title: 'Reuters' },
-  { type: 'url_citation' as const, url: 'https://apnews.com/b', title: 'AP News' },
+  cite({ url: 'https://reuters.com/a', title: 'Reuters' }),
+  cite({ url: 'https://apnews.com/b', title: 'AP News' }),
 ];
 
 /**

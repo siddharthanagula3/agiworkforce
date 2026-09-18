@@ -1,0 +1,10 @@
+{
+  "providers": [
+    {
+      "id": "perplexity-search",
+      "host": "api.perplexity.ai",
+      "apiKeyEnv": "PERPLEXITY_API_KEY",
+      "delivery": "indexed"
+    }
+  ]
+}

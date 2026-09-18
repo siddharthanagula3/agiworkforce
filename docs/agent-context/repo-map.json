@@ -1221,6 +1221,20 @@
         "packages/platform/context-engine/src/engine.ts",
         "packages/platform/context-engine/src/__tests__"
       ]
+    },
+    {
+      "path": "packages/platform/files",
+      "kind": "package",
+      "canonicalOwner": "Cloud platform",
+      "consumers": [],
+      "deployability": "cross-surface-client-library",
+      "trustBoundary": "one file identity, version chain and lineage graph shared by uploads, generated files, artifacts and exports",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/platform/files/src/index.ts",
+        "packages/platform/files/src/__tests__/index.test.ts"
+      ]
     }
   ]
 }

@@ -94,6 +94,7 @@ export * from './interactive-cards';
 export * from './places-search';
 export * from './project-file-citations';
 export * from './web-search-citations';
+export * from './search-provider';
 
 export * from './subscription-entitlement';
 
@@ -172,6 +173,7 @@ export {
 export * from './resource-lifecycle';
 
 export * from './file-reference';
+export * from './file-model';
 
 export * from './browser-bridge';
 export * from './context-handoff-uri';
@@ -270,6 +272,43 @@ export {
   type BrowserSessionKind,
   type BrowserSessionResolution,
 } from './browser-session';
+
+export {
+  BROWSER_SELECTION_ORDER,
+  BROWSER_SITE_ACCESS,
+  broadensSiteAccess,
+  browserSessionLabel,
+  browserSiteAccess,
+  browserSiteAccessRank,
+  selectBrowser,
+  type BrowserDeclineReason,
+  type BrowserDeclined,
+  type BrowserSelected,
+  type BrowserSelection,
+  type BrowserSelectionRefused,
+  type BrowserSelectionRequest,
+  type BrowserSiteAccess,
+} from './browser-selection';
+
+export {
+  AUTOMATION_OUTCOME_STATUSES,
+  AUTOMATION_SURFACES,
+  UNVERIFIED_SUCCESS_REASON,
+  attemptedAutomationOutcome,
+  automationOutcomeSuccessRate,
+  isAutomationOutcomeStatus,
+  settleAutomationAttempt,
+  startAutomationAttempt,
+  summarizeAutomationOutcomes,
+  type AutomationAttempt,
+  type AutomationOutcome,
+  type AutomationOutcomeStatus,
+  type AutomationOutcomeSummary,
+  type AutomationSettlement,
+  type AutomationSurface,
+  type AutomationVerification,
+  type StartAutomationAttemptInput,
+} from './automation-outcome';
 
 export {
   SITE_POLICY_ADMIN_UNAVAILABLE,

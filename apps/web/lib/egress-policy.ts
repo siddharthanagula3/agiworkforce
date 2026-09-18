@@ -17,6 +17,8 @@
 
 import { ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
 
+import { webSearchProviderHosts } from '@/lib/web-search/search-provider';
+
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import type { LookupFunction } from 'node:net';
@@ -33,10 +35,18 @@ const ALLOWED_SERVICE_HOSTNAMES: readonly string[] = [
   // Neon: wildcard for project-specific subdomains
 ];
 
-const ALLOWED_HOSTNAMES: ReadonlySet<string> = new Set([
-  ...[...ALLOWED_MANAGED_PROVIDER_HOSTS].filter((host) => !RETIRED_PROVIDER_HOSTS.has(host)),
-  ...ALLOWED_SERVICE_HOSTNAMES,
-]);
+/**
+ * A search vendor is reachable because it is a registered search provider, not
+ * because its hostname was typed into a list here. Recomputed per call so a
+ * provider registered after this module loaded is still vouched for.
+ */
+export function allowedEgressHostnames(): ReadonlySet<string> {
+  return new Set([
+    ...[...ALLOWED_MANAGED_PROVIDER_HOSTS].filter((host) => !RETIRED_PROVIDER_HOSTS.has(host)),
+    ...webSearchProviderHosts(),
+    ...ALLOWED_SERVICE_HOSTNAMES,
+  ]);
+}
 
 const LOCALHOST_NAMES = new Set(['localhost', 'localhost.localdomain']);
 
@@ -194,7 +204,7 @@ export function withOutboundTraceHeader(
   init?: RequestInit,
 ): RequestInit | undefined {
   const hostname = targetHostname(input)?.toLowerCase();
-  if (!hostname || !ALLOWED_HOSTNAMES.has(hostname)) return init;
+  if (!hostname || !allowedEgressHostnames().has(hostname)) return init;
   const traceparent = outboundTraceparent();
   if (!traceparent) return init;
   const headers = new Headers(
@@ -282,7 +292,7 @@ export function validateEgressUrl(urlString: string): void {
     throw new EgressPolicyError(urlString);
   }
 
-  if (ALLOWED_HOSTNAMES.has(url.hostname)) return;
+  if (allowedEgressHostnames().has(url.hostname)) return;
 
   throw new EgressPolicyError(urlString);
 }
