@@ -7,6 +7,7 @@ import type { IdentityRequestAuth } from '@agiworkforce/identity';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { traceDatabaseAdapter } from '@/lib/observability/database-span';
 import { setTenantScope } from '@/lib/observability/trace-context';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -23,12 +24,14 @@ let rlsDb: DatabaseAdapter | null = null;
 
 function getRlsCapableDb(): DatabaseAdapter {
   if (!rlsDb) {
-    rlsDb = createDatabaseClient({
-      applicationName: 'agi-web-rls',
-      unsafeAllowUnverifiedJwtSubject: true,
-      onConnectionError: reportDatabaseConnectionError,
-      ...RLS_POOL_TUNING,
-    });
+    rlsDb = traceDatabaseAdapter(
+      createDatabaseClient({
+        applicationName: 'agi-web-rls',
+        unsafeAllowUnverifiedJwtSubject: true,
+        onConnectionError: reportDatabaseConnectionError,
+        ...RLS_POOL_TUNING,
+      }),
+    );
   }
   return rlsDb;
 }
