@@ -72,6 +72,13 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
     reason: 'cron sweeps run over every workspace by design',
   },
   {
+    match: /lib\/services\/cloud-agent-budget\.ts$/,
+    reason:
+      'the spend guard reads one run by primary key and owner to price its receipts; a run ' +
+      "belongs to exactly one workspace and the budget is that run's own, so a workspace " +
+      'predicate cannot change which row answers',
+  },
+  {
     match: /lib\/server\/account-erasure\.ts$/,
     reason:
       'erasure removes an account across every workspace it holds content in; a workspace ' +
@@ -500,12 +507,27 @@ const ALLOWLIST = [
   },
   {
     match:
-      /lib\/services\/plugin-registry-service\.ts$|lib\/services\/plugin-installation-service\.ts$/,
-    tables: ['plugin_registry_entries'],
+      /lib\/services\/plugin-registry-service\.ts$|lib\/services\/plugin-installation-service\.ts$|lib\/services\/plugin-lifecycle\.ts$/,
+    tables: [
+      'plugin_registry_entries',
+      'plugin_registry_versions',
+      'plugin_registry_lifecycle_events',
+    ],
     reason:
       'plugin_registry_entries is a world-readable catalog (0096_plugin_registry.sql grants ' +
       '`select using (true)`), has no user_id/organization_id column, and writes are service-role ' +
-      'only; there is no tenant to constrain a read by',
+      'only; there is no tenant to constrain a read by. Its versions and lifecycle events (0259) ' +
+      'are the same platform-wide catalog: a suspended version is suspended for every tenant, ' +
+      'and the writers are the requirePlatformAdmin lifecycle routes',
+  },
+  {
+    match: /lib\/services\/plugin-lifecycle\.ts$/,
+    tables: ['plugin_installations'],
+    reason:
+      'suspending or rolling back a plugin version (0259) must reach every installation of that ' +
+      'version in every tenant at once; the two statements key on plugin_id and version, never ' +
+      'on a caller, and are reached only from the requirePlatformAdmin lifecycle routes. Member ' +
+      'reads and writes of plugin_installations stay in plugin-installation-service.ts, constrained',
   },
   {
     match: /lib\/services\/mobile-iap-notification-service\.ts$/,

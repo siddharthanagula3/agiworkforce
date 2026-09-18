@@ -1,13 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { PluginRegistryEntry } from '@agiworkforce/types';
+import type { PluginVersionRecord } from '@/lib/services/plugin-lifecycle';
 
 const loadPluginEntryMock = vi.hoisted(() => vi.fn());
 const loadPluginCatalogMock = vi.hoisted(() => vi.fn());
+const loadPluginReleaseHistoryMock = vi.hoisted(() =>
+  vi.fn<() => Promise<PluginVersionRecord[]>>(async () => []),
+);
 
 vi.mock('@/features/plugins/server/registry-source', () => ({
   loadPluginEntry: loadPluginEntryMock,
   loadPluginCatalog: loadPluginCatalogMock,
+  loadPluginReleaseHistory: loadPluginReleaseHistoryMock,
   detailInstallCommand: (entry: { installCommand?: string | null }) => entry.installCommand ?? null,
 }));
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => <div /> }));
@@ -60,6 +65,48 @@ describe('PluginDetailPage', () => {
       'href',
       '/apps',
     );
+  });
+
+  it('shows the release history and says which version was stopped and why', async () => {
+    const entry = BASE_ENTRY;
+    loadPluginEntryMock.mockResolvedValue({ status: 'ok', entry, manifest: null });
+    const history: PluginVersionRecord[] = [
+      {
+        pluginId: entry.id,
+        version: '1.1.0',
+        status: 'suspended',
+        manifestUrl: null,
+        sha256: null,
+        declaredSkills: [],
+        permissions: [],
+        changelog: 'Adds citation formatting.',
+        lifecycleReason: 'Leaks the connector token into its logs.',
+        publishedAt: '2026-09-05T00:00:00.000Z',
+        createdAt: '2026-09-05T00:00:00.000Z',
+      },
+      {
+        pluginId: entry.id,
+        version: '1.0.0',
+        status: 'published',
+        manifestUrl: null,
+        sha256: null,
+        declaredSkills: [],
+        permissions: [],
+        changelog: 'First release.',
+        lifecycleReason: null,
+        publishedAt: '2026-09-01T00:00:00.000Z',
+        createdAt: '2026-09-01T00:00:00.000Z',
+      },
+    ];
+    loadPluginReleaseHistoryMock.mockResolvedValueOnce(history);
+
+    render(await PluginDetailPage({ params: Promise.resolve({ id: entry.id }) }));
+
+    expect(screen.getByText('v1.1.0')).toBeVisible();
+    expect(
+      screen.getByText(/Suspended, installs stopped · Leaks the connector token into its logs\./),
+    ).toBeVisible();
+    expect(screen.getByText(/Published · current · First release\./)).toBeVisible();
   });
 
   it('lets the pinned install command wrap instead of widening a 390px page', async () => {

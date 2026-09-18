@@ -594,11 +594,10 @@ const ProviderUsageReceiptSchema = z
   })
   .passthrough();
 
-export async function getCloudAgentExecutionUsage(
+async function readCloudAgentUsage(
   db: DatabaseAdapter,
-  input: { userId: string; runId: string; billingIdempotencyKey: string },
+  input: { userId: string; runId: string; billingIdempotencyKey: string | null },
 ): Promise<CloudAgentExecutionUsage> {
-  const billingIdempotencyKey = z.string().min(8).max(128).parse(input.billingIdempotencyKey);
   const rows = await db.query<CloudAgentExecutionUsageRow>(
     `select count(*)::bigint as provider_calls,
             coalesce(sum(case when jsonb_typeof(usage->'inputTokens') = 'number'
@@ -619,8 +618,8 @@ export async function getCloudAgentExecutionUsage(
        from public.cloud_agent_execution_operations
       where run_id = $1 and user_id = $2
         and operation_kind = 'provider' and status = 'completed'
-        and usage->>'billingIdempotencyKey' = $3`,
-    [input.runId, input.userId, billingIdempotencyKey],
+        and ($3::text is null or usage->>'billingIdempotencyKey' = $3)`,
+    [input.runId, input.userId, input.billingIdempotencyKey],
   );
   const row = rows[0];
   if (!row) throw new CloudAgentExecutionConflictError('Cloud agent execution usage unavailable');
@@ -660,4 +659,27 @@ export async function getCloudAgentExecutionUsage(
       ? { providerCostDollars: recordedCosts.reduce((total, cost) => total + cost, 0) }
       : {}),
   };
+}
+
+export async function getCloudAgentExecutionUsage(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string; billingIdempotencyKey: string },
+): Promise<CloudAgentExecutionUsage> {
+  return readCloudAgentUsage(db, {
+    userId: input.userId,
+    runId: input.runId,
+    billingIdempotencyKey: z.string().min(8).max(128).parse(input.billingIdempotencyKey),
+  });
+}
+
+/**
+ * What the whole run has consumed, across every settlement. A budget is spent
+ * by the run, not by one of its billing keys, so this is the number a live cap
+ * is measured against.
+ */
+export async function getCloudAgentRunUsage(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentExecutionUsage> {
+  return readCloudAgentUsage(db, { ...input, billingIdempotencyKey: null });
 }

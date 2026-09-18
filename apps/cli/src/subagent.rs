@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 
 use crate::config::CliConfig;
 use crate::context::SystemContext;
+use crate::cost_ledger::CostBudget;
 use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
@@ -136,6 +137,12 @@ const SUBAGENT_JOIN_POLL_INTERVAL: std::time::Duration = std::time::Duration::fr
 /// tree so nested `task` calls cannot fan out into unbounded cost.
 const MAX_SUBAGENT_DEPTH: usize = 3;
 
+/// How many times `execute_task` runs one delegation before giving the failure
+/// back to the parent. A subagent that fails on a transient provider or tool
+/// error is worth one more attempt; a cancelled or timed-out one is not,
+/// because the stop was deliberate.
+const MAX_SUBAGENT_ATTEMPTS: usize = 2;
+
 /// Manages concurrent subagent tasks spawned via `task` or a named `agent`.
 ///
 /// Each subagent runs on a dedicated OS thread with its own tokio runtime,
@@ -164,6 +171,9 @@ pub struct SubagentManager {
     /// definitions may narrow these further but never widen them.
     allowed_tools: Option<Vec<String>>,
     disallowed_tools: Vec<String>,
+    /// The owning session's spend cap and spend so far. Each child is capped at
+    /// its even share of what is left, so a fan-out cannot outspend the parent.
+    cost_budget: Option<CostBudget>,
 }
 
 struct SubagentRunConfig {
@@ -171,6 +181,8 @@ struct SubagentRunConfig {
     model: String,
     /// Depth the spawned child session runs at (owning manager's depth + 1).
     depth: usize,
+    /// Per-child spend cap, distinct from the parent's own budget.
+    max_budget_usd: Option<f64>,
     sys_context: SystemContext,
     skip_permissions: bool,
     permission_mode: crate::cli_options::PermissionMode,
@@ -204,7 +216,14 @@ impl SubagentManager {
             permission_mode,
             allowed_tools,
             disallowed_tools,
+            cost_budget: None,
         }
+    }
+
+    /// Set the owning session's spend cap and spend so far. Without one a child
+    /// is uncapped, which is what an uncapped session has always meant.
+    pub fn set_cost_budget(&mut self, budget: Option<CostBudget>) {
+        self.cost_budget = budget;
     }
 
     /// Refresh authority-bearing values that can change during a long-lived
@@ -258,6 +277,18 @@ impl SubagentManager {
             );
         }
 
+        let child_budget_usd = match self.cost_budget {
+            Some(budget) => match budget.child_cap_usd(self.max_concurrent) {
+                Some(cap) => Some(cap),
+                None => bail!(
+                    "Session spend cap reached (${:.2} of ${:.2}). No further subagent can be spawned.",
+                    budget.spent_usd,
+                    budget.cap_usd
+                ),
+            },
+            None => None,
+        };
+
         // Check concurrency limit
         let running_count = {
             let entries = self.entries.read().await;
@@ -298,6 +329,7 @@ impl SubagentManager {
             config: self.config.clone(),
             model: self.model.clone(),
             depth: self.depth + 1,
+            max_budget_usd: child_budget_usd,
             sys_context: self.sys_context.clone(),
             skip_permissions: self.skip_permissions,
             permission_mode: self.permission_mode,
@@ -617,6 +649,7 @@ async fn run_subagent(
     session.skip_permissions = run_config.skip_permissions;
     session.permission_mode = run_config.permission_mode;
     session.subagent_depth = run_config.depth;
+    session.max_budget_usd = run_config.max_budget_usd;
     session.allowed_tools = run_config.allowed_tools.clone();
     session
         .disallowed_tools
@@ -724,6 +757,75 @@ fn extract_modified_files(output: &str) -> Vec<String> {
 /// on a non-returning provider call or hung tool blocking the parent forever.
 const SUBAGENT_EXECUTE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
 
+fn task_result(success: bool, output: String) -> crate::tools::ToolResult {
+    crate::tools::ToolResult {
+        tool_name: "task".to_string(),
+        success,
+        output,
+    }
+}
+
+/// One delegation attempt: either an answer for the parent, or a failure the
+/// next attempt may improve on. A cancellation or a timeout is an answer,
+/// because the stop was deliberate.
+enum SubagentAttempt {
+    Settled(crate::tools::ToolResult),
+    Retryable(String),
+}
+
+async fn await_subagent(manager: &SubagentManager, id: &str) -> SubagentAttempt {
+    let deadline = std::time::Instant::now() + SUBAGENT_EXECUTE_TIMEOUT;
+    loop {
+        match manager.get_status(id).await {
+            Some(SubagentStatus::Running) => {
+                if std::time::Instant::now() >= deadline {
+                    // Signal cancellation so the spawned thread stops updating
+                    // shared state, then surface a timeout.
+                    let _ = manager.cancel(id).await;
+                    return SubagentAttempt::Settled(task_result(
+                        false,
+                        format!(
+                            "Subagent {} timed out after {}s and was cancelled.",
+                            id,
+                            SUBAGENT_EXECUTE_TIMEOUT.as_secs()
+                        ),
+                    ));
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            Some(SubagentStatus::Completed) => {
+                let Some(result) = manager.get_result(id).await else {
+                    return SubagentAttempt::Settled(task_result(
+                        true,
+                        format!("Subagent {} completed (no output captured).", id),
+                    ));
+                };
+                let mut output = result.output;
+                if !result.files_modified.is_empty() {
+                    output.push_str("\n\nFiles modified:\n");
+                    for f in &result.files_modified {
+                        output.push_str(&format!("  - {}\n", f));
+                    }
+                }
+                return SubagentAttempt::Settled(task_result(true, output));
+            }
+            Some(SubagentStatus::Failed(msg)) => return SubagentAttempt::Retryable(msg),
+            Some(SubagentStatus::Cancelled) => {
+                return SubagentAttempt::Settled(task_result(
+                    false,
+                    format!("Subagent {} was cancelled.", id),
+                ));
+            }
+            None => {
+                return SubagentAttempt::Settled(task_result(
+                    false,
+                    format!("Subagent {} not found (internal error).", id),
+                ));
+            }
+        }
+    }
+}
+
 /// Execute the `Task` tool: spawn a subagent, wait for it, return its output.
 ///
 /// This is a blocking execution -- the subagent runs to completion before
@@ -731,91 +833,53 @@ const SUBAGENT_EXECUTE_TIMEOUT: std::time::Duration = std::time::Duration::from_
 /// tool calls in the same LLM turn will be executed concurrently by the
 /// agent loop.
 ///
-/// The wait is bounded by `SUBAGENT_EXECUTE_TIMEOUT`; if the subagent has not
-/// finished by then, a failed (timeout) `ToolResult` is returned so the parent
-/// agent's Task tool cannot hang the whole session indefinitely.
+/// Each wait is bounded by `SUBAGENT_EXECUTE_TIMEOUT` so the parent's Task tool
+/// cannot hang the session. A failed delegation is retried up to
+/// `MAX_SUBAGENT_ATTEMPTS` times; every attempt spawns through the same depth,
+/// concurrency and spend caps, so a retry can itself be refused.
 #[allow(dead_code)]
 pub async fn execute_task(
     manager: &SubagentManager,
     description: &str,
     prompt: &str,
 ) -> crate::tools::ToolResult {
-    match manager.spawn(description, prompt).await {
-        Ok(id) => {
-            let deadline = std::time::Instant::now() + SUBAGENT_EXECUTE_TIMEOUT;
-            // Wait for this specific subagent to complete
-            loop {
-                let status = manager.get_status(&id).await;
-                match status {
-                    Some(SubagentStatus::Running) => {
-                        if std::time::Instant::now() >= deadline {
-                            // Signal cancellation so the spawned thread stops
-                            // updating shared state, then surface a timeout.
-                            let _ = manager.cancel(&id).await;
-                            return crate::tools::ToolResult {
-                                tool_name: "task".to_string(),
-                                success: false,
-                                output: format!(
-                                    "Subagent {} timed out after {}s and was cancelled.",
-                                    id,
-                                    SUBAGENT_EXECUTE_TIMEOUT.as_secs()
-                                ),
-                            };
-                        }
-                        // Brief yield to let the task make progress
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    }
-                    Some(SubagentStatus::Completed) => {
-                        if let Some(result) = manager.get_result(&id).await {
-                            let mut output = result.output;
-                            if !result.files_modified.is_empty() {
-                                output.push_str("\n\nFiles modified:\n");
-                                for f in &result.files_modified {
-                                    output.push_str(&format!("  - {}\n", f));
-                                }
-                            }
-                            return crate::tools::ToolResult {
-                                tool_name: "task".to_string(),
-                                success: true,
-                                output,
-                            };
-                        }
-                        return crate::tools::ToolResult {
-                            tool_name: "task".to_string(),
-                            success: true,
-                            output: format!("Subagent {} completed (no output captured).", id),
-                        };
-                    }
-                    Some(SubagentStatus::Failed(msg)) => {
-                        return crate::tools::ToolResult {
-                            tool_name: "task".to_string(),
-                            success: false,
-                            output: format!("Subagent {} failed: {}", id, msg),
-                        };
-                    }
-                    Some(SubagentStatus::Cancelled) => {
-                        return crate::tools::ToolResult {
-                            tool_name: "task".to_string(),
-                            success: false,
-                            output: format!("Subagent {} was cancelled.", id),
-                        };
-                    }
-                    None => {
-                        return crate::tools::ToolResult {
-                            tool_name: "task".to_string(),
-                            success: false,
-                            output: format!("Subagent {} not found (internal error).", id),
-                        };
-                    }
+    let mut last_failure = String::new();
+    for attempt in 1..=MAX_SUBAGENT_ATTEMPTS {
+        let id = match manager.spawn(description, prompt).await {
+            Ok(id) => id,
+            Err(e) => {
+                let spawn_failure = format!("Failed to spawn subagent: {:#}", e);
+                return task_result(
+                    false,
+                    if last_failure.is_empty() {
+                        spawn_failure
+                    } else {
+                        format!("{last_failure}\n{spawn_failure}")
+                    },
+                );
+            }
+        };
+        match await_subagent(manager, &id).await {
+            SubagentAttempt::Settled(result) => return result,
+            SubagentAttempt::Retryable(message) => {
+                last_failure = format!("Subagent {} failed: {}", id, message);
+                if attempt < MAX_SUBAGENT_ATTEMPTS {
+                    eprintln!(
+                        "  {} Retrying {}, attempt {} of {}: {}",
+                        ts::warning_header("[task]"),
+                        description.dimmed(),
+                        attempt + 1,
+                        MAX_SUBAGENT_ATTEMPTS,
+                        message.dimmed()
+                    );
                 }
             }
         }
-        Err(e) => crate::tools::ToolResult {
-            tool_name: "task".to_string(),
-            success: false,
-            output: format!("Failed to spawn subagent: {:#}", e),
-        },
     }
+    task_result(
+        false,
+        format!("{last_failure} (gave up after {MAX_SUBAGENT_ATTEMPTS} attempts)"),
+    )
 }
 
 #[cfg(test)]
@@ -920,6 +984,92 @@ mod tests {
         );
         assert_eq!(manager.allowed_tools, Some(vec!["read_file".to_string()]));
         assert_eq!(manager.disallowed_tools, vec!["web_fetch".to_string()]);
+    }
+
+    fn root_manager() -> SubagentManager {
+        SubagentManager::new(
+            CliConfig::default(),
+            "fixture-local-model:latest".to_string(),
+            crate::context::gather_system_context(),
+            false,
+            crate::cli_options::PermissionMode::Default,
+            None,
+            Vec::new(),
+            0,
+        )
+    }
+
+    #[tokio::test]
+    async fn spawn_refused_once_the_session_spend_cap_is_reached() {
+        let mut manager = root_manager();
+        manager.set_cost_budget(Some(CostBudget::new(2.0, 2.0)));
+
+        let err = manager
+            .spawn("expensive", "do work")
+            .await
+            .expect_err("spawn with no budget left must be refused");
+        assert!(
+            err.to_string().contains("spend cap reached"),
+            "unexpected error: {err}"
+        );
+        assert!(manager.list().await.is_empty());
+    }
+
+    #[test]
+    fn a_child_is_capped_at_its_even_share_of_what_the_parent_has_left() {
+        let mut manager = root_manager();
+        manager.set_cost_budget(Some(CostBudget::new(7.0, 0.0)));
+        let budget = manager.cost_budget.expect("budget was just set");
+        let child = budget
+            .child_cap_usd(manager.max_concurrent)
+            .expect("a parent with headroom must yield a child cap");
+
+        assert!((child - 1.0).abs() < 1e-12);
+        assert!(child * manager.max_concurrent as f64 <= budget.remaining_usd() + 1e-12);
+    }
+
+    async fn seed_entry(manager: &SubagentManager, id: &str, status: SubagentStatus) {
+        manager.entries.write().await.insert(
+            id.to_string(),
+            SubagentEntry {
+                id: id.to_string(),
+                description: "seeded".to_string(),
+                status: Arc::new(RwLock::new(status)),
+                result: Arc::new(RwLock::new(None)),
+                handle: None,
+                cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            },
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_delegation_is_retryable_and_a_deliberate_stop_is_not() {
+        assert_eq!(MAX_SUBAGENT_ATTEMPTS, 2);
+        let manager = root_manager();
+
+        seed_entry(
+            &manager,
+            "subagent_failed",
+            SubagentStatus::Failed("provider hung up".to_string()),
+        )
+        .await;
+        match await_subagent(&manager, "subagent_failed").await {
+            SubagentAttempt::Retryable(message) => assert_eq!(message, "provider hung up"),
+            SubagentAttempt::Settled(result) => {
+                panic!("a failure must be retryable: {}", result.output)
+            }
+        }
+
+        seed_entry(&manager, "subagent_cancelled", SubagentStatus::Cancelled).await;
+        match await_subagent(&manager, "subagent_cancelled").await {
+            SubagentAttempt::Settled(result) => {
+                assert!(!result.success);
+                assert!(result.output.contains("was cancelled"), "{}", result.output);
+            }
+            SubagentAttempt::Retryable(message) => {
+                panic!("a deliberate stop must not be retried: {message}")
+            }
+        }
     }
 
     #[tokio::test]

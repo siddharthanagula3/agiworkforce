@@ -113,6 +113,38 @@ async function readApprovedPermissions(
  * Fails closed before any row is written: signed digest, passing scan verdict,
  * and no permission beyond what this member approved.
  */
+export class PluginVersionSuspendedError extends AppError {
+  constructor(pluginId: string, version: string, reason: string) {
+    super(
+      ErrorCode.CONFLICT,
+      `${pluginId} ${version} was suspended and cannot be installed: ${reason}`,
+      409,
+    );
+    Object.setPrototypeOf(this, PluginVersionSuspendedError.prototype);
+    this.name = 'PluginVersionSuspendedError';
+    this.asUserSafe();
+  }
+}
+
+async function assertVersionNotSuspended(
+  db: DatabaseAdapter,
+  pluginId: string,
+  version: string,
+): Promise<void> {
+  const rows = await db.query<{ status: string; lifecycle_reason: string | null }>(
+    `select status, lifecycle_reason from public.plugin_registry_versions
+      where plugin_id = $1 and version = $2`,
+    [pluginId, version],
+  );
+  const pinned = rows[0];
+  if (pinned?.status !== 'suspended') return;
+  throw new PluginVersionSuspendedError(
+    pluginId,
+    version,
+    pinned.lifecycle_reason ?? 'no reason was recorded',
+  );
+}
+
 export async function installWebPlugin(
   db: DatabaseAdapter,
   userId: string,
@@ -120,6 +152,8 @@ export async function installWebPlugin(
 ): Promise<PluginInstallation | null> {
   const found = await getPluginRegistryEntry(db, pluginId);
   if (!found || !isPluginEntryWebInstallable(found.entry) || !found.manifest) return null;
+
+  await assertVersionNotSuspended(db, found.entry.id, found.entry.version);
 
   await assertPluginPackageInstallable(db, {
     pluginId: found.entry.id,
@@ -270,11 +304,15 @@ export async function listEnabledPluginIds(
     `select installation.plugin_id
        from public.plugin_installations installation
        join public.plugin_registry_entries registry on registry.id = installation.plugin_id
+       left join public.plugin_registry_versions pinned
+              on pinned.plugin_id = installation.plugin_id
+             and pinned.version = installation.installed_version
       where installation.user_id = $1
         and installation.enabled = true
         and installation.review_required = false
         and registry.status = 'published'
-        and registry.web_installable = true`,
+        and registry.web_installable = true
+        and coalesce(pinned.status, 'published') <> 'suspended'`,
     [userId],
   );
   return new Set(rows.map((row) => row.plugin_id));

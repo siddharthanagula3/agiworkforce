@@ -5,6 +5,7 @@ const {
   csrfMock,
   rateLimitMock,
   getNeonDbMock,
+  userScopedDbMock,
   installWebPluginMock,
   listPluginInstallationsMock,
   setWebPluginEnabledMock,
@@ -17,6 +18,7 @@ const {
   csrfMock: vi.fn(),
   rateLimitMock: vi.fn(),
   getNeonDbMock: vi.fn(),
+  userScopedDbMock: vi.fn(),
   installWebPluginMock: vi.fn(),
   listPluginInstallationsMock: vi.fn(),
   setWebPluginEnabledMock: vi.fn(),
@@ -35,6 +37,7 @@ vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
 vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: recordWorkspaceAuditEventMock,
 }));
@@ -100,6 +103,11 @@ beforeEach(() => {
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
   getNeonDbMock.mockReturnValue({ query: vi.fn() });
+  userScopedDbMock.mockResolvedValue({
+    db: { query: vi.fn() },
+    userId: 'user-1',
+    organizationId: null,
+  });
   pluginPolicyMock.mockResolvedValue({
     allowed: true,
     code: 'ungoverned',

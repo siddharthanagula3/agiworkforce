@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   usage: vi.fn(),
   finalize: vi.fn(),
   autoMemory: vi.fn(),
+  summarize: vi.fn(),
   db: { current: undefined as unknown },
 }));
 
@@ -39,6 +40,7 @@ vi.mock('@/lib/services/agent-notification-service', () => ({
 }));
 vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
   getCloudAgentExecutionUsage: mocks.usage,
+  summarizeCloudAgentRunOutcome: mocks.summarize,
 }));
 vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   finalizeObservedManagedUsage: mocks.finalize,
@@ -248,6 +250,12 @@ describe('terminal cloud agent notifications across the real termination order',
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.notify.mockResolvedValue({ pushed: true });
+    mocks.summarize.mockResolvedValue({
+      status: 'completed',
+      outcomes: [],
+      failures: [],
+      unresolved: [],
+    });
     mocks.usage.mockResolvedValue({ ...NO_USAGE, providerCalls: 2 });
     mocks.finalize.mockResolvedValue({
       requestStatus: 'completed',

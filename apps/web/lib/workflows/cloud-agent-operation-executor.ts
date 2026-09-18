@@ -3,6 +3,7 @@ import type { ZodType } from 'zod';
 import { FatalError, RetryableError } from 'workflow';
 
 import { logger } from '@/lib/logger';
+import { authorizeCloudAgentOperation } from '@/lib/services/cloud-agent-budget';
 import {
   claimCloudAgentExecutionOperation,
   completeCloudAgentExecutionOperation,
@@ -249,6 +250,32 @@ export async function executeCloudAgentOperation<TResult extends object>(
     inputHash,
     retrySafety: input.retrySafety,
   });
+
+  // A replay of a step that already happened must return its receipt; only a
+  // side effect that has not happened yet is worth refusing.
+  if (claim.disposition === 'acquired') {
+    const decision = await authorizeCloudAgentOperation(db, {
+      userId: input.userId,
+      runId: input.runId,
+      operationKey: input.operationKey,
+      operationKind: input.operationKind,
+      inputHash,
+    });
+    if (!decision.allowed) {
+      const error = { name: 'CloudAgentBudgetRefusal', ...decision.refusal };
+      await failCloudAgentExecutionOperation(db, {
+        userId: input.userId,
+        operationId: claim.operationId,
+        leaseToken: claim.leaseToken,
+        error,
+      });
+      logger.warn(
+        { runId: input.runId, operationKey: input.operationKey, code: decision.refusal.code },
+        '[cloud-agent] run budget refused an operation',
+      );
+      throw new FatalError(decision.refusal.message);
+    }
+  }
 
   switch (claim.disposition) {
     case 'completed':

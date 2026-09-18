@@ -9,7 +9,11 @@ import {
   persistAssistantTurn,
 } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
-import { getCloudAgentExecutionUsage } from '@/lib/services/cloud-agent-execution-service';
+import {
+  getCloudAgentExecutionUsage,
+  summarizeCloudAgentRunOutcome,
+  type CloudAgentOperationOutcome,
+} from '@/lib/services/cloud-agent-execution-service';
 import {
   calculateObservedProviderUsageCostDollars,
   finalizeObservedManagedUsage,
@@ -47,12 +51,28 @@ export function terminalState(outcome: WorkflowTerminalOutcome): AgentTaskState 
   }
 }
 
+export const PARTIAL_COMPLETION_HEADING = 'Some steps of this run did not finish:';
+
+/**
+ * The per-step reasons the durable receipts already hold. Without this the user
+ * is told the run ended and never which parts of it did not.
+ */
+function partialCompletionNote(failures: readonly CloudAgentOperationOutcome[]): string {
+  const reasons = failures
+    .map((failure) => failure.reason)
+    .filter((reason): reason is string => Boolean(reason));
+  if (reasons.length === 0) return '';
+  const unique = [...new Set(reasons)];
+  return `\n\n${PARTIAL_COMPLETION_HEADING}\n${unique.map((reason) => `- ${reason}`).join('\n')}`;
+}
+
 async function persistWorkflowAssistantTurn(
   db: ReturnType<typeof getNeonDb>,
   input: CloudAgentWorkflowInput,
   serving: ProcessedRequest,
   outcome: WorkflowTerminalOutcome,
   usage: { inputTokens: number; outputTokens: number },
+  settlement: { state: AgentTaskState | null; note: string },
 ): Promise<void> {
   const processed = input.processed as ProcessedRequest;
   if (!canPersistAssistantTurn(processed)) return;
@@ -65,7 +85,7 @@ async function persistWorkflowAssistantTurn(
     processed,
     userId: input.userId,
     snapshot: {
-      content: journal.text,
+      content: `${journal.text}${settlement.note}`,
       model: serving.chatRequest.model,
       provider: serving.provider,
       inputTokens: usage.inputTokens,
@@ -76,10 +96,34 @@ async function persistWorkflowAssistantTurn(
         runId: input.runId,
         runPath: managedCloudAgentRunPath(input.runId),
         lastSequence: journal.lastSequence,
-        state: terminalState(outcome) ?? (outcome === 'paused' ? 'paused' : 'awaiting_input'),
+        state: settlement.state ?? (outcome === 'paused' ? 'paused' : 'awaiting_input'),
       },
     },
   });
+}
+
+/**
+ * A finished turn is only `completed` when every step of it was. The receipts
+ * already record which steps failed, so the run ends in the `partial` state
+ * 0196 allows rather than claiming work that did not land.
+ */
+async function resolveSettlement(
+  db: ReturnType<typeof getNeonDb>,
+  input: CloudAgentWorkflowInput,
+  outcome: WorkflowTerminalOutcome,
+): Promise<{ state: AgentTaskState | null; note: string }> {
+  const state = terminalState(outcome);
+  if (state !== 'ready_for_review') return { state, note: '' };
+
+  const summary = await summarizeCloudAgentRunOutcome(db, {
+    userId: input.userId,
+    runId: input.runId,
+  });
+  if (summary.status !== 'completed_partial') return { state, note: '' };
+  return {
+    state: 'partial',
+    note: partialCompletionNote([...summary.failures, ...summary.unresolved]),
+  };
 }
 
 /**
@@ -169,7 +213,9 @@ export async function settleWorkflowInvocation(
     },
   });
 
-  await persistWorkflowAssistantTurn(db, input, servingRequest, outcome, usage);
+  const settlement = await resolveSettlement(db, input, outcome);
+
+  await persistWorkflowAssistantTurn(db, input, servingRequest, outcome, usage, settlement);
 
   await recordManagedAutoMemoryTurn({
     db,
@@ -187,8 +233,11 @@ export async function settleWorkflowInvocation(
     });
   }
 
-  const state = terminalState(outcome);
-  if (state) {
-    await transitionCloudAgentRun(db, { userId: input.userId, runId: input.runId, state });
+  if (settlement.state) {
+    await transitionCloudAgentRun(db, {
+      userId: input.userId,
+      runId: input.runId,
+      state: settlement.state,
+    });
   }
 }

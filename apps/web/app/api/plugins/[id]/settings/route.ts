@@ -3,12 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   getPluginInstallationSettings,
   updatePluginInstallationSettings,
@@ -28,7 +27,7 @@ const ParamsSchema = z.object({
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleGet(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
@@ -40,7 +39,7 @@ async function handleGet(request: NextRequest, context: RouteContext): Promise<N
     );
   }
 
-  const settings = await getPluginInstallationSettings(getNeonDb(), userId, params.data.id);
+  const settings = await getPluginInstallationSettings(db, userId, params.data.id);
   if (!settings) {
     return NextResponse.json(
       { error: { code: 'PLUGIN_NOT_INSTALLED', message: 'Plugin installation not found.' } },
@@ -51,7 +50,7 @@ async function handleGet(request: NextRequest, context: RouteContext): Promise<N
 }
 
 async function handlePatch(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -68,12 +67,7 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
     );
   }
 
-  const settings = await updatePluginInstallationSettings(
-    getNeonDb(),
-    userId,
-    params.data.id,
-    body.data,
-  );
+  const settings = await updatePluginInstallationSettings(db, userId, params.data.id, body.data);
   if (!settings) {
     return NextResponse.json(
       { error: { code: 'PLUGIN_NOT_INSTALLED', message: 'Plugin installation not found.' } },

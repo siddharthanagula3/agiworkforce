@@ -5,12 +5,11 @@ import { z } from 'zod';
 
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { evaluatePluginPolicyForUser } from '@/lib/services/connector-policy-gate';
 import { pluginNotPermittedResponse } from '@/features/plugins/server/directory/install-responses';
@@ -31,18 +30,18 @@ const InstallPluginBodySchema = z.object({
 });
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
   const body: PluginInstallationsResponse = {
-    installations: await listPluginInstallations(getNeonDb(), userId),
+    installations: await listPluginInstallations(db, userId),
   };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -64,10 +63,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   );
   if (featureGate) return featureGate;
 
-  const db = getNeonDb();
   const policy = await evaluatePluginPolicyForUser({
     db,
     userId,
+    organizationId,
     pluginKey: parsed.data.pluginId,
     request,
   });

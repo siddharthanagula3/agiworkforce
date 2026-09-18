@@ -10,7 +10,12 @@ import {
   MarketingFooter,
   Prose,
 } from '@/features/marketing/components/system';
-import { detailInstallCommand, loadPluginEntry } from '@/features/plugins/server/registry-source';
+import {
+  detailInstallCommand,
+  loadPluginEntry,
+  loadPluginReleaseHistory,
+} from '@/features/plugins/server/registry-source';
+import type { PluginVersionRecord } from '@/lib/services/plugin-lifecycle';
 import {
   isPluginEntryInstallable,
   isPluginEntryWebInstallable,
@@ -32,6 +37,22 @@ function sourceLabel(source: PluginRegistryEntry['source']): string {
   if (source === 'builtin') return 'Built-in';
   if (source === 'marketplace') return 'Marketplace';
   return 'Custom';
+}
+
+const RELEASE_STATUS_LABELS: Readonly<Record<PluginVersionRecord['status'], string>> = {
+  draft: 'Draft, not offered',
+  in_review: 'In review',
+  published: 'Published',
+  deprecated: 'Deprecated, do not install',
+  suspended: 'Suspended, installs stopped',
+};
+
+function releaseRowValue(release: PluginVersionRecord, currentVersion: string): string {
+  const parts = [RELEASE_STATUS_LABELS[release.status]];
+  if (release.version === currentVersion) parts.push('current');
+  if (release.lifecycleReason) parts.push(release.lifecycleReason);
+  else if (release.changelog) parts.push(release.changelog);
+  return parts.join(' · ');
 }
 
 function statusLabel(entry: PluginRegistryEntry, cliCommand: string | null): string {
@@ -90,6 +111,7 @@ export default async function PluginDetailPage({ params }: Props) {
   }
 
   const { entry, manifest } = result;
+  const releases = await loadPluginReleaseHistory(entry.id);
   const installable = isPluginEntryInstallable(entry);
   const webInstallable = isPluginEntryWebInstallable(entry);
   const installCommand =
@@ -223,6 +245,32 @@ export default async function PluginDetailPage({ params }: Props) {
                   },
                 ]}
               />
+            </div>
+          </section>
+        ) : null}
+
+        {releases.length > 0 ? (
+          <section className="agi-lp-section" aria-labelledby="agi-plugin-releases-title">
+            <div className="agi-ds-container">
+              <div className="agi-lp-heading">
+                <Eyebrow>Release history</Eyebrow>
+                <h2 className="agi-ds-h2" id="agi-plugin-releases-title">
+                  Every version, and what happened to it.
+                </h2>
+              </div>
+              <Ledger
+                caption={`${entry.name} release history`}
+                rows={releases.map((release) => ({
+                  label: `v${release.version}`,
+                  value: releaseRowValue(release, entry.version),
+                }))}
+              />
+              <div style={{ marginTop: '1rem' }}>
+                <Prose size="sm">
+                  Updating to a newer version re-checks what it asks for. A version that adds a
+                  permission the installed one did not have is held for your review before it runs.
+                </Prose>
+              </div>
             </div>
           </section>
         ) : null}

@@ -5,12 +5,11 @@ import { z } from 'zod';
 
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import {
   installMarketplaceEntry,
@@ -39,13 +38,13 @@ const InstallBodySchema = z.union([
 ]);
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
   let installations;
   try {
-    installations = await listMarketplaceInstallations(getNeonDb(), userId);
+    installations = await listMarketplaceInstallations(db, userId);
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
     throw error;
@@ -56,11 +55,17 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
 async function installFromDirectory(
   request: NextRequest,
-  userId: string,
+  scope: UserScopedDb,
   pluginId: string,
 ): Promise<NextResponse> {
-  const db = getNeonDb();
-  const policy = await evaluatePluginPolicyForUser({ db, userId, pluginKey: pluginId, request });
+  const { db, userId, organizationId } = scope;
+  const policy = await evaluatePluginPolicyForUser({
+    db,
+    userId,
+    organizationId,
+    pluginKey: pluginId,
+    request,
+  });
   if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
   const result = await installDirectoryPlugin(db, userId, pluginId);
   switch (result.status) {
@@ -111,7 +116,8 @@ async function installFromDirectory(
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const scope = await getUserScopedDb(request);
+  const { db, userId, organizationId } = scope;
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -135,15 +141,15 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   try {
     if ('pluginId' in parsed.data) {
-      return await installFromDirectory(request, userId, parsed.data.pluginId);
+      return await installFromDirectory(request, scope, parsed.data.pluginId);
     }
 
-    const db = getNeonDb();
     const entry = await getMarketplaceEntryForUser(db, userId, parsed.data.entryId);
     if (entry) {
       const policy = await evaluatePluginPolicyForUser({
         db,
         userId,
+        organizationId,
         pluginKey: entry.pluginKey,
         request,
       });

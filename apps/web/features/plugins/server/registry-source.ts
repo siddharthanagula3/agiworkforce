@@ -7,6 +7,7 @@ import {
   getPluginRegistryEntry,
   listPluginRegistryEntries,
 } from '@/lib/services/plugin-registry-service';
+import { listPluginVersions, type PluginVersionRecord } from '@/lib/services/plugin-lifecycle';
 import { findDirectoryEntry } from './directory/catalog';
 import type { PluginDirectoryEntry } from './directory/types';
 import {
@@ -16,8 +17,7 @@ import {
 } from '@/lib/server/render-cache';
 
 export type PluginCatalogResult =
-  | { status: 'ok'; entries: PluginRegistryEntry[] }
-  | { status: 'unavailable' };
+  { status: 'ok'; entries: PluginRegistryEntry[] } | { status: 'unavailable' };
 
 export type PluginDetailEntry = PluginRegistryEntry | PluginDirectoryEntry;
 
@@ -94,13 +94,29 @@ export function entryReaderCountForTests(): number {
   return entryReaders.size;
 }
 
-export const loadPluginCatalog = cache(
-  async (): Promise<PluginCatalogResult> => cachedPluginCatalog(),
+export const loadPluginCatalog = cache(async (): Promise<PluginCatalogResult> =>
+  cachedPluginCatalog(),
 );
 
 // `cache` on top of the cross-request cache as well: the detail route resolves
 // the same entry in `generateMetadata` and again in the page body, and only the
 // per-request memo collapses that into one lookup on a cold cache.
-export const loadPluginEntry = cache(
-  async (id: string): Promise<PluginEntryResult> => cachedPluginEntry(id),
+export const loadPluginEntry = cache(async (id: string): Promise<PluginEntryResult> =>
+  cachedPluginEntry(id),
+);
+
+/**
+ * The pack's release history. Read per request rather than cached with the
+ * entry: a suspension has to reach the page that tells people not to install,
+ * and an empty list is the honest answer for a directory pack that is not in
+ * the hosted registry at all.
+ */
+export const loadPluginReleaseHistory = cache(
+  async (id: string): Promise<PluginVersionRecord[]> => {
+    try {
+      return await listPluginVersions(getNeonDb(), id);
+    } catch {
+      return [];
+    }
+  },
 );
