@@ -1,11 +1,20 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { CloudCodeAgentStep, CloudCodeSession, ProviderMessage } from '@agiworkforce/types';
+import type {
+  CancellationSemantics,
+  CloudCodeAgentStep,
+  CloudCodeSession,
+  ProviderMessage,
+} from '@agiworkforce/types';
 import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
 import { CLOUD_CODE_TURN_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
-import { getE2BExecutor } from '@/lib/e2b/runtime';
-import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
+import { getE2BExecutor, revokeE2BSessionCredentials } from '@/lib/e2b/runtime';
+import {
+  MANAGED_CLOUD_E2B_TENANT_ID,
+  managedCloudCodeSessionScope,
+  type E2BSessionScope,
+} from '@/lib/e2b/session-store';
 import { logger } from '@/lib/logger';
 import { buildServerProviderAdapter, resolveProviderFromModel } from './provider-adapter-service';
 import {
@@ -43,9 +52,11 @@ import {
   agentStepLabel,
   claimCloudCodeSessionForRun,
   getCloudCodeSession,
+  parseGitPorcelainStatus,
   releaseCloudCodeSessionAfterRun,
   validateCloudCodeSessionId,
 } from './cloud-code-session-service';
+import type { E2BExecutor } from '@/lib/e2b/types';
 
 const ESTIMATED_TURN_COST_CENTS = 25;
 
@@ -203,6 +214,41 @@ async function releaseSandbox(
 }
 
 /**
+ * Commit what a turn had changed before the sandbox is handed back, so a turn
+ * that stopped short leaves a diff somebody can read instead of a workspace
+ * nobody opens again. Local only: a push is an external side effect, and a stop
+ * is not the moment to make one.
+ */
+async function preserveUnfinishedTurnWork(
+  executor: E2BExecutor,
+  workspacePath: string,
+  context: { turnId: string; sessionId: string },
+): Promise<number> {
+  const git = executor.git;
+  if (!git || !workspacePath) return 0;
+  try {
+    const status = await git.status({ path: workspacePath });
+    if (!status.ok || !status.stdout.trim()) return 0;
+    const changed = parseGitPorcelainStatus(status.stdout).length;
+    if (changed === 0) return 0;
+    const staged = await git.add({ path: workspacePath, all: true });
+    if (!staged.ok) return 0;
+    const commit = await git.commit({
+      path: workspacePath,
+      message: `Work in progress from a stopped Code turn (${context.turnId})`,
+    });
+    if (!commit.ok) {
+      logger.warn({ ...context, error: commit.error }, 'Could not preserve stopped Code turn work');
+      return 0;
+    }
+    return changed;
+  } catch (error) {
+    logger.error({ error, ...context }, 'Could not preserve stopped Code turn work');
+    return 0;
+  }
+}
+
+/**
  * Move a turn row off `running`. Never throws: every caller is already unwinding
  * something else, and a failure here must not mask the original error or skip
  * the settlement that follows it.
@@ -282,11 +328,44 @@ function isFlagshipModel(model: string): boolean {
 
 const CANCELLABLE_TURN_STATES = ['running', 'awaiting_approval'];
 
+/**
+ * What pressing stop on a Code turn does, as a value a surface can render
+ * rather than as a promise the product does not keep. Claiming more than this
+ * would tell a reader their push was recalled when GitHub already has it.
+ */
+export const CLOUD_CODE_TURN_CANCELLATION: CancellationSemantics = {
+  immediatelyStopped: [
+    'the shell command, browser or coding agent running in the sandbox, killed by process',
+    'the provider stream the turn was reading, through its AbortSignal',
+    'every further step and tool call of the turn',
+  ],
+  cannotBeStopped: [
+    'a branch the turn already pushed, or a pull request it already opened',
+    'tokens the provider has already generated and billed',
+    'a write a command already made to a third party',
+  ],
+  partialOutputRetained: true,
+  resumable: false,
+  propagatesTo: ['provider-stream', 'background-worker', 'external-side-effect'],
+};
+
 export interface CloudCodeTurnCancellation {
   turnId: string;
   requestedAt: string;
   /** True when the stop was also recorded against a durable run carrying it. */
   durable: boolean;
+  /** Sandbox processes the stop killed, so a surface can say what it ended. */
+  processesStopped: number;
+  /** The managed credential minted into the sandbox was taken out of use. */
+  credentialsRevoked: boolean;
+}
+
+function cloudCodeSessionStoreScope(userId: string, sessionId: string): E2BSessionScope {
+  return {
+    tenantId: MANAGED_CLOUD_E2B_TENANT_ID,
+    userId,
+    resource: { kind: 'code_session', id: sessionId },
+  };
 }
 
 /**
@@ -352,9 +431,21 @@ export async function requestCloudCodeTurnCancellation(
       return false;
     },
   );
+  // The invocation driving the turn polls for this row, which bounds how long a
+  // reader waits but not what the sandbox does in the meantime. Killing its
+  // processes here is what actually ends the work already in flight, and it
+  // leaves the workspace so the turn's own unwind can preserve what it made.
+  const revocation = await revokeE2BSessionCredentials(
+    cloudCodeSessionStoreScope(owner.userId, sessionId),
+  ).catch((error: unknown) => {
+    logger.warn({ error, turnId: row.id, sessionId }, 'Could not stop the Code sandbox on request');
+    return null;
+  });
   return {
     turnId: row.id,
     durable,
+    processesStopped: revocation?.killed ?? 0,
+    credentialsRevoked: revocation?.gateCacheCleared ?? false,
     requestedAt:
       row.cancel_requested_at instanceof Date
         ? row.cancel_requested_at.toISOString()
@@ -460,21 +551,32 @@ function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
  * `errorMessage` unset for the non-`error` stop reasons, which would persist a
  * failed turn with a null explanation.
  */
-function terminalErrorMessage(result: CloudCodeAgentResult, stoppedByUser: boolean): string | null {
-  if (result.errorMessage) return result.errorMessage.slice(0, 2000);
+function preservedWorkSentence(preservedFiles: number): string {
+  if (preservedFiles <= 0) return '';
+  const files = preservedFiles === 1 ? '1 file' : `${preservedFiles} files`;
+  return ` The ${files} it had changed were committed in the workspace, so the partial work is still there to review.`;
+}
+
+function terminalErrorMessage(
+  result: CloudCodeAgentResult,
+  stoppedByUser: boolean,
+  preservedFiles = 0,
+): string | null {
+  const preserved = preservedWorkSentence(preservedFiles);
+  if (result.errorMessage) return `${result.errorMessage}${preserved}`.slice(0, 2000);
   switch (result.stopReason) {
     case 'timeout':
-      return 'Agent turn exceeded its time budget and was stopped.';
+      return `Agent turn exceeded its time budget and was stopped.${preserved}`;
     case 'max_steps':
-      return `Agent turn reached its ${CLOUD_CODE_AGENT_MAX_STEPS}-step limit before finishing.`;
+      return `Agent turn reached its ${CLOUD_CODE_AGENT_MAX_STEPS}-step limit before finishing.${preserved}`;
     case 'denied':
-      return 'Agent turn stopped: a required command was denied.';
+      return `Agent turn stopped: a required command was denied.${preserved}`;
     case 'cancelled':
       // Both end as `cancelled`, and they are not the same event to a reader:
       // one they asked for, one happened to them.
       return stoppedByUser
-        ? 'You stopped this turn. Nothing further was run.'
-        : 'The connection to this turn dropped before it finished, so it stopped where it was.';
+        ? `You stopped this turn. Nothing further was run.${preserved}`
+        : `The connection to this turn dropped before it finished, so it stopped where it was.${preserved}`;
     default:
       return null;
   }
@@ -615,6 +717,10 @@ async function runClaimedAgentTurn(
 
   let result: CloudCodeAgentResult;
   let stepIndex = initialStepIndex;
+  // Null while the turn is still running, and still null if it threw, which is
+  // the case the unwind must also preserve work for.
+  let outcomeStopReason: CloudCodeAgentResult['stopReason'] | null = null;
+  let preservedFiles = 0;
   const deadline = withTurnDeadline(input.signal, CLOUD_CODE_AGENT_TURN_BUDGET_MS, {
     isRequested: () =>
       input.isCancellationRequested
@@ -711,6 +817,7 @@ async function runClaimedAgentTurn(
       // as `cancelled` would blame the user for the clock.
       result = { ...result, stopReason: 'timeout' };
     }
+    outcomeStopReason = result.stopReason;
   } catch (error) {
     const abandoned = {
       stepsUsed: Math.max(0, stepIndex - initialStepIndex),
@@ -723,6 +830,7 @@ async function runClaimedAgentTurn(
       // already done still settles; only the rest of it is abandoned.
       logger.info({ turnId, sessionId }, 'Managed Code agent turn stopped on request');
       result = { stopReason: 'cancelled', ...abandoned };
+      outcomeStopReason = 'cancelled';
     } else if (deadline.expired() && !input.signal.aborted) {
       // A provider stream or sandbox command that hung past the budget: our own
       // abort surfaced as a throw. That is a timeout, not a 500, and it falls
@@ -734,19 +842,36 @@ async function runClaimedAgentTurn(
         'Managed Code agent turn aborted on its own time budget',
       );
       result = { stopReason: 'timeout', ...abandoned };
+      outcomeStopReason = 'timeout';
     } else {
+      preservedFiles = await preserveUnfinishedTurnWork(executor, session.workspacePath, {
+        turnId,
+        sessionId,
+      });
       await settleReservationQuietly(reservation, { outcome: 'failed', actualCostCents: 0 });
       await markTurnFailed(
         db,
         owner,
         turnId,
-        persistedFailureMessage(error, turnId, sessionId),
+        `${persistedFailureMessage(error, turnId, sessionId)}${preservedWorkSentence(preservedFiles)}`,
         'error',
       );
       throw error;
     }
   } finally {
     deadline.dispose();
+    // A turn that did not reach a conclusion has changes nobody has looked at.
+    // They are committed while the sandbox is still ours, before it is paused.
+    if (
+      preservedFiles === 0 &&
+      outcomeStopReason !== 'done' &&
+      outcomeStopReason !== 'awaiting_approval'
+    ) {
+      preservedFiles = await preserveUnfinishedTurnWork(executor, session.workspacePath, {
+        turnId,
+        sessionId,
+      });
+    }
     await releaseSandbox(executor, { turnId, sessionId });
   }
 
@@ -773,7 +898,7 @@ async function runClaimedAgentTurn(
         cumulativeSteps,
         result.stopReason === 'awaiting_approval' ? null : result.stopReason,
         result.finalMessage.slice(0, 100_000) || null,
-        terminalErrorMessage(result, stoppedByUser),
+        terminalErrorMessage(result, stoppedByUser, preservedFiles),
         owner.userId,
         result.usage.inputTokens,
         result.usage.outputTokens,
@@ -836,7 +961,7 @@ async function runClaimedAgentTurn(
 
   // The same explanation that went into the row, so a client that only reads the
   // response is not left with a bare `timeout` and no words.
-  const errorMessage = terminalErrorMessage(result, stoppedByUser);
+  const errorMessage = terminalErrorMessage(result, stoppedByUser, preservedFiles);
 
   return {
     turnId,

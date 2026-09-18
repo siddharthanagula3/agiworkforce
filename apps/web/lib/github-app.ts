@@ -828,11 +828,21 @@ export async function getPrDiff(
   if (!res.ok) throw new Error(`Failed to fetch PR diff: ${res.status}`);
 
   let diff = await res.text();
-  const MAX_CHARS = 50000;
+  // The reviewer chunks what it gets, so this is a memory bound rather than a
+  // review bound. At 50,000 it was the review bound, and everything past the
+  // first few files went unreviewed without anyone being told.
+  const MAX_CHARS = 300_000;
   if (diff.length > MAX_CHARS) {
-    diff = diff.substring(0, MAX_CHARS) + '\n\n[... diff truncated at 50,000 characters ...]';
+    diff = diff.substring(0, MAX_CHARS) + `\n\n[... diff truncated at ${MAX_CHARS} characters ...]`;
   }
   return diff;
+}
+
+export interface GitHubReviewLineComment {
+  path: string;
+  /** Line in the head revision. GitHub rejects one that is not in the diff. */
+  line: number;
+  body: string;
 }
 
 export async function postPrReview(
@@ -842,6 +852,7 @@ export async function postPrReview(
   prNumber: number,
   body: string,
   event: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES' = 'COMMENT',
+  comments: readonly GitHubReviewLineComment[] = [],
 ): Promise<void> {
   validateGitHubPathSegment(owner, 'owner');
   validateGitHubPathSegment(repo, 'repo');
@@ -857,10 +868,66 @@ export async function postPrReview(
         'Content-Type': 'application/json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      body: JSON.stringify({ body, event }),
+      body: JSON.stringify({
+        body,
+        event,
+        ...(comments.length > 0
+          ? {
+              comments: comments.map((comment) => ({
+                path: comment.path,
+                line: comment.line,
+                side: 'RIGHT',
+                body: comment.body,
+              })),
+            }
+          : {}),
+      }),
     },
   );
   if (!res.ok) throw new Error(`Failed to post PR review: ${res.status}`);
+}
+
+const REVIEW_COMMENT_PAGE_SIZE = 100;
+const MAX_REVIEW_COMMENT_PAGES = 10;
+
+/**
+ * Bodies of the line comments already on this pull request.
+ *
+ * The pull request is the authority on what has been said, not our own attempt
+ * table: a redeploy, a lost row or a second installation would otherwise post
+ * the same comment again on every push.
+ */
+export async function listPrReviewCommentBodies(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<string[]> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const bodies: string[] = [];
+  for (let page = 1; page <= MAX_REVIEW_COMMENT_PAGES; page += 1) {
+    const res = await fetch(
+      buildGitHubApiUrl(
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodeURIComponent(String(prNumber))}/comments?per_page=${REVIEW_COMMENT_PAGE_SIZE}&page=${page}`,
+      ),
+      {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      },
+    );
+    if (!res.ok) throw new Error(`Failed to list PR review comments: ${res.status}`);
+    const batch = (await res.json()) as Array<{ body?: unknown }>;
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    for (const comment of batch) {
+      if (typeof comment.body === 'string') bodies.push(comment.body);
+    }
+    if (batch.length < REVIEW_COMMENT_PAGE_SIZE) break;
+  }
+  return bodies;
 }
 
 export async function postIssueComment(

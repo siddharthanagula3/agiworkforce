@@ -1,4 +1,3 @@
-
 import {
   computeUnigramBLEU,
   computeChrF,
@@ -579,8 +578,8 @@ describe('QA session lifecycle', () => {
   });
 
   it('recordQAResult is a no-op outside active session', () => {
-    recordQAResult({ promptId: 'A-01', modelOutput: 'test' });
-    // Should not throw
+    expect(() => recordQAResult({ promptId: 'A-01', modelOutput: 'test' })).not.toThrow();
+    expect(finalizeQASession()).toBeNull();
   });
 });
 

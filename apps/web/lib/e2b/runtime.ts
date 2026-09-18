@@ -61,6 +61,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { egressNeedsProxy } from './network-policy';
 import { providerProxyBaseUrl, providerProxyHost } from './provider-proxy';
+import { invalidateCachedProviderProxyAccess } from './provider-proxy-access-cache';
 import { mintProviderProxyToken } from './provider-proxy-token';
 import {
   E2B_COMPUTE_RATE_ENV,
@@ -584,6 +585,85 @@ export async function killE2BSession(scope: E2BSessionScope): Promise<void> {
   } finally {
     await deleteE2BSession(scope);
   }
+}
+
+export interface E2BSessionProcessTermination {
+  sandboxId: string | null;
+  /** Processes this pass killed, browsers and coding-agent CLIs included. */
+  killed: number;
+  /** Still listed after the pass; the sandbox pause or kill is the backstop. */
+  survived: number;
+}
+
+const NO_PROCESSES: E2BSessionProcessTermination = { sandboxId: null, killed: 0, survived: 0 };
+
+/**
+ * Kill what the session is running right now, without taking the sandbox away.
+ *
+ * A stop is recorded by a different request than the one driving the turn, so
+ * the shell command, browser or agent CLI already in flight has no signal to
+ * observe and would otherwise run to completion. The workspace is deliberately
+ * left intact: the work done up to the stop is the reader's to review.
+ *
+ * Processes the template itself started carry a tag and are left alone; killing
+ * them would break a sandbox that is meant to survive the stop.
+ */
+export async function terminateE2BSessionProcesses(
+  scope: E2BSessionScope,
+): Promise<E2BSessionProcessTermination> {
+  const session = await getE2BSession(scope);
+  if (!session) return NO_PROCESSES;
+  const Sandbox = await importSandbox();
+  if (!Sandbox) return { ...NO_PROCESSES, sandboxId: session.sandboxId };
+
+  try {
+    const sandbox = await Sandbox.connect(session.sandboxId);
+    const listWorkloads = async (): Promise<{ pid: number }[]> => {
+      const processes = await sandbox.commands.list();
+      return processes.filter((process) => !process.tag);
+    };
+    const running = await listWorkloads();
+    let killed = 0;
+    for (const process of running) {
+      const stopped = await sandbox.commands.kill(process.pid).catch((err: unknown) => {
+        logger.warn(
+          { err, pid: process.pid, ...scopeLog(scope) },
+          '[e2b] could not kill a sandbox process on stop',
+        );
+        return false;
+      });
+      if (stopped) killed += 1;
+    }
+    const survived = running.length === 0 ? 0 : (await listWorkloads().catch(() => [])).length;
+    return { sandboxId: session.sandboxId, killed, survived };
+  } catch (err) {
+    logger.warn({ err, ...scopeLog(scope) }, '[e2b] sandbox processes could not be terminated');
+    return { ...NO_PROCESSES, sandboxId: session.sandboxId };
+  }
+}
+
+export interface E2BCredentialRevocation extends E2BSessionProcessTermination {
+  /** The cached ALLOWED gate decision for this session was dropped. */
+  gateCacheCleared: boolean;
+}
+
+/**
+ * Take the session's managed credential out of use, explicitly rather than as a
+ * side effect of teardown.
+ *
+ * The credential is a proxy token minted into the sandbox environment, so the
+ * processes carrying it are killed first; then the cached ALLOWED gate decision
+ * is dropped, so a call that slips out re-reads the gate from the database
+ * instead of riding a decision taken before the stop.
+ */
+export async function revokeE2BSessionCredentials(
+  scope: E2BSessionScope,
+): Promise<E2BCredentialRevocation> {
+  const terminated = await terminateE2BSessionProcesses(scope);
+  const sessionId = scope.resource?.kind === 'code_session' ? scope.resource.id : null;
+  if (!sessionId) return { ...terminated, gateCacheCleared: false };
+  await invalidateCachedProviderProxyAccess(sessionId);
+  return { ...terminated, gateCacheCleared: true };
 }
 
 export async function getE2BExecutor(

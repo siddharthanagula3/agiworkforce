@@ -169,6 +169,13 @@ const staticList = vi.fn(
   },
 );
 
+interface ListedProcess {
+  pid: number;
+  cmd: string;
+  tag?: string;
+}
+let listedProcesses: ListedProcess[] = [];
+
 function makeSandboxInstance(sandboxId: string) {
   return {
     sandboxId,
@@ -189,6 +196,12 @@ function makeSandboxInstance(sandboxId: string) {
         stderr: '',
         exitCode: 0,
       })),
+      list: vi.fn(async () => listedProcesses),
+      kill: vi.fn(async (pid: number) => {
+        const before = listedProcesses.length;
+        listedProcesses = listedProcesses.filter((process) => process.pid !== pid);
+        return listedProcesses.length < before;
+      }),
     },
     git: {
       clone: vi.fn(async () => ({ stdout: 'cloned', stderr: '', exitCode: 0 })),
@@ -203,6 +216,12 @@ function makeSandboxInstance(sandboxId: string) {
 
 vi.mock('@e2b/code-interpreter', () => ({
   Sandbox: { create, connect, kill: staticKill, pause: staticPause, list: staticList },
+}));
+
+const invalidateCachedProviderProxyAccess = vi.fn(async (_sessionId: string) => {});
+vi.mock('../provider-proxy-access-cache', () => ({
+  invalidateCachedProviderProxyAccess: (sessionId: string) =>
+    invalidateCachedProviderProxyAccess(sessionId),
 }));
 
 function liveSandboxesFor(
@@ -1268,5 +1287,84 @@ describe('getE2BExecutor, notebook cell outputs', () => {
     const [writtenPath, writtenData] = instance.files.write.mock.calls[0] as [string, ArrayBuffer];
     expect(writtenPath).toBe('/home/user/hi.txt');
     expect(Buffer.from(writtenData).toString('utf8')).toBe('hello');
+  });
+});
+
+describe('stopping a Code session without taking its workspace away', () => {
+  const CODE_SCOPE = codeScope('session-stop');
+
+  beforeEach(() => {
+    sessions.clear();
+    listedProcesses = [];
+    vi.clearAllMocks();
+  });
+
+  function withSandbox(sandboxId = 'sbx-stop'): void {
+    sessions.set(scopeKey(CODE_SCOPE), { sandboxId, contexts: {} });
+  }
+
+  it('kills the shell and browser the turn had running', async () => {
+    withSandbox();
+    listedProcesses = [
+      { pid: 11, cmd: 'pnpm test' },
+      { pid: 12, cmd: 'chromium --headless' },
+    ];
+    const { terminateE2BSessionProcesses } = await import('../runtime');
+
+    const result = await terminateE2BSessionProcesses(CODE_SCOPE as never);
+
+    expect(result).toEqual({ sandboxId: 'sbx-stop', killed: 2, survived: 0 });
+    expect(staticKill).not.toHaveBeenCalled();
+  });
+
+  it('leaves the process the template itself started alone', async () => {
+    withSandbox();
+    listedProcesses = [
+      { pid: 1, cmd: '/usr/bin/envd', tag: 'start_cmd' },
+      { pid: 21, cmd: 'git push origin agi/fix' },
+    ];
+    const { terminateE2BSessionProcesses } = await import('../runtime');
+
+    const result = await terminateE2BSessionProcesses(CODE_SCOPE as never);
+
+    expect(result.killed).toBe(1);
+    expect(listedProcesses.map((process) => process.pid)).toEqual([1]);
+  });
+
+  it('reports nothing killed when the session has no sandbox', async () => {
+    const { terminateE2BSessionProcesses } = await import('../runtime');
+
+    await expect(terminateE2BSessionProcesses(CODE_SCOPE as never)).resolves.toEqual({
+      sandboxId: null,
+      killed: 0,
+      survived: 0,
+    });
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('revokes the minted credential by ending the processes that hold it and dropping the gate', async () => {
+    withSandbox();
+    listedProcesses = [{ pid: 31, cmd: 'claude --print' }];
+    const { revokeE2BSessionCredentials } = await import('../runtime');
+
+    const result = await revokeE2BSessionCredentials(CODE_SCOPE as never);
+
+    expect(result).toEqual({
+      sandboxId: 'sbx-stop',
+      killed: 1,
+      survived: 0,
+      gateCacheCleared: true,
+    });
+    expect(invalidateCachedProviderProxyAccess).toHaveBeenCalledWith('session-stop');
+  });
+
+  it('keeps the sandbox mapping so the partial work stays reachable', async () => {
+    withSandbox();
+    listedProcesses = [{ pid: 41, cmd: 'pytest' }];
+    const { revokeE2BSessionCredentials } = await import('../runtime');
+
+    await revokeE2BSessionCredentials(CODE_SCOPE as never);
+
+    expect(sessions.get(scopeKey(CODE_SCOPE))?.sandboxId).toBe('sbx-stop');
   });
 });
