@@ -144,6 +144,72 @@ export async function stopRemoteWorkOnDevice(
   }
 }
 
+export const DEVICE_REVOCATION_REASONS = ['unlinked', 'lost', 'remote_work_stopped'] as const;
+
+export type DeviceRevocationReason = (typeof DEVICE_REVOCATION_REASONS)[number];
+
+export interface DeviceRevocation {
+  readonly userId: string;
+  readonly deviceId: string;
+  readonly reason: DeviceRevocationReason;
+  readonly revokedAtMs: number;
+}
+
+export interface DeviceRevocationDelivery {
+  readonly remoteWorkStopped: boolean;
+  readonly liveSessionsDropped: number | null;
+  readonly signalingReachable: boolean;
+}
+
+const SIGNALING_TIMEOUT_MS = 5_000;
+
+/**
+ * Carries a revocation to everywhere the device could still be reached from.
+ *
+ * The registry flip is what every durable run re-reads, so it is done first and
+ * is never conditional on the relay: a signaling server that is down delays the
+ * socket close, it does not leave the device cleared for the next step.
+ */
+export async function propagateDeviceRevocation(
+  db: DatabaseAdapter,
+  revocation: DeviceRevocation,
+): Promise<DeviceRevocationDelivery> {
+  const remoteWorkStopped = await stopRemoteWorkOnDevice(db, {
+    userId: revocation.userId,
+    deviceId: revocation.deviceId,
+  });
+
+  const url = process.env['SIGNALING_HTTP_URL'];
+  const secret = process.env['SIGNALING_INTERNAL_SECRET'];
+  if (!url || !secret) {
+    return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
+  }
+
+  try {
+    const response = await fetch(
+      `${url.replace(/\/+$/, '')}/devices/${encodeURIComponent(revocation.deviceId)}/revoke`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ reason: revocation.reason, revokedAtMs: revocation.revokedAtMs }),
+        signal: AbortSignal.timeout(SIGNALING_TIMEOUT_MS),
+      },
+    );
+    if (!response.ok) {
+      return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
+    }
+    const payload: unknown = await response.json().catch(() => null);
+    const closed = (payload as { closed?: unknown } | null)?.closed;
+    return {
+      remoteWorkStopped,
+      liveSessionsDropped: typeof closed === 'number' ? closed : null,
+      signalingReachable: true,
+    };
+  } catch {
+    return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
+  }
+}
+
 export type DeviceStepClearance =
   | { decision: 'ready'; deviceId: string }
   | { decision: 'wait'; reason: string; retryInMs: number; presence: DevicePresence }

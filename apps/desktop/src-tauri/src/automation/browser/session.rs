@@ -1,17 +1,5 @@
 //! Which browser a task runs in.
-//!
-//! The kinds and their capabilities are the Rust half of
-//! `packages/contracts/types/src/browser-session.ts`, which owns the wire names
-//! and the sentence a person reads. Kept as an explicit enum rather than
-//! inferred from which bridge happens to be connected, because the three
-//! sessions differ in ways a caller must choose deliberately: the user's own
-//! Chrome carries their signed-in profile, the built-in webview carries its
-//! own, and the cloud session would carry its own AND keep running once the
-//! client goes away.
-//!
-//! The cloud backend does not exist. Asking for it is refused in words. It must
-//! never degrade into the user's Chrome: that would run an isolated-by-request
-//! task inside their logged-in profile and leave its cookies and history there.
+//!.
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -78,8 +66,7 @@ impl BrowserSessionKind {
 }
 
 /// The backend a resolved session drives. Cloud has no variant here because
-/// there is nothing to drive; `BrowserState::session` refuses before this is
-/// constructed.
+/// there is nothing to drive; `BrowserState::session` refuses before this is.
 pub enum BrowserSessionTarget<'a> {
     UserChrome(&'a Arc<Mutex<ExtensionBridge>>),
     BuiltIn(&'a Arc<Mutex<PlaywrightBridge>>),
@@ -99,6 +86,118 @@ pub fn browser_session_capabilities() -> Vec<BrowserSessionCapability> {
         .iter()
         .map(|kind| kind.capability())
         .collect()
+}
+
+/// How much of the person's own world a session reaches, ordered so that a
+/// larger number is a larger reach. The Rust half of `browser-selection.ts`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BrowserSiteAccess {
+    IsolatedRemote,
+    IsolatedLocal,
+    UserProfile,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BrowserDeclineReason {
+    NotPresentOnThisSurface,
+    Unavailable,
+    WouldBroadenAccess,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserDeclined {
+    pub kind: BrowserSessionKind,
+    pub reason: BrowserDeclineReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserSelection {
+    pub kind: Option<BrowserSessionKind>,
+    pub via_fallback: bool,
+    pub declined: Vec<BrowserDeclined>,
+}
+
+impl BrowserSessionKind {
+    /// Least privilege first, so an unconstrained pick lands on the narrowest
+    /// session that can actually run.
+    pub const SELECTION_ORDER: [BrowserSessionKind; 3] = [
+        BrowserSessionKind::Cloud,
+        BrowserSessionKind::BuiltIn,
+        BrowserSessionKind::UserChrome,
+    ];
+
+    pub fn site_access(self) -> BrowserSiteAccess {
+        match self {
+            BrowserSessionKind::UserChrome => BrowserSiteAccess::UserProfile,
+            BrowserSessionKind::BuiltIn => BrowserSiteAccess::IsolatedLocal,
+            BrowserSessionKind::Cloud => BrowserSiteAccess::IsolatedRemote,
+        }
+    }
+
+    pub fn broadens_over(self, chosen: BrowserSessionKind) -> bool {
+        self.site_access() > chosen.site_access()
+    }
+}
+
+/// Picks the session to run in. A fallback may only narrow what the run can
+/// reach: a task that asked for an isolated session is refused rather than.
+pub fn select_browser_session(
+    requested: Option<BrowserSessionKind>,
+    present: &[BrowserSessionKind],
+) -> BrowserSelection {
+    let mut order: Vec<BrowserSessionKind> = Vec::with_capacity(BrowserSessionKind::ALL.len());
+    if let Some(kind) = requested {
+        order.push(kind);
+    }
+    order.extend(
+        BrowserSessionKind::SELECTION_ORDER
+            .iter()
+            .copied()
+            .filter(|kind| Some(*kind) != requested),
+    );
+
+    let mut declined = Vec::new();
+    for kind in order {
+        let is_fallback = requested.is_some_and(|wanted| wanted != kind);
+        if let Some(wanted) = requested {
+            if is_fallback && kind.broadens_over(wanted) {
+                declined.push(BrowserDeclined {
+                    kind,
+                    reason: BrowserDeclineReason::WouldBroadenAccess,
+                });
+                continue;
+            }
+        }
+        if !kind.capability().available {
+            declined.push(BrowserDeclined {
+                kind,
+                reason: BrowserDeclineReason::Unavailable,
+            });
+            continue;
+        }
+        if !present.contains(&kind) {
+            declined.push(BrowserDeclined {
+                kind,
+                reason: BrowserDeclineReason::NotPresentOnThisSurface,
+            });
+            continue;
+        }
+        return BrowserSelection {
+            kind: Some(kind),
+            via_fallback: is_fallback,
+            declined,
+        };
+    }
+
+    BrowserSelection {
+        kind: None,
+        via_fallback: false,
+        declined,
+    }
 }
 
 impl BrowserState {
@@ -200,6 +299,62 @@ mod tests {
                 .unwrap(),
             BrowserSessionKind::BuiltIn
         );
+    }
+
+    #[test]
+    fn an_unconstrained_pick_takes_the_narrowest_session_that_is_present() {
+        let selection = select_browser_session(
+            None,
+            &[BrowserSessionKind::BuiltIn, BrowserSessionKind::UserChrome],
+        );
+        assert_eq!(selection.kind, Some(BrowserSessionKind::BuiltIn));
+        assert!(!selection.via_fallback);
+        assert!(selection
+            .declined
+            .iter()
+            .any(|entry| entry.kind == BrowserSessionKind::Cloud));
+    }
+
+    #[test]
+    fn a_cloud_request_is_refused_rather_than_run_in_the_signed_in_chrome() {
+        let selection = select_browser_session(
+            Some(BrowserSessionKind::Cloud),
+            &[BrowserSessionKind::BuiltIn, BrowserSessionKind::UserChrome],
+        );
+        assert_eq!(selection.kind, None);
+        for kind in [BrowserSessionKind::BuiltIn, BrowserSessionKind::UserChrome] {
+            let entry = selection
+                .declined
+                .iter()
+                .find(|entry| entry.kind == kind)
+                .expect("every broader session is declined by name");
+            assert_eq!(entry.reason, BrowserDeclineReason::WouldBroadenAccess);
+        }
+    }
+
+    #[test]
+    fn a_fallback_may_narrow_what_the_run_reaches_but_never_widen_it() {
+        let narrowing = select_browser_session(
+            Some(BrowserSessionKind::UserChrome),
+            &[BrowserSessionKind::BuiltIn],
+        );
+        assert_eq!(narrowing.kind, Some(BrowserSessionKind::BuiltIn));
+        assert!(narrowing.via_fallback);
+
+        let widening = select_browser_session(
+            Some(BrowserSessionKind::BuiltIn),
+            &[BrowserSessionKind::UserChrome],
+        );
+        assert_eq!(widening.kind, None);
+        assert!(BrowserSessionKind::UserChrome.broadens_over(BrowserSessionKind::BuiltIn));
+        assert!(!BrowserSessionKind::BuiltIn.broadens_over(BrowserSessionKind::UserChrome));
+    }
+
+    #[test]
+    fn a_surface_that_drives_nothing_gets_no_session_at_all() {
+        let selection = select_browser_session(None, &[]);
+        assert_eq!(selection.kind, None);
+        assert_eq!(selection.declined.len(), BrowserSessionKind::ALL.len());
     }
 
     #[test]

@@ -15,6 +15,10 @@ import { getIdentityProvider } from '@/lib/server/identity';
 import { notifyDeviceDisconnected } from '@/lib/services/account-activity-notifications';
 import { revokeDeviceRefreshCredentials } from '@/lib/server/refresh-token-family';
 import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
+import {
+  propagateDeviceRevocation,
+  type DeviceRevocationReason,
+} from '@/lib/device-steps/device-registry';
 import { resolveSessionsPrincipal } from '../../sessions/session-principal';
 import { isCredentialLinkMissing, isRegistryMissing } from '../schema-state';
 
@@ -47,29 +51,6 @@ async function readUnlinkOptions(request: NextRequest): Promise<UnlinkOptions> {
   return { lost: parsed.data.lost ?? false, logoutAll: parsed.data.logoutAll ?? false };
 }
 
-/**
- * Its own statement, before the delete: deleting the row removes the record of
- * the authorization, this removes the authorization.
- */
-async function revokeRemoteControl(
-  db: DatabaseAdapter,
-  deviceId: string,
-  userId: string,
-): Promise<boolean> {
-  try {
-    const affected = await db.execute(
-      `update device_registrations
-          set remote_enabled = false, updated_at = now()
-        where id = $1 and user_id = $2`,
-      [deviceId, userId],
-    );
-    return affected > 0;
-  } catch (error) {
-    if (isRegistryMissing(error)) return false;
-    throw error;
-  }
-}
-
 async function handleUnlink(
   request: NextRequest,
   context: { params: Promise<{ deviceId: string }> },
@@ -89,7 +70,17 @@ async function handleUnlink(
   const options = await readUnlinkOptions(request);
 
   const registered = await readRegisteredDevice(db, deviceId, userId);
-  const remoteControlRevoked = registered ? await revokeRemoteControl(db, deviceId, userId) : false;
+  // Before the delete: deleting the row removes the record of the
+  // authorization, this removes the authorization and drops live sessions.
+  const revocation = registered
+    ? await propagateDeviceRevocation(db, {
+        userId,
+        deviceId,
+        reason: options.lost ? 'lost' : 'unlinked',
+        revokedAtMs: Date.now(),
+      })
+    : null;
+  const remoteControlRevoked = revocation?.remoteWorkStopped ?? false;
   const result = await db.transaction(async (tx) => {
     const owned = registered
       ? [registered]
@@ -233,7 +224,82 @@ async function handleUnlink(
     credentialsRevoked: result.credentialsRevocable,
     credentialFamilyCompromised: result.compromiseRecorded,
     remoteControlRevoked,
+    liveSessionsDropped: revocation?.liveSessionsDropped ?? null,
     ...(loggedOutEverywhere ? { loggedOutEverywhere } : {}),
+  });
+}
+
+const StopRequestSchema = z.object({ action: z.literal('stop-remote-work') }).strict();
+
+/**
+ * Stops what one device is doing without unlinking it. The device stays signed
+ * in; it is only withdrawn from remote work, which every durable run re-reads
+ * before its next step, so the step after this call is refused.
+ */
+async function handleStopRemoteWork(
+  request: NextRequest,
+  context: { params: Promise<{ deviceId: string }> },
+) {
+  const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { db, userId } = await resolveSessionsPrincipal(request);
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const { deviceId } = await context.params;
+  if (!UUID.test(deviceId)) {
+    throw createError.validation('Invalid device ID');
+  }
+  const parsed = StopRequestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    throw createError.validation('Unsupported device action');
+  }
+
+  const registered = await readRegisteredDevice(db, deviceId, userId);
+  if (!registered) {
+    throw createError.notFound('Device not found');
+  }
+
+  const reason: DeviceRevocationReason = 'remote_work_stopped';
+  const delivery = await propagateDeviceRevocation(db, {
+    userId,
+    deviceId,
+    reason,
+    revokedAtMs: Date.now(),
+  });
+
+  logger.info(
+    {
+      userId,
+      kind: registered.kind,
+      remoteWorkStopped: delivery.remoteWorkStopped,
+      signalingReachable: delivery.signalingReachable,
+    },
+    'Remote work stopped on one device',
+  );
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'device_trust_revoked',
+    request,
+    detail: {
+      resourceType: `device:${registered.kind}`,
+      resourceId: deviceId,
+      source: reason,
+      trusted: true,
+      enabled: false,
+    },
+  });
+
+  return NextResponse.json({
+    message: delivery.remoteWorkStopped
+      ? 'Remote work stopped on this device'
+      : 'This device was already withdrawn from remote work',
+    remoteWorkStopped: delivery.remoteWorkStopped,
+    liveSessionsDropped: delivery.liveSessionsDropped,
+    signalingReachable: delivery.signalingReachable,
   });
 }
 
@@ -378,6 +444,7 @@ async function revokeIdentitySession(sessionId: string, userId: string): Promise
 
 export const DELETE = withErrorHandler(handleUnlink);
 export const PATCH = withErrorHandler(handleRename);
+export const POST = withErrorHandler(handleStopRemoteWork);
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
