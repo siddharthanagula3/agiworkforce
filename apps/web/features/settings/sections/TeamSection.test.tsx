@@ -153,6 +153,7 @@ vi.mock('../hooks/use-settings-queries', () => ({
     mutateAsync: state.transferOwnership,
     isPending: false,
     error: null,
+    stepUpDialog: <div data-testid="transfer-step-up-dialog" />,
   }),
 }));
 
@@ -593,6 +594,12 @@ describe('TeamSection', () => {
       outgoingOwnerRole: 'viewer',
     });
     expect(state.leaveOrganization).not.toHaveBeenCalled();
+  });
+
+  it('mounts the step-up challenge, which the 403 has no other way to reach', () => {
+    renderAsOwnerWithMember();
+
+    expect(screen.getByTestId('transfer-step-up-dialog')).toBeInTheDocument();
   });
 
   it('names who gains what and what the owner loses before transferring', () => {

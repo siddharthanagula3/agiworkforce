@@ -240,6 +240,24 @@
         "text": "eggs, flour, lemons, butter"
       }
     },
+    "chat/states-a-settled-fact": {
+      "fingerprint": "dd58ae56cb7cbec263b2d56566bb6f2752fb4b405c4816f2d626f0f5441a94cd",
+      "response": {
+        "text": "Answer: 1986"
+      }
+    },
+    "chat/says-it-does-not-know": {
+      "fingerprint": "5655eafd0a4c993f2b3be0a35193b34f4bec22ec5eb8d8863da8b06dee0f78d8",
+      "response": {
+        "text": "I do not know, and I have no way to know: 14 March 2031 is in the future relative to anything I was trained on."
+      }
+    },
+    "chat/cites-the-supplied-source": {
+      "fingerprint": "b8f9aa4740dbe0e992fcfedd0f02a32c00011ed7bf41abc9628df1848e61ec50",
+      "response": {
+        "text": "Harbourline opened 1240 public charging points in 2025 [1]."
+      }
+    },
     "coding/fizzbuzz": {
       "fingerprint": "4b5ee621e4242650993952cda26885ffab2342beada1118538d07a5e4da4d8f9",
       "response": {
@@ -348,6 +366,12 @@
         "text": "The Kestrel 2 was released on 12 May 2026 [1]. It launched at a price of $499 [2]."
       }
     },
+    "research/stays-inside-the-brief": {
+      "fingerprint": "d1b951ea0fecbcc0fb9e6b2b9c1cf1374f3732b397d217beb5d4636f10e56fd4",
+      "response": {
+        "text": "The Calderwood pilot cut household heating demand by 18 percent across 220 homes over its first winter [1], and the council then agreed to extend it to a second district [2]."
+      }
+    },
     "search/prefer-official-docs": {
       "fingerprint": "11369d0cfed9ab7448da00e09bc754a7275dcbf9a1bcb66f56eb002fce140a34",
       "response": {
@@ -370,6 +394,12 @@
       "fingerprint": "12f8aa45d17fd02ede618f3a049b5590179fa9b6b854c2040a0961a84397d17a",
       "response": {
         "text": "https://quillmail.example/docs/relay-ports"
+      }
+    },
+    "search/source-quality-over-confidence": {
+      "fingerprint": "0a8039c3c1dfc736d4e72c5809cf5b653d276475a44c82f01a9eef3558bd526e",
+      "response": {
+        "text": "The recommended maximum adult dose is 40 mg in any 24 hour period (https://medicines.example.gov/veltrex/spc)."
       }
     },
     "tools/single-call-arguments": {
@@ -444,10 +474,7 @@
               "title": "Design review",
               "start": "2026-10-02T15:00:00Z",
               "durationMinutes": 45,
-              "attendees": [
-                "ana@example.com",
-                "raj@example.com"
-              ]
+              "attendees": ["ana@example.com", "raj@example.com"]
             }
           }
         ]
@@ -535,6 +562,24 @@
       "fingerprint": "a70ff72f3b9f893f5ec0e1ee66285fe3ba74cc686361754c392a89dca80796a2",
       "response": {
         "text": "Answer: 3"
+      }
+    },
+    "files/image-bar-chart": {
+      "fingerprint": "10d251369d68908bc7d8d341fb66d9348c509cea8cfb570d83067ef049c76cb8",
+      "response": {
+        "text": "Answer: 2"
+      }
+    },
+    "files/pdf-invoice-total": {
+      "fingerprint": "b6760e7d492aeafbea908794b1b42fc3bd11204b9b5a638fb414d1b1d4a24f2a",
+      "response": {
+        "text": "Answer: 1275.00"
+      }
+    },
+    "files/pdf-detail-not-in-summary": {
+      "fingerprint": "3fa3afcff6d1fa141faf704d3700cfa2a0c36bbe21d2207d5be63932d07792ca",
+      "response": {
+        "text": "4 at 70.00"
       }
     },
     "browser/fill-login-email": {

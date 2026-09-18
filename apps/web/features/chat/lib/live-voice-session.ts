@@ -256,6 +256,10 @@ export class LiveVoiceSession {
     for (const tool of created.tools ?? []) this.toolDescriptors.set(tool.id, tool);
   }
 
+  get outputElement(): HTMLAudioElement {
+    return this.audio;
+  }
+
   static async start(options: LiveVoiceSessionOptions): Promise<LiveVoiceSession> {
     if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       throw new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.unsupported, 'unsupported');

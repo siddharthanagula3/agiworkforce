@@ -16,6 +16,11 @@ import {
   importStripeCogsAdjustments,
   type StripeCogsImportSummary,
 } from '@/lib/services/cogs-ledger-service';
+import {
+  resolveReconciliationOutcome,
+  type AlertDelivery,
+  type ReconciliationFailure,
+} from '@/lib/services/reconciliation-outcome';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
@@ -41,8 +46,9 @@ interface ReconcileSummary {
   pending: number;
   terminal: number;
   alerted: boolean;
-  delivery: 'not_needed' | 'delivered' | 'undeliverable';
-  reason?: string;
+  delivery: AlertDelivery;
+  reason?: ReconciliationFailure;
+  deliveryError?: string;
   stripe?: {
     examined: number;
     diverged: number;
@@ -188,11 +194,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  let videoAlertFailure:
-    | 'video_incident_alert_pending'
-    | 'video_incident_alert_exhausted'
-    | 'video_incident_alert_recovery_failed'
-    | null = null;
+  let videoAlertFailure: ReconciliationFailure | null = null;
   try {
     const videoAlerts = await deliverDueVideoIncidentAlerts(getNeonDb(), 20);
     if (videoAlerts.pending > 0 || videoAlerts.exhausted > 0) {
@@ -217,11 +219,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   let stripeSummary: StripeReconciliationSummary | null = null;
-  let stripeFailure:
-    | 'stripe_reconciliation_failed'
-    | 'stripe_divergence_undeliverable'
-    | 'cogs_import_failed'
-    | null = null;
+  let stripeFailure: ReconciliationFailure | null = null;
+  let stripeDivergenceAlertDelivered: boolean | null = null;
   try {
     stripeSummary = await runStripeReconciliation();
   } catch (error) {
@@ -271,30 +270,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ? 'Stripe subscription divergence alert dispatched'
         : 'Stripe subscription divergence alert could NOT be delivered · no human has been told',
     );
-    if (!sent.delivered) stripeFailure = 'stripe_divergence_undeliverable';
+    stripeDivergenceAlertDelivered = sent.delivered;
   }
 
-  if (creditError || !summary) {
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        ...(videoAlertFailure ? { reason: videoAlertFailure } : {}),
-        ...(stripeFailure && !videoAlertFailure ? { reason: stripeFailure } : {}),
-      },
-      { status: 500 },
-    );
-  }
-
-  let responseBody: ReconcileSummary;
-  let responseStatus = 200;
-
-  if (summary.terminal === 0) {
-    responseBody = {
-      ...summary,
-      alerted: false,
-      delivery: 'not_needed',
-    };
-  } else {
+  let driftAlertDelivered: boolean | null = null;
+  let driftAlertError: string | undefined;
+  if (summary && !creditError && summary.terminal > 0) {
     const { subject, text, html } = buildDriftAlert(summary);
     const sent = await sendSupportEmail({
       to: getHandoffConfig().fallbackEmail,
@@ -302,31 +283,46 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       text,
       html,
     });
-
-    if (sent.delivered) {
-      logger.error(
-        { event: 'credit_settlement_drift', ...summary },
-        'Credit settlement drift alert dispatched',
-      );
-      responseBody = {
+    driftAlertDelivered = sent.delivered;
+    if (!sent.delivered) driftAlertError = sent.reason;
+    logger.error(
+      {
+        event: 'credit_settlement_drift',
         ...summary,
-        alerted: true,
-        delivery: 'delivered',
-      };
-    } else {
-      logger.error(
-        { event: 'credit_settlement_drift', ...summary, reason: sent.reason },
-        'Credit settlement drift alert could NOT be delivered · no human has been told',
-      );
-      responseBody = {
-        ...summary,
-        alerted: true,
-        delivery: 'undeliverable',
-        reason: sent.reason,
-      };
-      responseStatus = 500;
-    }
+        ...(sent.delivered ? {} : { reason: sent.reason }),
+      },
+      sent.delivered
+        ? 'Credit settlement drift alert dispatched'
+        : 'Credit settlement drift alert could NOT be delivered · no human has been told',
+    );
   }
+
+  const outcome = resolveReconciliationOutcome({
+    settlement: creditError ? null : summary,
+    settlementFailed: Boolean(creditError),
+    driftAlertDelivered,
+    videoAlertFailure,
+    stripeFailure,
+    stripeDivergenceAlertDelivered,
+  });
+
+  if (outcome.settlement === null) {
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        ...(outcome.reason ? { reason: outcome.reason } : {}),
+      },
+      { status: outcome.status },
+    );
+  }
+
+  const responseBody: ReconcileSummary = {
+    ...outcome.settlement,
+    alerted: outcome.alerted,
+    delivery: outcome.delivery,
+    ...(outcome.reason ? { reason: outcome.reason } : {}),
+    ...(driftAlertError ? { deliveryError: driftAlertError } : {}),
+  };
 
   if (stripeSummary) {
     responseBody.stripe = {
@@ -348,15 +344,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     };
   }
 
-  if (videoAlertFailure) {
-    responseBody.reason ??= videoAlertFailure;
-    responseStatus = 500;
-  }
-
-  if (stripeFailure) {
-    responseBody.reason ??= stripeFailure;
-    responseStatus = 500;
-  }
-
-  return NextResponse.json(responseBody, { status: responseStatus });
+  return NextResponse.json(responseBody, { status: outcome.status });
 }

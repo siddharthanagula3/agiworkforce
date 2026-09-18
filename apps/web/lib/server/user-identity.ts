@@ -3,6 +3,16 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import type { ProfileRow } from '@/lib/server/neon-types';
+import {
+  firstActiveInstruction,
+  readInstructionBlock,
+  type InstructionBlock,
+  type InstructionScope,
+} from '@/lib/preferences/instruction-preferences';
+import {
+  normalizeResponseStylePreference,
+  responseStyleLines,
+} from '@/lib/preferences/response-style-preferences';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 
 export const USER_IDENTITY_SETTINGS_NAMESPACE = 'general';
@@ -14,6 +24,8 @@ export interface UserIdentity {
   preferredName: string | null;
   workDescription: string | null;
   instructions: string | null;
+  instructionsEnabled: boolean;
+  instructionScope: InstructionScope;
   primaryUseCase: string | null;
   onboardingCompletedAt: string | null;
   profile: ProfileRow | null;
@@ -106,11 +118,14 @@ export async function readUserIdentity(db: DatabaseAdapter, userId: string): Pro
     readIdentityNamespace(db, userId),
   ]);
 
+  const instructionBlock = readInstructionBlock(namespace, 'account');
   return {
     displayName: normalizeText(profile?.display_name, 120),
     preferredName: normalizeText(namespace['preferredName'], 60),
     workDescription: normalizeText(namespace['workDescription'], 120),
-    instructions: normalizeText(namespace['instructions'], MAX_CUSTOM_INSTRUCTIONS_LENGTH),
+    instructions: instructionBlock.text,
+    instructionsEnabled: instructionBlock.enabled,
+    instructionScope: instructionBlock.scope,
     primaryUseCase: normalizeText(namespace['primaryUseCase'], MAX_PRIMARY_USE_CASE_LENGTH),
     onboardingCompletedAt: normalizeText(namespace['onboardingCompletedAt'], 40),
     profile,
@@ -135,65 +150,10 @@ export async function getOnboardingStatus(
 
 export const PERSONALIZATION_SETTINGS_NAMESPACE = 'personalization';
 
-export type ResponseStyle = 'default' | 'concise' | 'explanatory' | 'formal';
-
-const RESPONSE_STYLE_GUIDANCE: Readonly<Record<Exclude<ResponseStyle, 'default'>, string>> = {
-  concise: 'Keep responses short and direct. Lead with the answer.',
-  explanatory: 'Explain your reasoning and give context, as if teaching.',
-  formal: 'Use a formal register. Avoid contractions and casual phrasing.',
-};
-
-/**
- * The four sliders mobile ships run 0-100 with 50 as neutral. Only a clear
- * departure from neutral is worth a sentence, nudging the model on a 55 would
- * spend prompt on noise and make the control feel arbitrary.
- */
-const TRAIT_BAND = 20;
-
-interface TraitCopy {
-  low: string;
-  high: string;
-}
-
-const TRAIT_GUIDANCE: Readonly<Record<string, TraitCopy>> = {
-  warmth: {
-    low: 'Keep a neutral, businesslike tone.',
-    high: 'Be warm and personable.',
-  },
-  enthusiasm: {
-    low: 'Stay measured; skip exclamations and hype.',
-    high: 'Be energetic and encouraging.',
-  },
-  headersLists: {
-    low: 'Prefer flowing prose over headers and bullet lists.',
-    high: 'Use headers and bullet lists to structure answers.',
-  },
-  emoji: {
-    low: 'Do not use emoji.',
-    high: 'Emoji are welcome where they help.',
-  },
-};
-
-function traitSentences(namespace: Record<string, unknown>): string[] {
-  const out: string[] = [];
-  for (const [key, copy] of Object.entries(TRAIT_GUIDANCE)) {
-    const raw = namespace[key];
-    if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
-    const value = Math.max(0, Math.min(100, raw));
-    if (value <= 50 - TRAIT_BAND) out.push(copy.low);
-    else if (value >= 50 + TRAIT_BAND) out.push(copy.high);
-  }
-  return out;
-}
+export type { ResponseStyle } from '@/lib/preferences/response-style-preferences';
 
 export function formatResponseStyleLines(namespace: Record<string, unknown>): string[] {
-  const lines: string[] = [];
-  const style = namespace['style'];
-  if (typeof style === 'string' && style !== 'default' && style in RESPONSE_STYLE_GUIDANCE) {
-    lines.push(RESPONSE_STYLE_GUIDANCE[style as Exclude<ResponseStyle, 'default'>]);
-  }
-  lines.push(...traitSentences(namespace));
-  return lines;
+  return responseStyleLines(normalizeResponseStylePreference(namespace));
 }
 
 export interface PersonalizationInput {
@@ -262,11 +222,24 @@ export async function buildCustomInstructionsPreamble(
     workDescription:
       normalizeText(namespace['workDescription'], 120) ??
       normalizeText(personalization['occupation'], 120),
-    instructions:
-      normalizeText(namespace['instructions'], MAX_CUSTOM_INSTRUCTIONS_LENGTH) ??
-      normalizeText(personalization['instructions'], MAX_CUSTOM_INSTRUCTIONS_LENGTH),
+    instructions: firstActiveInstruction(readAccountInstructionBlocks(namespace, personalization)),
     responseStyle: formatResponseStyleLines(personalization),
   });
+}
+
+/**
+ * Both surfaces write an account-scoped instruction, web into 'general' and
+ * mobile into 'personalization'. A block switched off is not a candidate, so
+ * turning web's instructions off does not silently promote the mobile one.
+ */
+export function readAccountInstructionBlocks(
+  identityNamespace: Record<string, unknown>,
+  personalizationNamespace: Record<string, unknown>,
+): InstructionBlock[] {
+  return [
+    readInstructionBlock(identityNamespace, 'account'),
+    readInstructionBlock(personalizationNamespace, 'account'),
+  ];
 }
 
 export async function backfillDisplayNameFromUpstream(

@@ -30,6 +30,7 @@ import type {
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard, ProjectFileCitation, ResearchStep } from '@agiworkforce/types';
+import type { PastChatCitationView } from '@/features/chat/components/messages/CitationPastChats';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type {
   PaywallSlot,
@@ -256,6 +257,11 @@ export interface MessageMetadata {
    * heading trail it came from. Server-decided, so the client only carries it.
    */
   projectSources?: ProjectFileCitation[];
+  /**
+   * The earlier conversations this turn's recall quoted. Server-decided, so the
+   * client only carries it.
+   */
+  pastChatSources?: PastChatCitationView[];
   /**
    * The client's post-stream metadata save failed and was not retried, so what
    * is on screen is richer than what a reload will show.
@@ -774,6 +780,11 @@ interface ChatState {
   setProjectSources: (
     id: string,
     sources: ProjectFileCitation[] | undefined,
+    conversationId?: string,
+  ) => void;
+  setPastChatSources: (
+    id: string,
+    sources: PastChatCitationView[] | undefined,
     conversationId?: string,
   ) => void;
   setSearchResults: (
@@ -1376,6 +1387,14 @@ export const useChatStore = create<ChatState>()(
             (state) => patchMessageMetadata(state, conversationId, id, { projectSources: sources }),
             undefined,
             'chat/setProjectSources',
+          ),
+
+        setPastChatSources: (id, sources, conversationId) =>
+          set(
+            (state) =>
+              patchMessageMetadata(state, conversationId, id, { pastChatSources: sources }),
+            undefined,
+            'chat/setPastChatSources',
           ),
 
         setSearchResults: (id, results, conversationId) =>

@@ -135,6 +135,122 @@ describe('native mobile IAP hook', () => {
     expect(mockRefreshTier).toHaveBeenCalled();
   });
 
+  it('shows the store its own localized price, never a figure the app assembled', async () => {
+    const definitions = MOBILE_IAP_PRODUCT_DEFINITIONS.filter(
+      (item) => item.kind === 'subscription',
+    );
+    const product = { ...definitions[0]!, productId: 'fixture.subscription.localized' };
+    Object.assign(mockIapState, {
+      subscriptions: [
+        {
+          id: product.productId,
+          type: 'subs',
+          platform: 'ios',
+          displayPrice: '\u00a518,800',
+          currency: 'JPY',
+          price: 18800,
+        },
+      ],
+    });
+    mockFetchCatalog.mockResolvedValue({
+      enabled: true,
+      platform: 'ios',
+      appAccountToken: accountToken,
+      products: [product],
+      unavailableReason: null,
+    });
+
+    const { result } = renderHook(() => useMobileIap({ enabled: true }));
+    await waitFor(() => expect(result.current.catalog?.enabled).toBe(true));
+
+    const price = result.current.priceFor(product.key);
+    expect(price.label).toBe('\u00a518,800');
+    expect(price.currency).toBe('JPY');
+    expect(price.label).not.toMatch(/\$/);
+  });
+
+  it('prices an Android subscription from the offer the purchase will use', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    const definitions = MOBILE_IAP_PRODUCT_DEFINITIONS.filter(
+      (item) => item.kind === 'subscription',
+    );
+    const product = { ...definitions[0]!, productId: 'fixture.subscription.offer' };
+    Object.assign(mockIapState, {
+      subscriptions: [
+        {
+          id: product.productId,
+          type: 'subs',
+          platform: 'android',
+          displayPrice: '',
+          currency: 'EUR',
+          subscriptionOffers: [
+            {
+              offerTokenAndroid: 'fixture-offer-token',
+              displayPrice: '',
+              currency: 'EUR',
+              pricingPhasesAndroid: {
+                pricingPhaseList: [
+                  { formattedPrice: 'Free', priceAmountMicros: '0' },
+                  { formattedPrice: '18,99\u00a0\u20ac', priceAmountMicros: '18990000' },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    mockFetchCatalog.mockResolvedValue({
+      enabled: true,
+      platform: 'android',
+      appAccountToken: accountToken,
+      products: [product],
+      unavailableReason: null,
+    });
+
+    const { result } = renderHook(() => useMobileIap({ enabled: true }));
+    await waitFor(() => expect(result.current.catalog?.platform).toBe('android'));
+
+    // The trial phase is not the price of the plan, and the product-level
+    // displayPrice is empty on Android subscriptions.
+    const price = result.current.priceFor(product.key);
+    expect(price.label).toBe('18,99\u00a0\u20ac');
+    expect(price.offerToken).toBe('fixture-offer-token');
+
+    await act(async () => result.current.purchase(product.key));
+    expect(mockRequestPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          google: expect.objectContaining({
+            subscriptionOffers: [{ sku: product.productId, offerToken: price.offerToken }],
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('reports no price rather than one the store never quoted', async () => {
+    const definitions = MOBILE_IAP_PRODUCT_DEFINITIONS.filter(
+      (item) => item.kind === 'subscription',
+    );
+    const product = { ...definitions[0]!, productId: 'fixture.subscription.missing' };
+    mockFetchCatalog.mockResolvedValue({
+      enabled: true,
+      platform: 'ios',
+      appAccountToken: accountToken,
+      products: [product],
+      unavailableReason: null,
+    });
+
+    const { result } = renderHook(() => useMobileIap({ enabled: true }));
+    await waitFor(() => expect(result.current.catalog?.enabled).toBe(true));
+
+    expect(result.current.priceFor(product.key)).toEqual({
+      label: null,
+      currency: null,
+      offerToken: null,
+    });
+  });
+
   it('uses Google Play charge proration when replacing an active subscription', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     const definitions = MOBILE_IAP_PRODUCT_DEFINITIONS.filter(

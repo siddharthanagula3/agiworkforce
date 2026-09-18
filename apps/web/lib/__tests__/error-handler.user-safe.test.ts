@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { DenialErrorCode } from '@agiworkforce/types';
+
 import { handleError, withErrorHandler } from '@/lib/error-handler';
-import { createError } from '@/lib/errors';
+import { AppError, createError, type ErrorCodeValue } from '@/lib/errors';
 import { WORKSPACE_POLICY_UNAVAILABLE_DECISION } from '@/lib/services/organization-policy-evaluator';
 
 async function bodyOf(response: Response) {
@@ -22,6 +24,16 @@ describe('handleError message exposure', () => {
     const response = handleError(createError.serviceUnavailable(reason).asUserSafe());
     expect(response.status).toBe(503);
     expect((await bodyOf(response)).error.message).toBe(reason);
+  });
+
+  it('delivers every denial reason, so a caller can tell upgrade from switched off', async () => {
+    for (const code of Object.values(DenialErrorCode)) {
+      const reason = `Denied because ${code}`;
+      // DenialErrorCode is still a sibling union of ErrorCode rather than a
+      // member of it; folding the two together is the open w3-taxonomy item.
+      const response = handleError(new AppError(code as ErrorCodeValue, reason, 403));
+      expect((await bodyOf(response)).error.message, code).toBe(reason);
+    }
   });
 
   it('never exposes a raw thrown error', async () => {

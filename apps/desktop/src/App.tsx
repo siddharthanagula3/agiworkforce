@@ -233,12 +233,36 @@ import type { CaptureResult } from './types/capture';
 import { PlansModal } from './features/pricing/PlansModal';
 import { openExternalUrl } from './utils/navigation';
 import { WEB_APP_URL } from './api/config';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { exportDesktopDiagnostics } from './features/diagnostics';
+import { useUpdaterStore } from './stores/updaterStore';
 
 const HELP_PATHS = {
   help: '/help',
   troubleshoot: '/help?q=troubleshooting+error+not+working',
   support: '/support',
 } as const;
+
+async function exportDiagnosticsToFile(): Promise<void> {
+  try {
+    const result = await exportDesktopDiagnostics({
+      appVersion: useUpdaterStore.getState().updateInfo?.currentVersion ?? null,
+      conversationId: useDesktopChatStore.getState().activeConversationId,
+    });
+    const savePath = await save({
+      defaultPath: result.filename,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+    if (!savePath) return;
+    await writeTextFile(savePath, JSON.stringify(result.diagnostics, null, 2));
+    toast.success('Diagnostics exported', { description: result.summary });
+  } catch (cause) {
+    toast.error('Diagnostics export failed', {
+      description: cause instanceof Error ? cause.message : 'Could not prepare the bundle.',
+    });
+  }
+}
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">
@@ -1052,6 +1076,9 @@ const DesktopShell = () => {
               break;
             case 'menu_support':
               void openExternalUrl(new URL(HELP_PATHS.support, WEB_APP_URL).toString());
+              break;
+            case 'menu_export_diagnostics':
+              void exportDiagnosticsToFile();
               break;
           }
         });

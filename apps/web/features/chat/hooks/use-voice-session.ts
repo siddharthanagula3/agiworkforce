@@ -89,6 +89,12 @@ const controller = {
   stableTimer: null as number | null,
 };
 
+/**
+ * The element the live session plays through. The session owns it, so the
+ * output picker reads it here rather than rendering one of its own.
+ */
+export const liveVoiceOutputRef: { current: HTMLAudioElement | null } = { current: null };
+
 export interface VoiceReconnectState {
   readonly active: boolean;
   readonly attempt: number;
@@ -195,6 +201,7 @@ function deliverTranscript(turn: LiveTranscriptTurn): void {
 export function endLiveVoiceSession(reason: string): void {
   const { session, starting } = controller;
   controller.session = null;
+  liveVoiceOutputRef.current = null;
   controller.starting = null;
   controller.conversation = null;
   stopVoiceReconnect();
@@ -268,6 +275,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           onClosed: (closed) => {
             const session = controller.session;
             controller.session = null;
+            liveVoiceOutputRef.current = null;
             store.setBackendBusy(false);
             if (session) void settleSession(session, closed);
             if (REMOTE_CLOSE_REASONS_WITH_NOTICE.has(closed.reason)) {
@@ -281,6 +289,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           },
           onError: (message) => {
             controller.session = null;
+            liveVoiceOutputRef.current = null;
             store.setBackendBusy(false);
             stopVoiceReconnect();
             store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
@@ -288,6 +297,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           onConnectionLost: (message) => {
             const dropped = controller.session;
             controller.session = null;
+            liveVoiceOutputRef.current = null;
             store.setBackendBusy(false);
             if (dropped) {
               void settleSession(dropped, {
@@ -309,6 +319,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
       (session) => {
         controller.starting = null;
         controller.session = session;
+        liveVoiceOutputRef.current = session.outputElement;
         markVoiceReconnected();
         return session;
       },

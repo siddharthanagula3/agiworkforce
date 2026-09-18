@@ -16,7 +16,9 @@ function harness(rows: Record<string, unknown[]> = {}) {
   const query = vi.fn(async (sql: string, _params?: unknown[]) => {
     const text = String(sql);
     if (/date_trunc\('day'/.test(text)) return rows['daily'] ?? [];
+    if (/unsettled_requests/.test(text)) return rows['freshness'] ?? [];
     if (/group by 1/.test(text)) {
+      if (/as sessions/.test(text)) return rows['workloadSessions'] ?? [];
       if (/user_id as key/.test(text)) return rows['member'] ?? [];
       if (/model as key/.test(text)) return rows['model'] ?? [];
       if (/provider as key/.test(text)) return rows['provider'] ?? [];
@@ -155,6 +157,92 @@ describe('readOrganizationUsage product area and project', () => {
       ['unknown', 250],
     ]);
     expect(usage.byProject[0]).toMatchObject({ key: 'project-1', costCents: 400 });
+  });
+
+  it('names Work sessions and Code sessions rather than leaving them to be inferred', async () => {
+    const h = harness({
+      workloadSessions: [
+        agg({ key: 'work', sessions: 4, requests: 20, cost_cents: '900' }),
+        agg({ key: 'code', sessions: 2, requests: 7, cost_cents: '300' }),
+        agg({ key: 'chat', sessions: 9, requests: 40, cost_cents: '100' }),
+      ],
+    });
+
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.workSessions).toMatchObject({
+      workload: 'work',
+      sessions: 4,
+      requests: 20,
+      costCents: 900,
+    });
+    expect(usage.codeSessions).toMatchObject({
+      workload: 'code',
+      sessions: 2,
+      requests: 7,
+      costCents: 300,
+    });
+  });
+
+  it('counts a session once however many turns it produced', async () => {
+    const h = harness();
+    await readOrganizationUsage(h.db, ORG, window);
+
+    const sessionQuery = h.query.mock.calls.find(([sql]) => /as sessions/.test(String(sql)));
+    expect(String(sessionQuery?.[0])).toContain("count(distinct usage->>'sessionId')");
+  });
+
+  it('reports zero Work and Code sessions rather than omitting the field', async () => {
+    const h = harness({ workloadSessions: [] });
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.workSessions).toEqual({
+      workload: 'work',
+      sessions: 0,
+      requests: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costCents: 0,
+    });
+    expect(usage.codeSessions.sessions).toBe(0);
+  });
+});
+
+describe('readOrganizationUsage freshness', () => {
+  const window = { from: '2026-07-24T00:00:00.000Z', to: '2026-08-23T00:00:00.000Z' };
+
+  it('says when the answer was computed and how recent the newest turn in it is', async () => {
+    const h = harness({
+      freshness: [{ latest_activity_at: '2026-08-22T18:30:00.000Z', unsettled_requests: 3 }],
+    });
+
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.freshness.latestActivityAt).toBe('2026-08-22T18:30:00.000Z');
+    expect(usage.freshness.unsettledRequests).toBe(3);
+    expect(Number.isNaN(Date.parse(usage.freshness.asOf))).toBe(false);
+  });
+
+  it('reports a null newest turn for a window with no settled activity', async () => {
+    const h = harness({ freshness: [{ latest_activity_at: null, unsettled_requests: 0 }] });
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.freshness.latestActivityAt).toBeNull();
+    expect(usage.freshness.unsettledRequests).toBe(0);
+  });
+
+  it('counts in-flight turns, not turns that were released or declined', async () => {
+    const h = harness();
+    await readOrganizationUsage(h.db, ORG, window);
+
+    const freshnessQuery = h.query.mock.calls.find(([sql]) =>
+      /unsettled_requests/.test(String(sql)),
+    );
+    const sql = String(freshnessQuery?.[0]);
+    expect(sql).toContain('provider_started');
+    expect(sql).toContain('outcome_unknown');
+    expect(sql).not.toContain("'released'");
+    expect(sql).not.toContain("'declined'");
   });
 });
 

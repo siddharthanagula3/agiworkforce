@@ -2,6 +2,7 @@ import { AuthFlow } from '@/features/auth/AuthFlow';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import {
   configuredAuthProviders,
+  configuredMfaEmailFallback,
   configuredPasskeySignIn,
 } from '@/features/auth/authProviderConfig';
 import {
@@ -53,6 +54,7 @@ export default async function LoginPage({
         mode="login"
         providers={configuredAuthProviders()}
         passkeySignIn={configuredPasskeySignIn()}
+        mfaEmailFallback={configuredMfaEmailFallback()}
         redirects={{
           completeUrl: buildLoginCompleteUrl(context),
           switchUrl: buildSignupUrl(context),

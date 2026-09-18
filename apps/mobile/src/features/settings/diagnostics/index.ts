@@ -6,3 +6,4 @@ export {
   type DiagnosticsExportResult,
   type MobileDiagnosticsBundle,
 } from './diagnosticsBundle';
+export { shareMobileDiagnostics } from './shareDiagnostics';

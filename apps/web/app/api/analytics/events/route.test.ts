@@ -3,29 +3,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
-  getRequestIdentity: vi.fn(),
+  getUserScopedDb: vi.fn(),
   isProductAnalyticsAllowed: vi.fn(),
   recordProductAnalyticsEvents: vi.fn(),
-  resolveActiveOrganizationId: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/identity', () => ({ getRequestIdentity: mocks.getRequestIdentity }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
 vi.mock('@/lib/server/product-analytics', () => ({
   isProductAnalyticsAllowed: mocks.isProductAnalyticsAllowed,
   recordProductAnalyticsEvents: mocks.recordProductAnalyticsEvents,
-}));
-vi.mock('@/lib/services/active-workspace-service', () => ({
-  resolveActiveOrganizationId: mocks.resolveActiveOrganizationId,
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 import { NextRequest } from 'next/server';
+
+import { createError } from '@/lib/errors';
 
 import { POST } from './route';
 
@@ -43,15 +40,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireCsrfToken.mockResolvedValue(null);
   mocks.withRateLimit.mockResolvedValue(null);
-  mocks.getRequestIdentity.mockResolvedValue({ subject: 'user_1' });
+  mocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user_1', organizationId: null });
   mocks.isProductAnalyticsAllowed.mockResolvedValue(true);
   mocks.recordProductAnalyticsEvents.mockResolvedValue(1);
-  mocks.resolveActiveOrganizationId.mockResolvedValue(null);
 });
 
 describe('POST /api/analytics/events', () => {
   it('refuses a signed-out caller', async () => {
-    mocks.getRequestIdentity.mockResolvedValue({ subject: null });
+    mocks.getUserScopedDb.mockRejectedValue(createError.unauthorized());
 
     const response = await POST(request({ events: [] }));
 

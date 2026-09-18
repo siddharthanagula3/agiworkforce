@@ -5,6 +5,8 @@ import type { ChangeEvent, KeyboardEvent } from 'react';
 import { Mic, MicOff, Plus, X } from '@agiworkforce/icons';
 
 import { cn } from '@shared/lib/utils';
+import { liveVoiceOutputRef } from '@features/chat/hooks/use-voice-session';
+import { AudioRoutePicker } from './AudioRoutePicker';
 
 const LABEL = {
   group: 'Voice mode composer',
@@ -133,6 +135,8 @@ export function VoiceComposer({
           <Mic className="h-4 w-4" aria-hidden="true" />
         )}
       </button>
+
+      <AudioRoutePicker audioRef={liveVoiceOutputRef} />
 
       <button
         type="button"

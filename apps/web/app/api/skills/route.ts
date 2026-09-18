@@ -5,7 +5,6 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { readJsonBody } from '@/lib/read-json-body';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -38,7 +37,6 @@ import {
 import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
@@ -91,15 +89,13 @@ async function readUploadedSkillDraft(request: NextRequest) {
 async function handleListSkills(request: NextRequest) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const wholeCatalog = new URL(request.url).searchParams.get(CATALOG_PARAM) === CATALOG_ALL;
   let skills;
   try {
-    const enabledPluginIds = await listEnabledPluginIds(getNeonDb(), userId);
+    const enabledPluginIds = await listEnabledPluginIds(db, userId);
     const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
-    skills = wholeCatalog
-      ? directory
-      : await resolveInstalledManagedSkills(getNeonDb(), userId, directory);
+    skills = wholeCatalog ? directory : await resolveInstalledManagedSkills(db, userId, directory);
   } catch (error) {
     if (error instanceof SkillCatalogUnavailableError) {
       throw createError.internal('Failed to load skills');
@@ -107,8 +103,8 @@ async function handleListSkills(request: NextRequest) {
     throw error;
   }
   const canAuthorSkills = userSkillAuthoringEnabled();
-  const userSkills = canAuthorSkills ? await listUserSkills(getNeonDb(), userId) : [];
-  const directorySkills = await listInstalledDirectorySkills(getNeonDb(), userId);
+  const userSkills = canAuthorSkills ? await listUserSkills(db, userId) : [];
+  const directorySkills = await listInstalledDirectorySkills(db, userId);
   let body;
   try {
     body = ManagedSkillsResponseSchema.parse({

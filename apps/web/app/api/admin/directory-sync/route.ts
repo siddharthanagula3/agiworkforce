@@ -6,7 +6,6 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AppError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
 import type { DirectorySyncConnectionRow, DirectorySyncEventRow } from '@/lib/server/neon-types';
 import { readJsonBody } from '@/lib/read-json-body';
 import { getIdentityProvider } from '@/lib/server/identity';
@@ -31,7 +30,7 @@ export async function GET(request: NextRequest) {
     const access = await requireDirectorySyncAdmin(request, requestedOrgId);
     if (isDirectorySyncAccessFailure(access)) return access.response;
 
-    const db = getNeonDb();
+    const db = access.db;
 
     let connections: DirectorySyncConnectionRow[];
     let events: DirectorySyncEventRow[];
@@ -139,7 +138,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getNeonDb();
+    const db = access.db;
 
     let connection: DirectorySyncConnectionRow;
     try {
@@ -236,7 +235,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const db = getNeonDb();
+    const db = access.db;
 
     const existing = await db
       .query<

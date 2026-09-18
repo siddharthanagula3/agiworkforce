@@ -9,7 +9,11 @@ vi.mock('node:dns/promises', () => ({
   lookup: dnsMocks.lookup,
 }));
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import {
+  allowedEgressHostnames,
   assertResolvedPublicHostname,
   pinnedAddressesFor,
   pinnedLookup,
@@ -19,6 +23,11 @@ import {
   isDataUrl,
   EgressPolicyError,
 } from './egress-policy';
+import {
+  registerWebSearchProvider,
+  unregisterWebSearchProvider,
+  webSearchProviderHosts,
+} from './web-search/search-provider';
 
 beforeEach(() => {
   dnsMocks.lookup.mockReset();
@@ -298,5 +307,41 @@ describe('assertResolvedPublicHostname', () => {
     await expect(assertResolvedPublicHostname('https://missing.example/mcp')).rejects.toThrow(
       EgressPolicyError,
     );
+  });
+});
+
+describe('validateEgressUrl · search provider hosts are derived, not typed in', () => {
+  it('allows every host the configured search providers declare', () => {
+    const hosts = webSearchProviderHosts();
+    expect(hosts.length).toBeGreaterThan(0);
+    for (const host of hosts) {
+      expect(allowedEgressHostnames().has(host), host).toBe(true);
+      expect(() => validateEgressUrl(`https://${host}/search`)).not.toThrow();
+    }
+  });
+
+  it('does not name a search vendor host anywhere in the policy source', () => {
+    const source = readFileSync(join(process.cwd(), 'lib/egress-policy.ts'), 'utf8');
+    for (const host of webSearchProviderHosts()) {
+      expect(source.includes(host), host).toBe(false);
+    }
+  });
+
+  it('picks up a provider registered after the module loaded', () => {
+    const provider = {
+      id: 'test-egress-provider',
+      delivery: 'indexed' as const,
+      host: 'search.test',
+      isConfigured: () => true,
+      search: async () => ({ ok: true as const, items: [] }),
+    };
+    expect(() => validateEgressUrl('https://search.test/q')).toThrow(EgressPolicyError);
+    registerWebSearchProvider(provider);
+    try {
+      expect(() => validateEgressUrl('https://search.test/q')).not.toThrow();
+    } finally {
+      unregisterWebSearchProvider(provider.id);
+    }
+    expect(() => validateEgressUrl('https://search.test/q')).toThrow(EgressPolicyError);
   });
 });

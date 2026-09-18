@@ -3,7 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
-import { recordAuditEvent } from '@/lib/security-audit';
+import { recordAuditEvent, type AuditEventDetail } from '@/lib/security-audit';
 import {
   revokeEveryOtherSession,
   type IdentitySessionOperations,
@@ -34,6 +34,8 @@ export interface IdentitySecurityEventInput {
   surface?: string | null;
   deviceRef?: string | null;
   outcome?: 'success' | 'failure';
+  /** Merged into the audit detail so a call site keeps what only it knows. */
+  detail?: AuditEventDetail;
 }
 
 /**
@@ -79,6 +81,7 @@ export async function emitIdentitySecurityEvent(
       resourceType: spec.resourceType,
       resourceId: input.subjectRef ?? input.event,
       ...(input.surface ? { surface: input.surface } : {}),
+      ...input.detail,
     },
   });
 

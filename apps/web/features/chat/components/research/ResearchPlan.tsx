@@ -298,6 +298,7 @@ export function ResearchPlan({
               })
             }
             className="inline-flex min-h-8 items-center rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60"
+            data-testid="research-plan-start"
           >
             {START_LABEL}
           </button>
@@ -306,6 +307,7 @@ export function ResearchPlan({
             disabled={busy}
             onClick={onCancel}
             className="inline-flex min-h-8 items-center rounded-md border border-border px-3 py-1 text-xs font-medium text-foreground disabled:opacity-60"
+            data-testid="research-plan-cancel"
           >
             {CANCEL_LABEL}
           </button>

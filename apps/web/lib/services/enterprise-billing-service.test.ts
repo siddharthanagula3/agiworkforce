@@ -832,7 +832,7 @@ describe('enterprise contract contacts, payment terms and tax status', () => {
       }),
     );
 
-    expect(upsertParams(calls).slice(18)).toEqual([
+    expect(upsertParams(calls).slice(18, 24)).toEqual([
       'Accounts Payable',
       'ap@example.com',
       'Dana Buyer',
@@ -840,6 +840,27 @@ describe('enterprise contract contacts, payment terms and tax status', () => {
       45,
       'exempt',
     ]);
+  });
+
+  it('records that billing is running with no signed order form when no agreement exists', async () => {
+    const { db, calls } = contractDb();
+
+    await syncEnterpriseContractFromSubscription(
+      db,
+      stripeWithCustomer({ id: 'cus_ent_1', tax_exempt: 'none' }),
+      subscriptionFixture(),
+    );
+
+    expect(upsertParams(calls).slice(24)).toEqual([null, null, null, null, 'missing_signed_order']);
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: 'org_1',
+        detail: expect.objectContaining({
+          reason: 'enterprise_billing_without_signed_order',
+          status: 'missing_signed_order',
+        }),
+      }),
+    );
   });
 
   it('ignores a malformed contact email or out-of-range terms rather than storing them', async () => {

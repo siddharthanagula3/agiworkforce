@@ -88,12 +88,15 @@ describe('choosing what a research run may read', () => {
 
     fireEvent.click(screen.getByTestId('research-plan-start'));
 
-    expect(onPlanDecision).toHaveBeenCalledWith('start', {
-      files: false,
-      allowDomains: [],
-      denyDomains: [],
-      connectors: [],
-    });
+    expect(onPlanDecision).toHaveBeenCalledWith(
+      'start',
+      expect.objectContaining({
+        files: false,
+        allowDomains: [],
+        denyDomains: [],
+        connectors: [],
+      }),
+    );
   });
 
   it('adds sites, files and a connected app as individual sources', () => {
@@ -105,12 +108,15 @@ describe('choosing what a research run may read', () => {
     fireEvent.click(screen.getByTestId('research-plan-start'));
 
     expect(screen.getAllByTestId('research-plan-source')).toHaveLength(4);
-    expect(onPlanDecision).toHaveBeenCalledWith('start', {
-      files: true,
-      allowDomains: ['nature.com', 'who.int'],
-      denyDomains: [],
-      connectors: ['notion'],
-    });
+    expect(onPlanDecision).toHaveBeenCalledWith(
+      'start',
+      expect.objectContaining({
+        files: true,
+        allowDomains: ['nature.com', 'who.int'],
+        denyDomains: [],
+        connectors: ['notion'],
+      }),
+    );
   });
 
   it('removes one source without disturbing the rest', () => {
@@ -122,12 +128,15 @@ describe('choosing what a research run may read', () => {
     fireEvent.click(screen.getByTestId('research-plan-remove-connector:notion'));
     fireEvent.click(screen.getByTestId('research-plan-start'));
 
-    expect(onPlanDecision).toHaveBeenCalledWith('start', {
-      files: false,
-      allowDomains: ['nature.com'],
-      denyDomains: [],
-      connectors: ['google-drive'],
-    });
+    expect(onPlanDecision).toHaveBeenCalledWith(
+      'start',
+      expect.objectContaining({
+        files: false,
+        allowDomains: ['nature.com'],
+        denyDomains: [],
+        connectors: ['google-drive'],
+      }),
+    );
   });
 
   it('keeps an excluded site apart from an allowed one', () => {
@@ -137,12 +146,15 @@ describe('choosing what a research run may read', () => {
     addSource('web-excluded', 'content-farm.example');
     fireEvent.click(screen.getByTestId('research-plan-start'));
 
-    expect(onPlanDecision).toHaveBeenCalledWith('start', {
-      files: false,
-      allowDomains: ['nature.com'],
-      denyDomains: ['content-farm.example'],
-      connectors: [],
-    });
+    expect(onPlanDecision).toHaveBeenCalledWith(
+      'start',
+      expect.objectContaining({
+        files: false,
+        allowDomains: ['nature.com'],
+        denyDomains: ['content-farm.example'],
+        connectors: [],
+      }),
+    );
   });
 
   it('never adds the same source twice', () => {
@@ -154,12 +166,15 @@ describe('choosing what a research run may read', () => {
     fireEvent.click(screen.getByTestId('research-plan-start'));
 
     expect(screen.getAllByTestId('research-plan-source')).toHaveLength(2);
-    expect(onPlanDecision).toHaveBeenCalledWith('start', {
-      files: true,
-      allowDomains: ['nature.com'],
-      denyDomains: [],
-      connectors: [],
-    });
+    expect(onPlanDecision).toHaveBeenCalledWith(
+      'start',
+      expect.objectContaining({
+        files: true,
+        allowDomains: ['nature.com'],
+        denyDomains: [],
+        connectors: [],
+      }),
+    );
   });
 
   it('offers no connected-app option to an account with none connected', () => {

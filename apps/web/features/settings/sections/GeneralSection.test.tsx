@@ -355,3 +355,66 @@ describe('GeneralSection row density', () => {
     expect(document.querySelector('[class*="rounded-xl border"]')).toBeNull();
   });
 });
+
+describe('GeneralSection instruction and response-style preferences', () => {
+  beforeEach(() => {
+    mocks.fetchPreferences.mockReset();
+    mocks.fetchPreferences.mockResolvedValue({});
+    mocks.settings.accentColor = 'default';
+    mocks.settings.highContrast = false;
+    mocks.settings.motion = 'system';
+    mocks.tts.isSupported = false;
+    mocks.tts.voices = [];
+  });
+
+  it('offers a technical level, a preferred formatting and a response language', async () => {
+    render(<GeneralSection />);
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.getByRole('combobox', { name: 'Technical level' })).toHaveValue('unspecified');
+    expect(screen.getByRole('combobox', { name: 'Preferred formatting' })).toHaveValue(
+      'unspecified',
+    );
+    expect(screen.getByRole('combobox', { name: 'Response language' })).toHaveValue('auto');
+  });
+
+  it('defaults the response language to matching the message rather than the interface', async () => {
+    render(<GeneralSection />);
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    const select = screen.getByRole('combobox', { name: 'Response language' });
+    expect(within(select).getByRole('option', { name: 'Match my message' })).toHaveValue('auto');
+  });
+
+  it('switches instructions off without emptying the field', async () => {
+    const user = userEvent.setup();
+    mocks.fetchPreferences.mockResolvedValue({ instructions: 'Always cite sources.' });
+    render(<GeneralSection />);
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    const toggle = screen.getByRole('switch', { name: 'Apply instructions for AGI' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('textbox', { name: 'Instructions for AGI' })).toHaveValue(
+      'Always cite sources.',
+    );
+    expect(screen.getByText(/are not sent to the model/i)).toBeVisible();
+  });
+
+  it('reads a stored off state back as off', async () => {
+    mocks.fetchPreferences.mockResolvedValue({
+      instructions: 'Always cite sources.',
+      instructionsEnabled: false,
+    });
+    render(<GeneralSection />);
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.getByRole('switch', { name: 'Apply instructions for AGI' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+});

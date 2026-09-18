@@ -10,9 +10,7 @@ import {
   modelsCatalogJson as modelsData,
   normalizeUIPlanTier,
 } from '@agiworkforce/types';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
   ANONYMOUS_PLAN_TIER,
@@ -49,8 +47,7 @@ function toWireEntry(entry: CatalogueEntry): ModelCatalogueEntry {
 
 async function resolvePlanTier(request: NextRequest): Promise<string> {
   try {
-    const { userId } = await getClerkAuthUser(request);
-    const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+    const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
     const subscription = await SubscriptionService.getSubscription(db, userId);
     return effectivePlanTier(subscription?.plan_tier, subscription?.status);
   } catch {

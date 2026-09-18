@@ -10,7 +10,6 @@ import {
   CircleSlash,
   ListChecks,
   LoaderCircle,
-  Play,
   Plus,
   RotateCw,
   Search,
@@ -25,11 +24,13 @@ import {
   researchSourceKey,
   researchSourceRequest,
   runStatusLabel,
+  type ResearchDeliverableSpec,
   type ResearchSource,
   type ResearchSourceRequest,
   type ResearchStep,
 } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import { ResearchPlan } from './ResearchPlan';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
 function formatElapsed(ms: number): string {
@@ -119,7 +120,11 @@ export type ResearchPlanDecision = 'start' | 'cancel';
  * asked for, and a connected app is read only while the account's connector
  * permissions still allow it.
  */
-export type ResearchPlanOptions = ResearchSourceRequest;
+export type ResearchPlanOptions = ResearchSourceRequest & {
+  /** The plan as the reader edited it, absent when they started it unchanged. */
+  steps?: ResearchStep[];
+  deliverable?: ResearchDeliverableSpec;
+};
 
 const DOMAIN_SEPARATOR = /[\s,;]+/;
 
@@ -302,39 +307,6 @@ export function ResearchActivity({
         <span className="ml-auto flex shrink-0 items-center gap-2 tabular-nums">
           {counts.length > 0 && <span>{counts.join(' · ')}</span>}
           {liveElapsed > 0 && <span>{formatElapsed(liveElapsed)}</span>}
-          {canDecide && (
-            <>
-              <button
-                type="button"
-                onClick={() => onPlanDecision?.('start', researchSourceRequest(sources))}
-                disabled={isRetrying}
-                className={cn(
-                  'inline-flex items-center gap-1 min-h-6 rounded-md bg-primary px-2 py-0.5',
-                  'text-[12px] font-medium text-primary-foreground transition-opacity',
-                  'hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60',
-                )}
-                data-testid="research-plan-start"
-                aria-label="Start searching this research plan"
-              >
-                <Play className="h-3 w-3" aria-hidden="true" />
-                {isRetrying ? 'Starting…' : 'Start research'}
-              </button>
-              <button
-                type="button"
-                onClick={() => onPlanDecision?.('cancel')}
-                disabled={isRetrying}
-                className={cn(
-                  'inline-flex items-center gap-1 min-h-6 rounded-md border border-border/40 px-2 py-0.5',
-                  'text-[12px] font-medium text-foreground transition-colors',
-                  'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
-                )}
-                data-testid="research-plan-cancel"
-                aria-label="Cancel this research plan"
-              >
-                Cancel
-              </button>
-            </>
-          )}
           {canRetry && (
             <button
               type="button"
@@ -474,22 +446,39 @@ export function ResearchActivity({
         </div>
       )}
 
-      {steps.length > 0 && (
-        <ol
-          className={cn(
-            'space-y-0 rounded-b-lg border border-t-0 px-3 py-2 text-xs',
-            canDecide && 'border-t',
-            failed ? 'border-destructive/30 bg-destructive/5' : 'border-border/30 bg-muted/10',
-          )}
-          aria-label="Research plan"
-          role="status"
-          aria-live="polite"
-          data-testid="research-plan"
-        >
-          {steps.map((step) => (
-            <PlanStepRow key={step.id} step={step} />
-          ))}
-        </ol>
+      {canDecide ? (
+        <div className="rounded-b-lg border border-t-0 border-border/30 bg-muted/10 px-3 py-2">
+          <ResearchPlan
+            steps={steps}
+            editable
+            busy={isRetrying}
+            onStart={(submission) =>
+              onPlanDecision?.('start', {
+                ...researchSourceRequest(sources),
+                steps: submission.steps,
+                deliverable: submission.deliverable,
+              })
+            }
+            onCancel={() => onPlanDecision?.('cancel')}
+          />
+        </div>
+      ) : (
+        steps.length > 0 && (
+          <ol
+            className={cn(
+              'space-y-0 rounded-b-lg border border-t-0 px-3 py-2 text-xs',
+              failed ? 'border-destructive/30 bg-destructive/5' : 'border-border/30 bg-muted/10',
+            )}
+            aria-label="Research plan"
+            role="status"
+            aria-live="polite"
+            data-testid="research-plan"
+          >
+            {steps.map((step) => (
+              <PlanStepRow key={step.id} step={step} />
+            ))}
+          </ol>
+        )
       )}
     </div>
   );

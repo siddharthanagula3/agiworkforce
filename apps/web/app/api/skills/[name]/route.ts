@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { readJsonBody } from '@/lib/read-json-body';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -18,7 +17,6 @@ import {
   updateUserSkill,
 } from '@/lib/services/user-skill-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
@@ -36,10 +34,9 @@ function requireSkillName(name: string | undefined): string {
 async function handleGetBody(request: NextRequest, context: { params: Promise<{ name: string }> }) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const name = requireSkillName((await context.params).name);
 
-  const db = getNeonDb();
   const skill = await findSelectableSkillByName({
     db,
     userId,

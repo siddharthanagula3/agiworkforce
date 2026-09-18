@@ -152,7 +152,8 @@ describe('GET /api/cron/reconcile-credits', () => {
     await expect(response.json()).resolves.toMatchObject({
       alerted: true,
       delivery: 'undeliverable',
-      reason: 'not_configured',
+      reason: 'credit_settlement_drift_undeliverable',
+      deliveryError: 'not_configured',
     });
   });
 

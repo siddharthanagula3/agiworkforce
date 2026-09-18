@@ -101,7 +101,7 @@ async function handleUploadPart(
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'files-serve', session.userId);
+  const rateLimitResponse = await withRateLimit(request, 'uploads-resumable-part', session.userId);
   if (rateLimitResponse) return rateLimitResponse;
 
   const partNumber = assertPartNumber(

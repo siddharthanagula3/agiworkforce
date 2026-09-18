@@ -16,6 +16,7 @@ import { httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { createChatStreamDedupe } from '@/src/lib/chat-stream-dedupe';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudAgentRunClient,
@@ -379,7 +380,7 @@ export async function streamChat(
     timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
   };
   let currentRunReference: ManagedCloudAgentRunReference | undefined;
-  let lastCanonicalEvent: { sessionId: string; turnId: string; sequence: number } | undefined;
+  const dedupe = createChatStreamDedupe();
   const timedCallbacks: StreamCallbacks = {
     ...callbacks,
     onActivity: rearmStallWatchdog,
@@ -389,21 +390,7 @@ export async function streamChat(
     },
     onDelta: (delta) => {
       rearmStallWatchdog();
-      if (
-        delta.x_agent_event &&
-        lastCanonicalEvent?.sessionId === delta.x_agent_event.sessionId &&
-        lastCanonicalEvent.turnId === delta.x_agent_event.turnId &&
-        delta.x_agent_event.sequence <= lastCanonicalEvent.sequence
-      ) {
-        return;
-      }
-      if (delta.x_agent_event) {
-        lastCanonicalEvent = {
-          sessionId: delta.x_agent_event.sessionId,
-          turnId: delta.x_agent_event.turnId,
-          sequence: delta.x_agent_event.sequence,
-        };
-      }
+      if (delta.x_agent_event && !dedupe.admit(delta.x_agent_event)) return;
       if (delta.x_agent_event && currentRunReference) {
         currentRunReference = {
           ...currentRunReference,

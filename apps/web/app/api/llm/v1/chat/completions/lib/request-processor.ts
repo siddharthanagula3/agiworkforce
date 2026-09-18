@@ -3,10 +3,12 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import type {
+  ResearchDeliverableSpec,
   ResearchStep,
   ResolvedWorkspaceControls,
   WorkspaceFeature,
 } from '@agiworkforce/types';
+import { normalizeResearchDeliverable } from '@agiworkforce/types';
 import {
   DATA_REGIONS,
   NON_US_VENDOR_TRANSPORTS,
@@ -216,7 +218,10 @@ import {
   type ManagedMemoryContextDb,
   type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
-import { retrievePastChatContext } from '@/lib/services/past-chat-context-service';
+import {
+  resolvePastChatContext,
+  type PastChatCitation,
+} from '@/lib/services/past-chat-context-service';
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
@@ -418,6 +423,7 @@ export const ChatCompletionRequestSchema = z
           )
           .max(50)
           .optional(),
+        deliverable: z.unknown().optional(),
       })
       .optional(),
     code_execution: z.boolean().optional(),
@@ -786,6 +792,8 @@ export type ProcessedRequest = {
    * header and the persisted row cite the same passages the prompt carried.
    */
   projectSources?: readonly ProjectFileCitation[];
+  /** The earlier conversations this turn's recall quoted, shown beside the answer. */
+  pastChatSources?: readonly PastChatCitation[];
   assistantMessageId?: string | undefined;
   autoMemoryFacts?: string[];
   autoMemoryFactsRequireToolFreeTurn?: boolean;
@@ -896,6 +904,8 @@ export type ProcessedRequest = {
     steps: ResearchStep[];
     /** The plan the user pressed Start on after the approval pause. */
     approvedSteps: ResearchStep[];
+    /** What the reader asked the approved run to produce. */
+    deliverable: ResearchDeliverableSpec;
   };
   /** §24: the sources and site restriction this research run was given. */
   researchSources?: {
@@ -1158,34 +1168,34 @@ export async function enrichPastChatContext(params: {
   organizationId?: string | null;
   conversationId?: string | null;
   projectId?: string | null;
-}): Promise<boolean> {
+}): Promise<{ injected: boolean; citations: PastChatCitation[] }> {
   if (
     !params.policy.searchPastChats ||
     params.isTemporary ||
     params.surface === 'api' ||
     params.chatRequest.memory_enabled === false
   ) {
-    return false;
+    return { injected: false, citations: [] };
   }
 
   const query = lastUserMessageText(params.chatRequest);
-  if (!query) return false;
+  if (!query) return { injected: false, citations: [] };
 
   const scope = await loadProjectMemoryScope(params.db, {
     userId: params.userId,
     projectId: params.projectId ?? null,
   });
-  const prompt = await retrievePastChatContext(params.db, {
+  const recall = await resolvePastChatContext(params.db, {
     userId: params.userId,
     query,
     organizationId: params.organizationId ?? null,
     currentConversationId: params.conversationId ?? null,
     scope,
   });
-  if (!prompt) return false;
+  if (!recall.prompt) return { injected: false, citations: [] };
 
-  params.chatRequest.messages.unshift({ role: 'system', content: prompt });
-  return true;
+  params.chatRequest.messages.unshift({ role: 'system', content: recall.prompt });
+  return { injected: true, citations: recall.citations };
 }
 
 function lastUserMessageText(request: ChatCompletionRequest): string {
@@ -2664,10 +2674,11 @@ export async function processRequest(
     }
   }
 
+  let pastChatSources: PastChatCitation[] = [];
   if (managedMemoryPolicy.searchPastChats) {
     try {
       const scoped = await scopedDbPromise;
-      const injected = await enrichPastChatContext({
+      const recall = await enrichPastChatContext({
         db: scoped.db,
         userId,
         chatRequest,
@@ -2678,7 +2689,10 @@ export async function processRequest(
         conversationId: chatRequest.conversation_id ?? null,
         projectId: conversationProjectId,
       });
-      if (injected) dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
+      if (recall.injected) {
+        dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
+        pastChatSources = recall.citations;
+      }
     } catch (error) {
       logger.error(
         { error, userId, conversationId: chatRequest.conversation_id },
@@ -4276,6 +4290,7 @@ export async function processRequest(
     ...(ownership.ok && ownership.projectSources?.length
       ? { projectSources: ownership.projectSources }
       : {}),
+    ...(pastChatSources.length ? { pastChatSources } : {}),
     assistantMessageId: chatRequest.assistant_message_id,
     autoMemoryFacts,
     autoMemoryFactsRequireToolFreeTurn,
@@ -4329,6 +4344,7 @@ export async function processRequest(
             sources: chatRequest.research_resume.sources ?? [],
             steps: (chatRequest.research_resume.steps ?? []) as ResearchStep[],
             approvedSteps: (chatRequest.research_resume.approved_steps ?? []) as ResearchStep[],
+            deliverable: normalizeResearchDeliverable(chatRequest.research_resume.deliverable),
           },
         }
       : {}),

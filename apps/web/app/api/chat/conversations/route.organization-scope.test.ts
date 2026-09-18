@@ -91,7 +91,7 @@ describe('conversation active-organization isolation', () => {
       const sql = String(sqlValue);
       const params = paramsValue as unknown[];
 
-      if (/select[\s\S]+from web_conversations[\s\S]+order by pinned/u.test(sql)) {
+      if (/select[\s\S]+from web_conversations[\s\S]+order by page_sort_key/u.test(sql)) {
         assertOrganizationPredicate(sql);
         return rows.filter((row) => sameScope(row.organization_id, params[1]));
       }

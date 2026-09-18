@@ -2,14 +2,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetSession, mockRevokeSession, mockGetUserScopedDb, mockVerifyToken } =
-  vi.hoisted(() => ({
-    mockAuth: vi.fn(),
-    mockGetSession: vi.fn(),
-    mockRevokeSession: vi.fn(),
-    mockGetUserScopedDb: vi.fn(),
-    mockVerifyToken: vi.fn(),
-  }));
+const {
+  mockAuth,
+  mockGetSession,
+  mockRevokeSession,
+  mockGetUserScopedDb,
+  mockVerifyToken,
+  mockIdentityEvent,
+} = vi.hoisted(() => ({
+  mockAuth: vi.fn(),
+  mockGetSession: vi.fn(),
+  mockRevokeSession: vi.fn(),
+  mockGetUserScopedDb: vi.fn(),
+  mockVerifyToken: vi.fn(),
+  mockIdentityEvent: vi.fn(async () => ({
+    assessment: { level: 'none', signals: [] },
+    response: null,
+  })),
+}));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
@@ -39,6 +49,12 @@ vi.mock('@/lib/csrf', () => ({
 
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+
+vi.mock('@/lib/services/identity-events', () => ({
+  handleIdentitySecurityEvent: (...args: unknown[]) => mockIdentityEvent(...(args as [])),
 }));
 
 import { DELETE } from './route';
@@ -110,6 +126,23 @@ describe('DELETE /api/settings/sessions/[sessionId]', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ message: 'Session revoked', isCurrent: false });
     expect(mockRevokeSession).toHaveBeenCalledWith('sess_current');
+  });
+
+  it('reports the revocation as an identity security event so the owner is told', async () => {
+    mockGetSession.mockResolvedValue({ id: 'sess_other', userId: 'user-1', status: 'active' });
+
+    await request('sess_other');
+
+    expect(mockIdentityEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'user-1',
+        event: 'session_revoked',
+        subjectRef: 'sess_other',
+        detail: expect.objectContaining({ isCurrent: false, status: 'revoked' }),
+      }),
+    );
   });
 
   it('tells a Mobile Clerk-JWT caller when it just revoked its own session', async () => {

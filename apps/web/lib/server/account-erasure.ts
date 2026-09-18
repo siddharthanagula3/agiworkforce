@@ -20,6 +20,7 @@ import {
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
 import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
+import { isWorkspaceScopedContentTable } from '@/lib/server/workspace-scope';
 import {
   mcpAuthorizationContext,
   purgeMcpResponseCachePartitions,
@@ -845,7 +846,9 @@ export async function eraseUserAccountData(
         await db.execute(`delete from public.${table} where ${column} = $1`, [userId]);
         tables[table] = { deleted: true };
       } catch (error) {
-        if (isSchemaAbsent(error)) {
+        // A missing workspace content table is not a benign skip: it would
+        // report content erased that was never reached.
+        if (isSchemaAbsent(error) && !isWorkspaceScopedContentTable(table)) {
           tables[table] = { deleted: false, skipped: true };
           continue;
         }

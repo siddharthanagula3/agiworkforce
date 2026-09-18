@@ -53,8 +53,11 @@ import {
   READY_MARKER,
   DROP_MARKER,
   parseDroppedPlanSteps,
+  deriveResearchGaps,
+  hasDiminishingReturns,
   type ResearchRunReport,
 } from './research-loop';
+import { DEFAULT_RESEARCH_DELIVERABLE, type ResearchStep } from '@agiworkforce/types';
 import { createResearchDomainPolicy } from './research-sources';
 import { saveResearchReport } from '@/lib/services/research-report-service';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -1675,5 +1678,100 @@ describe('parseDroppedPlanSteps', () => {
       pending,
     );
     expect(parsed).toHaveLength(1);
+  });
+});
+
+describe('deriveResearchGaps', () => {
+  const step = (
+    id: string,
+    description: string,
+    status: ResearchStep['status'],
+    note?: string,
+  ): ResearchStep => ({ id, type: 'search', description, status, ...(note ? { note } : {}) });
+
+  it('opens a gap for every planned search the run never ran', () => {
+    const gaps = deriveResearchGaps(
+      [
+        step('plan-1', 'battery degradation rates', 'dropped', 'not searched: budget reached'),
+        step('plan-2', 'charging infrastructure coverage', 'pending'),
+      ],
+      'A report about something else entirely.',
+    );
+
+    expect(gaps).toHaveLength(2);
+    expect(gaps.every((gap) => gap.status === 'open')).toBe(true);
+    expect(gaps[0]?.reason).toContain('budget reached');
+  });
+
+  it('opens a gap for a search that ran but left no trace in the report', () => {
+    const gaps = deriveResearchGaps(
+      [step('plan-1', 'battery degradation rates over time', 'completed')],
+      'This report covers pricing and nothing else.',
+    );
+
+    expect(gaps[0]?.status).toBe('open');
+    expect(gaps[0]?.reason).toContain('does not answer it');
+  });
+
+  it('closes a gap the report answers', () => {
+    const gaps = deriveResearchGaps(
+      [step('plan-1', 'battery degradation rates', 'completed')],
+      'Battery degradation rates settle near two percent a year.',
+    );
+
+    expect(gaps[0]?.status).toBe('closed');
+  });
+
+  it('ignores steps that are not searches', () => {
+    expect(
+      deriveResearchGaps(
+        [
+          {
+            id: 'synthesize',
+            type: 'synthesize',
+            description: 'Write the report',
+            status: 'completed',
+          },
+        ],
+        '',
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('hasDiminishingReturns', () => {
+  it('is true only once a round brings back nothing new', () => {
+    expect(hasDiminishingReturns([])).toBe(false);
+    expect(hasDiminishingReturns([4, 2])).toBe(false);
+    expect(hasDiminishingReturns([4, 0])).toBe(true);
+    expect(hasDiminishingReturns([0, 3])).toBe(false);
+  });
+});
+
+describe('the deliverable spec shapes the report', () => {
+  it('asks for an executive summary with tables when that is what was chosen', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(sseStream([contentEvent(`notes\n${READY_MARKER}`), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('Final report [1]'), finishEvent()]));
+
+    await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        maxIterations: 3,
+        deliverable: {
+          ...DEFAULT_RESEARCH_DELIVERABLE,
+          depth: 'executive-summary',
+          format: 'prose-with-tables',
+        },
+      }),
+    );
+
+    const calls = streamRequestMock.mock.calls.length;
+    const synthesisRequest = streamRequestMock.mock.calls[calls - 1]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const directives = synthesisRequest.messages.at(-1)?.content ?? '';
+    expect(directives).toContain('executive summary');
+    expect(directives).toContain('markdown table');
   });
 });

@@ -342,3 +342,140 @@ describe('surface means a client everywhere else, so the classifier does not use
     expect(Object.keys(classification)).not.toContain('surface');
   });
 });
+
+describe('file lineage and versions', () => {
+  const organizationId = '11111111-1111-4111-8111-111111111111';
+  const conversationId = '22222222-2222-4222-8222-222222222222';
+
+  type PersistDb = NonNullable<Parameters<typeof persistGeneratedFileBytes>[1]>;
+
+  function lineageDb() {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) =>
+      String(sql).includes('update public.media_assets') ? [{ version: 2 }] : [],
+    );
+    return { query, client: { query } as unknown as PersistDb };
+  }
+
+  beforeEach(() => {
+    configured = true;
+    deleteStoredMedia.mockReset().mockResolvedValue(undefined);
+    storeMedia.mockReset().mockImplementation(async (p: { data: Buffer }) => ({
+      url: 'private-media/file/owner/x.bin',
+      pathname: 'private-media/file/owner/x.bin',
+      byteSize: p.data.byteLength,
+      contentType: 'application/octet-stream',
+    }));
+    insertMediaAsset.mockReset().mockResolvedValue('asset_9');
+  });
+
+  it('records a non-null parent_file_id for an export derived from an upload', async () => {
+    const db = lineageDb();
+    const outcome = await persistGeneratedFileBytes(
+      {
+        userId: 'user_1',
+        organizationId,
+        conversationId,
+        data: Buffer.from('%PDF-1.7', 'utf8'),
+        mimeType: 'application/pdf',
+        filename: 'quarterly.pdf',
+        provider: 'e2b',
+        origin: 'e2b-execution',
+        provenance: {
+          parentFileId: 'upload_7',
+          derivation: 'export',
+          generatedByTurnId: 'turn_3',
+        },
+      },
+      db.client,
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.parentFileId).toBe('upload_7');
+
+    const call = db.query.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into public.file_lineage'),
+    ) as unknown as [string, unknown[]] | undefined;
+    expect(call).toBeDefined();
+    const params = call![1];
+    expect(params[2]).toBe('asset_9');
+    expect(params[3]).toBe('upload_7');
+    expect(params[3]).not.toBeNull();
+    expect(params[4]).toBe('export');
+    expect(params[5]).toBe('turn_3');
+    expect(params[6]).toBe(conversationId);
+  });
+
+  it('writes no lineage edge when the file was not derived from anything', async () => {
+    const db = lineageDb();
+    await persistGeneratedFileBytes(
+      {
+        userId: 'user_1',
+        organizationId,
+        data: Buffer.from('hi', 'utf8'),
+        mimeType: 'text/plain',
+        filename: 'notes.txt',
+        provider: 'e2b',
+        origin: 'e2b-execution',
+      },
+      db.client,
+    );
+
+    expect(
+      db.query.mock.calls.some(([sql]) => String(sql).includes('insert into public.file_lineage')),
+    ).toBe(false);
+  });
+
+  it('makes a file that supersedes another the next version of it', async () => {
+    const db = lineageDb();
+    const outcome = await persistGeneratedFileBytes(
+      {
+        userId: 'user_1',
+        organizationId,
+        data: Buffer.from('v2', 'utf8'),
+        mimeType: 'text/plain',
+        filename: 'notes.txt',
+        provider: 'e2b',
+        origin: 'e2b-execution',
+        provenance: { supersedesFileId: 'asset_1' },
+      },
+      db.client,
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.version).toBe(2);
+
+    const revision = db.query.mock.calls.find(([sql]) =>
+      String(sql).includes('update public.media_assets'),
+    ) as unknown as [string, unknown[]] | undefined;
+    expect(revision![1]).toEqual(['asset_9', 'asset_1', 'user_1']);
+  });
+
+  it('keeps the bytes when the lineage write fails and says so', async () => {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+      if (String(sql).includes('insert into public.file_lineage')) {
+        throw Object.assign(new Error('relation file_lineage does not exist'), { code: '42P01' });
+      }
+      return [];
+    });
+    const db = { query, client: { query } as unknown as PersistDb };
+
+    const outcome = await persistGeneratedFileBytes(
+      {
+        userId: 'user_1',
+        organizationId,
+        data: Buffer.from('x', 'utf8'),
+        mimeType: 'text/plain',
+        filename: 'notes.txt',
+        provider: 'e2b',
+        origin: 'e2b-execution',
+        provenance: { parentFileId: 'upload_7' },
+      },
+      db.client,
+    );
+
+    expect(outcome.ok).toBe(true);
+    expect(deleteStoredMedia).not.toHaveBeenCalled();
+  });
+});

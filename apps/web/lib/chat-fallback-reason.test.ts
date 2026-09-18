@@ -4,8 +4,10 @@ import {
   addFallbackReasonHeader,
   describeFallbackReason,
   fallbackStepLabel,
+  isSubstitution,
   FALLBACK_REASON_HEADER,
   toFallbackReasonHeaderValue,
+  UNSPECIFIED_SUBSTITUTION_REASON,
 } from './chat-fallback-reason';
 
 describe('telling the user their request was changed', () => {
@@ -53,6 +55,64 @@ describe('telling the user their request was changed', () => {
   it('says nothing when there is nothing to say', () => {
     expect(describeFallbackReason(null)).toBeNull();
     expect(describeFallbackReason('')).toBeNull();
+  });
+});
+
+describe('a substitution is never silent', () => {
+  it('discloses a fallback whose cause nobody recorded', () => {
+    expect(toFallbackReasonHeaderValue({ usedFallback: true })).toBe(
+      UNSPECIFIED_SUBSTITUTION_REASON,
+    );
+    expect(toFallbackReasonHeaderValue({ usedFallback: true, fallbackReason: '   ' })).toBe(
+      UNSPECIFIED_SUBSTITUTION_REASON,
+    );
+  });
+
+  it('discloses a served model that is not the model the caller asked for', () => {
+    expect(
+      toFallbackReasonHeaderValue({
+        requestedModel: 'fixture-requested-model',
+        servedModel: 'fixture-served-model',
+      }),
+    ).toBe(UNSPECIFIED_SUBSTITUTION_REASON);
+    const headers: Record<string, string> = {};
+    addFallbackReasonHeader(headers, {
+      requestedModel: 'fixture-requested-model',
+      servedModel: 'fixture-served-model',
+    });
+    expect(headers[FALLBACK_REASON_HEADER]).toBe(UNSPECIFIED_SUBSTITUTION_REASON);
+  });
+
+  it('keeps quiet when the served model is the one that was asked for', () => {
+    expect(
+      toFallbackReasonHeaderValue({
+        requestedModel: 'fixture-requested-model',
+        servedModel: 'fixture-requested-model',
+      }),
+    ).toBeNull();
+    expect(isSubstitution({ servedModel: 'fixture-served-model' })).toBe(false);
+    expect(isSubstitution({ requestedModel: 'fixture-requested-model' })).toBe(false);
+  });
+
+  it('keeps a recorded cause rather than replacing it with the generic code', () => {
+    expect(
+      toFallbackReasonHeaderValue({
+        usedFallback: true,
+        fallbackReason: 'insufficient_credits',
+        requestedModel: 'fixture-requested-model',
+        servedModel: 'fixture-served-model',
+      }),
+    ).toBe('insufficient_credits');
+  });
+
+  it('reads the generic code back as an honest sentence', () => {
+    expect(
+      describeFallbackReason(UNSPECIFIED_SUBSTITUTION_REASON, 'Fixture Served Model'),
+    ).toContain('Fixture Served Model');
+    expect(describeFallbackReason(UNSPECIFIED_SUBSTITUTION_REASON)).toMatch(/was not recorded/i);
+    expect(fallbackStepLabel(UNSPECIFIED_SUBSTITUTION_REASON, null)).toBe(
+      'Switched to a different model',
+    );
   });
 });
 

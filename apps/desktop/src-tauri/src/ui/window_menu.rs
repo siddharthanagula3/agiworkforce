@@ -98,6 +98,13 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
         None::<&str>,
     )?;
     let get_support = MenuItem::with_id(app, "menu_support", "Get Support", true, None::<&str>)?;
+    let export_diagnostics = MenuItem::with_id(
+        app,
+        "menu_export_diagnostics",
+        "Export Diagnostics\u{2026}",
+        true,
+        None::<&str>,
+    )?;
     let sep_help_update = PredefinedMenuItem::separator(app)?;
     let restart_to_update = MenuItem::with_id(
         app,
@@ -114,6 +121,7 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
             &agi_help,
             &troubleshoot,
             &get_support,
+            &export_diagnostics,
             &sep_help_update,
             &restart_to_update,
         ],
@@ -201,7 +209,7 @@ fn handle_window_menu_event(app: &AppHandle, event: MenuEvent) {
         "menu_settings" => {
             let _ = app.emit("menu_action", "open_settings");
         }
-        "menu_help" | "menu_troubleshoot" | "menu_support" => {
+        "menu_help" | "menu_troubleshoot" | "menu_support" | "menu_export_diagnostics" => {
             let _ = app.emit("menu_action", id);
         }
         "menu_restart_to_update" => {

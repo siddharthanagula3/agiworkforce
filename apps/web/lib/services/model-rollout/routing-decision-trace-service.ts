@@ -3,6 +3,7 @@ import 'server-only';
 import type { RoutingDecisionTrace } from '@agiworkforce/routing';
 
 import { logger } from '@/lib/logger';
+import { recordRoutingDecision as recordRoutingDecisionMetric } from '@/lib/observability/metrics';
 import { normalizePromptStamps } from '@/lib/prompts/prompt-stamp';
 import { getNeonDb } from '@/lib/server/neon-db';
 
@@ -107,6 +108,22 @@ function traceKey(requestId: string, kind: RoutingTraceKind): string {
  * is logged and dropped: it must never fail, delay or reorder the turn itself.
  */
 export function persistRoutingDecision(record: RoutingDecisionRecord): void {
+  // Emitted before the write and only for a served turn: the metric describes
+  // the decision, which happened whether or not its row lands, and a shadow
+  // turn is never delivered to anyone.
+  if (record.kind === 'served') {
+    const { trace } = record;
+    recordRoutingDecisionMetric({
+      status: trace.status,
+      routeId: trace.routeId,
+      provider: trace.provider,
+      modelKey: trace.modelKey,
+      cohort: trace.cohort,
+      trustMode: trace.trustMode,
+      region: trace.region,
+      surface: record.surface,
+    });
+  }
   if (pendingTraces.size >= PENDING_TRACE_LIMIT) {
     pendingTraces.delete(pendingTraces.values().next().value ?? '');
   }

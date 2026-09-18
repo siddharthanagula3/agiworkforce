@@ -29,6 +29,7 @@ const RAIL_DESTINATIONS = [
   { label: 'Projects', path: '/chat/projects' },
   { label: 'Library', path: '/chat/library' },
   { label: 'Models', path: '/models' },
+  { label: 'Study', path: '/chat/study' },
 ] as const;
 
 /** A conversation id that is well formed and belongs to nobody. */
@@ -117,6 +118,24 @@ test.describe('primary navigation works at runtime', () => {
     await page.waitForURL('**/chat/projects', { timeout: LOAD_TIMEOUT_MS });
     await page.waitForTimeout(SETTLE_MS);
     await expect(railEntry(page, 'Projects')).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('study mode offers its start form and refuses to start without a subject', async ({
+    page,
+  }) => {
+    await openApp(page);
+
+    await railEntry(page, 'Study').click();
+    await page.waitForURL('**/chat/study', { timeout: LOAD_TIMEOUT_MS });
+    await page.waitForTimeout(SETTLE_MS);
+
+    const start = page.getByRole('button', { name: 'Start studying' });
+    await expect(start).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
+    await expect(start, 'an empty subject was startable').toBeDisabled();
+
+    await page.getByRole('radio', { name: /Practise it/ }).click();
+    await page.getByPlaceholder('e.g.').fill('Eigenvalues');
+    await expect(start).toBeEnabled();
   });
 
   test('a conversation that does not exist is handled, not crashed into', async ({ page }) => {

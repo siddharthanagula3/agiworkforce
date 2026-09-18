@@ -165,6 +165,7 @@ import {
   type ReachableQuickPickItem,
 } from '../features/model-picker/reachability';
 import { openAgentConfig } from '../features/config/agentConfig';
+import { exportVsCodeDiagnostics } from '../features/diagnostics';
 
 const execFileAsync = promisify(execFile);
 
@@ -1148,6 +1149,44 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       if (pick?.conversationId !== undefined) {
         await vscode.commands.executeCommand('agi-workforce.openConversation', pick.conversationId);
+      }
+    }),
+
+    register('agi-workforce.exportDiagnostics', async () => {
+      const token = await getAccountToken(context.secrets);
+      if (!token) {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: sign in first. Diagnostics are redacted on the server, so nothing is exported while you are signed out.',
+        );
+        return;
+      }
+
+      try {
+        const result = await exportVsCodeDiagnostics({
+          token,
+          baseUrl: getCloudWebOrigin(),
+          environment: {
+            extensionVersion: getExtensionVersion(),
+            hostName: vscode.env.appName,
+            hostVersion: vscode.version,
+            language: vscode.env.language,
+            osPlatform: process.platform,
+          },
+        });
+        const target = await vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(result.filename),
+          filters: { JSON: ['json'] },
+        });
+        if (!target) return;
+        await vscode.workspace.fs.writeFile(
+          target,
+          Buffer.from(JSON.stringify(result.diagnostics, null, 2), 'utf8'),
+        );
+        vscode.window.showInformationMessage(`AGI Workforce: ${result.summary}`);
+      } catch (cause) {
+        vscode.window.showErrorMessage(
+          `AGI Workforce: ${cause instanceof Error ? cause.message : 'Diagnostics export failed.'}`,
+        );
       }
     }),
 

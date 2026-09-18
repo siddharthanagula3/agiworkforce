@@ -6,7 +6,6 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { readJsonBody } from '@/lib/read-json-body';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -21,7 +20,6 @@ import {
   setSkillInstallOverride,
 } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
@@ -38,8 +36,7 @@ const InstallBodySchema = z
 async function handleListInstalls(request: NextRequest) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  const { db, userId } = await getUserScopedDb(request);
 
   const enabledPluginIds = await listEnabledPluginIds(db, userId);
   const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);

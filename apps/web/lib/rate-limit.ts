@@ -292,6 +292,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 presigned-upload requests per minute per user
     failClosed: false,
   },
+  'uploads-resumable-part': {
+    limit: 600,
+    window: '1 m', // one 256 MiB upload is 32 parts; several concurrent uploads must still fit
+    failClosed: false,
+  },
   'files-serve': {
     limit: 120,
     window: '1 m', // generated-file byte serving; a transcript can render many inline files
@@ -482,6 +487,17 @@ export const rateLimitConfigs = {
   'settings-session-revoke': {
     limit: 10,
     window: '1 m',
+    failClosed: true,
+  },
+  'settings-account-compromise-read': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-account-compromise-report': {
+    limit: 5,
+    window: '1 m',
+    // Ends every session, so a repeat is never a way to reach anything.
     failClosed: true,
   },
   'settings-audit-logs': {

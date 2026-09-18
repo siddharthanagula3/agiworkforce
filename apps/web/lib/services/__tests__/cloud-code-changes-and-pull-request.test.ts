@@ -100,8 +100,42 @@ function stubDb(row: Record<string, unknown>, calls: QueryCall[] = []) {
     calls,
     query: vi.fn(async (sql: string, params: unknown[]) => {
       calls.push({ sql, params });
+      if (/from cloud_code_agent_steps/.test(sql)) {
+        return [
+          {
+            turn_id: 'turn-1',
+            step_index: 0,
+            tool_name: 'write_file',
+            tool_args: { path: 'tests/clock.ts' },
+            output: 'ok',
+            is_error: false,
+          },
+          {
+            turn_id: 'turn-1',
+            step_index: 1,
+            tool_name: 'run_command',
+            tool_args: { command: 'pnpm test' },
+            output: 'Renamed the fixture and pinned the clock.\n[exit 0]',
+            is_error: false,
+          },
+        ];
+      }
       if (/from cloud_code_agent_turns/.test(sql)) {
-        return [{ final_message: 'Renamed the fixture and pinned the clock.', goal: 'fix it' }];
+        return [
+          {
+            id: 'turn-1',
+            goal: 'fix the flaky clock test',
+            state: 'done',
+            stop_reason: 'done',
+            steps_used: 2,
+            input_tokens: 0,
+            output_tokens: 0,
+            cancel_requested_at: null,
+            final_message: 'Renamed the fixture and pinned the clock.',
+            error_message: null,
+            created_at: '2026-09-07T12:00:00.000Z',
+          },
+        ];
       }
       if (/^\s*update cloud_code_sessions/.test(sql)) {
         // Every update answers with the fixture row, so a claim and a release
@@ -305,15 +339,74 @@ describe('openCloudCodeSessionPullRequest', () => {
       url: 'https://github.com/acme/widgets/pull/7',
       alreadyOpen: false,
     });
-    expect(mockCreatePullRequest).toHaveBeenCalledWith('installation-token', {
+    const [, input] = mockCreatePullRequest.mock.calls[0] as [string, Record<string, unknown>];
+    expect(input).toMatchObject({
       owner: 'acme',
       repo: 'widgets',
       title: 'Fix the flaky test',
-      body: 'Renamed the fixture and pinned the clock.',
       head: 'agi/fix-the-flaky-test-11111111',
       base: 'main',
+      draft: false,
     });
+    expect(String(input['body'])).toContain('- Tests: passed (`pnpm test`, exit 0)');
+    expect(String(input['body'])).toContain('`tests/clock.ts`');
+    expect(String(input['body'])).not.toContain('Renamed the fixture and pinned the clock.');
     expect(db.calls.some((call) => /set pull_request_url/.test(call.sql))).toBe(true);
+  });
+
+  it('opens a draft when the session cannot back its own completion claim', async () => {
+    mockCreatePullRequest.mockResolvedValue({
+      number: 8,
+      url: 'https://github.com/acme/widgets/pull/8',
+    });
+    const db = stubDb(sessionRow());
+    db.query = vi.fn(async (sql: string) => {
+      if (/from cloud_code_agent_steps/.test(sql)) {
+        return [
+          {
+            turn_id: 'turn-1',
+            step_index: 0,
+            tool_name: 'write_file',
+            tool_args: { path: 'tests/clock.ts' },
+            output: 'ok',
+            is_error: false,
+          },
+          {
+            turn_id: 'turn-1',
+            step_index: 1,
+            tool_name: 'run_command',
+            tool_args: { command: 'pnpm test' },
+            output: 'two failed\n[exit 1]',
+            is_error: true,
+          },
+        ];
+      }
+      if (/from cloud_code_agent_turns/.test(sql)) {
+        return [
+          {
+            id: 'turn-1',
+            goal: 'fix the flaky clock test',
+            state: 'done',
+            stop_reason: 'done',
+            steps_used: 2,
+            input_tokens: 0,
+            output_tokens: 0,
+            cancel_requested_at: null,
+            final_message: 'Everything passes now.',
+            error_message: null,
+            created_at: '2026-09-07T12:00:00.000Z',
+          },
+        ];
+      }
+      return [sessionRow()];
+    }) as never;
+
+    await openCloudCodeSessionPullRequest(db as never, OWNER, SESSION_ID);
+
+    const [, input] = mockCreatePullRequest.mock.calls[0] as [string, Record<string, unknown>];
+    expect(input['draft']).toBe(true);
+    expect(String(input['body'])).toContain('- Tests: failed (`pnpm test`, exit 1)');
+    expect(String(input['body'])).not.toContain('Everything passes now.');
   });
 
   it('answers from the row on a second call without asking GitHub again', async () => {

@@ -4,6 +4,7 @@ import {
   ATTR_HTTP_RESPONSE_STATUS_CODE,
   ATTR_URL_PATH,
 } from '@opentelemetry/semantic-conventions';
+import { DenialErrorCode } from '@agiworkforce/types';
 import { AppError, createError } from './errors';
 import {
   API_CONTRACT_VERSION,
@@ -67,6 +68,9 @@ const SAFE_TO_EXPOSE_CODES = new Set<string>([
   'CAPABILITY_UNAVAILABLE',
   'MFA_REQUIRED',
   'IP_NOT_ALLOWED',
+  // A denial names why the answer is no. Collapsing it to 403 or 503 is what
+  // leaves a caller unable to tell "upgrade" from "your admin turned it off".
+  ...Object.values(DenialErrorCode),
 ]);
 
 function safeErrorMessage(error: AppError): string {

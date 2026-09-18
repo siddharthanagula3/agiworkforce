@@ -9,6 +9,7 @@ import {
 } from './features/options/site-allowlist';
 import { createSitePermissionPolicySection } from './features/options/site-permission-policy';
 import { createDataHandlingSection } from './features/options/data-handling-section';
+import { exportExtensionDiagnostics } from './features/diagnostics';
 import { SITE_ALLOWLIST_STORAGE_KEY } from './background/policy';
 import { loadSitePolicyInput } from './features/site-policy/store';
 import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
@@ -1841,6 +1842,53 @@ function buildPage(): void {
     );
     helpSection.appendChild(row);
   }
+
+  const diagnosticsRow = el('div', { class: 'opt-row' });
+  const diagnosticsLeft = el('div');
+  diagnosticsLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Export diagnostics'));
+  diagnosticsLeft.appendChild(
+    el(
+      'div',
+      { class: 'opt-row-hint' },
+      'Saves a redacted bundle to attach to a support request. The server redacts it before you get the file.',
+    ),
+  );
+  diagnosticsRow.appendChild(diagnosticsLeft);
+  const diagnosticsStatus = el('div', { class: 'opt-row-hint', role: 'status' }, '');
+  const diagnosticsBtn = el(
+    'button',
+    { class: 'opt-link', type: 'button' },
+    'Export',
+  ) as HTMLButtonElement;
+  diagnosticsBtn.addEventListener('click', () => {
+    diagnosticsBtn.disabled = true;
+    diagnosticsStatus.textContent = 'Preparing…';
+    void (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) {
+          diagnosticsStatus.textContent = 'Sign in first, the bundle is redacted on the server.';
+          return;
+        }
+        const result = await exportExtensionDiagnostics(token);
+        const url = URL.createObjectURL(
+          new Blob([JSON.stringify(result.diagnostics, null, 2)], { type: 'application/json' }),
+        );
+        const anchor = el('a', { href: url, download: result.filename });
+        anchor.click();
+        URL.revokeObjectURL(url);
+        diagnosticsStatus.textContent = result.summary;
+      } catch (cause) {
+        diagnosticsStatus.textContent =
+          cause instanceof Error ? cause.message : 'Diagnostics export failed.';
+      } finally {
+        diagnosticsBtn.disabled = false;
+      }
+    })();
+  });
+  diagnosticsRow.appendChild(diagnosticsBtn);
+  helpSection.appendChild(diagnosticsRow);
+  helpSection.appendChild(diagnosticsStatus);
 
   page.appendChild(helpSection);
 

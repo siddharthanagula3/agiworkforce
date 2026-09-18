@@ -3,6 +3,7 @@
 import { useOrganizationOverview } from '@/features/settings/hooks/use-settings-queries';
 import { SSOPanel } from '@/features/settings/sections/team/SSOPanel';
 import DirectorySyncAdminPage from '@/features/admin/pages/DirectorySyncAdminPage';
+import { WorkspaceServicePrincipals } from './WorkspaceServicePrincipals';
 
 const noticeStyle = {
   border: '1px solid var(--settings-border)',
@@ -72,6 +73,7 @@ export function WorkspaceIdentityPanels() {
     <div className="flex flex-col gap-6">
       <SSOPanel organizationId={organization.id} isOwner={isOwner} />
       <DirectorySyncAdminPage organizationId={organization.id} />
+      <WorkspaceServicePrincipals />
       <div style={noticeStyle}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           What deprovisioning does
