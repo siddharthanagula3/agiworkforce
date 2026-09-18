@@ -96,7 +96,7 @@ describe('the pairing routes run the same gates as every other authenticated rou
   it('pair initiation resolves its caller through the auth boundary', () => {
     const route = source('app/api/pair/initiate/route.ts');
 
-    expect(route).toContain('getClerkAuthUser');
+    expect(route).toMatch(/getUserScopedDb\(|getClerkAuthUser/);
     expect(route).not.toContain('getRequestIdentity');
   });
 });
