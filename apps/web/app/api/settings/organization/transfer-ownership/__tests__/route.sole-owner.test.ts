@@ -69,8 +69,10 @@ function member(userId: string, role: string, organizationId = ORG_A) {
   };
 }
 
+// The permission read returns the caller's role beside the set; a null role is
+// how a non-member comes back, so the fixture has to name one.
 function ownerPermissions() {
-  return { permissions: [...BUILT_IN_ORGANIZATION_ROLES.primary_owner.permissions] };
+  return { role: 'owner', permissions: [...BUILT_IN_ORGANIZATION_ROLES.primary_owner.permissions] };
 }
 
 function transferRequest(body: unknown) {

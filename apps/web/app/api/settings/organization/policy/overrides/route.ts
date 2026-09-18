@@ -15,9 +15,9 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { parseWorkspaceControlsLayer } from '@/lib/services/organization-policy-service';
 import {
   listPolicyOverrides,
-  policySubjectExists,
   upsertPolicyOverride,
 } from '@/lib/services/organization-policy-override-service';
+import { policyScopeSubjectExists } from '../policy-subject';
 import { requireWorkspaceConsolePermission } from '../../workspace-access';
 import { ControlsPatchSchema } from '../controls-schema';
 
@@ -65,7 +65,7 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse | Respon
   }
 
   const db = getNeonDb();
-  if (!(await policySubjectExists(db, organizationId, input.subjectType, input.subjectId))) {
+  if (!(await policyScopeSubjectExists(db, organizationId, input.subjectType, input.subjectId))) {
     throw createError
       .notFound(`That ${input.subjectType} does not exist in this workspace.`)
       .asUserSafe();
