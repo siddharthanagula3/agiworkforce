@@ -75,13 +75,19 @@ function jsonRequest(path: string, method: string, body: unknown) {
 
 const routeContext = { params: Promise.resolve({ id: MEMORY_ID }) };
 
+const POLICY = { allow_memory: true, retention_days: null, retention_enforced: false };
+
+function answer(sql: string, memoryRow: unknown) {
+  if (sql.includes("settings -> 'memory'")) return [];
+  if (sql.includes('organization_admin_policies')) return [POLICY];
+  return [memoryRow];
+}
+
 beforeEach(() => {
   mocks.query.mockReset();
   mocks.execute.mockReset();
   mocks.organizationId = ORG;
-  mocks.query.mockImplementation(async (sql: string) =>
-    sql.includes("settings -> 'memory'") ? [] : [row()],
-  );
+  mocks.query.mockImplementation(async (sql: string) => answer(sql, row()));
 });
 
 describe('memory reads are bound to the active workspace in SQL', () => {
@@ -140,9 +146,10 @@ describe('memory reads are bound to the active workspace in SQL', () => {
 describe('memory create consolidates and resolves conflicts', () => {
   it('writes into the active workspace and reports what it superseded', async () => {
     mocks.query.mockImplementation(async (sql: string) =>
-      sql.includes("settings -> 'memory'")
-        ? []
-        : [row({ outcome: 'inserted', superseded_ids: ['0190a000-0000-7000-8000-000000000def'] })],
+      answer(
+        sql,
+        row({ outcome: 'inserted', superseded_ids: ['0190a000-0000-7000-8000-000000000def'] }),
+      ),
     );
 
     const response = await createMemory(
@@ -160,9 +167,7 @@ describe('memory create consolidates and resolves conflicts', () => {
   });
 
   it('answers 200 with the existing memory when the new one is a near-duplicate', async () => {
-    mocks.query.mockImplementation(async (sql: string) =>
-      sql.includes("settings -> 'memory'") ? [] : [row({ outcome: 'merged' })],
-    );
+    mocks.query.mockImplementation(async (sql: string) => answer(sql, row({ outcome: 'merged' })));
 
     const response = await createMemory(
       jsonRequest('/api/memory', 'POST', { content: 'user lives in berlin.' }),
@@ -175,13 +180,30 @@ describe('memory create consolidates and resolves conflicts', () => {
   });
 });
 
+describe('memory policy refusals through the API', () => {
+  it('answers 403 with the policy reason when the workspace has memory off', async () => {
+    mocks.query.mockImplementation(async (sql: string) =>
+      sql.includes('organization_admin_policies')
+        ? [{ ...POLICY, allow_memory: false }]
+        : answer(sql, row()),
+    );
+
+    const response = await createMemory(
+      jsonRequest('/api/memory', 'POST', { content: 'User lives in Berlin' }),
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(JSON.stringify(body)).toContain('memory turned off');
+    expect(memoryCalls().some(([sql]) => sql.includes('insert'))).toBe(false);
+  });
+});
+
 describe('memory expiry through the API', () => {
   it('stores a future expiry on create', async () => {
     const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
     mocks.query.mockImplementation(async (sql: string) =>
-      sql.includes("settings -> 'memory'")
-        ? []
-        : [row({ outcome: 'inserted', expires_at: expiresAt })],
+      answer(sql, row({ outcome: 'inserted', expires_at: expiresAt })),
     );
 
     const response = await createMemory(

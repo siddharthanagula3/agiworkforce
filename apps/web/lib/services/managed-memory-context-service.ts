@@ -4,7 +4,14 @@ import {
   memoryConflictTopic,
   memoryConsolidationKey,
 } from '@agiworkforce/agent-core';
-import { contextFenceTag, contextSource, type ContextSource } from '@agiworkforce/context';
+import {
+  contextFenceTag,
+  contextSource,
+  contextSourceClassPolicy,
+  type ContextSource,
+  type ContextSourceClass,
+} from '@agiworkforce/context';
+import type { PrivacyMode } from '@agiworkforce/types';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
 import { withSpan } from '@/lib/observability/span';
 import { logger } from '@/lib/logger';
@@ -61,26 +68,65 @@ function isoTimestamp(value: string | Date | null): string | null {
  * explicitly enables it, and a read failure must not silently open that
  * gate for every member.
  */
-export async function organizationAllowsMemory(
+export interface OrganizationMemoryPolicy {
+  allowMemory: boolean;
+  /** The workspace's recorded retention window; only a control when enforced. */
+  retentionDays: number | null;
+  retentionEnforced: boolean;
+}
+
+export const CLOSED_ORGANIZATION_MEMORY_POLICY: OrganizationMemoryPolicy = {
+  allowMemory: false,
+  retentionDays: null,
+  retentionEnforced: false,
+};
+
+export const UNGOVERNED_MEMORY_POLICY: OrganizationMemoryPolicy = {
+  allowMemory: true,
+  retentionDays: null,
+  retentionEnforced: false,
+};
+
+export async function loadOrganizationMemoryPolicy(
   db: ManagedMemoryContextDb,
-  organizationId: string,
-): Promise<boolean> {
+  organizationId: string | null | undefined,
+): Promise<OrganizationMemoryPolicy> {
+  if (!organizationId) return UNGOVERNED_MEMORY_POLICY;
   try {
-    const [row] = await db.query<{ allow_memory: boolean }>(
-      `select allow_memory
+    const [row] = await db.query<{
+      allow_memory: boolean;
+      retention_days: number | null;
+      retention_enforced: boolean;
+    }>(
+      `select allow_memory, retention_days, retention_enforced
          from organization_admin_policies
         where organization_id = $1
         limit 1`,
       [organizationId],
     );
-    return row?.allow_memory === true;
+    if (!row) return CLOSED_ORGANIZATION_MEMORY_POLICY;
+    return {
+      allowMemory: row.allow_memory === true,
+      retentionDays:
+        typeof row.retention_days === 'number' && row.retention_days > 0
+          ? row.retention_days
+          : null,
+      retentionEnforced: row.retention_enforced === true,
+    };
   } catch (error) {
     logger.error(
       { error, organizationId },
       '[managed-memory] organization policy read failed; memory disabled for this organization',
     );
-    return false;
+    return CLOSED_ORGANIZATION_MEMORY_POLICY;
   }
+}
+
+export async function organizationAllowsMemory(
+  db: ManagedMemoryContextDb,
+  organizationId: string,
+): Promise<boolean> {
+  return (await loadOrganizationMemoryPolicy(db, organizationId)).allowMemory;
 }
 
 export async function organizationMemoryGate(
@@ -286,6 +332,129 @@ export interface ConsolidatedMemoryWrite {
   projectId?: string | null;
   organizationId?: string | null;
   expiresAt?: string | null;
+  /** Which class of context the fact was taken from. Defaults to `past_chat`. */
+  sourceClass?: ContextSourceClass;
+  /** Trust boundary the turn ran under. Defaults to `managed`. */
+  trustMode?: PrivacyMode;
+}
+
+export const MEMORY_RETENTION_CLASSES = [
+  'account',
+  'project_scoped',
+  'long_running_project_context',
+] as const;
+
+export type MemoryRetentionClass = (typeof MEMORY_RETENTION_CLASSES)[number];
+
+/**
+ * A project's durable narrative, the decisions and standing context a long
+ * project accumulates, as opposed to an ordinary fact that merely happens to
+ * have been stated inside it.
+ */
+const LONG_RUNNING_PROJECT_CATEGORIES = new Set(['context', 'decision', 'summary']);
+
+export function memoryRetentionClass(write: {
+  projectId?: string | null;
+  category: string | null;
+}): MemoryRetentionClass {
+  if (!write.projectId) return 'account';
+  const category = write.category?.trim().toLowerCase() ?? '';
+  return LONG_RUNNING_PROJECT_CATEGORIES.has(category)
+    ? 'long_running_project_context'
+    : 'project_scoped';
+}
+
+export const MEMORY_INELIGIBILITY_REASONS = [
+  'organization_memory_disabled',
+  'source_class_cannot_generate_memory',
+  'trust_mode_outside_managed_storage',
+] as const;
+
+export type MemoryIneligibilityReason = (typeof MEMORY_INELIGIBILITY_REASONS)[number];
+
+export class MemoryIneligibleError extends Error {
+  readonly reason: MemoryIneligibilityReason;
+
+  constructor(reason: MemoryIneligibilityReason, message: string) {
+    super(message);
+    this.name = 'MemoryIneligibleError';
+    this.reason = reason;
+  }
+}
+
+export type MemoryEligibilityDecision =
+  | { eligible: true; retentionClass: MemoryRetentionClass; expiresAt: string | null | undefined }
+  | { eligible: false; reason: MemoryIneligibilityReason; message: string };
+
+const DEFAULT_MEMORY_SOURCE_CLASS: ContextSourceClass = 'past_chat';
+
+/**
+ * The one place a fact is judged fit to enter managed memory, across all three
+ * axes the product governs: who the workspace lets remember, what kind of
+ * context the fact came from, and which trust boundary produced it.
+ */
+export function memoryEligibilityGate(input: {
+  write: ConsolidatedMemoryWrite;
+  organizationPolicy: OrganizationMemoryPolicy;
+  nowMs?: number;
+}): MemoryEligibilityDecision {
+  const { write, organizationPolicy } = input;
+
+  if (!organizationPolicy.allowMemory) {
+    return {
+      eligible: false,
+      reason: 'organization_memory_disabled',
+      message: 'This workspace has memory turned off for its members.',
+    };
+  }
+
+  const sourceClass = write.sourceClass ?? DEFAULT_MEMORY_SOURCE_CLASS;
+  if (!contextSourceClassPolicy(sourceClass).canGenerateMemory) {
+    return {
+      eligible: false,
+      reason: 'source_class_cannot_generate_memory',
+      message: `Content from ${sourceClass} cannot be turned into a memory.`,
+    };
+  }
+
+  // The suite's trust boundary puts local work on local_device storage and BYOK
+  // work on the user's own provider; user_memories is managed storage, so
+  // neither may be persisted here.
+  const trustMode = write.trustMode ?? 'managed';
+  if (trustMode !== 'managed') {
+    return {
+      eligible: false,
+      reason: 'trust_mode_outside_managed_storage',
+      message: `A ${trustMode} turn keeps its content outside AGI-managed storage.`,
+    };
+  }
+
+  return {
+    eligible: true,
+    retentionClass: memoryRetentionClass(write),
+    expiresAt: clampMemoryExpiryToRetention(
+      write.expiresAt,
+      organizationPolicy,
+      input.nowMs ?? Date.now(),
+    ),
+  };
+}
+
+/**
+ * Retention is a recorded position until the workspace enforces it (migration
+ * 0138), so an unenforced window never shortens a memory's life.
+ */
+export function clampMemoryExpiryToRetention(
+  requested: string | null | undefined,
+  policy: OrganizationMemoryPolicy,
+  nowMs: number,
+): string | null | undefined {
+  if (!policy.retentionEnforced || policy.retentionDays === null) return requested;
+  const ceilingMs = nowMs + policy.retentionDays * DAY_MS;
+  if (requested === null || requested === undefined) return new Date(ceilingMs).toISOString();
+  const requestedMs = Date.parse(requested);
+  if (!Number.isFinite(requestedMs)) return new Date(ceilingMs).toISOString();
+  return new Date(Math.min(requestedMs, ceilingMs)).toISOString();
 }
 
 function memoryWriteRank(write: ConsolidatedMemoryWrite): number {
@@ -301,7 +470,19 @@ const CONSOLIDATED_MEMORY_COLUMNS = (alias: string, outcome: string) =>
 export async function writeConsolidatedMemory(
   db: ManagedMemoryContextDb,
   write: ConsolidatedMemoryWrite,
+  options: { organizationPolicy?: OrganizationMemoryPolicy } = {},
 ): Promise<ConsolidatedMemoryRow | null> {
+  const organizationPolicy =
+    options.organizationPolicy ?? (await loadOrganizationMemoryPolicy(db, write.organizationId));
+  const decision = memoryEligibilityGate({ write, organizationPolicy });
+  if (!decision.eligible) {
+    logger.warn(
+      { userId: write.userId, reason: decision.reason },
+      '[managed-memory] write refused by the eligibility gate',
+    );
+    throw new MemoryIneligibleError(decision.reason, decision.message);
+  }
+
   const topic = memoryConflictTopic(write.content);
   const topicPatterns = topic ? topic.prefixes.map((prefix) => `${prefix} %`) : [];
   const [row] = await db.query<ConsolidatedMemoryRow>(
@@ -397,7 +578,7 @@ export async function writeConsolidatedMemory(
       write.category,
       write.source,
       write.pinned === true,
-      write.expiresAt ?? null,
+      decision.expiresAt ?? null,
       topicPatterns,
       memoryWriteRank(write),
     ],
@@ -460,12 +641,21 @@ export async function loadManagedMemoryContext(
     organizationId?: string | null;
     suppressedSources?: readonly MemorySource[];
     scope?: MemoryScope;
+    policy?: ManagedMemoryPolicy;
   },
 ): Promise<ManagedMemoryContextSource[]> {
   return withSpan(
     'memory.context.load',
     { domain: 'retrieval', attributes: { 'retrieval.source': 'user_memories' } },
     async (span) => {
+      // The contract: turning memory off stops the product READING existing
+      // memories, not only writing new ones. A caller holding the policy hands
+      // it in and gets that enforced here rather than at its own call site.
+      if (params.policy && !params.policy.enabled) {
+        span.setAttributes({ 'retrieval.result_count': 0, 'retrieval.skipped': 'memory_disabled' });
+        return [];
+      }
+
       const scope = params.scope ?? GLOBAL_MEMORY_SCOPE;
       const suppressed = normalizeSuppressedMemorySources(params.suppressedSources ?? []);
 
@@ -605,6 +795,8 @@ export async function persistManagedAutoMemoryFacts(
     candidates: readonly string[];
     projectId?: string | null;
     organizationId?: string | null;
+    sourceClass?: ContextSourceClass;
+    trustMode?: PrivacyMode;
   },
 ): Promise<ManagedAutoMemoryResult> {
   const extracted = params.candidates.length;
@@ -654,18 +846,30 @@ export async function persistManagedAutoMemoryFacts(
   }
   if (batch.length === 0) return { extracted, inserted: 0, excluded };
 
+  const organizationPolicy = await loadOrganizationMemoryPolicy(db, params.organizationId);
   let inserted = 0;
   for (const item of batch) {
-    const row = await writeConsolidatedMemory(db, {
-      userId: params.userId,
-      id: item.id,
-      content: item.content,
-      category: item.category,
-      source: AUTO_MEMORY_SOURCE,
-      projectId: params.projectId ?? null,
-      organizationId: params.organizationId ?? null,
-    });
-    if (row && row.outcome !== 'merged') inserted += 1;
+    try {
+      const row = await writeConsolidatedMemory(
+        db,
+        {
+          userId: params.userId,
+          id: item.id,
+          content: item.content,
+          category: item.category,
+          source: AUTO_MEMORY_SOURCE,
+          projectId: params.projectId ?? null,
+          organizationId: params.organizationId ?? null,
+          sourceClass: params.sourceClass ?? DEFAULT_MEMORY_SOURCE_CLASS,
+          trustMode: params.trustMode ?? 'managed',
+        },
+        { organizationPolicy },
+      );
+      if (row && row.outcome !== 'merged') inserted += 1;
+    } catch (error) {
+      if (!(error instanceof MemoryIneligibleError)) throw error;
+      excluded += 1;
+    }
   }
 
   return { extracted, inserted, excluded };

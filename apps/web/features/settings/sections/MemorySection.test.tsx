@@ -72,6 +72,21 @@ describe('MemorySection under a workspace policy', () => {
     }
   });
 
+  // The three scopes and the disabled contract are the two questions Settings
+  // could not answer before: where a fact applies, and what turning memory off
+  // does to the facts already saved.
+  it('explains account, workspace and project scope, and what disabling memory does', () => {
+    mockCapabilities.mockReturnValue(capabilities(true));
+    render(<MemorySection />);
+
+    const explanation = screen.getByRole('region', { name: 'Where a memory applies' });
+    expect(explanation).toHaveTextContent('Account');
+    expect(explanation).toHaveTextContent('Workspace');
+    expect(explanation).toHaveTextContent('Project');
+    expect(explanation).toHaveTextContent(/never sees your account facts/i);
+    expect(explanation).toHaveTextContent(/no longer read into any answer/i);
+  });
+
   it('leaves the toggles usable when the workspace allows memory', () => {
     mockCapabilities.mockReturnValue(capabilities(true));
     render(<MemorySection />);

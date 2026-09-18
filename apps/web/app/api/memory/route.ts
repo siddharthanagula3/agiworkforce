@@ -11,6 +11,7 @@ const MAX_MEMORY_CATEGORY_CHARS = 200;
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 import {
+  MemoryIneligibleError,
   activeMemoryPredicate,
   parseMemoryExpiry,
   workspaceMemoryPredicate,
@@ -148,6 +149,9 @@ async function handleCreateMemory(request: NextRequest) {
     if (!written) throw new Error('No row returned');
     row = written;
   } catch (error) {
+    if (error instanceof MemoryIneligibleError) {
+      throw createError.forbidden(error.message).asUserSafe();
+    }
     logger.error({ error, userId }, 'Failed to create memory');
     throw createError.internal('Failed to create memory');
   }

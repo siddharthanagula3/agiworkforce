@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
@@ -47,6 +47,9 @@ import {
   type PopularSearch,
 } from '../../services/global-search-service';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { safePlatform } from '@shared/utils/browser-utils';
+import { findShortcutDoc, formatShortcutKeys } from '../../hooks/use-keyboard-shortcuts';
 import { format } from 'date-fns';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { memoWhenClosed } from '@shared/lib/memo-when-closed';
@@ -55,6 +58,11 @@ interface GlobalSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const EMPTY_SHORTCUT_IDS: string[] = [];
+
+const FOOTER_KEY_CLASS =
+  'rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:border-gray-500 dark:bg-gray-600 dark:text-gray-100';
 
 const RESULT_TYPE_LABELS: Partial<Record<SearchResult['type'], string>> = {
   project: 'Project',
@@ -88,6 +96,8 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
   const router = useRouter();
   const { user } = useAuthStore();
+  const disabledShortcutIds =
+    useSettingsStore((state) => state.disabledShortcutIds) ?? EMPTY_SHORTCUT_IDS;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [stats, setStats] = useState<SearchStats | null>(null);
@@ -316,6 +326,13 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
         return <MessageSquare className="h-3.5 w-3.5" />;
     }
   };
+
+  // A binding the user switched off in Settings is not a binding to advertise.
+  const openShortcutKeys = useMemo(() => {
+    if (disabledShortcutIds.includes('open-search')) return [];
+    const doc = findShortcutDoc('open-search');
+    return doc ? formatShortcutKeys(doc, safePlatform.isMac()) : [];
+  }, [disabledShortcutIds]);
 
   const activeFilterCount = [
     roleFilter !== 'all',
@@ -705,15 +722,20 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
           {/* Footer */}
           <div className="border-t bg-muted/20 px-6 py-3">
             <p className="text-center text-xs text-muted-foreground">
-              Press{' '}
-              <kbd className="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:border-gray-500 dark:bg-gray-600 dark:text-gray-100">
-                Enter
-              </kbd>{' '}
-              to search,{' '}
-              <kbd className="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:border-gray-500 dark:bg-gray-600 dark:text-gray-100">
-                Esc
-              </kbd>{' '}
-              to close
+              Press <kbd className={FOOTER_KEY_CLASS}>Enter</kbd> to search,{' '}
+              <kbd className={FOOTER_KEY_CLASS}>Esc</kbd> to close
+              {openShortcutKeys.length > 0 && (
+                <>
+                  , and{' '}
+                  {openShortcutKeys.map((key, index) => (
+                    <span key={key}>
+                      {index > 0 && ' '}
+                      <kbd className={FOOTER_KEY_CLASS}>{key}</kbd>
+                    </span>
+                  ))}{' '}
+                  to reopen search
+                </>
+              )}
             </p>
           </div>
           {clearHistoryDialog}
