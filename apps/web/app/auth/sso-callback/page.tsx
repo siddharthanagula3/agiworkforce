@@ -1,5 +1,7 @@
 import { Spinner } from '@agiworkforce/ui';
 
+import { AuthLayout } from '@/features/auth/AuthLayout';
+import { AuthProviderCallbackNotice } from '@/features/auth/AuthProviderCallbackNotice';
 import { IdentityBotProtection, IdentitySsoCallback } from '@/features/auth/identityAuthAdapter';
 import {
   buildLoginCompleteUrl,
@@ -8,6 +10,7 @@ import {
   buildSignupUrl,
   readAuthRouteContext,
 } from '@/features/auth/authRoutes';
+import { classifyProviderCallbackError } from '@/lib/auth/error-taxonomy';
 import { getSafeRedirectUrl } from '../../../lib/safe-redirect';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
@@ -17,11 +20,27 @@ const CALLBACK_FALLBACK_REDIRECT = '/';
 export default async function SsoCallbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirectTo?: string; surface?: string; authRetry?: string }>;
+  searchParams: Promise<{
+    redirectTo?: string;
+    surface?: string;
+    authRetry?: string;
+    error?: string;
+  }>;
 }) {
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), CALLBACK_FALLBACK_REDIRECT);
   const context = readAuthRouteContext(params, redirectTo);
+
+  // The provider answers a cancelled or failed consent by redirecting here with
+  // an error parameter and no code, so this never reaches the identity vendor.
+  const notice = classifyProviderCallbackError(params.error);
+  if (notice) {
+    return (
+      <AuthLayout embedded={context.desktopSurface}>
+        <AuthProviderCallbackNotice notice={notice} retryHref={buildLoginUrl(context)} />
+      </AuthLayout>
+    );
+  }
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-surface-page">

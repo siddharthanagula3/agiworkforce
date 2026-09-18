@@ -1,4 +1,10 @@
-export type Status = 'idle' | 'loading' | 'success' | 'error';
+import type { SurfaceState } from '@agiworkforce/types';
+
+export type { SurfaceState } from '@agiworkforce/types';
+
+// The four members this alias used to declare are a prefix of SurfaceState, so
+// widening it is additive: nothing renames and no existing narrowing breaks.
+export type Status = SurfaceState;
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -256,13 +262,7 @@ export type AIProvider =
   | 'custom';
 
 export type AIEmployeeStatus =
-  | 'available'
-  | 'busy'
-  | 'offline'
-  | 'working'
-  | 'thinking'
-  | 'idle'
-  | 'maintenance';
+  'available' | 'busy' | 'offline' | 'working' | 'thinking' | 'idle' | 'maintenance';
 
 export interface AIEmployeeBasic {
   id: string;
@@ -370,14 +370,7 @@ export interface CollaborationAgentCapability {
 export interface AgentStatus {
   agentName: string;
   status:
-    | 'idle'
-    | 'thinking'
-    | 'analyzing'
-    | 'working'
-    | 'waiting'
-    | 'completed'
-    | 'blocked'
-    | 'error';
+    'idle' | 'thinking' | 'analyzing' | 'working' | 'waiting' | 'completed' | 'blocked' | 'error';
   currentTask?: string;
   progress: number;
   toolsUsing?: string[];
