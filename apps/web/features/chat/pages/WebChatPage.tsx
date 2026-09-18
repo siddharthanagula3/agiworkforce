@@ -166,11 +166,21 @@ import {
 } from '../stores/voice-session-store';
 import {
   conversationDeleteConfirm,
+  conversationHref,
   projectDeleteConfirm,
 } from '@shared/components/layout/sidebar-session-actions';
+import {
+  copyProjectLink,
+  deleteProjectOptimistically,
+  projectHref,
+  projectNewChatHref,
+  toggleProjectPin,
+} from '@shared/components/layout/sidebar-project-actions';
+import { toSidebarSessions } from '@shared/components/layout/sidebar-session-rows';
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
+import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
 import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonomyNotice';
 import { AGI_WORK_LABEL } from '../lib/agi-work';
@@ -233,7 +243,6 @@ import {
   useProjectStore,
   ProjectSettingsDialog,
 } from '@features/projects';
-import { webManagedCloudProjects } from '@features/projects/services/managed-cloud-projects';
 import {
   acknowledgeProjectChatHandoff,
   readProjectChatHandoff,
@@ -1004,6 +1013,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const { user: identityUser } = useCurrentUser();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const disabledFeatures = useDisabledWorkspaceFeatures();
+  const { isUnread, toggleUnread } = useUnreadConversations();
   const { user: compatibilityUser, logout } = useAuthStore();
   const canonicalUser = useBillingStore((s) => s.user);
   const clerkAccountUser = useMemo<ChatAccountIdentity | null>(() => {
@@ -3402,14 +3412,14 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   /** Navigate to the project page (shows project conversations + settings). */
   const handleProjectOpen = useCallback(
     (projectId: string) => {
-      router.push(`/chat/projects/${projectId}`);
+      router.push(projectHref(projectId));
     },
     [router],
   );
 
   const handleProjectNewChat = useCallback(
     (projectId: string) => {
-      router.push(`/chat?projectId=${projectId}`);
+      router.push(projectNewChatHref(projectId));
     },
     [router],
   );
@@ -3422,15 +3432,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     setProjectSettingsId(projectId);
   }, []);
 
-  const handleProjectShare = useCallback(async (projectId: string) => {
-    const url = `${window.location.origin}/chat/projects/${encodeURIComponent(projectId)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success('Project link copied');
-    } catch {
-      toast.error('Could not copy the project link');
-    }
-  }, []);
+  const handleProjectShare = useCallback((projectId: string) => copyProjectLink(projectId), []);
 
   /**
    * Project settings: open the settings dialog.
@@ -3446,12 +3448,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     (projectId: string) => {
       const project = storeProjects.find((p) => p.id === projectId);
       if (!project) return;
-      const next = !project.starred;
-      updateProjectInStore(projectId, { starred: next }); // optimistic
-      void webManagedCloudProjects.updateProject(projectId, { starred: next }).catch((error) => {
-        updateProjectInStore(projectId, { starred: project.starred ?? false }); // rollback
-        toast.error(toUserMessage(error, 'Failed to update pin'));
-      });
+      void toggleProjectPin(project, (id, starred) => updateProjectInStore(id, { starred }));
     },
     [storeProjects, updateProjectInStore],
   );
@@ -3479,21 +3476,13 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const handleProjectDelete = useCallback(
     (projectId: string) => {
       const project = storeProjects.find((p) => p.id === projectId);
+      if (!project) return;
       confirmDestructive({
-        ...projectDeleteConfirm(project?.name),
-        onConfirm: async () => {
-          // Optimistic remove, with rollback on server failure so the sidebar
-          // never lies about what actually got deleted.
-          removeProjectFromStore(projectId);
-          try {
-            await webManagedCloudProjects.deleteProject(projectId);
-          } catch (err) {
-            if (project) {
-              setStoreProjects([...useProjectStore.getState().projects, project]);
-            }
-            toast.error(toUserMessage(err, 'Failed to delete project'));
-          }
-        },
+        ...projectDeleteConfirm(project.name),
+        onConfirm: () =>
+          deleteProjectOptimistically(project, removeProjectFromStore, (restored) =>
+            setStoreProjects([...useProjectStore.getState().projects, restored]),
+          ),
       });
     },
     [confirmDestructive, storeProjects, removeProjectFromStore, setStoreProjects],
@@ -3859,6 +3848,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     [conversations, updateConversation],
   );
 
+  const handleMarkUnreadSession = useCallback((id: string) => toggleUnread(id), [toggleUnread]);
+
   const handleArchiveSession = useCallback(
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
@@ -3876,7 +3867,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       if (id === displayedConversationId) {
         setShareDialogOpen(true);
       } else {
-        router.push(`/chat/${id}`);
+        router.push(conversationHref(id));
       }
     },
     [displayedConversationId, router],
@@ -4769,23 +4760,16 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   );
   const sidebarSessions = useMemo<SidebarSession[]>(
     () =>
-      conversations
-        .filter((c) => !c.isTemporary)
-        .map((c) => ({
-          id: c.id,
-          title: c.title,
-          updatedAt: c.updatedAt,
-          pinned: c.isPinned ?? false,
-          starred: c.isStarred ?? false,
-          archived: c.isArchived ?? false,
-          projectId: c.projectId ?? undefined,
-          messageCount: c.messageCount,
+      toSidebarSessions(conversations, {
+        isUnread,
+        decorate: (c) => ({
           ...(c.workMode === AGI_WORK_MODE || workModeByConversation[c.id] === AGI_WORK_MODE
             ? { agiWork: true }
             : {}),
           ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
-        })),
-    [conversations, runningConversationIds, workModeByConversation],
+        }),
+      }),
+    [conversations, isUnread, runningConversationIds, workModeByConversation],
   );
 
   // Top-level destinations stay visible in the production sidebar. The rail body
@@ -4962,7 +4946,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     navItems: sidebarNavItems,
     footerSlot: sidebarFooterSlot,
     collapsedFooterSlot: sidebarCollapsedFooterSlot,
-    getSessionHref: (session: SidebarSession) => `/chat/${encodeURIComponent(session.id)}`,
+    getSessionHref: (session: SidebarSession) => conversationHref(session.id),
     // GOV-19: the two props the shared Sidebar's usage widget needs.
     showUsageWidget: managedUsageSummary !== null,
     budgetPercent: managedBudgetPercent,
@@ -4974,6 +4958,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     onArchive: handleArchiveSession,
     onRestore: handleArchiveSession,
     onShare: handleShareSession,
+    onMarkUnread: handleMarkUnreadSession,
     onMoveToProject: handleMoveToProjectSession,
     onProjectOpen: handleProjectOpen,
     onProjectNewChat: handleProjectNewChat,

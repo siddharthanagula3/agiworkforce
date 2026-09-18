@@ -55,15 +55,22 @@ import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import {
   conversationDeleteConfirm,
+  conversationHref,
   projectDeleteConfirm,
 } from '@shared/components/layout/sidebar-session-actions';
+import {
+  copyProjectLink,
+  deleteProjectOptimistically,
+  projectHref,
+  projectNewChatHref,
+  toggleProjectPin,
+} from '@shared/components/layout/sidebar-project-actions';
+import { toSidebarSessions } from '@shared/components/layout/sidebar-session-rows';
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
-import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
-import { toast } from 'sonner';
 import {
   getBillingPlanPricing,
   hasSelfServeUpgradePath,
@@ -79,7 +86,6 @@ import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flo
 import { ComposerFeedbackDialog } from '@/features/chat/components/Composer/ComposerFeedbackDialog';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
-import { toUserMessage } from '@/lib/user-error-message';
 import { onAppCommand } from '@shared/lib/app-commands';
 
 // A fresh [] each render changes the identity every time and defeats the
@@ -177,28 +183,21 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     isLoading: isConversationsLoading,
     listError: conversationListError,
     fetchConversations,
+    hasMoreConversations,
+    isLoadingMoreConversations,
+    loadMoreConversations,
   } = useConversations();
 
   // ---- Projects ----
   const { projects: storeProjects } = useManagedCloudProjects();
-  const toggleStar = useProjectStore((s) => s.toggleStar);
+  const updateProjectInStore = useProjectStore((s) => s.updateProject);
   const removeProjectFromStore = useProjectStore((s) => s.removeProject);
+  const setStoreProjects = useProjectStore((s) => s.setProjects);
 
   const { isUnread, toggleUnread } = useUnreadConversations();
 
   const sidebarSessions = useMemo<SidebarSession[]>(
-    () =>
-      conversations.map((c) => ({
-        id: c.id,
-        title: c.title,
-        updatedAt: c.updatedAt,
-        pinned: c.isPinned ?? false,
-        starred: c.isStarred ?? false,
-        archived: c.isArchived ?? false,
-        projectId: c.projectId ?? undefined,
-        messageCount: c.messageCount,
-        unread: isUnread(c.id),
-      })),
+    () => toSidebarSessions(conversations, { isUnread }),
     [conversations, isUnread],
   );
 
@@ -234,7 +233,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     [managedUsageSummary],
   );
   const handleSelectSession = useCallback(
-    (id: string) => router.push(`/chat/${encodeURIComponent(id)}`),
+    (id: string) => router.push(conversationHref(id)),
     [router],
   );
   const handleDeleteSession = useCallback(
@@ -266,6 +265,12 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     [conversations, updateConversation],
   );
   const handleMarkUnreadSession = useCallback((id: string) => toggleUnread(id), [toggleUnread]);
+  // No conversation is on screen outside /chat, so Share opens the one the row
+  // names; its header share control is the only place the link can be minted.
+  const handleShareSession = useCallback(
+    (id: string) => router.push(conversationHref(id)),
+    [router],
+  );
   const handleMoveToProjectSession = useCallback(
     (sessionId: string, projectId: string) => void updateConversation(sessionId, { projectId }),
     [updateConversation],
@@ -273,32 +278,31 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
 
   // ---- Project row handlers ----
   const handleProjectOpen = useCallback(
-    (projectId: string) => router.push(`/chat/projects/${encodeURIComponent(projectId)}`),
+    (projectId: string) => router.push(projectHref(projectId)),
     [router],
   );
   const handleProjectNewChat = useCallback(
     // `?projectId=` is the ONE canonical project entry param for /chat.
-    (projectId: string) => router.push(`/chat?projectId=${encodeURIComponent(projectId)}`),
+    (projectId: string) => router.push(projectNewChatHref(projectId)),
     [router],
   );
   const handleProjectSettings = useCallback(
-    (projectId: string) => router.push(`/chat/projects/${encodeURIComponent(projectId)}`),
+    (projectId: string) => router.push(projectHref(projectId)),
     [router],
   );
   // Rename opens the same project-home page as Settings: that page's own
   // kebab menu is where the rename field actually lives, this shell has no
   // settings dialog of its own to open inline.
   const handleProjectRename = handleProjectSettings;
-  const handleProjectShare = useCallback(async (projectId: string) => {
-    const url = `${window.location.origin}/chat/projects/${encodeURIComponent(projectId)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success('Project link copied');
-    } catch {
-      toast.error('Could not copy the project link');
-    }
-  }, []);
-  const handleProjectPin = useCallback((projectId: string) => toggleStar(projectId), [toggleStar]);
+  const handleProjectShare = useCallback((projectId: string) => copyProjectLink(projectId), []);
+  const handleProjectPin = useCallback(
+    (projectId: string) => {
+      const project = storeProjects.find((p) => p.id === projectId);
+      if (!project) return;
+      void toggleProjectPin(project, (id, starred) => updateProjectInStore(id, { starred }));
+    },
+    [storeProjects, updateProjectInStore],
+  );
   const handleProjectDelete = useCallback(
     (projectId: string) => {
       // The shared <Sidebar> invokes this straight from the project row's
@@ -306,19 +310,16 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       // project on a single stray click, worse than the native confirm the chat
       // shell at least had. Same dialog and copy as ProjectSettingsDialog.
       const project = storeProjects.find((p) => p.id === projectId);
+      if (!project) return;
       confirmDestructive({
-        ...projectDeleteConfirm(project?.name),
-        onConfirm: async () => {
-          try {
-            await webManagedCloudProjects.deleteProject(projectId);
-            removeProjectFromStore(projectId);
-          } catch (error) {
-            toast.error(toUserMessage(error, 'Failed to delete project'));
-          }
-        },
+        ...projectDeleteConfirm(project.name),
+        onConfirm: () =>
+          deleteProjectOptimistically(project, removeProjectFromStore, (restored) =>
+            setStoreProjects([...useProjectStore.getState().projects, restored]),
+          ),
       });
     },
-    [confirmDestructive, removeProjectFromStore, storeProjects],
+    [confirmDestructive, removeProjectFromStore, setStoreProjects, storeProjects],
   );
   // The projects page owns the create dialog, so carry the intent across the
   // navigation: without ?new=1 this button lands the user on a list and the
@@ -473,12 +474,15 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     isLoading: isAccountLoading || isConversationsLoading,
     error: conversationListError,
     onRetryLoad: () => void fetchConversations(),
+    hasMoreSessions: hasMoreConversations,
+    isLoadingMoreSessions: isLoadingMoreConversations,
+    onLoadMoreSessions: () => void loadMoreConversations(),
     mode: 'cloud' as const,
     headerSlot: <SidebarBrandRow />,
     navItems: sidebarNavItems,
     footerSlot,
     collapsedFooterSlot,
-    getSessionHref: (session: SidebarSession) => `/chat/${encodeURIComponent(session.id)}`,
+    getSessionHref: (session: SidebarSession) => conversationHref(session.id),
     onNewChat: handleNewChat,
     onOpenCode: disabledFeatures.includes('code') ? undefined : handleOpenCode,
     onOpenSearch: handleOpenSearch,
@@ -491,6 +495,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     onTogglePin: handlePinSession,
     onArchive: handleArchiveSession,
     onRestore: handleArchiveSession,
+    onShare: handleShareSession,
     onMarkUnread: handleMarkUnreadSession,
     onMoveToProject: handleMoveToProjectSession,
     onProjectOpen: handleProjectOpen,

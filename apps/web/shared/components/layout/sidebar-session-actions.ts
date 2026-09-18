@@ -14,6 +14,10 @@ export interface DestructiveConfirmCopy {
   confirmLabel: string;
 }
 
+export function conversationHref(conversationId: string): string {
+  return `/chat/${encodeURIComponent(conversationId)}`;
+}
+
 function quoted(label: string | null | undefined, fallback: string): string {
   return label?.trim() ? `“${label.trim()}”` : fallback;
 }
