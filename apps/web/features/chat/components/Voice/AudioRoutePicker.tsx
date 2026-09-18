@@ -143,7 +143,7 @@ export function AudioRoutePicker({ audioRef, className }: AudioRoutePickerProps)
               <button
                 key={device.deviceId}
                 type="button"
-                role="menuitem"
+                role="menuitemradio"
                 aria-checked={selected}
                 onClick={() => select(device.deviceId)}
                 className={cn(
