@@ -421,6 +421,7 @@ pub(crate) fn rule_paths_from_tool_call(
         "multiedit",
         "notebook_edit",
         "apply_patch",
+        "resolve_conflict",
         "lsp_definition",
         "lsp_hover",
         "lsp_diagnostics",
@@ -453,6 +454,7 @@ pub(crate) fn is_rule_sensitive_mutation_tool(tool_name: &str) -> bool {
             | "multiedit"
             | "notebook_edit"
             | "apply_patch"
+            | "resolve_conflict"
             | "lsp_format"
             | "run_command"
             | "powershell"
@@ -2010,9 +2012,12 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 39);
+        assert_eq!(defs.len(), 40);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
+        assert!(defs
+            .iter()
+            .any(|definition| definition.name == "resolve_conflict"));
     }
 
     #[test]

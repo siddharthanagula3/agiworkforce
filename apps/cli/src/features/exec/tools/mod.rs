@@ -418,12 +418,15 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         || (opts.auto_approve_edits
             && crate::platform::runtime::tool_catalog::is_file_edit_tool(canonical_name));
     let mut require_confirm = opts.require_confirmation && !pre_approved;
+    // Set when the user approved this exact call under the policy prompt, so the
+    // trust gate below does not ask a second time for one command.
+    let mut approved_this_call = false;
     if let Some(workspace_root) = opts.workspace_root.as_deref() {
-        let policy = crate::platform::policy::PolicyEngine::load_workspace(workspace_root)?;
+        let policy = crate::platform::policy::PolicyEngine::load_layered(workspace_root)?;
         if policy.has_rules() {
             let primary_argument = policy_primary_argument(canonical_name, &call.args);
             let decision = effective_workspace_policy_decision(
-                policy.evaluate(canonical_name, &primary_argument),
+                policy.resolve(canonical_name, &primary_argument),
                 workspace_policy_is_trusted(workspace_root),
             );
             match decision {
@@ -478,8 +481,23 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
                     // for this invocation; do not immediately ask a second time in
                     // the tool-specific executor.
                     require_confirm = false;
+                    approved_this_call = true;
                 }
             }
+        }
+    }
+
+    if let Some(workspace_root) = opts.workspace_root.as_deref() {
+        if let Some(refusal) = untrusted_shell_refusal(
+            canonical_name,
+            &call.args,
+            workspace_root,
+            opts.approval_callback.as_ref(),
+            approved_this_call,
+        )
+        .await
+        {
+            return Ok(refusal);
         }
     }
 
@@ -542,6 +560,15 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
         "apply_patch" => {
             execute_apply_patch(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+        }
+        "resolve_conflict" => {
+            execute_resolve_conflict(
+                &call.args,
+                opts.workspace_root.as_deref(),
+                require_confirm,
+                opts.approval_callback.as_ref(),
+            )
+            .await
         }
         "tool_search" => execute_tool_search(&call.args).await,
         "agent" => {
@@ -671,10 +698,129 @@ fn trust_boundary_approval(
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct HunkResolution {
+    hunk: usize,
+    choice: String,
+    #[serde(default)]
+    lines: Option<Vec<String>>,
+}
+
+/// Turn the tool's wire shape into the resolutions the workflow takes. An
+/// unknown choice is refused rather than mapped onto a side.
+fn parse_hunk_resolutions(
+    json: &str,
+) -> std::result::Result<Vec<(usize, crate::merge_conflicts::Resolution)>, String> {
+    use crate::merge_conflicts::{ConflictSide, Resolution};
+
+    let parsed: Vec<HunkResolution> =
+        serde_json::from_str(json).map_err(|error| format!("Invalid resolutions JSON: {error}"))?;
+    if parsed.is_empty() {
+        return Err("resolutions is empty; every conflicted hunk needs one".to_string());
+    }
+    let mut resolutions = Vec::with_capacity(parsed.len());
+    for entry in parsed {
+        let resolution = match entry.choice.as_str() {
+            "union" => Resolution::Union,
+            "custom" => Resolution::Custom(entry.lines.ok_or_else(|| {
+                format!("hunk {} uses choice=custom but has no lines", entry.hunk)
+            })?),
+            side => Resolution::Take(ConflictSide::parse(side).ok_or_else(|| {
+                format!(
+                    "hunk {} has an unknown choice '{side}'; use ours, theirs, base, union or custom",
+                    entry.hunk
+                )
+            })?),
+        };
+        resolutions.push((entry.hunk, resolution));
+    }
+    Ok(resolutions)
+}
+
+async fn execute_resolve_conflict(
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+    require_confirm: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<ToolResult> {
+    let refuse = |output: String| {
+        Ok(ToolResult {
+            tool_name: "resolve_conflict".to_string(),
+            success: false,
+            output,
+        })
+    };
+    let Some(path) = args
+        .get("path")
+        .map(|path| path.trim())
+        .filter(|path| !path.is_empty())
+    else {
+        return refuse("Missing required argument: path".to_string());
+    };
+    let Some(resolutions_json) = args.get("resolutions") else {
+        return refuse("Missing required argument: resolutions".to_string());
+    };
+    let resolutions = match parse_hunk_resolutions(resolutions_json) {
+        Ok(resolutions) => resolutions,
+        Err(message) => return refuse(message),
+    };
+    let root = match workspace_root {
+        Some(root) => crate::project_scope::resolve_project_scope(root),
+        None => match std::env::current_dir() {
+            Ok(cwd) => crate::project_scope::resolve_project_scope(&cwd),
+            Err(error) => return refuse(format!("Cannot resolve the repository root: {error}")),
+        },
+    };
+    let relative = std::path::Path::new(path);
+    if relative.is_absolute() {
+        return refuse("path must be relative to the repository root".to_string());
+    }
+
+    if require_confirm {
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::FileEdit {
+                path: std::path::PathBuf::from(path),
+            },
+            format!(
+                "Resolve {} merge conflict hunk(s) in {path}",
+                resolutions.len()
+            ),
+            vec![format!("repository: {}", root.display())],
+        );
+        let allowed = match request_approval(approval_callback, request.clone()).await {
+            Some(decision) => approval_allows(decision),
+            None => Confirm::new()
+                .with_prompt(format!("{} Allow it?", request.summary))
+                .default(false)
+                .interact()
+                .unwrap_or(false),
+        };
+        if !allowed {
+            return refuse("`resolve_conflict` was not approved and did not run.".to_string());
+        }
+    }
+
+    let run_tests = args
+        .get("run_tests")
+        .is_some_and(|value| matches!(value.trim(), "true" | "1" | "yes"));
+    match crate::merge_conflicts::resolve_conflicted_file(&root, relative, &resolutions, run_tests)
+        .await
+    {
+        Ok(outcome) => Ok(ToolResult {
+            tool_name: "resolve_conflict".to_string(),
+            success: true,
+            output: outcome.summary(),
+        }),
+        Err(error) => refuse(format!("{error:#}")),
+    }
+}
+
 fn policy_primary_argument(tool_name: &str, args: &HashMap<String, String>) -> String {
     let preferred_keys: &[&str] = match tool_name {
         "run_command" | "powershell" => &["command"],
-        "write_file" | "edit_file" | "notebook_edit" | "read_file" => &["path", "file_path"],
+        "write_file" | "edit_file" | "notebook_edit" | "read_file" | "resolve_conflict" => {
+            &["path", "file_path"]
+        }
         "web_fetch" => &["url"],
         "web_search" | "search_files" | "grep_files" => &["query", "pattern"],
         "advisor" | "ask_user" => &["question"],
@@ -688,32 +834,73 @@ fn policy_primary_argument(tool_name: &str, args: &HashMap<String, String>) -> S
 }
 
 pub(crate) fn workspace_policy_is_trusted(workspace_root: &std::path::Path) -> bool {
-    let project_root = crate::project_scope::resolve_project_scope(workspace_root);
-    let Ok(config_dir) = crate::config::CliConfig::config_dir() else {
-        return false;
-    };
-    let Ok(registry) = crate::project_registry::ProjectRegistry::load(&config_dir) else {
-        return false;
-    };
-    let project_key = project_root.to_string_lossy();
-    registry
-        .projects
-        .get(project_key.as_ref())
-        .is_some_and(|entry| entry.trust_level == "trusted")
+    crate::trust::is_trusted(workspace_root)
 }
 
 fn effective_workspace_policy_decision(
-    decision: crate::platform::policy::PolicyDecision,
+    resolution: crate::platform::policy::PolicyResolution,
     workspace_is_trusted: bool,
 ) -> crate::platform::policy::PolicyDecision {
-    use crate::platform::policy::PolicyDecision;
+    use crate::platform::policy::{PolicyDecision, PolicyLayer};
 
-    match (decision, workspace_is_trusted) {
+    match (resolution.decision, resolution.layer) {
         // A repository-controlled file must not be able to remove an approval
-        // boundary until the user has explicitly trusted that repository.
-        (PolicyDecision::Allow, false) => PolicyDecision::Ask,
+        // boundary until the user has explicitly trusted that repository. The
+        // managed and user layers are not repository-controlled, so they keep
+        // their decision either way.
+        (PolicyDecision::Allow, Some(PolicyLayer::Workspace)) if !workspace_is_trusted => {
+            PolicyDecision::Ask
+        }
         (decision, _) => decision,
     }
+}
+
+/// Refuse a shell tool in a workspace that has not been trusted, unless the
+/// user approves this one command. No auto-approval mode waives it: a
+/// repository the user has not vouched for does not get a shell on this machine.
+async fn untrusted_shell_refusal(
+    canonical_name: &str,
+    args: &HashMap<String, String>,
+    workspace_root: &std::path::Path,
+    approval_callback: Option<&ApprovalCallback>,
+    already_approved: bool,
+) -> Option<ToolResult> {
+    if !matches!(canonical_name, "run_command" | "powershell") {
+        return None;
+    }
+    let status = crate::trust::status_for(workspace_root);
+    if status.restrictions().unrestricted_shell || already_approved {
+        return None;
+    }
+    let command = args.get("command").cloned().unwrap_or_default();
+    let request = ApprovalRequest::new(
+        ApprovalRequestKind::Exec {
+            command: command.clone(),
+        },
+        format!(
+            "{} is not a trusted workspace; running a shell command here needs explicit approval",
+            status.root.display()
+        ),
+        vec![
+            format!("command: {command}"),
+            format!("trust: {}", status.state.label()),
+        ],
+    );
+    let allowed = match request_approval(approval_callback, request).await {
+        Some(decision) => approval_allows(decision),
+        None => false,
+    };
+    if allowed {
+        return None;
+    }
+    Some(ToolResult {
+        tool_name: canonical_name.to_string(),
+        success: false,
+        output: format!(
+            "`{canonical_name}` was blocked: {} is not trusted. Run /trust grant to trust this workspace, or approve the command when prompted.",
+            status.root.display()
+        ),
+    })
 }
 
 pub(crate) async fn request_approval(
@@ -1722,20 +1909,167 @@ decision = "deny"
 
     #[test]
     fn untrusted_workspace_cannot_auto_approve_itself() {
-        use crate::platform::policy::PolicyDecision;
+        use crate::platform::policy::{PolicyDecision, PolicyLayer, PolicyResolution};
+
+        let resolution = |decision, layer| PolicyResolution {
+            decision,
+            layer: Some(layer),
+            locked: false,
+            reason: None,
+        };
 
         assert_eq!(
-            effective_workspace_policy_decision(PolicyDecision::Allow, false),
+            effective_workspace_policy_decision(
+                resolution(PolicyDecision::Allow, PolicyLayer::Workspace),
+                false
+            ),
             PolicyDecision::Ask
         );
         assert_eq!(
-            effective_workspace_policy_decision(PolicyDecision::Deny, false),
+            effective_workspace_policy_decision(
+                resolution(PolicyDecision::Deny, PolicyLayer::Workspace),
+                false
+            ),
             PolicyDecision::Deny
         );
         assert_eq!(
-            effective_workspace_policy_decision(PolicyDecision::Allow, true),
+            effective_workspace_policy_decision(
+                resolution(PolicyDecision::Allow, PolicyLayer::Workspace),
+                true
+            ),
             PolicyDecision::Allow
         );
+        // An administrator's allow is not repository-controlled, so an
+        // untrusted checkout does not downgrade it.
+        assert_eq!(
+            effective_workspace_policy_decision(
+                resolution(PolicyDecision::Allow, PolicyLayer::Managed),
+                false
+            ),
+            PolicyDecision::Allow
+        );
+    }
+
+    #[test]
+    fn resolve_conflict_maps_every_choice_and_refuses_an_unknown_one() {
+        use crate::merge_conflicts::{ConflictSide, Resolution};
+
+        let parsed = parse_hunk_resolutions(
+            r#"[{"hunk":1,"choice":"ours"},{"hunk":2,"choice":"theirs"},{"hunk":3,"choice":"union"},{"hunk":4,"choice":"custom","lines":["merged"]}]"#,
+        )
+        .expect("every documented choice parses");
+        assert_eq!(
+            parsed,
+            vec![
+                (1, Resolution::Take(ConflictSide::Ours)),
+                (2, Resolution::Take(ConflictSide::Theirs)),
+                (3, Resolution::Union),
+                (4, Resolution::Custom(vec!["merged".to_string()])),
+            ]
+        );
+
+        let unknown = parse_hunk_resolutions(r#"[{"hunk":1,"choice":"whatever"}]"#).unwrap_err();
+        assert!(unknown.contains("unknown choice"));
+        let missing_lines =
+            parse_hunk_resolutions(r#"[{"hunk":1,"choice":"custom"}]"#).unwrap_err();
+        assert!(missing_lines.contains("no lines"));
+        assert!(parse_hunk_resolutions("[]").unwrap_err().contains("empty"));
+    }
+
+    #[tokio::test]
+    async fn resolve_conflict_refuses_an_absolute_path_before_touching_the_repository() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let args = HashMap::from([
+            (
+                "path".to_string(),
+                workspace.path().join("a.rs").display().to_string(),
+            ),
+            (
+                "resolutions".to_string(),
+                r#"[{"hunk":1,"choice":"ours"}]"#.to_string(),
+            ),
+        ]);
+        let result = execute_resolve_conflict(&args, Some(workspace.path()), false, None)
+            .await
+            .expect("refusal");
+        assert!(!result.success);
+        assert!(result.output.contains("relative to the repository root"));
+    }
+
+    #[tokio::test]
+    async fn an_untrusted_workspace_blocks_a_shell_command_with_no_approver() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let call = ToolCall {
+            name: "run_command".to_string(),
+            args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
+        };
+        let opts = ToolExecOptions {
+            require_confirmation: false,
+            auto_approve_safe: true,
+            auto_approve_edits: true,
+            quiet: true,
+            approval_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: Some(workspace.path().to_path_buf()),
+        };
+
+        let result = execute_tool_with_opts(&call, &opts)
+            .await
+            .expect("trust gate result");
+        assert!(!result.success);
+        assert!(
+            result.output.contains("is not trusted"),
+            "auto-approval must not waive the trust gate: {}",
+            result.output
+        );
+    }
+
+    #[tokio::test]
+    async fn one_command_is_never_approved_twice_for_two_boundaries() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let args = HashMap::from([("command".to_string(), "printf hi".to_string())]);
+        assert!(
+            untrusted_shell_refusal("run_command", &args, workspace.path(), None, true)
+                .await
+                .is_none(),
+            "an approval already given for this call satisfies the trust gate"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_untrusted_workspace_asks_before_running_a_shell_command() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let seen_for_callback = seen.clone();
+        let callback: ApprovalCallback = std::sync::Arc::new(move |request| {
+            let seen_for_callback = seen_for_callback.clone();
+            Box::pin(async move {
+                *seen_for_callback.lock().expect("seen lock") = Some(request.kind);
+                ApprovalDecision::Deny
+            })
+        });
+        let call = ToolCall {
+            name: "run_command".to_string(),
+            args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
+        };
+        let opts = ToolExecOptions {
+            require_confirmation: false,
+            auto_approve_safe: true,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: Some(workspace.path().to_path_buf()),
+        };
+
+        let result = execute_tool_with_opts(&call, &opts)
+            .await
+            .expect("trust gate result");
+        assert!(!result.success);
+        assert!(matches!(
+            seen.lock().expect("seen lock").as_ref(),
+            Some(ApprovalRequestKind::Exec { command }) if command == "printf untrusted"
+        ));
     }
 
     fn dispatched_tool_names_from_source() -> BTreeSet<String> {

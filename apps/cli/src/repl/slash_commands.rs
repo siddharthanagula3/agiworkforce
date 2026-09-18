@@ -158,6 +158,14 @@ pub(super) async fn handle_slash_command(
         "/permissions" | "/perms" | "/approvals" | "/approve" => {
             registry::handle_permissions(arg);
         }
+        "/trust" | "/untrust" => {
+            let arg = if cmd == "/untrust" && arg.is_empty() {
+                "revoke"
+            } else {
+                arg
+            };
+            registry::handle_trust(arg);
+        }
         "/raw" => {
             output::print_block(&registry::render_raw_last_response(session, arg));
         }
@@ -246,6 +254,10 @@ pub(super) async fn handle_slash_command(
             );
             eprintln!("  Checkpoints: {}", session.checkpoint_count());
             eprintln!("  Skip perms: {}", session.skip_permissions);
+            eprintln!(
+                "  Trust:      {}",
+                crate::trust::current_status().state.label()
+            );
         }
         "/usage" => {
             output::print_block(
@@ -610,6 +622,8 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
         "perms",
         "approvals",
         "approve",
+        "trust",
+        "untrust",
         "raw",
         "worktree",
         "wt",

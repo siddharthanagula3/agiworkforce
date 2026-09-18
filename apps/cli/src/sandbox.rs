@@ -159,6 +159,12 @@ impl SandboxManager {
         workspace_dir: PathBuf,
         network_policy: NetworkPolicy,
     ) -> Result<Self> {
+        // An untrusted workspace never gets the network, whatever the caller
+        // asked for: the repository itself is the untrusted input here.
+        let network_policy = clamp_network_to_trust(
+            network_policy,
+            crate::trust::restrictions_for(&workspace_dir).unrestricted_network,
+        );
         let manager = Self::full_auto(workspace_dir).with_network(network_policy);
         if manager.sandbox_type == SandboxType::None {
             anyhow::bail!(
@@ -173,10 +179,46 @@ pub fn set_sandbox_disabled(disabled: bool) {
     SANDBOX_DISABLED.store(disabled, Ordering::Relaxed);
 }
 
+/// Whether the user asked for the sandbox to be off, before any policy applies.
+pub fn sandbox_disabled_requested() -> bool {
+    SANDBOX_DISABLED.load(Ordering::Relaxed) || std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok()
+}
+
 pub fn sandbox_disabled() -> bool {
-    let requested = SANDBOX_DISABLED.load(Ordering::Relaxed)
-        || std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok();
-    requested && !sandbox_settings().forced
+    resolve_sandbox_disabled(
+        sandbox_disabled_requested(),
+        sandbox_settings().forced,
+        crate::trust::restrictions().unrestricted_shell,
+    )
+}
+
+/// `--no-sandbox` is honoured only when the organization has not forced the
+/// sandbox and the workspace is trusted. An untrusted repository does not get
+/// an unsandboxed shell on this machine.
+fn resolve_sandbox_disabled(requested: bool, forced: bool, shell_unrestricted: bool) -> bool {
+    requested && !forced && shell_unrestricted
+}
+
+fn clamp_network_to_trust(requested: NetworkPolicy, network_unrestricted: bool) -> NetworkPolicy {
+    if network_unrestricted {
+        requested
+    } else {
+        NetworkPolicy::Deny
+    }
+}
+
+/// Whether a command launched for `workspace_dir` may see this machine's
+/// environment. An untrusted workspace never does: the credentials in the
+/// environment are exactly what a repository-supplied command would harvest.
+fn scrub_environment_for(workspace_dir: &Path) -> bool {
+    resolve_scrub_environment(
+        sandbox_settings().scrub_environment,
+        crate::trust::restrictions_for(workspace_dir).secret_injection,
+    )
+}
+
+fn resolve_scrub_environment(settings_scrub: bool, secret_injection_allowed: bool) -> bool {
+    settings_scrub || !secret_injection_allowed
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -621,7 +663,7 @@ pub(crate) async fn execute_sandboxed_with_input(
         cwd,
         stdin,
         timeout,
-        sandbox_settings().scrub_environment,
+        scrub_environment_for(&manager.workspace_dir),
     )
     .await
 }
@@ -641,7 +683,7 @@ pub(crate) async fn execute_sandboxed_program_with_timeout(
         cwd,
         None,
         timeout,
-        sandbox_settings().scrub_environment,
+        scrub_environment_for(&manager.workspace_dir),
     )
     .await
 }
@@ -1397,8 +1439,42 @@ mod tests {
     #[test]
     fn sandbox_disabled_flag_can_be_set_by_cli() {
         set_sandbox_disabled(true);
-        assert!(sandbox_disabled());
+        assert!(sandbox_disabled_requested());
         set_sandbox_disabled(false);
+        assert!(!sandbox_disabled_requested());
+    }
+
+    #[test]
+    fn an_untrusted_workspace_cannot_turn_the_sandbox_off() {
+        assert!(resolve_sandbox_disabled(true, false, true));
+        assert!(
+            !resolve_sandbox_disabled(true, false, false),
+            "--no-sandbox must not apply in a workspace the user has not trusted"
+        );
+        assert!(!resolve_sandbox_disabled(true, true, true));
+        assert!(!resolve_sandbox_disabled(false, false, true));
+    }
+
+    #[test]
+    fn an_untrusted_workspace_never_hands_a_command_this_machines_environment() {
+        assert!(resolve_scrub_environment(false, false));
+        assert!(resolve_scrub_environment(true, true));
+        assert!(!resolve_scrub_environment(false, true));
+    }
+
+    #[test]
+    fn an_untrusted_workspace_gets_no_network_however_the_caller_asked() {
+        for requested in [
+            NetworkPolicy::Allow,
+            NetworkPolicy::AllowExternal,
+            NetworkPolicy::Deny,
+        ] {
+            assert_eq!(
+                clamp_network_to_trust(requested, false),
+                NetworkPolicy::Deny
+            );
+            assert_eq!(clamp_network_to_trust(requested, true), requested);
+        }
     }
 
     /// The profile the real execution path would hand to `sandbox-exec`, for a

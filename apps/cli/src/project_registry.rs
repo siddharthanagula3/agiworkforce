@@ -23,6 +23,20 @@ pub struct ProjectEntry {
     /// visited; the link is always explicit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cloud_project_id: Option<String>,
+    /// Stable repository identity this grant is keyed by, so moving or
+    /// re-cloning the checkout does not silently drop or re-use the decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<String>,
+    /// Who granted trust, and on which machine. Absent on entries written
+    /// before grants carried an identity; those stay honoured as-is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trusted_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trusted_on: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trusted_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revoked_at: Option<String>,
 }
 
 /// Registry of known projects, stored as `~/.agiworkforce/projects.json`.
@@ -108,9 +122,85 @@ impl ProjectRegistry {
                 last_seen: chrono::Utc::now().to_rfc3339(),
                 trust_level: trust_level.to_string(),
                 cloud_project_id: None,
+                identity: None,
+                trusted_by: None,
+                trusted_on: None,
+                trusted_at: None,
+                revoked_at: None,
             },
         );
         Ok(())
+    }
+
+    /// Record an explicit trust grant for `path`, bound to the repository
+    /// identity, the account that granted it and the machine it was granted on.
+    pub fn trust(&mut self, path: &Path, identity: &str, actor: &str, machine: &str) -> Result<()> {
+        if identity.trim().is_empty() {
+            bail!("A trust grant needs a repository identity");
+        }
+        self.register_project(path, "trusted")?;
+        let entry = self
+            .projects
+            .get_mut(&Self::path_key(path))
+            .context("Project entry vanished while recording a trust grant")?;
+        entry.trust_level = "trusted".to_string();
+        entry.identity = Some(identity.to_string());
+        entry.trusted_by = Some(actor.to_string());
+        entry.trusted_on = Some(machine.to_string());
+        entry.trusted_at = Some(chrono::Utc::now().to_rfc3339());
+        entry.revoked_at = None;
+        Ok(())
+    }
+
+    /// Revoke trust for a repository identity, and for the directory itself.
+    ///
+    /// Revocation is identity-scoped: every checkout of the same repository
+    /// loses the grant, not only the path the command ran in. Returns how many
+    /// entries were revoked.
+    pub fn revoke(&mut self, path: &Path, identity: &str) -> usize {
+        let path_key = Self::path_key(path);
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut revoked = 0;
+        for (key, entry) in self.projects.iter_mut() {
+            let matches_identity =
+                !identity.is_empty() && entry.identity.as_deref() == Some(identity);
+            if !matches_identity && key != &path_key {
+                continue;
+            }
+            if entry.trust_level == "untrusted" && entry.revoked_at.is_some() {
+                continue;
+            }
+            entry.trust_level = "untrusted".to_string();
+            entry.revoked_at = Some(now.clone());
+            entry.trusted_by = None;
+            entry.trusted_on = None;
+            entry.trusted_at = None;
+            revoked += 1;
+        }
+        revoked
+    }
+
+    /// Look up the entry that governs `path`: the identity-keyed grant first,
+    /// the path-keyed entry second, so a registry written before grants carried
+    /// an identity still resolves.
+    pub fn entry_for(&self, path: &Path, identity: &str) -> Option<&ProjectEntry> {
+        let path_key = Self::path_key(path);
+        if let Some(entry) = self.projects.get(&path_key) {
+            return Some(entry);
+        }
+        if identity.is_empty() {
+            return None;
+        }
+        self.projects
+            .values()
+            .find(|entry| entry.identity.as_deref() == Some(identity))
+    }
+
+    fn path_key(path: &Path) -> String {
+        path.canonicalize()
+            .unwrap_or_else(|_| path.to_path_buf())
+            .to_string_lossy()
+            .to_string()
     }
 
     /// Look up a project entry by its absolute path string.
@@ -378,6 +468,109 @@ mod tests {
 
         let reloaded = ProjectRegistry::load(config.path()).unwrap();
         assert_eq!(reloaded.cloud_project_for(&project), Some("p-77"));
+    }
+
+    #[test]
+    fn a_grant_records_the_identity_the_account_and_the_machine() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(dir.path(), "git:github.com/o/r", "ada", "laptop")
+            .unwrap();
+
+        let entry = registry
+            .entry_for(dir.path(), "git:github.com/o/r")
+            .unwrap();
+        assert_eq!(entry.trust_level, "trusted");
+        assert_eq!(entry.identity.as_deref(), Some("git:github.com/o/r"));
+        assert_eq!(entry.trusted_by.as_deref(), Some("ada"));
+        assert_eq!(entry.trusted_on.as_deref(), Some("laptop"));
+        assert!(entry.trusted_at.is_some());
+        assert!(entry.revoked_at.is_none());
+    }
+
+    #[test]
+    fn a_grant_without_an_identity_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut registry = ProjectRegistry::default();
+        assert!(registry.trust(dir.path(), "  ", "ada", "laptop").is_err());
+    }
+
+    #[test]
+    fn revoking_clears_every_checkout_of_the_same_repository() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let unrelated = tempfile::tempdir().unwrap();
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(first.path(), "git:github.com/o/r", "ada", "laptop")
+            .unwrap();
+        registry
+            .trust(second.path(), "git:github.com/o/r", "ada", "laptop")
+            .unwrap();
+        registry
+            .trust(unrelated.path(), "git:github.com/o/other", "ada", "laptop")
+            .unwrap();
+
+        assert_eq!(registry.revoke(first.path(), "git:github.com/o/r"), 2);
+
+        for dir in [first.path(), second.path()] {
+            let entry = registry.entry_for(dir, "git:github.com/o/r").unwrap();
+            assert_eq!(entry.trust_level, "untrusted");
+            assert!(entry.revoked_at.is_some());
+            assert!(entry.trusted_by.is_none());
+        }
+        assert_eq!(
+            registry
+                .entry_for(unrelated.path(), "git:github.com/o/other")
+                .unwrap()
+                .trust_level,
+            "trusted"
+        );
+    }
+
+    #[test]
+    fn revoking_twice_reports_nothing_left_to_revoke() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(dir.path(), "git:github.com/o/r", "ada", "laptop")
+            .unwrap();
+        assert_eq!(registry.revoke(dir.path(), "git:github.com/o/r"), 1);
+        assert_eq!(registry.revoke(dir.path(), "git:github.com/o/r"), 0);
+    }
+
+    #[test]
+    fn a_fresh_clone_of_a_trusted_repository_resolves_by_identity() {
+        let original = tempfile::tempdir().unwrap();
+        let clone = tempfile::tempdir().unwrap();
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(original.path(), "git:github.com/o/r", "ada", "laptop")
+            .unwrap();
+
+        let entry = registry
+            .entry_for(clone.path(), "git:github.com/o/r")
+            .expect("identity lookup finds the grant at another path");
+        assert_eq!(entry.trust_level, "trusted");
+        assert!(registry.entry_for(clone.path(), "git:other").is_none());
+    }
+
+    #[test]
+    fn a_grant_survives_a_save_and_load() {
+        let config = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(dir.path(), "git:github.com/o/r", "ada", "laptop")
+            .unwrap();
+        registry.save(config.path()).unwrap();
+
+        let reloaded = ProjectRegistry::load(config.path()).unwrap();
+        let entry = reloaded
+            .entry_for(dir.path(), "git:github.com/o/r")
+            .unwrap();
+        assert_eq!(entry.trusted_on.as_deref(), Some("laptop"));
     }
 
     #[test]

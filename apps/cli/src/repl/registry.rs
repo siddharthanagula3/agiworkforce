@@ -469,6 +469,46 @@ pub(super) fn handle_providers(config: &CliConfig) {
 // Permissions commands
 // ---------------------------------------------------------------------------
 
+/// `/trust [status|grant|revoke]`, the mid-session control over the current
+/// workspace's trust. A revoke takes effect on the next tool call, not at the
+/// next session start.
+pub fn handle_trust(arg: &str) {
+    let (subcommand, _) = split_first_word(arg.trim());
+    let Ok(cwd) = std::env::current_dir() else {
+        output::print_error("Cannot resolve the current directory.");
+        return;
+    };
+    match subcommand {
+        "" | "status" | "show" => {
+            output::print_block(&sanitize_terminal_text(
+                &crate::trust::status_for(&cwd).render(),
+            ));
+        }
+        "grant" | "trust" => match crate::trust::grant(&cwd) {
+            Ok(status) => {
+                output::print_info(&format!("Trusted {}", status.root.display()));
+                output::print_block(&sanitize_terminal_text(&status.render()));
+            }
+            Err(error) => output::print_error(&format!("{error:#}")),
+        },
+        "revoke" | "untrust" => match crate::trust::revoke(&cwd) {
+            Ok(0) => output::print_info("No trust grant to revoke for this workspace."),
+            Ok(count) => {
+                output::print_info(&format!(
+                    "Revoked {count} grant(s) for this repository. The next tool call is restricted."
+                ));
+                output::print_block(&sanitize_terminal_text(
+                    &crate::trust::status_for(&cwd).render(),
+                ));
+            }
+            Err(error) => output::print_error(&format!("{error:#}")),
+        },
+        other => output::print_warn(&format!(
+            "Unknown /trust subcommand '{other}'. Use: /trust [status|grant|revoke]"
+        )),
+    }
+}
+
 pub fn handle_permissions(arg: &str) {
     let arg = arg.trim();
     let (subcommand, rest) = split_first_word(arg);

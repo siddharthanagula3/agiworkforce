@@ -548,12 +548,56 @@ impl CliConfig {
     #[allow(dead_code)]
     pub fn load_merged() -> Result<Self> {
         let mut config = Self::load()?;
-        if let Some(mut project) = Self::load_project_config() {
-            Self::consent_gate_project_providers(&mut project);
-            config.merge_from(&project);
+        if Self::project_config_allowed() {
+            if let Some(mut project) = Self::load_project_config() {
+                Self::consent_gate_project_providers(&mut project);
+                config.merge_from(&project);
+            }
         }
         config.merge_env_overrides();
+        config.apply_managed_overrides();
         Ok(config)
+    }
+
+    /// Whether repository-controlled configuration may be merged at all.
+    ///
+    /// Two layers above the repository can withhold it: an organization's
+    /// managed policy, and the user's own trust decision for this workspace.
+    /// Enforcing it here rather than at the call site means no caller can read
+    /// a repository's config by forgetting to ask.
+    fn project_config_allowed() -> bool {
+        let managed = crate::platform::policy::managed::load_managed_policy();
+        let managed_allows = match managed.document().and_then(|doc| doc.config.as_ref()) {
+            Some(config) => config.allow_project_config.unwrap_or(true),
+            None => true,
+        };
+        if !managed_allows {
+            return false;
+        }
+        std::env::current_dir()
+            .map(|cwd| crate::trust::restrictions_for(&cwd).repository_config)
+            .unwrap_or(false)
+    }
+
+    /// Apply the managed (organization) layer last, so neither the user's
+    /// config, a repository's config, nor an environment override can loosen it.
+    pub fn apply_managed_overrides(&mut self) {
+        let state = crate::platform::policy::managed::load_managed_policy();
+        if let Some(managed) = state.document().and_then(|doc| doc.config.as_ref()) {
+            self.apply_managed_config(managed);
+        }
+    }
+
+    pub(crate) fn apply_managed_config(
+        &mut self,
+        managed: &crate::platform::policy::managed::ManagedConfigSection,
+    ) {
+        if let Some(mode) = &managed.approval_mode {
+            self.default.approval_mode = mode.clone();
+        }
+        if let Some(mode) = &managed.privacy_mode {
+            self.ui.privacy_mode = Some(mode.clone());
+        }
     }
 
     /// Load global configuration plus explicit environment overrides without
@@ -565,6 +609,7 @@ impl CliConfig {
     pub fn load_without_project() -> Result<Self> {
         let mut config = Self::load()?;
         config.merge_env_overrides();
+        config.apply_managed_overrides();
         Ok(config)
     }
 
@@ -2228,6 +2273,36 @@ model = "fixture-config-model"
             project.providers["local"].base_url.as_deref(),
             Some("http://localhost:11434")
         );
+    }
+
+    #[test]
+    fn the_managed_layer_caps_what_the_user_and_the_repository_chose() {
+        use crate::platform::policy::managed::ManagedConfigSection;
+
+        let mut config = CliConfig::default();
+        config.default.approval_mode = "full-auto".to_string();
+        config.ui.privacy_mode = Some("byok".to_string());
+
+        config.apply_managed_config(&ManagedConfigSection {
+            approval_mode: Some("ask".to_string()),
+            privacy_mode: Some("local".to_string()),
+            allow_project_config: Some(false),
+        });
+
+        assert_eq!(config.default.approval_mode, "ask");
+        assert_eq!(config.ui.privacy_mode.as_deref(), Some("local"));
+    }
+
+    #[test]
+    fn a_managed_layer_that_pins_nothing_leaves_the_user_config_alone() {
+        use crate::platform::policy::managed::ManagedConfigSection;
+
+        let mut config = CliConfig::default();
+        config.default.approval_mode = "full-auto".to_string();
+
+        config.apply_managed_config(&ManagedConfigSection::default());
+
+        assert_eq!(config.default.approval_mode, "full-auto");
     }
 }
 
