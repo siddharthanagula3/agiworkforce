@@ -3,7 +3,10 @@
 /**
  * Per-turn permission posture selected by an interactive developer surface.
  *
- * These values intentionally mirror the CLI's existing `PermissionMode`
- * vocabulary without importing an application-layer type into the protocol.
+ * This is the one permission-mode vocabulary for every developer surface. The
+ * CLI, VS Code, the desktop shell and the Chrome bridge each spell it their
+ * own way in their own settings; [`DeveloperAgentMode::from_client_spelling`]
+ * is where those spellings become one value, so a session opened on one
+ * surface and resumed on another runs under the same posture.
  */
 export type DeveloperAgentMode = 'ask' | 'auto' | 'plan' | 'bypass';
