@@ -274,6 +274,15 @@ const MAX_INLINE_GENERATED_TEXT_BYTES = 2 * 1024 * 1024;
 const TURN_FAILED_LEAD = 'Response failed';
 const USER_MESSAGE_COLLAPSE_HEIGHT_PX = 320;
 
+function isUnresolvedToolEntry(tool: ToolEntry): boolean {
+  return (
+    tool.status === 'pending' ||
+    tool.status === 'running' ||
+    tool.status === 'awaiting_approval' ||
+    tool.status === 'awaiting_device'
+  );
+}
+
 function generatedFileLanguage(file: GeneratedFileMetadataEntry): string {
   const extension = file.fileName.toLowerCase().split('.').pop() ?? '';
   if (file.kind === 'image') return extension || 'image';
@@ -1547,6 +1556,23 @@ const MessageBubbleComponent = function MessageBubble({
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const toolTimeline =
     !isUser && !canonicalOwnsToolActivity && message.metadata?.tools ? message.metadata.tools : [];
+  // The turn's SSE connection stays open while a decision is outstanding, so
+  // `isStreaming` remains true although nothing is being written.
+  const pausedForDecision =
+    !isUser &&
+    (canonicalActivity?.status === 'awaiting-approval' ||
+      Boolean(
+        message.metadata?.tools?.some(
+          (tool) => tool.status === 'awaiting_approval' || tool.status === 'awaiting_device',
+        ),
+      ));
+  const proseIsStreaming = Boolean(message.isStreaming) && !pausedForDecision;
+  // Without thinking segments there is no per-step position to attach a card
+  // to, but a tool that has not returned yet cannot have prose after it, so
+  // every character we hold was authored before the card and the card follows.
+  const nonInterleavedTools = message.metadata?.thinkingSegments?.length ? [] : toolTimeline;
+  const nonInterleavedToolsFollowProse =
+    nonInterleavedTools.length > 0 && nonInterleavedTools.every(isUnresolvedToolEntry);
 
   // Collect web-search sources from metadata (searchResults and/or citations).
   // These feed the "Searched the web" step's result count and the compact
@@ -1628,6 +1654,19 @@ const MessageBubbleComponent = function MessageBubble({
     artifactConversationId,
     message.id,
   ]);
+
+  const nonInterleavedToolBlock =
+    nonInterleavedTools.length > 0 ? (
+      <div className={nonInterleavedToolsFollowProse ? 'mt-3' : 'mb-3'}>
+        <ToolTimeline
+          tools={nonInterleavedTools}
+          searchSources={searchSources}
+          searchQuery={searchQuery}
+          {...approvalHandlers}
+          {...connectRetryHandler}
+        />
+      </div>
+    ) : null;
 
   return (
     <motion.div
@@ -1760,10 +1799,7 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser &&
             (() => {
               const segments = message.metadata?.thinkingSegments;
-              const tools =
-                !isUser && !canonicalOwnsToolActivity && message.metadata?.tools
-                  ? message.metadata.tools
-                  : [];
+              const tools = toolTimeline;
 
               if (segments && segments.length > 0) {
                 const groups = mergeAdjacentThinkingSegments(segments, tools);
@@ -1837,6 +1873,8 @@ const MessageBubbleComponent = function MessageBubble({
               return null;
             })()}
 
+          {!nonInterleavedToolsFollowProse && nonInterleavedToolBlock}
+
           {/* A/B comparison response · shown instead of main content when options are present */}
           {!isUser && message.metadata?.comparisonOptions && (
             <ComparisonResponse
@@ -1848,22 +1886,6 @@ const MessageBubbleComponent = function MessageBubble({
                 setComparisonChoice(message.sessionId ?? '', message.id, side);
               }}
             />
-          )}
-
-          {/* Tool timeline (legacy path) · rendered before prose so it appears as
-              leading context for the response, not an afterthought appended at the end.
-              Only shown when there are no interleaved thinkingSegments (those handle
-              their own per-step tool rendering above). */}
-          {!isUser && toolTimeline.length > 0 && !message.metadata?.thinkingSegments?.length && (
-            <div className="mb-3">
-              <ToolTimeline
-                tools={toolTimeline}
-                searchSources={searchSources}
-                searchQuery={searchQuery}
-                {...approvalHandlers}
-                {...connectRetryHandler}
-              />
-            </div>
           )}
 
           {!isUser &&
@@ -1899,7 +1921,7 @@ const MessageBubbleComponent = function MessageBubble({
             <div
               ref={userContentRef}
               dir="auto"
-              data-streaming={!isUser && message.isStreaming ? 'true' : undefined}
+              data-streaming={!isUser && proseIsStreaming ? 'true' : undefined}
               className={cn(
                 'prose dark:prose-invert max-w-none',
                 'message-text',
@@ -1919,10 +1941,13 @@ const MessageBubbleComponent = function MessageBubble({
                   : undefined
               }
             >
-              {message.isStreaming &&
+              {proseIsStreaming &&
               !cleanedContent.trim() &&
               !streamingBlock &&
               !activityTimeline &&
+              // A tool card is its own step's progress indicator, same as the
+              // media cards below; "Thinking..." on top claims a second step.
+              toolTimeline.length === 0 &&
               !message.metadata?.isExecutingCode &&
               !message.metadata?.codeExecutionResult &&
               message.metadata?.toolType !== 'image-generation' &&
@@ -1944,7 +1969,7 @@ const MessageBubbleComponent = function MessageBubble({
                 />
               ) : (
                 (() => {
-                  const markdown = message.isStreaming ? (
+                  const markdown = proseIsStreaming ? (
                     <StreamingMarkdownContent
                       content={cleanedContent}
                       isStreaming
@@ -1989,6 +2014,8 @@ const MessageBubbleComponent = function MessageBubble({
               {userContentExpanded ? 'Show less' : 'Show more'}
             </button>
           )}
+          {nonInterleavedToolsFollowProse && nonInterleavedToolBlock}
+
           {/* Interactive cards sit AFTER the prose that motivated them and
               before the artifact chip, matching where the model emitted them.
               A card that fails to render its kind still renders its authored
@@ -2367,18 +2394,25 @@ const MessageBubbleComponent = function MessageBubble({
             message.metadata?.videoUrl && (
               <div className="mt-4 flex flex-col gap-2">
                 {videoError ? (
-                  <div className="flex items-center justify-center p-8 bg-muted/50 text-muted-foreground rounded-xl">
+                  <div
+                    className="flex items-center justify-center p-8 bg-muted/50 text-muted-foreground rounded-xl"
+                    role="status"
+                    aria-live="polite"
+                  >
                     <span className="text-sm">Video failed to load</span>
                   </div>
                 ) : (
                   <>
                     <span className="text-sm text-foreground">Your video is ready!</span>
                     <div className="group relative w-fit overflow-hidden rounded-xl">
+                      {/* The native controls carry their own names; the player
+                          itself otherwise reads as a bare "video". */}
                       <video
                         src={message.metadata.videoUrl}
                         controls
                         playsInline
                         preload="metadata"
+                        aria-label="Generated video"
                         className="max-h-96 rounded-xl"
                         poster={message.metadata.thumbnailUrl}
                         onError={() => setVideoError(true)}

@@ -900,14 +900,14 @@ const VirtualizedTranscriptRow = memo(function VirtualizedTranscriptRow({
 
   if (!group) {
     return (
-      <div {...ariaAttributes} style={style} className="pb-2">
+      <div {...ariaAttributes} style={style} className="min-w-0 pb-2">
         {footer}
       </div>
     );
   }
 
   return (
-    <div {...ariaAttributes} style={style}>
+    <div {...ariaAttributes} style={style} className="min-w-0">
       <MessageGroupRow
         group={group}
         isLastGroup={groupIndex === groups.length - 1}
@@ -1794,6 +1794,9 @@ const ChatMessageListComponent = ({
         onTouchMove={markUserScrollIntent}
         onKeyDown={handleTranscriptKeyDown}
         className="h-full"
+        // react-window's List bounds only the y axis, unlike its Grid sibling.
+        // Horizontal scroll belongs to the code block or table that needs it.
+        style={{ overflowX: 'hidden' }}
       />
 
       {/* Scroll-to-bottom FAB · shown when user has scrolled up. Its screen
