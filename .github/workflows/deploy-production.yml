@@ -153,9 +153,61 @@ jobs:
           set -euo pipefail
           node scripts/production-deploy-scope.mjs --shipped sandbox >> "$GITHUB_OUTPUT"
 
+  # Production promotes an artifact staging has already served, not merely one
+  # CI went green on. deploy-staging.yml fires on the same workflow_run event as
+  # this workflow and posts its verdict as a `staging-web` commit status on the
+  # exact SHA, which is what this waits for. The status, not the staging run's
+  # own head_sha: a workflow_run-triggered run reports the default branch head,
+  # which is already a different commit if anything landed while CI was running.
+  staging-gate:
+    name: Wait for staging to accept this artifact
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Wait for the staging verdict on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 1500 ))
+          while :; do
+            verdict="$(
+              gh api "repos/$REPOSITORY/commits/$HEAD_SHA/status" \
+                --jq 'first(.statuses[] | select(.context == "staging-web")) // {}
+                      | "\(.state // "none")\t\(.description // "")"' || true
+            )"
+            state="${verdict%%$'\t'*}"
+            description="${verdict#*$'\t'}"
+            case "$state" in
+              success)
+                echo "staging verdict for $HEAD_SHA: $description"
+                case "$description" in
+                  *'not provisioned'*)
+                    echo "::warning::$description"
+                    ;;
+                esac
+                exit 0
+                ;;
+              failure | error)
+                echo "::error::staging rejected $HEAD_SHA: $description"
+                exit 1
+                ;;
+            esac
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::no staging-web status on $HEAD_SHA after 25 minutes; deploy-staging.yml never reported"
+              exit 1
+            fi
+            sleep 30
+          done
+
   deploy-web:
     name: Deploy verified web artifact
-    needs: scope
+    needs: [scope, staging-gate]
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -389,6 +441,37 @@ jobs:
             echo "- Serving path: $serving_path"
             echo "- Rollback: $rollback"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The background workers ship inside this artifact, so this deployment is
+      # also their release. The registry is what gives each one a version and a
+      # changelog; printing the roster here is what connects "production is
+      # serving commit X" to "reclaim-sandboxes is at 1.0.0".
+      - name: Record the background components this deployment carries
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const fs = require('node:fs');
+          const registry = JSON.parse(
+            fs.readFileSync('apps/web/app/api/cron/deployable-components.json', 'utf8'),
+          );
+          const byRole = new Map();
+          for (const component of registry.components) {
+            const roster = byRole.get(component.role) ?? [];
+            roster.push(`${component.name}@${component.version}`);
+            byRole.set(component.role, roster);
+          }
+          console.log('## Background components');
+          console.log('');
+          console.log(`${registry.components.length} registered deployable components.`);
+          console.log('');
+          console.log('| Role | Components |');
+          console.log('| ---- | ---------- |');
+          for (const [role, roster] of [...byRole].sort()) {
+            console.log(`| ${role} | ${roster.sort().join(', ')} |`);
+          }
+          NODE
 
   # infrastructure/sandbox is the separate origin that isolates every
   # model-generated HTML, React and SVG artifact from the web app's session, and

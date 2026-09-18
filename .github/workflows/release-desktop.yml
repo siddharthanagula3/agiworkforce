@@ -162,6 +162,16 @@ jobs:
             fi
           done
 
+          # A manual run builds whatever ref it was dispatched from, and the
+          # macos-release environment holds the Apple signing identity and the
+          # updater key. Without this, a branch is a path to both.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] &&
+             [ "$GITHUB_REF" != "refs/heads/main" ] &&
+             [ "$GITHUB_REF" != "refs/tags/${TAG}" ]; then
+            echo "ERROR: a desktop release runs from main or from ${TAG}; got $GITHUB_REF" >&2
+            exit 1
+          fi
+
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "channel=${CHANNEL}" >> $GITHUB_OUTPUT
@@ -266,6 +276,30 @@ jobs:
             core.setOutput('release_id', data.id);
             return data.id;
 
+      # The renderer tags every event with VITE_APP_VERSION (see
+      # apps/desktop/src/services/errorTracking.ts), so this release name is the
+      # one crashes arrive under. Registering it here, with the commits between
+      # the previous tag and this one, is what turns "a crash in production"
+      # into "a crash in 1.2.0, introduced somewhere in these twelve commits".
+      # The build jobs upload this release's sourcemaps; publish-release
+      # finalizes it.
+      - name: Register the Sentry release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+          SENTRY_RELEASE: ${{ steps.get-version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
+            echo "::warning::SENTRY_AUTH_TOKEN, SENTRY_ORG or SENTRY_PROJECT_DESKTOP is unset; $SENTRY_RELEASE will not be segmented in Sentry"
+            exit 0
+          fi
+          npm install --global @sentry/cli@2.58.6
+          sentry-cli releases new "$SENTRY_RELEASE"
+          sentry-cli releases set-commits "$SENTRY_RELEASE" --local --ignore-missing
+
   # ==========================================================================
   # Validate - Lint, type check, and test before build
   # ==========================================================================
@@ -308,6 +342,7 @@ jobs:
     timeout-minutes: 60
     env:
       VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN_DESKTOP }}
+      VITE_APP_VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -369,7 +404,40 @@ jobs:
 
       - name: Build web frontend
         # H27: --max-old-space-size=8192 is intentional; ubuntu-22.04 runners have 7 GB RAM
-        run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web
+        # The trailing args reach `vite build`, the last command in build:web,
+        # and override the config's `sourcemap: mode !== 'production'`.
+        run: echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV && pnpm --filter @agiworkforce/desktop run build:web -- --sourcemap hidden
+
+      # tauri.conf.json's beforeBuildCommand runs `vite build` again inside the
+      # tauri-action step below, which empties dist/ and rebuilds it without
+      # maps. That rebuild is deterministic, so the chunk names uploaded here
+      # are the chunk names that ship, and Sentry resolves a frame by release
+      # plus artifact name (`~` is the host-agnostic prefix for
+      # `tauri://localhost/...`). Nothing carrying a map reaches the bundle.
+      - name: Upload the renderer sourcemaps to Sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+          SENTRY_RELEASE: ${{ needs.prepare-release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist=apps/desktop/dist
+          maps="$(find "$dist" -name '*.map' | wc -l | tr -d ' ')"
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
+            echo "::warning::Sentry upload is unconfigured; Linux $SENTRY_RELEASE ships unsymbolicated"
+            find "$dist" -name '*.map' -delete
+            exit 0
+          fi
+          if [ "$maps" -eq 0 ]; then
+            echo "::error::the renderer build produced no sourcemaps, so a crash in $SENTRY_RELEASE would resolve to a minified chunk offset and nothing else"
+            exit 1
+          fi
+          npm install --global @sentry/cli@2.58.6
+          sentry-cli sourcemaps upload --release "$SENTRY_RELEASE" --url-prefix '~' "$dist"
+          find "$dist" -name '*.map' -delete
+          echo "uploaded $maps renderer sourcemaps for $SENTRY_RELEASE from the Linux build"
 
       - name: Build native messaging host sidecar
         run: pnpm --filter @agiworkforce/desktop run build:native-host
@@ -474,6 +542,11 @@ jobs:
       contents: write
     env:
       VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN_DESKTOP }}
+      # Same release name as the Linux build, and the same renderer bundle: the
+      # frontend has no platform branch, so the sourcemaps the Linux job
+      # uploaded for this release resolve macOS frames too. Re-uploading them
+      # from a macOS runner would buy nothing at four times the minute rate.
+      VITE_APP_VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -984,6 +1057,24 @@ jobs:
             });
 
             console.log('Release published successfully!');
+
+      # Finalized only once the artifacts that carry this release exist, so the
+      # release's date in Sentry is when users could first run it.
+      - name: Finalize the Sentry release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+          SENTRY_RELEASE: ${{ needs.prepare-release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
+            echo "::warning::Sentry is unconfigured; $SENTRY_RELEASE was never registered"
+            exit 0
+          fi
+          npm install --global @sentry/cli@2.58.6
+          sentry-cli releases finalize "$SENTRY_RELEASE"
 
       - name: Notify on success
         if: success()

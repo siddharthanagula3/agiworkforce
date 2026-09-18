@@ -126,6 +126,37 @@ jobs:
           node apps/extension/scripts/verify-package.mjs "dist/chrome/${ARCHIVE_NAME}"
           sha256sum "dist/chrome/${ARCHIVE_NAME}" > "dist/chrome/${ARCHIVE_NAME}.sha256"
 
+      # errorReporting.ts tags every event with the manifest version, so that
+      # bare version is the release name a crash arrives under and the one the
+      # maps have to be filed against. The ZIP already excludes *.map (the
+      # package script's -x, re-asserted by verify-package.mjs), so uploading
+      # from apps/extension/dist publishes nothing to the store.
+      - name: Register the Sentry release and upload the extension sourcemaps
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_CHROME_EXTENSION }}
+          SENTRY_RELEASE: ${{ steps.metadata.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist=apps/extension/dist
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
+            echo "::warning::Sentry upload is unconfigured; $SENTRY_RELEASE ships unsymbolicated"
+            exit 0
+          fi
+          maps="$(find "$dist" -name '*.map' | wc -l | tr -d ' ')"
+          if [ "$maps" -eq 0 ]; then
+            echo "::error::the extension build produced no sourcemaps, so a crash in $SENTRY_RELEASE resolves to a minified offset; apps/extension/vite.config.ts builds production without them"
+            exit 1
+          fi
+          npm install --global @sentry/cli@2.58.6
+          sentry-cli releases new "$SENTRY_RELEASE"
+          sentry-cli releases set-commits "$SENTRY_RELEASE" --local --ignore-missing
+          sentry-cli sourcemaps upload --release "$SENTRY_RELEASE" --url-prefix '~' "$dist"
+          sentry-cli releases finalize "$SENTRY_RELEASE"
+          echo "uploaded $maps extension sourcemaps for $SENTRY_RELEASE"
+
       - name: Install Chromium for packaged-byte smoke
         run: pnpm exec playwright install --with-deps chromium
 

@@ -1,0 +1,142 @@
+{
+  "$comment": "Intended protection for every GitHub deployment environment a workflow names. GitHub does not read this file; .github/rulesets/README.md holds the command that walks it. Reviewers are logins, resolved to numeric ids at apply time. What each environment holds is declared by the workflow that reads it, not repeated here.",
+  "environments": [
+    {
+      "name": "production-web",
+      "used_by": [
+        ".github/workflows/deploy-production.yml",
+        ".github/workflows/deploy-staging.yml",
+        ".github/workflows/env-drift.yml",
+        ".github/workflows/clerk-bot-protection.yml"
+      ],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [{ "name": "main", "type": "branch" }]
+    },
+    {
+      "name": "staging-web",
+      "used_by": [".github/workflows/deploy-staging.yml"],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [{ "name": "main", "type": "branch" }]
+    },
+    {
+      "name": "production-railway",
+      "used_by": [".github/workflows/deploy-signaling-server.yml"],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [{ "name": "main", "type": "branch" }]
+    },
+    {
+      "name": "production-fly",
+      "used_by": [".github/workflows/deploy-signaling-server.yml"],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [{ "name": "main", "type": "branch" }]
+    },
+    {
+      "name": "macos-release",
+      "used_by": [
+        ".github/workflows/release-desktop.yml",
+        ".github/workflows/release-desktop-cloud.yml"
+      ],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [
+        { "name": "main", "type": "branch" },
+        { "name": "v-desktop-*", "type": "tag" },
+        { "name": "v-cloud-desktop-*", "type": "tag" }
+      ]
+    },
+    {
+      "name": "chrome-web-store",
+      "used_by": [".github/workflows/release-chrome-extension.yml"],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [
+        { "name": "main", "type": "branch" },
+        { "name": "v-ext-*", "type": "tag" }
+      ]
+    },
+    {
+      "name": "vscode-marketplace",
+      "used_by": [".github/workflows/release-vscode-extension.yml"],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [
+        { "name": "main", "type": "branch" },
+        { "name": "v-vscode-*", "type": "tag" }
+      ]
+    },
+    {
+      "name": "mobile-store-release",
+      "used_by": [".github/workflows/release-mobile.yml"],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [
+        { "name": "main", "type": "branch" },
+        { "name": "v-mobile-*", "type": "tag" }
+      ]
+    }
+  ],
+  "retired": {
+    "$comment": "The Express gateway was deleted on 2026-08-17 and nothing reads these. Deleting an environment is destructive and is the repository owner's call; scripts/founder/provision-deploy-environments.sh carries the command.",
+    "environments": ["staging-gateway", "production-gateway"]
+  }
+}

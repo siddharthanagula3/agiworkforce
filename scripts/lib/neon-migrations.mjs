@@ -12,7 +12,7 @@ const ADVISORY_LOCK_ID = 20_260_730;
 const MIGRATION_NAME = /^(\d{4})_([a-z0-9][a-z0-9_]*)\.sql$/;
 const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
 
-export const MIGRATION_TARGETS = ['local', 'ci', 'branch', 'production'];
+export const MIGRATION_TARGETS = ['local', 'ci', 'branch', 'staging', 'production'];
 export const DEPLOYMENT_SURFACES = ['web', 'gateway'];
 export const DEPLOYMENT_HISTORY_LIMIT = 20;
 export const MIGRATION_LEDGER_TABLE = 'public.schema_migrations';
@@ -332,7 +332,7 @@ export async function ensureDeploymentLedger(client) {
     CREATE TABLE IF NOT EXISTS public.schema_migration_deployments (
       id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       surface text NOT NULL CHECK (surface IN ('web', 'gateway')),
-      target text NOT NULL CHECK (target IN ('local', 'ci', 'branch', 'production')),
+      target text NOT NULL CHECK (target IN ('local', 'ci', 'branch', 'staging', 'production')),
       commit_sha text NOT NULL CHECK (commit_sha ~ '^[0-9a-f]{7,40}$'),
       deployment_ref text,
       head_sequence integer NOT NULL CHECK (head_sequence > 0),

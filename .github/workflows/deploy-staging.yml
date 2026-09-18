@@ -1,0 +1,280 @@
+name: Deploy Staging Web
+
+# The tier production promotes through. It takes the same commit under the same
+# exact-SHA CI gate as .github/workflows/deploy-production.yml, applies the
+# pending migrations to a persistent staging database, and probes the staging
+# origin the same way the production gate probes the apex. It publishes its
+# verdict as a `staging-web` commit status, and deploy-production.yml waits for
+# that status before it promotes anything, so an artifact reaches production
+# only after the identical artifact served staging.
+#
+# Unlike the production job this one has no affected-surface filter: staging
+# tracks main commit for commit. A staging deploy that a scope filter skipped
+# would be a commit production could never promote.
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: staging-web
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # The verdict this workflow publishes is a commit status on the exact SHA it
+  # deployed. deploy-production.yml's staging-gate reads that status rather than
+  # this run's own head_sha: a workflow_run-triggered run reports the default
+  # branch's head, which is a different commit the moment anything else lands
+  # while CI is still going.
+  statuses: write
+
+jobs:
+  # Posted so the gate is never left polling for a tier nobody has provisioned.
+  # It is green because there is nothing failing, and the description is what
+  # says nothing was verified.
+  unprovisioned:
+    name: Declare the staging tier unprovisioned
+    if: >-
+      vars.STAGING_WEB_URL == '' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Report no staging verification for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=success \
+            -f context=staging-web \
+            -f description='staging tier not provisioned; nothing was verified' \
+            --silent
+          echo "::warning::vars.STAGING_WEB_URL is unset, so this commit reaches production without a staging deploy"
+
+  deploy:
+    name: Deploy and verify the staging web artifact
+    # vars.STAGING_WEB_URL is the switch that turns the tier on. Until the
+    # staging origin and database exist this job does not run, the workflow
+    # still concludes success, and the production gate is not held by a tier
+    # nobody has provisioned yet.
+    if: >-
+      vars.STAGING_WEB_URL != '' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository
+        )
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: staging-web
+      url: ${{ vars.STAGING_WEB_URL }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      AGI_STAGING_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
+      STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+    steps:
+      - name: Checkout the CI-verified commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve the candidate commit
+        id: commit
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Require the protected staging deployment contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID AGI_STAGING_DATABASE_URL STAGING_WEB_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is required in the staging-web environment"
+              exit 1
+            fi
+          done
+
+      - name: Self-test the serving-path verifier
+        run: node --test scripts/verify-deployment.test.mjs
+
+      - name: Install migration-ledger dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The whole point of the tier: the migrations run here, against a database
+      # that keeps its state between deploys, before the same commit is allowed
+      # near production. A migration that only ever meets an empty CI Postgres
+      # has not been tested against data.
+      - name: Apply pending migrations to the staging database
+        env:
+          AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
+        run: pnpm db:migrate -- apply --target staging
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.4.0
+
+      - name: Pull preview project settings
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+      - name: Build the staging artifact
+        run: vercel build --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+      - name: Deploy the prebuilt artifact
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_url="$(
+            vercel deploy --prebuilt --archive=tgz --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+          )"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Deployed $deployment_url"
+
+      # The deployment's own *.vercel.app alias sits behind Deployment
+      # Protection and answers 401 to any unauthenticated probe, so the smoke
+      # check below has to run against the custom staging domain. Aliasing is
+      # what puts this build there.
+      - name: Point the staging origin at this deployment
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="${STAGING_WEB_URL#https://}"
+          host="${host#http://}"
+          host="${host%%/*}"
+          vercel alias set "$DEPLOYMENT_URL" "$host" --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+      # Same verifier the production gate uses, against the same serving path:
+      # /api/health plus routes whose module graph reaches lib/api-auth, and the
+      # commit the origin reports has to be this one.
+      - name: Verify the staging serving path
+        id: verify
+        env:
+          HEAD_SHA: ${{ steps.commit.outputs.sha }}
+        run: >-
+          node scripts/verify-deployment.mjs --await-promotion
+          "$STAGING_WEB_URL" "$HEAD_SHA"
+
+      - name: Record the migration state staging serves
+        env:
+          AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          HEAD_SHA: ${{ steps.commit.outputs.sha }}
+        run: >-
+          pnpm db:migrate -- record --surface web --commit "$HEAD_SHA"
+          --target staging --deployment-ref "$DEPLOYMENT_URL"
+
+      - name: Record staging deployment summary
+        if: ${{ !cancelled() && steps.deploy.outputs.url != '' }}
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOYMENT_SHA: ${{ steps.commit.outputs.sha }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$VERIFY_OUTCOME" = "success" ]; then
+            serving_path="health plus authenticated routes verified"
+          else
+            serving_path="FAILED ($VERIFY_OUTCOME); production will not promote this commit"
+            echo "::error::$serving_path"
+          fi
+          {
+            echo "## Staging web deployment"
+            echo
+            echo "- Commit: \`$DEPLOYMENT_SHA\`"
+            echo "- Artifact: prebuilt and CI verified"
+            echo "- URL: $DEPLOYMENT_URL"
+            echo "- Origin: $STAGING_WEB_URL"
+            echo "- Migrations: applied to the staging database and recorded at target \`staging\`"
+            echo "- Serving path: $serving_path"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The background workers ship inside this artifact, so staging is where
+      # their versions are exercised before production carries the same roster.
+      - name: Record the background components staging carries
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const fs = require('node:fs');
+          const registry = JSON.parse(
+            fs.readFileSync('apps/web/app/api/cron/deployable-components.json', 'utf8'),
+          );
+          const byRole = new Map();
+          for (const component of registry.components) {
+            const roster = byRole.get(component.role) ?? [];
+            roster.push(`${component.name}@${component.version}`);
+            byRole.set(component.role, roster);
+          }
+          console.log('## Background components');
+          console.log('');
+          console.log(`${registry.components.length} registered deployable components.`);
+          console.log('');
+          console.log('| Role | Components |');
+          console.log('| ---- | ---------- |');
+          for (const [role, roster] of [...byRole].sort()) {
+            console.log(`| ${role} | ${roster.sort().join(', ')} |`);
+          }
+          NODE
+
+      # The gate deploy-production.yml waits on. It runs on the failure path too:
+      # a staging run that ends without posting anything would hold the
+      # production promotion until its 25-minute deadline and then fail it with
+      # a timeout rather than with the reason.
+      - name: Publish the staging verdict for this commit
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Falls back to the triggering commit: a job that failed before the
+          # checkout resolved still has to report, or the production gate waits
+          # out its deadline instead of being told why.
+          HEAD_SHA: >-
+            ${{ steps.commit.outputs.sha || github.event.workflow_run.head_sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$VERIFY_OUTCOME" = "success" ]; then
+            state=success
+            description='staging served this commit and verified it'
+          else
+            state=failure
+            description="staging did not verify this commit (verify: ${VERIFY_OUTCOME:-not reached})"
+          fi
+          gh api --method POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
+            -f "state=$state" \
+            -f context=staging-web \
+            -f "description=$description" \
+            -f "target_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --silent
