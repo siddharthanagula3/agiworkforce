@@ -193,6 +193,7 @@ describe('ResearchActivity plan approval', () => {
       files: false,
       allowDomains: [],
       denyDomains: [],
+      connectors: [],
     });
 
     await userEvent.click(screen.getByTestId('research-plan-cancel'));

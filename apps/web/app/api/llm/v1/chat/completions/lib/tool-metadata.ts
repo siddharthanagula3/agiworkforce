@@ -41,8 +41,13 @@
  * a client-supplied boolean the live web client never even sends).
  */
 
+import { deviceStepCapability, isDeviceStepTool } from '@agiworkforce/local-runtime-contract';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  getConnectorExecutionChannel,
+  type ConnectorExecutionChannel,
+} from '@/lib/connectors/catalog';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 import {
   isDestructiveTool,
@@ -51,6 +56,7 @@ import {
   type ToolApprovalReason,
   type ToolDefinition,
   type ToolPermissionDecision,
+  type ToolRetrySafety,
 } from '@agiworkforce/types';
 
 export type ToolActionClass = ContractToolActionClass;
@@ -59,12 +65,34 @@ export type ToolCallVerdict = ToolPermissionDecision;
 
 export type ToolCallReason = ToolApprovalReason;
 
+/**
+ * How much a single call can cost the user if it is wrong. Derived from the
+ * four declared properties unless a tool names its own tier, which is what
+ * `external_delivery: 'send'` on money and mail needs.
+ */
+export const TOOL_RISK_TIERS = ['low', 'medium', 'high', 'critical'] as const;
+export type ToolRiskTier = (typeof TOOL_RISK_TIERS)[number];
+
+export type ToolExternalDelivery = 'draft' | 'send';
+
 export interface ToolMetadata {
   actionClass: ToolActionClass;
   reversible: boolean;
   acceptsUntrustedContent: boolean;
   createsEgressPath: boolean;
   declared: boolean;
+  /** Overrides the derived tier. Only ever raises it. */
+  riskTier?: ToolRiskTier;
+  /**
+   * Whether repeating the call repeats the effect. `at_most_once` is the
+   * payment case: a retry after an unknown outcome can charge twice.
+   */
+  retrySafety?: ToolRetrySafety;
+  /**
+   * For a tool that puts something in front of another person: `draft` leaves
+   * it for the user to send, `send` delivers it on the call.
+   */
+  externalDelivery?: ToolExternalDelivery;
   /**
    * Runs without asking under the read-only policy even though it reaches the
    * public internet or the sandbox: web search, page fetch and sandboxed code
@@ -171,6 +199,8 @@ const GITHUB_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.free
     acceptsUntrustedContent: false,
     createsEgressPath: true,
     declared: true,
+    externalDelivery: 'send',
+    retrySafety: 'at_most_once',
   },
   post_pull_request_review: {
     actionClass: 'external_send',
@@ -178,6 +208,8 @@ const GITHUB_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.free
     acceptsUntrustedContent: false,
     createsEgressPath: true,
     declared: true,
+    externalDelivery: 'send',
+    retrySafety: 'at_most_once',
   },
 });
 
@@ -212,6 +244,50 @@ export function resolveConnectorToolMetadata(connectorId: string, toolName: stri
     PLATFORM_TOOL_METADATA[toolName] ??
     UNKNOWN_TOOL_METADATA
   );
+}
+
+function deriveRiskTier(metadata: ToolMetadata): ToolRiskTier {
+  if (metadata.actionClass === 'read') return 'low';
+  if (metadata.actionClass === 'delete' || metadata.actionClass === 'external_send') {
+    return metadata.reversible ? 'high' : 'critical';
+  }
+  return metadata.reversible ? 'medium' : 'high';
+}
+
+export function toolRiskTier(name: string): ToolRiskTier {
+  const metadata = resolveToolMetadata(name);
+  const derived = deriveRiskTier(metadata);
+  if (!metadata.riskTier) return derived;
+  return TOOL_RISK_TIERS.indexOf(metadata.riskTier) > TOOL_RISK_TIERS.indexOf(derived)
+    ? metadata.riskTier
+    : derived;
+}
+
+export function toolRetrySafety(name: string): ToolRetrySafety {
+  const metadata = resolveToolMetadata(name);
+  if (metadata.retrySafety) return metadata.retrySafety;
+  if (metadata.actionClass === 'read') return 'idempotent';
+  if (metadata.actionClass === 'delete' || metadata.actionClass === 'external_send') {
+    return 'at_most_once';
+  }
+  return 'unknown';
+}
+
+export function toolExternalDelivery(name: string): ToolExternalDelivery | null {
+  return resolveToolMetadata(name).externalDelivery ?? null;
+}
+
+/**
+ * Which instrument the call reaches the world with. A step that moves the
+ * pointer over whatever is on screen is `automation`, driving a page is
+ * `browser`, and everything else is a structured API.
+ */
+export function toolExecutionChannel(qualifiedName: string): ConnectorExecutionChannel {
+  if (isDeviceStepTool(qualifiedName)) {
+    return deviceStepCapability(qualifiedName) === 'computer.use' ? 'automation' : 'connector';
+  }
+  const parsed = parseQualifiedToolName(qualifiedName);
+  return parsed ? getConnectorExecutionChannel(parsed.serverId) : 'connector';
 }
 
 export function isDestructiveToolMetadata(metadata: ToolMetadata): boolean {
@@ -275,7 +351,7 @@ export function toContractToolDefinition(
     reversible: metadata.reversible,
     acceptsUntrustedContent: metadata.acceptsUntrustedContent,
     createsEgressPath: metadata.createsEgressPath,
-    retrySafety: metadata.actionClass === 'read' ? 'idempotent' : 'unknown',
+    retrySafety: toolRetrySafety(def.qualifiedName),
     declared: metadata.declared,
   };
 }

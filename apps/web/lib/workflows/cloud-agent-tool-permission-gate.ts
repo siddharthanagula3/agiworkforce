@@ -2,7 +2,9 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import { toolExecutionChannel } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import type { ToolLoopToolResult } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
+import { isChannelPreferredOver } from '@/lib/connectors/catalog';
 import { logger } from '@/lib/logger';
 
 export interface CloudAgentToolPermissionGate {
@@ -25,6 +27,22 @@ function unreadableDecisionMessage(qualifiedName: string): string {
   );
 }
 
+function preferredChannelMessage(qualifiedName: string, preferred: string): string {
+  return (
+    `Tool "${qualifiedName}" drives the machine directly, and this account already offers ` +
+    `${preferred} for the same work. Use that instead; if it cannot do the job, say so rather ` +
+    'than falling back to pointer and keyboard control.'
+  );
+}
+
+function bypassMessage(qualifiedName: string, blocked: string): string {
+  return (
+    `Tool "${qualifiedName}" was not executed because "${blocked}" is blocked in this account's ` +
+    'connector permissions, and driving the browser or the screen must not be used to do what a ' +
+    'blocked connector would have done. Tell the user it is blocked.'
+  );
+}
+
 function refusal(content: string): ToolLoopToolResult {
   return { content, isError: true, unavailable: true };
 }
@@ -39,13 +57,40 @@ export function createCloudAgentToolPermissionGate(
   db: DatabaseAdapter,
   params: { userId: string; connectorToolNames: ReadonlySet<string> },
 ): CloudAgentToolPermissionGate {
+  const offered = [...params.connectorToolNames];
+
+  function preferredAlternativeTo(qualifiedName: string): string | null {
+    const channel = toolExecutionChannel(qualifiedName);
+    if (channel === 'connector') return null;
+    return (
+      offered.find(
+        (candidate) =>
+          candidate !== qualifiedName &&
+          isChannelPreferredOver(toolExecutionChannel(candidate), channel),
+      ) ?? null
+    );
+  }
+
   return {
     async refusalFor(qualifiedName: string): Promise<ToolLoopToolResult | null> {
-      if (!params.connectorToolNames.has(qualifiedName)) return null;
-      let denied: boolean;
+      const channel = toolExecutionChannel(qualifiedName);
+      const isConnectorTool = params.connectorToolNames.has(qualifiedName);
+      if (!isConnectorTool && channel === 'connector') return null;
+
+      if (channel !== 'connector') {
+        const preferred = preferredAlternativeTo(qualifiedName);
+        if (preferred) {
+          logger.warn(
+            { userId: params.userId, tool: qualifiedName, preferred },
+            '[cloud-agent] refusing a lower-preference execution channel while a better one is offered',
+          );
+          return refusal(preferredChannelMessage(qualifiedName, preferred));
+        }
+      }
+
+      let permissions: Awaited<ReturnType<typeof loadConnectorToolPermissions>>;
       try {
-        const permissions = await loadConnectorToolPermissions(db, params.userId);
-        denied = permissions.isDenied(qualifiedName);
+        permissions = await loadConnectorToolPermissions(db, params.userId);
       } catch (error) {
         logger.warn(
           { error, userId: params.userId, tool: qualifiedName },
@@ -53,12 +98,27 @@ export function createCloudAgentToolPermissionGate(
         );
         return refusal(unreadableDecisionMessage(qualifiedName));
       }
-      if (!denied) return null;
+
+      if (isConnectorTool && permissions.isDenied(qualifiedName)) {
+        logger.warn(
+          { userId: params.userId, tool: qualifiedName },
+          '[cloud-agent] tool blocked since the run started; refusing the dispatch',
+        );
+        return refusal(blockedMidRunMessage(qualifiedName));
+      }
+      if (channel === 'connector') return null;
+
+      // A browser or screen step must not become the way around a connector the
+      // account blocked. A blocked connector is never offered to the run, so the
+      // stored verdicts are what the fallback has to be checked against.
+      const blockedEntry = permissions.entries.find((entry) => entry.level === 'deny');
+      const blocked = blockedEntry ? `${blockedEntry.connectorId}/${blockedEntry.toolName}` : null;
+      if (!blocked) return null;
       logger.warn(
-        { userId: params.userId, tool: qualifiedName },
-        '[cloud-agent] tool blocked since the run started; refusing the dispatch',
+        { userId: params.userId, tool: qualifiedName, blocked },
+        '[cloud-agent] refusing an automation fallback around a blocked connector',
       );
-      return refusal(blockedMidRunMessage(qualifiedName));
+      return refusal(bypassMessage(qualifiedName, blocked));
     },
   };
 }
