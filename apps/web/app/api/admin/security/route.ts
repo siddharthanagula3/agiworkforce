@@ -12,6 +12,39 @@ import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { readJsonBody } from '@/lib/read-json-body';
 import { setCachedAccountStatus } from '@/lib/server/request-context-cache';
 import { getIdentityProvider } from '@/lib/server/identity';
+import {
+  liftTenantLockdown,
+  listLockedDownTenants,
+  lockdownTenant,
+  type TenantLockdownInput,
+} from '@/lib/feature-flags/tenant-lockdown';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_REASON_LENGTH = 1000;
+
+function parseLockdownBody(body: unknown): TenantLockdownInput | AppError {
+  const { organizationId, reason, secondApproverUserId } = (body ?? {}) as {
+    organizationId?: string;
+    reason?: string;
+    secondApproverUserId?: string;
+  };
+  if (typeof organizationId !== 'string' || !UUID_PATTERN.test(organizationId)) {
+    return createError.badRequest('organizationId is required and must be a workspace id');
+  }
+  if (typeof reason !== 'string' || !reason.trim() || reason.length > MAX_REASON_LENGTH) {
+    return createError.badRequest(
+      `reason is required and must be at most ${MAX_REASON_LENGTH} characters`,
+    );
+  }
+  if (typeof secondApproverUserId !== 'string' || !secondApproverUserId.trim()) {
+    return createError.badRequest('secondApproverUserId is required');
+  }
+  return {
+    organizationId,
+    reason: reason.trim(),
+    secondApproverUserId: secondApproverUserId.trim(),
+  };
+}
 
 function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
   return NextResponse.json(
@@ -111,10 +144,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ top_ips: topIps });
       }
 
+      case 'lockdowns': {
+        const tenants = await listLockedDownTenants();
+        return NextResponse.json({ locked_down_tenants: tenants, count: tenants.length });
+      }
+
       default:
         return errorResponse(
           createError.badRequest(
-            'Unknown action. Supported: dashboard, metrics, alerts, events, user, ips',
+            'Unknown action. Supported: dashboard, metrics, alerts, events, user, ips, lockdowns',
           ),
         );
     }
@@ -332,10 +370,46 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      case 'lockdown-tenant':
+      case 'lift-tenant-lockdown': {
+        const input = parseLockdownBody(await readJsonBody(request));
+        if (isAppError(input)) return errorResponse(input);
+
+        const actor = { userId: adminUserId, request };
+        if (action === 'lockdown-tenant') {
+          await lockdownTenant(actor, input);
+        } else {
+          await liftTenantLockdown(actor, input);
+        }
+
+        await logSecurityEvent({
+          userId: adminUserId,
+          eventType: 'admin_action',
+          severity: 'critical',
+          endpoint: `/api/admin/security?action=${action}`,
+          details: {
+            action,
+            organizationId: input.organizationId,
+            secondApproverUserId: input.secondApproverUserId,
+            reason: input.reason,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          organization_id: input.organizationId,
+          locked_down: action === 'lockdown-tenant',
+          message:
+            action === 'lockdown-tenant'
+              ? `Workspace ${input.organizationId} is locked out of every route, agent and model`
+              : `Workspace ${input.organizationId} has its access back`,
+        });
+      }
+
       default:
         return errorResponse(
           createError.badRequest(
-            'Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user',
+            'Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user, lockdown-tenant, lift-tenant-lockdown',
           ),
         );
     }

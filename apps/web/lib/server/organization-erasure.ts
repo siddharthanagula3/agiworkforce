@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { lockdownTenantForErasure } from '@/lib/feature-flags/tenant-lockdown';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
@@ -253,6 +254,12 @@ export async function eraseOrganizationData(
     );
     return heldReport(organizationId, legalHold.count, legalHold.error);
   }
+
+  // Isolate before deleting: from here the workspace reaches no route, agent or
+  // model, so nothing is still serving it while its rows go.
+  await lockdownTenantForErasure(organizationId).catch((error: unknown) => {
+    logger.error({ organizationId, error }, 'Could not isolate the workspace before erasure');
+  });
 
   const media = await eraseOrganizationMedia(organizationId);
   const tables: OrganizationErasureReport['tables'] = {};

@@ -19,6 +19,8 @@ import {
   normalizeSubscriptionAccessTier,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
+import { readKillSwitchGate, type KillSwitchGate } from '@/lib/feature-flags/capability-gate';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
@@ -43,6 +45,7 @@ type OpenAiCompatibleModel = {
 };
 
 const CREATED_AT_TIMESTAMP = 1_704_067_200;
+const ANONYMOUS_FLAG_SUBJECT_ID = 'anonymous';
 const MODEL_TYPES = ['chat', 'code', 'reasoning', 'multimodal', 'search'] as const;
 const SURFACE_RUNTIME_PROFILE = 'web/cloud-chat';
 
@@ -77,7 +80,21 @@ interface VisibleModels {
   temporarilyUnavailable: string[];
 }
 
-async function getVisibleModelsForTier(userTier: string): Promise<VisibleModels> {
+/**
+ * A model is served only while its own switch and at least one of its routes'
+ * provider switches are open. Both are flags, so taking a model or a whole
+ * provider out of every client's picker is a flip an operator makes here, not a
+ * catalogue edit followed by a release of six surfaces.
+ */
+function killSwitchClosedFor(entry: CatalogueEntry, gate: KillSwitchGate): boolean {
+  if (!gate.modelAllowed(entry.id)) return true;
+  return entry.routes.every((route) => !gate.providerAllowed(route.provider));
+}
+
+async function getVisibleModelsForTier(
+  userTier: string,
+  gate: KillSwitchGate,
+): Promise<VisibleModels> {
   const surfaceModelIds = new Set(
     getPickerModelsForRuntimeProfile(SURFACE_RUNTIME_PROFILE, {
       modelTypes: [...MODEL_TYPES],
@@ -88,6 +105,7 @@ async function getVisibleModelsForTier(userTier: string): Promise<VisibleModels>
   const temporarilyUnavailable: string[] = [];
   for (const entry of entries) {
     if (!entry.admitted || !surfaceModelIds.has(entry.id)) continue;
+    if (killSwitchClosedFor(entry, gate)) continue;
     const record = toModelRecord(entry);
     if (!record) continue;
     if (entry.temporarilyUnavailable) temporarilyUnavailable.push(record.id);
@@ -96,8 +114,17 @@ async function getVisibleModelsForTier(userTier: string): Promise<VisibleModels>
   return { available, temporarilyUnavailable };
 }
 
-async function listModelsForRequest(request: NextRequest, userTier: string) {
-  const { available, temporarilyUnavailable } = await getVisibleModelsForTier(userTier);
+async function listModelsForRequest(request: NextRequest, userTier: string, userId: string) {
+  const gate = await readKillSwitchGate(
+    buildFlagSubject(request, {
+      userId,
+      workspaceId: null,
+      role: null,
+      plan: normalizeSubscriptionAccessTier(userTier),
+      surface: null,
+    }),
+  );
+  const { available, temporarilyUnavailable } = await getVisibleModelsForTier(userTier, gate);
 
   return NextResponse.json(
     {
@@ -161,13 +188,14 @@ async function handleListModels(request: NextRequest) {
         { status: insufficientScope ? 403 : 401, headers: getCorsHeaders(request) },
       );
     }
-    return listModelsForRequest(request, ANONYMOUS_PLAN_TIER);
+    return listModelsForRequest(request, ANONYMOUS_PLAN_TIER, ANONYMOUS_FLAG_SUBJECT_ID);
   }
 
   const subscription = await SubscriptionService.getSubscription(scoped.db, scoped.userId);
   return listModelsForRequest(
     request,
     effectivePlanTier(subscription?.plan_tier, subscription?.status),
+    scoped.userId,
   );
 }
 
