@@ -3,8 +3,9 @@ import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { buildAuditCoverageReport } from '../index';
 import { SURFACE_AUDIT_COVERAGE, UNAUDITED_MUTATING_ROUTES } from '../registry';
-import { isAudited, sweepRouteAuditCoverage } from '../sweep';
+import { isAudited, resolveAuditCoverageRoot, sweepRouteAuditCoverage } from '../sweep';
 
 function appRoot(): string {
   const direct = process.cwd();
@@ -63,6 +64,31 @@ describe('every mutating route has an audit decision', () => {
       }
       expect(entry.expectedEvent, `${entry.route} is a gap with no event named`).toBeTruthy();
     }
+  });
+});
+
+describe('the report the admin console reads', () => {
+  const REPORT = buildAuditCoverageReport(APP_ROOT);
+
+  it('carries every unaudited route with the reason the registry declares', () => {
+    expect(REPORT.totals.mutatingRoutes).toBe(COVERAGE.length);
+    expect(REPORT.totals.audited + REPORT.totals.unaudited).toBe(COVERAGE.length);
+    expect(REPORT.unaudited.map((route) => route.route)).toEqual(
+      COVERAGE.filter((route) => !isAudited(route)).map((route) => route.route),
+    );
+    expect(REPORT.unaudited.filter((route) => route.reason === null)).toEqual([]);
+    expect(REPORT.surfaces).toEqual(SURFACE_AUDIT_COVERAGE);
+  });
+
+  it('reports nothing undeclared and no exemption that outlived its route', () => {
+    expect(REPORT.undeclared).toEqual([]);
+    expect(REPORT.staleExemptions).toEqual([]);
+  });
+
+  it('has no root to sweep where the route sources were not deployed', () => {
+    expect(resolveAuditCoverageRoot(APP_ROOT)).toBe(APP_ROOT);
+    expect(resolveAuditCoverageRoot(REPO_ROOT)).toBe(APP_ROOT);
+    expect(resolveAuditCoverageRoot(join(APP_ROOT, 'db'))).toBeNull();
   });
 });
 

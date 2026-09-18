@@ -1,5 +1,6 @@
 import 'server-only';
 import { AUDIT_EVENT_SCHEMA_VERSION, type AuditRetentionClass } from '@agiworkforce/types';
+import { resourceUriFor } from './identity/resource-uri';
 import { getNeonDb } from './server/neon-db';
 import { logger } from './logger';
 import { getRequestId } from './observability/trace-context';
@@ -591,6 +592,16 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     logger.error({ error: err, eventType }, 'Failed to prepare audit event');
   }
 
+  const resourceType =
+    typeof detail['resourceType'] === 'string'
+      ? detail['resourceType']
+      : inferResourceType(eventType);
+  const resourceUri = resourceUriFor({
+    kind: resourceType,
+    id: typeof detail['resourceId'] === 'string' ? detail['resourceId'] : null,
+    workspaceId: event.organizationId ?? null,
+  });
+
   try {
     const detailsForSecurityLog: Record<string, unknown> = {
       ...detail,
@@ -602,6 +613,7 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     if (typeof detail['resourceId'] === 'string') {
       detailsForSecurityLog['resource_id'] = detail['resourceId'];
     }
+    if (resourceUri) detailsForSecurityLog['resource_uri'] = resourceUri;
     if (outcome !== 'success') {
       detailsForSecurityLog['outcome'] = outcome;
       detailsForSecurityLog['description'] = eventType;
@@ -643,6 +655,7 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     };
     if (ipAddress) enterpriseMetadata['ipAddress'] = ipAddress;
     if (userAgent) enterpriseMetadata['userAgent'] = userAgent;
+    if (resourceUri) enterpriseMetadata['resourceUri'] = resourceUri;
 
     await getNeonDb().query(
       `select public.record_enterprise_audit_event($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
@@ -651,7 +664,7 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
         event.userId ?? null,
         event.surface ?? 'web',
         eventType,
-        detail['resourceType'] ?? inferResourceType(eventType),
+        resourceType,
         detail['resourceId'] ?? null,
         outcome,
         severity,

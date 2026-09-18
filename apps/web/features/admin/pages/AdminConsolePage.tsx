@@ -132,6 +132,14 @@ const ADMIN_CONTROLS: ReadonlyArray<{
     external: true,
   },
   {
+    name: 'Audit coverage',
+    href: '/api/admin/audit-coverage',
+    service: 'GET /api/admin/audit-coverage',
+    detail:
+      'Every mutating API route with the audit event it emits, and for each route that emits none, the reason the registry declares. A route nobody classified is listed as undeclared.',
+    external: true,
+  },
+  {
     name: 'Directory sync (SCIM 2.0)',
     href: '/admin/directory-sync',
     service: '/api/admin/directory-sync',
