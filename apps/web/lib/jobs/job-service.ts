@@ -7,6 +7,8 @@ import {
   type DataRegionId,
 } from '@agiworkforce/compliance';
 
+import { withTraceCarrier } from '@/lib/observability/trace-propagation';
+
 import {
   JOB_QUEUE_NAMES,
   JOB_QUEUE_POLICIES,
@@ -177,7 +179,7 @@ export async function enqueueJob(
       input.kind,
       input.userId ?? null,
       input.organizationId ?? null,
-      JSON.stringify(input.payload),
+      JSON.stringify(withTraceCarrier(input.payload)),
       priority,
       maxAttempts,
       runAfter ? runAfter.toISOString() : null,
