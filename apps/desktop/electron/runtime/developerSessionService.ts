@@ -801,6 +801,22 @@ async function listForRoot(root: WorkspaceRoot): Promise<DeveloperSessionGroup> 
   return group;
 }
 
+/**
+ * Call one app-server method in the CLI that owns `rootId`. This is the single
+ * door the other runtime services use, so none of them reimplements the
+ * transport, the readiness wait, or the unavailable-runtime error.
+ */
+export async function callDeveloperMethod(
+  rootId: string,
+  method: string,
+  params: Record<string, unknown> = {},
+  options: { timeoutMs?: number } = {},
+): Promise<unknown> {
+  const root = requireRoot(rootId);
+  const server = await readyServer(root);
+  return request(server, method, params, options.timeoutMs ?? REQUEST_TIMEOUT_MS);
+}
+
 async function requestOrNull(
   server: RunningServer,
   method: string,

@@ -1085,6 +1085,21 @@ fn load_explicit_mcp_configs(
     Ok(())
 }
 
+/// An untrusted workspace does not get servers started for it: `.mcp.json` is
+/// repository-controlled, so auto-start would run a binary the user has not
+/// vouched for. Returns the line to print when start is suppressed.
+pub(crate) fn untrusted_autostart_notice(
+    server_count: usize,
+    autostart_allowed: bool,
+) -> Option<String> {
+    if server_count == 0 || autostart_allowed {
+        return None;
+    }
+    Some(format!(
+        "MCP: {server_count} server(s) not started; this workspace is not trusted. Run /trust grant to start them."
+    ))
+}
+
 impl McpManager {
     pub fn new() -> Self {
         Self {
@@ -1154,6 +1169,14 @@ impl McpManager {
         // terminal, otherwise these lines bleed into and corrupt the display.
         // In exec / non-TUI mode the flag is false and they render normally.
         let quiet = crate::tui::tui_active();
+        if let Some(notice) =
+            untrusted_autostart_notice(configs.len(), crate::trust::restrictions().mcp_autostart)
+        {
+            if !quiet {
+                eprintln!("  {notice}");
+            }
+            return Ok(());
+        }
         // Sorted, so a name a collision forced apart is the same name on the
         // next run: the model's allowlists and transcripts stay valid.
         let mut ordered: Vec<(&String, &McpServerConfig)> = configs.iter().collect();
@@ -1594,6 +1617,15 @@ fn normalize_mcp_prompt_part(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_untrusted_workspace_starts_no_configured_mcp_server() {
+        assert!(untrusted_autostart_notice(0, false).is_none());
+        assert!(untrusted_autostart_notice(3, true).is_none());
+        let notice = untrusted_autostart_notice(3, false).expect("suppressed");
+        assert!(notice.contains("3 server(s) not started"));
+        assert!(notice.contains("/trust grant"));
+    }
 
     struct AcceptingElicitationHandler {
         called: Arc<std::sync::atomic::AtomicBool>,

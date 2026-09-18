@@ -4,7 +4,8 @@
 //! from the workspace root (if trusted) and evaluates tool calls against
 //! pattern-matched rules.
 
-mod engine;
+pub mod engine;
+pub mod managed;
 
 #[cfg(target_os = "macos")]
 pub mod macos_sandbox;
@@ -13,4 +14,6 @@ pub mod macos_sandbox;
 pub mod linux_sandbox;
 
 #[allow(unused_imports)]
-pub use engine::{PolicyDecision, PolicyEngine, PolicyRule, WorkspacePolicy};
+pub use engine::{
+    PolicyDecision, PolicyEngine, PolicyLayer, PolicyResolution, PolicyRule, WorkspacePolicy,
+};

@@ -209,6 +209,7 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
         "ToolSearch" => "tool_search",
         "Skill" => "skill",
         "ApplyPatch" => "apply_patch",
+        "ResolveConflict" => "resolve_conflict",
         "Batch" => "batch",
         "NotebookEdit" => "notebook_edit",
         "TodoRead" => "todo_read",
@@ -244,6 +245,7 @@ pub fn tool_aliases(tool_name: &str) -> &'static [&'static str] {
         "tool_search" => &["ToolSearch"],
         "skill" => &["Skill"],
         "apply_patch" => &["ApplyPatch"],
+        "resolve_conflict" => &["ResolveConflict"],
         "batch" => &["Batch"],
         "notebook_edit" => &["NotebookEdit"],
         "todo_read" => &["TodoRead"],
@@ -282,6 +284,7 @@ fn policy_alias_tool_names(alias: &str) -> &'static [&'static str] {
         "edit" | "editfile" => &["edit_file", "multiedit", "apply_patch"],
         "multiedit" => &["multiedit"],
         "applypatch" => &["apply_patch"],
+        "resolveconflict" => &["resolve_conflict"],
         "grep" | "grepfiles" => &["grep_files", "search_files"],
         "glob" => &["glob"],
         "list" | "ls" | "listdirectory" => &["list_directory"],
@@ -331,7 +334,7 @@ fn tool_owner(name: &str) -> &'static str {
             "cli-team-collaboration"
         }
         "advisor" => "cli-advisor",
-        "apply_patch" => "cli-patch-tools",
+        "apply_patch" | "resolve_conflict" => "cli-patch-tools",
         "browser_read_page" | "browser_click" | "browser_type" | "browser_navigate"
         | "browser_screenshot" => "cli-browser",
         _ => "cli-runtime",
@@ -374,7 +377,13 @@ pub fn tool_result_size_cap(tool_name: &str) -> Option<usize> {
 pub fn is_file_edit_tool(tool_name: &str) -> bool {
     matches!(
         canonical_tool_name(tool_name),
-        "write_file" | "edit_file" | "multiedit" | "apply_patch" | "notebook_edit" | "lsp_format"
+        "write_file"
+            | "edit_file"
+            | "multiedit"
+            | "apply_patch"
+            | "resolve_conflict"
+            | "notebook_edit"
+            | "lsp_format"
     )
 }
 
@@ -596,6 +605,33 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             "Apply a unified diff/patch to the working directory.",
             serde_json::json!({"type":"object","properties":{"patch":{"type":"string","description":"Unified diff content"}},"required":["patch"]}),
         ).with_size_cap(5_000).deferred(),
+        def(
+            "resolve_conflict",
+            "Resolve a merge-conflicted file hunk by hunk. Read the file first: its conflicted view numbers every hunk. Every hunk must get a resolution; there is no default and no side is ever picked for you. The resolution is applied as a patch and staged.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the conflicted file, relative to the repository root"},
+                    "resolutions": {
+                        "type": "array",
+                        "description": "One entry per conflicted hunk in the file",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "hunk": {"type": "integer", "description": "1-based hunk number from the conflicted view"},
+                                "choice": {"type": "string", "enum": ["ours", "theirs", "base", "union", "custom"], "description": "Which side to take, both in order (union), or custom replacement lines"},
+                                "lines": {"type": "array", "items": {"type": "string"}, "description": "Replacement lines; required only for choice=custom"}
+                            },
+                            "required": ["hunk", "choice"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "run_tests": {"type": "boolean", "description": "Run the repository's declared test command after staging (default false)"}
+                },
+                "required": ["path", "resolutions"],
+                "additionalProperties": false
+            }),
+        ).with_size_cap(20_000).deferred(),
         // Sprint B4: real plan mode -- model writes plan via this tool, user
         // approves via /plan accept, then mutating tools unlock. Deferred
         // because it is plan-mode-only; normal sessions don't need it in the
