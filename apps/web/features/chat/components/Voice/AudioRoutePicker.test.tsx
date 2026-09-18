@@ -59,7 +59,7 @@ describe('AudioRoutePicker', () => {
     renderPicker();
 
     await user.click(await screen.findByTestId('voice-audio-route-trigger'));
-    const airpods = await screen.findByRole('menuitem', { name: /airpods pro/i });
+    const airpods = await screen.findByRole('menuitemradio', { name: /airpods pro/i });
     await user.click(airpods);
 
     expect(setSinkId).toHaveBeenCalledWith('bt-1');
@@ -76,7 +76,7 @@ describe('AudioRoutePicker', () => {
     renderPicker();
 
     await user.click(await screen.findByTestId('voice-audio-route-trigger'));
-    await user.click(await screen.findByRole('menuitem', { name: /airpods pro/i }));
+    await user.click(await screen.findByRole('menuitemradio', { name: /airpods pro/i }));
 
     await waitFor(() =>
       expect(screen.getByTestId('voice-audio-route-trigger').getAttribute('aria-label')).toContain(
