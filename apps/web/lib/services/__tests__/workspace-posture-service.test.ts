@@ -10,6 +10,11 @@ vi.mock('@/lib/server/db-connection-error', () => ({
   reportDatabaseConnectionError: vi.fn(),
 }));
 
+const entitlement = vi.hoisted(() => ({ plan: 'team' as string }));
+vi.mock('@/lib/services/org-entitlements', () => ({
+  resolveOrganizationEntitlementPlan: vi.fn(async () => entitlement.plan),
+}));
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { readWorkspacePosture, type PostureSignal } from '../workspace-posture-service';
 
@@ -138,7 +143,10 @@ function signal(groups: { signals: PostureSignal[] }[], id: string): PostureSign
 }
 
 describe('readWorkspacePosture', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    entitlement.plan = 'team';
+  });
 
   it('binds every query to the organization it was asked about', async () => {
     const h = harness();
@@ -200,6 +208,36 @@ describe('readWorkspacePosture', () => {
     expect(retention.enforcement).toBe('enforced');
     expect(retention.value).toBe('90 days, enforced');
     expect(retention.state).toBe('ok');
+  });
+
+  it('says a plan-required window is not yet enforced rather than implying it is', async () => {
+    // The commitment is contractual on that plan, so the gap between what is
+    // sold and what the sweep deletes against has to be visible, not smoothed.
+    entitlement.plan = 'enterprise';
+    const h = harness({
+      policyRow: {
+        organization_id: ORG,
+        default_privacy_mode: 'byok',
+        allowed_privacy_modes: ['local', 'byok'],
+        allow_managed_compute: false,
+        require_local_to_byok_preview: true,
+        chat_sync_surfaces: ['web'],
+        allow_cli_cloud_sync: false,
+        allow_vscode_cloud_sync: false,
+        allow_chrome_cloud_sync: false,
+        audit_export_enabled: true,
+        retention_days: 30,
+        retention_enforced: false,
+        metadata: {},
+        updated_at: '2026-08-23T00:00:00.000Z',
+      },
+    });
+    const retention = signal((await readWorkspacePosture(h.db, ORG)).groups, 'retention');
+
+    expect(retention.value).toBe('30 days, required by your plan and not yet enforced');
+    expect(retention.state).toBe('attention');
+    expect(retention.enforcement).toBe('stated');
+    expect(retention.detail).toContain('not a preference');
   });
 
   it('says plainly when a legal hold is suspending retention', async () => {
