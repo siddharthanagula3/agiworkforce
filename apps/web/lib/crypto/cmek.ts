@@ -216,7 +216,15 @@ const CMEK_ENV_NAME = 'AGI_CMEK_DATA_KEY';
  * silent fall-through would mean data the customer believes only they can
  * unlock is readable without them.
  */
-export type CustomerKeyRingResolver = (record: OrganizationKeyRecord) => Promise<KeyRing>;
+export interface CustomerKeyRingResolver {
+  (record: OrganizationKeyRecord): Promise<KeyRing>;
+  /**
+   * Forgets this record's unwrapped data keys. A revocation that waited for the
+   * cache window to lapse would keep serving plaintext the customer has already
+   * withdrawn the key for.
+   */
+  invalidate(record: OrganizationKeyRecord): void;
+}
 
 export function createCustomerKeyRingResolver(
   registry: CmekProviderRegistry,
@@ -224,8 +232,12 @@ export function createCustomerKeyRingResolver(
 ): CustomerKeyRingResolver {
   const providers = new Map<string, ReturnType<typeof createKmsKeyProvider>>();
 
+  function cacheKeyFor(descriptor: CmekKeyDescriptor): string {
+    return `${descriptor.provider}|${descriptor.region}|${descriptor.keyUri}`;
+  }
+
   function keyProviderFor(descriptor: CmekKeyDescriptor) {
-    const cacheKey = `${descriptor.provider}|${descriptor.region}|${descriptor.keyUri}`;
+    const cacheKey = cacheKeyFor(descriptor);
     const existing = providers.get(cacheKey);
     if (existing) return existing;
     const client = registry[descriptor.provider];
@@ -238,7 +250,7 @@ export function createCustomerKeyRingResolver(
     return created;
   }
 
-  return async function resolve(record: OrganizationKeyRecord): Promise<KeyRing> {
+  async function resolve(record: OrganizationKeyRecord): Promise<KeyRing> {
     if (record.status === 'revoked') throw new CustomerKeyRevokedError(record.organizationId);
     const provider = keyProviderFor(record.descriptor);
     try {
@@ -254,7 +266,14 @@ export function createCustomerKeyRingResolver(
         error,
       );
     }
-  };
+  }
+
+  function invalidate(record: OrganizationKeyRecord): void {
+    const provider = providers.get(cacheKeyFor(record.descriptor));
+    provider?.invalidate?.([record.active.wrapped, ...record.retired.map((key) => key.wrapped)]);
+  }
+
+  return Object.assign(resolve, { invalidate });
 }
 
 const WRAPPED_KEY_RE = /^[A-Za-z0-9+/=_-]+$/;

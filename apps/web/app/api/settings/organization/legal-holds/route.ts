@@ -20,8 +20,10 @@ import {
   createLegalHold,
   listLegalHolds,
   listRetentionSweeps,
+  readRetentionBacklog,
   releaseLegalHold,
   type LegalHold,
+  type RetentionBacklog,
   type RetentionSweepRecord,
 } from '@/lib/services/retention-service';
 
@@ -44,6 +46,7 @@ export interface LegalHoldsResponse {
   canManageHolds: boolean;
   holds: LegalHold[];
   sweeps: RetentionSweepRecord[];
+  backlog: RetentionBacklog;
 }
 
 async function requireAdmin(request: NextRequest) {
@@ -67,9 +70,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const { db, userId, membership } = await requireAdmin(request);
 
-  const [holds, sweeps] = await Promise.all([
+  const [holds, sweeps, backlog] = await Promise.all([
     listLegalHolds(db, membership.organizationId, { includeReleased: true }),
     listRetentionSweeps(db, membership.organizationId),
+    readRetentionBacklog(db, membership.organizationId),
   ]);
 
   await logAdminDataAccess(request, {
@@ -85,6 +89,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     canManageHolds: true,
     holds,
     sweeps,
+    backlog,
   };
   return NextResponse.json(payload);
 }

@@ -22,6 +22,8 @@ import {
 } from '@/lib/server/identity-account';
 import { accountAccessDecision, effectiveAccountStatus } from '@/lib/auth/account-status';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
 import { bindSurfaceFromClaims, type BoundSurface } from '@/lib/free-chat-surface-policy';
 
@@ -120,7 +122,31 @@ interface AccountLifecycleRow {
   erased: boolean | null;
 }
 
-export async function assertAccountActive(userId: string): Promise<void> {
+/**
+ * A workspace locked down during an incident reaches no route. Resolution
+ * failures answer "not locked", which is the contract tenant-lockdown.ts states:
+ * the switch can only ever take something down deliberately.
+ */
+async function assertWorkspaceNotLockedDown(userId: string, request?: NextRequest): Promise<void> {
+  let organizationId: string | null = null;
+  try {
+    const resolved = await withDeadline(
+      resolveActiveOrganizationId(getNeonDb(), userId, request),
+      ACCOUNT_STATUS_DEADLINE_MS,
+    );
+    if (resolved !== DEADLINE_EXCEEDED) organizationId = resolved;
+  } catch (error) {
+    logger.warn({ error, userId }, 'workspace lookup for the lockdown gate failed; not locked');
+  }
+  await assertTenantNotLockedDown(organizationId);
+}
+
+export async function assertAccountActive(userId: string, request?: NextRequest): Promise<void> {
+  await assertAccountLifecycleActive(userId);
+  await assertWorkspaceNotLockedDown(userId, request);
+}
+
+async function assertAccountLifecycleActive(userId: string): Promise<void> {
   const cachedStatus = await getCachedAccountStatus(userId);
   if (cachedStatus !== undefined) {
     assertStatusAllowsAccess(cachedStatus);
@@ -284,7 +310,7 @@ export async function getClerkAuthUser(
         if (!apiKeyHasScope(result.scopes, options.apiKeyScope)) {
           throw new ApiKeyScopeError('API key does not have the required scope');
         }
-        await assertAccountActive(result.userId);
+        await assertAccountActive(result.userId, request);
         setTenantScope({ userId: result.userId });
         await assertMfaPolicyUnlessExemptOwner(
           result.userId,
@@ -299,7 +325,7 @@ export async function getClerkAuthUser(
 
     const result = await verifyBearerToken(token, request);
     if (result) {
-      await assertAccountActive(result.userId);
+      await assertAccountActive(result.userId, request);
       setTenantScope({ userId: result.userId });
       await assertMfaPolicyUnlessExemptOwner(result.userId, options.mfaGateExemptForOwner ?? false);
       await assertIpAllowList(result.userId, request);
@@ -313,7 +339,7 @@ export async function getClerkAuthUser(
   const account = subject === null ? null : await accountForSubject(subject, request);
   if (account) {
     const userId = account.accountId;
-    await assertAccountActive(userId);
+    await assertAccountActive(userId, request);
     setTenantScope({ userId });
     await assertMfaPolicyUnlessExemptOwner(userId, options.mfaGateExemptForOwner ?? false);
     await assertIpAllowList(userId, request);

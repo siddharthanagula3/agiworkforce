@@ -32,6 +32,22 @@ function hold(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function backlog(overrides: Record<string, unknown> = {}) {
+  return {
+    organizationId: 'org-1',
+    enforced: false,
+    retentionDays: null,
+    cutoff: null,
+    pendingDeletions: 0,
+    heldFromDeletion: 0,
+    perRunCeiling: 5000,
+    runsRemaining: 0,
+    lastSweptAt: null,
+    estimatedCompletionAt: null,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.useLegalHolds.mockReturnValue({
@@ -39,7 +55,7 @@ beforeEach(() => {
     isError: false,
     error: null,
     refetch: vi.fn(),
-    data: { holds: [hold()], sweeps: [] },
+    data: { holds: [hold()], sweeps: [], backlog: backlog() },
   });
   mocks.useCreateLegalHold.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false });
   mocks.useReleaseLegalHold.mockReturnValue({
@@ -108,6 +124,7 @@ describe('releasing a legal hold asks first, and names what it costs', () => {
       data: {
         holds: [hold({ scope: 'member', subjectUserId: 'user_42', name: 'One member' })],
         sweeps: [],
+        backlog: backlog(),
       },
     });
     const user = userEvent.setup();
@@ -124,7 +141,11 @@ describe('releasing a legal hold asks first, and names what it costs', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-      data: { holds: [hold({ releasedAt: '2026-08-05T00:00:00.000Z' })], sweeps: [] },
+      data: {
+        holds: [hold({ releasedAt: '2026-08-05T00:00:00.000Z' })],
+        sweeps: [],
+        backlog: backlog(),
+      },
     });
     render(<WorkspaceDataControls />);
 

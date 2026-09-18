@@ -127,6 +127,51 @@ describe('legal holds', () => {
     );
   });
 
+  it('reports the deletion backlog the sweep tracks internally', async () => {
+    permissionRole.value = 'admin';
+    mockQuery.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG }];
+      if (/from public\.organization_members/i.test(text)) {
+        return [{ organization_id: ORG, role: 'admin' }];
+      }
+      if (/from public\.organization_admin_policies/i.test(text)) {
+        return [{ retention_days: 30, retention_enforced: true }];
+      }
+      if (/from public\.web_conversations/i.test(text)) return [{ pending: 900, held: 4 }];
+      if (/from public\.organization_retention_sweeps/i.test(text)) {
+        return [
+          { created_at: '2026-09-16T00:00:00.000Z' },
+          { created_at: '2026-09-15T00:00:00.000Z' },
+        ];
+      }
+      return [];
+    });
+
+    const res = await GET(req('GET') as never);
+    const body = (await res.json()) as { backlog: Record<string, unknown> };
+
+    expect(res.status).toBe(200);
+    expect(body.backlog).toMatchObject({
+      organizationId: ORG,
+      enforced: true,
+      retentionDays: 30,
+      pendingDeletions: 900,
+      heldFromDeletion: 4,
+      lastSweptAt: '2026-09-16T00:00:00.000Z',
+    });
+    expect(Number(body.backlog['runsRemaining'])).toBeGreaterThan(0);
+    expect(body.backlog['estimatedCompletionAt']).toBe('2026-09-17T00:00:00.000Z');
+  });
+
+  it('reports no backlog for a workspace that does not enforce retention', async () => {
+    bind({ role: 'admin' });
+    const res = await GET(req('GET') as never);
+    const body = (await res.json()) as { backlog: Record<string, unknown> };
+    expect(body.backlog['enforced']).toBe(false);
+    expect(body.backlog['pendingDeletions']).toBe(0);
+  });
+
   it('places an organization-wide hold and records it', async () => {
     bind({ role: 'owner' });
     const res = await POST(

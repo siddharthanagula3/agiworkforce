@@ -11,6 +11,7 @@ import {
   useReleaseLegalHold,
   type LegalHold,
   type LegalHoldScope,
+  type RetentionBacklog,
   type RetentionSweepRecord,
 } from '../hooks/use-legal-holds';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -61,6 +62,77 @@ function OutcomeChip({ sweep }: { sweep: RetentionSweepRecord }) {
     >
       {label}
     </span>
+  );
+}
+
+function Figure({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="flex min-w-[8rem] flex-col gap-0.5">
+      <dt className="text-xs" style={{ color: 'var(--text-3)' }}>
+        {label}
+      </dt>
+      <dd
+        className="text-sm font-medium tabular-nums"
+        style={{ color: 'var(--text-1)', margin: 0 }}
+      >
+        {value}
+      </dd>
+      {hint ? (
+        <p className="text-xs" style={{ color: 'var(--text-3)' }}>
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The sweep has always known how far behind it is. Until this it said so only in
+ * its own return value, so a workspace could not tell a deletion in progress
+ * from one that had quietly stopped.
+ */
+function BacklogStrip({ backlog }: { backlog: RetentionBacklog }) {
+  if (!backlog.enforced) return null;
+
+  const caughtUp = backlog.pendingDeletions === 0;
+  const completion = backlog.estimatedCompletionAt
+    ? when(backlog.estimatedCompletionAt)
+    : 'Known after two sweeps set a pace';
+
+  return (
+    <div
+      role="group"
+      aria-label="Deletion backlog"
+      className="border-b px-5 py-3.5"
+      style={{ borderColor: 'var(--settings-border)' }}
+    >
+      <dl className="flex flex-wrap gap-x-10 gap-y-4" style={{ margin: 0 }}>
+        <Figure
+          label="Waiting to be deleted"
+          value={caughtUp ? 'Nothing' : backlog.pendingDeletions.toLocaleString()}
+          {...(caughtUp
+            ? { hint: 'The sweep has reached the whole retention window.' }
+            : { hint: `Older than the ${backlog.retentionDays}-day window.` })}
+        />
+        {backlog.heldFromDeletion > 0 ? (
+          <Figure
+            label="Held from deletion"
+            value={backlog.heldFromDeletion.toLocaleString()}
+            hint="Kept by a legal hold, however old."
+          />
+        ) : null}
+        {caughtUp ? null : (
+          <>
+            <Figure
+              label="Sweeps still to run"
+              value={backlog.runsRemaining.toLocaleString()}
+              hint={`Each run deletes at most ${backlog.perRunCeiling.toLocaleString()}.`}
+            />
+            <Figure label="Estimated to finish" value={completion} />
+          </>
+        )}
+      </dl>
+    </div>
   );
 }
 
@@ -370,6 +442,8 @@ export function WorkspaceDataControls() {
             you show an auditor instead of asserting that deletion happens.
           </p>
         </div>
+
+        <BacklogStrip backlog={data.backlog} />
 
         {data.sweeps.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-5 py-10 text-center">
