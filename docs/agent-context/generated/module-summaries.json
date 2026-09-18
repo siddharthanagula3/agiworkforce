@@ -315,6 +315,12 @@
       "purpose": "Artifact derivation, client store, managed publish, and cloud merge and apply."
     },
     {
+      "name": "@agiworkforce/context-engine",
+      "path": "packages/platform/context-engine",
+      "kind": "package",
+      "purpose": "The one engine every context source is resolved through: per-source permission and policy checks, per-source token budgets, cross-source dedup, staleness, and a replayable per-turn manifest."
+    },
+    {
       "name": "@agiworkforce/data-layer",
       "path": "packages/platform/data-layer",
       "kind": "package",

@@ -2,7 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { effectivePlanTier } from '@agiworkforce/types';
+import { effectivePlanTier, type NotebookCellOutput } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -30,7 +30,22 @@ import { recordNotebookRun, requireNotebookNetworkPolicy } from '../lib/notebook
 export const runtime = 'nodejs';
 export const maxDuration = 600;
 
+const MAX_CELLS_PER_RUN = 100;
+
 type RouteContext = { params: Promise<{ sessionId: string }> };
+
+interface RunAllCell {
+  id: string;
+  code: string;
+  language: string;
+}
+
+interface RunAllCellResult {
+  cellId: string;
+  ok: boolean;
+  outputs: NotebookCellOutput[];
+  error?: string;
+}
 
 function rethrowCloudCodeError(error: unknown): never {
   if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
@@ -60,7 +75,30 @@ async function requestObject(request: NextRequest): Promise<Record<string, unkno
   return value as Record<string, unknown>;
 }
 
-async function handleExecute(request: NextRequest, context: RouteContext) {
+/**
+ * Markdown cells never arrive here: they are documentation, not code, and the
+ * client keeps them out of the run rather than the server refusing them one by
+ * one.
+ */
+function validateCells(value: unknown): RunAllCell[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw createError.validation('cells must be a non-empty array');
+  }
+  if (value.length > MAX_CELLS_PER_RUN) {
+    throw createError.validation(`A run may cover at most ${MAX_CELLS_PER_RUN} cells`);
+  }
+  return value.map((entry, index) => {
+    const cell =
+      typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {};
+    const id = typeof cell['id'] === 'string' ? cell['id'].trim() : '';
+    const code = typeof cell['code'] === 'string' ? cell['code'] : '';
+    const language = typeof cell['language'] === 'string' ? cell['language'].trim() : 'python';
+    if (!id) throw createError.validation(`cells[${index}].id is required`);
+    return { id, code, language };
+  });
+}
+
+async function handleRunAll(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (limited) return limited;
@@ -89,6 +127,11 @@ async function handleExecute(request: NextRequest, context: RouteContext) {
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+
+  const cells = validateCells(body['cells']);
+  const fromTop = body['fromTop'] !== false;
+  const runId = randomUUID();
+
   try {
     const owner = { userId, organizationId };
     const session = await getCloudCodeSession(db, owner, sessionId);
@@ -96,27 +139,57 @@ async function handleExecute(request: NextRequest, context: RouteContext) {
       session.networkAccess,
       body['requireNetworkAccess'],
     );
-    const startedAt = new Date().toISOString();
-    const outcome = await runCloudCodeNotebookCell(db, owner, sessionId, body, planTier);
-    await recordNotebookRun(db, {
-      userId,
-      organizationId,
-      sessionId,
-      runId: randomUUID(),
-      cellId: typeof body['cellId'] === 'string' && body['cellId'].trim() ? body['cellId'] : 'cell',
-      cellIndex: 0,
-      language: typeof body['language'] === 'string' ? body['language'] : 'python',
-      code: typeof body['code'] === 'string' ? body['code'] : '',
+
+    const results: RunAllCellResult[] = [];
+    let latestSession = session;
+    for (const [cellIndex, cell] of cells.entries()) {
+      const startedAt = new Date().toISOString();
+      const outcome = await runCloudCodeNotebookCell(
+        db,
+        owner,
+        sessionId,
+        { code: cell.code, language: cell.language },
+        planTier,
+      );
+      latestSession = outcome.session;
+      await recordNotebookRun(db, {
+        userId,
+        organizationId,
+        sessionId,
+        runId,
+        cellId: cell.id,
+        cellIndex,
+        language: cell.language,
+        code: cell.code,
+        networkAccess,
+        fromTop,
+        ok: outcome.ok,
+        error: outcome.error,
+        startedAt,
+      });
+      results.push({
+        cellId: cell.id,
+        ok: outcome.ok,
+        outputs: outcome.outputs,
+        ...(outcome.error ? { error: outcome.error } : {}),
+      });
+      // A cell that failed leaves the kernel in a state the cells below it were
+      // not written for, so the run stops rather than reporting results nobody
+      // should read.
+      if (!outcome.ok) break;
+    }
+
+    return NextResponse.json({
+      session: latestSession,
+      runId,
+      fromTop,
       networkAccess,
-      fromTop: false,
-      ok: outcome.ok,
-      error: outcome.error,
-      startedAt,
+      results,
+      completed: results.length === cells.length && results.every((result) => result.ok),
     });
-    return NextResponse.json(outcome);
   } catch (error) {
     rethrowCloudCodeError(error);
   }
 }
 
-export const POST = withErrorHandler(handleExecute);
+export const POST = withErrorHandler(handleRunAll);

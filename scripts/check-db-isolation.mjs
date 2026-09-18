@@ -163,6 +163,18 @@ const ALLOWLIST = [
       'mapped, and the contract is keyed by the Stripe subscription id only that event can supply',
   },
   {
+    match: /lib\/server\/temporary-files\/purge\.ts$/,
+    tables: ['media_assets'],
+    functions: ['purgeTemporaryChatFiles'],
+    reason:
+      'a time-based fleet sweep reached only from api/cron/purge-temporary-chats, which has no ' +
+      'caller to constrain by: it selects temporary-chat files past the 30-day window by age ' +
+      'alone, and deletes exactly the ids that select returned, after their stored objects were ' +
+      'deleted. It lives in its own module so every per-user statement in media-assets.ts stays ' +
+      'policed by user_id, and `temporary_chat` is in both statements so a file a user saved to ' +
+      'the Library, which clears the flag, is never in the candidate set.',
+  },
+  {
     match: /lib\/server\/data-region\.ts$/,
     tables: ['organizations'],
     reason:
@@ -774,6 +786,13 @@ const ALLOWLIST = [
 ];
 
 const CROSS_TENANT_TABLES = new Map([
+  [
+    'authentication_attempts',
+    'the sign-in availability ledger the login SLO reads (0251). A failed or unreachable ' +
+      'attempt has no authenticated subject, so `user_id` is nullable and mostly null; it is ' +
+      'written by the verification path and read only in aggregate by lib/server/slo/attainment, ' +
+      'never listed back to a user.',
+  ],
   [
     'beta_applications',
     'the public beta intake queue. Applying requires no account, so `user_id` is nullable and ' +

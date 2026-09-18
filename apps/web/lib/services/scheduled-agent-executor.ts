@@ -1,5 +1,11 @@
 import 'server-only';
 
+import {
+  createPostgresContextManifestStore,
+  resolveContext,
+  type ContextCandidate,
+  type ContextSourceLoader,
+} from '@agiworkforce/context-engine';
 import { classifyTaskLocally, detectIndicScript, resolveAutoRoute } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { getModelMetadataById, getSlotForModel, getTierPolicy } from '@agiworkforce/types';
@@ -31,7 +37,15 @@ import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   formatProjectSystemPrompt,
   loadProjectContext,
+  type LoadedProjectContext,
 } from '@/lib/services/project-context-service';
+import {
+  formatManagedMemorySystemPrompt,
+  loadManagedMemoryPolicy,
+  loadOrganizationContextPolicy,
+  loadProjectMemoryScope,
+  managedMemoryContextLoader,
+} from '@/lib/services/managed-memory-context-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { evaluateManagedComputeAccess } from '@/lib/services/managed-compute-access';
@@ -192,6 +206,112 @@ async function buildScheduledToolPlan(input: {
       : {}),
     webSearch,
     codeExecution: codeExecution.tools.length > 0,
+  };
+}
+
+const PROJECT_SOURCE_BUDGET_CHARS: Readonly<Record<string, number>> = {
+  project_instruction: 8_000,
+  project_knowledge_file: 48_000,
+  project_sibling_chat: 16_000,
+};
+
+/**
+ * The project's own sources as engine candidates, one loader per class so the
+ * manifest says which kind of project context contributed what. The text is
+ * what each source contributes to the prompt, so the engine budgets and
+ * deduplicates the same strings the model will read.
+ */
+export function projectContextLoaders(context: LoadedProjectContext): ContextSourceLoader[] {
+  const siblingSources = context.sources.filter(
+    (source) => source.sourceClass === 'project_sibling_chat',
+  );
+  const textFor = (source: (typeof context.sources)[number]): string => {
+    const { locator } = source.provenance;
+    if (source.sourceClass === 'project_instruction') return context.instructions?.trim() ?? '';
+    if (source.sourceClass === 'project_knowledge_file') {
+      const fileId = locator.slice('project_knowledge_files/'.length);
+      const file = context.knowledgeFiles.find((entry) => entry.fileId === fileId);
+      const passages = file?.selection?.passages.map((passage) => passage.text).join('\n');
+      return passages || file?.extractedText?.trim() || file?.summary?.trim() || '';
+    }
+    return context.siblingChats[siblingSources.indexOf(source)]?.preview?.trim() ?? '';
+  };
+
+  return [...new Set(context.sources.map((source) => source.sourceClass))].map((sourceClass) => ({
+    sourceClass,
+    budgetChars: PROJECT_SOURCE_BUDGET_CHARS[sourceClass] ?? 8_000,
+    load: (): ContextCandidate[] =>
+      context.sources
+        .filter((source) => source.sourceClass === sourceClass)
+        .flatMap((source): ContextCandidate[] => {
+          const text = textFor(source);
+          return text ? [{ source, text }] : [];
+        }),
+  }));
+}
+
+/**
+ * An unattended run resolves its context through the same engine an attended
+ * turn does, so the workspace policy, the ownership checks and the per-source
+ * budgets apply here too and the run leaves a manifest behind.
+ */
+async function resolveScheduledContext(input: {
+  task: ScheduleTask;
+  runId: string;
+  scope: Parameters<ScheduledTaskExecutor>[3];
+  projectContext: LoadedProjectContext | null;
+}): Promise<{ projectPrompt: string | null; memoryPrompt: string | null }> {
+  const { scope, task } = input;
+  const [contextPolicy, memoryPolicy, memoryScope] = await Promise.all([
+    loadOrganizationContextPolicy(scope.db, scope.organizationId),
+    loadManagedMemoryPolicy(scope.db, {
+      userId: scope.userId,
+      organizationId: scope.organizationId,
+    }),
+    loadProjectMemoryScope(scope.db, { userId: scope.userId, projectId: task.projectId ?? null }),
+  ]);
+  const memoryLoader = managedMemoryContextLoader(scope.db, {
+    userId: scope.userId,
+    organizationId: scope.organizationId,
+    scope: memoryScope,
+    policy: memoryPolicy,
+  });
+
+  const resolution = await resolveContext({
+    turnId: `schedule-run-${input.runId}`,
+    actor: {
+      userId: scope.userId,
+      organizationId: scope.organizationId ?? null,
+      projectId: task.projectId ?? null,
+    },
+    policy: contextPolicy,
+    loaders: [
+      ...(input.projectContext ? projectContextLoaders(input.projectContext) : []),
+      memoryLoader,
+    ],
+    store: createPostgresContextManifestStore(scope.db),
+    onLoaderError: (sourceClass, error) => {
+      logger.warn(
+        { taskId: task.id, runId: input.runId, sourceClass, error },
+        'Scheduled run context source failed to load',
+      );
+    },
+  });
+
+  const memories = resolution.itemsOf('account_memory').flatMap((item) => {
+    const memory = memoryLoader.itemFor(item.source.id);
+    return memory ? [memory] : [];
+  });
+  const projectIncluded = resolution.manifest.entries.some(
+    (entry) => entry.sourceClass !== 'account_memory' && entry.includedCount > 0,
+  );
+
+  return {
+    projectPrompt:
+      input.projectContext && projectIncluded
+        ? formatProjectSystemPrompt(input.projectContext)
+        : null,
+    memoryPrompt: memories.length > 0 ? formatManagedMemorySystemPrompt(memories) : null,
   };
 }
 
@@ -435,8 +555,10 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   const projectContext = task.projectId
     ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
     : null;
+  const resolved = await resolveScheduledContext({ task, runId, scope, projectContext });
   const systemPrompt = [
-    projectContext ? formatProjectSystemPrompt(projectContext) : null,
+    resolved.projectPrompt,
+    resolved.memoryPrompt,
     buildCapabilityPreamble({ tools: plan.tools, timeZone: task.timezone }),
     SCHEDULED_TASK_DIRECTIVE,
   ]
