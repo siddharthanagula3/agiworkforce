@@ -30,6 +30,8 @@ import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from './clie
 import { logger, generateCorrelationId } from './logger.js';
 import { connectionManager } from './connection-manager.js';
 import { metrics } from './metrics.js';
+import { shutdownOtel, spanTraceparent, startOtel, startSpan } from './otel.js';
+import { TRACEPARENT_HEADER, parseTraceparent } from './trace-context.js';
 import {
   securityHeadersMiddleware,
   disablePoweredBy,
@@ -165,6 +167,28 @@ app.use(securityHeadersMiddleware);
 app.use((req: Request, _res: Response, next: NextFunction) => {
   (req as Request & { correlationId?: string }).correlationId =
     (req.headers['x-correlation-id'] as string) ?? generateCorrelationId();
+  next();
+});
+
+const SERVER_ERROR_STATUS = 500;
+const NORMAL_WS_CLOSE_CODE = 1000;
+
+startOtel(process.env);
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const parent = parseTraceparent(req.headers[TRACEPARENT_HEADER] as string | undefined);
+  const span = startSpan(`${req.method} ${req.path}`, 'server', parent);
+  span.setAttributes({
+    'http.request.method': req.method,
+    'url.path': req.path,
+    'agi.correlation.id': (req as Request & { correlationId?: string }).correlationId,
+  });
+  const outbound = spanTraceparent(span);
+  if (outbound) res.setHeader(TRACEPARENT_HEADER, outbound);
+  res.on('finish', () => {
+    span.setAttributes({ 'http.response.status_code': res.statusCode });
+    span.end(res.statusCode >= SERVER_ERROR_STATUS ? 'error' : 'ok');
+  });
   next();
 });
 
@@ -732,6 +756,13 @@ wss.on('connection', (socket, request) => {
   const correlationId = generateCorrelationId();
   connectionManager.addConnection(socket, ip, correlationId);
 
+  const connectionSpan = startSpan(
+    'ws.connection',
+    'server',
+    parseTraceparent(request.headers[TRACEPARENT_HEADER] as string | undefined),
+  );
+  connectionSpan.setAttributes({ 'agi.correlation.id': correlationId });
+
   logger.debug({ ip, correlationId }, 'WebSocket connection established');
   metrics.recordMessage('connection');
 
@@ -841,6 +872,8 @@ wss.on('connection', (socket, request) => {
     logger.debug({ correlationId, closeCode: code, closeReason }, 'WebSocket connection closed');
     metrics.recordMessage('disconnection');
     metrics.recordError(`ws_close_${code}`);
+    connectionSpan.setAttributes({ 'ws.close.code': code, 'ws.close.reason': closeReason });
+    connectionSpan.end(code === NORMAL_WS_CLOSE_CODE ? 'ok' : 'error');
 
     const client = clients.get(socket);
     if (!client) {
@@ -953,6 +986,8 @@ async function gracefulShutdown(signal: string): Promise<void> {
         else resolve();
       });
     });
+
+    await shutdownOtel();
 
     clearTimeout(shutdownTimeout);
     logger.info('Graceful shutdown completed');

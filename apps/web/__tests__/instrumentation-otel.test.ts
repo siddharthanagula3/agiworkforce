@@ -4,6 +4,7 @@ import {
   OTEL_ENDPOINT_ENV,
   OTEL_HEADERS_ENV,
   OTEL_SAMPLE_RATIO_ENV,
+  RECORD_ALL_TRACES_SAMPLE_RATE,
 } from '@/lib/observability/otel-config';
 import {
   DEFAULT_TRACES_SAMPLE_RATE,
@@ -112,25 +113,27 @@ describe('register with an exporter endpoint configured', () => {
     expect(validateOpenTelemetrySetup).toHaveBeenCalledTimes(1);
   });
 
-  it('lets one sample ratio govern both pipelines when both run', async () => {
+  it('never head-drops on the export ratio, which would hide the errors and slow tail', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('SENTRY_DSN', SENTRY_DSN);
     vi.stubEnv(OTEL_ENDPOINT_ENV, COLLECTOR);
-    vi.stubEnv(OTEL_SAMPLE_RATIO_ENV, '0.25');
+    vi.stubEnv(OTEL_SAMPLE_RATIO_ENV, '0.01');
 
     await runRegister();
 
-    expect(sentryOptions()['tracesSampleRate']).toBe(0.25);
+    expect(sentryOptions()['tracesSampleRate']).not.toBe(0.01);
+    expect(sentryOptions()['tracesSampleRate']).toBe(RECORD_ALL_TRACES_SAMPLE_RATE);
+    expect(startOtelSdk.mock.calls[0]?.[0]).toMatchObject({ sampleRatio: 0.01 });
   });
 
-  it('keeps the existing Sentry rate when no ratio is configured', async () => {
+  it('records every span so the tail processor owns the export decision', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('SENTRY_DSN', SENTRY_DSN);
     vi.stubEnv(OTEL_ENDPOINT_ENV, COLLECTOR);
 
     await runRegister();
 
-    expect(sentryOptions()['tracesSampleRate']).toBe(DEFAULT_TRACES_SAMPLE_RATE);
+    expect(sentryOptions()['tracesSampleRate']).toBe(RECORD_ALL_TRACES_SAMPLE_RATE);
   });
 
   it('never starts the node SDK on the edge runtime', async () => {

@@ -48,6 +48,7 @@ import {
   type SandboxFileEntry,
 } from './types';
 import { e2bExecutionEnabled } from './gate';
+import { traceSandboxExecutor } from './tracing';
 import type { E2BUnavailableCause } from './unavailability';
 import {
   harnessCredentialSpecs,
@@ -861,7 +862,7 @@ export async function getE2BExecutor(
     return stored;
   }
 
-  return {
+  const executor: E2BExecutor = {
     async runCode({ language, code }): Promise<ExecutionResult> {
       try {
         const lang = mapLanguage(language);
@@ -1135,4 +1136,10 @@ export async function getE2BExecutor(
       // compute per bare-API call, not an open-ended meter.
     },
   };
+
+  return traceSandboxExecutor(executor, {
+    sandboxId,
+    ...(template ? { template } : {}),
+    ...(conversationId ? { conversationId } : {}),
+  });
 }

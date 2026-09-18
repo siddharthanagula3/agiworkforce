@@ -1,17 +1,21 @@
 export type EnvironmentSource = Readonly<Record<string, string | undefined>>;
 
+import { DEFAULT_SLOW_SPAN_THRESHOLD_MS } from './trace-sampling';
+
 export interface OtelExportConfig {
   readonly tracesEndpoint: string;
   readonly metricsEndpoint: string;
   readonly serviceName: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly sampleRatio: number | null;
+  readonly slowSpanThresholdMs: number;
 }
 
 export const OTEL_ENDPOINT_ENV = 'AGI_OTEL_EXPORTER_ENDPOINT';
 export const OTEL_SERVICE_NAME_ENV = 'AGI_OTEL_SERVICE_NAME';
 export const OTEL_HEADERS_ENV = 'AGI_OTEL_HEADERS';
 export const OTEL_SAMPLE_RATIO_ENV = 'AGI_OTEL_SAMPLE_RATIO';
+export const OTEL_SLOW_SPAN_MS_ENV = 'AGI_OTEL_SLOW_SPAN_MS';
 
 export const DEFAULT_OTEL_SERVICE_NAME = 'agiworkforce-web';
 
@@ -49,6 +53,21 @@ export function parseOtelSampleRatio(raw: string | undefined): number | null {
   return Math.min(MAX_SAMPLE_RATIO, Math.max(MIN_SAMPLE_RATIO, parsed));
 }
 
+export const RECORD_ALL_TRACES_SAMPLE_RATE = 1;
+
+// The tail processor only sees spans Sentry recorded, so a head sample rate here
+// would drop the errors and the slow tail before that decision is made.
+export function sentryTracesSampleRate(config: OtelExportConfig | null): number | undefined {
+  return config ? RECORD_ALL_TRACES_SAMPLE_RATE : undefined;
+}
+
+export function parseOtelSlowSpanThresholdMs(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return DEFAULT_SLOW_SPAN_THRESHOLD_MS;
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_SLOW_SPAN_THRESHOLD_MS;
+  return parsed;
+}
+
 export function resolveOtelExportConfig(env: EnvironmentSource): OtelExportConfig | null {
   const endpoint = env[OTEL_ENDPOINT_ENV]?.trim();
   if (!endpoint) return null;
@@ -63,5 +82,6 @@ export function resolveOtelExportConfig(env: EnvironmentSource): OtelExportConfi
     serviceName: env[OTEL_SERVICE_NAME_ENV]?.trim() || DEFAULT_OTEL_SERVICE_NAME,
     headers: parseOtelHeaders(env[OTEL_HEADERS_ENV]),
     sampleRatio: parseOtelSampleRatio(env[OTEL_SAMPLE_RATIO_ENV]),
+    slowSpanThresholdMs: parseOtelSlowSpanThresholdMs(env[OTEL_SLOW_SPAN_MS_ENV]),
   };
 }

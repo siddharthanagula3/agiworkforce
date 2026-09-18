@@ -2,6 +2,7 @@ import {
   metrics,
   type Attributes,
   type Counter,
+  type Gauge,
   type Histogram,
   type MeterProvider,
 } from '@opentelemetry/api';
@@ -24,10 +25,23 @@ export const METRIC_NAME = {
   browserTasks: 'agi.browser.tasks',
   notificationDeliveries: 'agi.notification.deliveries',
   failures: 'agi.failures',
+  databaseOperations: 'db.client.operation.count',
+  databaseDuration: 'db.client.operation.duration',
+  queueDepth: 'agi.queue.depth',
+  queueWait: 'agi.queue.wait',
 } as const;
 
 export type FailureKind =
-  'api' | 'browser' | 'connector' | 'mcp' | 'model' | 'notification' | 'remote' | 'tool' | 'worker';
+  | 'api'
+  | 'browser'
+  | 'connector'
+  | 'database'
+  | 'mcp'
+  | 'model'
+  | 'notification'
+  | 'remote'
+  | 'tool'
+  | 'worker';
 
 export type SpanOutcome = 'ok' | 'error';
 
@@ -47,6 +61,10 @@ interface Instruments {
   readonly browserTasks: Counter;
   readonly notificationDeliveries: Counter;
   readonly failures: Counter;
+  readonly databaseOperations: Counter;
+  readonly databaseDuration: Histogram;
+  readonly queueDepth: Gauge;
+  readonly queueWait: Histogram;
 }
 
 let cached: { provider: MeterProvider; instruments: Instruments } | null = null;
@@ -65,6 +83,10 @@ function instruments(): Instruments {
     browserTasks: meter.createCounter(METRIC_NAME.browserTasks),
     notificationDeliveries: meter.createCounter(METRIC_NAME.notificationDeliveries),
     failures: meter.createCounter(METRIC_NAME.failures),
+    databaseOperations: meter.createCounter(METRIC_NAME.databaseOperations),
+    databaseDuration: meter.createHistogram(METRIC_NAME.databaseDuration, { unit: MILLISECONDS }),
+    queueDepth: meter.createGauge(METRIC_NAME.queueDepth),
+    queueWait: meter.createHistogram(METRIC_NAME.queueWait, { unit: MILLISECONDS }),
   };
   cached = { provider, instruments: created };
   return created;
@@ -118,6 +140,52 @@ export function recordFailure(kind: FailureKind, errorType?: string): void {
       [OBSERVABILITY_ATTRIBUTE.failureKind]: kind,
       [OBSERVABILITY_ATTRIBUTE.errorType]: errorType,
     }),
+  );
+}
+
+export type DatabaseOutcome = 'ok' | 'error';
+
+const DATABASE_OPERATION_ATTRIBUTE = 'db.operation.name';
+const DATABASE_OUTCOME_ATTRIBUTE = 'db.operation.outcome';
+
+export function recordDatabaseOperation(input: {
+  operation: string;
+  outcome: DatabaseOutcome;
+  durationMs: number;
+  errorType?: string | undefined;
+}): void {
+  const attributes = clean({
+    [DATABASE_OPERATION_ATTRIBUTE]: input.operation,
+    [DATABASE_OUTCOME_ATTRIBUTE]: input.outcome,
+  });
+  const recorded = instruments();
+  recorded.databaseOperations.add(1, attributes);
+  recorded.databaseDuration.record(nonNegative(input.durationMs), attributes);
+  if (input.outcome === 'error') recordFailure('database', input.errorType);
+}
+
+export type QueueDepthStatus = 'queued' | 'running' | 'dead';
+
+const QUEUE_DEPTH_STATUS_ATTRIBUTE = 'agi.queue.status';
+
+export function recordQueueDepth(input: {
+  queue: string;
+  status: QueueDepthStatus;
+  count: number;
+}): void {
+  instruments().queueDepth.record(
+    nonNegative(input.count),
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.queueName]: input.queue,
+      [QUEUE_DEPTH_STATUS_ATTRIBUTE]: input.status,
+    }),
+  );
+}
+
+export function recordQueueWait(input: { queue: string; waitMs: number }): void {
+  instruments().queueWait.record(
+    nonNegative(input.waitMs),
+    clean({ [OBSERVABILITY_ATTRIBUTE.queueName]: input.queue }),
   );
 }
 

@@ -14,6 +14,8 @@ import {
   recordFailure,
   recordHttpRequest,
   recordNotificationDelivery,
+  recordQueueDepth,
+  recordQueueWait,
   recordSpanMetrics,
   recordToolOutcome,
 } from './metrics';
@@ -179,5 +181,40 @@ describe('notification delivery metrics', () => {
   it('does not count an unconfigured transport as a failed delivery', async () => {
     recordNotificationDelivery({ channel: 'email', outcome: 'not_configured' });
     expect(await points(METRIC_NAME.failures)).toHaveLength(0);
+  });
+});
+
+describe('queue metrics', () => {
+  it('exports depth per queue and status, replacing the last reading', async () => {
+    recordQueueDepth({ queue: 'default', status: 'queued', count: 12 });
+    recordQueueDepth({ queue: 'default', status: 'running', count: 3 });
+    recordQueueDepth({ queue: 'default', status: 'queued', count: 7 });
+
+    const depth = await points(METRIC_NAME.queueDepth);
+    expect(
+      countWhere(depth, {
+        'messaging.destination.name': 'default',
+        'agi.queue.status': 'queued',
+      }),
+    ).toBe(7);
+    expect(
+      countWhere(depth, {
+        'messaging.destination.name': 'default',
+        'agi.queue.status': 'running',
+      }),
+    ).toBe(3);
+  });
+
+  it('records how long a job waited before a worker claimed it', async () => {
+    recordQueueWait({ queue: 'exports', waitMs: 2_500 });
+    const waits = await points(METRIC_NAME.queueWait);
+    expect(waits).toHaveLength(1);
+    expect(waits[0]?.attributes).toMatchObject({ 'messaging.destination.name': 'exports' });
+  });
+
+  it('floors a negative reading rather than exporting it', async () => {
+    recordQueueDepth({ queue: 'dead', status: 'dead', count: -1 });
+    const depth = await points(METRIC_NAME.queueDepth);
+    expect(countWhere(depth, { 'agi.queue.status': 'dead' })).toBe(0);
   });
 });
