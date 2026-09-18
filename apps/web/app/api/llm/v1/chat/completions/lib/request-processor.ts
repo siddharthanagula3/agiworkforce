@@ -120,10 +120,12 @@ import {
   isFreeBillingPlanTier,
   isValidIanaTimeZone,
   resolveMaxOutputTokens,
+  resolvePromptCachePrivacyClass,
 } from '@agiworkforce/types';
 import type {
   ModelCapabilities,
   ProjectFileCitation,
+  PromptCacheScope,
   RoutingSlot,
   ThinkingBlock,
 } from '@agiworkforce/types';
@@ -183,6 +185,7 @@ import type { AuthGateSuccess } from './auth-gate';
 import { resolveAuthenticatedSurface } from './request-surface';
 import { resolveChatWorkload } from '@/lib/billing/usage-attribution';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { readOrganizationRegion } from '@/lib/server/data-region';
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
   ManagedUsageRequestError,
@@ -928,6 +931,13 @@ export type ProcessedRequest = {
     thinking?: { type: string; budget_tokens?: number };
     effort?: string;
     usePromptCache?: boolean;
+    /**
+     * Who this turn belongs to, for the prompt cache. Carried on the request
+     * rather than re-derived per adapter so one turn cannot be scoped two ways,
+     * and so a Temporary Chat or a zero-retention workspace is refused a cache
+     * key at the one place that knows both facts.
+     */
+    promptCacheScope?: PromptCacheScope;
   };
 };
 
@@ -1690,6 +1700,13 @@ export function buildWebCloudAutoRoutingRequest(
    */
   userRoutingPreferences?: UserRoutingPreferences | null,
   rollout?: WebCloudRolloutInputs,
+  /**
+   * The region the workspace has pinned its data to, when it has pinned one
+   * other than the region this deployment already processes in. Admission is
+   * fail-closed against it: every candidate must publish that region, so a
+   * route with no published residency answer is refused rather than assumed.
+   */
+  residencyRegion?: string | null,
 ): AutoRoutingRequest {
   const gatewayFlagHarnessIds = admittedHarnessIds();
   return {
@@ -1730,6 +1747,7 @@ export function buildWebCloudAutoRoutingRequest(
       : {}),
     ...(organizationPolicy ? { organizationPolicy } : {}),
     ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
+    ...(residencyRegion ? { residencyRegion } : {}),
     excludedRouteHosts: EXCLUDED_ROUTE_HOSTS,
     ...(rollout
       ? {
@@ -1746,6 +1764,54 @@ export function buildWebCloudAutoRoutingRequest(
         }
       : {}),
   };
+}
+
+/**
+ * Whether this turn may be prompt-cached, and under whose name.
+ *
+ * The client asks with `use_prompt_cache`; the privacy class decides. A
+ * Temporary Chat promises nothing outlives the turn and a zero-retention
+ * workspace promises the provider keeps nothing, so neither may leave a cached
+ * prefix behind however the caller set the flag. The scope travels with the
+ * turn so every adapter derives one key for it rather than one each.
+ */
+export function resolveTurnPromptCache(input: {
+  requested: boolean | undefined;
+  temporaryChat: boolean;
+  zeroDataRetentionOnly: boolean;
+  organizationId: string | null;
+  userId: string;
+}): { usePromptCache: boolean; promptCacheScope: PromptCacheScope } {
+  const privacyClass = resolvePromptCachePrivacyClass({
+    temporaryChat: input.temporaryChat,
+    zeroDataRetentionOnly: input.zeroDataRetentionOnly,
+  });
+  return {
+    usePromptCache: input.requested === true && privacyClass === 'standard',
+    promptCacheScope: {
+      organizationId: input.organizationId,
+      userId: input.userId,
+      privacyClass,
+    },
+  };
+}
+
+/**
+ * The residency region routing must admit against, or `null` when the workspace
+ * has asked for nothing beyond the region this deployment already processes in.
+ *
+ * A workspace sitting in the deployment's own region is served from it by
+ * construction, and `EXCLUDED_ROUTE_HOSTS` is that region's own answer about
+ * which transports may carry its traffic. A workspace pinned elsewhere is a
+ * promise routing has to keep, so its region is carried into admission, where
+ * it is fail-closed.
+ */
+export function resolveResidencyRegion(
+  workspaceRegion: string | null | undefined,
+  deploymentRegion: string | null,
+): string | null {
+  if (!workspaceRegion) return null;
+  return workspaceRegion === deploymentRegion ? null : workspaceRegion;
 }
 
 export function resolveWebCloudModelRoute(
@@ -1771,6 +1837,7 @@ export function resolveWebCloudModelRoute(
   organizationPolicy?: ModelAccessPolicy | null,
   userRoutingPreferences?: UserRoutingPreferences | null,
   rollout?: WebCloudRolloutInputs,
+  residencyRegion?: string | null,
 ) {
   return resolveAutoRoute(
     buildWebCloudAutoRoutingRequest(
@@ -1786,6 +1853,7 @@ export function resolveWebCloudModelRoute(
       organizationPolicy,
       userRoutingPreferences,
       rollout,
+      residencyRegion,
     ),
   );
 }
@@ -2923,6 +2991,7 @@ export async function processRequest(
     workspaceModelPolicy,
     userRoutingPreferences,
     rolloutInputs,
+    workspaceRegion,
   ] = await timePhase(CHAT_TURN_PHASE.routeSelection, () =>
     Promise.all([
       resolveRouteHealthRuntimeState(routeSelection, routeResolutionNowMs),
@@ -2950,11 +3019,22 @@ export async function processRequest(
           nowMs: routeResolutionNowMs,
         }),
       ),
+      // Deliberately not caught: a residency promise that falls back to "route
+      // it anywhere" when the read fails is not a promise, so a failed read
+      // fails the turn rather than the pin.
+      scopedDbPromise.then((scoped) =>
+        scoped.organizationId ? readOrganizationRegion(scoped.db, scoped.organizationId) : null,
+      ),
     ]),
   );
   const availableProviderIds = listAvailableManagedProviderIds();
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
+  // Only a workspace pinned AWAY from the region this deployment processes in
+  // carries a residency requirement into routing. One sitting in the home
+  // region is already served from it, and `EXCLUDED_ROUTE_HOSTS` is that
+  // region's own answer about which transports may carry its traffic.
+  const residencyRegion = resolveResidencyRegion(workspaceRegion?.effective, rolloutInputs.region);
 
   const { decision: baseRouteDecision, routingRequest: baseRoutingRequest } =
     await resolveWithObservedCapabilities(
@@ -2976,6 +3056,7 @@ export async function processRequest(
         workspaceModelPolicy,
         userRoutingPreferences,
         rolloutInputs,
+        residencyRegion,
       ),
       routeResolutionNowMs,
     );
@@ -3007,6 +3088,7 @@ export async function processRequest(
         workspaceModelPolicy,
         userRoutingPreferences,
         rolloutInputs,
+        residencyRegion,
       )
     : null;
   const freeLaneNowMs = Date.now();
@@ -4095,7 +4177,13 @@ export async function processRequest(
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
-    usePromptCache: chatRequest.use_prompt_cache,
+    ...resolveTurnPromptCache({
+      requested: chatRequest.use_prompt_cache,
+      temporaryChat: conversationIsTemporary,
+      zeroDataRetentionOnly,
+      organizationId: scopedForPolicy.organizationId,
+      userId,
+    }),
   };
 
   const scopedForCompaction = await scopedDbPromise;

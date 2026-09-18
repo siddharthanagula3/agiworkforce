@@ -15,11 +15,17 @@ const compat = detectOpenAICompletionsCompat({
   baseUrl: 'https://api.openai.com/v1',
 }).defaults;
 
+const TENANT: ChatRequest['promptCache'] = {
+  organizationId: 'org_alpha',
+  userId: 'user_alpha',
+};
+
 function reqWithSystem(system: string, userText: string): ChatRequest {
   return {
     model: OPENAI_DEFAULT_MODEL_ID,
     system,
     messages: [{ role: 'user', content: userText }],
+    promptCache: TENANT,
   };
 }
 
@@ -43,6 +49,7 @@ describe('derivePromptCacheKey', () => {
     const req: ChatRequest = {
       model: OPENAI_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'hi' }],
+      promptCache: TENANT,
     };
 
     expect(derivePromptCacheKey(req)).toBeUndefined();
@@ -55,6 +62,7 @@ describe('derivePromptCacheKey', () => {
         { role: 'system', content: 'You are a helpful agent.' },
         { role: 'user', content: 'hi' },
       ],
+      promptCache: TENANT,
     };
 
     expect(derivePromptCacheKey(req)).toBeDefined();
@@ -67,6 +75,125 @@ describe('derivePromptCacheKey', () => {
         { role: 'user', content: 'hi' },
         { role: 'system', content: 'late system text' },
       ],
+      promptCache: TENANT,
+    };
+
+    expect(derivePromptCacheKey(req)).toBeUndefined();
+  });
+});
+
+describe('derivePromptCacheKey tenant scope', () => {
+  function scoped(scope: ChatRequest['promptCache']): ChatRequest {
+    return {
+      model: OPENAI_DEFAULT_MODEL_ID,
+      system: 'You are a helpful agent.',
+      messages: [{ role: 'user', content: 'identical text in both tenants' }],
+      ...(scope ? { promptCache: scope } : {}),
+    };
+  }
+
+  it('never shares a key between two organizations sending the same prompt', () => {
+    const alpha = derivePromptCacheKey(scoped({ organizationId: 'org_alpha' }));
+    const beta = derivePromptCacheKey(scoped({ organizationId: 'org_beta' }));
+
+    expect(alpha).toBeDefined();
+    expect(beta).toBeDefined();
+    expect(alpha).not.toBe(beta);
+  });
+
+  it('never shares a key between two users of one organization', () => {
+    const one = derivePromptCacheKey(scoped({ organizationId: 'org_alpha', userId: 'user_one' }));
+    const two = derivePromptCacheKey(scoped({ organizationId: 'org_alpha', userId: 'user_two' }));
+
+    expect(one).not.toBe(two);
+  });
+
+  it('cannot be forged by an identifier that impersonates the field delimiter', () => {
+    const forged = derivePromptCacheKey(scoped({ organizationId: 'org_alpha|user:10:user_two' }));
+    const real = derivePromptCacheKey(scoped({ organizationId: 'org_alpha', userId: 'user_two' }));
+
+    expect(forged).not.toBe(real);
+  });
+
+  it('emits no key at all when the caller named no tenant', () => {
+    expect(derivePromptCacheKey(scoped(undefined))).toBeUndefined();
+  });
+
+  it('separates workspaces of one organization', () => {
+    const one = derivePromptCacheKey(
+      scoped({ organizationId: 'org_alpha', workspaceId: 'ws_one' }),
+    );
+    const two = derivePromptCacheKey(
+      scoped({ organizationId: 'org_alpha', workspaceId: 'ws_two' }),
+    );
+
+    expect(one).not.toBe(two);
+  });
+
+  it('separates two prompt manifest versions of one tenant', () => {
+    const one = derivePromptCacheKey(scoped({ organizationId: 'org_alpha', promptVersion: '1' }));
+    const two = derivePromptCacheKey(scoped({ organizationId: 'org_alpha', promptVersion: '2' }));
+
+    expect(one).not.toBe(two);
+  });
+
+  it('separates two toolsets of one tenant on the same prompt', () => {
+    const base = scoped({ organizationId: 'org_alpha' });
+    const withTool = derivePromptCacheKey({
+      ...base,
+      tools: [{ name: 'web_search', description: 'search', inputSchema: {} }],
+    });
+    const withOther = derivePromptCacheKey({
+      ...base,
+      tools: [{ name: 'code_exec', description: 'run', inputSchema: {} }],
+    });
+
+    expect(withTool).toBeDefined();
+    expect(withTool).not.toBe(withOther);
+    expect(withTool).not.toBe(derivePromptCacheKey(base));
+  });
+
+  it('is unchanged by the order the same tools arrive in', () => {
+    const base = scoped({ organizationId: 'org_alpha' });
+    const tools = [
+      { name: 'web_search', description: 'search', inputSchema: {} },
+      { name: 'code_exec', description: 'run', inputSchema: {} },
+    ];
+
+    expect(derivePromptCacheKey({ ...base, tools })).toBe(
+      derivePromptCacheKey({ ...base, tools: [...tools].reverse() }),
+    );
+  });
+});
+
+describe('derivePromptCacheKey privacy classes', () => {
+  function classed(privacyClass: 'temporary' | 'zero_retention'): ChatRequest {
+    return {
+      model: OPENAI_DEFAULT_MODEL_ID,
+      system: 'You are a helpful agent.',
+      messages: [{ role: 'user', content: 'hi' }],
+      promptCache: { organizationId: 'org_alpha', userId: 'user_alpha', privacyClass },
+    };
+  }
+
+  it('emits no key for a Temporary Chat', () => {
+    expect(derivePromptCacheKey(classed('temporary'))).toBeUndefined();
+    expect(
+      translateChatRequest(classed('temporary'), { compat, provider: 'openai' }).prompt_cache_key,
+    ).toBeUndefined();
+  });
+
+  it('emits no key for a zero-retention turn', () => {
+    expect(derivePromptCacheKey(classed('zero_retention'))).toBeUndefined();
+  });
+
+  it('emits no key when the route itself carries the zero-retention requirement', () => {
+    const req: ChatRequest = {
+      model: OPENAI_DEFAULT_MODEL_ID,
+      system: 'You are a helpful agent.',
+      messages: [{ role: 'user', content: 'hi' }],
+      promptCache: { organizationId: 'org_alpha' },
+      zeroDataRetentionOnly: true,
     };
 
     expect(derivePromptCacheKey(req)).toBeUndefined();
@@ -92,6 +219,7 @@ describe('translateChatRequest prompt_cache_key', () => {
     const req: ChatRequest = {
       model: OPENAI_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'hi' }],
+      promptCache: TENANT,
     };
     const out = translateChatRequest(req, { compat, provider: 'openai' });
 
@@ -124,6 +252,7 @@ describe('translateChatRequestToResponses prompt_cache_key', () => {
     const req: ChatRequest = {
       model: OPENAI_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'hi' }],
+      promptCache: TENANT,
     };
     const out = translateChatRequestToResponses(req, { compat });
 

@@ -256,6 +256,37 @@ describe('toCanonicalChatRequest', () => {
     expect(chatRequest.model).toBe(UNCHANGED_API_MODEL.id);
   });
 
+  describe('prompt cache scope', () => {
+    it('carries the tenant-scoped cache scope onto the adapter request', () => {
+      const processed = makeProcessed(
+        { messages: [{ role: 'user', content: 'hi' }] },
+        'openrouter',
+      );
+      processed.llmRequest.promptCacheScope = {
+        organizationId: 'org_1',
+        userId: 'user_1',
+        privacyClass: 'standard',
+      };
+
+      const chatRequest = toCanonicalChatRequest(processed);
+
+      expect(chatRequest.promptCache).toEqual({
+        organizationId: 'org_1',
+        userId: 'user_1',
+        privacyClass: 'standard',
+      });
+    });
+
+    it('emits no scope when the processor withheld one', () => {
+      const processed = makeProcessed(
+        { messages: [{ role: 'user', content: 'hi' }] },
+        'openrouter',
+      );
+
+      expect(toCanonicalChatRequest(processed).promptCache).toBeUndefined();
+    });
+  });
+
   describe('zero data retention metadata', () => {
     it('hands the adapter the requirement when the workspace requires zero data retention', () => {
       const processed = {

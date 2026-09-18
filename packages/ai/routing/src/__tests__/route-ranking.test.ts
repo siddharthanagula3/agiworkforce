@@ -366,3 +366,106 @@ describe('ranked route selection over synthetic route economics', () => {
     expect(decision).toMatchObject({ status: 'selected', routeId: DEFAULT_ROUTE_ID });
   });
 });
+
+describe('data residency admission', () => {
+  const EU_REQUEST: AutoRoutingRequest = { ...BYOK_REQUEST, residencyRegion: 'eu' };
+
+  function publishResidency(
+    registry: RoutingRegistryView,
+    modelRegions: readonly string[] | null,
+    transportRegions: readonly string[] | null,
+  ): void {
+    const model = registry.models[SYNTHETIC_MODEL_KEY];
+    if (model) model.residencyRegions = modelRegions;
+    registry.governance = {
+      ...registry.governance,
+      [SYNTHETIC_DEFAULT_PROVIDER]: { residencyRegions: transportRegions },
+      [SYNTHETIC_ALTERNATE_PROVIDER]: { residencyRegions: transportRegions },
+    };
+  }
+
+  it('never ranks a model whose published regions exclude the pinned region', async () => {
+    const decision = await resolveWithRegistry(EU_REQUEST, (registry) => {
+      publishResidency(registry, ['us'], ['us', 'eu']);
+    });
+
+    expect(decision.status).toBe('unavailable');
+  });
+
+  it('never ranks a transport whose published regions exclude the pinned region', async () => {
+    const decision = await resolveWithRegistry(EU_REQUEST, (registry) => {
+      publishResidency(registry, ['us', 'eu'], ['us']);
+    });
+
+    expect(decision.status).toBe('unavailable');
+  });
+
+  it('refuses a route that publishes no residency answer at all', async () => {
+    const decision = await resolveWithRegistry(EU_REQUEST, (registry) => {
+      publishResidency(registry, null, null);
+    });
+
+    expect(decision.status).toBe('unavailable');
+  });
+
+  it('serves a pinned workspace from the routes that publish its region', async () => {
+    const decision = await resolveWithRegistry(EU_REQUEST, (registry) => {
+      publishResidency(registry, ['us', 'eu'], ['us', 'eu']);
+    });
+
+    expect(decision).toMatchObject({ status: 'selected', routeId: DEFAULT_ROUTE_ID });
+  });
+
+  it('leaves a workspace that has pinned nothing exactly where it was', async () => {
+    const decision = await resolveWithRegistry(BYOK_REQUEST, (registry) => {
+      publishResidency(registry, null, null);
+    });
+
+    expect(decision).toMatchObject({ status: 'selected', routeId: DEFAULT_ROUTE_ID });
+  });
+
+  it('keeps admitting an unpublished transport in the deployment home region', async () => {
+    const decision = await resolveWithRegistry({ ...BYOK_REQUEST, region: 'us' }, (registry) => {
+      publishResidency(registry, null, null);
+    });
+
+    expect(decision).toMatchObject({ status: 'selected', routeId: DEFAULT_ROUTE_ID });
+  });
+});
+
+describe('route cache affinity', () => {
+  const PREMIUM_WITHIN_CEILING = 1.2;
+
+  async function resolveWarmRouteAt(cacheClass: string): Promise<AutoRouteDecision> {
+    return resolveWithRegistry(
+      {
+        ...BYOK_REQUEST,
+        estimatedInputTokens: 100_000,
+        preferredRouteId: ALTERNATE_ROUTE_ID,
+      },
+      (registry) => {
+        const route = registry.routes[ALTERNATE_ROUTE_ID];
+        const canonical = registry.routes[DEFAULT_ROUTE_ID];
+        if (!route || !canonical) return;
+        route.cacheClass = cacheClass as typeof route.cacheClass;
+        route.pricing.inputPerMillion =
+          (canonical.pricing.inputPerMillion ?? 1) * PREMIUM_WITHIN_CEILING;
+        route.pricing.outputPerMillion =
+          (canonical.pricing.outputPerMillion ?? 1) * PREMIUM_WITHIN_CEILING;
+        delete route.pricing.cacheReadPerMillion;
+      },
+    );
+  }
+
+  it('pays the premium to stay on a route that keeps a prompt cache', async () => {
+    const decision = await resolveWarmRouteAt('provider_explicit_prompt_cache');
+
+    expect(decision).toMatchObject({ status: 'selected', routeId: ALTERNATE_ROUTE_ID });
+  });
+
+  it('refuses the premium for a warm route the catalog says keeps no cache', async () => {
+    const decision = await resolveWarmRouteAt('no_provider_cache');
+
+    expect(decision).toMatchObject({ status: 'selected', routeId: DEFAULT_ROUTE_ID });
+  });
+});
