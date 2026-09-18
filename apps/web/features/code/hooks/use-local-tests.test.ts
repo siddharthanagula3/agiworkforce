@@ -101,3 +101,53 @@ describe('useLocalTests', () => {
     expect(result.current.message).toBeNull();
   });
 });
+
+describe('the validation summary a claim must be backed by', () => {
+  it('records a pass only with exit 0, and leaves the checks nobody ran out', async () => {
+    startLocalCommand.mockReturnValue({ runId: 'run-1', result: Promise.resolve(finished({})) });
+    const { result } = renderHook(() => useLocalTests('root-1'));
+
+    await act(() => result.current.run());
+
+    expect(result.current.summary.checks).toEqual([
+      { kind: 'tests', command: 'pnpm test', exitCode: 0, outcome: 'passed' },
+    ]);
+    expect(result.current.summary.commandsFailed).toBe(0);
+  });
+
+  it('records a nonzero exit as failed, never as a pass', async () => {
+    startLocalCommand.mockReturnValue({
+      runId: 'run-1',
+      result: Promise.resolve(finished({ exitCode: 1, stdout: '2 failed\n' })),
+    });
+    const { result } = renderHook(() => useLocalTests('root-1'));
+
+    await act(() => result.current.run());
+
+    expect(result.current.summary.checks[0]).toMatchObject({ outcome: 'failed', exitCode: 1 });
+    expect(result.current.summary.commandsFailed).toBe(1);
+  });
+
+  it('calls a timed-out run unknown, because it proved nothing either way', async () => {
+    startLocalCommand.mockReturnValue({
+      runId: 'run-1',
+      result: Promise.resolve(finished({ timedOut: true })),
+    });
+    const { result } = renderHook(() => useLocalTests('root-1'));
+
+    await act(() => result.current.run());
+
+    expect(result.current.summary.checks[0]).toMatchObject({ outcome: 'unknown' });
+  });
+
+  it('claims nothing when no test command exists here', async () => {
+    listWorkspaceFiles.mockResolvedValue([entry('README.md')]);
+    readWorkspaceText.mockResolvedValue({ text: '' });
+    const { result } = renderHook(() => useLocalTests('root-1'));
+
+    await act(() => result.current.run());
+
+    expect(result.current.status).toBe('unavailable');
+    expect(result.current.summary.checks).toEqual([]);
+  });
+});

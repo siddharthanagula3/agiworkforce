@@ -698,6 +698,8 @@ export interface CreateGitHubPullRequestInput {
   body: string;
   head: string;
   base: string;
+  /** Opens the pull request as a draft, so nothing requests review yet. */
+  draft?: boolean;
 }
 
 export async function getGitHubRepositoryDefaultBranch(
@@ -789,6 +791,7 @@ export async function createGitHubPullRequest(
         body: input.body,
         head: input.head,
         base: input.base,
+        draft: input.draft === true,
       }),
       signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
@@ -802,6 +805,264 @@ export async function createGitHubPullRequest(
     throw new Error('GitHub pull request response was invalid');
   }
   return { number: parsed.data.number, url: parsed.data.html_url };
+}
+
+const GITHUB_UNAUTHORIZED_STATUSES = new Set([401, 403]);
+
+/**
+ * GitHub refused the credential itself. The installation's permissions can be
+ * narrowed or revoked at any time by someone who is not the AGI user, so this
+ * is separated from every other failure: it is the one the reader fixes by
+ * reauthorizing rather than by retrying.
+ */
+export class GitHubAuthorizationRevokedError extends Error {
+  constructor(
+    readonly status: number,
+    readonly installUrl: string | null,
+  ) {
+    super(
+      'GitHub refused this connection. Reauthorize the AGI Workforce GitHub App to restore access.',
+    );
+    this.name = 'GitHubAuthorizationRevokedError';
+  }
+}
+
+function assertGitHubResponseAuthorized(status: number): void {
+  if (!GITHUB_UNAUTHORIZED_STATUSES.has(status)) return;
+  throw new GitHubAuthorizationRevokedError(status, getGitHubAppInstallUrl());
+}
+
+function githubNumberSegment(value: number, label: string): string {
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`Invalid ${label}`);
+  return String(value);
+}
+
+const gitHubPullRequestStatusSchema = z.object({
+  number: z.number().int().positive(),
+  state: z.enum(['open', 'closed']),
+  draft: z.boolean().optional(),
+  merged: z.boolean().optional(),
+  mergeable: z.boolean().nullish(),
+  mergeable_state: z.string().nullish(),
+  head: z.object({ sha: z.string().min(1).max(64) }),
+  body: z.string().nullish(),
+});
+
+const gitHubReviewsSchema = z.array(
+  z.object({ state: z.string().min(1).max(64), submitted_at: z.string().nullish() }),
+);
+
+const gitHubCheckRunsSchema = z.object({
+  check_runs: z.array(
+    z.object({
+      name: z.string().min(1).max(255),
+      status: z.string().min(1).max(32),
+      conclusion: z.string().nullish(),
+    }),
+  ),
+});
+
+export type GitHubChecksState = 'passing' | 'failing' | 'pending' | 'none';
+export type GitHubReviewState = 'approved' | 'changes_requested' | 'commented' | 'none';
+
+export interface GitHubPullRequestStatus {
+  number: number;
+  state: 'open' | 'closed';
+  draft: boolean;
+  merged: boolean;
+  mergeableState: string | null;
+  headSha: string;
+  reviewState: GitHubReviewState;
+  checksState: GitHubChecksState;
+  failedChecks: string[];
+  linkedIssues: string[];
+}
+
+const REVIEW_STATE_RANK: Readonly<Record<string, number>> = Object.freeze({
+  CHANGES_REQUESTED: 3,
+  APPROVED: 2,
+  COMMENTED: 1,
+});
+
+const LINKED_ISSUE_RE =
+  /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?:([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+))?#(\d{1,7})\b/gi;
+
+/** The issues a pull request body says it closes, as GitHub itself reads them. */
+export function parseLinkedIssues(body: string): string[] {
+  const found: string[] = [];
+  for (const match of body.matchAll(LINKED_ISSUE_RE)) {
+    const reference = `${match[1] ?? ''}#${match[2]}`;
+    if (!found.includes(reference)) found.push(reference);
+  }
+  return found;
+}
+
+async function readGitHubJson(token: string, path: string, label: string): Promise<unknown> {
+  const response = await fetch(buildGitHubApiUrl(path), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': GITHUB_API_VERSION,
+    },
+    signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    assertGitHubResponseAuthorized(response.status);
+    throw new Error(`Failed to ${label}: ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Everything a reader needs to say where a pull request stands: whether it is a
+ * draft, what reviewers decided, whether CI is green, and whether it merged.
+ */
+export async function getGitHubPullRequestStatus(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<GitHubPullRequestStatus> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  const number = githubNumberSegment(prNumber, 'pull request number');
+  const parsed = gitHubPullRequestStatusSchema.safeParse(
+    await readGitHubJson(token, `${base}/pulls/${number}`, 'read the pull request'),
+  );
+  if (!parsed.success) throw new Error('GitHub pull request response was invalid');
+
+  const reviews = gitHubReviewsSchema.safeParse(
+    await readGitHubJson(
+      token,
+      `${base}/pulls/${number}/reviews?per_page=100`,
+      'list pull request reviews',
+    ),
+  );
+  let reviewRank = 0;
+  let reviewState: GitHubReviewState = 'none';
+  for (const review of reviews.success ? reviews.data : []) {
+    const rank = REVIEW_STATE_RANK[review.state.toUpperCase()] ?? 0;
+    if (rank <= reviewRank) continue;
+    reviewRank = rank;
+    reviewState = review.state.toLowerCase() as GitHubReviewState;
+  }
+
+  const checks = gitHubCheckRunsSchema.safeParse(
+    await readGitHubJson(
+      token,
+      `${base}/commits/${encodeURIComponent(parsed.data.head.sha)}/check-runs?per_page=100`,
+      'list check runs',
+    ),
+  );
+  const runs = checks.success ? checks.data.check_runs : [];
+  const failedChecks = runs
+    .filter((run) => run.conclusion !== null && run.conclusion !== undefined)
+    .filter((run) => !['success', 'neutral', 'skipped'].includes(run.conclusion ?? ''))
+    .map((run) => run.name);
+  const pending = runs.some((run) => run.status !== 'completed');
+  const checksState: GitHubChecksState =
+    runs.length === 0
+      ? 'none'
+      : failedChecks.length > 0
+        ? 'failing'
+        : pending
+          ? 'pending'
+          : 'passing';
+
+  return {
+    number: parsed.data.number,
+    state: parsed.data.state,
+    draft: parsed.data.draft === true,
+    merged: parsed.data.merged === true,
+    mergeableState: parsed.data.mergeable_state ?? null,
+    headSha: parsed.data.head.sha,
+    reviewState,
+    checksState,
+    failedChecks,
+    linkedIssues: parseLinkedIssues(parsed.data.body ?? ''),
+  };
+}
+
+const MAX_GITHUB_ISSUE_BODY_LENGTH = 20_000;
+const GITHUB_ISSUES_PER_PAGE_MAX = 100;
+
+const gitHubIssueSchema = z.object({
+  number: z.number().int().positive(),
+  title: z.string().max(1024),
+  body: z.string().nullish(),
+  state: z.enum(['open', 'closed']),
+  html_url: z.string().url(),
+  labels: z.array(z.union([z.string(), z.object({ name: z.string() })])).default([]),
+  pull_request: z.unknown().optional(),
+});
+
+export interface GitHubIssue {
+  number: number;
+  title: string;
+  body: string;
+  state: 'open' | 'closed';
+  url: string;
+  labels: string[];
+}
+
+function toGitHubIssue(raw: z.infer<typeof gitHubIssueSchema>): GitHubIssue {
+  return {
+    number: raw.number,
+    title: raw.title,
+    body: (raw.body ?? '').slice(0, MAX_GITHUB_ISSUE_BODY_LENGTH),
+    state: raw.state,
+    url: raw.html_url,
+    labels: raw.labels.map((label) => (typeof label === 'string' ? label : label.name)),
+  };
+}
+
+/**
+ * Open issues on a repository. `/issues` also answers with pull requests, which
+ * carry a `pull_request` key; they are dropped so a caller asking for issues
+ * never gets a pull request wearing an issue's shape.
+ */
+export async function listGitHubIssues(
+  token: string,
+  owner: string,
+  repo: string,
+  options: { state?: 'open' | 'closed' | 'all'; perPage?: number; labels?: string } = {},
+): Promise<GitHubIssue[]> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const perPage = Math.min(Math.max(options.perPage ?? 30, 1), GITHUB_ISSUES_PER_PAGE_MAX);
+  const query = new URLSearchParams({ state: options.state ?? 'open', per_page: String(perPage) });
+  if (options.labels) query.set('labels', options.labels);
+  const parsed = z
+    .array(gitHubIssueSchema)
+    .safeParse(
+      await readGitHubJson(
+        token,
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues?${query.toString()}`,
+        'list issues',
+      ),
+    );
+  if (!parsed.success) throw new Error('GitHub issue listing response was invalid');
+  return parsed.data.filter((raw) => raw.pull_request === undefined).map(toGitHubIssue);
+}
+
+export async function getGitHubIssue(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+): Promise<GitHubIssue> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const parsed = gitHubIssueSchema.safeParse(
+    await readGitHubJson(
+      token,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${githubNumberSegment(issueNumber, 'issue number')}`,
+      'read the issue',
+    ),
+  );
+  if (!parsed.success) throw new Error('GitHub issue response was invalid');
+  return toGitHubIssue(parsed.data);
 }
 
 export async function getPrDiff(
@@ -825,7 +1086,10 @@ export async function getPrDiff(
     },
   );
 
-  if (!res.ok) throw new Error(`Failed to fetch PR diff: ${res.status}`);
+  if (!res.ok) {
+    assertGitHubResponseAuthorized(res.status);
+    throw new Error(`Failed to fetch PR diff: ${res.status}`);
+  }
 
   let diff = await res.text();
   // The reviewer chunks what it gets, so this is a memory bound rather than a
@@ -884,7 +1148,10 @@ export async function postPrReview(
       }),
     },
   );
-  if (!res.ok) throw new Error(`Failed to post PR review: ${res.status}`);
+  if (!res.ok) {
+    assertGitHubResponseAuthorized(res.status);
+    throw new Error(`Failed to post PR review: ${res.status}`);
+  }
 }
 
 const REVIEW_COMMENT_PAGE_SIZE = 100;
@@ -954,7 +1221,10 @@ export async function postIssueComment(
       body: JSON.stringify({ body }),
     },
   );
-  if (!res.ok) throw new Error(`Failed to post comment: ${res.status}`);
+  if (!res.ok) {
+    assertGitHubResponseAuthorized(res.status);
+    throw new Error(`Failed to post comment: ${res.status}`);
+  }
 }
 
 export function generateGitHubInstallState(): string {

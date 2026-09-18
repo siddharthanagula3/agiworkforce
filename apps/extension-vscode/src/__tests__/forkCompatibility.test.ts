@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { activate } from '../extension';
@@ -167,5 +168,124 @@ describe('Code-OSS fork compatibility', () => {
       provider.resolveWebviewView(view, {} as vscode.WebviewViewResolveContext, {} as never),
     ).not.toThrow();
     expect((view as { badge?: unknown }).badge).toBeUndefined();
+  });
+});
+
+/**
+ * The forks people actually run this in. Each entry states the API surface
+ * that fork gives an extension, so a regression shows up as the named fork
+ * breaking rather than as a generic "Code-OSS" test going red.
+ */
+const FORKS = [
+  {
+    // Cursor ships the chat contribution point but refuses a third-party
+    // participant, so registration throws rather than being absent.
+    name: 'Cursor',
+    appName: 'Cursor',
+    chat: () => ({
+      createChatParticipant: vi.fn(() => {
+        throw new Error('Chat participants are reserved for the host in this product');
+      }),
+    }),
+  },
+  {
+    name: 'Windsurf',
+    appName: 'Windsurf',
+    chat: () => ({ createChatParticipant: undefined }),
+  },
+  {
+    // VSCodium is Code-OSS: the Chat API ships with the proprietary build only.
+    name: 'VSCodium',
+    appName: 'VSCodium',
+    chat: () => undefined,
+  },
+] as const;
+
+// The namespace itself, not one of its members: a fork that ships no Chat API
+// has no `vscode.chat` at all, and the module binding cannot be assigned.
+function defineChatNamespace(value: unknown): void {
+  Object.defineProperty(vscode as unknown as Record<string, unknown>, 'chat', {
+    configurable: true,
+    value,
+  });
+}
+
+const PROPRIETARY_COMMANDS = [
+  'workbench.action.chat.open',
+  'workbench.panel.chat.view.copilot.focus',
+  'github.copilot.chat.explain',
+  'cursor.chat.open',
+  'windsurf.cascade.open',
+];
+
+describe.each(FORKS)('$name', (fork) => {
+  let handlers: Map<string, (...args: unknown[]) => unknown>;
+  let originalChat: typeof vscode.chat;
+  let originalAppName: unknown;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    handlers = new Map();
+    originalChat = vscode.chat;
+    originalAppName = (vscode.env as Record<string, unknown>)['appName'];
+    defineChatNamespace(fork.chat());
+    Object.defineProperty(vscode.env, 'appName', { configurable: true, value: fork.appName });
+    vi.mocked(vscode.commands.registerCommand).mockImplementation((id, handler) => {
+      handlers.set(id, handler);
+      return new vscode.Disposable(() => undefined);
+    });
+    vi.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+  });
+
+  afterEach(() => {
+    defineChatNamespace(originalChat);
+    Object.defineProperty(vscode.env, 'appName', {
+      configurable: true,
+      value: originalAppName,
+    });
+    __resetSubsystemHealthForTests();
+    vi.restoreAllMocks();
+  });
+
+  it(`activates on ${fork.name} and keeps Chat on the first-party sidebar`, async () => {
+    expect(() => activate(context())).not.toThrow();
+    expect(registerChatParticipant(context())).toBeUndefined();
+
+    await handlers.get('agi-workforce.chat')?.();
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.sidebar.focus');
+    const invoked = vi.mocked(vscode.commands.executeCommand).mock.calls.map(([id]) => id);
+    for (const proprietary of PROPRIETARY_COMMANDS) {
+      expect(invoked).not.toContain(proprietary);
+    }
+  });
+
+  it(`registers its own commands on ${fork.name} rather than relying on the Chat contribution`, () => {
+    activate(context());
+
+    expect(handlers.has('agi-workforce.chat')).toBe(true);
+    expect(handlers.has('agi-workforce.pullCloudTaskIntoWorkspace')).toBe(true);
+  });
+});
+
+describe('the manifest never makes a fork depend on the Chat API', () => {
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+  ) as {
+    activationEvents: string[];
+    contributes: { commands: Array<{ command: string }>; chatParticipants: unknown };
+  };
+
+  it('activates on startup, so a host that ignores chatParticipants still loads it', () => {
+    expect(manifest.activationEvents).toContain('onStartupFinished');
+  });
+
+  it('offers every Chat entry point as a plain command too', () => {
+    const commands = manifest.contributes.commands.map((entry) => entry.command);
+    expect(commands).toContain('agi-workforce.chat');
+    expect(commands).toContain('agi-workforce.pullCloudTaskIntoWorkspace');
   });
 });
