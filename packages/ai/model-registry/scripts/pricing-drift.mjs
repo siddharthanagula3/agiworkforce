@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 /* global fetch, AbortSignal */
 
-// Cross-checks compiled registry pricing and limits against BerriAI/litellm's
-// model_prices_and_context_window.json, fetched at runtime and never vendored.
+// Cross-checks compiled registry pricing, limits and declared capabilities
+// against BerriAI/litellm's model_prices_and_context_window.json, fetched at
+// runtime and never vendored.
+//
+// Capability rows are the behaviour half: a provider that turns off tool
+// calling, structured output or prompt caching under an id that did not change
+// moves the product without moving this repository, and a price comparison
+// cannot see it. Measured behaviour drift is a separate check, `pnpm evals
+// compare` between two measured runs of the same route.
 //
 // litellm is a third-party community snapshot, not an authority. Neither side is
 // presumed right. Every row printed here is an instruction to open the provider's
@@ -33,6 +40,19 @@ const LOG = '[pricing-drift]';
 
 const PRICING = 'pricing';
 const LIMITS = 'limits';
+const CAPABILITIES = 'capabilities';
+
+const CAPABILITY_MAP = [
+  { ours: 'functionCalling', theirs: 'supports_function_calling' },
+  { ours: 'structuredOutput', theirs: 'supports_response_schema' },
+  { ours: 'imageInput', theirs: 'supports_vision' },
+  { ours: 'audioInput', theirs: 'supports_audio_input' },
+  { ours: 'audioOutput', theirs: 'supports_audio_output' },
+  { ours: 'reasoning', theirs: 'supports_reasoning' },
+  { ours: 'promptCaching', theirs: 'supports_prompt_caching' },
+  { ours: 'webSearch', theirs: 'supports_web_search' },
+  { ours: 'computerUse', theirs: 'supports_computer_use' },
+];
 
 const FIELD_MAP = [
   {
@@ -230,6 +250,29 @@ function compareField(field, entry, ourPricing, ourLimits, threshold, isPinned) 
   };
 }
 
+/**
+ * A capability we declare and they declare differently. Only a disagreement
+ * between two stated booleans is a row: silence on either side is a coverage
+ * gap, not a contradiction, and our `null` means "not established".
+ */
+function compareCapabilities(entry, ours) {
+  const findings = [];
+  for (const capability of CAPABILITY_MAP) {
+    const mine = ours[capability.ours];
+    const theirs = entry[capability.theirs];
+    if (typeof mine !== 'boolean' || typeof theirs !== 'boolean' || mine === theirs) continue;
+    findings.push({
+      field: capability.ours,
+      kind: 'capability-drift',
+      group: CAPABILITIES,
+      ours: mine,
+      theirs,
+      theirsField: capability.theirs,
+    });
+  }
+  return findings;
+}
+
 function compare(registry, upstream, threshold, curation) {
   const index = indexUpstream(upstream);
   const matched = [];
@@ -267,6 +310,7 @@ function compare(registry, upstream, threshold, curation) {
       const finding = compareField(field, hit.entry, ourPricing, ourLimits, threshold, isPinned);
       if (finding) findings.push(finding);
     }
+    findings.push(...compareCapabilities(hit.entry, registry.capabilities?.[key] ?? {}));
 
     matched.push({ key, upstreamKey: hit.key, findings, note: curation.notes.get(key) });
   }
@@ -297,6 +341,22 @@ function reportDrift(rows) {
           ` (${percent(finding.drift)})${via}`,
       );
     }
+  }
+  console.log('');
+}
+
+function reportCapabilities(rows) {
+  console.log(`CAPABILITY DISAGREEMENT (${rows.length} model(s))`);
+  console.log(
+    '  A capability we claim and the upstream snapshot denies, or the reverse.\n' +
+      "  Check the provider's own model page: a capability withdrawn under an\n" +
+      '  unchanged model id is a behaviour change nothing else here would catch.',
+  );
+  for (const row of rows) {
+    const fields = row.findings
+      .filter((finding) => finding.kind === 'capability-drift')
+      .map((finding) => `${finding.field} ours ${finding.ours} vs upstream ${finding.theirs}`);
+    console.log(`  ${row.key}: ${fields.join('; ')}`);
   }
   console.log('');
 }
@@ -344,6 +404,7 @@ function report(registry, upstream, threshold, result) {
   const { matched, unmatched } = result;
   const withKind = (kind) => matched.filter((row) => row.findings.some((f) => f.kind === kind));
   const drifted = withKind('drift');
+  const capabilityDrift = withKind('capability-drift');
   const pinned = withKind('policy-pinned');
   const skipped = matched.filter((row) => row.skipped);
   const gaps = matched.filter((row) =>
@@ -358,17 +419,18 @@ function report(registry, upstream, threshold, result) {
   console.log('');
 
   if (drifted.length) reportDrift(drifted);
+  if (capabilityDrift.length) reportCapabilities(capabilityDrift);
   if (pinned.length) reportPinned(pinned);
   if (skipped.length) reportSkipped(skipped);
   if (gaps.length) reportGaps(gaps);
   if (unmatched.length) reportUnmatched(unmatched);
 
   console.log(
-    drifted.length
-      ? `${LOG} ${drifted.length} model(s) to verify against provider pricing pages.`
-      : `${LOG} ✓ nothing above ${percent(threshold)} outside policy-pinned routes.`,
+    drifted.length || capabilityDrift.length
+      ? `${LOG} ${drifted.length} model(s) to verify against provider pricing pages, ${capabilityDrift.length} against provider capability pages.`
+      : `${LOG} ✓ nothing above ${percent(threshold)} outside policy-pinned routes, and no capability disagreement.`,
   );
-  return drifted.length;
+  return drifted.length + capabilityDrift.length;
 }
 
 async function main() {

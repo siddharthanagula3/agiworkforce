@@ -447,4 +447,41 @@ export type NormalizedModelCapabilities = Readonly<
   Record<ModelCapabilityName, ModelCapabilityValue>
 >;
 
+export interface RetiredModelRecord {
+  id: string;
+  metadataPreserved: boolean;
+  displayName?: string;
+  provider?: string;
+  developer?: string;
+  modelType?: string;
+  contextWindow?: number | null;
+  capabilities?: Readonly<Record<string, boolean>>;
+  released?: string | null;
+  retiredOn?: string;
+  replacedBy?: string | null;
+  metadataSource?: string;
+}
+
+const retiredModelRecords = registry.retiredModels as unknown as Readonly<
+  Record<string, RetiredModelRecord>
+>;
+
+/**
+ * What a retired model was, for rows that still name it.
+ * A retired model is gone from the live catalog on purpose, so a conversation
+ * that used one has only the id left on the row. This is the only place its name and
+ * capabilities survive.
+ */
+export function getRetiredModelRecord(modelKey: string): RetiredModelRecord | null {
+  return retiredModelRecords[modelKey] ?? null;
+}
+
+export function isRetiredModelKey(modelKey: string): boolean {
+  return retiredModelRecords[modelKey] !== undefined;
+}
+
+export function listRetiredModels(): readonly RetiredModelRecord[] {
+  return Object.values(retiredModelRecords);
+}
+
 export default registry;

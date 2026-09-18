@@ -57,7 +57,62 @@ function exceeds(candidate, baseline, ratio) {
  * each is gated on its own floor, and a corpus that declares 1.0 stays at 1.0.
  */
 export function scoreFloor(base, tolerance) {
-  return Math.max(base.score - tolerance.scoreDrop, base.threshold ?? 0);
+  return Math.max(base.score - scoreDropFor(base, tolerance), base.threshold ?? 0);
+}
+
+/**
+ * A P0 corpus is the set of rows a release may not regress on at all, so the
+ * score tolerance that absorbs noise on a capability corpus does not apply to
+ * it. Corpora recorded before priorities existed carry none and keep the
+ * default tolerance.
+ */
+export function scoreDropFor(base, tolerance) {
+  return base.priority === 'P0' ? 0 : tolerance.scoreDrop;
+}
+
+/**
+ * Slice floors, because an aggregate is an average.
+ *
+ * A suite can hold its headline score while one cut of it collapses: the rows
+ * of one family go from passing to failing and an equal number elsewhere go the
+ * other way. Every slice the baseline measured is held to its own floor, so the
+ * regression surfaces on the slice that moved rather than being averaged away.
+ */
+function sliceFindings(suite, base, run, tolerance) {
+  if (!base.slices) return [];
+  if (!run.slices) {
+    return [
+      finding(
+        suite,
+        'slices',
+        false,
+        'baseline carries per-slice scores, candidate run does not; re-record the candidate',
+      ),
+    ];
+  }
+  const drop = scoreDropFor(base, tolerance);
+  const findings = [];
+  for (const [axis, buckets] of Object.entries(base.slices)) {
+    for (const [name, baseSlice] of Object.entries(buckets)) {
+      const runSlice = run.slices[axis]?.[name];
+      if (!runSlice) {
+        findings.push(
+          finding(suite, `slice ${axis}=${name}`, false, 'candidate run has no such slice'),
+        );
+        continue;
+      }
+      const floor = Math.max(baseSlice.score - drop, 0);
+      findings.push(
+        finding(
+          suite,
+          `slice ${axis}=${name}`,
+          runSlice.score >= floor,
+          `score ${runSlice.score.toFixed(3)} vs baseline ${baseSlice.score.toFixed(3)} over ${runSlice.total} rows (floor ${floor.toFixed(3)})`,
+        ),
+      );
+    }
+  }
+  return findings;
 }
 
 export function compareToBaseline(baseline, candidate, tolerance) {
@@ -97,9 +152,28 @@ export function compareToBaseline(baseline, candidate, tolerance) {
         suite,
         'score',
         run.score >= floor,
-        `score ${run.score.toFixed(3)} vs baseline ${base.score.toFixed(3)} (floor ${floor.toFixed(3)}, corpus threshold ${(base.threshold ?? 0).toFixed(3)})`,
+        `score ${run.score.toFixed(3)} vs baseline ${base.score.toFixed(3)} (floor ${floor.toFixed(3)}, corpus threshold ${(base.threshold ?? 0).toFixed(3)}${base.priority ? `, ${base.priority}` : ''})`,
       ),
     );
+    findings.push(...sliceFindings(suite, base, run, tolerance));
+    if (typeof base.completeness === 'number') {
+      const completeness = run.completeness;
+      findings.push(
+        typeof completeness !== 'number'
+          ? finding(
+              suite,
+              'completeness',
+              false,
+              'baseline measured completeness, candidate run did not',
+            )
+          : finding(
+              suite,
+              'completeness',
+              completeness >= base.completeness - tolerance.completenessDrop,
+              `completeness ${completeness.toFixed(3)} vs baseline ${base.completeness.toFixed(3)} (tolerance -${tolerance.completenessDrop})`,
+            ),
+      );
+    }
     if (base.cost?.meanUsd !== null && base.cost?.meanUsd !== undefined) {
       const mean = run.cost?.meanUsd;
       findings.push(
@@ -128,6 +202,30 @@ export function compareToBaseline(baseline, candidate, tolerance) {
     }
   }
   return findings;
+}
+
+/**
+ * Compare any two measured runs against each other.
+ *
+ * The promotion gate answers one question, "may this model take that slot".
+ * The same comparison answers two more: whether a route change moved behaviour
+ * (measure the new route, compare against the old route's run) and whether a
+ * provider moved under a route that did not change (re-measure the same route
+ * and compare against its own last run). Pricing drift is checked separately
+ * against a third-party snapshot; this is the behaviour half.
+ */
+export function compareRuns({ baseline, candidate, policy = readGatePolicy(), label = 'run' }) {
+  const refusals = [
+    ...liveProblems(`${label} baseline`, baseline),
+    ...liveProblems(`${label} candidate`, candidate),
+  ];
+  const findings =
+    refusals.length > 0 ? [] : compareToBaseline(baseline, candidate, policy.tolerance);
+  return {
+    passed: refusals.length === 0 && findings.every((entry) => entry.passed),
+    refusals,
+    findings,
+  };
 }
 
 function liveProblems(label, report) {

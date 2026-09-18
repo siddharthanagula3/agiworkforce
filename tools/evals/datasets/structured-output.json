@@ -1,6 +1,12 @@
 {
   "suite": "structured-output",
   "version": 1,
+  "priority": "P1",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository, each row carrying the JSON Schema its answer must validate against",
+    "authoredOn": "2026-09-17"
+  },
   "passThreshold": 1,
   "cases": [
     {

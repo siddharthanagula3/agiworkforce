@@ -3,6 +3,7 @@ import {
   AGENT_EVENT_SCHEMA_VERSION,
   AgentEventEnvelopeSchema,
 } from '@agiworkforce/cloud-contracts';
+import { agentEventId } from '@/lib/streaming/agent-event-id';
 import { longestTrailingTagPrefix } from '@/lib/streaming/trailing-tag-prefix';
 
 type AgentEventJson = Extract<AgentEvent, { type: 'tool-execution-start' }>['input'];
@@ -15,10 +16,19 @@ export interface AgentEventStreamEmitterOptions {
   now?: () => number;
 }
 
+export interface EmittedAgentEvent {
+  envelope: AgentEventEnvelope;
+  /** Stable identity of this event, for a client that may see it twice. */
+  eventId: string;
+  sse: string;
+}
+
 export interface AgentEventStreamEmitter {
   emit(event: AgentEvent): string;
-  emitWithEnvelope(event: AgentEvent): { envelope: AgentEventEnvelope; sse: string };
+  emitWithEnvelope(event: AgentEvent): EmittedAgentEvent;
   nextSequence(): number;
+  /** The identity of the last event emitted, or null before the first. */
+  lastEventId(): string | null;
 }
 
 export interface PublicTextDeltaProjector {
@@ -97,9 +107,10 @@ export function createAgentEventStreamEmitter(
   options: AgentEventStreamEmitterOptions,
 ): AgentEventStreamEmitter {
   let sequence = Math.max(0, Math.trunc(options.initialSequence ?? 0));
+  let lastId: string | null = null;
   const now = options.now ?? Date.now;
 
-  const emitWithEnvelope = (event: AgentEvent): { envelope: AgentEventEnvelope; sse: string } => {
+  const emitWithEnvelope = (event: AgentEvent): EmittedAgentEvent => {
     const envelope: AgentEventEnvelope = AgentEventEnvelopeSchema.parse({
       schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
       sessionId: options.sessionId,
@@ -109,9 +120,11 @@ export function createAgentEventStreamEmitter(
       event,
     });
     sequence += 1;
+    lastId = agentEventId(envelope);
 
     return {
       envelope,
+      eventId: lastId,
       sse: `data: ${JSON.stringify({
         choices: [{ delta: { x_agent_event: envelope }, index: 0 }],
         model: options.responseModel,
@@ -126,6 +139,9 @@ export function createAgentEventStreamEmitter(
     emitWithEnvelope,
     nextSequence() {
       return sequence;
+    },
+    lastEventId() {
+      return lastId;
     },
   };
 }

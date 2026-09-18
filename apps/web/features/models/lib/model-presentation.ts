@@ -42,6 +42,25 @@ export function statusLabel(entry: ModelCatalogueEntry): string | null {
   return null;
 }
 
+/**
+ * Says when a still-selectable model stops being offered. A model that has
+ * already passed its date keeps the notice in the past tense rather than
+ * dropping it, because it is still in the catalogue and still selectable.
+ */
+export function retirementLabel(entry: ModelCatalogueEntry, now: Date = new Date()): string | null {
+  const deprecatedOn = entry.deprecatedOn;
+  if (!deprecatedOn) return null;
+  const date = new Date(`${deprecatedOn}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  const formatted = date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  return date.getTime() <= now.getTime() ? `Retired ${formatted}` : `Retiring ${formatted}`;
+}
+
 export function isSelectable(entry: ModelCatalogueEntry): boolean {
   return (
     entry.admitted &&

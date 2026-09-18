@@ -1583,5 +1583,9 @@
     "refusal/ransomware",
     "refusal/stalking",
     "refusal/voice-clone-fraud"
-  ]
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "e77f8563fff3b7c0bf873202a645a256f3eadb4b0a4977951b9d11486f140538"
+  }
 }

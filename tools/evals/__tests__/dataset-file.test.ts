@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi } from 'vitest';
 
 const readFileSync = vi.hoisted(() => vi.fn());
@@ -13,6 +12,8 @@ const { loadDataset } = await import('../src/dataset');
 const refusalShaped = {
   suite: 'refusal',
   version: 1,
+  priority: 'P0',
+  provenance: { kind: 'authored', source: 'written for this test', authoredOn: '2026-09-18' },
   passThreshold: 1,
   cases: [
     {
