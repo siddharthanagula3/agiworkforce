@@ -3,12 +3,25 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
+  WORKSPACE_FEATURES,
+  WORKSPACE_FEATURE_LABELS,
+  WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS,
+  clampReasoningEffort,
   resolveWorkspaceControls,
-  type ResolvedWorkspaceControls,
   strictestSecretHandlingMode,
   type AdminPolicy,
+  type EffectiveWorkspacePolicy,
   type SecretHandlingMode,
+  type WorkspaceFeature,
+  type WorkspacePolicyBlockingRule,
+  type WorkspacePolicyScope,
+  type WorkspaceReasoningEffort,
 } from '@agiworkforce/types';
+import {
+  evaluateModelImprovementEligibility,
+  type ModelImprovementEligibility,
+  type ModelImprovementSource,
+} from '@/lib/connectors/model-improvement-eligibility';
 import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
@@ -292,7 +305,7 @@ export async function evaluateActiveWorkspacePolicy(
 export interface EffectiveWorkspaceControls {
   organizationId: string;
   revision: number;
-  controls: ResolvedWorkspaceControls;
+  controls: EffectiveWorkspacePolicy;
 }
 
 export async function resolveEffectiveWorkspaceControls(
@@ -323,10 +336,11 @@ export async function resolveEffectiveWorkspaceControls(
           readApplicablePolicyOverrides(db, scopedOrganizationId, userId),
         )
       : [];
+    const revision = layered.policy.revision ?? 0;
     return {
       organizationId: scopedOrganizationId,
-      revision: layered.policy.revision ?? 0,
-      controls: resolveWorkspaceControls(layered.policy.controls, overrides),
+      revision,
+      controls: resolveWorkspaceControls(layered.policy.controls, overrides, revision),
     };
   } catch (error) {
     logger.error(
@@ -335,6 +349,124 @@ export async function resolveEffectiveWorkspaceControls(
     );
     throw accountControlUnavailable();
   }
+}
+
+export interface WorkspaceControlPreferences {
+  featureAccess?: Partial<Record<WorkspaceFeature, boolean>>;
+  maxReasoningEffort?: WorkspaceReasoningEffort | null;
+}
+
+export interface GovernedControlValue<T> {
+  /** What the product does now: policy first, then the member's own choice. */
+  effective: T;
+  /** The member's choice, kept whether or not policy currently permits it. */
+  preferred: T | null;
+  /** What policy alone permits, which is what an administrator enforces. */
+  enforced: T;
+  governed: boolean;
+  explanation: string | null;
+}
+
+export interface EffectiveWorkspaceControlsView {
+  organizationId: string | null;
+  revision: number;
+  features: Readonly<Record<WorkspaceFeature, GovernedControlValue<boolean>>>;
+  maxReasoningEffort: GovernedControlValue<WorkspaceReasoningEffort | null>;
+}
+
+function policyScopeLabel(scope: WorkspacePolicyScope): string {
+  return scope === 'workspace'
+    ? 'workspace'
+    : WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS[scope].toLowerCase();
+}
+
+function featureBlockingRule(
+  rules: readonly WorkspacePolicyBlockingRule[],
+  feature: WorkspaceFeature,
+): WorkspacePolicyBlockingRule | undefined {
+  return rules.find((rule) => rule.control === 'feature' && rule.feature === feature);
+}
+
+function ungovernedFeature(preferred: boolean | null): GovernedControlValue<boolean> {
+  return {
+    effective: preferred ?? true,
+    preferred,
+    enforced: true,
+    governed: false,
+    explanation: null,
+  };
+}
+
+function governedFeatures(
+  controls: EffectiveWorkspacePolicy | null,
+  preferences: WorkspaceControlPreferences,
+): Readonly<Record<WorkspaceFeature, GovernedControlValue<boolean>>> {
+  const view = {} as Record<WorkspaceFeature, GovernedControlValue<boolean>>;
+  for (const feature of WORKSPACE_FEATURES) {
+    const preferred = preferences.featureAccess?.[feature] ?? null;
+    if (!controls || controls.featureAccess[feature] !== false) {
+      view[feature] = ungovernedFeature(preferred);
+      continue;
+    }
+    const rule = featureBlockingRule(controls.blockingRules, feature);
+    view[feature] = {
+      effective: false,
+      preferred,
+      enforced: false,
+      governed: true,
+      explanation: `${WORKSPACE_FEATURE_LABELS[feature]} is turned off by ${policyScopeLabel(
+        rule?.scope ?? 'workspace',
+      )} policy.`,
+    };
+  }
+  return view;
+}
+
+function governedReasoningEffort(
+  controls: EffectiveWorkspacePolicy | null,
+  preferences: WorkspaceControlPreferences,
+): GovernedControlValue<WorkspaceReasoningEffort | null> {
+  const preferred = preferences.maxReasoningEffort ?? null;
+  const enforced = controls?.maxReasoningEffort ?? null;
+  const capped =
+    preferred !== null && enforced !== null && preferred !== enforced
+      ? clampReasoningEffort(preferred, enforced)
+      : preferred;
+  const effective = (capped ?? null) as WorkspaceReasoningEffort | null;
+  const governed = preferred !== null && effective !== preferred;
+  const rule = controls?.blockingRules.find((entry) => entry.control === 'reasoning_effort');
+  return {
+    effective,
+    preferred,
+    enforced,
+    governed,
+    explanation: governed
+      ? `Reasoning effort is capped at ${enforced} by ${policyScopeLabel(
+          rule?.scope ?? 'workspace',
+        )} policy.`
+      : null,
+  };
+}
+
+/**
+ * The one answer both surfaces read: a member sees the effective value and why
+ * a control is disabled, an administrator sees the enforced value, and the
+ * member's own preference is reported alongside rather than overwritten, so it
+ * returns by itself once the policy is lifted.
+ */
+export async function describeEffectiveWorkspaceControls(
+  db: DatabaseAdapter,
+  userId: string,
+  preferences: WorkspaceControlPreferences = {},
+  request?: ScopedRequest,
+): Promise<EffectiveWorkspaceControlsView> {
+  const resolved = await resolveEffectiveWorkspaceControls(db, userId, request);
+  return {
+    organizationId: resolved?.organizationId ?? null,
+    revision: resolved?.revision ?? 0,
+    features: governedFeatures(resolved?.controls ?? null, preferences),
+    maxReasoningEffort: governedReasoningEffort(resolved?.controls ?? null, preferences),
+  };
 }
 
 export interface SecretHandlingPolicyResult {
@@ -474,6 +606,58 @@ export async function resolveZeroDataRetentionPolicy(
   }
 
   return firstGoverned ?? { required: false, organizationId: null };
+}
+
+export interface ModelImprovementAsk {
+  source: ModelImprovementSource;
+  connectorId?: string | null;
+  accountOptIn: boolean;
+  feedbackOptIn: boolean;
+}
+
+function workspaceModelImprovementOpinion(policy: AdminPolicy | null): boolean | null {
+  const declared = (policy?.metadata?.modelImprovement as { allowed?: unknown } | undefined)
+    ?.allowed;
+  return typeof declared === 'boolean' ? declared : null;
+}
+
+/**
+ * The single answer for "may this content improve models", asked the same way
+ * on every surface. An unreadable policy refuses rather than assuming consent.
+ */
+export async function resolveModelImprovementEligibility(
+  db: DatabaseAdapter,
+  userId: string,
+  ask: ModelImprovementAsk,
+): Promise<ModelImprovementEligibility> {
+  const organizationIds = await governingOrganizationIdsOrDeny(db, userId, 'model-improvement');
+
+  let allowsModelImprovement: boolean | null = null;
+  let zeroDataRetentionOnly = false;
+
+  for (const organizationId of organizationIds) {
+    let policy: AdminPolicy | null;
+    try {
+      policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
+    } catch (error) {
+      logger.error(
+        { error, userId, organizationId },
+        '[model-improvement] policy read failed after retry; request denied',
+      );
+      throw accountControlUnavailable();
+    }
+    if (policy?.zeroDataRetentionOnly) zeroDataRetentionOnly = true;
+    if (workspaceModelImprovementOpinion(policy) === false) allowsModelImprovement = false;
+    else if (allowsModelImprovement === null) {
+      allowsModelImprovement = workspaceModelImprovementOpinion(policy);
+    }
+  }
+
+  return evaluateModelImprovementEligibility({
+    ...ask,
+    organizationPolicy:
+      organizationIds.length === 0 ? null : { allowsModelImprovement, zeroDataRetentionOnly },
+  });
 }
 
 export interface GovernedIpAllowList {

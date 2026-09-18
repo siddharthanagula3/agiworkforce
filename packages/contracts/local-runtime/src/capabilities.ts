@@ -7,6 +7,14 @@
  * and the runtime enforces it before dispatch.
  */
 
+import {
+  ALL_PLATFORM_CAPABILITIES,
+  surfaceCapabilityGrant,
+  type CapabilityLayerGrant,
+  type PlatformCapability,
+  type SyncedAppSurface,
+} from '@agiworkforce/types';
+
 export const DESKTOP_CAPABILITIES = [
   'filesystem.read',
   'filesystem.write',
@@ -87,4 +95,86 @@ export function permissionScopeKey(scope: PermissionScope): string {
 
 export function permissionKey(capability: DesktopCapability, scope: PermissionScope): string {
   return `${capability}@${permissionScopeKey(scope)}`;
+}
+
+/**
+ * The one place the runtime's permission vocabulary meets the product's
+ * capability vocabulary. A capability with no product counterpart maps to
+ * `null` rather than being invented on either side.
+ */
+export const DESKTOP_CAPABILITY_PLATFORM_MAPPING: Readonly<
+  Record<DesktopCapability, PlatformCapability | null>
+> = Object.freeze({
+  'filesystem.read': 'canUseFileSystem',
+  'filesystem.write': 'canUseFileSystem',
+  'shell.execute': 'canUseTerminal',
+  'git.read': 'canUseWorkingDirectory',
+  'git.write': 'canUseWorkingDirectory',
+  'git.destructive': 'canUseWorkingDirectory',
+  'browser.site': 'canUseBrowserAutomation',
+  'browser.cdp': 'canUseBrowserAutomation',
+  'screen.capture': 'canTakeScreenshot',
+  'computer.use': 'canUseDesktopAutomation',
+  'application.control': 'canUseNativeIntegrations',
+  'clipboard.read': 'canUseClipboard',
+  'clipboard.monitor': 'canUseClipboard',
+  microphone: 'canUseVoice',
+  'simulator.ios': 'canRunLocalCode',
+  'emulator.android': 'canRunLocalCode',
+  'mcp.local': 'canUseLocalMcp',
+  'local.inference': 'canUseLocalModels',
+  'host.remote': null,
+  'task.scheduled': null,
+});
+
+export function platformCapabilityFor(capability: DesktopCapability): PlatformCapability | null {
+  return DESKTOP_CAPABILITY_PLATFORM_MAPPING[capability];
+}
+
+export function desktopCapabilitiesFor(
+  capability: PlatformCapability,
+): readonly DesktopCapability[] {
+  return DESKTOP_CAPABILITIES.filter(
+    (candidate) => DESKTOP_CAPABILITY_PLATFORM_MAPPING[candidate] === capability,
+  );
+}
+
+export const LOCAL_RUNTIME_GRANT_SOURCE = 'local-runtime';
+
+/**
+ * The surface-layer grant the renderer hands `capability-handshake`. A product
+ * capability survives only when the platform row allows it AND a runtime
+ * permission behind it is granted, so a revoked grant closes it at the source.
+ */
+export function localRuntimeCapabilityGrant(
+  surface: SyncedAppSurface,
+  granted: readonly DesktopCapability[],
+): CapabilityLayerGrant {
+  const grantedSet = new Set(granted);
+  const surfaceGrant = surfaceCapabilityGrant(surface);
+  const capabilities = new Set<PlatformCapability>();
+
+  for (const capability of ALL_PLATFORM_CAPABILITIES) {
+    if (!surfaceGrant.has(capability)) continue;
+    const required = desktopCapabilitiesFor(capability);
+    if (required.length === 0 || required.some((entry) => grantedSet.has(entry))) {
+      capabilities.add(capability);
+    }
+  }
+
+  return { layer: 'surface', sourceId: LOCAL_RUNTIME_GRANT_SOURCE, granted: capabilities };
+}
+
+/** The latest decision per capability wins, so a revocation closes an earlier grant. */
+export function grantedDesktopCapabilities(
+  decisions: readonly PermissionDecision[],
+): readonly DesktopCapability[] {
+  const latest = new Map<DesktopCapability, PermissionDecision>();
+  for (const decision of decisions) {
+    const current = latest.get(decision.capability);
+    if (!current || decision.decidedAtMs >= current.decidedAtMs) {
+      latest.set(decision.capability, decision);
+    }
+  }
+  return DESKTOP_CAPABILITIES.filter((capability) => latest.get(capability)?.state === 'granted');
 }

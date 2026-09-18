@@ -207,6 +207,65 @@ export function unhonouredCapabilitiesByRoute(
   return unhonoured;
 }
 
+export const SERVICE_NETWORK_STATES = [
+  'online',
+  'provider-degraded',
+  'local-runtime-only',
+  'offline',
+] as const;
+
+export type ServiceNetworkState = (typeof SERVICE_NETWORK_STATES)[number];
+
+export interface ServiceNetworkStateInput {
+  reachable: boolean;
+  unhonouredCapabilities: readonly ObservedCapability[];
+  localRuntimeAvailable: boolean;
+}
+
+export interface ServiceNetworkStatus {
+  state: ServiceNetworkState;
+  degradedCapabilities: readonly ObservedCapability[];
+  localRuntimeAvailable: boolean;
+  summary: string;
+}
+
+/**
+ * The one network state a client renders. Degradation is per capability, not a
+ * single up/down bit, so a surface can say which capability is unreliable and
+ * whether a local runtime can serve the turn instead.
+ */
+export function resolveServiceNetworkState(input: ServiceNetworkStateInput): ServiceNetworkStatus {
+  const degradedCapabilities = [...input.unhonouredCapabilities].sort();
+  const localRuntimeAvailable = input.localRuntimeAvailable;
+
+  if (!input.reachable) {
+    return {
+      state: localRuntimeAvailable ? 'local-runtime-only' : 'offline',
+      degradedCapabilities,
+      localRuntimeAvailable,
+      summary: localRuntimeAvailable
+        ? 'Cloud models are unreachable. Local models on this machine can still answer.'
+        : 'Cloud models are unreachable and no local model is available.',
+    };
+  }
+
+  if (degradedCapabilities.length > 0) {
+    return {
+      state: 'provider-degraded',
+      degradedCapabilities,
+      localRuntimeAvailable,
+      summary: `Some providers are not honouring ${degradedCapabilities.join(', ')} right now. Requests are being routed around them.`,
+    };
+  }
+
+  return {
+    state: 'online',
+    degradedCapabilities,
+    localRuntimeAvailable,
+    summary: 'All providers are responding normally.',
+  };
+}
+
 export interface CapabilityHealthStoreFailureEvent {
   failure: RouteHealthStoreFailure;
   keys: readonly CapabilityHealthKey[];
