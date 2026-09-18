@@ -1,8 +1,5 @@
 //! Preflight diagnostics for `agi doctor`.
-//!
-//! This command is intentionally read-mostly: it validates configuration,
-//! local tools, state directories, MCP/plugin shape, and git hygiene without
-//! starting an LLM request or connecting to user MCP servers.
+//!.
 
 use anyhow::Result;
 use serde::Serialize;
@@ -329,8 +326,7 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
             crate::platform::policy::linux_sandbox::compile_bpf_available()
         ));
         // Only bubblewrap backs sandboxed exec on Linux. The seccomp module
-        // installs no filter on any exec path, so its presence must never
-        // upgrade this verdict.
+        // installs no filter on any exec path, so its presence must never.
         let missing = detected == crate::sandbox::SandboxType::None;
         vec![check(
             "sandbox.os",
@@ -636,7 +632,10 @@ fn is_http_url(value: &str) -> bool {
 }
 
 fn git_hygiene_checks() -> Vec<DoctorCheck> {
-    if !git_is_repo() {
+    let layout = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| crate::repo::detect_repository_layout(&cwd));
+    let Some(layout) = layout else {
         return vec![check(
             "git.repository",
             "git repository",
@@ -644,32 +643,79 @@ fn git_hygiene_checks() -> Vec<DoctorCheck> {
             "current directory is not inside a git worktree",
             vec![],
         )];
+    };
+
+    let mut checks = vec![repository_layout_check(&layout)];
+    if layout.bare {
+        return checks;
     }
 
-    let current_branch = git_output(&["branch", "--show-current"]).unwrap_or_default();
+    let current_branch = layout.head.to_string();
     let branches = stale_branches(60).unwrap_or_default();
     let status = if branches.is_empty() {
         DoctorStatus::Pass
     } else {
         DoctorStatus::Warn
     };
-    vec![check(
+    checks.push(check(
         "git.stale_branches",
         "stale branches",
         status,
         format!("{} branch(es) older than 60 days", branches.len()),
         {
-            let mut details = vec![format!("current branch: {}", current_branch.trim())];
+            let mut details = vec![format!("current branch: {current_branch}")];
             details.extend(branches.into_iter().take(20));
             details
         },
-    )]
+    ));
+    checks
 }
 
-fn git_is_repo() -> bool {
-    git_output(&["rev-parse", "--is-inside-work-tree"])
-        .map(|value| value.trim() == "true")
-        .unwrap_or(false)
+/// The repository's shape as one check: a detached HEAD, a bare checkout, a
+/// linked worktree or a repository nested inside another all change what a.
+fn repository_layout_check(layout: &crate::repo::RepositoryLayout) -> DoctorCheck {
+    let mut details = vec![
+        format!("root: {}", layout.root.display()),
+        format!("HEAD: {}", layout.head),
+    ];
+    if layout.linked_worktree {
+        details.push(format!("common git dir: {}", layout.common_dir.display()));
+    }
+    if let Some(parent) = &layout.parent_root {
+        details.push(format!("nested inside: {}", parent.display()));
+    }
+    for remote in &layout.remotes {
+        details.push(format!("remote {}: {}", remote.name, remote.url));
+    }
+    if let Some(branch) = &layout.default_branch {
+        details.push(format!("default branch: {branch}"));
+    }
+    if let Some(workspace) = &layout.workspace {
+        details.push(format!(
+            "workspace: {} pattern(s), {} package(s)",
+            workspace.patterns.len(),
+            workspace.members.len()
+        ));
+    }
+    for nested in layout.nested_roots.iter().take(20) {
+        details.push(format!("nested repository: {}", nested.display()));
+    }
+    for (key, value) in &layout.config {
+        details.push(format!("config {key}={value}"));
+    }
+
+    let status = if layout.remotes.is_empty() || layout.head.is_detached() || layout.is_nested() {
+        DoctorStatus::Warn
+    } else {
+        DoctorStatus::Pass
+    };
+    check(
+        "git.repository",
+        "git repository",
+        status,
+        layout.summary(),
+        details,
+    )
 }
 
 fn git_output(args: &[&str]) -> Option<String> {
@@ -723,6 +769,50 @@ mod tests {
         assert_eq!(summary.pass, 1);
         assert_eq!(summary.warn, 1);
         assert_eq!(summary.fail, 1);
+    }
+
+    #[test]
+    fn a_detached_head_and_a_nested_checkout_are_both_reported_as_warnings() {
+        let mut config = std::collections::BTreeMap::new();
+        config.insert("core.bare".to_string(), "false".to_string());
+        let layout = crate::repo::RepositoryLayout {
+            root: PathBuf::from("/work/inner"),
+            git_dir: PathBuf::from("/work/inner/.git"),
+            common_dir: PathBuf::from("/work/inner/.git"),
+            bare: false,
+            linked_worktree: false,
+            head: crate::repo::HeadState::Detached {
+                commit: "1a2b3c4d5e6f".to_string(),
+                describe: Some("v2.0.0".to_string()),
+            },
+            remotes: vec![agiworkforce_protocol::code_domain::RepositoryRemote::new(
+                "fork",
+                "https://example.test/fork.git",
+            )],
+            default_remote: Some("fork".to_string()),
+            default_branch: Some("main".to_string()),
+            parent_root: Some(PathBuf::from("/work")),
+            nested_roots: Vec::new(),
+            workspace: None,
+            config,
+        };
+
+        let result = repository_layout_check(&layout);
+
+        assert_eq!(result.status, DoctorStatus::Warn);
+        assert!(result.message.contains("detached at 1a2b3c4 (v2.0.0)"));
+        assert!(result
+            .details
+            .iter()
+            .any(|detail| detail == "remote fork: https://example.test/fork.git"));
+        assert!(result
+            .details
+            .iter()
+            .any(|detail| detail == "nested inside: /work"));
+        assert!(result
+            .details
+            .iter()
+            .any(|detail| detail == "config core.bare=false"));
     }
 
     #[test]

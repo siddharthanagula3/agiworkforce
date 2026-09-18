@@ -62,9 +62,7 @@ const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
 const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
 // Backstop for a hung discovery pipeline only. Must exceed the per-server
-// `McpTimeouts.initialize` (30s): a single stalled server is skipped by its
-// own timeout and discovery still resolves to `mcp/ready`. Equal values race
-// the two timers and make the emitted notification nondeterministic.
+// `McpTimeouts.initialize` (30s): a single stalled server is skipped by its.
 const MCP_LOAD_TIMEOUT_SECONDS: u64 = 60;
 const MAX_CONTEXT_FILES_PER_TURN: usize = 64;
 const MAX_USER_INPUT_ITEMS_PER_TURN: usize = 128;
@@ -79,24 +77,14 @@ const MAX_IMAGE_MIME_BYTES: usize = 127;
 const MAX_IMAGE_INPUT_ENCODED_BYTES: usize = MAX_IMAGE_INPUT_BYTES.div_ceil(3) * 4;
 const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // The VS Code JSONL client rejects any single line above 4 MiB. Reserve ample
-// headroom for the JSON-RPC envelope and thread summary while measuring the
-// exact serialized message objects included in `thread/read`.
+// headroom for the JSON-RPC envelope and thread summary while measuring the.
 const MAX_THREAD_READ_TRANSCRIPT_JSON_BYTES: usize = 3 * 1024 * 1024;
 const PROCESS_TREE_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
 /// Tools that build a second `AgentSession` this host never sees.
-///
-/// `subagent::run_subagent` constructs the child session itself and leaves
-/// `on_tool_approval` unset, so a child's approval prompt cannot reach the
-/// client: it falls back to a terminal dialog on a stdin that is this
-/// process's JSON-RPC transport. They are also the only tools that never reach
-/// `execute_tool`, which is where `.agiworkforce/policy.toml` is evaluated.
+///.
 const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// Ceiling on turns running at once across every thread this host owns.
-///
-/// A subagent concurrency cap is per `SubagentManager`, and a manager belongs
-/// to one session, so the host-wide ceiling on subagent OS threads is this
-/// value times that cap. Without it the multiplier is however many threads a
-/// client chooses to drive at once.
+///.
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
 const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
@@ -292,10 +280,7 @@ struct PendingApproval {
 }
 
 /// Canonical local developer runtime shared by the CLI and VS Code.
-///
-/// The host owns persisted sessions, live agent instances, turn tasks,
-/// cancellation, approval continuations, MCP attachment, and streamed events.
-/// VS Code is a client of this host and never owns a second agent loop.
+///.
 pub struct CliDeveloperSessionHost {
     config: Arc<CliConfig>,
     workspace_root: PathBuf,
@@ -339,8 +324,7 @@ impl CliDeveloperSessionHost {
     ) -> Result<Self, DeveloperSessionHostError> {
         let workspace_root = canonical_directory(&workspace_root)?;
         // AgentSession's existing context loader validates against the process
-        // cwd plus registered roots. App-server processes normally launch in
-        // this directory; registering it also keeps embedded/test hosts honest.
+        // cwd plus registered roots. App-server processes normally launch in.
         crate::path_security::register_additional_workspace_root_path(&workspace_root)
             .map_err(DeveloperSessionHostError::invalid_request)?;
         let (notifications, _) = broadcast::channel(1024);
@@ -482,13 +466,6 @@ impl CliDeveloperSessionHost {
 
     /// Withhold the subagent-spawning tools whenever a child session would run
     /// outside this host's authority.
-    ///
-    /// The child never receives the per-turn approval sink, so it can only be
-    /// let through when the session already answers its own approvals; every
-    /// other mode would send the child's prompt to a stdin that carries the
-    /// JSON-RPC transport. The operator's workspace policy is applied here for
-    /// the same reason: these two tools bypass `execute_tool`, so a `deny` rule
-    /// written for them has no other place to bite.
     fn apply_subagent_boundary_policy(&self, agent: &mut AgentSession) {
         let policy = PolicyEngine::load_workspace(&self.workspace_root).ok();
         let mut disallowed = agent
@@ -524,8 +501,7 @@ impl CliDeveloperSessionHost {
         let lifecycle = self.lifecycle.clone();
         tokio::spawn(async move {
             // Discovery may launch MCP subprocesses, so it participates in the
-            // same admission barrier as requests. Shutdown either waits for
-            // this whole pipeline or prevents it from starting.
+            // same admission barrier as requests. Shutdown either waits for.
             let _admission = lifecycle.read().await;
             if shutdown_started.load(Ordering::Acquire) {
                 return;
@@ -1092,8 +1068,7 @@ impl CliDeveloperSessionHost {
                 .collect()
         } else {
             // Managed provider failover belongs behind the AGI gateway. Feeding
-            // upstream IDs into the CLI's direct-provider fallback chain would
-            // silently cross the Managed trust boundary.
+            // upstream IDs into the CLI's direct-provider fallback chain would.
             Vec::new()
         };
 
@@ -1302,9 +1277,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         };
         let provider_override = match auto_trust {
             // Auto resolves to an upstream provider model ID, but Managed
-            // sessions must retain the AGI gateway as their provider/trust
-            // authority. Detecting from the concrete model here would silently
-            // turn Managed Auto into a direct BYOK route.
+            // sessions must retain the AGI gateway as their provider/trust.
             Some(agiworkforce_model_registry::TrustMode::ManagedCloud) => Some("managed_cloud"),
             Some(_) => auto_vendor.as_deref(),
             None => models::selection_provider_override(
@@ -1786,8 +1759,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let client_turn_id = validated_client_turn_id(params.client_turn_id)?;
         let session = self.load_agent(&params.thread_id).await?;
         // Claim exclusive start ownership before touching the shared agent.
-        // Keeping this guard through session setup prevents a losing concurrent
-        // request from changing the model, controls, messages, or attachments.
+        // Keeping this guard through session setup prevents a losing concurrent.
         let mut running_turns = self.running_turns.lock().await;
         if let Some(accepted) = client_turn_id
             .as_deref()
@@ -1957,8 +1929,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut cumulative_output_tokens = 0u32;
 
             // A route that cannot start is refused before any work is announced,
-            // so a client shows the failure alone rather than an activity row
-            // that ended with an error.
+            // so a client shows the failure alone rather than an activity row.
             let route_block = match refused_turn {
                 Some(error) => Some(error),
                 None => {
@@ -2300,11 +2271,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         drop(running_turns);
         let process_owner = running.process_owner;
         // Order matters: the turn task holds the session mutex across
-        // `agent.send`, and the two steps below need it. `abort` releases it
-        // only because `SubagentManager::wait_all` polls instead of blocking on
-        // `join`, without that await point this lock and that join wedge each
-        // other. Join last: awaiting the aborted task before the subagents are
-        // cancelled waits for exactly the work the interrupt is meant to stop.
+        // `agent.send`, and the two steps below need it. `abort` releases it.
         running.handle.abort();
         let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
             &[process_owner],
@@ -2654,9 +2621,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             running.handle.abort();
         }
         // Same ordering as `interrupt_turn`, and the same dependency on
-        // `wait_all` yielding: the session locks below are unreachable until
-        // the aborted turns drop their guards, and one wedged session would
-        // otherwise stall shutdown for every other session in this loop.
+        // `wait_all` yielding: the session locks below are unreachable until.
         let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
             &process_owners,
             PROCESS_TREE_SHUTDOWN_TIMEOUT,
@@ -2769,8 +2734,7 @@ fn emit_writer_change(
 }
 
 /// Keep a running turn's lease alive. When another process has explicitly
-/// taken the thread, say so once; the turn still finishes and its messages are
-/// kept by the collision check on save.
+/// taken the thread, say so once; the turn still finishes and its messages are.
 async fn renew_writer_lease(
     session_path: PathBuf,
     identity: &'static WriterIdentity,
@@ -2881,12 +2845,6 @@ fn file_uri(path: &Path) -> String {
 
 /// Build the config a turn hands to the engine, with the process defaults
 /// replaced by this session's own route.
-///
-/// A subagent re-derives its provider from `config.default.{model,provider}`
-/// instead of from the session that spawned it, and `ToolExecOptions
-/// .privacy_mode`, the only gate on the network tools, is derived from that
-/// provider. Left at the process defaults, a Local session's child would route
-/// somewhere else and unlock tools the parent is not allowed to use.
 fn turn_config_pinned_to_session_route(base: &CliConfig, agent: &AgentSession) -> CliConfig {
     let mut config = base.clone();
     config.default.model = agent.model.clone();
@@ -3401,11 +3359,7 @@ fn apply_agent_controls(
 }
 
 /// Classify the error that ended a turn into the protocol's closed set.
-///
-/// The CLI's own taxonomy is the richer one and wins: it knows which provider
-/// failed and whether a credential was missing or rejected. The shared engine's
-/// taxonomy is the fallback, so a turn that fails below the CLI layer still
-/// reaches a client as a code rather than as prose.
+///.
 fn classify_turn_failure(error: &anyhow::Error) -> TurnFailure {
     for cause in error.chain() {
         if let Some(cli) = cause.downcast_ref::<crate::errors::CliError>() {
@@ -3420,10 +3374,7 @@ fn classify_turn_failure(error: &anyhow::Error) -> TurnFailure {
 }
 
 /// Re-persist the thread's branch and worktree root now that a turn has ended.
-///
-/// Best effort: a thread that cannot be reloaded or saved keeps the state it
-/// had, because failing a finished turn over stale metadata would be worse
-/// than the stale metadata.
+///.
 async fn refresh_persisted_workspace_state(
     store: &ManagedSessionStore,
     workspace_root: &Path,
@@ -3459,37 +3410,22 @@ struct WorkspaceGitState {
     repository: Option<String>,
 }
 
-/// Branch and worktree root of `root`.
-///
-/// Both are persisted on the thread rather than probed while listing: a client
-/// that opens a picker over a hundred threads must not cost a hundred process
-/// spawns, and a thread whose checkout later moves or switches branch should
-/// still say where its work happened.
-///
-/// Two invocations rather than one: `rev-parse --abbrev-ref HEAD` fails
-/// outright in a repository with no commits, which would lose the worktree
-/// root as well as the branch. `branch --show-current` answers there, and
-/// answers empty on a detached HEAD, where there is genuinely no branch.
+/// Branch and worktree root of `root`, from the one repository detector every
+/// surface reads ([`crate::repo::detect_repository_layout`]).
 fn workspace_git_state(root: &Path) -> WorkspaceGitState {
-    fn git(root: &Path, args: &[&str]) -> Option<String> {
-        let output = std::process::Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .args(args)
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        (!value.is_empty()).then_some(value)
-    }
+    let Some(layout) = crate::repo::detect_repository_layout(root) else {
+        return WorkspaceGitState {
+            branch: None,
+            worktree_root: None,
+            repository: None,
+        };
+    };
 
     WorkspaceGitState {
-        branch: git(root, &["branch", "--show-current"]),
-        worktree_root: git(root, &["rev-parse", "--show-toplevel"]).map(PathBuf::from),
-        repository: git(root, &["remote", "get-url", "origin"])
-            .as_deref()
+        branch: Some(layout.head.to_string()),
+        worktree_root: Some(layout.root.clone()),
+        repository: layout
+            .default_remote_url()
             .and_then(repository_without_credentials),
     }
 }
@@ -3515,8 +3451,7 @@ fn repository_without_credentials(remote: &str) -> Option<String> {
 }
 
 /// Which surface a connection speaks for, from the name it introduced itself
-/// with. The exact name is kept separately on the thread; this is the coarse
-/// bucket a client groups and filters by.
+/// with. The exact name is kept separately on the thread; this is the coarse.
 fn source_from_client(client: &AppServerClientInfo) -> DeveloperSessionSource {
     let name = client.name.to_ascii_lowercase();
     if name.contains("vscode") {
@@ -3761,9 +3696,7 @@ mod tests {
     }
 
     /// `createdBy` is the coarse surface a client groups by; `client` is the
-    /// exact name the connection introduced itself with. A desktop client used
-    /// to land in the `cli` bucket, so every desktop thread was
-    /// indistinguishable from one started in a terminal.
+    /// exact name the connection introduced itself with. A desktop client used.
     #[test]
     fn a_clients_name_decides_its_surface_in_both_directions() {
         for (name, expected) in [
@@ -3797,9 +3730,7 @@ mod tests {
     }
 
     /// The branch comes from what the host persisted, never from probing while
-    /// listing: a picker over a hundred threads must not spawn a hundred git
-    /// processes, and a thread whose checkout has since moved should still say
-    /// where its work happened.
+    /// listing: a picker over a hundred threads must not spawn a hundred git.
     #[tokio::test]
     async fn a_threads_branch_and_worktree_come_from_what_was_persisted() {
         let workspace = tempdir().expect("workspace");
@@ -3855,8 +3786,7 @@ mod tests {
     }
 
     /// A free-text error cannot tell a client whether to offer a sign-in, a
-    /// retry, or nothing at all. The code can, and it is derived from the
-    /// typed error rather than by matching on prose that changes per provider.
+    /// retry, or nothing at all. The code can, and it is derived from the.
     #[test]
     fn a_failed_turn_classifies_into_a_code_a_client_can_act_on() {
         let missing =
@@ -4190,8 +4120,7 @@ mod tests {
         let path = store.save(&session).expect("save valid session");
 
         // Simulate a user-edited JSONL header containing a C1 control. Serde
-        // accepts the escaped string, but it must not cross the protocol or be
-        // trusted for execution.
+        // accepts the escaped string, but it must not cross the protocol or be.
         let persisted = std::fs::read_to_string(&path).expect("read session");
         let (header, records) = persisted.split_once('\n').expect("JSONL header");
         let mut header: serde_json::Value = serde_json::from_str(header).expect("parse header");
@@ -4375,10 +4304,7 @@ mod tests {
     }
 
     /// Regression: the Effort picker used to be stored ONLY as its Anthropic
-    /// projection, which collapses Low and Medium to the same `None`. Every
-    /// non-Anthropic provider therefore ran at its own default no matter what
-    /// the user selected. The level itself must survive so the request boundary
-    /// can derive the OpenAI and Gemini forms too.
+    /// projection, which collapses Low and Medium to the same `None`. Every.
     #[test]
     fn developer_effort_survives_for_non_anthropic_providers() {
         let mut agent = test_agent();
@@ -4839,8 +4765,7 @@ mod tests {
             Some(&resolved.provider_model_id)
         );
         // The registry now hands back a cross-provider ladder behind the cached
-        // model. The host must chain it verbatim, once each, and every entry has
-        // to be a BYOK-reachable catalog model.
+        // model. The host must chain it verbatim, once each, and every entry has.
         let expected = crate::model_catalog::resolve_auto_model_with_context(
             "auto-economy",
             agiworkforce_model_registry::RoutingTaskType::Coding,
@@ -5930,8 +5855,7 @@ mod tests {
         }
 
         // Bypass answers its own approvals, so the child never needs the sink
-        // the crossing cannot carry, and `task` comes back. (`agent` stays out
-        // of every schema list on its own: the catalog defers it.)
+        // the crossing cannot carry, and `task` comes back. (`agent` stays out.
         apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
         host.apply_subagent_boundary_policy(&mut agent);
         let names = tool_names(&agent);
@@ -5999,8 +5923,7 @@ mod tests {
         base.default.model = crate::model_catalog::default_model().to_string();
 
         // This is the derivation `subagent::run_subagent` performs for its own
-        // session. Against the process defaults it resolves to nothing, so the
-        // child re-derives a route the parent never authorized.
+        // session. Against the process defaults it resolves to nothing, so the.
         assert!(crate::models::selection_provider_override(
             &agent.model,
             &base.default.model,
@@ -6093,9 +6016,7 @@ mod tests {
     }
 
     /// A turn task shaped like one that spawned a subagent: its work runs on a
-    /// separate thread under the turn's process owner, and the task itself
-    /// parks on a synchronous join with no await point for `abort` to land on.
-    /// It leaves that join only once the process tree is gone.
+    /// separate thread under the turn's process owner, and the task itself.
     #[cfg(unix)]
     async fn parked_subagent_turn(
         process_owner: crate::process_tree::ProcessTreeOwner,

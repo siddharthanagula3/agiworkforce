@@ -39,6 +39,7 @@
     "@agiworkforce/apply-patch": "workspace:*",
     "@agiworkforce/artifacts": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",
+    "@agiworkforce/ide-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/desktop-command-client": "workspace:*",

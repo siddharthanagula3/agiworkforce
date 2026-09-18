@@ -38,13 +38,23 @@ pub fn gather_system_context() -> SystemContext {
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
 
-    let git_branch = detect_git_branch();
-    let git_status_summary = detect_git_status_summary();
-    let git_remote_url = detect_git_remote_url();
+    let layout = crate::repo::detect_repository_layout(Path::new(&cwd));
+    let git_branch = layout
+        .as_ref()
+        .map(|layout| layout.head.to_string())
+        .or_else(detect_git_branch);
+    let git_status_summary = if layout.as_ref().is_some_and(|layout| layout.bare) {
+        Some("bare repository".to_string())
+    } else {
+        detect_git_status_summary()
+    };
+    let git_remote_url = layout
+        .as_ref()
+        .and_then(|layout| layout.default_remote_url().map(str::to_string));
     let project_type = detect_project_type(&cwd);
     let project_language = detect_project_language(&cwd);
     let ci_providers = detect_ci_providers(&cwd);
-    let monorepo_type = detect_monorepo_type(&cwd);
+    let monorepo_type = describe_repository_shape(&cwd, layout.as_ref());
     let package_manager = detect_package_manager(&cwd);
     let containerization = detect_containerization(&cwd);
     let editor_configs = detect_editor_configs(&cwd);
@@ -157,29 +167,42 @@ fn detect_git_status_summary() -> Option<String> {
     }
 }
 
-/// Run `git remote get-url origin` to get the remote URL.
-fn detect_git_remote_url() -> Option<String> {
-    let output = Command::new("git")
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .ok()?;
+/// The URL of the repository's default remote, which is only `origin` when
+/// nothing else resolves first. See [`crate::repo::resolve_default_remote`].
+pub fn detect_git_remote_url() -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let layout = crate::repo::detect_repository_layout(&cwd)?;
+    layout.default_remote_url().map(str::to_string)
+}
 
-    if !output.status.success() {
-        return None;
+/// The monorepo line of the prompt context: the orchestration tool, the size of
+/// the workspace graph, and any repository checked out inside this one.
+pub fn describe_repository_shape(
+    cwd: &str,
+    layout: Option<&crate::repo::RepositoryLayout>,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(tool) = detect_monorepo_type(cwd) {
+        parts.push(tool);
     }
-
-    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if url.is_empty() {
-        None
-    } else {
-        Some(url)
+    if let Some(layout) = layout {
+        if let Some(workspace) = &layout.workspace {
+            if !workspace.members.is_empty() {
+                parts.push(format!("{} workspace packages", workspace.members.len()));
+            }
+        }
+        if !layout.nested_roots.is_empty() {
+            parts.push(format!("{} nested repositories", layout.nested_roots.len()));
+        }
+        if let Some(parent) = &layout.parent_root {
+            parts.push(format!("nested inside {}", parent.display()));
+        }
     }
+    (!parts.is_empty()).then(|| parts.join(", "))
 }
 
 /// Detect project type by checking for well-known config files in the cwd.
-///
-/// Returns a label like "rust", "node", "python", "go", "ruby", "java",
-/// "dotnet", "elixir", or `None` if unrecognized.
+///.
 pub fn detect_project_type(cwd: &str) -> Option<String> {
     let dir = Path::new(cwd);
 
@@ -223,10 +246,7 @@ pub fn detect_project_type(cwd: &str) -> Option<String> {
 }
 
 /// Detect the primary language of a project by inspecting config files.
-///
-/// This examines the same markers as `detect_project_type` but returns a
-/// human-readable language name (e.g. "Rust", "TypeScript", "Python").
-/// For Node projects it peeks at `tsconfig.json` to distinguish TypeScript.
+///.
 pub fn detect_project_language(cwd: &str) -> Option<String> {
     let dir = Path::new(cwd);
 
@@ -267,8 +287,7 @@ pub fn detect_project_language(cwd: &str) -> Option<String> {
 }
 
 /// Detect CI/CD providers from config files in the project root.
-///
-/// Returns a (possibly empty) list of provider names.
+///.
 pub fn detect_ci_providers(cwd: &str) -> Vec<String> {
     let dir = Path::new(cwd);
     let mut providers = Vec::new();
@@ -299,8 +318,7 @@ pub fn detect_ci_providers(cwd: &str) -> Vec<String> {
 }
 
 /// Detect monorepo orchestration tool from well-known config files.
-///
-/// Returns the tool name (e.g. "pnpm workspaces", "nx", "turbo") or `None`.
+///.
 pub fn detect_monorepo_type(cwd: &str) -> Option<String> {
     let dir = Path::new(cwd);
 
@@ -323,8 +341,7 @@ pub fn detect_monorepo_type(cwd: &str) -> Option<String> {
 }
 
 /// Detect the package manager / build system from lockfile presence.
-///
-/// Returns the package manager name (e.g. "pnpm", "yarn", "cargo") or `None`.
+///.
 pub fn detect_package_manager(cwd: &str) -> Option<String> {
     let dir = Path::new(cwd);
 
@@ -350,9 +367,7 @@ pub fn detect_package_manager(cwd: &str) -> Option<String> {
 }
 
 /// Detect containerization / orchestration technologies.
-///
-/// Returns a list of detected tools (e.g. "docker", "docker-compose",
-/// "devcontainer", "kubernetes").
+///.
 pub fn detect_containerization(cwd: &str) -> Vec<String> {
     let dir = Path::new(cwd);
     let mut tools = Vec::new();
@@ -374,8 +389,7 @@ pub fn detect_containerization(cwd: &str) -> Vec<String> {
 }
 
 /// Detect editor / IDE configuration directories.
-///
-/// Returns a list of detected editors (e.g. "vscode", "intellij", "zed").
+///.
 pub fn detect_editor_configs(cwd: &str) -> Vec<String> {
     let dir = Path::new(cwd);
     let mut editors = Vec::new();
@@ -397,15 +411,10 @@ pub fn detect_editor_configs(cwd: &str) -> Vec<String> {
 }
 
 // ---------------------------------------------------------------------------
-// Canonical domain records (agiworkforce_protocol::code_domain)
-//
-// `SystemContext` is the prompt-facing rendering. These build the records the
-// rest of the product stores, sends and decides on.
-// ---------------------------------------------------------------------------
+// Canonical domain records (agiworkforce_protocol::code_domain).
 
 /// Names that make an environment variable a credential reference rather than
-/// configuration. Matched on the name, so no value is ever inspected to
-/// classify one.
+/// configuration. Matched on the name, so no value is ever inspected to.
 const CREDENTIAL_NAME_MARKERS: &[&str] = &[
     "API_KEY",
     "APIKEY",
@@ -481,14 +490,23 @@ pub fn repository_identity_from_remote(url: &str) -> RepositoryId {
     RepositoryId::new(normalize_remote_identity(&redact_remote_credentials(url)))
 }
 
-/// A repository's identity: its primary remote when it has one, so the same
-/// repository cloned twice on one machine is one repository, and its root
-/// otherwise.
+/// A repository's identity: its default remote when it has one, so the same
+/// repository cloned twice on one machine is one repository, and its root.
 pub fn repository_identity(remotes: &[RepositoryRemote], root: &Path) -> RepositoryId {
-    remotes
-        .iter()
-        .find(|remote| remote.name == "origin")
-        .or_else(|| remotes.first())
+    repository_identity_with_default(remotes, root, None)
+}
+
+/// [`repository_identity`] when the caller already resolved the default remote,
+/// which is the only way a fork-first checkout identifies itself by its fork.
+pub fn repository_identity_with_default(
+    remotes: &[RepositoryRemote],
+    root: &Path,
+    default_remote: Option<&str>,
+) -> RepositoryId {
+    let name = default_remote
+        .map(str::to_string)
+        .or_else(|| crate::repo::resolve_default_remote(remotes, None));
+    name.and_then(|name| remotes.iter().find(|remote| remote.name == name))
         .map_or_else(
             || RepositoryId::new(root.display().to_string()),
             |remote| RepositoryId::new(normalize_remote_identity(&remote.url)),
@@ -498,34 +516,24 @@ pub fn repository_identity(remotes: &[RepositoryRemote], root: &Path) -> Reposit
 /// Build the [`Repository`] the working directory belongs to, or `None` when
 /// it is not inside one.
 pub fn gather_repository(cwd: &Path) -> Option<Repository> {
-    let root = git_output(cwd, &["rev-parse", "--show-toplevel"])?
-        .trim()
-        .to_string();
-    if root.is_empty() {
-        return None;
-    }
-    let root = PathBuf::from(root);
-    let remotes = git_output(cwd, &["remote", "-v"])
-        .map(|text| parse_git_remotes(&text))
-        .unwrap_or_default();
-    let id = repository_identity(&remotes, &root);
-    let name = root
+    let layout = crate::repo::detect_repository_layout(cwd)?;
+    let id = repository_identity_with_default(
+        &layout.remotes,
+        &layout.root,
+        layout.default_remote.as_deref(),
+    );
+    let name = layout
+        .root
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| id.as_str().to_string());
-    let default_branch = git_output(
-        cwd,
-        &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-    )
-    .map(|text| text.trim().trim_start_matches("origin/").to_string())
-    .filter(|branch| !branch.is_empty());
 
-    let mut repository = Repository::local(id, name, root);
-    for remote in remotes {
+    let mut repository = Repository::local(id, name, layout.root.clone());
+    for remote in layout.remotes {
         repository = repository.with_remote(remote);
     }
     Some(repository.with_policy(RepositoryPolicy {
-        default_branch,
+        default_branch: layout.default_branch,
         ..RepositoryPolicy::default()
     }))
 }
@@ -541,8 +549,7 @@ fn status_kind(code: char) -> Option<ChangeKind> {
 }
 
 /// Parse `git status --porcelain` into typed changes. The index column and the
-/// worktree column are distinct changes to the same path, which is what makes
-/// the staged state readable instead of guessed.
+/// worktree column are distinct changes to the same path, which is what makes.
 pub fn parse_porcelain_status(text: &str) -> Vec<RepositoryChange> {
     let mut changes = Vec::new();
     for line in text.lines() {
@@ -572,8 +579,7 @@ pub fn parse_porcelain_status(text: &str) -> Vec<RepositoryChange> {
 }
 
 /// Capture what the repository holds right now. Every change starts attributed
-/// to the user; call [`RepositorySnapshot::attribute_against`] with the
-/// session's opening snapshot to tell later agent work apart from it.
+/// to the user; call [`RepositorySnapshot::attribute_against`] with the.
 pub fn capture_repository_snapshot(
     cwd: &Path,
     repository_id: RepositoryId,
@@ -685,8 +691,7 @@ where
 }
 
 /// Every executable name reachable on `PATH`, in `PATH` precedence order.
-/// Versions are not probed here: running several thousand binaries to ask them
-/// would cost more than the answer is worth.
+/// Versions are not probed here: running several thousand binaries to ask them.
 pub fn discover_path_binaries() -> Vec<DiscoveredBinary> {
     let Some(path_var) = std::env::var_os("PATH") else {
         return Vec::new();
@@ -741,8 +746,7 @@ pub fn detect_shell() -> ShellInfo {
 }
 
 /// Containers the session is actually inside, plus the ones the project merely
-/// configures. Presence of a `Dockerfile` is configuration; a running
-/// devcontainer is state, and only the second changes what a command can do.
+/// configures. Presence of a `Dockerfile` is configuration; a running.
 pub fn detect_container_states(cwd: &str) -> Vec<ContainerState> {
     let mut states = Vec::new();
     if Path::new("/.dockerenv").exists() {
@@ -804,8 +808,7 @@ pub fn is_credential_env_name(name: &str) -> bool {
 }
 
 /// Credential *references* for the credential-shaped names among `vars`: the
-/// name and whether it is set. The value is consulted for emptiness and then
-/// dropped, so an environment is never represented as a raw `.env` dump.
+/// name and whether it is set. The value is consulted for emptiness and then.
 pub fn credential_refs_from<I, N, V>(vars: I) -> Vec<CredentialRef>
 where
     I: IntoIterator<Item = (N, V)>,
@@ -993,8 +996,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // detect_project_type
-    // -----------------------------------------------------------------------
+    // detect_project_type.
 
     #[test]
     fn test_detect_project_type_rust() {
@@ -1102,8 +1104,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // detect_project_language
-    // -----------------------------------------------------------------------
+    // detect_project_language.
 
     #[test]
     fn test_detect_language_rust() {
@@ -1175,8 +1176,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // detect_ci_providers
-    // -----------------------------------------------------------------------
+    // detect_ci_providers.
 
     #[test]
     fn test_detect_ci_github_actions() {
@@ -1253,8 +1253,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // detect_monorepo_type
-    // -----------------------------------------------------------------------
+    // detect_monorepo_type.
 
     #[test]
     fn test_detect_monorepo_pnpm() {
@@ -1313,8 +1312,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // detect_package_manager
-    // -----------------------------------------------------------------------
+    // detect_package_manager.
 
     #[test]
     fn test_detect_pm_pnpm() {
@@ -1388,8 +1386,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // detect_containerization
-    // -----------------------------------------------------------------------
+    // detect_containerization.
 
     #[test]
     fn test_detect_container_dockerfile() {
@@ -1460,8 +1457,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // detect_editor_configs
-    // -----------------------------------------------------------------------
+    // detect_editor_configs.
 
     #[test]
     fn test_detect_editor_vscode() {
@@ -1532,9 +1528,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // detect_git_remote_url (unit-testable via mock, but we can test the
-    // parsing logic runs without crashing at minimum)
-    // -----------------------------------------------------------------------
+    // detect_git_remote_url (unit-testable via mock, but we can test the.
 
     #[test]
     fn test_detect_git_remote_url_runs() {
@@ -1547,8 +1541,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Display impl
-    // -----------------------------------------------------------------------
+    // Display impl.
 
     #[test]
     fn test_display_full_context() {
@@ -1698,8 +1691,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // git status parsing
-    // -----------------------------------------------------------------------
+    // git status parsing.
 
     #[test]
     fn test_git_status_parsing_runs() {
@@ -1713,8 +1705,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Canonical domain records
-    // -----------------------------------------------------------------------
+    // Canonical domain records.
 
     #[test]
     fn remotes_are_enumerated_not_reduced_to_origin() {
@@ -1749,6 +1740,60 @@ mod tests {
             repository_identity(&[], Path::new("/work/w")).as_str(),
             "/work/w"
         );
+    }
+
+    #[test]
+    fn a_fork_only_checkout_identifies_itself_by_the_fork_not_by_origin() {
+        let remotes = parse_git_remotes("fork\thttps://github.com/me/widgets.git (fetch)\n");
+
+        assert_eq!(
+            repository_identity(&remotes, Path::new("/work/w")).as_str(),
+            "github.com/me/widgets"
+        );
+        assert_eq!(
+            repository_identity_with_default(&remotes, Path::new("/work/w"), Some("fork")).as_str(),
+            "github.com/me/widgets"
+        );
+    }
+
+    #[test]
+    fn the_monorepo_line_names_workspace_packages_and_nested_repositories() {
+        let (_dir, path) = tmp_project_dir();
+        fs::write(
+            Path::new(&path).join("pnpm-workspace.yaml"),
+            "packages:\n  - 'p/*'\n",
+        )
+        .unwrap();
+        fs::create_dir_all(Path::new(&path).join("p/alpha")).unwrap();
+        fs::write(
+            Path::new(&path).join("p/alpha/package.json"),
+            r#"{"name":"alpha"}"#,
+        )
+        .unwrap();
+        let nested = Path::new(&path).join("p/alpha/.git");
+        fs::create_dir_all(&nested).unwrap();
+
+        let layout = crate::repo::RepositoryLayout {
+            root: PathBuf::from(&path),
+            git_dir: PathBuf::from(&path).join(".git"),
+            common_dir: PathBuf::from(&path).join(".git"),
+            bare: false,
+            linked_worktree: false,
+            head: crate::repo::HeadState::Branch("main".to_string()),
+            remotes: Vec::new(),
+            default_remote: None,
+            default_branch: None,
+            parent_root: None,
+            nested_roots: vec![nested],
+            workspace: crate::repo::workspace_graph(Path::new(&path), None),
+            config: std::collections::BTreeMap::new(),
+        };
+
+        let described = describe_repository_shape(&path, Some(&layout)).expect("a shape");
+
+        assert!(described.contains("pnpm workspaces"));
+        assert!(described.contains("1 workspace packages"));
+        assert!(described.contains("1 nested repositories"));
     }
 
     #[test]
