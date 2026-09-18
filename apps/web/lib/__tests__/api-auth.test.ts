@@ -1043,6 +1043,13 @@ describe('assertAccountActive, warm Redis cache', () => {
     vi.clearAllMocks();
   });
 
+  // The lockdown gate resolves the workspace on the same call, so the count that
+  // proves the status cache is warm is the lifecycle read, not every read.
+  function lifecycleReads(): number {
+    return mockNeonQuery.mock.calls.filter(([sql]) => String(sql).includes('account_status'))
+      .length;
+  }
+
   it('reads Postgres once across two consecutive calls for the same user', async () => {
     mockNeonQuery.mockResolvedValue([{ account_status: null }]);
     vi.mocked(getKeyValueStore).mockReturnValue(asKeyValueStore(fakeCacheRedis()));
@@ -1050,7 +1057,7 @@ describe('assertAccountActive, warm Redis cache', () => {
     await expect(assertAccountActive('user-warm-1')).resolves.toBeUndefined();
     await expect(assertAccountActive('user-warm-1')).resolves.toBeUndefined();
 
-    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+    expect(lifecycleReads()).toBe(1);
   });
 
   it('rejects from the cached suspended status without a second Postgres read', async () => {
@@ -1060,7 +1067,153 @@ describe('assertAccountActive, warm Redis cache', () => {
     await expect(assertAccountActive('user-warm-2')).rejects.toMatchObject({ statusCode: 403 });
     await expect(assertAccountActive('user-warm-2')).rejects.toMatchObject({ statusCode: 403 });
 
-    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+    expect(lifecycleReads()).toBe(1);
+  });
+});
+
+describe('tenant lockdown at the auth boundary', () => {
+  const LOCKED_ORGANIZATION = '33333333-3333-4333-8333-333333333333';
+
+  // Matching the message too, or a 403 from some other gate would pass for it.
+  const LOCKED_OUT = { statusCode: 403, message: expect.stringMatching(/locked down/) };
+
+  /**
+   * Wraps whatever the fixture already answers so a key issued through the real
+   * route still verifies, and adds the two reads the lockdown gate makes: the
+   * caller's workspace and that workspace's override.
+   */
+  function bindWorkspace(organizationId: string | null, locked: boolean) {
+    const inner = mockNeonQuery.getMockImplementation();
+    mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      const s = String(sql).toLowerCase();
+      if (s.includes('from public.user_settings')) {
+        return organizationId ? [{ organization_id: organizationId }] : [];
+      }
+      if (s.includes('from public.feature_flags')) {
+        return locked && organizationId
+          ? [
+              {
+                flag_name: 'tenant.lockdown',
+                user_id: null,
+                organization_id: organizationId,
+                variant: 'off',
+                enabled: false,
+                expires_at: null,
+              },
+            ]
+          : [];
+      }
+      return inner ? ((await inner(sql, params)) as unknown[]) : [];
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+    vi.mocked(getKeyValueStore).mockReturnValue(null as unknown as KeyValueStore);
+    process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
+  });
+
+  it('refuses a cookie session whose workspace is locked down', async () => {
+    makeFakeDb();
+    bindWorkspace(LOCKED_ORGANIZATION, true);
+    mockAuth.mockResolvedValue(authSession('locked-cookie-user'));
+
+    await expect(
+      getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+    ).rejects.toMatchObject(LOCKED_OUT);
+  });
+
+  it('refuses a Clerk bearer token whose workspace is locked down', async () => {
+    makeFakeDb();
+    bindWorkspace(LOCKED_ORGANIZATION, true);
+    mockAuth.mockResolvedValue(authSession(null));
+    mockVerifyToken.mockResolvedValue({ sub: 'locked-jwt-user' });
+
+    await expect(
+      getClerkAuthUser(
+        makeBearerRequest('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJsb2NrZWQtand0LXVzZXIifQ.sig'),
+      ),
+    ).rejects.toMatchObject(LOCKED_OUT);
+  });
+
+  it('refuses a first-party developer device token whose workspace is locked down', async () => {
+    makeFakeDb();
+    bindWorkspace(LOCKED_ORGANIZATION, true);
+    mockAuth.mockResolvedValue(authSession(null));
+    const token = jwt.sign(
+      { userId: 'locked-device-user', sub: 'locked-device-user', surface: 'developer' },
+      TEST_DEVELOPER_JWT_SECRET,
+      {
+        expiresIn: 3600,
+        issuer: 'agiworkforce-api-gateway',
+        audience: 'agiworkforce',
+        jwtid: 'locked-device-jti',
+      },
+    );
+
+    await expect(getClerkAuthUser(makeBearerRequest(token))).rejects.toMatchObject(LOCKED_OUT);
+  });
+
+  it('refuses an API key whose workspace is locked down, key and scope notwithstanding', async () => {
+    makeFakeDb();
+    mockAuth.mockResolvedValue(authSession('locked-key-user'));
+    const createRes = await createApiKeyRoute(makeCreateRequest());
+    const created = (await createRes.json()) as { full_key: string };
+
+    mockAuth.mockResolvedValue(authSession(null));
+    bindWorkspace(LOCKED_ORGANIZATION, true);
+
+    await expect(
+      getClerkAuthUser(makeBearerRequest(created.full_key), { apiKeyScope: 'inference:write' }),
+    ).rejects.toMatchObject(LOCKED_OUT);
+  });
+
+  it('says what happened, so a locked-out workspace is not left guessing', async () => {
+    makeFakeDb();
+    bindWorkspace(LOCKED_ORGANIZATION, true);
+    mockAuth.mockResolvedValue(authSession('locked-cookie-user'));
+
+    await expect(
+      getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+    ).rejects.toMatchObject({ message: expect.stringMatching(/locked down|Contact support/) });
+  });
+
+  it('lets the same principal through once the lockdown is lifted', async () => {
+    makeFakeDb();
+    bindWorkspace(LOCKED_ORGANIZATION, false);
+    mockAuth.mockResolvedValue(authSession('unlocked-cookie-user'));
+
+    await expect(
+      getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+    ).resolves.toEqual({ userId: 'unlocked-cookie-user' });
+  });
+
+  it('lets a personal workspace through, having no workspace to lock', async () => {
+    makeFakeDb();
+    bindWorkspace(null, true);
+    mockAuth.mockResolvedValue(authSession('personal-user'));
+
+    await expect(
+      getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+    ).resolves.toEqual({ userId: 'personal-user' });
+  });
+
+  it('does not lock anyone out when the workspace lookup itself fails', async () => {
+    // The switch's contract: it can only ever take something down deliberately.
+    makeFakeDb();
+    const inner = mockNeonQuery.getMockImplementation();
+    mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (String(sql).toLowerCase().includes('from public.user_settings')) {
+        throw new Error('workspace lookup is down');
+      }
+      return inner ? ((await inner(sql, params)) as unknown[]) : [];
+    });
+    mockAuth.mockResolvedValue(authSession('degraded-user'));
+
+    await expect(
+      getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+    ).resolves.toEqual({ userId: 'degraded-user' });
   });
 });
 
