@@ -316,7 +316,7 @@ export function scimServiceProviderConfig(baseUrl: string) {
     filter: { supported: true, maxResults: SCIM_MAX_PAGE_SIZE },
     changePassword: { supported: false },
     sort: { supported: false },
-    etag: { supported: false },
+    etag: { supported: true },
     authenticationSchemes: [
       {
         type: 'oauthbearertoken',

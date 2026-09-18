@@ -1,7 +1,11 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import ts from 'typescript';
-import { expectedTablesAfter, loadMigrationInventory } from './neon-migrations.mjs';
+import {
+  MIGRATION_LEDGER_TABLE,
+  expectedTablesAfter,
+  loadMigrationInventory,
+} from './neon-migrations.mjs';
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 const DEFAULT_SOURCE_ROOTS = [
@@ -148,8 +152,15 @@ function expectedViewsAfter(migrations) {
   return views;
 }
 
+// The ledger is created by the migrator itself, so no migration file names it.
+const LEDGER_RELATION = MIGRATION_LEDGER_TABLE.replace(/^public\./u, '');
+
 export function canonicalRouteRelations(migrations = loadMigrationInventory()) {
-  return new Set([...expectedTablesAfter(migrations), ...expectedViewsAfter(migrations)]);
+  return new Set([
+    ...expectedTablesAfter(migrations),
+    ...expectedViewsAfter(migrations),
+    LEDGER_RELATION,
+  ]);
 }
 
 export function missingRouteTableMigrations(repoRoot, options = {}) {
