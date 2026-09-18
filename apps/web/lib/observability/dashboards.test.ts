@@ -56,6 +56,26 @@ describe('service dashboards', () => {
     );
   });
 
+  it('correlates a deploy with an error spike by splitting HTTP errors per release', () => {
+    const release = SERVICE_DASHBOARDS.find((dashboard) => dashboard.id === 'release-health');
+    const byId = new Map(release?.panels.map((panel) => [panel.id, panel]));
+    expect(byId.get('error-rate-by-release')?.groupBy).toContain('service_version');
+    expect(byId.get('crash-rate-by-release')?.groupBy).toContain('service_version');
+    expect(byId.get('traffic-by-client-version')?.groupBy).toContain('agi_client_version');
+  });
+
+  it('reads a gauge at its last value rather than as a rate or a histogram', () => {
+    const stuck = dashboardPanels().find((panel) => panel.id === 'stuck-jobs');
+    expect(panelQuery(stuck!)).toBe('max by (messaging_destination_name) (agi_queue_stuck)');
+  });
+
+  it('shows the queue age and the share of turns that found no route', () => {
+    const ids = dashboardPanels().map((panel) => panel.id);
+    expect(ids).toContain('queue-age');
+    const unavailable = dashboardPanels().find((panel) => panel.id === 'routing-unavailable-ratio');
+    expect(unavailable?.match).toEqual({ agi_routing_status: 'unavailable' });
+  });
+
   it('groups the browser panels by a surface attribute the spans also carry', () => {
     const browser = dashboardPanels().filter((panel) => panel.id.startsWith('browser-task'));
     expect(browser).toHaveLength(2);

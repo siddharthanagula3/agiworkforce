@@ -13,9 +13,16 @@ export interface SloIndicatorSource {
   coverage: string;
 }
 
+/**
+ * `internal` is measured and alerted on but never published: the §90 list is a
+ * commitment to customers, and the status and SLA pages render it verbatim.
+ */
+export type SloAudience = 'public' | 'internal';
+
 export interface SloDefinition {
   id: string;
   domain: string;
+  audience?: SloAudience;
   kind: SloIndicatorKind;
   /** The share of eligible events that must be good, as a fraction of one. */
   objective: number;
@@ -236,14 +243,61 @@ export const SLO_CATALOGUE: readonly SloDefinition[] = [
         'Webhook events the billing provider delivered. An event the provider never delivered cannot appear here.',
     },
   },
+  {
+    id: 'billing-usage',
+    domain: 'Billing usage',
+    audience: 'internal',
+    kind: 'availability',
+    objective: 0.999,
+    windowDays: MONTHLY_WINDOW_DAYS,
+    statement: 'Usage a request consumed is settled against the account that consumed it.',
+    source: {
+      table: 'managed_usage_requests',
+      occurredAt: 'created_at',
+      eligible: 'final_settlement_status is not null',
+      good: `final_settlement_status = 'succeeded'`,
+      coverage:
+        'Metered requests whose settlement reached a decision. A request still holding a reservation is not yet a sample; a settlement that gave up is a failed one.',
+    },
+  },
+  {
+    id: 'entitlement-activation',
+    domain: 'Entitlement activation',
+    audience: 'internal',
+    kind: 'availability',
+    objective: 0.999,
+    windowDays: MONTHLY_WINDOW_DAYS,
+    statement: 'What an account paid for is granted to it.',
+    source: {
+      table: 'credit_settlement_jobs',
+      occurredAt: 'created_at',
+      eligible: `status = any (array['succeeded', 'terminal'])`,
+      good: `status = 'succeeded'`,
+      coverage:
+        'Grants that reached a terminal state. A grant still retrying is not yet a sample, and a terminal one is money taken without the entitlement it bought.',
+    },
+  },
 ];
 
+export function isPublishedSlo(slo: SloDefinition): boolean {
+  return slo.audience !== 'internal';
+}
+
+export function publishedSlos(): readonly SloDefinition[] {
+  return SLO_CATALOGUE.filter(isPublishedSlo);
+}
+
 export function measuredSlos(): readonly SloDefinition[] {
-  return SLO_CATALOGUE.filter((slo) => slo.source !== null);
+  return SLO_CATALOGUE.filter((slo) => slo.source !== null && isPublishedSlo(slo));
 }
 
 export function declaredOnlySlos(): readonly SloDefinition[] {
-  return SLO_CATALOGUE.filter((slo) => slo.source === null);
+  return SLO_CATALOGUE.filter((slo) => slo.source === null && isPublishedSlo(slo));
+}
+
+/** Every indicator with a source, published or not: alerting sees them all. */
+export function alertableSlos(): readonly SloDefinition[] {
+  return SLO_CATALOGUE.filter((slo) => slo.source !== null);
 }
 
 export function findSlo(id: string): SloDefinition | undefined {

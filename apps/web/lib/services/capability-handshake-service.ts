@@ -26,14 +26,14 @@
  *     `canAccessManualModelSelection`. No new entitlement source invented.
  *   - `surface`, `getPlatformCapabilities(surface)`, the existing PLATFORM
  *     capability matrix (`../capabilities.ts`), not a parallel vocabulary.
- *   - `settings`, no per-capability user-settings store exists for web
- *     today (checked: `profiles.routing_preferences` is a routing/geo
- *     preference, not a capability toggle; `useChatStream`'s
- *     `webSearchEnabled` is a per-turn composer choice, not a persisted
- *     account setting). Honest default: this layer imposes NO restriction
- *     (grants everything) rather than fabricating a denial with no backing
- *     data. Replace with a real per-capability read once such a store
- *     exists, see the module-level TODO below.
+ *   - `settings`, the operator kill switches resolved by the caller from
+ *     `lib/feature-flags/capability-gate`, and nothing else. No per-capability
+ *     USER-settings store exists for web today (checked:
+ *     `profiles.routing_preferences` is a routing/geo preference, not a
+ *     capability toggle; `useChatStream`'s `webSearchEnabled` is a per-turn
+ *     composer choice, not a persisted account setting), so with no switch
+ *     thrown this layer still imposes no restriction rather than fabricating
+ *     a denial with no backing data. See the module-level TODO below.
  *
  * Every layer starts from "grant everything" (`ALL_PLATFORM_CAPABILITIES`)
  * and SUBTRACTS only the specific ids it has real evidence to restrict. This
@@ -44,8 +44,7 @@
  * not exist), free users obviously can chat.
  *
  * TODO(web-settings): once a real per-capability user-settings store exists,
- * replace `buildSettingsLayerGrant` with a genuine read instead of the
- * grant-everything default.
+ * `buildSettingsLayerGrant` should subtract it as well as the kill switches.
  */
 import 'server-only';
 
@@ -115,8 +114,23 @@ function buildSurfaceLayerGrant(surface: SyncedAppSurface): CapabilityLayerGrant
   return { layer: 'surface', sourceId: `surface:${surface}`, granted };
 }
 
-function buildSettingsLayerGrant(): CapabilityLayerGrant {
-  return { layer: 'settings', sourceId: 'settings:none-configured', granted: allCapabilities() };
+/**
+ * Also carries the operator kill switches. `CapabilityLayer` is a wire contract
+ * of exactly four names that every surface reads, so a switched-off capability
+ * is denied by the layer that holds deployment-side state rather than by a
+ * fifth name no client knows. The sourceId names the switches, not 'settings',
+ * so the reason is never guessed from the layer alone.
+ */
+function buildSettingsLayerGrant(
+  closedCapabilities: readonly PlatformCapability[],
+): CapabilityLayerGrant {
+  const granted = allCapabilities();
+  for (const capability of closedCapabilities) granted.delete(capability);
+  const sourceId =
+    closedCapabilities.length === 0
+      ? 'settings:none-configured'
+      : `kill-switch:${[...closedCapabilities].sort().join(',')}`;
+  return { layer: 'settings', sourceId, granted };
 }
 
 export interface CapabilityLimitResets {
@@ -250,6 +264,8 @@ export interface BuildMeCapabilityHandshakeInput {
   tier: string | null | undefined;
   surface: SyncedAppSurface;
   cloudExecutionDeploymentEnabled: boolean;
+  /** Capabilities an operator has switched off, from the kill-switch gate. */
+  closedCapabilities?: readonly PlatformCapability[];
   resets?: CapabilityLimitResets;
   computedAt?: string;
 }
@@ -263,7 +279,7 @@ export function buildMeCapabilityHandshake(
     model: buildModelLayerGrant(input.cloudExecutionDeploymentEnabled),
     tier: buildTierLayerGrant(input.tier),
     surface: buildSurfaceLayerGrant(input.surface),
-    settings: buildSettingsLayerGrant(),
+    settings: buildSettingsLayerGrant(input.closedCapabilities ?? []),
   };
   const limits = buildLimits(input.tier, input.resets ?? NO_CAPABILITY_LIMIT_RESETS);
   return buildEffectiveCapabilityDocument({

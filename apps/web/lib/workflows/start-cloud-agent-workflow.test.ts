@@ -13,6 +13,9 @@ const workflowMocks = vi.hoisted(() => ({
   completeCheckpoint: vi.fn(async () => undefined),
   autoMemory: vi.fn(async () => undefined),
   connectorExecutor: vi.fn(),
+  assertCapabilityAvailable: vi.fn(
+    async (_subject: unknown, _capability: string, _label: string) => undefined,
+  ),
 }));
 
 vi.mock('workflow/api', () => ({ start: workflowMocks.start }));
@@ -79,6 +82,9 @@ vi.mock('@/lib/services/managed-auto-memory-service', () => ({
 }));
 vi.mock('@/lib/user-connector-tools', () => ({
   makeUserConnectorExecutor: workflowMocks.connectorExecutor,
+}));
+vi.mock('@/lib/feature-flags/capability-gate', () => ({
+  assertCapabilityAvailable: workflowMocks.assertCapabilityAvailable,
 }));
 
 import { WORKFLOW_WORLD_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
@@ -244,6 +250,55 @@ describe('cloud agent workflow starter', () => {
  * resume request-scoped already existed in `runToolLoop`; it was simply not
  * reachable from those entry points.
  */
+describe('the Work kill switch', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('asks about Work before it starts anything', async () => {
+    workflowMocks.start.mockResolvedValue({
+      runId: 'wf-1',
+      getReadable: () => ({}) as never,
+      cancel: vi.fn(),
+    });
+    workflowMocks.attach.mockResolvedValue(undefined);
+
+    await startCloudAgentWorkflowExecution(baseInput());
+
+    const [subject, capability, label] = workflowMocks.assertCapabilityAvailable.mock.calls[0]!;
+    expect(capability).toBe('work');
+    expect(label).toBe('Work');
+    expect(subject).toMatchObject({ userId: 'user-1', workspaceId: null });
+  });
+
+  it('starts no run and attaches nothing when Work is switched off', async () => {
+    workflowMocks.assertCapabilityAvailable.mockRejectedValueOnce(
+      new Error('Work is temporarily switched off while we investigate a problem with it.'),
+    );
+
+    await expect(startCloudAgentWorkflowExecution(baseInput())).rejects.toThrow(
+      'temporarily switched off',
+    );
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(workflowMocks.attach).not.toHaveBeenCalled();
+  });
+
+  it('carries the workspace, so a switch closed for one tenant is asked per tenant', async () => {
+    workflowMocks.start.mockResolvedValue({
+      runId: 'wf-1',
+      getReadable: () => ({}) as never,
+      cancel: vi.fn(),
+    });
+    workflowMocks.attach.mockResolvedValue(undefined);
+    const input = baseInput();
+    (input.processed as unknown as { organizationId: string | null }).organizationId = 'org-9';
+
+    await startCloudAgentWorkflowExecution(input);
+
+    expect(workflowMocks.assertCapabilityAvailable.mock.calls[0]![0]).toMatchObject({
+      workspaceId: 'org-9',
+    });
+  });
+});
+
 describe('runCloudAgentTurn transport selection', () => {
   const inlineStream = new ReadableStream<Uint8Array>();
 
