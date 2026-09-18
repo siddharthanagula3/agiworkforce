@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { resolveBrowserSession, type BrowserSessionKind } from '@agiworkforce/types';
 import { useBrowserStore } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
+import { BrowserSessionPicker } from './BrowserSessionPicker';
 import { Button } from '@/ui/Button';
 import {
   Play,
@@ -24,6 +26,10 @@ interface BrowserViewerProps {
   className?: string;
   tabId?: string;
 }
+
+const VIEWER_HOSTS_THE_BUILT_IN_SESSION =
+  'Your Chrome is driven by the AGI extension inside Chrome itself, so this viewer cannot start it. ' +
+  'Pick the built-in browser to run here.';
 
 function describeRuntimeError(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -86,6 +92,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
   const [isNavigating, setIsNavigating] = useState(false);
   const [runtimeBusy, setRuntimeBusy] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [sessionKind, setSessionKind] = useState<BrowserSessionKind>('built-in');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -280,6 +287,15 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
 
   const handleStartRuntime = async () => {
     if (runtimeBusy) return;
+    const resolution = resolveBrowserSession(sessionKind);
+    if (!resolution.ok) {
+      setRuntimeError(resolution.reason);
+      return;
+    }
+    if (sessionKind !== 'built-in') {
+      setRuntimeError(VIEWER_HOSTS_THE_BUILT_IN_SESSION);
+      return;
+    }
     setRuntimeBusy(true);
     setRuntimeError(null);
     try {
@@ -550,6 +566,11 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
                   <p className="text-xs text-muted-foreground/80">
                     Start it to let agents browse, and to watch what they do here.
                   </p>
+                  <BrowserSessionPicker
+                    value={sessionKind}
+                    onChange={setSessionKind}
+                    className="text-left"
+                  />
                   <Button
                     variant="default"
                     size="sm"
