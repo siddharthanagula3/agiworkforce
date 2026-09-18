@@ -13,18 +13,24 @@ interface ConnectionInfo {
   connectedAt: number;
   lastActivity: number;
   correlationId: string;
+  deviceId?: string;
 }
 
 interface RemoveConnectionMetadata {
-  trigger?: 'socket_close' | 'server_cleanup' | 'server_shutdown' | 'error';
+  trigger?: 'socket_close' | 'server_cleanup' | 'server_shutdown' | 'error' | 'device_revoked';
   closeCode?: number;
   closeReason?: string;
 }
+
+export const DEVICE_REVOKED_CLOSE_CODE = 1008;
+export const DEVICE_REVOKED_REASON = 'device_revoked';
 
 class ConnectionManager {
   private connections = new Map<WebSocket, ConnectionInfo>();
   private ipConnectionCounts = new Map<string, number>();
   private closeReasonCounts = new Map<string, number>();
+  private deviceSockets = new Map<string, Set<WebSocket>>();
+  private revokedDevices = new Set<string>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   start(): void {
@@ -85,6 +91,7 @@ class ConnectionManager {
     }
 
     this.connections.delete(socket);
+    this.forgetDeviceSocket(socket, info.deviceId);
 
     const currentCount = this.ipConnectionCounts.get(info.ip) ?? 1;
     if (currentCount <= 1) {
@@ -111,6 +118,91 @@ class ConnectionManager {
       },
       'Connection removed',
     );
+  }
+
+  /**
+   * Names the device behind an already-open socket, which is the earliest the
+   * server knows it: the identity arrives in the register message, not in the
+   * handshake. Returns false when the device is already revoked, so the caller
+   * refuses the registration instead of relaying for it.
+   */
+  bindDevice(socket: WebSocket, deviceId: string): boolean {
+    const info = this.connections.get(socket);
+    if (!info || !deviceId) return false;
+    if (this.revokedDevices.has(deviceId)) {
+      this.closeRevoked(socket, DEVICE_REVOKED_REASON);
+      return false;
+    }
+
+    this.forgetDeviceSocket(socket, info.deviceId);
+    info.deviceId = deviceId;
+    const sockets = this.deviceSockets.get(deviceId) ?? new Set<WebSocket>();
+    sockets.add(socket);
+    this.deviceSockets.set(deviceId, sockets);
+    return true;
+  }
+
+  /**
+   * Drops every connection a revoked device holds, now. The device id is also
+   * remembered so a reconnect that arrives a moment later is refused rather
+   * than waiting for the next poll of whatever revoked it.
+   */
+  revokeDevice(deviceId: string, reason: string = DEVICE_REVOKED_REASON): number {
+    if (!deviceId) return 0;
+    this.revokedDevices.add(deviceId);
+
+    const sockets = this.deviceSockets.get(deviceId);
+    if (!sockets || sockets.size === 0) {
+      logger.info({ deviceId, closed: 0 }, 'Device revoked with no live connections');
+      return 0;
+    }
+
+    let closed = 0;
+    for (const socket of [...sockets]) {
+      this.closeRevoked(socket, reason);
+      this.removeConnection(socket, {
+        trigger: 'device_revoked',
+        closeCode: DEVICE_REVOKED_CLOSE_CODE,
+        closeReason: reason,
+      });
+      closed++;
+    }
+    this.deviceSockets.delete(deviceId);
+
+    logger.info({ deviceId, closed, reason }, 'Device revoked; connections dropped');
+    return closed;
+  }
+
+  /** Undoes a revocation when the device is paired again. */
+  reinstateDevice(deviceId: string): void {
+    this.revokedDevices.delete(deviceId);
+  }
+
+  isDeviceRevoked(deviceId: string): boolean {
+    return this.revokedDevices.has(deviceId);
+  }
+
+  getDeviceConnectionCount(deviceId: string): number {
+    return this.deviceSockets.get(deviceId)?.size ?? 0;
+  }
+
+  private closeRevoked(socket: WebSocket, reason: string): void {
+    try {
+      if (socket.readyState === 1) {
+        socket.send(JSON.stringify({ type: DEVICE_REVOKED_REASON, reason }));
+      }
+      socket.close(DEVICE_REVOKED_CLOSE_CODE, reason);
+    } catch {
+      // A socket that cannot be closed is already gone; the binding is dropped either way.
+    }
+  }
+
+  private forgetDeviceSocket(socket: WebSocket, deviceId: string | undefined): void {
+    if (!deviceId) return;
+    const sockets = this.deviceSockets.get(deviceId);
+    if (!sockets) return;
+    sockets.delete(socket);
+    if (sockets.size === 0) this.deviceSockets.delete(deviceId);
   }
 
   updateActivity(socket: WebSocket): void {

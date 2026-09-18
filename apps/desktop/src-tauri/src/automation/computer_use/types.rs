@@ -1,7 +1,5 @@
 //! Core types for Computer Use capability.
-//!
-//! This module defines all the fundamental types used throughout the Computer Use
-//! system, including actions, coordinates, screen elements, and task definitions.
+//!.
 
 use super::control::DialogResponse;
 use serde::{Deserialize, Serialize};
@@ -607,10 +605,25 @@ pub struct TaskOutcome {
 
     /// Final screen state description.
     pub final_state: Option<String>,
+
+    /// The check that was run after the last action, when one was run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<TaskVerification>,
+}
+
+/// What was checked after the task's last action, and whether the check passed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskVerification {
+    pub check: String,
+    pub passed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed: Option<String>,
 }
 
 impl TaskOutcome {
-    /// Creates a successful outcome.
+    /// Creates a successful outcome with nothing checked. Prefer
+    /// [`TaskOutcome::settle`]: an outcome built here reports `verified()`.
     pub fn success(total_actions: u32, duration_ms: u64, summary: String) -> Self {
         Self {
             success: true,
@@ -620,7 +633,48 @@ impl TaskOutcome {
             errors: Vec::new(),
             screenshots: Vec::new(),
             final_state: None,
+            verification: None,
         }
+    }
+
+    /// Settles a task on the result of a check rather than on a claim: a check
+    /// that did not pass produces a failure, whatever the run believed.
+    pub fn settle(
+        total_actions: u32,
+        duration_ms: u64,
+        summary: String,
+        verification: TaskVerification,
+    ) -> Self {
+        let passed = verification.passed;
+        Self {
+            success: passed,
+            total_actions,
+            duration_ms,
+            summary,
+            errors: if passed {
+                Vec::new()
+            } else {
+                vec![format!("Check did not pass: {}", verification.check)]
+            },
+            screenshots: Vec::new(),
+            final_state: None,
+            verification: Some(verification),
+        }
+    }
+
+    /// True only when the task succeeded and a check said so.
+    pub fn verified(&self) -> bool {
+        self.success
+            && self
+                .verification
+                .as_ref()
+                .is_some_and(|verification| verification.passed)
+    }
+
+    /// A success nobody checked. Counted apart from real successes so a surface
+    /// that stops checking its work shows up instead of looking healthy.
+    pub fn unverified_success(&self) -> bool {
+        self.success && !self.verified()
     }
 
     /// Creates a failed outcome.
@@ -638,7 +692,46 @@ impl TaskOutcome {
             errors,
             screenshots: Vec::new(),
             final_state: None,
+            verification: None,
         }
+    }
+}
+
+/// Success-rate aggregation over the outcomes of one session or one device.
+///.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskOutcomeMetrics {
+    pub total: u32,
+    pub succeeded: u32,
+    pub failed: u32,
+    pub unverified: u32,
+    pub total_actions: u32,
+    pub total_duration_ms: u64,
+    pub success_rate: f64,
+}
+
+impl TaskOutcome {
+    /// Aggregates settled outcomes into the numbers a session end reports.
+    pub fn tally<'a>(outcomes: impl IntoIterator<Item = &'a TaskOutcome>) -> TaskOutcomeMetrics {
+        let mut metrics = TaskOutcomeMetrics::default();
+        for outcome in outcomes {
+            metrics.total += 1;
+            metrics.total_actions += outcome.total_actions;
+            metrics.total_duration_ms += outcome.duration_ms;
+            if outcome.verified() {
+                metrics.succeeded += 1;
+            } else {
+                metrics.failed += 1;
+            }
+            if outcome.unverified_success() {
+                metrics.unverified += 1;
+            }
+        }
+        if metrics.total > 0 {
+            metrics.success_rate = f64::from(metrics.succeeded) / f64::from(metrics.total);
+        }
+        metrics
     }
 }
 
@@ -685,6 +778,84 @@ mod tests {
             delay_ms: 10,
         };
         assert!(typ.description().contains("Hello"));
+    }
+
+    #[test]
+    fn a_task_settles_on_its_check_not_on_what_the_run_believed() {
+        let claimed = TaskOutcome::settle(
+            3,
+            1_200,
+            "Filled the form".to_string(),
+            TaskVerification {
+                check: "the confirmation heading is on screen".to_string(),
+                passed: false,
+                observed: None,
+            },
+        );
+        assert!(!claimed.success);
+        assert!(!claimed.verified());
+        assert!(claimed.errors[0].contains("confirmation heading"));
+
+        let checked = TaskOutcome::settle(
+            3,
+            1_200,
+            "Filled the form".to_string(),
+            TaskVerification {
+                check: "the confirmation heading is on screen".to_string(),
+                passed: true,
+                observed: Some("Thanks for your order".to_string()),
+            },
+        );
+        assert!(checked.success);
+        assert!(checked.verified());
+        assert!(checked.errors.is_empty());
+    }
+
+    #[test]
+    fn a_success_nobody_checked_is_not_counted_as_one() {
+        let unchecked = TaskOutcome::success(2, 900, "Done".to_string());
+        assert!(unchecked.success);
+        assert!(!unchecked.verified());
+        assert!(unchecked.unverified_success());
+
+        let metrics = TaskOutcome::tally([&unchecked]);
+        assert_eq!(metrics.succeeded, 0);
+        assert_eq!(metrics.unverified, 1);
+        assert_eq!(metrics.success_rate, 0.0);
+    }
+
+    #[test]
+    fn outcomes_aggregate_into_a_success_rate_per_session() {
+        let checked = TaskOutcome::settle(
+            4,
+            2_000,
+            "Done".to_string(),
+            TaskVerification {
+                check: "the page changed".to_string(),
+                passed: true,
+                observed: None,
+            },
+        );
+        let failed = TaskOutcome::failure(1, 500, "Stopped".to_string(), vec!["timeout".into()]);
+
+        let metrics = TaskOutcome::tally([&checked, &failed]);
+        assert_eq!(metrics.total, 2);
+        assert_eq!(metrics.succeeded, 1);
+        assert_eq!(metrics.failed, 1);
+        assert_eq!(metrics.total_actions, 5);
+        assert_eq!(metrics.total_duration_ms, 2_500);
+        assert!((metrics.success_rate - 0.5).abs() < f64::EPSILON);
+
+        assert_eq!(TaskOutcome::tally([]).success_rate, 0.0);
+    }
+
+    #[test]
+    fn an_outcome_without_a_check_serializes_without_the_field() {
+        let json = serde_json::to_string(&TaskOutcome::success(1, 10, "Done".to_string())).unwrap();
+        assert!(!json.contains("verification"));
+
+        let restored: TaskOutcome = serde_json::from_str(&json).unwrap();
+        assert!(restored.verification.is_none());
     }
 
     #[test]

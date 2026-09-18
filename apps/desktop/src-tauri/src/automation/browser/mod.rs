@@ -14,8 +14,9 @@ pub use extension_bridge::ExtensionBridge;
 pub use playwright_bridge::*;
 pub use semantic::*;
 pub use session::{
-    browser_session_capabilities, BrowserSessionCapability, BrowserSessionKind,
-    BrowserSessionTarget, CLOUD_BROWSER_UNAVAILABLE,
+    browser_session_capabilities, select_browser_session, BrowserDeclineReason, BrowserDeclined,
+    BrowserSelection, BrowserSessionCapability, BrowserSessionKind, BrowserSessionTarget,
+    BrowserSiteAccess, CLOUD_BROWSER_UNAVAILABLE,
 };
 pub use tab_manager::*;
 
@@ -33,12 +34,7 @@ pub struct BrowserState {
 
 impl BrowserState {
     /// SEV-DESK-02: production constructor, threads the Tauri `AppHandle`
-    /// through to `ExtensionBridge` so dangerous browser-mutating actions
-    /// (`execute_script`, `navigate`, cookie ops, localStorage ops) can
-    /// surface a confirmation prompt before reaching the page.
-    ///
-    /// Tests / non-IPC callers may pass `None`; in that case any gated
-    /// `ExtensionBridge` method fails closed with an explicit error.
+    /// through to `ExtensionBridge` so dangerous browser-mutating actions.
     pub async fn new(app_handle: Option<tauri::AppHandle>) -> Result<Self> {
         let extension = match app_handle {
             Some(handle) => ExtensionBridge::with_app_handle(handle),
