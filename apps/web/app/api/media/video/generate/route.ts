@@ -108,6 +108,11 @@ type VideoAspectRatio = ManagedMediaVideoAspectRatio;
 interface VideoGenerationResponse {
   success: boolean;
   task_id: string;
+  /**
+   * Every candidate this request created, `task_id` first. A caller that asked
+   * for one gets a single-entry list and can keep reading `task_id` alone.
+   */
+  task_ids?: string[];
   status: 'queued' | 'processing' | 'completed' | 'failed';
   provider: VideoProvider;
   model: string;
@@ -115,6 +120,8 @@ interface VideoGenerationResponse {
   video_url?: string;
   error?: string;
 }
+
+type VideoCatalogModel = ModelMetadata;
 
 const VideoGenerationRouteRequestSchema = ManagedMediaVideoGenerationRequestSchema.extend({
   conversation_id: z.string().uuid().optional(),
@@ -831,10 +838,13 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     model: requestedModelId,
     conversation_id: conversationId,
     assistant_message_id: assistantMessageId,
+    n: requestedCandidateCount,
   } = validationResult.data;
+  const candidateCount = requestedCandidateCount ?? 1;
 
   const requestHash = fingerprintManagedUsageRequest(validationResult.data);
   let idempotencyKey: string;
+  let candidateIdempotencyKeys: string[];
   let sourceSurface: 'web' | 'mobile' | 'desktop';
   let organizationId: string | null;
   let scopedDb: ManagedUsageRequestReservation['db'];
@@ -847,6 +857,21 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
         400,
         'invalid_media_idempotency_key',
       );
+    }
+    // Each candidate settles under its own reservation, so each needs its own
+    // key. Deriving them from the caller's key keeps a retried request idempotent
+    // per candidate rather than producing a second set of videos.
+    candidateIdempotencyKeys = Array.from({ length: candidateCount }, (_, index) =>
+      index === 0 ? idempotencyKey : `${idempotencyKey}-c${index + 1}`,
+    );
+    for (const candidateKey of candidateIdempotencyKeys) {
+      if (!parseManagedMediaIdempotencyKey(candidateKey)) {
+        throw new ManagedUsageRequestError(
+          'Idempotency-Key is too long to carry more than one video candidate.',
+          400,
+          'invalid_media_idempotency_key',
+        );
+      }
     }
     sourceSurface = mediaIdentity.surface;
     const scoped = await callerScope();
@@ -983,7 +1008,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       userId,
       planTier: subscription.plan_tier,
       unit: 'video_seconds',
-      requestedUnits: billableDurationSecs,
+      requestedUnits: billableDurationSecs * candidateCount,
     });
   } catch (error) {
     const managedError =
@@ -1006,6 +1031,153 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       'Durable video processing is temporarily unavailable. Please try again later.',
     );
   }
+  const submission = await submitVideoCandidates({
+    request,
+    db: scopedDb,
+    userId,
+    organizationId,
+    conversationId,
+    assistantMessageId,
+    idempotencyKeys: candidateIdempotencyKeys,
+    requestHash,
+    planTier: subscription.plan_tier,
+    provider,
+    model,
+    prompt,
+    durationSecs: billableDurationSecs,
+    resolution,
+    aspectRatio,
+    generateAudio,
+    sourceSurface,
+    estimatedCostCents,
+    estimatedDurationSecs: estimatedDuration,
+  });
+  if (submission.kind === 'response') return submission.response;
+  const job = submission.jobs[0]!;
+
+  const response: VideoGenerationResponse = {
+    success: true,
+    task_id: job.id,
+    task_ids: submission.jobs.map((candidate) => candidate.id),
+    status: 'queued',
+    provider,
+    model: model.id,
+    estimated_duration_secs: estimatedDuration,
+  };
+
+  logger.info(
+    {
+      userId: userId,
+      taskId: job.id,
+      taskIds: response.task_ids,
+      provider,
+      estimatedDuration,
+    },
+    'Video generation task created',
+  );
+
+  return NextResponse.json(response, {
+    headers: {
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  });
+}
+
+interface VideoCandidateSubmissionInput {
+  request: NextRequest;
+  db: ManagedUsageRequestReservation['db'];
+  userId: string;
+  organizationId: string | null;
+  conversationId: string | undefined;
+  assistantMessageId: string | undefined;
+  idempotencyKey: string;
+  requestHash: string;
+  planTier: string;
+  provider: VideoProvider;
+  model: VideoCatalogModel;
+  prompt: string;
+  durationSecs: number;
+  resolution: VideoResolution;
+  aspectRatio: VideoAspectRatio;
+  generateAudio: boolean;
+  sourceSurface: 'web' | 'mobile' | 'desktop';
+  estimatedCostCents: number;
+  estimatedDurationSecs: number;
+}
+
+type VideoCandidateOutcome =
+  { kind: 'job'; job: VideoGenerationJob } | { kind: 'response'; response: NextResponse };
+
+/**
+ * Submit every requested candidate.
+ *
+ * Each candidate is a separate durable job with its own reservation, because
+ * one job owns one provider task, one asset and one settlement. The first
+ * candidate behaves exactly as a single-candidate request always has, including
+ * its replays and refusals. A later candidate that fails does not throw away the
+ * ones already accepted and paid for: submission stops there and the response
+ * carries the ids that exist.
+ */
+async function submitVideoCandidates(
+  input: Omit<VideoCandidateSubmissionInput, 'idempotencyKey'> & { idempotencyKeys: string[] },
+): Promise<
+  { kind: 'jobs'; jobs: VideoGenerationJob[] } | { kind: 'response'; response: NextResponse }
+> {
+  const jobs: VideoGenerationJob[] = [];
+  for (const [index, idempotencyKey] of input.idempotencyKeys.entries()) {
+    const isFirst = index === 0;
+    let outcome: VideoCandidateOutcome;
+    try {
+      outcome = await submitVideoCandidate({
+        ...input,
+        idempotencyKey,
+        // The transcript placeholder is one row and one job owns it, so the
+        // extra candidates are library-only rather than silently rebinding it.
+        conversationId: isFirst ? input.conversationId : undefined,
+        assistantMessageId: isFirst ? input.assistantMessageId : undefined,
+      });
+    } catch (error) {
+      if (isFirst) throw error;
+      logger.error(
+        { error, userId: input.userId, candidate: index + 1 },
+        'Additional video candidate was not submitted',
+      );
+      break;
+    }
+    if (outcome.kind === 'response') {
+      if (isFirst) return { kind: 'response', response: outcome.response };
+      break;
+    }
+    jobs.push(outcome.job);
+  }
+  return { kind: 'jobs', jobs };
+}
+
+async function submitVideoCandidate(
+  input: VideoCandidateSubmissionInput,
+): Promise<VideoCandidateOutcome> {
+  const {
+    request,
+    db: scopedDb,
+    userId,
+    organizationId,
+    conversationId,
+    assistantMessageId,
+    idempotencyKey,
+    requestHash,
+    provider,
+    model,
+    prompt,
+    sourceSurface,
+    resolution,
+    aspectRatio,
+    generateAudio,
+    estimatedCostCents,
+  } = input;
+  const billableDurationSecs = input.durationSecs;
+  const estimatedDuration = input.estimatedDurationSecs;
+
   const admissionToken = randomUUID();
   try {
     const admitted = await acquireVideoGenerationAdmission({
@@ -1015,14 +1187,17 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       admissionSeconds: VIDEO_GENERATION_ADMISSION_SECONDS,
     });
     if (!admitted) {
-      return managedUsageErrorResponse(
-        request,
-        new ManagedUsageRequestError(
-          'A previous video request is still being set up, or account data is being erased. Try again in about a minute.',
-          409,
-          'video_generation_admission_busy',
+      return {
+        kind: 'response',
+        response: managedUsageErrorResponse(
+          request,
+          new ManagedUsageRequestError(
+            'A previous video request is still being set up, or account data is being erased. Try again in about a minute.',
+            409,
+            'video_generation_admission_busy',
+          ),
         ),
-      );
+      };
     }
   } catch (error) {
     logger.error({ error, userId }, 'Video generation admission could not be acquired');
@@ -1041,7 +1216,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       provider,
       model: model.id,
       estimatedCostCents,
-      planTier: subscription.plan_tier,
+      planTier: input.planTier,
       isFlagship: false,
       leaseSeconds: 3600,
     });
@@ -1064,7 +1239,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
           idempotencyKey,
           requestHash,
         });
-        if (existing) return replayResponse(request, existing);
+        if (existing) return { kind: 'response', response: replayResponse(request, existing) };
       } catch (replayError) {
         const managedError =
           replayError instanceof ManagedUsageRequestError
@@ -1074,7 +1249,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
                 503,
                 'billing_unavailable',
               );
-        return managedUsageErrorResponse(request, managedError);
+        return { kind: 'response', response: managedUsageErrorResponse(request, managedError) };
       }
     }
     const managedError =
@@ -1085,7 +1260,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
             503,
             'billing_unavailable',
           );
-    return managedUsageErrorResponse(request, managedError);
+    return { kind: 'response', response: managedUsageErrorResponse(request, managedError) };
   }
 
   const settlePreJobFailure = async (reason: string): Promise<void> => {
@@ -1185,7 +1360,8 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       recoveryError = readError;
     }
     if (recovered) {
-      if (recovered.status !== 'submitting') return replayResponse(request, recovered);
+      if (recovered.status !== 'submitting')
+        return { kind: 'response', response: replayResponse(request, recovered) };
       job = recovered;
     } else if (recoveryError) {
       logger.error(
@@ -1301,7 +1477,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       claimToken: submissionClaimToken,
       claimSeconds: 120,
     });
-    if (!begun) return replayResponse(request, job);
+    if (!begun) return { kind: 'response', response: replayResponse(request, job) };
     job = begun;
   } catch (error) {
     logger.warn({ error, jobId: job.id }, 'Video provider submission claim was not acquired');
@@ -1311,7 +1487,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       idempotencyKey,
       requestHash,
     }).catch(() => null);
-    return replayResponse(request, current ?? job);
+    return { kind: 'response', response: replayResponse(request, current ?? job) };
   }
 
   try {
@@ -1363,7 +1539,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
             { cause, jobId: job.id, providerTaskId },
             'Accepted video provider task moved to durable attachment recovery',
           );
-          return replayResponse(request, job);
+          return { kind: 'response', response: replayResponse(request, job) };
         } catch (workflowError) {
           throw new VideoProviderTaskAttachmentUnavailableError(
             'The accepted provider task could not be copied into durable recovery.',
@@ -1451,31 +1627,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     'Video generation task durably queued',
   );
 
-  const response: VideoGenerationResponse = {
-    success: true,
-    task_id: job.id,
-    status: 'queued',
-    provider,
-    model: model.id,
-    estimated_duration_secs: estimatedDuration,
-  };
-
-  logger.info(
-    {
-      userId: userId,
-      taskId: job.id,
-      provider,
-      estimatedDuration,
-    },
-    'Video generation task created',
-  );
-
-  return NextResponse.json(response, {
-    headers: {
-      ...getCorsHeaders(request),
-      ...getSecurityHeaders(),
-    },
-  });
+  return { kind: 'job', job };
 }
 
 export const POST = withErrorHandler(handleVideoGeneration);

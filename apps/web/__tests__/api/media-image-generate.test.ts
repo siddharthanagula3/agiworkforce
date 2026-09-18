@@ -243,6 +243,35 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   markManagedUsageClientDelivered: managedUsageMocks.delivered,
 }));
 
+const afterCallbacks = vi.hoisted(() => [] as Array<() => unknown>);
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual<typeof import('next/server')>('next/server');
+  return {
+    ...actual,
+    after: (callback: () => unknown) => {
+      afterCallbacks.push(callback);
+    },
+  };
+});
+
+// 0226 is unapplied on a deployment that has not run it, and every case below
+// predates the durable job, so the store reads as absent unless a case says
+// otherwise. That keeps this file measuring the synchronous contract the other
+// surfaces still speak.
+const imageJobMocks = vi.hoisted(() => ({
+  storeReady: vi.fn(async (..._args: unknown[]) => false),
+  create: vi.fn(),
+  claim: vi.fn(),
+  complete: vi.fn(),
+}));
+vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/image-generation-jobs')>()),
+  isImageJobStoreReady: (...args: unknown[]) => imageJobMocks.storeReady(...args),
+  createImageGenerationJob: (...args: unknown[]) => imageJobMocks.create(...args),
+  claimImageGenerationJobAttempt: (...args: unknown[]) => imageJobMocks.claim(...args),
+  completeImageGenerationJob: (...args: unknown[]) => imageJobMocks.complete(...args),
+}));
+
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
@@ -283,9 +312,64 @@ const PRO_SUBSCRIPTION = {
 
 const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
 
+const DURABLE_IMAGE_JOB = {
+  id: '77777777-7777-4777-8777-777777777777',
+  userId: TEST_USER.userId,
+  organizationId: null,
+  conversationId: null,
+  idempotencyKey: 'agi.media.web.image.operation-123',
+  requestHash: 'a'.repeat(64),
+  billingLeaseToken: 'lease-image',
+  provider: 'openai' as const,
+  model: imageRouteFixtures.openAiModelId,
+  operation: 'generate' as const,
+  prompt: 'a cat sitting on a throne',
+  plan: {
+    aspectRatio: '1:1' as const,
+    quality: 'standard',
+    legacySize: '1024x1024',
+    transparentBackground: false,
+  },
+  sourceImageSha256: null,
+  maskImageSha256: null,
+  imageCount: 1,
+  sourceSurface: 'web' as const,
+  estimatedCostMicrousd: 8000,
+  actualCostMicrousd: null,
+  status: 'queued' as const,
+  attempts: 0,
+  maxAttempts: 3,
+  attemptStartedAt: null,
+  retryable: false,
+  publicError: null,
+  cancelRequestedAt: null,
+  billingOutcome: null,
+  billingSettlementStatus: null,
+  nextAttemptAt: '2026-09-17T00:00:00.000Z',
+  claimToken: null,
+  claimExpiresAt: null,
+  createdAt: '2026-09-17T00:00:00.000Z',
+  updatedAt: '2026-09-17T00:00:00.000Z',
+  terminalAt: null,
+};
+
 describe('POST /api/media/image/generate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    afterCallbacks.length = 0;
+    imageJobMocks.storeReady.mockResolvedValue(false);
+    imageJobMocks.claim.mockImplementation(async () => ({
+      ...DURABLE_IMAGE_JOB,
+      status: 'processing' as const,
+      attempts: 1,
+    }));
+    imageJobMocks.complete.mockImplementation(async () => ({
+      ...DURABLE_IMAGE_JOB,
+      status: 'completed' as const,
+      attempts: 1,
+      actualCostMicrousd: 8000,
+      terminalAt: '2026-09-17T00:01:00.000Z',
+    }));
 
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
@@ -907,6 +991,60 @@ describe('POST /api/media/image/generate', () => {
       expect(data.catalog_model).toBe(imageRouteFixtures.openAiModelId);
       expect(data).not.toHaveProperty('cost_estimate');
       expect(typeof data.latency_ms).toBe('number');
+    });
+
+    it('creates a durable job and hands back its handle once the store exists', async () => {
+      imageJobMocks.storeReady.mockResolvedValue(true);
+      imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://example.com/generated-image.png' }] }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a cat sitting on a throne', provider: 'openai' }),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.job_id).toBe(DURABLE_IMAGE_JOB.id);
+      expect(imageJobMocks.create).toHaveBeenCalledTimes(1);
+      expect(imageJobMocks.create.mock.calls[0]![0]).toMatchObject({
+        idempotencyKey: 'agi.media.web.image.operation-123',
+        operation: 'generate',
+        imageCount: 1,
+      });
+    });
+
+    it('returns the job handle before the provider call when the caller asks to poll', async () => {
+      imageJobMocks.storeReady.mockResolvedValue(true);
+      imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a cat sitting on a throne', provider: 'openai', async: true }),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(202);
+      expect(data.job_id).toBe(DURABLE_IMAGE_JOB.id);
+      expect(data.status).toBe('queued');
+      // Nothing was asked of the provider on this connection: the attempt is
+      // scheduled to run after the response, which is what lets the user leave.
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(afterCallbacks).toHaveLength(1);
+    });
+
+    it('refuses an async request on a deployment without the durable store', async () => {
+      imageJobMocks.storeReady.mockResolvedValue(false);
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a cat', provider: 'openai', async: true }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should return 200 with hd quality model', async () => {

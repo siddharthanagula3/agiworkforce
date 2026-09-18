@@ -82,6 +82,36 @@ describe('managed media cloud request contracts', () => {
     });
   });
 
+  it('carries a video candidate count in the same envelope image already had', () => {
+    expect(ManagedMediaVideoGenerationRequestSchema.parse({ prompt: 'video', n: 4 }).n).toBe(4);
+    // Absent means one candidate; the field is not defaulted, so a client that
+    // never sends it keeps producing the exact request body it always did.
+    expect(ManagedMediaVideoGenerationRequestSchema.parse({ prompt: 'video' })).not.toHaveProperty(
+      'n',
+    );
+    expect(
+      ManagedMediaVideoGenerationRequestSchema.safeParse({ prompt: 'video', n: 5 }).success,
+    ).toBe(false);
+    expect(
+      ManagedMediaVideoGenerationRequestSchema.safeParse({ prompt: 'video', n: 0 }).success,
+    ).toBe(false);
+    expect(
+      ManagedMediaVideoGenerationRequestSchema.safeParse({ prompt: 'video', n: 1.5 }).success,
+    ).toBe(false);
+  });
+
+  it('lets an image caller ask for the durable job handle instead of the images', () => {
+    expect(
+      ManagedMediaImageGenerationRequestSchema.parse({ prompt: 'image', async: true }).async,
+    ).toBe(true);
+    expect(ManagedMediaImageGenerationRequestSchema.parse({ prompt: 'image' })).not.toHaveProperty(
+      'async',
+    );
+    expect(
+      ManagedMediaImageGenerationRequestSchema.safeParse({ prompt: 'image', async: 'yes' }).success,
+    ).toBe(false);
+  });
+
   it('rejects duration and aspect values outside the broad video wire envelope', () => {
     expect(
       ManagedMediaVideoGenerationRequestSchema.safeParse({

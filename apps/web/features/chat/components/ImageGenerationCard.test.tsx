@@ -206,8 +206,8 @@ describe('ImageGenerationCard revision panel', () => {
     fireEvent.click(screen.getByRole('button', { name: /new version/i }));
     fireEvent.click(screen.getByTitle('Generate this image with a different aspect ratio'));
 
-    expect(screen.queryByRole('button', { name: /portrait 3:4/i })).toBeNull();
-    expect(screen.getByRole('button', { name: /portrait 2:3/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitemradio', { name: /portrait 3:4/i })).toBeNull();
+    expect(screen.getByRole('menuitemradio', { name: /portrait 2:3/i })).toBeInTheDocument();
   });
 
   it('normalizes a persisted legacy ratio before a describe-change regeneration', () => {
