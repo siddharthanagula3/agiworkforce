@@ -17,6 +17,7 @@
       "@agiworkforce/desktop",
       "@agiworkforce/desktop-command-client",
       "@agiworkforce/extension",
+      "@agiworkforce/files",
       "@agiworkforce/guardian-core",
       "@agiworkforce/guardian-github",
       "@agiworkforce/i18n",
@@ -137,6 +138,10 @@
       },
       {
         "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/ide-runtime"
+      },
+      {
+        "from": "@agiworkforce/desktop",
         "to": "@agiworkforce/local-runtime-contract"
       },
       {
@@ -222,6 +227,10 @@
       {
         "from": "@agiworkforce/extension",
         "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "@agiworkforce/files",
+        "to": "@agiworkforce/types"
       },
       {
         "from": "@agiworkforce/guardian-github",
