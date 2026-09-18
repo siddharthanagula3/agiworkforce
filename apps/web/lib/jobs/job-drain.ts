@@ -28,6 +28,12 @@ import {
   type BackgroundJob,
   type JobQueueStats,
 } from './job-service';
+import {
+  JobCancelledError,
+  acknowledgeJobCancellation,
+  reapAbandonedCancellations,
+  watchJobCancellation,
+} from './cancellation';
 
 const LEASE_SAFETY_MS = 5_000;
 const MIN_JOB_BUDGET_MS = 5_000;
@@ -48,7 +54,9 @@ export interface JobDrainSummary {
   succeeded: number;
   retried: number;
   deadLettered: number;
+  cancelled: number;
   reaped: { requeued: number; deadLettered: number };
+  abandonedCancellations: number;
   pruned: number;
   drained: boolean;
   unhealthyQueues: string[];
@@ -137,9 +145,10 @@ async function runJob(
   handlers: JobHandlerRegistry,
   job: BackgroundJob,
   timeoutMs: number,
-): Promise<'succeeded' | 'retry' | 'dead' | 'stale'> {
+): Promise<'succeeded' | 'retry' | 'dead' | 'stale' | 'cancelled'> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(jobTimeoutError(job)), timeoutMs);
+  const watch = watchJobCancellation(db, job, controller);
   try {
     const handler = isJobKind(job.kind) ? handlers[job.kind] : undefined;
     if (!handler) throw new PermanentJobError(`No handler is registered for job kind ${job.kind}`);
@@ -178,9 +187,14 @@ async function runJob(
     const completed = await completeJob(db, job, result ?? null);
     return completed ? 'succeeded' : 'stale';
   } catch (error) {
+    if (error instanceof JobCancelledError) {
+      await acknowledgeJobCancellation(db, job);
+      return 'cancelled';
+    }
     captureWorkerFailure(error, { worker: `background-job:${job.queue}`, jobId: job.id });
     return failJob(db, job, error);
   } finally {
+    watch.stop();
     clearTimeout(timer);
   }
 }
@@ -194,9 +208,11 @@ export async function drainBackgroundJobs(
   const summary: JobDrainSummary = {
     claimed: 0,
     succeeded: 0,
+    cancelled: 0,
     retried: 0,
     deadLettered: 0,
     reaped: await reapExpiredJobLeases(options.db),
+    abandonedCancellations: await reapAbandonedCancellations(options.db),
     pruned: 0,
     drained: false,
     unhealthyQueues: [],
@@ -248,6 +264,7 @@ export async function drainBackgroundJobs(
           if (outcome === 'succeeded') summary.succeeded += 1;
           else if (outcome === 'retry') summary.retried += 1;
           else if (outcome === 'dead') summary.deadLettered += 1;
+          else if (outcome === 'cancelled') summary.cancelled += 1;
         },
         (error: unknown) => {
           logger.error({ error, jobId: job.id }, 'Background job could not record its outcome');

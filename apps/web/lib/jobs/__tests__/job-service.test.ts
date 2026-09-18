@@ -90,6 +90,7 @@ describe('enqueueJob', () => {
       enqueueJob(database(query), {
         kind: 'webhooks.audit-stream-delivery',
         organizationId: '11111111-1111-4111-8111-111111111111',
+        idempotencyKey: 'audit-stream:org-1:bucket-1',
         payload: {},
       }),
     ).resolves.toEqual({ id: 'job-2', status: 'queued', created: true });
@@ -111,6 +112,7 @@ describe('enqueueJob', () => {
     await runWithTraceContext(TRACE, () =>
       enqueueJob(database(query), {
         kind: 'email.schedule-completed',
+        idempotencyKey: 'schedule-email:run-1',
         payload: { runId: 'run-1' },
       }),
     );
@@ -126,6 +128,7 @@ describe('enqueueJob', () => {
 
     await enqueueJob(database(query), {
       kind: 'email.schedule-completed',
+      idempotencyKey: 'schedule-email:run-2',
       payload: { runId: 'run-2' },
     });
 
