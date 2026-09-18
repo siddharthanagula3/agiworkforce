@@ -8,6 +8,7 @@ import {
   Check,
   RefreshCw,
   ShoppingBag,
+  CircleHelp,
 } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -44,6 +45,8 @@ import {
   getSubscriptionOwnerGuard,
 } from '@/src/features/billing/subscriptionSource';
 import { useMobileIap } from '@/src/features/billing/useMobileIap';
+
+const PURCHASE_HELP_URL = 'https://agiworkforce.com/help?q=purchase+billing+credits+refund';
 
 const FREE_FEATURES = [
   'Chat on web, iOS, Android, and desktop',
@@ -527,9 +530,21 @@ export default function CloudBillingScreen() {
           onPress={
             isFreeTier ? undefined : () => void openExternalUrl('https://agiworkforce.com/billing')
           }
+        />
+        <SettingsRow
+          label="Help with a purchase"
+          value="Charged twice, missing credits, refunds"
+          icon={CircleHelp}
+          onPress={() => void openExternalUrl(PURCHASE_HELP_URL)}
           isLast
         />
       </SettingsGroup>
+
+      <SettingsInfo
+        title="A purchase that did not arrive"
+        body="A store purchase is granted only after the receipt is verified with Apple or Google, so a charge can land before the credits do. Restore purchases re-sends the receipt and is safe to run more than once: it never charges you again. Refunds are handled by the store that took the payment, not in this app."
+        icon={ShoppingBag}
+      />
 
       {nextUpgradeTier ? (
         <PaywallBottomSheet

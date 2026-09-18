@@ -1,4 +1,3 @@
-
 export interface SupportCitation {
   title: string;
   url: string;
@@ -90,6 +89,7 @@ export interface CorpusChunk {
   heading: string | null;
   headingPath: string;
   text: string;
+  updated: string;
   origin: 'markdown' | 'static-data';
 }
 
