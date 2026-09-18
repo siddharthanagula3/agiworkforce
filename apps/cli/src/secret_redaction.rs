@@ -1,11 +1,18 @@
-//! Shared CLI secret-redaction mechanics for persisted logs and explicit
-//! Local→cloud payload previews. Product actions decide what content is in
-//! scope; this module only performs deterministic value scrubbing.
+//! Shared CLI secret-redaction mechanics for persisted logs, tool output that
+//! reaches the model, and explicit Local→cloud payload previews. Product
+//! actions decide what content is in scope; this module only performs
+//! deterministic value scrubbing.
+//!
+//! Two strengths are published. `redact_tool_output` runs the value-shaped
+//! rules only, so command output and file reads keep every line the model
+//! needs while credential material never survives. `redact_secrets` adds the
+//! whole-line password sweep, which is safe for a log nobody reads back as
+//! code but would blank legitimate source lines on the way to the model.
 
 use regex::Regex;
 use std::sync::OnceLock;
 
-fn patterns() -> &'static Vec<(Regex, &'static str)> {
+fn value_patterns() -> &'static Vec<(Regex, &'static str)> {
     static PATTERNS: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new();
     PATTERNS.get_or_init(|| {
         vec![
@@ -77,15 +84,28 @@ fn patterns() -> &'static Vec<(Regex, &'static str)> {
                 .expect("named secret regex"),
                 "$1=[REDACTED]",
             ),
+            // `-p` only counts as a flag when it is a whole argument: an
+            // unanchored match mangles every hyphenated word (`raw-parallel`).
             (
-                Regex::new(r"(?i)(-p|--password[= ])\s*\S+").expect("password flag regex"),
-                "$1 [REDACTED]",
+                Regex::new(r"(?im)(^|[ \t])(-p)[ \t]+\S+").expect("password short flag regex"),
+                "${1}${2} [REDACTED]",
+            ),
+            (
+                Regex::new(r"(?i)(--password)([= \t][ \t]*)\S+").expect("password long flag regex"),
+                "${1}${2}[REDACTED]",
             ),
             (
                 Regex::new(
-                    r"(?i)(postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s/:]+:[^\s]+@",
+                    r#"(?i)\b(password|passwd|pwd)\b['"]?\s*[=:]\s*['"]?[^\s,'"}]{8,}['"]?"#,
                 )
-                .expect("credential URL regex"),
+                .expect("password assignment regex"),
+                "$1=[REDACTED]",
+            ),
+            // Any scheme, so a `git remote`/`git push` URL carrying userinfo is
+            // redacted the same way a database URL is.
+            (
+                Regex::new(r"(?i)\b([a-z][a-z0-9+.-]*)://[^\s/:@]+:[^\s/@]+@")
+                    .expect("credential URL regex"),
                 "$1://[CREDENTIALS_REDACTED]@",
             ),
             (
@@ -95,26 +115,43 @@ fn patterns() -> &'static Vec<(Regex, &'static str)> {
                 .expect("private key regex"),
                 "[REDACTED_PRIVATE_KEY]",
             ),
-            (
-                Regex::new(r"(?im)^.*\bpassw(?:or)?d\b.*$").expect("password line regex"),
-                "[REDACTED LINE]",
-            ),
         ]
     })
 }
 
-/// Redact known credential shapes without changing unrelated text.
-pub fn redact_secrets(input: &str) -> String {
+fn password_line_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN
+        .get_or_init(|| Regex::new(r"(?im)^.*\bpassw(?:or)?d\b.*$").expect("password line regex"))
+}
+
+fn apply(input: &str, patterns: &[(Regex, &'static str)]) -> String {
     let mut redacted = input.to_string();
-    for (pattern, replacement) in patterns() {
+    for (pattern, replacement) in patterns {
         redacted = pattern.replace_all(&redacted, *replacement).into_owned();
     }
     redacted
 }
 
+/// Redact known credential shapes without changing unrelated text.
+pub fn redact_secrets(input: &str) -> String {
+    let redacted = apply(input, value_patterns());
+    password_line_pattern()
+        .replace_all(&redacted, "[REDACTED LINE]")
+        .into_owned()
+}
+
+/// Redact credential values from tool output before it reaches the model, the
+/// transcript, or the saved overflow file. Unlike [`redact_secrets`] this keeps
+/// every line, so source code that merely mentions a password stays readable
+/// while the values themselves do not survive.
+pub fn redact_tool_output(input: &str) -> String {
+    apply(input, value_patterns())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::redact_secrets;
+    use super::{redact_secrets, redact_tool_output};
 
     #[test]
     fn redacts_cross_provider_tokens_jwts_and_database_credentials() {
@@ -158,5 +195,79 @@ mod tests {
             redact_secrets("ordinary project context"),
             "ordinary project context"
         );
+    }
+
+    #[test]
+    fn tool_output_redacts_command_output_carrying_an_api_key() {
+        let transcript = redact_tool_output(
+            "Exit code: 0\nOPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz0123\nDATABASE_URL=postgres://alice:hunter2@db.internal:5432/app\n",
+        );
+
+        assert!(!transcript.contains("sk-proj-abcdefghijklmnopqrstuvwxyz0123"));
+        assert!(!transcript.contains("hunter2"));
+        assert!(transcript.contains("[REDACTED_API_KEY]"));
+        assert!(transcript.contains("[CREDENTIALS_REDACTED]"));
+        assert!(transcript.starts_with("Exit code: 0\n"));
+    }
+
+    #[test]
+    fn tool_output_redacts_a_git_remote_url_with_embedded_credentials() {
+        let redacted =
+            redact_tool_output("origin\thttps://agi:ghp_0123456789abcdefghijklmnopqrstuvwx@github.com/acme/app.git (push)");
+
+        assert!(!redacted.contains("ghp_0123456789abcdefghijklmnopqrstuvwx"));
+        assert!(redacted.contains("https://[CREDENTIALS_REDACTED]@github.com/acme/app.git"));
+    }
+
+    #[test]
+    fn tool_output_keeps_source_code_that_only_mentions_secrets() {
+        // The false-positive guard: a file read must survive intact when it
+        // names a credential without carrying one.
+        for line in [
+            "interface Credentials { password: string; apiKey: string }",
+            "const digest = sha256(password + salt);",
+            "// rotate the api key every 90 days",
+            "https://registry.example.com:8443/simple/index.html",
+            "let checksum = \"9f2c4ae81b3d5f60a7c81e2d4b6f8a01\";",
+        ] {
+            assert_eq!(redact_tool_output(line), line, "mangled: {line}");
+        }
+    }
+
+    #[test]
+    fn a_hyphenated_word_is_not_a_password_flag() {
+        for line in [
+            "opened src/my-project/x",
+            "raw-parallel-body",
+            "--print-path /usr/bin",
+            "fn handle_raw_parallel_body() -> Result<()>",
+        ] {
+            assert_eq!(redact_tool_output(line), line, "mangled: {line}");
+            assert_eq!(redact_secrets(line), line, "mangled: {line}");
+        }
+    }
+
+    #[test]
+    fn a_standalone_password_flag_loses_its_value() {
+        assert_eq!(
+            redact_tool_output("mysql -u root -p hunter2"),
+            "mysql -u root -p [REDACTED]"
+        );
+        assert_eq!(redact_tool_output("-p hunter2"), "-p [REDACTED]");
+        assert_eq!(
+            redact_tool_output("curl --password=hunter2 https://example.com"),
+            "curl --password=[REDACTED] https://example.com"
+        );
+        assert_eq!(
+            redact_tool_output("curl --password hunter2"),
+            "curl --password [REDACTED]"
+        );
+    }
+
+    #[test]
+    fn only_the_log_strength_blanks_whole_password_lines() {
+        let line = "const digest = sha256(password + salt);";
+        assert_eq!(redact_secrets(line), "[REDACTED LINE]");
+        assert_eq!(redact_tool_output(line), line);
     }
 }
