@@ -105,6 +105,7 @@ describe('createOfflineQueue', () => {
       storage: inMemoryStorage(),
       logger: silentLogger(),
       maxRetries: 2,
+      initialBackoffMs: 0,
     });
     queue.queueMessage('s', 'a');
 
@@ -203,5 +204,94 @@ describe('createOfflineQueue', () => {
 
     expect(queue.queueMessage('s', 'a')).toBe('msg_test_0');
     expect(queue.queueToolExecution('s', 't', {})).toBe('tool_test_1');
+  });
+});
+
+// Reconnecting fires several signals at once (the online event, a visibility
+// change, a poll). Each of these is what the queue must survive, because the
+// alternative is the recipient seeing one unsent message several times.
+describe('createOfflineQueue on reconnect', () => {
+  it('replays the queue once when several reconnect signals arrive together', async () => {
+    const queue = createOfflineQueue({ storage: inMemoryStorage(), logger: silentLogger() });
+    queue.queueMessage('s', 'first');
+    queue.queueMessage('s', 'second');
+
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const onMessageSync = vi.fn(async () => {
+      await gate;
+    });
+
+    const runs = [
+      queue.syncOfflineQueue({ onMessageSync }),
+      queue.syncOfflineQueue({ onMessageSync }),
+      queue.syncOfflineQueue({ onMessageSync }),
+    ];
+    release();
+    const summaries = await Promise.all(runs);
+
+    expect(onMessageSync).toHaveBeenCalledTimes(2);
+    expect(queue.getQueuedItemCount()).toBe(0);
+    expect(summaries[0]).toBe(summaries[1]);
+    expect(summaries[0]?.messagesSynced).toBe(2);
+  });
+
+  it('accepts a later sync once the first has finished', async () => {
+    const queue = createOfflineQueue({ storage: inMemoryStorage(), logger: silentLogger() });
+    queue.queueMessage('s', 'first');
+    const onMessageSync = vi.fn(async () => undefined);
+
+    await queue.syncOfflineQueue({ onMessageSync });
+    queue.queueMessage('s', 'second');
+    await queue.syncOfflineQueue({ onMessageSync });
+
+    expect(onMessageSync).toHaveBeenCalledTimes(2);
+    expect(queue.getQueuedItemCount()).toBe(0);
+  });
+
+  it('holds a failed message back for its backoff instead of burning every retry at once', async () => {
+    const queue = createOfflineQueue({
+      storage: inMemoryStorage(),
+      logger: silentLogger(),
+      maxRetries: 3,
+      initialBackoffMs: 60_000,
+    });
+    const id = queue.queueMessage('s', 'a');
+    const onMessageSync = vi.fn().mockRejectedValue(new Error('network failed'));
+
+    await queue.syncOfflineQueue({ onMessageSync });
+    await queue.syncOfflineQueue({ onMessageSync });
+    await queue.syncOfflineQueue({ onMessageSync });
+
+    expect(onMessageSync).toHaveBeenCalledTimes(1);
+    expect(queue.getMessageRetryStatus(id)?.retryCount).toBe(1);
+    expect(queue.getQueuedItemCount()).toBe(1);
+  });
+
+  it('never drops a queued message just because the host offered no sync callback', async () => {
+    const queue = createOfflineQueue({ storage: inMemoryStorage(), logger: silentLogger() });
+    queue.queueMessage('s', 'a');
+
+    const summary = await queue.syncOfflineQueue();
+
+    expect(summary.messagesSynced).toBe(0);
+    expect(queue.getQueuedItemCount()).toBe(1);
+  });
+
+  it('leaves the queue untouched while the probe still reports offline', async () => {
+    const queue = createOfflineQueue({
+      storage: inMemoryStorage(),
+      logger: silentLogger(),
+      probeOnline: async () => false,
+    });
+    queue.queueMessage('s', 'a');
+    const onMessageSync = vi.fn(async () => undefined);
+
+    await queue.syncOfflineQueue({ onMessageSync });
+
+    expect(onMessageSync).not.toHaveBeenCalled();
+    expect(queue.getQueuedItemCount()).toBe(1);
   });
 });

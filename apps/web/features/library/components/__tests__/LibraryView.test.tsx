@@ -10,7 +10,7 @@ const {
   publish,
   toastSuccess,
 } = vi.hoisted(() => ({
-  mockUseAuth: vi.fn(() => ({ isSignedIn: true })),
+  mockUseAuth: vi.fn((): { isSignedIn: boolean; isLoaded?: boolean } => ({ isSignedIn: true })),
   exportDocument: vi.fn(async () => {}),
   uploadChatAttachments: vi.fn(async () => []),
   push: vi.fn(),
@@ -124,6 +124,27 @@ describe('LibraryView', () => {
     render(<LibraryView />);
     await act(async () => {});
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('asks a resolved signed-out reader to sign in rather than calling the library empty', async () => {
+    mockUseAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
+    render(<LibraryView />);
+    await act(async () => {});
+
+    expect(screen.getByTestId('library-signed-out')).toBeInTheDocument();
+    expect(screen.queryByTestId('library-empty-state')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toContain(
+      'redirectTo=',
+    );
+  });
+
+  it('keeps showing the library while the session is still resolving', async () => {
+    mockUseAuth.mockReturnValue({ isLoaded: false, isSignedIn: false });
+    render(<LibraryView />);
+    await act(async () => {});
+
+    expect(screen.queryByTestId('library-signed-out')).toBeNull();
+    expect(screen.getByTestId('library-loading')).toBeInTheDocument();
   });
 
   it('renders the fetched page as a grid of library tiles', async () => {
@@ -487,6 +508,66 @@ describe('library hand-off actions', () => {
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith('https://agiworkforce.com/shared-artifact/abc'),
     );
+  });
+});
+
+// The two surfaces own different copies. A library item hands a chat a copy of
+// its bytes, and from then on the library row and the conversation attachment
+// have separate lifetimes: deleting one must not reach into the other.
+describe('library and conversation attachment lifecycle', () => {
+  const item = makeItem();
+
+  function stubAsset(items: unknown[]) {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse([]);
+      if (url.startsWith('/api/files/')) {
+        return {
+          ok: true,
+          status: 200,
+          blob: async () => new Blob(['%PDF-bytes'], { type: 'application/pdf' }),
+        } as Response;
+      }
+      return pageResponse(items);
+    });
+  }
+
+  afterEach(() => {
+    takeStagedLibraryAttachments();
+  });
+
+  it('hands the chat its own copy of the bytes, not a library reference', async () => {
+    stubAsset([item]);
+    render(<LibraryView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for report.pdf' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to chat' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/chat'));
+    const staged = takeStagedLibraryAttachments();
+    expect(staged?.[0]).toBeInstanceOf(File);
+    expect(staged?.[0]?.size).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toContain(item.uri);
+  });
+
+  it('deletes a library item through the media surface alone, never through a conversation', async () => {
+    stubAsset([item]);
+    render(<LibraryView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for report.pdf' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          (call) => call[1]?.method === 'DELETE' && String(call[0]).startsWith('/api/media?id='),
+        ),
+      ).toBe(true),
+    );
+    expect(
+      fetchMock.mock.calls
+        .map((call) => String(call[0]))
+        .filter((url) => url.includes('/api/chat')),
+    ).toEqual([]);
   });
 });
 

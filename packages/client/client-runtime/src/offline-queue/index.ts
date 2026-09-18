@@ -1,4 +1,3 @@
-
 import type {
   OfflineQueueState,
   QueuedMessage,
@@ -83,6 +82,12 @@ export function createOfflineQueue(opts: OfflineQueueOptions): OfflineQueueApi {
 
   const emptyState = (): OfflineQueueState => ({ messages: [], toolExecutions: [] });
 
+  // A reconnect fires more than one signal (the online event, a visibility
+  // change, a poll). Without this every signal replayed the same queue, and the
+  // recipient saw each unsent message once per signal.
+  let inFlight: Promise<SyncSummary> | null = null;
+  const retryNotBefore = new Map<string, number>();
+
   function loadQueue(): OfflineQueueState {
     try {
       const data = storage.getJSON<OfflineQueueState>(storageKey, emptyState());
@@ -105,6 +110,20 @@ export function createOfflineQueue(opts: OfflineQueueOptions): OfflineQueueApi {
     return Math.min(initialBackoffMs * Math.pow(2, retryCount), maxBackoffMs);
   }
 
+  function holdOffRetry(id: string, retryCount: number): void {
+    retryNotBefore.set(id, Date.now() + getBackoffDelay(retryCount));
+  }
+
+  function isHeldOff(id: string): boolean {
+    const until = retryNotBefore.get(id);
+    if (until === undefined) return false;
+    if (Date.now() >= until) {
+      retryNotBefore.delete(id);
+      return false;
+    }
+    return true;
+  }
+
   function incrementMessageRetry(messageId: string): void {
     const queue = loadQueue();
     const next: OfflineQueueState = {
@@ -125,6 +144,99 @@ export function createOfflineQueue(opts: OfflineQueueOptions): OfflineQueueApi {
       ),
     };
     saveQueue(next);
+  }
+
+  async function runSync(callbacks?: SyncCallbacks): Promise<SyncSummary> {
+    const startTime = Date.now();
+    const summary: SyncSummary = {
+      messagesSynced: 0,
+      messagesFailed: 0,
+      toolsSynced: 0,
+      toolsFailed: 0,
+      totalTime: 0,
+    };
+
+    try {
+      if (probeOnline) {
+        const online = await probeOnline();
+        if (!online) {
+          logger.info('[OfflineQueue] still offline, skipping sync');
+          callbacks?.onSyncComplete?.(false, summary);
+          return summary;
+        }
+      }
+
+      const queue = loadQueue();
+
+      for (const message of queue.messages) {
+        try {
+          if (message.retryCount >= maxRetries) {
+            logger.warn(`[OfflineQueue] max retries exceeded for message ${message.id}`);
+            summary.messagesFailed++;
+            api.clearQueuedMessage(message.id);
+            continue;
+          }
+          if (isHeldOff(message.id)) continue;
+
+          if (callbacks?.onMessageSync) {
+            await callbacks.onMessageSync(message);
+            summary.messagesSynced++;
+            api.clearQueuedMessage(message.id);
+          }
+        } catch (error) {
+          logger.error(
+            { err: error, messageId: message.id },
+            '[OfflineQueue] failed to sync message',
+          );
+          incrementMessageRetry(message.id);
+          holdOffRetry(message.id, message.retryCount);
+          summary.messagesFailed++;
+
+          if (error instanceof Error && error.message.includes('401')) {
+            throw error;
+          }
+        }
+      }
+
+      for (const tool of queue.toolExecutions) {
+        try {
+          if (tool.retryCount >= maxRetries) {
+            logger.warn(`[OfflineQueue] max retries exceeded for tool ${tool.id}`);
+            summary.toolsFailed++;
+            api.clearQueuedToolExecution(tool.id);
+            continue;
+          }
+          if (isHeldOff(tool.id)) continue;
+
+          if (callbacks?.onToolSync) {
+            await callbacks.onToolSync(tool);
+            summary.toolsSynced++;
+            api.clearQueuedToolExecution(tool.id);
+          }
+        } catch (error) {
+          logger.error({ err: error, toolId: tool.id }, '[OfflineQueue] failed to sync tool');
+          incrementToolRetry(tool.id);
+          holdOffRetry(tool.id, tool.retryCount);
+          summary.toolsFailed++;
+
+          if (error instanceof Error && error.message.includes('401')) {
+            throw error;
+          }
+        }
+      }
+
+      const updatedQueue = loadQueue();
+      saveQueue({ ...updatedQueue, lastSyncTime: new Date().toISOString() });
+
+      summary.totalTime = Date.now() - startTime;
+      callbacks?.onSyncComplete?.(true, summary);
+      return summary;
+    } catch (error) {
+      logger.error({ err: error }, '[OfflineQueue] sync failed with fatal error');
+      summary.totalTime = Date.now() - startTime;
+      callbacks?.onSyncComplete?.(false, summary);
+      throw error;
+    }
   }
 
   const api: OfflineQueueApi = {
@@ -210,93 +322,11 @@ export function createOfflineQueue(opts: OfflineQueueOptions): OfflineQueueApi {
       }
     },
 
-    async syncOfflineQueue(callbacks) {
-      const startTime = Date.now();
-      const summary: SyncSummary = {
-        messagesSynced: 0,
-        messagesFailed: 0,
-        toolsSynced: 0,
-        toolsFailed: 0,
-        totalTime: 0,
-      };
-
-      try {
-        if (probeOnline) {
-          const online = await probeOnline();
-          if (!online) {
-            logger.info('[OfflineQueue] still offline, skipping sync');
-            callbacks?.onSyncComplete?.(false, summary);
-            return summary;
-          }
-        }
-
-        const queue = loadQueue();
-
-        for (const message of queue.messages) {
-          try {
-            if (message.retryCount >= maxRetries) {
-              logger.warn(`[OfflineQueue] max retries exceeded for message ${message.id}`);
-              summary.messagesFailed++;
-              api.clearQueuedMessage(message.id);
-              continue;
-            }
-
-            if (callbacks?.onMessageSync) {
-              await callbacks.onMessageSync(message);
-              summary.messagesSynced++;
-              api.clearQueuedMessage(message.id);
-            }
-          } catch (error) {
-            logger.error(
-              { err: error, messageId: message.id },
-              '[OfflineQueue] failed to sync message',
-            );
-            incrementMessageRetry(message.id);
-            summary.messagesFailed++;
-
-            if (error instanceof Error && error.message.includes('401')) {
-              throw error;
-            }
-          }
-        }
-
-        for (const tool of queue.toolExecutions) {
-          try {
-            if (tool.retryCount >= maxRetries) {
-              logger.warn(`[OfflineQueue] max retries exceeded for tool ${tool.id}`);
-              summary.toolsFailed++;
-              api.clearQueuedToolExecution(tool.id);
-              continue;
-            }
-
-            if (callbacks?.onToolSync) {
-              await callbacks.onToolSync(tool);
-              summary.toolsSynced++;
-              api.clearQueuedToolExecution(tool.id);
-            }
-          } catch (error) {
-            logger.error({ err: error, toolId: tool.id }, '[OfflineQueue] failed to sync tool');
-            incrementToolRetry(tool.id);
-            summary.toolsFailed++;
-
-            if (error instanceof Error && error.message.includes('401')) {
-              throw error;
-            }
-          }
-        }
-
-        const updatedQueue = loadQueue();
-        saveQueue({ ...updatedQueue, lastSyncTime: new Date().toISOString() });
-
-        summary.totalTime = Date.now() - startTime;
-        callbacks?.onSyncComplete?.(true, summary);
-        return summary;
-      } catch (error) {
-        logger.error({ err: error }, '[OfflineQueue] sync failed with fatal error');
-        summary.totalTime = Date.now() - startTime;
-        callbacks?.onSyncComplete?.(false, summary);
-        throw error;
-      }
+    syncOfflineQueue(callbacks) {
+      inFlight ??= runSync(callbacks).finally(() => {
+        inFlight = null;
+      });
+      return inFlight;
     },
 
     getLastSyncTime() {

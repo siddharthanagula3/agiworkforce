@@ -101,8 +101,12 @@ function streamThrough(source: string, chunks: readonly string[]): Mounted {
 // re-rendered by the canonical path anyway.
 const IN_PLACE_UPDATE_RESIDUE = / style=""/g;
 
+// The streaming path also carries StreamAnnouncer's polite live region. It holds no
+// markdown, so it is dropped before the streamed DOM is held against one parse.
+const STREAM_ANNOUNCER = /<span data-testid="stream-announcer"[\s\S]*?<\/span>/g;
+
 function markup(container: HTMLElement): string {
-  return container.innerHTML.replace(IN_PLACE_UPDATE_RESIDUE, '');
+  return container.innerHTML.replace(IN_PLACE_UPDATE_RESIDUE, '').replace(STREAM_ANNOUNCER, '');
 }
 
 function renderedOnce(source: string): string {

@@ -92,7 +92,7 @@ export const CodeBlock = ({
         </Button>
       </div>
       <div className="code-block-body">
-        <pre>
+        <pre tabIndex={0} aria-label={`${language} code block`}>
           <HighlightedCode
             code={codeString}
             language={language}
@@ -280,7 +280,7 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
   return (
     <a
       href={cleanHref}
-      className="text-primary hover:underline"
+      className="break-words text-primary hover:underline"
       {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
     >
       {children}
@@ -290,7 +290,9 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
 
 const MarkdownParagraph = ({ children }: { children?: React.ReactNode }) => {
   const citations = useMarkdownCitations();
-  return <p className="mb-3 leading-relaxed">{unwrapCitationParens(children, citations)}</p>;
+  return (
+    <p className="mb-3 break-words leading-relaxed">{unwrapCitationParens(children, citations)}</p>
+  );
 };
 
 const TASK_LIST_CLASS = 'contains-task-list';
@@ -349,6 +351,18 @@ const MarkdownUnorderedList = ({
   </ul>
 );
 
+const MarkdownOrderedList = ({
+  children,
+  start,
+}: {
+  children?: React.ReactNode;
+  start?: number;
+}) => (
+  <ol className="mb-3 list-decimal pl-6" start={start}>
+    {children}
+  </ol>
+);
+
 const MarkdownListItem = ({
   children,
   className,
@@ -358,7 +372,12 @@ const MarkdownListItem = ({
 }) => {
   const citations = useMarkdownCitations();
   return (
-    <li className={cn('mb-1', hasClassToken(className, TASK_LIST_ITEM_CLASS) && 'list-none')}>
+    <li
+      className={cn(
+        'mb-1 break-words',
+        hasClassToken(className, TASK_LIST_ITEM_CLASS) && 'list-none',
+      )}
+    >
       {unwrapCitationParens(children, citations)}
     </li>
   );
@@ -367,7 +386,9 @@ const MarkdownListItem = ({
 const MarkdownTableCell = ({ children }: { children?: React.ReactNode }) => {
   const citations = useMarkdownCitations();
   return (
-    <td className="border border-border px-3 py-2">{unwrapCitationParens(children, citations)}</td>
+    <td className="border border-border px-3 py-2 align-top break-words">
+      {unwrapCitationParens(children, citations)}
+    </td>
   );
 };
 
@@ -379,7 +400,7 @@ const markdownComponents: Components = {
   h3: ({ children }) => <h3 className="mb-2 mt-4 text-base font-semibold">{children}</h3>,
   p: MarkdownParagraph as Components['p'],
   ul: MarkdownUnorderedList as Components['ul'],
-  ol: ({ children }) => <ol className="mb-3 list-decimal pl-6">{children}</ol>,
+  ol: MarkdownOrderedList as Components['ol'],
   li: MarkdownListItem as Components['li'],
   input: MarkdownTaskCheckbox as Components['input'],
   blockquote: ({ children }) => (
@@ -388,12 +409,19 @@ const markdownComponents: Components = {
     </blockquote>
   ),
   table: ({ children }) => (
-    <div className="my-3 overflow-x-auto">
+    <div
+      className="my-3 max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+      role="region"
+      aria-label="Table"
+      tabIndex={0}
+    >
       <table className="w-full border-collapse text-sm">{children}</table>
     </div>
   ),
   th: ({ children }) => (
-    <th className="border border-border bg-muted px-3 py-2 text-left font-semibold">{children}</th>
+    <th className="border border-border bg-muted px-3 py-2 text-left align-top font-semibold break-words">
+      {children}
+    </th>
   ),
   td: MarkdownTableCell as Components['td'],
   a: MarkdownLink as Components['a'],

@@ -1,5 +1,6 @@
 import React, { useMemo, useRef } from 'react';
 
+import { StreamAnnouncer } from './StreamAnnouncer';
 import { MarkdownContent } from './MarkdownContent';
 import { completeInlineTokens } from './completeInlineTokens';
 import { preprocessMath } from './preprocessMath';
@@ -96,7 +97,7 @@ function StreamingMarkdownContentImpl({
   const tail = isStreaming ? completeInlineTokens(view.tail) : view.tail;
 
   return (
-    <>
+    <StreamAnnouncer text={content} isStreaming={isStreaming}>
       {view.settled.map((block) => (
         <React.Fragment key={block.key}>
           <MarkdownContent content={block.source} skipPreprocess citations={citations} />
@@ -109,7 +110,7 @@ function StreamingMarkdownContentImpl({
         skipPreprocess
         citations={citations}
       />
-    </>
+    </StreamAnnouncer>
   );
 }
 

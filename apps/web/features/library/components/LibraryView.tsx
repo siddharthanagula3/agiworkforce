@@ -4,6 +4,8 @@ import { useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import { toast } from 'sonner';
+import { Button } from '@agiworkforce/ui';
+import { Lock } from 'lucide-react';
 import { publishArtifact } from '@agiworkforce/artifacts';
 import {
   LibraryView as SharedLibraryView,
@@ -21,6 +23,8 @@ import { CONTENT_OVERLAY_ROOT_ID } from '@shared/components/layout/WebAppShell';
 import { libraryItemToFile } from '@features/chat/components/Composer/ComposerFilesMenu';
 import { createWebCloudPublisher } from '@features/chat/components/artifacts/publishArtifactClient';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
+import { NEW_CHAT_PATH } from '@features/chat/lib/new-chat-entry';
+import { buildWorkObjective } from '@features/work/launch';
 import {
   stageLibraryItemForImageRemix,
   stageLibraryItemForNewChat,
@@ -29,7 +33,6 @@ import {
 export { iconKindFor, generatedFileFromLibraryItem } from '@agiworkforce/unified-chat';
 
 const PROJECTS_PATH = '/chat/projects';
-const NEW_CHAT_PATH = '/chat';
 const PROJECT_LIST_ENDPOINT = '/api/projects';
 
 function publishableArtifactShape(item: LibraryItem): { type: string; language?: string } {
@@ -95,6 +98,33 @@ function foldersFromProjectList(body: unknown): LibraryFolder[] {
 
 export const LIBRARY_ITEM_QUERY_PARAM = 'item';
 export const LIBRARY_QUERY_PARAM = 'q';
+
+const SIGN_IN_PATH = `/login?redirectTo=${encodeURIComponent('/chat/library')}`;
+
+/**
+ * Signed out the library has nothing to list, and the shared view's empty state
+ * would read as "you have no files" rather than "sign in to see them".
+ */
+function LibrarySignInRequired() {
+  return (
+    <div
+      data-testid="library-signed-out"
+      className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 py-24 text-center"
+    >
+      <Lock className="h-6 w-6 text-[var(--chat-text-muted)]" aria-hidden />
+      <h1 className="text-lg font-medium text-[var(--chat-text-primary)]">
+        Sign in to see your library
+      </h1>
+      <p className="max-w-sm text-sm text-[var(--chat-text-muted)]">
+        Files and artifacts are stored against your account. Nothing here is lost, it is just not
+        readable until you sign in.
+      </p>
+      <Button size="sm" asChild>
+        <a href={SIGN_IN_PATH}>Sign in</a>
+      </Button>
+    </div>
+  );
+}
 
 export function LibraryView() {
   const { isLoaded, isSignedIn } = useSession();
@@ -167,7 +197,12 @@ export function LibraryView() {
         router.push(NEW_CHAT_PATH);
       },
       addToWork: async (item) => {
-        await stageLibraryItemForNewChat(item, { workMode: 'agiwork' });
+        await stageLibraryItemForNewChat(item, {
+          workMode: 'agiwork',
+          draft: buildWorkObjective({
+            source: { entryPoint: 'file', title: item.file_name, reference: item.id },
+          }),
+        });
         router.push(NEW_CHAT_PATH);
       },
       remixItem: async (item) => {
@@ -193,6 +228,8 @@ export function LibraryView() {
     }),
     [isLoaded, isSignedIn, openFolder, createFolder, router],
   );
+
+  if (isLoaded && !isSignedIn) return <LibrarySignInRequired />;
 
   return (
     <SharedLibraryView

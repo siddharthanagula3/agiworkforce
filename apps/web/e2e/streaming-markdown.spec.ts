@@ -49,6 +49,13 @@ const MERMAID_FAILED = 'failed';
 const MERMAID_SOURCE_SELECTOR = '.mermaid-source';
 const MERMAID_FAILURE_PATTERN = 'could not be drawn';
 
+const STREAM_ANNOUNCER_SELECTOR = '[data-testid="stream-announcer"]';
+// Sub-pixel rounding moves a measured height by a fraction; anything the reader
+// would see as the answer collapsing is far larger than this.
+const FLICKER_HEIGHT_TOLERANCE_PX = 2;
+const MAX_ANNOUNCEMENTS_PER_ANSWER = 6;
+const MIN_ANNOUNCEMENTS_PER_ANSWER = 1;
+
 const KATEX_DISPLAY_SELECTOR = '.katex-display';
 const DISPLAY_MATH_DELIMITER = '$$';
 const FENCE_MARKER = '```';
@@ -326,6 +333,30 @@ async function readMermaidSnapshot(page: Page): Promise<MermaidSnapshot> {
   );
 }
 
+interface FrameSample {
+  height: number;
+  textLength: number;
+}
+
+async function readAssistantFrame(page: Page): Promise<FrameSample> {
+  return page.evaluate((selector: string) => {
+    const bubbles = Array.from(document.querySelectorAll(selector));
+    const last = bubbles[bubbles.length - 1] as HTMLElement | undefined;
+    if (!last) return { height: 0, textLength: 0 };
+    return {
+      height: Math.round(last.getBoundingClientRect().height),
+      textLength: (last.innerText ?? '').trim().length,
+    };
+  }, ASSISTANT_BUBBLE);
+}
+
+async function readAnnouncement(page: Page): Promise<string> {
+  return page.evaluate((selector: string) => {
+    const region = document.querySelector(selector);
+    return (region?.textContent ?? '').trim();
+  }, STREAM_ANNOUNCER_SELECTOR);
+}
+
 test.describe('streaming markdown', () => {
   test.setTimeout(SPEC_TIMEOUT_MS);
   test.use({ reducedMotion: 'reduce', viewport: DESKTOP_VIEWPORT } as never);
@@ -364,6 +395,85 @@ test.describe('streaming markdown', () => {
     ).toBeGreaterThanOrEqual(MIN_OBSERVED_GROWTH_STEPS);
 
     expect(collapse(await prose.innerText())).toContain(collapse(LONG_PROSE));
+  });
+
+  test('the answer never blanks or collapses in height between frames', async ({ page }) => {
+    const mock = await openChat(page);
+    await sendPrompt(page, `${PROMPT_PREFIX}: flicker`);
+    await mock.waitForRequest();
+    await expect(assistantMessage(page)).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
+
+    const frames: FrameSample[] = [];
+    await streamAnswer(page, mock, LONG_PROSE, async () => {
+      frames.push(await readAssistantFrame(page));
+    });
+    await settleStream(page, mock);
+
+    const written = frames.filter((frame) => frame.textLength > ZERO);
+    expect(written.length, `no frame carried any text: ${frames.length} frames`).toBeGreaterThan(
+      ZERO,
+    );
+
+    const firstWritten = frames.indexOf(written[0]!);
+    const blanked = frames
+      .map((frame, index) => ({ frame, index }))
+      .filter(({ frame, index }) => index > firstWritten && frame.textLength === ZERO)
+      .map(({ index }) => `frame ${index}`);
+    expect(blanked, `the answer went blank mid-stream at: ${blanked.join(', ')}`).toEqual([]);
+
+    const collapses = written
+      .map((frame, index) => ({ frame, index }))
+      .filter(
+        ({ frame, index }) =>
+          index > ZERO &&
+          frame.height < (written[index - 1]?.height ?? ZERO) - FLICKER_HEIGHT_TOLERANCE_PX,
+      )
+      .map(({ frame, index }) => `frame ${index} fell to ${frame.height}px`);
+    expect(collapses, `the answer collapsed in height at: ${collapses.join(', ')}`).toEqual([]);
+  });
+
+  test('a screen reader hears settled passages, not one announcement per token', async ({
+    page,
+  }) => {
+    const mock = await openChat(page);
+    await sendPrompt(page, `${PROMPT_PREFIX}: live region`);
+    await mock.waitForRequest();
+    await expect(assistantMessage(page)).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
+
+    const region = assistantMessage(page).locator(STREAM_ANNOUNCER_SELECTOR);
+    await expect(region, 'the streaming answer carries no live region at all').toHaveCount(1);
+    await expect(region).toHaveAttribute('aria-live', 'polite');
+    await expect(region).toHaveAttribute('aria-atomic', 'true');
+
+    const announcements: string[] = [];
+    let chunks = ZERO;
+    await streamAnswer(page, mock, LONG_PROSE, async () => {
+      chunks += 1;
+      const spoken = await readAnnouncement(page);
+      if (spoken && spoken !== announcements[announcements.length - 1]) announcements.push(spoken);
+    });
+    await settleStream(page, mock);
+
+    const spokenAtEnd = await readAnnouncement(page);
+    if (spokenAtEnd && spokenAtEnd !== announcements[announcements.length - 1]) {
+      announcements.push(spokenAtEnd);
+    }
+
+    expect(
+      announcements.length,
+      `the live region never said anything across ${chunks} sampled chunks`,
+    ).toBeGreaterThanOrEqual(MIN_ANNOUNCEMENTS_PER_ANSWER);
+    expect(
+      announcements.length,
+      `the live region spoke ${announcements.length} times for one answer: ${announcements.join(' | ')}`,
+    ).toBeLessThanOrEqual(MAX_ANNOUNCEMENTS_PER_ANSWER);
+
+    const collapsedAnswer = collapse(LONG_PROSE);
+    const strays = announcements.filter((spoken) => !collapsedAnswer.includes(collapse(spoken)));
+    expect(
+      strays,
+      `the live region read text the answer never carried: ${strays.join(' | ')}`,
+    ).toEqual([]);
   });
 
   test('a mermaid fence never surfaces a broken diagram or a raw fence while it streams', async ({
