@@ -1,7 +1,31 @@
+import { presignedUrlExpiresAt } from '@agiworkforce/object-storage/presign';
 import type { ChatSession, ChatMessage } from '../types';
 
 export interface ExportContentOptions {
   includeTimestamps?: boolean;
+}
+
+export const EXPIRING_LINK_PLACEHOLDER = '[expiring link removed from export]';
+
+/**
+ * A downloaded export is a file handed to whoever ends up with it. A signed
+ * storage link inside it grants the bytes to the holder until it expires,
+ * without asking who they are, so it is stripped rather than shipped.
+ */
+function withoutExpiringLinks(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return presignedUrlExpiresAt(value) === null ? value : EXPIRING_LINK_PLACEHOLDER;
+  }
+  if (Array.isArray(value)) return value.map(withoutExpiringLinks);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        key,
+        withoutExpiringLinks(entry),
+      ]),
+    );
+  }
+  return value;
 }
 
 export class ChatExportService {
@@ -26,8 +50,7 @@ export class ChatExportService {
       markdown += `${message.content}\n\n`;
 
       const attachments = message.metadata?.attachments as
-        | Array<{ name: string; size: number }>
-        | undefined;
+        Array<{ name: string; size: number }> | undefined;
       if (attachments && attachments.length > 0) {
         markdown += `**Attachments:**\n`;
         for (const attachment of attachments) {
@@ -57,8 +80,8 @@ export class ChatExportService {
         role: msg.role,
         content: msg.content,
         createdAt: new Date(msg.createdAt).toISOString(),
-        attachments: msg.metadata?.attachments,
-        metadata: msg.metadata,
+        attachments: withoutExpiringLinks(msg.metadata?.attachments),
+        metadata: withoutExpiringLinks(msg.metadata),
       })),
       exportedAt: new Date().toISOString(),
     };
@@ -145,8 +168,7 @@ export class ChatExportService {
 `;
 
       const htmlAttachments = message.metadata?.attachments as
-        | Array<{ name: string; size: number }>
-        | undefined;
+        Array<{ name: string; size: number }> | undefined;
       if (htmlAttachments && htmlAttachments.length > 0) {
         html += `    <div class="attachments">
       <strong>Attachments:</strong>
@@ -193,8 +215,7 @@ export class ChatExportService {
       text += `${message.content}\n`;
 
       const textAttachments = message.metadata?.attachments as
-        | Array<{ name: string; size: number }>
-        | undefined;
+        Array<{ name: string; size: number }> | undefined;
       if (textAttachments && textAttachments.length > 0) {
         text += `\nAttachments:\n`;
         for (const attachment of textAttachments) {

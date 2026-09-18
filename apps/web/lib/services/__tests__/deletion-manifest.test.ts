@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 vi.mock('server-only', () => ({}));
 
@@ -24,6 +26,7 @@ import {
   RETENTION_MATRIX,
   accountErasureProgress,
   resolveDeletionStatus,
+  renderRetentionMatrixMarkdown,
   scheduledDeletionProgress,
   storesOutlivingTheirSubject,
   unclassifiedStores,
@@ -123,10 +126,14 @@ describe('retention windows are read from the schedules that own them', () => {
 });
 
 describe('the stores that outlive their subject', () => {
-  it('is exactly the cached MCP response body, so a new one fails this', () => {
-    expect(storesOutlivingTheirSubject().map((candidate) => candidate.store)).toEqual([
-      'mcp_response_cache',
-    ]);
+  it('is empty, so a store added without a deletion path fails this', () => {
+    expect(storesOutlivingTheirSubject().map((candidate) => candidate.store)).toEqual([]);
+  });
+
+  it('names the path that reaches the cached MCP response bodies', () => {
+    const cache = entry('mcp_response_cache');
+    expect(cache.erasedWithSubject).toBe(true);
+    expect(cache.deletionPath).toContain('eraseConnectorResponseCache');
   });
 });
 
@@ -272,5 +279,29 @@ describe('accountErasureProgress', () => {
       status: 'pending',
       reason: 'Deletion is scheduled for 2026-09-19T00:00:00.000Z and has not started.',
     });
+  });
+});
+
+describe('the published matrix is the one the code holds', () => {
+  const doc = readFileSync(
+    join(process.cwd(), '../../docs/architecture/RETENTION_MATRIX.md'),
+    'utf8',
+  );
+
+  function storesNamedIn(markdown: string): string[] {
+    return [...markdown.matchAll(/^\|\s*`([^`]+)`\s*\|/gmu)].map((row) => row[1] as string).sort();
+  }
+
+  it('publishes a row for every store and no store the code dropped', () => {
+    expect(storesNamedIn(doc)).toEqual(storesNamedIn(renderRetentionMatrixMarkdown()));
+  });
+
+  it('states the deletion path each row was rendered with', () => {
+    for (const entry of RETENTION_MATRIX) {
+      if (!entry.deletionPath) continue;
+      expect(doc, `${entry.store} is published without its deletion path`).toContain(
+        entry.deletionPath.replace(/\|/g, '/'),
+      );
+    }
   });
 });

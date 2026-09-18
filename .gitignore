@@ -289,3 +289,6 @@ __pycache__/
 tmp/qa/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# swc plugin cache written by next dev at whichever cwd ran it
+.swc/

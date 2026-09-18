@@ -6,7 +6,8 @@
   "description": "ObjectStore port with an S3-compatible adapter and an in-memory adapter",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./presign": "./src/presign.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

@@ -1,16 +1,54 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  abortOrphanedMultipartUploads,
+  hasObjectStorageCredentials,
+  type OrphanedMultipartSweep,
+} from '@agiworkforce/object-storage';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
+import { getObjectStore, objectStorageConfig } from '@/lib/server/object-storage-runtime';
 
 export const runtime = 'nodejs';
 
 const RECOVERY_WINDOW_DAYS = 30;
 
 const MAX_ASSETS_PER_RUN = 500;
+
+const MAX_MULTIPART_ABORTS_PER_RUN = 200;
+
+/**
+ * Parts uploaded into a session nobody completed are billed bytes no request
+ * can reach. Nothing expires them, so this sweep is what closes them.
+ */
+async function sweepOrphanedMultipartUploads(): Promise<Record<string, OrphanedMultipartSweep>> {
+  const config = objectStorageConfig();
+  if (!hasObjectStorageCredentials(config)) return {};
+
+  const store = getObjectStore();
+  const buckets = [...new Set([config.publicBucket, config.privateBucket])].filter(
+    (bucket): bucket is string => Boolean(bucket),
+  );
+
+  const swept: Record<string, OrphanedMultipartSweep> = {};
+  for (const bucket of buckets) {
+    try {
+      swept[bucket] = await abortOrphanedMultipartUploads(store, {
+        bucket,
+        limit: MAX_MULTIPART_ABORTS_PER_RUN,
+      });
+    } catch (error) {
+      logger.error(
+        { bucket, error: error instanceof Error ? error.message : String(error) },
+        'Orphan multipart sweep failed for a bucket',
+      );
+    }
+  }
+  return swept;
+}
 
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
@@ -20,6 +58,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const db = getNeonDb();
+    const multipart = await sweepOrphanedMultipartUploads();
 
     const expired = await db.query<{ id: string; storage_pathname: string | null }>(
       `
@@ -34,7 +73,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (expired.length === 0) {
-      return NextResponse.json({ message: 'No expired media to purge', purged: 0 });
+      return NextResponse.json({ message: 'No expired media to purge', purged: 0, multipart });
     }
 
     const { deleted: objectsDeleted, failedPathnames } = await deleteStoredMediaObjects(
@@ -61,6 +100,7 @@ export async function GET(request: NextRequest) {
         objectsDeleted,
         objectsFailed: failedPathnames.length,
         rowsPurged,
+        multipart,
       },
       'Purged expired soft-deleted media assets',
     );
@@ -71,6 +111,7 @@ export async function GET(request: NextRequest) {
       objectsDeleted,
       objectsFailed: failedPathnames.length,
       purged: rowsPurged,
+      multipart,
     });
   } catch (error) {
     logger.error(

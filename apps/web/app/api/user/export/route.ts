@@ -1123,6 +1123,51 @@ const mobileIapAccountExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const studySessionExportSchema = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  topic: z.string(),
+  mode: z.string(),
+  level: z.string(),
+  started_at: timestampSchema,
+  ended_at: nullableTimestampSchema,
+});
+
+const notebookRunExportSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  run_id: z.string(),
+  cell_id: z.string(),
+  cell_index: z.number(),
+  language: z.string(),
+  code: z.string(),
+  network_access: z.string(),
+  from_top: z.boolean(),
+  ok: z.boolean(),
+  error: z.string().nullable(),
+  started_at: timestampSchema,
+  finished_at: timestampSchema,
+});
+
+const authenticationAttemptExportSchema = z.object({
+  id: z.string(),
+  surface: z.string(),
+  outcome: z.string(),
+  failure_reason: z.string().nullable(),
+  provider: z.string().nullable(),
+  region: z.string().nullable(),
+  occurred_at: timestampSchema,
+});
+
+const accountCompromiseResponseExportSchema = z.object({
+  id: z.string(),
+  trigger: z.string(),
+  sessions_revoked: z.number(),
+  sessions_failed: z.number(),
+  opened_at: timestampSchema,
+  resolved_at: nullableTimestampSchema,
+});
+
 const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   section: string;
   table: string;
@@ -1484,6 +1529,51 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1`,
     schema: mobileIapAccountExportSchema,
   },
+  {
+    section: 'study_sessions',
+    table: 'study_sessions',
+    sql: `select id, conversation_id, topic, mode, level, started_at, ended_at
+          from study_sessions
+          where user_id = $1
+          order by started_at asc`,
+    schema: studySessionExportSchema,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'notebook_runs',
+    table: 'notebook_runs',
+    sql: `select id, session_id, run_id, cell_id, cell_index, language, code,
+                 network_access, from_top, ok, error, started_at, finished_at
+          from notebook_runs
+          where user_id = $1
+          order by started_at desc
+          limit 1000`,
+    schema: notebookRunExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'authentication_attempts',
+    table: 'authentication_attempts',
+    sql: `select id, surface, outcome, failure_reason, provider, region, occurred_at
+          from authentication_attempts
+          where user_id = $1
+          order by occurred_at desc
+          limit 1000`,
+    schema: authenticationAttemptExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'account_compromise_responses',
+    table: 'account_compromise_responses',
+    sql: `select id, trigger, sessions_revoked, sessions_failed, opened_at, resolved_at
+          from account_compromise_responses
+          where user_id = $1
+          order by opened_at desc`,
+    schema: accountCompromiseResponseExportSchema,
+    acrossWorkspaces: true,
+  },
 ];
 
 export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
@@ -1517,6 +1607,12 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     'Search index state derived from chats, project files, library files, artifacts, research reports and developer sessions, each exported in full in its own section.',
   retrieval_chunks:
     'Passages and embeddings cut from those same exported sources for search; an embedding is a numeric derivative of text the export already contains.',
+  context_manifests:
+    'A per-turn digest of which sources were put in front of the model, kept so a turn can be explained. The sources themselves are the conversations, projects, files and memories the export already carries in full; the manifest is a hash-keyed index over them, not content of its own.',
+  file_lineage:
+    'Derived parent-to-child links between files the export already carries. A lineage row holds two file ids and how one came from the other; both files are exported in their own sections.',
+  identity_risk_observations:
+    'The signals and scores behind account-takeover detection, kept so an attacker cannot read back which of their attempts the product noticed and how close it came to acting. What the product did about a risk it acted on is exported as account_compromise_responses, and the sign-ins themselves as authentication_attempts.',
   background_jobs:
     'Background work still queued or recently finished for this account, such as the notification a scheduled run owes you or an upload cleanup. It is transient plumbing that carries no content of its own: what the work produces is exported in the section it belongs to, and a job that has done its work is deleted on its queue retention.',
 };

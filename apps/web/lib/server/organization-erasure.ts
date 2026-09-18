@@ -6,6 +6,10 @@ import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { countActiveLegalHolds } from '@/lib/services/retention-service';
+import {
+  mcpAuthorizationContext,
+  purgeMcpResponseCachePartitions,
+} from '@/lib/connectors/mcp-runtime-cache';
 
 /**
  * Every table whose rows belong to one organization and are erased outright
@@ -81,6 +85,14 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'event_trigger_events', column: 'organization_id' },
   { table: 'event_triggers', column: 'organization_id' },
   { table: 'background_jobs', column: 'organization_id' },
+  { table: 'organization_mcp_servers', column: 'organization_id' },
+  { table: 'organization_admin_delegations', column: 'organization_id' },
+  { table: 'organization_service_principals', column: 'organization_id' },
+  { table: 'organization_key_rewrap_runs', column: 'organization_id' },
+  { table: 'admin_request_idempotency', column: 'organization_id' },
+  { table: 'context_manifests', column: 'organization_id' },
+  { table: 'notebook_runs', column: 'organization_id' },
+  { table: 'file_lineage', column: 'organization_id' },
 ];
 
 /**
@@ -251,6 +263,32 @@ function heldReport(
   };
 }
 
+/**
+ * Cached MCP bodies are keyed by a digest of the authorization context, so the
+ * shared servers have to be read before their rows go or the bodies become
+ * unreachable and permanent.
+ */
+async function eraseSharedConnectorResponseCache(
+  db: { query: <T>(sql: string, params: unknown[]) => Promise<T[]> },
+  organizationId: string,
+): Promise<number> {
+  const contexts: string[] = [];
+  for (const table of ['organization_shared_connectors', 'organization_mcp_servers']) {
+    try {
+      const rows = await db.query<{ id: string }>(
+        `select id from public.${table} where organization_id = $1`,
+        [organizationId],
+      );
+      for (const row of rows) {
+        contexts.push(mcpAuthorizationContext.organizationSharedServer(organizationId, row.id));
+      }
+    } catch (error) {
+      if (!isSchemaAbsent(error)) throw error;
+    }
+  }
+  return purgeMcpResponseCachePartitions(contexts);
+}
+
 export async function eraseOrganizationData(
   organizationId: string,
   options: EraseOrganizationDataOptions = {},
@@ -273,6 +311,7 @@ export async function eraseOrganizationData(
   });
 
   const media = await eraseOrganizationMedia(organizationId);
+  await eraseSharedConnectorResponseCache(db, organizationId);
   const tables: OrganizationErasureReport['tables'] = {};
   const anonymized: OrganizationErasureReport['anonymized'] = {};
 

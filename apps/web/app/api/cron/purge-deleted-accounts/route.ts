@@ -5,6 +5,10 @@ import { logger } from '@/lib/logger';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  sweepExpiredMcpDiscoveryCache,
+  sweepExpiredMcpResponseCache,
+} from '@/lib/connectors/mcp-runtime-cache';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -98,6 +102,8 @@ export async function GET(request: NextRequest) {
   }
 
   const db = getNeonDb();
+  const connectorCacheRowsExpired =
+    (await sweepExpiredMcpResponseCache()) + (await sweepExpiredMcpDiscoveryCache());
 
   let due: DueAccount[] = [];
   let deletionColumnsProvisioned = true;
@@ -209,5 +215,6 @@ export async function GET(request: NextRequest) {
     tombstoneCandidates: tombstones.length,
     resurrected,
     resweepsQueued,
+    connectorCacheRowsExpired,
   });
 }
