@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('@/src/ui/theme', () => ({
   colors: {
@@ -176,6 +176,12 @@ jest.mock('@/stores/settingsStore', () => ({
   },
 }));
 
+jest.mock('@/lib/safeOpenURL', () => ({
+  openInAppBrowser: jest.fn(),
+  openExternalUrl: jest.fn(),
+}));
+
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 import PermissionsScreen from '@/src/features/settings/permissions';
 import PermissionDetailScreen from '@/src/features/settings/permissions/detail';
 
@@ -188,6 +194,20 @@ describe('PermissionsScreen, index', () => {
   it('locks the native-backed permission list card', () => {
     const { toJSON } = render(<PermissionsScreen />);
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it('says why each permission is asked for, without naming a feature that does not exist', () => {
+    const { getByText } = render(<PermissionsScreen />);
+    expect(getByText(/AGI asks only when a feature you started needs one/)).toBeTruthy();
+    expect(getByText(/microphone for voice/)).toBeTruthy();
+    expect(getByText(/Nothing is read in the background/)).toBeTruthy();
+  });
+
+  it('offers help without leaving the reader to search for it', () => {
+    const { getByLabelText } = render(<PermissionsScreen />);
+    const link = getByLabelText('Get help with permissions, opens the help centre');
+    fireEvent.press(link);
+    expect(openInAppBrowser).toHaveBeenCalledWith(expect.stringContaining('agiworkforce.com/help'));
   });
 });
 

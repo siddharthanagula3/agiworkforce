@@ -2322,6 +2322,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
           <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Privacy &amp; data controls</button>
+          <button type="button" class="onboarding-link" id="onboardingGetHelp">Get help</button>
         </div>
       </article>
 
@@ -2339,6 +2340,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     <div class="runtime-status-actions">
       <button type="button" id="runtimeSettingsBtn">Open setup</button>
       <button type="button" class="runtime-status-secondary" id="runtimeRetryBtn">Try again</button>
+      <button type="button" class="runtime-status-secondary" id="runtimeHelpBtn">Get help</button>
     </div>
   </div>
 
@@ -2589,6 +2591,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
     const runtimeRetryBtn = document.getElementById('runtimeRetryBtn');
+    const runtimeHelpBtn = document.getElementById('runtimeHelpBtn');
+    const onboardingGetHelp = document.getElementById('onboardingGetHelp');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
@@ -2754,6 +2758,16 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     if (onboardingPrivacySettings) {
       onboardingPrivacySettings.addEventListener('click', function() {
         vscode.postMessage({ type: 'openPrivacySettings' });
+      });
+    }
+    if (onboardingGetHelp) {
+      onboardingGetHelp.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openHelp' });
+      });
+    }
+    if (runtimeHelpBtn) {
+      runtimeHelpBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openHelp' });
       });
     }
     if (onboardingWorkspaceAction) {
@@ -8434,6 +8448,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
           <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Privacy &amp; data controls</button>
+          <button type="button" class="onboarding-link" id="onboardingGetHelp">Get help</button>
         </div>
       </article>
 
@@ -8451,6 +8466,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     <div class="runtime-status-actions">
       <button type="button" id="runtimeSettingsBtn">Open setup</button>
       <button type="button" class="runtime-status-secondary" id="runtimeRetryBtn">Try again</button>
+      <button type="button" class="runtime-status-secondary" id="runtimeHelpBtn">Get help</button>
     </div>
   </div>
 
@@ -8701,6 +8717,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
     const runtimeRetryBtn = document.getElementById('runtimeRetryBtn');
+    const runtimeHelpBtn = document.getElementById('runtimeHelpBtn');
+    const onboardingGetHelp = document.getElementById('onboardingGetHelp');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
@@ -8866,6 +8884,16 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     if (onboardingPrivacySettings) {
       onboardingPrivacySettings.addEventListener('click', function() {
         vscode.postMessage({ type: 'openPrivacySettings' });
+      });
+    }
+    if (onboardingGetHelp) {
+      onboardingGetHelp.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openHelp' });
+      });
+    }
+    if (runtimeHelpBtn) {
+      runtimeHelpBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openHelp' });
       });
     }
     if (onboardingWorkspaceAction) {
@@ -14546,6 +14574,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
           <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Privacy &amp; data controls</button>
+          <button type="button" class="onboarding-link" id="onboardingGetHelp">Get help</button>
         </div>
       </article>
 
@@ -14563,6 +14592,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     <div class="runtime-status-actions">
       <button type="button" id="runtimeSettingsBtn">Open setup</button>
       <button type="button" class="runtime-status-secondary" id="runtimeRetryBtn">Try again</button>
+      <button type="button" class="runtime-status-secondary" id="runtimeHelpBtn">Get help</button>
     </div>
   </div>
 
@@ -14813,6 +14843,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
     const runtimeRetryBtn = document.getElementById('runtimeRetryBtn');
+    const runtimeHelpBtn = document.getElementById('runtimeHelpBtn');
+    const onboardingGetHelp = document.getElementById('onboardingGetHelp');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
@@ -14978,6 +15010,16 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     if (onboardingPrivacySettings) {
       onboardingPrivacySettings.addEventListener('click', function() {
         vscode.postMessage({ type: 'openPrivacySettings' });
+      });
+    }
+    if (onboardingGetHelp) {
+      onboardingGetHelp.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openHelp' });
+      });
+    }
+    if (runtimeHelpBtn) {
+      runtimeHelpBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openHelp' });
       });
     }
     if (onboardingWorkspaceAction) {

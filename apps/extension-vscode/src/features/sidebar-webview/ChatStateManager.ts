@@ -190,6 +190,7 @@ export type WebviewToExtMessage =
   | { type: 'openAccount' }
   | { type: 'completeOnboarding' }
   | { type: 'openPermissionDocs' }
+  | { type: 'openHelp' }
   | { type: 'openPrivacySettings' }
   | { type: 'openRecentConversation'; payload: { threadId: string } }
   | { type: 'openPathReference'; payload: PathReferenceTarget }
@@ -917,6 +918,13 @@ export class ChatStateManager {
       case 'openPermissionDocs': {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/docs?topic=permissions&from=vscode-extension'),
+        );
+        break;
+      }
+
+      case 'openHelp': {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/help?from=vscode-extension'),
         );
         break;
       }

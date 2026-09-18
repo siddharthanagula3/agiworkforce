@@ -4,9 +4,14 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
 
 import type {
+  CreateEscalationInput,
+  EscalationPageOutcome,
+  EscalationSeverity,
+  EscalationTracker,
   CreateTicketInput,
   SupportTicket,
   SupportTicketReply,
+  TicketEscalation,
   TicketPriority,
   TicketStatus,
 } from './types';
@@ -122,6 +127,107 @@ export async function getTicketForUser(
   );
   const row = rows[0];
   return row ? toTicket(row) : null;
+}
+
+/**
+ * The one read with no `user_id` predicate. Escalation is a staff action behind
+ * requirePlatformAdmin, and the escalating engineer is not the ticket's owner.
+ */
+export async function getTicketForStaff(ticketId: string): Promise<SupportTicket | null> {
+  const db = getNeonDb();
+  const rows = await db.query<TicketRow>(
+    `select ${TICKET_COLUMNS} from public.support_tickets where id = $1`,
+    [ticketId],
+  );
+  const row = rows[0];
+  return row ? toTicket(row) : null;
+}
+
+interface EscalationRow {
+  id: string;
+  ticket_id: string;
+  reference_id: string;
+  severity: EscalationSeverity;
+  summary: string;
+  escalated_by_user_id: string;
+  tracker: EscalationTracker;
+  paged_at: string | null;
+  page_outcome: EscalationPageOutcome | null;
+  responders: string[] | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+const ESCALATION_COLUMNS = `id, ticket_id, reference_id, severity, summary,
+  escalated_by_user_id, tracker, paged_at, page_outcome, responders, resolved_at, created_at`;
+
+function toEscalation(row: EscalationRow): TicketEscalation {
+  return {
+    id: row.id,
+    ticketId: row.ticket_id,
+    referenceId: row.reference_id,
+    severity: row.severity,
+    summary: row.summary,
+    escalatedByUserId: row.escalated_by_user_id,
+    tracker: row.tracker,
+    pagedAt: row.paged_at,
+    pageOutcome: row.page_outcome,
+    responders: row.responders ?? [],
+    resolvedAt: row.resolved_at,
+    createdAt: row.created_at,
+  };
+}
+
+export async function insertEscalation(
+  input: CreateEscalationInput,
+): Promise<TicketEscalation | null> {
+  const db = getNeonDb();
+  const rows = await db.query<EscalationRow>(
+    `insert into public.support_ticket_escalations
+       (ticket_id, reference_id, severity, summary, escalated_by_user_id, tracker, paged_at,
+        page_outcome, responders)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+     returning ${ESCALATION_COLUMNS}`,
+    [
+      input.ticketId,
+      input.referenceId,
+      input.severity,
+      input.summary,
+      input.escalatedByUserId,
+      input.tracker,
+      input.pagedAt,
+      input.pageOutcome,
+      JSON.stringify([...input.responders]),
+    ],
+  );
+  const row = rows[0];
+  return row ? toEscalation(row) : null;
+}
+
+/** Staff-scoped counterpart of updateTicketStatus, for the escalation path only. */
+export async function startTicketForStaff(ticketId: string): Promise<SupportTicket | null> {
+  const db = getNeonDb();
+  const rows = await db.query<TicketRow>(
+    `update public.support_tickets
+        set status = 'in_progress', updated_at = now(), resolved_at = null
+      where id = $1 and status = 'open'
+      returning ${TICKET_COLUMNS}`,
+    [ticketId],
+  );
+  const row = rows[0];
+  return row ? toTicket(row) : null;
+}
+
+export async function listEscalationsForTicket(ticketId: string): Promise<TicketEscalation[]> {
+  const db = getNeonDb();
+  const rows = await db.query<EscalationRow>(
+    `select ${ESCALATION_COLUMNS}
+       from public.support_ticket_escalations
+      where ticket_id = $1
+      order by created_at desc`,
+    [ticketId],
+  );
+  return rows.map(toEscalation);
 }
 
 export async function listRepliesForTicket(

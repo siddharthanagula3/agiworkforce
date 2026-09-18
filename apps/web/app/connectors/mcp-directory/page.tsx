@@ -12,6 +12,7 @@ import {
 import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
 import { isConnectableNow } from '@/lib/connectors/directory/snapshot-view';
+import { helpEntryPoint, helpHref } from '@/lib/support/help-entry-points';
 import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
 
 export const dynamic = 'force-dynamic';
@@ -240,6 +241,9 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
               </Prose>
               <ButtonRow>
                 <Button href={SIGN_IN_HREF}>Sign in to connect</Button>
+                <Button href={helpHref('connectors')} variant="secondary">
+                  {helpEntryPoint('connectors').label}
+                </Button>
               </ButtonRow>
             </div>
           </div>

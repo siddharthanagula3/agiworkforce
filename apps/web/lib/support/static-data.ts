@@ -5,6 +5,15 @@ import {
   SURFACE_STATUS,
   AVAILABLE_NOW_LABEL,
 } from '@/lib/marketing-constants';
+import {
+  ALL_DOC_PLANS,
+  ALL_DOC_PLATFORMS,
+  CLOUD_DOC_PLANS,
+  KEY_BEARING_DOC_PLANS,
+  type DocApplicability,
+  type DocAudience,
+  type DocMaturity,
+} from '@/lib/support/doc-metadata';
 
 const SURFACE_NAMES: Record<keyof typeof SURFACE_STATUS, string> = {
   web: 'the web app',
@@ -30,6 +39,10 @@ export interface FAQ {
   answer: string;
   display_order: number;
   is_published: boolean;
+  updated: string;
+  maturity: DocMaturity;
+  audience: DocAudience;
+  applicability: DocApplicability;
 }
 
 export interface SupportArticle {
@@ -40,6 +53,10 @@ export interface SupportArticle {
   excerpt: string;
   content: string;
   views: number;
+  updated: string;
+  maturity: DocMaturity;
+  audience: DocAudience;
+  applicability: DocApplicability;
 }
 
 export const STATIC_FAQS: FAQ[] = [
@@ -50,6 +67,10 @@ export const STATIC_FAQS: FAQ[] = [
     answer: `Provider keys are accepted on ${BYOK_SURFACES.label}. On the CLI, run "agi login" and paste the key; in VS Code, run "AGI Workforce: Set API Key". The key is stored encrypted on your machine. ${BYOK_SURFACES.exclusion}`,
     display_order: 1,
     is_published: true,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'developer',
+    applicability: { platforms: ['cli', 'desktop', 'vscode'], plans: ALL_DOC_PLANS },
   },
   {
     id: 'faq-002',
@@ -58,6 +79,10 @@ export const STATIC_FAQS: FAQ[] = [
     answer: `AGI supports ${MARKETING.providers.display} provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and custom OpenAI-compatible endpoints. Desktop Local mode supports ${DESKTOP_LOCAL_RUNTIMES.label}. The in-product catalog is the current source of truth.`,
     display_order: 2,
     is_published: true,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'user',
+    applicability: { platforms: ALL_DOC_PLATFORMS, plans: ALL_DOC_PLANS },
   },
   {
     id: 'faq-003',
@@ -67,6 +92,10 @@ export const STATIC_FAQS: FAQ[] = [
       'Basic includes Managed Cloud chat on Web, Mobile, and Desktop. Pro adds higher usage, more projects and custom MCP connections, image generation, AGI Work, and managed Cloud access from CLI, Chrome, and VS Code. Current availability and regional prices are shown on the pricing page.',
     display_order: 3,
     is_published: true,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'user',
+    applicability: { platforms: ALL_DOC_PLATFORMS, plans: CLOUD_DOC_PLANS },
   },
   {
     id: 'faq-004',
@@ -76,6 +105,10 @@ export const STATIC_FAQS: FAQ[] = [
       'You can cancel at any time from Settings > Billing. Your access continues until the end of your current billing period.',
     display_order: 4,
     is_published: true,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'user',
+    applicability: { platforms: ALL_DOC_PLATFORMS, plans: CLOUD_DOC_PLANS },
   },
   {
     id: 'faq-005',
@@ -85,6 +118,10 @@ export const STATIC_FAQS: FAQ[] = [
       'For Local-only mode, all data stays on your device. For cloud sync, conversations are stored encrypted in our database. You can export or delete your data at any time from Settings > Privacy.',
     display_order: 5,
     is_published: true,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'user',
+    applicability: { platforms: ALL_DOC_PLATFORMS, plans: ALL_DOC_PLANS },
   },
   {
     id: 'faq-006',
@@ -93,6 +130,10 @@ export const STATIC_FAQS: FAQ[] = [
     answer: `Conversations belong to your account rather than to one device, so any signed-in surface opens the same history. ${PUBLISHED_SURFACE_LIST} are published today; Desktop, Mobile, VS Code and Chrome are not released yet, and the download page takes your address for the platform you want.`,
     display_order: 6,
     is_published: true,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'user',
+    applicability: { platforms: ALL_DOC_PLATFORMS, plans: CLOUD_DOC_PLANS },
   },
 ];
 
@@ -105,6 +146,10 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     excerpt: 'Learn how to set up AGI and start your first conversation.',
     content: `# Getting started with AGI\n\n1. Create an account with Google, GitHub, or an email address and a password. Managed cloud is open by default, so there is no waitlist and no invite code.\n2. Start a new chat and confirm the visible route label, which names where the answer came from.\n3. Leave the model on Auto, or pick one by name from the control under the composer.\n\nThe web app runs on your AGI account. Local mode and BYOK live on the developer surfaces: ${BYOK_SURFACES.label} accept provider keys, and Desktop Local mode runs a model on your own machine through a supported runtime (${DESKTOP_LOCAL_RUNTIMES.label}) with no AGI API key at all.`,
     views: 1240,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'user',
+    applicability: { platforms: ALL_DOC_PLATFORMS, plans: ALL_DOC_PLANS },
   },
   {
     id: 'article-002',
@@ -114,6 +159,10 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     excerpt: 'Step-by-step guide to adding provider API keys.',
     content: `# Connecting AI providers\n\nAGI supports BYOK (bring your own key) for cloud providers on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.exclusion}\n\n## On the CLI\n1. Create an API key with your provider.\n2. Run "agi login" and paste it, then "agi auth-status" to confirm every configured provider.\n\n## In VS Code\n1. Run "AGI Workforce: Set API Key" and paste it.\n2. Run "AGI Workforce: Select Model" to choose what answers. "AGI Workforce: Clear API Key" removes it.`,
     views: 875,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'developer',
+    applicability: { platforms: ['cli', 'vscode'], plans: KEY_BEARING_DOC_PLANS },
   },
   {
     id: 'article-003',
@@ -124,5 +173,9 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     content:
       '# Using web search\n\nThere is no search switch to find. Search-capable models reach the live web on their own when an answer should not come from training data alone, and the composer states whether search is on for the model you picked. Managed Cloud search follows the chat and usage policy for your plan; Local and BYOK behavior depends on the selected runtime and provider.',
     views: 640,
+    updated: '2026-09-18',
+    maturity: 'ga',
+    audience: 'user',
+    applicability: { platforms: ALL_DOC_PLATFORMS, plans: ALL_DOC_PLANS },
   },
 ];

@@ -132,6 +132,7 @@ import {
   ChevronRight,
   Check,
   Plug,
+  CircleHelp,
   renderIcon,
 } from './assets/icons';
 import {
@@ -408,13 +409,7 @@ let resetScheduledTaskDraftForOwnerTransition: () => void = () => {
 let initialCloudAccountRefresh: Promise<void> = Promise.resolve();
 type ManagedCloudChatState = 'loading' | 'ready' | 'signed_out' | 'unavailable';
 type ManagedCloudGateAction =
-  | 'none'
-  | 'sign_in'
-  | 'open_web'
-  | 'upgrade'
-  | 'billing'
-  | 'usage'
-  | 'retry';
+  'none' | 'sign_in' | 'open_web' | 'upgrade' | 'billing' | 'usage' | 'retry';
 let managedCloudChatState: ManagedCloudChatState = 'loading';
 let managedCloudGateMessage = t('spGateChecking');
 let managedCloudGateAction: ManagedCloudGateAction = 'none';
@@ -692,6 +687,7 @@ function modelGroupHeading(providerKey: string): string {
 }
 
 const CONNECTORS_URL = 'https://agiworkforce.com/connectors?from=chrome-extension';
+const HELP_URL = 'https://agiworkforce.com/help?from=chrome-extension';
 
 const RECENTS_SEARCH_THRESHOLD = 10;
 
@@ -4485,8 +4481,7 @@ const PAGE_CONTEXT_CHANGED_REASON =
   'The active page changed before it could be read. Go back to the page you asked about and try again.';
 
 export type PageContextCapture =
-  | { ok: true; text: string; source: PageContextSource }
-  | { ok: false; reason: string };
+  { ok: true; text: string; source: PageContextSource } | { ok: false; reason: string };
 
 function describePageContextFailure(message: string): string {
   if (/chrome:\/\/|extension gallery|chrome-untrusted|view-source/i.test(message)) {
@@ -7132,6 +7127,18 @@ function buildUI(): void {
   });
   toolsRow.appendChild(drawerOptionsBtn);
 
+  const drawerHelpBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-help-btn',
+    title: 'Open the AGI help centre',
+  });
+  drawerHelpBtn.appendChild(renderIcon(CircleHelp, 13));
+  drawerHelpBtn.appendChild(document.createTextNode(' Get help'));
+  drawerHelpBtn.addEventListener('click', () => {
+    void chrome.tabs.create({ url: HELP_URL });
+  });
+  toolsRow.appendChild(drawerHelpBtn);
+
   toolsSection.appendChild(toolsRow);
   const toolsGroupBody = drawerGroupBody(t('spMenuTools'), () => {
     void refreshDrawerTabInfo();
@@ -9456,8 +9463,7 @@ function buildUI(): void {
       }
 
       const escalation = resp['escalation'] as
-        | { shouldEscalate?: boolean; agentGoal?: string; triggers?: unknown[] }
-        | undefined;
+        { shouldEscalate?: boolean; agentGoal?: string; triggers?: unknown[] } | undefined;
 
       if (!escalation?.shouldEscalate) {
         cuPanel.showHandoffBanner('No agent escalation needed.', 'success');
@@ -9476,8 +9482,7 @@ function buildUI(): void {
       cuPanel.setRunState(true, requestedRunId);
 
       let startResponse:
-        | { success?: boolean; runId?: string; runGeneration?: number; error?: string }
-        | undefined;
+        { success?: boolean; runId?: string; runGeneration?: number; error?: string } | undefined;
       try {
         startResponse = (await chrome.runtime.sendMessage({
           type: 'AGI_START_COMPUTER_USE',
@@ -10949,8 +10954,7 @@ function checkPendingChat(): void {
   chrome.storage.session.get('agi_pending_chat', (result) => {
     if (chrome.runtime.lastError) return;
     const pending = result['agi_pending_chat'] as
-      | { type: string; text: string; url: string; timestamp: number }
-      | undefined;
+      { type: string; text: string; url: string; timestamp: number } | undefined;
     if (!pending || Date.now() - pending.timestamp > PENDING_CHAT_TTL_MS) {
       if (pending) chrome.storage.session.remove('agi_pending_chat').catch(() => {});
       return;

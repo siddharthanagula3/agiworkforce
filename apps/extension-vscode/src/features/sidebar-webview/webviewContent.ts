@@ -2291,6 +2291,7 @@ export function getWebviewContent(
         <div class="onboarding-inline-actions">
           <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
           <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Privacy &amp; data controls</button>
+          <button type="button" class="onboarding-link" id="onboardingGetHelp">Get help</button>
         </div>
       </article>
 
@@ -2308,6 +2309,7 @@ export function getWebviewContent(
     <div class="runtime-status-actions">
       <button type="button" id="runtimeSettingsBtn">Open setup</button>
       <button type="button" class="runtime-status-secondary" id="runtimeRetryBtn">Try again</button>
+      <button type="button" class="runtime-status-secondary" id="runtimeHelpBtn">Get help</button>
     </div>
   </div>
 
@@ -2558,6 +2560,8 @@ export function getWebviewContent(
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
     const runtimeRetryBtn = document.getElementById('runtimeRetryBtn');
+    const runtimeHelpBtn = document.getElementById('runtimeHelpBtn');
+    const onboardingGetHelp = document.getElementById('onboardingGetHelp');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
@@ -2723,6 +2727,16 @@ export function getWebviewContent(
     if (onboardingPrivacySettings) {
       onboardingPrivacySettings.addEventListener('click', function() {
         vscode.postMessage({ type: 'openPrivacySettings' });
+      });
+    }
+    if (onboardingGetHelp) {
+      onboardingGetHelp.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openHelp' });
+      });
+    }
+    if (runtimeHelpBtn) {
+      runtimeHelpBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openHelp' });
       });
     }
     if (onboardingWorkspaceAction) {

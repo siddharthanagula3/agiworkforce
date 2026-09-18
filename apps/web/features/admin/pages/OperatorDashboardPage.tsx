@@ -23,6 +23,7 @@ import RoutingHealthPanel from '../components/RoutingHealthPanel';
 import ServiceHealthPanel from '../components/ServiceHealthPanel';
 import { SupportHandoffQueuePanel } from '@/features/support/components/SupportHandoffQueuePanel';
 import { formatCents, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
+import { helpHref } from '@/lib/support/help-entry-points';
 
 const TABS = [
   'overview',
@@ -298,11 +299,19 @@ export function OperatorDashboardPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Operator dashboard</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Feedback, accounts, and growth, read straight from the database.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Operator dashboard</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Feedback, accounts, and growth, read straight from the database.
+          </p>
+        </div>
+        <a
+          href={helpHref('operator')}
+          className="rounded-full border border-border px-4 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+        >
+          Get help
+        </a>
       </div>
 
       <div role="tablist" aria-label="Dashboard views" className="flex flex-wrap gap-2">

@@ -231,6 +231,14 @@ import { createManagedCloudRequestContext } from './services/managedCloudRequest
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
 import { PlansModal } from './features/pricing/PlansModal';
+import { openExternalUrl } from './utils/navigation';
+import { WEB_APP_URL } from './api/config';
+
+const HELP_PATHS = {
+  help: '/help',
+  troubleshoot: '/help?q=troubleshooting+error+not+working',
+  support: '/support',
+} as const;
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">
@@ -1035,6 +1043,15 @@ const DesktopShell = () => {
               break;
             case 'restart_to_update':
               setUpdateDialogOpen(true);
+              break;
+            case 'menu_help':
+              void openExternalUrl(new URL(HELP_PATHS.help, WEB_APP_URL).toString());
+              break;
+            case 'menu_troubleshoot':
+              void openExternalUrl(new URL(HELP_PATHS.troubleshoot, WEB_APP_URL).toString());
+              break;
+            case 'menu_support':
+              void openExternalUrl(new URL(HELP_PATHS.support, WEB_APP_URL).toString());
               break;
           }
         });

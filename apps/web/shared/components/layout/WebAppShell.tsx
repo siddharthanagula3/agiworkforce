@@ -82,6 +82,7 @@ import { useSettingsModal } from '@/features/settings/components/SettingsModalPr
 import { GlobalSearchDialog } from '@/features/chat/components/dialogs/GlobalSearchDialog';
 import { getWorstUsagePercent, useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
+import { helpHrefForPath } from '@/lib/support/help-entry-points';
 import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
 import { ComposerFeedbackDialog } from '@/features/chat/components/Composer/ComposerFeedbackDialog';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
@@ -382,7 +383,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       email={user?.email}
       onManageWorkspace={() => openSettings('team')}
       onOpenSettings={() => openSettings('general')}
-      onOpenHelp={() => router.push('/help')}
+      onOpenHelp={() => router.push(helpHrefForPath(pathname))}
       onOpenFeedback={() => setFeedbackOpen(true)}
       onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
       showUpgrade={hasSelfServeUpgradePath(currentTier)}
@@ -575,7 +576,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
           id="main-content"
           role="main"
           tabIndex={-1}
-          className="min-h-0 min-w-0 flex-1 overflow-auto"
+          className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain [scrollbar-width:thin]"
         >
           {children}
         </div>
@@ -589,7 +590,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
             id="webappshell-mobile-nav"
             side="left"
             style={{ width: MOBILE_NAV_DRAWER_WIDTH }}
-            className="max-w-[85vw] gap-0 overflow-y-auto p-0"
+            className="max-w-[85vw] gap-0 overflow-y-auto overscroll-contain p-0 [scrollbar-width:thin]"
             data-testid="mobile-nav-drawer"
             onEscapeKeyDown={keepOpenForMenuEscape}
             onCloseAutoFocus={(event) => {

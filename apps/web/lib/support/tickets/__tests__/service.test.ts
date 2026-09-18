@@ -13,6 +13,10 @@ const store = vi.hoisted(() => ({
   listRepliesForTicket: vi.fn(),
   insertReply: vi.fn(),
   updateTicketStatus: vi.fn(),
+  getTicketForStaff: vi.fn(),
+  startTicketForStaff: vi.fn(),
+  insertEscalation: vi.fn(),
+  listEscalationsForTicket: vi.fn(),
 }));
 vi.mock('../store', () => store);
 

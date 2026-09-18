@@ -1251,8 +1251,60 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
             }
           }
         >
-          Permissions are managed by your device. Changing a permission may open Settings.
+          Permissions are managed by your device. Changing a permission may open Settings. AGI asks only when a feature you started needs one: the microphone for voice, the camera and photos for what you attach, notifications for a reply that arrives after you leave. Nothing is read in the background, and denying one disables that feature rather than the app.
         </Text>
+        <View
+          accessibilityLabel="Get help with permissions, opens the help centre"
+          accessibilityRole="link"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "justifyContent": "center",
+              "marginTop": 6,
+              "minHeight": 44,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#2dd4bf",
+                "fontSize": 13,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Get help with permissions
+          </Text>
+        </View>
       </View>
     </View>
   </RCTScrollView>

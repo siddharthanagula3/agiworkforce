@@ -44,6 +44,65 @@ export interface SupportTicket {
   resolvedAt: string | null;
 }
 
+export const MAX_ESCALATION_SUMMARY_CHARS = 4_000;
+
+export const ESCALATION_SEVERITIES = ['p0', 'p1', 'p2', 'p3'] as const;
+export const ESCALATION_TRACKERS = ['on-call', 'support-engineering'] as const;
+
+export type EscalationSeverity = (typeof ESCALATION_SEVERITIES)[number];
+export type EscalationTracker = (typeof ESCALATION_TRACKERS)[number];
+export type EscalationPageOutcome = 'paged' | 'unconfigured' | 'failed';
+
+const PRIORITY_SEVERITY: Readonly<Record<TicketPriority, EscalationSeverity>> = Object.freeze({
+  urgent: 'p0',
+  high: 'p1',
+  normal: 'p2',
+  low: 'p3',
+});
+
+/**
+ * Severity is read off the contracted priority the ticket already carries, so a
+ * page cannot be won by retyping a severity in the escalation form.
+ */
+export function severityForPriority(priority: TicketPriority): EscalationSeverity {
+  return PRIORITY_SEVERITY[priority];
+}
+
+export function pagesOnCall(severity: EscalationSeverity): boolean {
+  return severity === 'p0' || severity === 'p1';
+}
+
+export function isEscalationTracker(value: unknown): value is EscalationTracker {
+  return typeof value === 'string' && (ESCALATION_TRACKERS as readonly string[]).includes(value);
+}
+
+export interface TicketEscalation {
+  id: string;
+  ticketId: string;
+  referenceId: string;
+  severity: EscalationSeverity;
+  summary: string;
+  escalatedByUserId: string;
+  tracker: EscalationTracker;
+  pagedAt: string | null;
+  pageOutcome: EscalationPageOutcome | null;
+  responders: readonly string[];
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateEscalationInput {
+  ticketId: string;
+  referenceId: string;
+  severity: EscalationSeverity;
+  summary: string;
+  escalatedByUserId: string;
+  tracker: EscalationTracker;
+  pagedAt: string | null;
+  pageOutcome: EscalationPageOutcome | null;
+  responders: readonly string[];
+}
+
 export interface SupportTicketReply {
   id: string;
   ticketId: string;
