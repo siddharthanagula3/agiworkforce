@@ -29,7 +29,19 @@ describe('parseDataset', () => {
     prompt: 'What is 2 + 2?',
     checks: [{ kind: 'includesAny', values: ['4'] }],
   };
-  const valid = { suite: 'golden', version: 1, passThreshold: 1, cases: [validCase] };
+  const provenance = {
+    kind: 'authored',
+    source: 'written for this test',
+    authoredOn: '2026-09-18',
+  };
+  const valid = {
+    suite: 'golden',
+    version: 1,
+    priority: 'P0',
+    provenance,
+    passThreshold: 1,
+    cases: [validCase],
+  };
 
   it('accepts a well-formed corpus', () => {
     expect(parseDataset(valid).cases).toHaveLength(1);
@@ -157,6 +169,12 @@ describe('prompt linkage', () => {
       parseDataset({
         suite: 'golden',
         version: 1,
+        priority: 'P0',
+        provenance: {
+          kind: 'authored',
+          source: 'written for this test',
+          authoredOn: '2026-09-18',
+        },
         passThreshold: 0.5,
         promptId: 'Not A Prompt',
         cases: [

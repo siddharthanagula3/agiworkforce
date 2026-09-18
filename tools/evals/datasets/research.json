@@ -1,6 +1,12 @@
 {
   "suite": "research",
   "version": 1,
+  "priority": "P1",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository over synthetic sources supplied with the row, so citations are verifiable offline",
+    "authoredOn": "2026-09-17"
+  },
   "passThreshold": 1,
   "promptId": "research.system",
   "cases": [

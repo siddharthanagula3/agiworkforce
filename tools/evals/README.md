@@ -274,6 +274,70 @@ summarises the document and ignores the injected order, so requiring a refusal
 there would score correct behaviour as a failure. Those rows assert the canary
 string is absent _and_ that the real task was done.
 
+## What a report carries beyond the score
+
+- **Per-slice scores.** Every suite is cut by the labels its rows already
+  carry, `family` and `risk`, and each cut is scored separately. An aggregate is
+  an average, and an average hides a slice: the rows of one family can go from
+  passing to failing while an equal number elsewhere go the other way and the
+  headline number does not move. The gate holds every slice the baseline
+  measured to its own floor.
+- **Completeness.** The fraction of a row's checks the answer satisfied, meaned
+  over the suite. `score` is all-or-nothing per row; completeness is what
+  separates an answer that missed one clause from one that answered nothing.
+- **Corpus priority.** Each corpus declares `P0` or `P1`. A P0 corpus (golden,
+  refusal, jailbreak) may not regress at all: the gate gives it no score
+  tolerance. P1 corpora keep the tolerance in `gate-policy.json`.
+- **Provenance.** Each corpus declares where its rows came from and when they
+  were written, so a row can be argued with rather than only obeyed.
+- **Attempts.** A row that answered on its second try is one graded result and
+  two `EvalAttempt`s. The discarded attempt's cost is priced into the suite's
+  `retries` from whatever the provider metered before the stream failed, so a
+  run reports what the retries cost and not only what the answers cost.
+- **Correlation.** Every run has a `runId`; every attempt carries
+  `<runId>/<caseId>#<attempt>` and sends it to the provider on the request, so a
+  row of a report can be found in the logs of the call that produced it.
+
+## Measurement integrity
+
+Measurements are evidence, so they are write-once:
+
+- Every file under `measurements/` carries the sha256 digest of its own
+  content, and `measurements/ledger.json` lists every artefact with that digest,
+  its run id, its measurement date and each of its suite scores. The ledger is
+  also the queryable index of what was measured when.
+- `node tools/evals/scripts/measurement-integrity.mjs` fails if a file no longer
+  matches its digest, if a measurement is missing from the ledger, if a ledger
+  entry's file has gone, or if an artefact changed while still claiming the run
+  id or measurement date of the one it replaced. A genuine re-measurement always
+  shows up in the ledger diff as a new run.
+- `--stamp` only ever adds a missing digest or a missing entry. It will not
+  bless a file whose content no longer matches what the ledger recorded.
+
+`recordings/reference.json` is deliberately outside this rule: it is
+hand-written, it is supposed to change when a corpus changes, and it is already
+held to the corpora by its fingerprints and by `pnpm evals:replay`.
+
+## Comparing two runs
+
+`tsx tools/evals/scripts/evals.ts compare --baseline <run> --candidate <run>`
+holds one measured run against another, suite by suite and slice by slice, on
+the same rules as the promotion gate. Each argument is a path or a measurement
+key under `measurements/runs/`. It answers three questions with one flow:
+
+- did a **model** change regress anything (baseline family measurement vs the
+  candidate model's run);
+- did a **route** change regress anything (the old route's run vs the new
+  route's run, both measured through `--route`);
+- did a **provider** move under a route that did not change (re-measure the same
+  route, compare against its own last run). That is behaviour drift; pricing and
+  capability drift against a third-party snapshot are checked separately by
+  `packages/ai/model-registry/scripts/pricing-drift.mjs`.
+
+`release-evidence` prints the committed baselines as one dated artefact: model,
+route, run, measurement date, digest, every suite score and the suites that were
+not met.
+
 ## Adding a row
 
 1. Add it to the right file in `datasets/`, with a stable `<suite>/<slug>` id

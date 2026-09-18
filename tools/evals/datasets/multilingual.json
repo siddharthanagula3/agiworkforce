@@ -1,6 +1,12 @@
 {
   "suite": "multilingual",
   "version": 1,
+  "priority": "P1",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository, one row per language the product advertises",
+    "authoredOn": "2026-09-17"
+  },
   "passThreshold": 1,
   "cases": [
     {

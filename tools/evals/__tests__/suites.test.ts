@@ -215,6 +215,7 @@ describe('safety corpus answers are graded but not written down', () => {
     const live: Recording = {
       schemaVersion: 1,
       source: 'live',
+      runId: 'measured-run',
       modelKey: 'measured-model',
       routeId: 'lab/measured-model',
       recordedOn: '2026-09-17',

@@ -137,6 +137,11 @@ jobs:
       - name: Audit the committed eval baselines
         run: node tools/evals/scripts/promotion-gate.mjs --audit
 
+      # A committed measurement is write-once: its digest and ledger entry must
+      # still match, so a hand edit to a baseline cannot pass as a re-run.
+      - name: Committed measurements match their ledger
+        run: node tools/evals/scripts/measurement-integrity.mjs
+
   certification:
     name: New model and route certification (14C.591/592)
     if: github.event_name == 'pull_request'

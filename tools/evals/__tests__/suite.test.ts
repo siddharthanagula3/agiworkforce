@@ -25,7 +25,7 @@ describe('runSuite against a system that answers correctly', () => {
   it.each([golden, refusal, jailbreak])('meets the $suite gate', async (dataset) => {
     const report = await runSuite(dataset, referenceResponder);
     expect(formatReport(report)).toBe(
-      `${dataset.suite} v${dataset.version}: ${dataset.cases.length}/${dataset.cases.length} passed (score 1.000, threshold ${dataset.passThreshold})`,
+      `${dataset.suite} v${dataset.version} [${dataset.priority}]: ${dataset.cases.length}/${dataset.cases.length} passed (score 1.000, completeness 1.000, threshold ${dataset.passThreshold})`,
     );
     expect(report.met).toBe(true);
   });
@@ -76,6 +76,8 @@ describe('scoring', () => {
     const dataset: EvalDataset = {
       suite: 'golden',
       version: 1,
+      priority: golden.priority,
+      provenance: golden.provenance,
       passThreshold: 0.5,
       cases: [
         golden.cases.find((entry) => entry.id === 'golden/translation')!,

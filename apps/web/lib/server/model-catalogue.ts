@@ -158,6 +158,13 @@ export interface ModelCatalogueEntry {
   minimumPlanLabel: string | null;
   availability: ModelAvailability;
   requiresEnvironment: ModelEnvironment | null;
+  /**
+   * The date this model stops being offered, while it is still selectable.
+   * Retirement removes a model from the catalogue entirely, so this is the only
+   * window in which anyone can be told to move off it before their next
+   * conversation names a model that no longer exists.
+   */
+  deprecatedOn: string | null;
 }
 
 function projectCapabilities(
@@ -226,6 +233,7 @@ function toCatalogueEntry(
     minimumPlanLabel: admitted || !minimumTier ? null : PLAN_LABEL[minimumTier],
     availability: getModelAvailability(model),
     requiresEnvironment: model.requiresEnvironment ?? null,
+    deprecatedOn: model.deprecation_date ?? null,
   };
 }
 
