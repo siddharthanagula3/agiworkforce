@@ -3,12 +3,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-  countPorcelain,
-  findRepositoryRoot,
-  parseAheadBehind,
-  readGitState,
-} from '../runtime/gitService';
+import { findRepositoryRoot, readGitHeadLabel, readGitState } from '../runtime/gitService';
 
 let repo: string;
 let plain: string;
@@ -92,27 +87,9 @@ describe('readGitState', () => {
   });
 });
 
-describe('countPorcelain', () => {
-  it('reads the index column and the worktree column separately', () => {
-    expect(countPorcelain([' M README.md'])).toEqual({ staged: 0, unstaged: 1, untracked: 0 });
-    expect(countPorcelain(['A  staged.ts'])).toEqual({ staged: 1, unstaged: 0, untracked: 0 });
-    expect(countPorcelain(['MM both.ts'])).toEqual({ staged: 1, unstaged: 1, untracked: 0 });
-    expect(countPorcelain(['?? new.txt'])).toEqual({ staged: 0, unstaged: 0, untracked: 1 });
-  });
-
-  it('ignores lines too short to carry a status', () => {
-    expect(countPorcelain(['', 'M'])).toEqual({ staged: 0, unstaged: 0, untracked: 0 });
-  });
-});
-
-describe('parseAheadBehind', () => {
-  it('reads behind from the left count and ahead from the right', () => {
-    expect(parseAheadBehind('2\t5')).toEqual({ ahead: 5, behind: 2 });
-    expect(parseAheadBehind('0\t0')).toEqual({ ahead: 0, behind: 0 });
-  });
-
-  it('falls back to zero for missing or unreadable input', () => {
-    expect(parseAheadBehind(null)).toEqual({ ahead: 0, behind: 0 });
-    expect(parseAheadBehind('nonsense')).toEqual({ ahead: 0, behind: 0 });
+describe('readGitHeadLabel', () => {
+  it('renders the head the way every other surface renders it', async () => {
+    expect(await readGitHeadLabel(repo)).toBe('main');
+    expect(await readGitHeadLabel(plain)).toBeNull();
   });
 });

@@ -28,6 +28,7 @@ pub mod custom_commands;
 pub mod daemon;
 pub mod design_system;
 pub mod device_registry;
+pub mod diagnostics_bundle;
 pub mod diff_model;
 pub mod doctor;
 pub mod errors;
@@ -42,6 +43,7 @@ pub use platform::lsp;
 pub mod mcp;
 pub mod memory;
 pub mod mentions;
+pub mod merge_conflicts;
 #[allow(dead_code)]
 // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
 pub mod message_queue;
@@ -56,6 +58,7 @@ pub(crate) mod process_tree;
 pub use features::plan::plan_mode;
 pub mod provider;
 pub mod repl;
+pub mod repo;
 pub mod safety;
 pub mod secret_redaction;
 pub mod sensitive_files;

@@ -6,7 +6,6 @@ import type { WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
 import {
   createDirectory,
   globFiles,
-  globToRegExp,
   grepFiles,
   listDirectory,
   readTextFile,
@@ -110,28 +109,6 @@ describe('createDirectory', () => {
     const stat = await createDirectory(root, 'a/b/c');
     expect(stat.kind).toBe('directory');
     expect(stat.path).toBe('a/b/c');
-  });
-});
-
-describe('globToRegExp', () => {
-  it('keeps a single star inside one path segment', () => {
-    expect(globToRegExp('*.ts').test('index.ts')).toBe(true);
-    expect(globToRegExp('*.ts').test('src/index.ts')).toBe(false);
-  });
-
-  it('lets a double star cross separators', () => {
-    expect(globToRegExp('**/*.ts').test('src/nested/deep.ts')).toBe(true);
-  });
-
-  it('escapes regex metacharacters rather than honouring them', () => {
-    expect(globToRegExp('a+b.txt').test('a+b.txt')).toBe(true);
-    expect(globToRegExp('a+b.txt').test('aab.txt')).toBe(false);
-    expect(globToRegExp('file.(1)').test('file.(1)')).toBe(true);
-  });
-
-  it('matches a single character for a question mark', () => {
-    expect(globToRegExp('a?.ts').test('ab.ts')).toBe(true);
-    expect(globToRegExp('a?.ts').test('abc.ts')).toBe(false);
   });
 });
 

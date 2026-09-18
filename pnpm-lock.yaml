@@ -180,6 +180,9 @@ importers:
       '@agiworkforce/i18n':
         specifier: workspace:*
         version: link:../../packages/ui/i18n
+      '@agiworkforce/ide-runtime':
+        specifier: workspace:*
+        version: link:../../packages/client/ide-runtime
       '@agiworkforce/local-runtime-contract':
         specifier: workspace:*
         version: link:../../packages/contracts/local-runtime
@@ -2085,6 +2088,16 @@ importers:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.5)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(jsdom@20.0.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(msw@2.15.0(@types/node@24.13.5)(typescript@5.9.3))(vite@8.0.16(@types/node@24.13.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))
+
+  packages/platform/files:
+    dependencies:
+      '@agiworkforce/types':
+        specifier: workspace:*
+        version: link:../../contracts/types
+    devDependencies:
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.5)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(jsdom@20.0.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(msw@2.15.0(@types/node@24.13.5)(typescript@5.9.3))(vite@8.0.16(@types/node@24.13.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))

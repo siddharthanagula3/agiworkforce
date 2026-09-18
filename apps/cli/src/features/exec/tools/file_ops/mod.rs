@@ -69,10 +69,7 @@ fn saved_denial_message(action: &str) -> String {
 }
 
 /// Render a diff preview for the terminal.
-///
-/// The hunks mix the file on disk with the model's proposed content, and this
-/// preview is printed immediately above an approval prompt, so an escape here
-/// could scroll or repaint what the operator believes they are approving.
+///.
 fn diff_preview_lines(diff: &str) -> Vec<String> {
     diff.lines()
         .map(|line| {
@@ -95,17 +92,7 @@ fn print_diff_preview(diff: &str) {
 }
 
 /// Reached when a mutating tool needs approval, there is no TUI/approval
-/// callback installed (headless / `agi exec` context), and stdin is not a
-/// TTY, i.e. there is no way to actually obtain user consent (the
-/// `dialoguer::Confirm` prompt below would fail immediately and silently
-/// resolve to "denied").
-///
-/// Returning a normal `ToolResult { success: false, .. }` here is not enough:
-/// the denial gets reported back to the model as a routine tool result, the
-/// model narrates an apology, and the *process* still exits 0, a script
-/// driving `agi exec` gets no failure signal even though the requested
-/// mutation never happened. Hard-fail the process instead so non-interactive
-/// callers can detect the failure.
+/// callback installed (headless / `agi exec` context), and stdin is not a.
 fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
     eprintln!(
         "{}",
@@ -131,8 +118,7 @@ fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
 }
 
 /// True when there is no way to prompt a human for approval right now:
-/// stdin is not attached to a terminal (e.g. `agi exec ... </dev/null`, a
-/// piped/scripted invocation, or a CI runner).
+/// stdin is not attached to a terminal (e.g. `agi exec ... </dev/null`, a.
 fn stdin_is_noninteractive() -> bool {
     !crate::interactive::can_prompt()
 }
@@ -284,6 +270,80 @@ fn rewrite_guard_refusal(shown_path: &str, old: &str, new: &str) -> Option<Strin
         "Refusing to rewrite {shown_path}: this write replaces all {old_lines} lines but only \
          {changed} differ. Use edit_file (or multiedit for several sites) so the rest of the file \
          is left untouched."
+    ))
+}
+
+const CONFLICT_INLINE_MAX_LINES: usize = 40;
+
+/// The base/ours/theirs view of a conflicted file, appended to its raw read so
+/// the three sides are readable without re-deriving them from the markers.
+fn conflict_view(file_path: &Path, contents: &str) -> Option<String> {
+    if !crate::merge_conflicts::has_conflict_markers(contents) {
+        return None;
+    }
+    let relative = crate::path_security::repo_relative(file_path);
+    let file = crate::merge_conflicts::parse_conflicts(&relative, contents);
+    if !file.is_conflicted() {
+        return None;
+    }
+
+    let mut view = format!(
+        "\n\n[merge conflict: {} hunk(s) in {}]\n\
+         Every hunk needs an explicit resolution; nothing here picks a side for you.\n",
+        file.hunks.len(),
+        relative.display()
+    );
+    for line in file.outline() {
+        view.push_str(&format!("  {line}\n"));
+    }
+    for hunk in &file.hunks {
+        let sides = [
+            (
+                crate::merge_conflicts::ConflictSide::Base,
+                hunk.base.as_deref(),
+            ),
+            (
+                crate::merge_conflicts::ConflictSide::Ours,
+                Some(hunk.ours.as_slice()),
+            ),
+            (
+                crate::merge_conflicts::ConflictSide::Theirs,
+                Some(hunk.theirs.as_slice()),
+            ),
+        ];
+        for (side, lines) in sides {
+            let Some(lines) = lines else {
+                view.push_str(&format!("  hunk {} {side}: not recorded\n", hunk.index));
+                continue;
+            };
+            if lines.len() > CONFLICT_INLINE_MAX_LINES {
+                view.push_str(&format!(
+                    "  hunk {} {side}: {} lines (too long to inline)\n",
+                    hunk.index,
+                    lines.len()
+                ));
+                continue;
+            }
+            view.push_str(&format!("  hunk {} {side}:\n", hunk.index));
+            for line in lines {
+                view.push_str(&format!("    {}\n", truncate_line(line)));
+            }
+        }
+    }
+    Some(view)
+}
+
+/// `Some(message)` when a write would put conflict markers into a file that had
+/// none. Writing markers is how an unresolved merge gets committed as content.
+fn conflict_marker_refusal(shown_path: &str, old: &str, new: &str) -> Option<String> {
+    if !crate::merge_conflicts::has_conflict_markers(new)
+        || crate::merge_conflicts::has_conflict_markers(old)
+    {
+        return None;
+    }
+    Some(format!(
+        "Refusing to write {shown_path}: the content introduces merge conflict markers. \
+         Resolve the conflict and write the resolved text."
     ))
 }
 
@@ -481,7 +541,10 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
                 ));
             }
 
-            let output = truncate_output_with_save("read_file", output);
+            let mut output = truncate_output_with_save("read_file", output);
+            if let Some(view) = conflict_view(file_path, &contents) {
+                output.push_str(&view);
+            }
 
             Ok(ToolResult {
                 tool_name: "read_file".to_string(),
@@ -551,16 +614,24 @@ pub(super) async fn execute_write_file(
         });
     }
 
-    if file_path.is_file() {
-        if let Ok(existing) = read_existing_text_for_preview(file_path) {
-            if let Some(refusal) = rewrite_guard_refusal(&shown_path, &existing, content) {
-                return Ok(ToolResult {
-                    tool_name: "write_file".to_string(),
-                    success: false,
-                    output: refusal,
-                });
-            }
-        }
+    let existing = file_path
+        .is_file()
+        .then(|| read_existing_text_for_preview(file_path).ok())
+        .flatten();
+    if let Some(refusal) =
+        conflict_marker_refusal(&shown_path, existing.as_deref().unwrap_or(""), content).or_else(
+            || {
+                existing
+                    .as_deref()
+                    .and_then(|existing| rewrite_guard_refusal(&shown_path, existing, content))
+            },
+        )
+    {
+        return Ok(ToolResult {
+            tool_name: "write_file".to_string(),
+            success: false,
+            output: refusal,
+        });
     }
 
     if require_confirmation {
@@ -590,9 +661,7 @@ pub(super) async fn execute_write_file(
                 .await
                 {
                     // Resolved by the TUI approval overlay (or any installed callback).
-                    // This decision is authoritative, do NOT fall through to the
-                    // dialoguer confirm below, which would double-prompt on the
-                    // alternate screen and auto-deny when stdin is not a TTY.
+                    // This decision is authoritative, do NOT fall through to the.
                     if !approval_allows(decision) {
                         return Ok(ToolResult {
                             tool_name: "write_file".to_string(),
@@ -1017,9 +1086,7 @@ pub(super) async fn execute_apply_patch(
         }
     }
     // Freshness gate: for every existing file the patch will touch, confirm
-    // it has been read since it was last modified on disk.  This matches the
-    // read-before-write contract enforced by write_file/edit_file/multiedit.
-    // New files (not yet on disk) are skipped, there is nothing to be stale.
+    // it has been read since it was last modified on disk.  This matches the.
     if let Ok(paths) = patch_target_paths(patch) {
         for path in &paths {
             if path.exists() {
@@ -1353,6 +1420,38 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
 }
 
 #[cfg(test)]
+mod conflict_tests {
+    use super::*;
+
+    const CONFLICTED: &str =
+        "head\n<<<<<<< HEAD\nours\n||||||| base\nbase\n=======\ntheirs\n>>>>>>> feature\ntail\n";
+
+    #[test]
+    fn a_conflicted_read_reports_all_three_sides() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let path = workspace.path().join("app.txt");
+        std::fs::write(&path, CONFLICTED).expect("write fixture");
+
+        let view = conflict_view(&path, CONFLICTED).expect("a conflict view");
+
+        assert!(view.contains("1 hunk(s)"));
+        assert!(view.contains("hunk 1 base:"));
+        assert!(view.contains("hunk 1 ours:"));
+        assert!(view.contains("hunk 1 theirs:"));
+        assert!(view.contains("nothing here picks a side for you"));
+        assert!(conflict_view(&path, "clean\n").is_none());
+    }
+
+    #[test]
+    fn a_write_that_introduces_markers_is_refused() {
+        assert!(conflict_marker_refusal("app.txt", "clean\n", CONFLICTED)
+            .is_some_and(|message| message.contains("merge conflict markers")));
+        assert!(conflict_marker_refusal("app.txt", CONFLICTED, "resolved\n").is_none());
+        assert!(conflict_marker_refusal("app.txt", "clean\n", "still clean\n").is_none());
+    }
+}
+
+#[cfg(test)]
 mod path_feedback_tests {
     use super::*;
 
@@ -1449,8 +1548,7 @@ mod tests {
     use std::path::Path;
 
     /// The preview is the operator's only look at the change before the
-    /// confirm prompt; a hunk carrying OSC/CSI bytes used to reach the
-    /// terminal verbatim and could repaint that prompt.
+    /// confirm prompt; a hunk carrying OSC/CSI bytes used to reach the.
     #[test]
     fn diff_preview_strips_escape_sequences_from_hunks() {
         let payload = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2J\u{1b}[1;1H";

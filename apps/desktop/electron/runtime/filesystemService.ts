@@ -12,26 +12,21 @@ import {
   type FileTextContent,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
+import {
+  BINARY_SNIFF_BYTES,
+  globToRegExp,
+  grepLines,
+  GREP_PREVIEW_LIMIT,
+  isSkippedDirectory,
+  joinWorkspacePath,
+  looksBinary,
+  MAX_WORKSPACE_WALK_DEPTH,
+  toPosixPath,
+} from '@agiworkforce/ide-runtime/workspace';
 import { assertNotDeniedFile, PathRefused, resolveWithinRoot } from './pathGuard';
 
-const SKIPPED_DIRECTORIES = new Set([
-  '.git',
-  'node_modules',
-  '.next',
-  'dist',
-  'build',
-  'target',
-  '.turbo',
-  '.cache',
-  'coverage',
-]);
-
-const MAX_WALK_DEPTH = 24;
-const BINARY_SNIFF_BYTES = 8192;
-const PREVIEW_LIMIT = 240;
-
 function toPosix(value: string): string {
-  return value.split(path.sep).join('/');
+  return toPosixPath(value.split(path.sep).join('/'));
 }
 
 function kindOf(stat: { isSymbolicLink(): boolean; isDirectory(): boolean }): FileEntry['kind'] {
@@ -53,15 +48,6 @@ async function entryFor(absolute: string, relative: string): Promise<FileEntry |
   } catch {
     return null;
   }
-}
-
-/**
- * A file counts as binary when a NUL byte appears in its opening bytes, which
- * is how git decides the same question. Reading the whole file to be certain
- * would defeat the point of asking.
- */
-function looksBinary(sample: Buffer): boolean {
-  return sample.includes(0);
 }
 
 async function sniffBinary(absolute: string, size: number): Promise<boolean> {
@@ -92,7 +78,7 @@ export async function listDirectory(
   for (const name of names.slice(0, MAX_LIST_ENTRIES)) {
     const entry = await entryFor(
       path.join(resolved.absolute, name),
-      resolved.relative ? `${resolved.relative}/${name}` : name,
+      joinWorkspacePath(resolved.relative, name),
     );
     if (entry) entries.push(entry);
   }
@@ -216,7 +202,7 @@ async function* walk(
   relative: string,
   depth: number,
 ): AsyncGenerator<{ absolute: string; relative: string }> {
-  if (depth > MAX_WALK_DEPTH) return;
+  if (depth > MAX_WORKSPACE_WALK_DEPTH) return;
   let names: string[];
   try {
     names = await fs.readdir(absolute);
@@ -224,9 +210,9 @@ async function* walk(
     return;
   }
   for (const name of names) {
-    if (SKIPPED_DIRECTORIES.has(name)) continue;
+    if (isSkippedDirectory(name)) continue;
     const childAbsolute = path.join(absolute, name);
-    const childRelative = relative ? `${relative}/${name}` : name;
+    const childRelative = joinWorkspacePath(relative, name);
     let stat: Awaited<ReturnType<typeof fs.lstat>>;
     try {
       stat = await fs.lstat(childAbsolute);
@@ -240,42 +226,6 @@ async function* walk(
       yield { absolute: childAbsolute, relative: childRelative };
     }
   }
-}
-
-/**
- * Translates a glob into a regular expression.
- *
- * Every regex metacharacter is escaped first, so a pattern cannot smuggle
- * regex syntax through; the wildcards are then reintroduced deliberately.
- * The distinction callers depend on is that `**` crosses directory separators
- * and `*` does not.
- */
-export function globToRegExp(pattern: string): RegExp {
-  let source = '';
-  let index = 0;
-
-  while (index < pattern.length) {
-    const char = pattern[index];
-    if (char === '*') {
-      if (pattern[index + 1] === '*') {
-        source += '.*';
-        index += 2;
-        continue;
-      }
-      source += '[^/]*';
-      index += 1;
-      continue;
-    }
-    if (char === '?') {
-      source += '[^/]';
-      index += 1;
-      continue;
-    }
-    source += (char ?? '').replace(/[.+^${}()|[\]\\]/g, '\\$&');
-    index += 1;
-  }
-
-  return new RegExp(`^${source}$`);
 }
 
 export async function globFiles(
@@ -316,21 +266,14 @@ export async function grepFiles(
     } catch {
       continue;
     }
-    if (looksBinary(buffer.subarray(0, Math.min(BINARY_SNIFF_BYTES, buffer.length)))) continue;
+    if (looksBinary(buffer)) continue;
 
-    const lines = buffer.toString('utf8').split('\n');
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index] ?? '';
-      const column = line.indexOf(query);
-      if (column === -1) continue;
-      matches.push({
-        path: toPosix(found.relative),
-        line: index + 1,
-        column: column + 1,
-        preview: line.length > PREVIEW_LIMIT ? line.slice(0, PREVIEW_LIMIT) : line,
-      });
-      if (matches.length >= MAX_GREP_MATCHES) break;
-    }
+    matches.push(
+      ...grepLines(found.relative, buffer.toString('utf8'), query, {
+        limit: MAX_GREP_MATCHES - matches.length,
+        previewLimit: GREP_PREVIEW_LIMIT,
+      }),
+    );
   }
   return matches;
 }
