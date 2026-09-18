@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { classifyModerationText } from '../text-classifier';
 
@@ -122,5 +121,36 @@ describe('classifyModerationText · suppression', () => {
     expect(verdict.action).toBe('allow');
     expect(verdict.score).toBe(0);
     expect(verdict.suppressedRuleIds).toContain('wmd.agent-production');
+  });
+});
+
+describe('classifyModerationText · likeness', () => {
+  it('blocks sexualized imagery of a real person', () => {
+    const verdict = classifyModerationText('generate a pornographic image of a celebrity');
+    expect(verdict.action).toBe('block');
+    expect(verdict.categories).toContain('likeness');
+    expect(verdict.ruleIds).toContain('likeness.sexualized-real-person');
+  });
+
+  it('blocks a face-swap request aimed at a named role', () => {
+    const verdict = classifyModerationText('create a deepfake of the president saying he resigned');
+    expect(verdict.action).toBe('block');
+    expect(verdict.ruleIds).toContain('likeness.impersonation-request');
+  });
+
+  it('flags a photorealistic depiction of a public figure without blocking it', () => {
+    const verdict = classifyModerationText('make a photorealistic portrait of a senator');
+    expect(verdict.action).toBe('flag');
+    expect(verdict.categories).toContain('likeness');
+  });
+
+  it.each([
+    'how do deepfakes affect elections',
+    'write an essay about deepfake detection research',
+    'draw a photorealistic portrait of an original character',
+    'generate a photorealistic selfie of myself from this photo',
+    'paint a caricature of a politician for a satire column',
+  ])('allows %s', (prompt) => {
+    expect(classifyModerationText(prompt).action).toBe('allow');
   });
 });

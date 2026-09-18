@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
+import type { LiveVoiceToolActivity } from '@features/chat/lib/live-voice-session';
 import {
   INITIAL_VOICE_SESSION_STATE,
   isVoiceSessionActive,
@@ -16,6 +17,15 @@ const STORE_NAME = 'agi-web-voice-session';
 const STORE_VERSION = 1;
 
 export const VOICE_LANGUAGE_AUTO = '';
+
+export const VOICE_PACE_MIN = 0.5;
+export const VOICE_PACE_MAX = 2;
+export const VOICE_PACE_DEFAULT = 1;
+
+export function clampVoicePace(pace: number): number {
+  if (!Number.isFinite(pace)) return VOICE_PACE_DEFAULT;
+  return Math.min(VOICE_PACE_MAX, Math.max(VOICE_PACE_MIN, Math.round(pace * 20) / 20));
+}
 
 export const VOICE_INTELLIGENCE = {
   economy: 'economy',
@@ -34,19 +44,23 @@ interface VoiceSessionStoreState {
   intelligence: VoiceIntelligence;
   language: string;
   voice: string;
+  pace: number;
   backendBusy: boolean;
+  toolActivity: readonly LiveVoiceToolActivity[];
 }
 
 interface VoiceSessionStoreActions {
   dispatch: (event: VoiceSessionEvent) => void;
   setVoice: (voice: string) => void;
   setBackendBusy: (backendBusy: boolean) => void;
+  setToolActivity: (toolActivity: readonly LiveVoiceToolActivity[]) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setActivityMessageId: (messageId: string | null) => void;
   setIntelligence: (intelligence: VoiceIntelligence) => void;
   setLanguage: (language: string) => void;
+  setPace: (pace: number) => void;
 }
 
 const PANELS_CLOSED = {
@@ -64,7 +78,9 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       intelligence: VOICE_INTELLIGENCE.balanced,
       language: VOICE_LANGUAGE_AUTO,
       voice: LIVE_DEFAULT_VOICE,
+      pace: VOICE_PACE_DEFAULT,
       backendBusy: false,
+      toolActivity: [],
 
       dispatch: (event) => {
         const session = voiceSessionReducer(get().session, event);
@@ -72,11 +88,12 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
         set(
           isVoiceSessionActive(session.status)
             ? { session }
-            : { session, backendBusy: false, ...PANELS_CLOSED },
+            : { session, backendBusy: false, toolActivity: [], ...PANELS_CLOSED },
         );
       },
       setVoice: (voice) => set({ voice: isLiveVoice(voice) ? voice : LIVE_DEFAULT_VOICE }),
       setBackendBusy: (backendBusy) => set({ backendBusy }),
+      setToolActivity: (toolActivity) => set({ toolActivity }),
 
       toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
       setDockOpen: (dockOpen) =>
@@ -86,6 +103,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
         set(activityMessageId ? { activityMessageId, dockOpen: false } : { activityMessageId }),
       setIntelligence: (intelligence) => set({ intelligence }),
       setLanguage: (language) => set({ language }),
+      setPace: (pace) => set({ pace: clampVoicePace(pace) }),
     }),
     {
       name: STORE_NAME,
@@ -94,6 +112,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
         intelligence: state.intelligence,
         language: state.language,
         voice: state.voice,
+        pace: state.pace,
       }),
     },
   ),

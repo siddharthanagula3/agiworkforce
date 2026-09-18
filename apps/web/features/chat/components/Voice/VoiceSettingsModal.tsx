@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  AudioLines,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -21,6 +22,8 @@ import { getAutoRoutingProfileTiers } from '@agiworkforce/types';
 import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { cn } from '@shared/lib/utils';
 import {
+  clampVoicePace,
+  useVoiceSessionStore,
   VOICE_LANGUAGE_AUTO,
   type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
@@ -30,17 +33,25 @@ import { VoiceOrbPreview } from './VoiceOrb';
 const LABEL = {
   title: 'Voice settings',
   description:
-    'Choose the spoken voice, how much intelligence a voice turn gets, and its language.',
+    'Choose the spoken voice, how much intelligence a voice turn gets, its language and its speaking pace.',
   voice: 'Voice',
   previous: 'Previous voice',
   next: 'Next voice',
   intelligence: 'Intelligence',
   language: 'Language',
+  pace: 'Speaking pace',
   autoDetect: 'Auto-detect',
   noVoices: 'This browser offers no speech voices.',
 } as const;
 
 const VOICE_CAROUSEL_DOTS_MAX = 12;
+
+const PACE_OPTIONS: readonly PickerOption[] = [
+  { id: '0.75', label: 'Slower', hint: '0.75x' },
+  { id: '1', label: 'Normal', hint: '1x' },
+  { id: '1.25', label: 'Faster', hint: '1.25x' },
+  { id: '1.5', label: 'Fastest', hint: '1.5x' },
+];
 
 const TRIGGER_CLASS =
   'flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 py-2 text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]';
@@ -173,6 +184,8 @@ export function VoiceSettingsModal({
   onLanguageChange,
 }: VoiceSettingsModalProps) {
   const [openPicker, setOpenPicker] = useState<string | null>(null);
+  const pace = useVoiceSessionStore((state) => state.pace);
+  const setPace = useVoiceSessionStore((state) => state.setPace);
 
   const intelligenceOptions = useMemo<PickerOption[]>(
     () =>
@@ -295,6 +308,16 @@ export function VoiceSettingsModal({
             open={openPicker === LABEL.language}
             onOpenChange={(next) => setOpenPicker(next ? LABEL.language : null)}
             onSelect={onLanguageChange}
+          />
+          <Picker
+            id="pace"
+            label={LABEL.pace}
+            icon={AudioLines}
+            options={PACE_OPTIONS}
+            selectedId={String(clampVoicePace(pace))}
+            open={openPicker === LABEL.pace}
+            onOpenChange={(next) => setOpenPicker(next ? LABEL.pace : null)}
+            onSelect={(id) => setPace(Number(id))}
           />
         </div>
       </DialogContent>

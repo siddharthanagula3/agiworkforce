@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
 
 import {
+  KEEPALIVE_INTERVAL_MS,
+  KEEPALIVE_TIMEOUT_MS,
   LIVE_SESSION_MESSAGE,
   LiveVoiceSession,
   LiveVoiceSessionError,
@@ -67,10 +69,13 @@ function callbacks(): LiveVoiceSessionCallbacks & { turns: LiveTranscriptTurn[] 
     onStarted: vi.fn(),
     onSpeaking: vi.fn(),
     onBackendBusy: vi.fn(),
+    onToolActivity: vi.fn(),
+    onUnverifiedClaim: vi.fn(),
     onTranscript: vi.fn((turn: LiveTranscriptTurn) => turns.push(turn)),
     onUsage: vi.fn(),
     onClosed: vi.fn(),
     onError: vi.fn(),
+    onConnectionLost: vi.fn(),
   };
 }
 
@@ -96,6 +101,14 @@ describe('LiveVoiceSession', () => {
               estimatedCostCents: 50,
               ceilingSeconds: 600,
             },
+            tools: [
+              {
+                id: 'web_search',
+                label: 'Searching the web',
+                timeoutMs: 20_000,
+                requiresApproval: false,
+              },
+            ],
           }),
           { status: 201 },
         ),
@@ -153,6 +166,8 @@ describe('LiveVoiceSession', () => {
       sdp: 'offer-sdp',
       voice: 'marin',
       conversationId: null,
+      language: null,
+      surface: 'web',
     });
     expect((init.headers as Record<string, string>)['x-csrf-token']).toBe('csrf-token');
     expect(peer.remote).toEqual({ type: 'answer', sdp: 'answer-sdp' });
@@ -300,6 +315,79 @@ describe('LiveVoiceSession', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('pings on the keepalive interval and keeps a session that answers alive', async () => {
+    vi.useFakeTimers();
+    try {
+      const { cb } = await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+
+      await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS);
+      expect(peer.channel.sent.at(-1)).toMatchObject({ type: 'session.ping' });
+
+      for (let elapsed = 0; elapsed < KEEPALIVE_TIMEOUT_MS * 2; elapsed += KEEPALIVE_INTERVAL_MS) {
+        await vi.advanceTimersByTimeAsync(KEEPALIVE_INTERVAL_MS);
+        peer.channel.receive({ type: 'session.usage.updated', usage: { seconds: 1 } });
+      }
+      expect(cb.onError).not.toHaveBeenCalled();
+      expect(cb.onConnectionLost).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats a link that has gone silent as a recoverable drop', async () => {
+    vi.useFakeTimers();
+    try {
+      const { cb } = await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+
+      await vi.advanceTimersByTimeAsync(KEEPALIVE_TIMEOUT_MS + KEEPALIVE_INTERVAL_MS);
+
+      expect(cb.onConnectionLost).toHaveBeenCalledWith(LIVE_SESSION_MESSAGE.connectionDropped);
+      expect(cb.onError).not.toHaveBeenCalled();
+      expect(peer.closed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('hands a failed peer to the host as recoverable, with the turn in flight finalized', async () => {
+    const { cb } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    peer.channel.receive({ type: 'session.output_transcript.delta', delta: 'Half a sentence' });
+
+    peer.connectionState = 'failed';
+    peer.dispatchEvent(new Event('connectionstatechange'));
+
+    expect(cb.onConnectionLost).toHaveBeenCalledWith(LIVE_SESSION_MESSAGE.connectionDropped);
+    expect(cb.onError).not.toHaveBeenCalled();
+    expect(cb.turns.filter((turn) => turn.final).map((turn) => turn.text)).toEqual([
+      'Half a sentence',
+    ]);
+  });
+
+  it('reports a drop before the session started as a failure, never as a reconnect', async () => {
+    const { cb } = await startSession();
+
+    peer.connectionState = 'failed';
+    peer.dispatchEvent(new Event('connectionstatechange'));
+
+    expect(cb.onError).toHaveBeenCalledWith(LIVE_SESSION_MESSAGE.connectionFailed);
+    expect(cb.onConnectionLost).not.toHaveBeenCalled();
+  });
+
+  it('leaves a host with no reconnect path on the error it already handled', async () => {
+    const cb = callbacks();
+    delete (cb as { onConnectionLost?: unknown }).onConnectionLost;
+    await startSession(cb);
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+
+    peer.connectionState = 'failed';
+    peer.dispatchEvent(new Event('connectionstatechange'));
+
+    expect(cb.onError).toHaveBeenCalledWith(LIVE_SESSION_MESSAGE.connectionDropped);
+  });
+
   it('surfaces the server error message when the session is refused and releases the microphone', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
@@ -310,5 +398,104 @@ describe('LiveVoiceSession', () => {
     await expect(startSession()).rejects.toBeInstanceOf(LiveVoiceSessionError);
     expect(tracks[0]!.stop).toHaveBeenCalled();
     expect(peer.closed).toBe(true);
+  });
+
+  it('labels a running tool and clears it when the delegated turn completes', async () => {
+    const { cb } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+
+    peer.channel.receive({
+      type: 'session.delegation.created',
+      delegation: { id: 'd1', tool: 'web_search' },
+    });
+    expect(cb.onBackendBusy).toHaveBeenLastCalledWith(true);
+    expect(cb.onToolActivity).toHaveBeenLastCalledWith([
+      expect.objectContaining({ delegationId: 'd1', toolId: 'web_search', state: 'running' }),
+    ]);
+
+    peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'd1',
+      event: { type: 'response.completed' },
+    });
+    expect(cb.onBackendBusy).toHaveBeenLastCalledWith(false);
+    expect(cb.onToolActivity).toHaveBeenLastCalledWith([]);
+  });
+
+  it('marks a tool that outran its budget so the caller can offer to cancel', async () => {
+    vi.useFakeTimers();
+    try {
+      const { cb } = await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd1', tool: 'web_search' },
+      });
+      vi.advanceTimersByTime(20_001);
+      expect(cb.onToolActivity).toHaveBeenLastCalledWith([
+        expect.objectContaining({ delegationId: 'd1', state: 'timed_out' }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels the in-flight delegation on close instead of leaving the provider running it', async () => {
+    const { session } = await startSession();
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    peer.channel.receive({
+      type: 'session.delegation.created',
+      delegation: { id: 'd1', tool: 'web_search' },
+    });
+
+    const closing = session.close();
+    expect(peer.channel.sent).toContainEqual(
+      expect.objectContaining({ type: 'session.delegation.cancel', delegation_id: 'd1' }),
+    );
+    peer.channel.receive({ type: 'session.closed', reason: 'close_requested' });
+    await closing;
+  });
+
+  it('reports a spoken success claim with no tool result behind it', async () => {
+    vi.useFakeTimers();
+    try {
+      const { cb } = await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+      peer.channel.receive({
+        type: 'session.output_transcript.delta',
+        delta: "I've sent the message.",
+      });
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(cb.onUnverifiedClaim).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'assistant', final: true }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('accepts the same claim once a tool call actually completed', async () => {
+    vi.useFakeTimers();
+    try {
+      const { cb } = await startSession();
+      peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+      peer.channel.receive({
+        type: 'session.delegation.created',
+        delegation: { id: 'd1', tool: 'web_search' },
+      });
+      peer.channel.receive({
+        type: 'response.event',
+        delegation_id: 'd1',
+        event: { type: 'response.completed' },
+      });
+      peer.channel.receive({
+        type: 'session.output_transcript.delta',
+        delta: "I've sent the message.",
+      });
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(cb.onUnverifiedClaim).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

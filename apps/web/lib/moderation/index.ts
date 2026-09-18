@@ -5,11 +5,19 @@ import { classifyModerationText, type ModerationCategory } from './text-classifi
 
 export { matchDenylistedUpload } from './hash-denylist';
 export { recordModerationEvent } from './reporting';
+export { inspectImageBytes, type ImageStructureRejection } from './image-structure';
+export {
+  GENERATED_OUTPUT_REFUSAL,
+  UPLOADED_IMAGE_REFUSAL,
+  moderateGeneratedMedia,
+  moderateUploadedImage,
+  type GeneratedMediaModeration,
+} from './output-moderation';
 
 export interface ManagedPromptModerationInput {
   userId: string;
   segments: readonly string[];
-  surface?: 'managed-chat' | 'managed-video';
+  surface?: 'managed-chat' | 'managed-image' | 'managed-video';
 }
 
 export type ManagedPromptModeration =

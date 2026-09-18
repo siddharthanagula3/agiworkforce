@@ -263,9 +263,25 @@ function compose(sections: readonly (string | null)[], maxChars: number): string
  * The speech layer gets the conversation and the project's own instructions;
  * knowledge-file passages stay with the delegated turn that can cite them.
  */
-export function buildLiveVoiceInstructions(base: string, bundle: LiveVoiceContextBundle): string {
+export function formatLiveVoiceLanguage(language: string | null): string | null {
+  return language
+    ? `Speak and transcribe in ${language}. Keep to it even when the user's audio is ambiguous.`
+    : null;
+}
+
+export function buildLiveVoiceInstructions(
+  base: string,
+  bundle: LiveVoiceContextBundle,
+  options: { language?: string | null } = {},
+): string {
   return compose(
-    [base, bundle.memoryPrompt, bundle.projectBrief, formatLiveVoiceTranscript(bundle.turns)],
+    [
+      base,
+      formatLiveVoiceLanguage(options.language ?? null),
+      bundle.memoryPrompt,
+      bundle.projectBrief,
+      formatLiveVoiceTranscript(bundle.turns),
+    ],
     MAX_LIVE_INSTRUCTIONS_CHARS,
   );
 }
