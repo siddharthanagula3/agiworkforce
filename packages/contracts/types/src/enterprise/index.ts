@@ -18,6 +18,7 @@ import { DEFAULT_WORKSPACE_CONTROLS, type WorkspaceControls } from './workspace-
 
 export * from './permissions';
 export * from './workspace-controls';
+export * from './authorization';
 export * from './retention-domains';
 
 export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer';

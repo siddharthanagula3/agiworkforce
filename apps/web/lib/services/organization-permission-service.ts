@@ -1,11 +1,15 @@
 import 'server-only';
 
 import {
+  DEFAULT_WORKSPACE_CONTROLS,
+  ENTERPRISE_DENIAL_STAGE,
+  evaluateAuthorization,
   isOrganizationPermission,
+  type AuthorizationSubject,
   type OrganizationPermission,
   type OrganizationRole,
 } from '@agiworkforce/types';
-import { createError } from '@/lib/errors';
+import { EnterpriseDenialError } from '@/lib/authorization/denial';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
@@ -13,6 +17,31 @@ export interface OrganizationAccess {
   organizationId: string;
   role: OrganizationRole;
   permissions: ReadonlySet<OrganizationPermission>;
+}
+
+interface MembershipAccess {
+  role: OrganizationRole | null;
+  permissions: ReadonlySet<OrganizationPermission>;
+}
+
+// The role comes back with the set because the three Primary Owner permissions
+// are answered by the membership row, not by what the grid granted.
+async function readMembershipAccess(
+  organizationId: string,
+  userId: string,
+): Promise<MembershipAccess> {
+  const [row] = await getNeonDb().query<{ role: OrganizationRole | null; permissions: unknown }>(
+    `select (select role
+               from public.organization_members
+              where organization_id = $1 and user_id = $2) as role,
+            public.organization_member_permissions($1::uuid, $2) as permissions`,
+    [organizationId, userId],
+  );
+  const permissions = Array.isArray(row?.permissions) ? row.permissions : [];
+  return {
+    role: row?.role ?? null,
+    permissions: new Set(permissions.filter(isOrganizationPermission)),
+  };
 }
 
 export async function resolveOrganizationPermissions(
@@ -27,17 +56,55 @@ export async function resolveOrganizationPermissions(
   return new Set(permissions.filter(isOrganizationPermission));
 }
 
+function refuseNonMember(organizationId: string | null): never {
+  throw new EnterpriseDenialError({
+    code: 'not_a_member',
+    stage: ENTERPRISE_DENIAL_STAGE.not_a_member,
+    message: 'You are not a member of this workspace.',
+    organizationId,
+    policyRevision: 0,
+  });
+}
+
+// A caller with no membership is refused before the decision function sees it:
+// an absent workspace is personal scope there, and personal scope allows all.
+function assertPermission(
+  input: {
+    organizationId: string | null;
+    role: OrganizationRole | null;
+    permissions: ReadonlySet<OrganizationPermission>;
+  },
+  permission: OrganizationPermission,
+  deniedMessage: string,
+): void {
+  if (!input.organizationId || !input.role) refuseNonMember(input.organizationId);
+  const subject: AuthorizationSubject = {
+    organizationId: input.organizationId,
+    isMember: true,
+    isPrimaryOwner: input.role === 'owner',
+    permissions: input.permissions,
+    entitledFeatures: null,
+    controls: DEFAULT_WORKSPACE_CONTROLS,
+    policyRevision: 0,
+  };
+  const decision = evaluateAuthorization(subject, { permission });
+  if (decision.allowed) return;
+  throw new EnterpriseDenialError({ ...decision.denial, message: deniedMessage });
+}
+
 export async function requireMemberPermission(
   organizationId: string,
   userId: string,
   permission: OrganizationPermission,
   deniedMessage: string,
 ): Promise<ReadonlySet<OrganizationPermission>> {
-  const permissions = await resolveOrganizationPermissions(organizationId, userId);
-  if (!permissions.has(permission)) {
-    throw createError.forbidden(deniedMessage).asUserSafe();
-  }
-  return permissions;
+  const access = await readMembershipAccess(organizationId, userId);
+  assertPermission(
+    { organizationId, role: access.role, permissions: access.permissions },
+    permission,
+    deniedMessage,
+  );
+  return access.permissions;
 }
 
 export async function resolveOrganizationAccess(
@@ -72,12 +139,8 @@ export function requirePermission(
   permission: OrganizationPermission,
   deniedMessage: string,
 ): OrganizationAccess {
-  if (!access) {
-    throw createError.forbidden('You are not a member of this workspace.').asUserSafe();
-  }
-  if (!access.permissions.has(permission)) {
-    throw createError.forbidden(deniedMessage).asUserSafe();
-  }
+  if (!access) refuseNonMember(null);
+  assertPermission(access, permission, deniedMessage);
   return access;
 }
 

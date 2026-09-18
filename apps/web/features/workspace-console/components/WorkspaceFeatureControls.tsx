@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import {
   WORKSPACE_FEATURE_LABELS,
+  WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS,
   WORKSPACE_REASONING_EFFORTS,
   type WorkspaceControls,
   type WorkspaceControlsLayer,
@@ -290,10 +291,12 @@ function PolicyExceptions({ organizationId }: { organizationId: string }) {
         ? (members.data ?? []).map((m) => ({ id: m.userId, label: m.name || m.email }))
         : override.subjectType === 'group'
           ? (groups.data?.groups ?? []).map((g) => ({ id: g.id, label: g.displayName }))
-          : (roles.data?.roles ?? []).map((r) => ({ id: r.id, label: r.name }));
+          : override.subjectType === 'role'
+            ? (roles.data?.roles ?? []).map((r) => ({ id: r.id, label: r.name }))
+            : [];
     const label =
       pool.find((entry) => entry.id === override.subjectId)?.label ?? override.subjectId;
-    return `${override.subjectType === 'user' ? 'Person' : override.subjectType === 'group' ? 'Group' : 'Role'}: ${label}`;
+    return `${WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS[override.subjectType]}: ${label}`;
   }
 
   const layer: WorkspaceControlsLayer = {

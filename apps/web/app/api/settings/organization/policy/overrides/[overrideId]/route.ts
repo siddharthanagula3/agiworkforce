@@ -8,7 +8,6 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { deletePolicyOverride } from '@/lib/services/organization-policy-override-service';
 import { requireWorkspaceConsolePermission } from '../../../workspace-access';
 
@@ -29,13 +28,13 @@ async function handleDelete(
   const { overrideId } = await context.params;
   if (!UUID_RE.test(overrideId)) throw createError.validation('overrideId must be a uuid');
 
-  const { userId, organizationId, access } = await requireWorkspaceConsolePermission(
+  const { db, userId, organizationId, access } = await requireWorkspaceConsolePermission(
     request,
     'policy.manage',
     'Your workspace role does not allow changing workspace policy.',
   );
 
-  const removed = await deletePolicyOverride(getNeonDb(), organizationId, overrideId);
+  const removed = await deletePolicyOverride(db, organizationId, overrideId);
   if (!removed) {
     throw createError.notFound('That policy exception does not exist.').asUserSafe();
   }

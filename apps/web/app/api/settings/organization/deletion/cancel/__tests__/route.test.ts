@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockGetClerkAuthUser, mockRecordAuditEvent } = vi.hoisted(() => ({
+const { mockQuery, mockGetClerkAuthUser, mockGetNeonDb, mockRecordAuditEvent } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
+  mockGetNeonDb: vi.fn(),
   mockRecordAuditEvent: vi.fn(async () => undefined),
 }));
 
@@ -13,16 +14,23 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockGetClerkAuthUser }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async (...args: unknown[]) => {
+    const { userId } = (await mockGetClerkAuthUser(...args)) as { userId: string };
+    return {
+      db: { query: (...queryArgs: unknown[]) => mockQuery(...queryArgs) },
+      userId,
+      organizationId: null,
+    };
+  },
+}));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mockRecordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
   logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mockQuery(...args) })),
-}));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mockGetNeonDb }));
 
 import { POST } from '../route';
 

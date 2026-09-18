@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { createError } from '@/lib/errors';
 import { persistActiveWorkspaceSelection } from '@/lib/services/active-workspace-service';
@@ -25,8 +24,8 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Select a valid workspace', parsed.error.issues);
   }
 
-  const { userId } = await getClerkAuthUser(request);
-  await getNeonDb().transaction(async (tx) => {
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
+  await db.transaction(async (tx) => {
     await tx.query(
       `select pg_advisory_xact_lock(hashtextextended('agi:active-workspace:' || $1, 0))`,
       [userId],
