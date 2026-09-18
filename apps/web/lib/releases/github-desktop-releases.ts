@@ -2,6 +2,12 @@ import 'server-only';
 
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import {
+  RELEASE_CHANNELS,
+  channelCarriesMaturity,
+  type FeatureMaturity,
+  type ReleaseChannel,
+} from '@/lib/feature-flags/flag-definition';
 import { getOptionalEnv } from '@shared/utils/env';
 
 export const DESKTOP_RELEASE_PLATFORMS = [
@@ -11,10 +17,18 @@ export const DESKTOP_RELEASE_PLATFORMS = [
   'windows-x86_64',
   'linux-x86_64',
 ] as const;
-export const DESKTOP_RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const;
+export const DESKTOP_RELEASE_CHANNELS = RELEASE_CHANNELS;
 
 export type DesktopReleasePlatform = (typeof DESKTOP_RELEASE_PLATFORMS)[number];
-export type DesktopReleaseChannel = (typeof DESKTOP_RELEASE_CHANNELS)[number];
+export type DesktopReleaseChannel = ReleaseChannel;
+
+/** A channel may only carry a build whose maturity it is wide enough for. */
+export function desktopChannelCarriesMaturity(
+  channel: DesktopReleaseChannel,
+  maturity: FeatureMaturity,
+): boolean {
+  return channelCarriesMaturity(channel, maturity);
+}
 
 const httpsUrlSchema = z
   .string()

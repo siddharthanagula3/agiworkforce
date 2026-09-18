@@ -2,7 +2,7 @@ import 'server-only';
 
 import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { MAX_PURCHASABLE_SEATS } from '@agiworkforce/types';
+import { MAX_PURCHASABLE_SEATS, type CapabilityDenialReason } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -844,6 +844,31 @@ export interface EnterpriseInvoiceSummary {
 }
 
 export const ENTERPRISE_INVOICE_HISTORY_LIMIT = 24;
+
+/**
+ * An unactivated contract is an entitlement the account does not hold yet, not
+ * a forbidden action, so it refuses under the entitlement code rather than the
+ * shared 403 every other refusal used to carry.
+ */
+export function enterpriseActivationDenialReason(
+  blockedReason: ActivationBlockedReason | null,
+): CapabilityDenialReason | null {
+  if (blockedReason === null) return null;
+  return blockedReason === 'missing_signed_order' ? 'entitlement_missing' : 'policy_blocked';
+}
+
+/**
+ * Whether a contract entitles the organization right now, replacing the
+ * `isEnterprise` boolean that told a caller the tier but never whether the
+ * contract behind it was live.
+ */
+export function enterpriseContractDenialReason(
+  contract: Pick<EnterpriseContractSummary, 'ended' | 'activationBlockedReason'> | null,
+): CapabilityDenialReason | null {
+  if (!contract) return 'entitlement_missing';
+  if (contract.ended) return 'entitlement_missing';
+  return enterpriseActivationDenialReason(contract.activationBlockedReason);
+}
 
 function contactOrNull(
   name: string | null,

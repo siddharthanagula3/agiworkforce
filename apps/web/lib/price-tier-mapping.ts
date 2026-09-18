@@ -1,4 +1,10 @@
-import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
+import {
+  isBillingPlanTier,
+  isByokPlanTier,
+  isLocalOnlyPlanTier,
+  type BillingInterval,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 
 interface PriceMappingEntry {
   tier: BillingPlanTier;
@@ -143,11 +149,11 @@ export function resolvePlanTier(
   return getPlanTierFromPriceId(priceId);
 }
 
-export function isValidPlanTier(tier: string | null | undefined): tier is string {
-  if (!tier) return false;
-  return ['free', 'basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'].includes(
-    tier.toLowerCase(),
-  );
+/** A tier a hosted subscription can carry: the catalogue minus the two local-runtime tiers, which no Price sells. */
+export function isValidPlanTier(tier: string | null | undefined): tier is BillingPlanTier {
+  const normalized = tier?.toLowerCase();
+  if (!isBillingPlanTier(normalized)) return false;
+  return !isLocalOnlyPlanTier(normalized) && !isByokPlanTier(normalized);
 }
 
 export function getAllRegisteredPriceIds(): string[] {

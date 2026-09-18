@@ -8,7 +8,11 @@ vi.mock('../pricing', () => ({
   STRIPE_PRICE_IDS: {},
 }));
 
-import { validateRequiredEnvVars } from '../validate-env';
+import {
+  validateConfigKeyRegistry,
+  validateOAuthCallbackIsolation,
+  validateRequiredEnvVars,
+} from '../validate-env';
 
 describe('validateRequiredEnvVars · database URL either-or check', () => {
   let savedEnv: NodeJS.ProcessEnv;
@@ -333,7 +337,6 @@ describe('validateEmailPseudonymPepper · boot check', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
     for (const key of Object.keys(process.env)) {
       if (!(key in savedEnv)) delete process.env[key];
     }
@@ -391,7 +394,6 @@ describe('validateSandboxOriginConfigured · boot check', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
     for (const key of Object.keys(process.env)) {
       if (!(key in savedEnv)) delete process.env[key];
     }
@@ -440,5 +442,73 @@ describe('validateSandboxOriginConfigured · boot check', () => {
     expect(result.warnings).toEqual(
       expect.arrayContaining([expect.stringContaining('NEXT_PUBLIC_SANDBOX_ORIGIN is not set')]),
     );
+  });
+});
+
+describe('OAuth callback isolation and the config key registry', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    delete process.env['AGI_DEPLOY_ENV'];
+    delete process.env['VERCEL_ENV'];
+    delete process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'];
+    delete process.env['NEXT_PUBLIC_APP_URL'];
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  it('warns when a development runtime sends OAuth callbacks to a shared host', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] = 'https://app.agiworkforce.com';
+
+    expect(validateOAuthCallbackIsolation().warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('app.agiworkforce.com')]),
+    );
+  });
+
+  it('accepts a loopback callback in development', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] = 'http://127.0.0.1:3000';
+
+    expect(validateOAuthCallbackIsolation()).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('refuses a deployed callback that points at another deployment', () => {
+    process.env['AGI_DEPLOY_ENV'] = 'production';
+    process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.example.com';
+    process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] = 'https://preview.example.com';
+
+    const result = validateOAuthCallbackIsolation();
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('preview.example.com');
+  });
+
+  it('refuses a deployed callback that is not https', () => {
+    process.env['AGI_DEPLOY_ENV'] = 'production';
+    process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] = 'http://app.example.com';
+
+    expect(validateOAuthCallbackIsolation().errors[0]).toContain('must use https');
+  });
+
+  it('warns when a key allowed only in a deployed environment is set locally', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    process.env['AGI_DEPLOY_ENV'] = 'development';
+    process.env['VERCEL_ENV'] = 'production';
+
+    expect(validateConfigKeyRegistry().warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('VERCEL_ENV')]),
+    );
+  });
+
+  it('registers no secret under a name the bundler ships to the browser', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(validateConfigKeyRegistry().errors).toEqual([]);
   });
 });

@@ -7,6 +7,7 @@
  * @module capability-handshake
  */
 
+export * from '../reason-codes';
 export * from './types';
 export * from './registry';
 export * from './evaluator';

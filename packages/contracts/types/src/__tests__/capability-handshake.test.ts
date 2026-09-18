@@ -162,6 +162,8 @@ describe('evaluateCapabilityAdmission', () => {
         capabilityId: 'canUseWebSearch',
         reason: 'task requires live search',
         deniedByLayers: ['model', 'tier', 'surface', 'settings'],
+        reasonCode: 'unsupported_by_provider',
+        decidedBy: 'capability',
       },
     ]);
   });
@@ -184,7 +186,12 @@ describe('evaluateCapabilityAdmission', () => {
     expect(result.admitted).toBe(false);
     if (result.admitted) throw new Error('expected rejection');
     expect(result.rejected).toEqual([
-      { capabilityId: 'canUseWebSearch', reason: undefined, deniedByLayers: ['tier'] },
+      {
+        capabilityId: 'canUseWebSearch',
+        deniedByLayers: ['tier'],
+        reasonCode: 'requires_upgrade',
+        decidedBy: 'entitlement',
+      },
     ]);
   });
 

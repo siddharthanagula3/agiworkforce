@@ -37,7 +37,7 @@ export const REMOTE_DATABASE_OVERRIDE_VAR = 'AGI_ALLOW_REMOTE_DATABASE';
 export const REMOTE_DATABASE_OVERRIDE_VALUE =
   'yes-i-am-pointing-a-development-runtime-at-a-shared-database';
 
-const RUNTIME_ENVIRONMENTS: readonly RuntimeEnvironment[] = [
+export const RUNTIME_ENVIRONMENTS: readonly RuntimeEnvironment[] = [
   'development',
   'test',
   'preview',
@@ -144,4 +144,73 @@ export function assertDatabaseEnvironmentIsolation({
       `host is genuinely intended, set ${REMOTE_DATABASE_OVERRIDE_VAR}=` +
       `"${REMOTE_DATABASE_OVERRIDE_VALUE}".`,
   );
+}
+
+export type ConfigKeySecrecy = 'secret' | 'public';
+
+/**
+ * What one configuration key is, and where it may be read. A key without an
+ * entry is unreadable in production: an unclassified key is one nobody has
+ * decided is safe to read there.
+ */
+export interface ConfigKeyDescriptor {
+  key: string;
+  secrecy: ConfigKeySecrecy;
+  allowedEnvironments: readonly RuntimeEnvironment[];
+}
+
+export type ConfigKeyRegistry = Readonly<Record<string, ConfigKeyDescriptor>>;
+
+export function defineConfigKeys(descriptors: readonly ConfigKeyDescriptor[]): ConfigKeyRegistry {
+  return Object.freeze(
+    Object.fromEntries(descriptors.map((descriptor) => [descriptor.key, descriptor])),
+  );
+}
+
+export interface ConfigKeyViolation {
+  key: string;
+  environment: RuntimeEnvironment;
+  reason: 'environment_not_allowed' | 'secret_exposed_to_client';
+  message: string;
+}
+
+const CLIENT_READABLE_PREFIX = 'NEXT_PUBLIC_';
+
+/**
+ * A secret named so the bundler inlines it into client JavaScript is not a
+ * secret. That is a static property of the key, so it is checked in every
+ * environment, not only the deployed ones.
+ */
+export function checkConfigKeys(
+  registry: ConfigKeyRegistry,
+  env: IsolationEnvironment = process.env,
+  environment: RuntimeEnvironment = resolveRuntimeEnvironment(env),
+): ConfigKeyViolation[] {
+  const violations: ConfigKeyViolation[] = [];
+
+  for (const descriptor of Object.values(registry)) {
+    if (descriptor.secrecy === 'secret' && descriptor.key.startsWith(CLIENT_READABLE_PREFIX)) {
+      violations.push({
+        key: descriptor.key,
+        environment,
+        reason: 'secret_exposed_to_client',
+        message: `${descriptor.key} is registered as a secret but its ${CLIENT_READABLE_PREFIX} name ships its value to every browser.`,
+      });
+    }
+  }
+
+  for (const key of Object.keys(env)) {
+    if (readTrimmed(env, key) === undefined) continue;
+    const descriptor = registry[key];
+    if (!descriptor) continue;
+    if (descriptor.allowedEnvironments.includes(environment)) continue;
+    violations.push({
+      key,
+      environment,
+      reason: 'environment_not_allowed',
+      message: `${key} is set in a ${environment} runtime but is only allowed in ${descriptor.allowedEnvironments.join(', ')}.`,
+    });
+  }
+
+  return violations;
 }

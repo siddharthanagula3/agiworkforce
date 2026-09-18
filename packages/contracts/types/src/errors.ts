@@ -49,6 +49,44 @@ export const ErrorCode = {
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 /**
+ * Refusal codes, one per thing that can refuse a request. FORBIDDEN and
+ * CAPABILITY_UNAVAILABLE stood for all of these, so no reader could tell an
+ * admin switch from a missing plan from an unsupported route.
+ */
+export const DenialErrorCode = {
+  DISABLED_BY_USER: 'DISABLED_BY_USER',
+  DISABLED_BY_ORGANIZATION: 'DISABLED_BY_ORGANIZATION',
+  DISABLED_BY_WORKSPACE: 'DISABLED_BY_WORKSPACE',
+
+  UNSUPPORTED_BY_PROVIDER: 'UNSUPPORTED_BY_PROVIDER',
+  UNSUPPORTED_BY_ROUTE: 'UNSUPPORTED_BY_ROUTE',
+  UNSUPPORTED_BY_SURFACE: 'UNSUPPORTED_BY_SURFACE',
+
+  PERMISSION_REQUIRED: 'PERMISSION_REQUIRED',
+  CONNECTED_ACCOUNT_REQUIRED: 'CONNECTED_ACCOUNT_REQUIRED',
+  DESKTOP_HOST_REQUIRED: 'DESKTOP_HOST_REQUIRED',
+
+  UPGRADE_REQUIRED: 'UPGRADE_REQUIRED',
+  SEAT_REQUIRED: 'SEAT_REQUIRED',
+  ENTITLEMENT_REQUIRED: 'ENTITLEMENT_REQUIRED',
+  QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+
+  POLICY_BLOCKED: 'POLICY_BLOCKED',
+
+  PROVIDER_DEGRADED: 'PROVIDER_DEGRADED',
+  PROVIDER_UNAVAILABLE: 'PROVIDER_UNAVAILABLE',
+  OFFLINE: 'OFFLINE',
+
+  FEATURE_EXPERIMENTAL: 'FEATURE_EXPERIMENTAL',
+  FEATURE_CLOSED_BETA: 'FEATURE_CLOSED_BETA',
+  FEATURE_DEPRECATED: 'FEATURE_DEPRECATED',
+} as const;
+
+export type DenialErrorCodeValue = (typeof DenialErrorCode)[keyof typeof DenialErrorCode];
+
+export type AnyErrorCodeValue = ErrorCodeValue | DenialErrorCodeValue;
+
+/**
  * Standard API error response format.
  *
  * @example
@@ -131,6 +169,39 @@ export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.INVALID_RESPONSE]: 502,
   [ErrorCode.PAYMENT_REQUIRED]: 402,
 };
+
+export const DENIAL_ERROR_CODE_TO_HTTP_STATUS: Record<DenialErrorCodeValue, number> = {
+  [DenialErrorCode.DISABLED_BY_USER]: 403,
+  [DenialErrorCode.DISABLED_BY_ORGANIZATION]: 403,
+  [DenialErrorCode.DISABLED_BY_WORKSPACE]: 403,
+  [DenialErrorCode.UNSUPPORTED_BY_PROVIDER]: 501,
+  [DenialErrorCode.UNSUPPORTED_BY_ROUTE]: 501,
+  [DenialErrorCode.UNSUPPORTED_BY_SURFACE]: 501,
+  [DenialErrorCode.PERMISSION_REQUIRED]: 403,
+  [DenialErrorCode.CONNECTED_ACCOUNT_REQUIRED]: 428,
+  [DenialErrorCode.DESKTOP_HOST_REQUIRED]: 428,
+  [DenialErrorCode.UPGRADE_REQUIRED]: 402,
+  [DenialErrorCode.SEAT_REQUIRED]: 402,
+  [DenialErrorCode.ENTITLEMENT_REQUIRED]: 403,
+  [DenialErrorCode.QUOTA_EXCEEDED]: 429,
+  [DenialErrorCode.POLICY_BLOCKED]: 403,
+  [DenialErrorCode.PROVIDER_DEGRADED]: 503,
+  [DenialErrorCode.PROVIDER_UNAVAILABLE]: 503,
+  [DenialErrorCode.OFFLINE]: 503,
+  [DenialErrorCode.FEATURE_EXPERIMENTAL]: 403,
+  [DenialErrorCode.FEATURE_CLOSED_BETA]: 403,
+  [DenialErrorCode.FEATURE_DEPRECATED]: 410,
+};
+
+export function isDenialErrorCode(code: string): code is DenialErrorCodeValue {
+  return Object.prototype.hasOwnProperty.call(DENIAL_ERROR_CODE_TO_HTTP_STATUS, code);
+}
+
+export function errorCodeHttpStatus(code: AnyErrorCodeValue): number {
+  return isDenialErrorCode(code)
+    ? DENIAL_ERROR_CODE_TO_HTTP_STATUS[code]
+    : (ERROR_CODE_TO_HTTP_STATUS[code] ?? 500);
+}
 
 export interface FriendlyError {
   title: string;

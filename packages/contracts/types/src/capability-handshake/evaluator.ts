@@ -39,11 +39,23 @@
 
 import type { PlatformCapability } from '../capabilities';
 import {
+  capabilityDenialDescriptor,
+  type CapabilityDenialReason,
+  type CapabilityDenialRemedy,
+  type DenialDecider,
+} from '../reason-codes';
+import {
+  CAPABILITY_LAYER_DENIAL_REASONS,
   CAPABILITY_LAYERS,
   type CapabilityLayer,
   type CapabilityLimit,
   type EffectiveCapabilityDocument,
 } from './types';
+
+type CapabilityDocumentView = Pick<
+  EffectiveCapabilityDocument,
+  'granted' | 'deniedBy' | 'sources' | 'limits' | 'denialReasons'
+>;
 
 export interface CapabilityDecision {
   capabilityId: PlatformCapability;
@@ -51,21 +63,39 @@ export interface CapabilityDecision {
   deniedByLayers: readonly CapabilityLayer[];
   policySource: string | null;
   limits: readonly CapabilityLimit[];
+  reason: CapabilityDenialReason | null;
+  decidedBy: DenialDecider | null;
+}
+
+/**
+ * The reason the document recorded, or the one the deciding layer implies. A
+ * document written before denial reasons existed still names a cause.
+ */
+function denialReasonFor(
+  document: CapabilityDocumentView,
+  capabilityId: PlatformCapability,
+  decidingLayer: CapabilityLayer | undefined,
+): CapabilityDenialReason | null {
+  if (!decidingLayer) return null;
+  return document.denialReasons?.[capabilityId] ?? CAPABILITY_LAYER_DENIAL_REASONS[decidingLayer];
 }
 
 export function resolveCapabilityDecision(
-  document: Pick<EffectiveCapabilityDocument, 'granted' | 'deniedBy' | 'sources' | 'limits'>,
+  document: CapabilityDocumentView,
   capabilityId: PlatformCapability,
 ): CapabilityDecision {
   const deniedByLayers = document.deniedBy[capabilityId] ?? [];
   const allowed = document.granted.includes(capabilityId) && deniedByLayers.length === 0;
   const decidingLayer = deniedByLayers[0];
+  const reason = allowed ? null : denialReasonFor(document, capabilityId, decidingLayer);
   return {
     capabilityId,
     allowed,
     deniedByLayers,
     policySource: decidingLayer ? (document.sources[decidingLayer] ?? null) : null,
     limits: (document.limits ?? []).filter((limit) => limit.capabilityId === capabilityId),
+    reason,
+    decidedBy: reason ? capabilityDenialDescriptor(reason).decidedBy : null,
   };
 }
 
@@ -75,12 +105,16 @@ export interface CapabilityRequirement {
   capabilityId: PlatformCapability;
   strength: CapabilityRequirementStrength;
   reason?: string;
+  /** What would lift this denial: the plan to hold, the permission to be granted. */
+  remedy?: CapabilityDenialRemedy;
 }
 
-export interface CapabilityAdmissionRejection {
+export interface CapabilityAdmissionRejection extends CapabilityDenialRemedy {
   capabilityId: PlatformCapability;
   reason?: string;
   deniedByLayers: readonly CapabilityLayer[];
+  reasonCode: CapabilityDenialReason;
+  decidedBy: DenialDecider;
 }
 
 export type CapabilityAdmissionResult =
@@ -107,10 +141,18 @@ export function evaluateCapabilityAdmission(
     if (requirement.strength !== 'mandatory') continue;
     if (grantedSet.has(requirement.capabilityId)) continue;
 
+    const deniedByLayers = document.deniedBy[requirement.capabilityId] ?? CAPABILITY_LAYERS;
+    const reasonCode =
+      denialReasonFor(document, requirement.capabilityId, deniedByLayers[0]) ??
+      'entitlement_missing';
+
     rejected.push({
       capabilityId: requirement.capabilityId,
       ...(requirement.reason !== undefined ? { reason: requirement.reason } : {}),
-      deniedByLayers: document.deniedBy[requirement.capabilityId] ?? CAPABILITY_LAYERS,
+      deniedByLayers,
+      reasonCode,
+      decidedBy: capabilityDenialDescriptor(reasonCode).decidedBy,
+      ...(requirement.remedy ?? {}),
     });
   }
 

@@ -2,10 +2,14 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  effectivePlanTier,
   isContractPricedPlan,
+  isEntitledSubscriptionStatus,
   isEntitledSubscriptionStatusForTier,
   isPerSeatBillingPlan,
   normalizeBillingPlanTier,
+  type BillingPlanTier,
+  type CapabilityDenialReason,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -212,20 +216,106 @@ export async function resolveEffectiveSubscription(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<SubscriptionInfo | null> {
+  return (await resolveEntitlementBundle(db, userId)).subscription;
+}
+
+export type EntitlementSource = 'subscription' | 'seat' | 'none';
+
+/**
+ * What one account is entitled to, as one object. Every entitlement question
+ * resolves here so two services cannot compute two answers for one user.
+ */
+export interface EntitlementBundle {
+  userId: string;
+  plan: BillingPlanTier;
+  status: string | null;
+  entitled: boolean;
+  source: EntitlementSource;
+  seatSource: { organizationId: string; ownerUserId: string } | null;
+  subscription: SubscriptionInfo | null;
+  denialReason: CapabilityDenialReason | null;
+}
+
+export interface EntitlementResolutionOptions {
+  /**
+   * Off for questions about what a person holds in their own right, such as an
+   * ownership-transfer candidate, whose seat in the organization being handed
+   * over would otherwise entitle them to receive it.
+   */
+  includeSeats?: boolean;
+}
+
+function bundleFrom(
+  userId: string,
+  subscription: SubscriptionInfo | null,
+  source: EntitlementSource,
+): EntitlementBundle {
+  if (!subscription) {
+    return {
+      userId,
+      plan: normalizeBillingPlanTier('free'),
+      status: null,
+      entitled: false,
+      source: 'none',
+      seatSource: null,
+      subscription: null,
+      denialReason: 'entitlement_missing',
+    };
+  }
+
+  const entitled = isEntitledSubscriptionStatus(subscription.status);
+  const plan = normalizeBillingPlanTier(
+    effectivePlanTier(subscription.plan_tier, subscription.status),
+  );
+  return {
+    userId,
+    plan,
+    status: subscription.status,
+    entitled,
+    source,
+    seatSource: subscription.seat_source ?? null,
+    subscription,
+    denialReason: entitled ? null : 'payment_required',
+  };
+}
+
+/**
+ * The one entitlement-resolution entry point.
+ */
+export async function resolveEntitlementBundle(
+  db: DatabaseAdapter,
+  userId: string,
+  options: EntitlementResolutionOptions = {},
+): Promise<EntitlementBundle> {
   const own = await SubscriptionService.getSubscription(db, userId);
-  if (own) return own;
+  if (own) return bundleFrom(userId, own, 'subscription');
+  if (options.includeSeats === false) return bundleFrom(userId, null, 'none');
 
   let seat: SubscriptionInfo | null = null;
   try {
     seat = await resolveSeatSubscription(userId);
   } catch (error) {
     logger.error({ error, userId }, 'Seat entitlement lookup failed; falling back to no seat');
-    return null;
+    return bundleFrom(userId, null, 'none');
   }
 
-  if (!seat) return null;
+  if (!seat) return bundleFrom(userId, null, 'none');
   await ensureSeatMemberCreditAccount(db, seat);
-  return seat;
+  return bundleFrom(userId, seat, 'seat');
+}
+
+/**
+ * Why a bundle does not reach the plan a caller needs. A seat-bearing plan the
+ * account has no seat on is a different refusal from a plan it never bought.
+ */
+export function entitlementDenialReason(
+  bundle: EntitlementBundle,
+  requiredPlans: readonly BillingPlanTier[],
+): CapabilityDenialReason | null {
+  if (requiredPlans.includes(bundle.plan) && bundle.entitled) return null;
+  if (bundle.denialReason) return bundle.denialReason;
+  if (requiredPlans.some((plan) => isSeatBearingBillingPlan(plan))) return 'requires_seat';
+  return 'requires_upgrade';
 }
 
 export interface SeatMemberLedgerProvisioning {
