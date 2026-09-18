@@ -17,6 +17,7 @@ import {
   type RouteHealthSnapshot,
   type RoutingRuntimeState,
 } from './runtime-state';
+import { residencyRejection, routeKeepsCache, strictResidencyRejection } from './route-ranking';
 import { routingStageEnabled } from './routing-stages';
 import type { TaskFamily } from './task-family';
 import {
@@ -41,6 +42,12 @@ export type ModelCapabilityName = RegistryCapabilityName;
 interface RegistryModel {
   identity: { key: string; provider: string; providerModelId: string };
   lifecycle: { availability: string; deprecated: boolean };
+  /**
+   * Regions this model may be processed in, projected from its serving
+   * provider's governance record. `null` records an unverified fact, which is
+   * why a pinned workspace refuses it and the home region does not.
+   */
+  residencyRegions?: readonly string[] | null;
 }
 
 export type RouteCacheClass =
@@ -217,6 +224,18 @@ export interface AutoRoutingRequest {
    * `excludedRouteHosts`.
    */
   region?: string | null;
+  /**
+   * The region the requesting WORKSPACE has pinned its data to, when it has
+   * pinned one.
+   *
+   * Distinct from `region` above, which is where this deployment happens to
+   * process, and it is the difference between a default and a promise. Every
+   * route offered to a pinned workspace must publish that region, on both the
+   * model and the transport, so an unpublished residency answer is a refusal
+   * here and a pass there. Absent means the workspace has pinned nothing and
+   * admission is unchanged.
+   */
+  residencyRegion?: string | null;
   capabilityDocument?: EffectiveCapabilityDocument | null;
   capabilityRequirements?: readonly CapabilityRequirement[];
   fallbackToAutoForCapabilityMismatch?: boolean;
@@ -981,9 +1000,23 @@ function routeAdmissionRejections(
   if (request.excludedRouteHosts?.has(route.provider)) {
     reasons.push(`route ${routeId} dispatches through an excluded transport`);
   }
-  const residencyRegions = registry.governance?.[route.provider]?.residencyRegions;
-  if (request.region && residencyRegions && !residencyRegions.includes(request.region)) {
-    reasons.push(`route ${routeId} does not process requests in region ${request.region}`);
+  const transportRegions = registry.governance?.[route.provider]?.residencyRegions;
+  const modelRegions = registry.models[route.modelKey]?.residencyRegions;
+  const homeRejection = residencyRejection({
+    routeId,
+    subject: 'route',
+    region: request.region,
+    published: transportRegions,
+  });
+  if (homeRejection) reasons.push(homeRejection);
+  for (const subject of ['route', 'model'] as const) {
+    const pinnedRejection = strictResidencyRejection({
+      routeId,
+      subject,
+      region: request.residencyRegion,
+      published: subject === 'route' ? transportRegions : modelRegions,
+    });
+    if (pinnedRejection) reasons.push(pinnedRejection);
   }
   if (request.organizationPolicy) {
     // Both provider identities: the VENDOR that owns the model and the
@@ -1077,7 +1110,13 @@ function rankRoutes(
   const preferred = ordered[preferredIndex];
   const cheapest = ordered[0];
   if (!preferred || !cheapest || !preferred.healthy) return ordered;
-  if (preferred.expectedCents > cheapest.expectedCents * PREFERRED_ROUTE_COST_CEILING_MULTIPLE) {
+  // The premium buys a warm cache, so a route whose `cacheClass` says it keeps
+  // none has nothing to sell: affinity to it is worth staying on at the same
+  // price and never worth paying more for.
+  const affinityCeiling = routeKeepsCache(preferred.route.cacheClass)
+    ? PREFERRED_ROUTE_COST_CEILING_MULTIPLE
+    : 1;
+  if (preferred.expectedCents > cheapest.expectedCents * affinityCeiling) {
     return ordered;
   }
   return [preferred, ...ordered.filter((entry) => entry !== preferred)];

@@ -7,10 +7,12 @@ import type {
   ToolChoice,
 } from '@agiworkforce/types';
 import {
+  buildPromptCachePlan,
   decodeTextFileBlock,
   getModelMetadataById,
   isTextLikeFileMediaType,
   UnsupportedFileInputError,
+  type PromptCachePlan,
 } from '@agiworkforce/types';
 
 interface AnthropicTranslatedRequest {
@@ -25,9 +27,7 @@ interface AnthropicTranslatedRequest {
   top_k?: number;
   stop_sequences?: string[];
   thinking?:
-    | { type: 'enabled'; budget_tokens: number }
-    | { type: 'disabled' }
-    | { type: 'adaptive' };
+    { type: 'enabled'; budget_tokens: number } | { type: 'disabled' } | { type: 'adaptive' };
   output_config?: { effort: string };
   metadata?: Record<string, unknown>;
 }
@@ -75,10 +75,7 @@ interface AnthropicToolParam {
 }
 
 type AnthropicToolChoiceParam =
-  | { type: 'auto' }
-  | { type: 'any' }
-  | { type: 'tool'; name: string }
-  | { type: 'none' };
+  { type: 'auto' } | { type: 'any' } | { type: 'tool'; name: string } | { type: 'none' };
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
@@ -226,6 +223,46 @@ function translateToolChoice(choice: ToolChoice | undefined): AnthropicToolChoic
   return { type: 'tool', name: choice.name };
 }
 
+type CacheableBlock = { cache_control?: { type: 'ephemeral'; ttl?: '5m' | '1h' } };
+
+/**
+ * Breakpoints are placed by whoever assembled the blocks; which of them survive
+ * to the wire is the cache plan's answer, and this is the last hop before the
+ * wire that can enforce it.
+ *
+ * Three enforcements, in the order they matter: a turn the plan will not cache
+ * loses every breakpoint, including one a route-level zero-retention obligation
+ * turned on after the blocks were built; a turn that would exceed Anthropic's
+ * breakpoint ceiling keeps the earliest ones, since a later breakpoint caches a
+ * prefix the earlier one already covers; and an hour-long write is downgraded
+ * to the default when the plan asks for short retention, because a 1h write is
+ * charged at twice a 5m one and nothing but a stable toolset earns it.
+ */
+function applyPromptCachePlan(
+  system: AnthropicSystemBlock[] | undefined,
+  messages: AnthropicMessageParam[],
+  plan: PromptCachePlan,
+): void {
+  const blocks: CacheableBlock[] = [
+    ...(system ?? []),
+    ...messages.flatMap((message) =>
+      typeof message.content === 'string' ? [] : (message.content as CacheableBlock[]),
+    ),
+  ];
+  let kept = 0;
+  for (const block of blocks) {
+    if (block.cache_control === undefined) continue;
+    if (!plan.cacheable || kept >= plan.maxBreakpoints) {
+      delete block.cache_control;
+      continue;
+    }
+    if (plan.retention !== 'long' && block.cache_control.ttl !== undefined) {
+      block.cache_control = { type: block.cache_control.type };
+    }
+    kept += 1;
+  }
+}
+
 export function translateChatRequest(req: ChatRequest): AnthropicTranslatedRequest {
   const metadata = getModelMetadataById(req.model);
   const reasoning = metadata?.reasoning;
@@ -246,6 +283,7 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     .map(translateMessage)
     .filter((m): m is AnthropicMessageParam => m !== null);
   const system = translateSystem(req.messages, req.system);
+  applyPromptCachePlan(system, messages, buildPromptCachePlan(req));
   const translatedTools = req.tools?.map(translateTool) ?? [];
   const tools = [...translatedTools, ...((req.rawVendorTools ?? []) as AnthropicToolParam[])];
   const toolChoice = translateToolChoice(req.toolChoice);

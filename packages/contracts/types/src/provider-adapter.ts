@@ -25,6 +25,9 @@
 import type { Provider } from './provider';
 import type { ModelMetadata, ModelCapabilities, ModelType } from './model-catalog';
 import type { Effort } from './design-system/effort';
+import type { PromptCacheScope } from './prompt-cache-plan';
+
+export * from './prompt-cache-plan';
 
 export type AuthMethod =
   | {
@@ -112,12 +115,7 @@ export interface ThinkingBlock {
 }
 
 export type ContentBlock =
-  | TextBlock
-  | ImageBlock
-  | FileBlock
-  | ToolUseBlock
-  | ToolResultBlock
-  | ThinkingBlock;
+  TextBlock | ImageBlock | FileBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock;
 
 export interface ProviderMessage {
   role: 'user' | 'assistant' | 'system';
@@ -174,6 +172,13 @@ export interface ChatRequest {
    * declared it can meet.
    */
   zeroDataRetentionOnly?: boolean;
+  /**
+   * Who this turn belongs to, for the prompt cache only. `buildPromptCachePlan`
+   * folds it into the cache key before anything is hashed; a request that
+   * carries none of its identifiers gets no shared cache key at all, so two
+   * tenants whose stable prefix matches can never land on one namespace.
+   */
+  promptCache?: PromptCacheScope;
   metadata?: Record<string, unknown>;
 }
 
