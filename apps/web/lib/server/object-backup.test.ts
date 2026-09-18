@@ -28,6 +28,7 @@ import {
   missingBackupEnv,
   objectBackupReadiness,
   reconcileBackupDeletions,
+  requeueReplicasAfterRestore,
   recordBackupReplica,
 } from './object-backup';
 
@@ -157,5 +158,18 @@ describe('reconcileBackupDeletions', () => {
       retained: 0,
     });
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('requeueReplicasAfterRestore', () => {
+  it('marks every tracked replica due so the sweep re-checks the whole bucket', async () => {
+    mocks.query.mockResolvedValueOnce([{ object_key: 'a.png' }, { object_key: 'b.png' }]);
+
+    await expect(requeueReplicasAfterRestore()).resolves.toBe(2);
+
+    const [sql] = mocks.query.mock.calls[0] as [string];
+    expect(sql).toContain('object_backup_replicas');
+    expect(sql).toContain("set verified_at = 'epoch'::timestamptz");
+    expect(sql).not.toContain('where');
   });
 });

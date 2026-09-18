@@ -3,9 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -25,8 +23,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
   try {
     const [row] = await db.query<ProfileRow>(
@@ -54,8 +51,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+  const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
   let raw: unknown;
   try {

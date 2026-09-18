@@ -4378,7 +4378,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         return;
       }
 
-      const approved = approvedResearchSteps(research.steps);
+      const approved = options?.steps?.length
+        ? options.steps
+        : approvedResearchSteps(research.steps);
       if (approved.length === 0) return;
       const plan = planRegenerateRollback(displayedMessages, id);
       if (!plan) return;
@@ -4410,6 +4412,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
               sources: research.sourcesForRetry ?? [],
               steps: completedResearchSteps(research.steps),
               approvedSteps: approved,
+              ...(options?.deliverable ? { deliverable: options.deliverable } : {}),
             },
             ...(options &&
             (options.files || options.allowDomains.length > 0 || options.denyDomains.length > 0)

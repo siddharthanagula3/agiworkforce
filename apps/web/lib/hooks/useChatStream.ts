@@ -108,7 +108,9 @@ import {
 } from './turnStartProgress';
 import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
 import {
+  PAST_CHAT_CITATIONS_HEADER,
   PROJECT_FILE_CITATIONS_HEADER,
+  readPastChatSourcesHeaderValue,
   readProjectSourcesHeaderValue,
 } from '@/lib/chat-project-sources';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
@@ -120,6 +122,7 @@ import type {
   AgentEventEnvelope,
   AgentEventToolCategory,
   AgentTaskState,
+  ResearchDeliverableSpec,
   ResearchStep,
 } from '@agiworkforce/types';
 import { parseResearchPlanEvent, rendersResearchPlan } from '@/features/chat/utils/research-plan';
@@ -205,6 +208,8 @@ interface SendMessageOptions {
     steps: ResearchStep[];
     /** The plan the user pressed Start on after the server paused for approval. */
     approvedSteps?: ResearchStep[];
+    /** What that approved run was asked to produce. */
+    deliverable?: ResearchDeliverableSpec;
   };
   workMode?: CloudWorkMode;
   agiWorkGoal?: AgiWorkGoalInput;
@@ -1265,6 +1270,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     store.setProjectSources(assistantMessageId, streamProjectSources, conversationId);
   } else if (!isTurnContinuation) {
     store.setProjectSources(assistantMessageId, undefined, conversationId);
+  }
+  const streamPastChatSources = readPastChatSourcesHeaderValue(
+    response.headers.get(PAST_CHAT_CITATIONS_HEADER),
+  );
+  if (streamPastChatSources.length > 0) {
+    store.setPastChatSources(assistantMessageId, streamPastChatSources, conversationId);
+  } else if (!isTurnContinuation) {
+    store.setPastChatSources(assistantMessageId, undefined, conversationId);
   }
   const streamSecretRedactionCount = response.headers.get(SECRET_REDACTION_COUNT_HEADER);
   if (streamSecretRedactionCount) {
@@ -3314,6 +3327,9 @@ export function useChatStream(): UseChatStreamReturn {
                       steps: options.researchResume.steps,
                       ...(options.researchResume.approvedSteps?.length
                         ? { approved_steps: options.researchResume.approvedSteps }
+                        : {}),
+                      ...(options.researchResume.deliverable
+                        ? { deliverable: options.researchResume.deliverable }
                         : {}),
                     }
                   : undefined,

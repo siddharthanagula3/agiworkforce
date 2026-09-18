@@ -5,7 +5,6 @@ import { getClientIp, logSecurityEvent, recordAuditEvent } from '@/lib/security-
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { revokeScimToken } from '@/lib/server/scim/scim-token-service';
 import {
   isDirectorySyncAccessFailure,
@@ -39,7 +38,7 @@ export async function DELETE(request: NextRequest, routeContext: RouteContext) {
       return NextResponse.json({ error: 'Token not found' }, { status: 404 });
     }
 
-    const revoked = await revokeScimToken(getNeonDb(), tokenId, access.organizationId);
+    const revoked = await revokeScimToken(access.db, tokenId, access.organizationId);
 
     if (!revoked) {
       return NextResponse.json({ error: 'Token not found' }, { status: 404 });

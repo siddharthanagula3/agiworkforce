@@ -45,6 +45,12 @@ const { getDb } = vi.hoisted(() => ({ getDb: { current: null as unknown } }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => getDb.current,
 }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async (...args: unknown[]) => {
+    const { userId } = (await mockGetClerkAuthUser(...(args as []))) as { userId: string };
+    return { db: getDb.current, userId, organizationId: null };
+  },
+}));
 
 import { PATCH } from '../route';
 

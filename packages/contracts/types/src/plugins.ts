@@ -69,13 +69,17 @@ export interface PluginPublisher {
  *                   installs keep working; the entry stays readable so a
  *                   resolver can explain why it stopped.
  */
-export type PluginRegistryStatus = 'preview' | 'published' | 'deprecated';
+export type PluginRegistryStatus =
+  'draft' | 'in_review' | 'preview' | 'published' | 'deprecated' | 'suspended';
 
-/** Every valid {@link PluginRegistryStatus}. */
+/** Every valid {@link PluginRegistryStatus}. Matches 0265's check constraint. */
 export const PLUGIN_REGISTRY_STATUSES: readonly PluginRegistryStatus[] = [
+  'draft',
+  'in_review',
   'preview',
   'published',
   'deprecated',
+  'suspended',
 ] as const;
 
 export function isPluginRegistryStatus(value: unknown): value is PluginRegistryStatus {
@@ -139,12 +143,7 @@ export interface PluginManifest {
  * as enforced would be a fake safety badge.
  */
 export type PluginCapability =
-  | 'filesystem-read'
-  | 'filesystem-write'
-  | 'network'
-  | 'shell'
-  | 'mcp'
-  | 'connectors';
+  'filesystem-read' | 'filesystem-write' | 'network' | 'shell' | 'mcp' | 'connectors';
 
 /** Every valid {@link PluginCapability}. */
 export const PLUGIN_CAPABILITIES: readonly PluginCapability[] = [

@@ -4,6 +4,10 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   recordAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
+  identityEvent: vi.fn(async () => ({
+    assessment: { level: 'none', signals: [] },
+    response: null,
+  })),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -26,6 +30,11 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (event: Record<string, unknown>) => mocks.recordAuditEvent(event),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
+}));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/server/identity', () => ({ getIdentityProvider: () => ({}) }));
+vi.mock('@/lib/services/identity-events', () => ({
+  handleIdentitySecurityEvent: (...args: unknown[]) => mocks.identityEvent(...(args as [])),
 }));
 
 process.env['CSRF_SECRET'] = 'two-factor-disable-step-up-secret-long-enough';
@@ -138,15 +147,17 @@ describe('DELETE /api/settings/2fa', () => {
     expect(mocks.query.mock.calls[1]?.[0]).toContain('set enabled = false');
   });
 
-  it('records how the second factor was proven', async () => {
+  it('records how the second factor was proven, and tells the account owner', async () => {
     mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([]);
 
     await DELETE(deleteRequest(grant('backup_code')));
 
-    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+    expect(mocks.identityEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
       expect.objectContaining({
-        eventType: 'two_factor_disabled',
-        detail: expect.objectContaining({ resourceType: 'two_factor', source: 'backup_code' }),
+        event: 'two_factor_disabled',
+        detail: expect.objectContaining({ source: 'backup_code' }),
       }),
     );
   });

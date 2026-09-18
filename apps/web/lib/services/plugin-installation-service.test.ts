@@ -231,6 +231,24 @@ describe('installWebPlugin', () => {
     process.env['PLUGIN_SIGNING_PUBLIC_KEYS'] = publisher.publicKeyPem;
   });
 
+  it('refuses a version an admin suspended, and says which reason stopped it', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(signedEntry());
+    const db = installDatabase({ scan: scanRow('pass') });
+    db.query.mockImplementation(async (sql: string) => {
+      const text = String(sql).toLowerCase();
+      if (text.includes('from public.plugin_registry_versions')) {
+        return [{ status: 'suspended', lifecycle_reason: 'Leaks the connector token.' }];
+      }
+      if (text.includes('plugin_package_scans')) return [scanRow('pass')];
+      return [INSTALLATION_ROW];
+    });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).rejects.toThrow(
+      /Leaks the connector token/,
+    );
+    expect(insertCall(db)).toBeUndefined();
+  });
+
   it('installs a signed, scanned, web-installable entry', async () => {
     getPluginRegistryEntryMock.mockResolvedValue(signedEntry());
     const db = installDatabase({ scan: scanRow('pass') });
@@ -544,6 +562,14 @@ describe('listEnabledPluginIds', () => {
     const sql = String(db.query.mock.calls[0]?.[0]).toLowerCase();
     expect(sql).toContain("registry.status = 'published'");
     expect(sql).toContain('registry.web_installable = true');
+  });
+
+  it('drops an installation pinned to a version an admin suspended', async () => {
+    const db = database([]);
+    await listEnabledPluginIds(db, 'user-1');
+    const sql = String(db.query.mock.calls[0]?.[0]).toLowerCase();
+    expect(sql).toContain('plugin_registry_versions');
+    expect(sql).toContain("coalesce(pinned.status, 'published') <> 'suspended'");
   });
 });
 

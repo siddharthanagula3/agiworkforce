@@ -10,6 +10,7 @@ const {
   mockListUserSkills,
   mockAuthoringEnabled,
   mockInvalidateCache,
+  mockUserScopedDb,
 } = vi.hoisted(() => ({
   mockAuthUser: vi.fn(),
   mockRateLimit: vi.fn(),
@@ -19,12 +20,13 @@ const {
   mockListUserSkills: vi.fn(),
   mockAuthoringEnabled: vi.fn(),
   mockInvalidateCache: vi.fn(),
+  mockUserScopedDb: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockAuthUser }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn().mockReturnValue({}) }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockUserScopedDb }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mockListEnabledPluginIds,
@@ -85,6 +87,7 @@ describe('GET /api/skills catalog parameter', () => {
     vi.clearAllMocks();
     mockRateLimit.mockResolvedValue(null);
     mockAuthUser.mockResolvedValue({ userId: 'user-1' });
+    mockUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1', organizationId: null });
     mockListEnabledPluginIds.mockResolvedValue([]);
     mockListUserSkills.mockResolvedValue([]);
     mockAuthoringEnabled.mockReturnValue(false);

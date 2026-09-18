@@ -6,7 +6,6 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AppError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { readJsonBody } from '@/lib/read-json-body';
 import type { DirectorySyncConnectionRow } from '@/lib/server/neon-types';
 import { createScimToken, listScimTokens } from '@/lib/server/scim/scim-token-service';
@@ -28,7 +27,7 @@ export async function GET(request: NextRequest) {
     );
     if (isDirectorySyncAccessFailure(access)) return access.response;
 
-    const tokens = await listScimTokens(getNeonDb(), access.organizationId);
+    const tokens = await listScimTokens(access.db, access.organizationId);
 
     return NextResponse.json({
       tokens: tokens.map((token) => ({
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
       expiresAtIso = parsed.toISOString();
     }
 
-    const db = getNeonDb();
+    const db = access.db;
 
     const connections = await db.query<Pick<DirectorySyncConnectionRow, 'id'>>(
       'select id from directory_sync_connections where id = $1 and organization_id = $2 limit 1',

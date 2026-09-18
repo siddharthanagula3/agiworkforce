@@ -1023,7 +1023,7 @@ describe('evaluateActiveWorkspacePolicy, feature controls and policy layers', ()
     expect(h.query).toHaveBeenCalledTimes(3);
   });
 
-  it('lets a user exception re-enable a feature the workspace turned off', async () => {
+  it('keeps a feature the workspace turned off closed despite a user exception', async () => {
     const h = harness();
     h.query
       .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
@@ -1039,7 +1039,7 @@ describe('evaluateActiveWorkspacePolicy, feature controls and policy layers', ()
       feature: 'code',
     });
 
-    expect(decision.allowed).toBe(true);
+    expect(decision.allowed).toBe(false);
     const [overrideSql, overrideParams] = h.query.mock.calls[3] as [string, unknown[]];
     expect(overrideSql).toContain('organization_policy_overrides');
     expect(overrideParams).toEqual([ORGANIZATION_ID, 'member-1']);

@@ -347,6 +347,21 @@
       "reason": "the personal data export includes connector_call_events rows; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0223 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0223 is applied."
     },
     {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 247,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 252,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 254,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
       "file": "apps/web/app/api/web-push/route.ts",
       "migration": 151,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -517,6 +532,21 @@
       "reason": "the erasure inventory fences support_access_events, the append-only break-glass trail 0229 creates, so an erasure cannot quietly remove the record of what support read; the trail is classified rather than deleted and the classification has to name the table. The deploy runbook applies 0229 before this code reaches production."
     },
     {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 247,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 252,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 254,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
       "file": "apps/web/lib/server/admin-api-keys.ts",
       "migration": 206,
       "reason": "workspace API keys are stored in and verified against organization_admin_api_keys, which 0206 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0206 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0206 is applied."
@@ -645,6 +675,26 @@
       "file": "apps/web/lib/server/organization-erasure.ts",
       "migration": 229,
       "reason": "workspace erasure sweeps support_access_grants by organization_id and classifies support_access_events as retained, both created by 0229; the trail outlives the workspace it names because it is the evidence for what support did there. The deploy runbook applies 0229 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 238,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 245,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 252,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 254,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
     },
     {
       "file": "apps/web/lib/server/product-analytics.ts",
@@ -920,6 +970,31 @@
       "file": "apps/web/lib/services/deletion-manifest.ts",
       "migration": 237,
       "reason": "the deletion manifest classifies every store the erasure inventories name and executes no SQL, so a pending migration cannot break it; the table name appears only as a retention-matrix key, and account-erasure.ts, which does run the deletes, carries its own entry for the same migration."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 238,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 245,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 247,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 252,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 254,
+      "reason": "classification key only, executes no SQL against the table: the erasure and export inventories name it so the completeness test has to account for it, and the sweep skips a table the database does not yet have."
     },
     {
       "file": "apps/web/lib/services/deprovision-service.ts",

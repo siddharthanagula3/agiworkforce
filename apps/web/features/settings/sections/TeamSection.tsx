@@ -1037,7 +1037,7 @@ export function TeamSection() {
                   confirmLabel: 'Transfer ownership',
                   destructive: true,
                   onConfirm: () =>
-                    transferOwnership.mutateAsync({
+                    transferOwnership.mutate({
                       organizationId: organization.id,
                       toUserId: target.userId,
                       outgoingOwnerRole,
@@ -1049,6 +1049,7 @@ export function TeamSection() {
               {transferOwnership.isPending ? 'Transferring…' : 'Transfer ownership'}
             </button>
             <InlineError error={transferOwnership.error} />
+            {transferOwnership.stepUpDialog}
           </div>
         </SectionCard>
       ) : null}
