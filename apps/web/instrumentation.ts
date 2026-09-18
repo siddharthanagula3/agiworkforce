@@ -16,7 +16,7 @@ import {
   type TenantTaggedEvent,
 } from './lib/sentry-shared';
 import { getTenantScope } from './lib/observability/trace-context';
-import { resolveOtelExportConfig } from './lib/observability/otel-config';
+import { resolveOtelExportConfig, sentryTracesSampleRate } from './lib/observability/otel-config';
 import type { SentryTracingClient } from './lib/observability/otel-sdk';
 
 const NODE_RUNTIME = 'nodejs';
@@ -31,6 +31,8 @@ function tagRequestOrganization(event: TenantTaggedEvent): void {
 export async function register() {
   if (process.env['NEXT_RUNTIME'] === NODE_RUNTIME) {
     await import('./lib/observability/trace-storage.node');
+    const { installWebProviderTracer } = await import('./lib/observability/provider-tracer');
+    installWebProviderTracer();
     try {
       const { validateEnvironment, logValidationResults } = await import('./lib/validate-env');
       const result = validateEnvironment();
@@ -72,7 +74,7 @@ export async function register() {
     const options: CommonInitOptions = { tenantTagHook: tagRequestOrganization };
     if (otelConfig) {
       options.skipOpenTelemetrySetup = true;
-      if (otelConfig.sampleRatio !== null) options.tracesSampleRate = otelConfig.sampleRatio;
+      options.tracesSampleRate = sentryTracesSampleRate(otelConfig);
     }
     sentryClient = Sentry.init(commonInitOptions(options)) as SentryTracingClient | undefined;
   }

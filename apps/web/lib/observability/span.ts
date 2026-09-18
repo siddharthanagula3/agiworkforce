@@ -7,7 +7,17 @@ import { getTraceContext, runWithTraceContext, type TraceContext } from './trace
 export type { SpanKind };
 
 export type SpanDomain =
-  'approval' | 'billing' | 'external' | 'http' | 'model' | 'retrieval' | 'task' | 'tool';
+  | 'approval'
+  | 'billing'
+  | 'database'
+  | 'external'
+  | 'http'
+  | 'model'
+  | 'queue'
+  | 'retrieval'
+  | 'sandbox'
+  | 'task'
+  | 'tool';
 
 export interface SpanOptions {
   readonly kind?: SpanKind;
@@ -22,6 +32,7 @@ export interface ActiveSpan {
 }
 
 const DEFAULT_SPAN_KIND: SpanKind = 'internal';
+const QUIET_SPAN_DOMAIN: SpanDomain = 'database';
 
 const activeSpans = new WeakMap<TraceContext, ActiveSpan>();
 
@@ -83,7 +94,10 @@ export async function withSpan<R>(
       return;
     }
     bridged.end();
-    logger.info(record, `span ${name}`);
+    // A line per query would dwarf every other log in production, and the span
+    // still reaches the collector, where the tail processor decides.
+    if (options.domain === QUIET_SPAN_DOMAIN) logger.debug(record, `span ${name}`);
+    else logger.info(record, `span ${name}`);
   };
 
   try {

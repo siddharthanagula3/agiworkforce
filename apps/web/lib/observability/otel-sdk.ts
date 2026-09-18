@@ -1,19 +1,22 @@
-import { metrics } from '@opentelemetry/api';
+import { SpanStatusCode, metrics, type Context } from '@opentelemetry/api';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import {
+  AlwaysOnSampler,
   BatchSpanProcessor,
   ParentBasedSampler,
-  TraceIdRatioBasedSampler,
+  type ReadableSpan,
+  type Span,
   type SpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { initOpenTelemetry, type NodeClient } from '@sentry/nextjs';
 
 import type { OtelExportConfig } from './otel-config';
+import { keepSpanForExport } from './trace-sampling';
 
 export type SentryTracingClient = NodeClient;
 
@@ -23,6 +26,51 @@ export interface OtelTracing {
 
 const FULL_SAMPLE_RATIO = 1;
 const NO_INSTRUMENTATIONS = Object.freeze([]);
+const NANOS_PER_MS = 1e6;
+const MS_PER_SECOND = 1e3;
+
+function durationMsOf(span: ReadableSpan): number {
+  const [seconds, nanos] = span.duration;
+  return seconds * MS_PER_SECOND + nanos / NANOS_PER_MS;
+}
+
+/**
+ * Every span is recorded so that `onEnd` can see its status and duration, and
+ * this decides there which ones are worth the exporter's budget. Filtering here
+ * rather than at the sampler is what lets a failed or slow span survive a ratio
+ * that would have dropped its trace at the head, where neither was knowable.
+ */
+export class TailBiasedSpanProcessor implements SpanProcessor {
+  constructor(
+    private readonly inner: SpanProcessor,
+    private readonly ratio: number,
+    private readonly slowThresholdMs: number,
+  ) {}
+
+  onStart(span: Span, parentContext: Context): void {
+    this.inner.onStart(span, parentContext);
+  }
+
+  onEnd(span: ReadableSpan): void {
+    const keep = keepSpanForExport({
+      traceId: span.spanContext().traceId,
+      errored: span.status.code === SpanStatusCode.ERROR,
+      durationMs: durationMsOf(span),
+      ratio: this.ratio,
+      slowThresholdMs: this.slowThresholdMs,
+    });
+    if (!keep) return;
+    this.inner.onEnd(span);
+  }
+
+  forceFlush(): Promise<void> {
+    return this.inner.forceFlush();
+  }
+
+  shutdown(): Promise<void> {
+    return this.inner.shutdown();
+  }
+}
 
 function otlpMetricReader(config: OtelExportConfig): PeriodicExportingMetricReader {
   return new PeriodicExportingMetricReader({
@@ -34,8 +82,12 @@ function otlpMetricReader(config: OtelExportConfig): PeriodicExportingMetricRead
 }
 
 function otlpSpanProcessor(config: OtelExportConfig): SpanProcessor {
-  return new BatchSpanProcessor(
-    new OTLPTraceExporter({ url: config.tracesEndpoint, headers: { ...config.headers } }),
+  return new TailBiasedSpanProcessor(
+    new BatchSpanProcessor(
+      new OTLPTraceExporter({ url: config.tracesEndpoint, headers: { ...config.headers } }),
+    ),
+    config.sampleRatio ?? FULL_SAMPLE_RATIO,
+    config.slowSpanThresholdMs,
   );
 }
 
@@ -72,9 +124,7 @@ export function startOtelSdk(
   const sdk = new NodeSDK({
     resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: config.serviceName }),
     instrumentations: [...NO_INSTRUMENTATIONS],
-    sampler: new ParentBasedSampler({
-      root: new TraceIdRatioBasedSampler(config.sampleRatio ?? FULL_SAMPLE_RATIO),
-    }),
+    sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
     spanProcessors: [processor],
     metricReaders: [metricReader],
   });

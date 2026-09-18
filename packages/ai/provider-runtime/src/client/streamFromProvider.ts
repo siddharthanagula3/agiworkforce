@@ -1,6 +1,7 @@
 import type { StreamChunk } from '@agiworkforce/types';
 import { DEFAULT_STREAM_IDLE_TIMEOUT_MS, StreamIdleTimeoutError } from '../watchdog';
 import { stripTrailingSlashes } from '@agiworkforce/types';
+import { traceHeaders, withProviderSpan } from '../tracing';
 
 export interface StreamIdleWatchdogOptions {
   idleMs?: number;
@@ -23,6 +24,12 @@ export interface StreamFromProviderOptions<TRequest = unknown> {
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return 'Provider stream failed.';
+}
+
+function requestedModel(request: unknown): string | undefined {
+  if (typeof request !== 'object' || request === null) return undefined;
+  const model = (request as { model?: unknown }).model;
+  return typeof model === 'string' ? model : undefined;
 }
 
 function combineSignals(
@@ -133,16 +140,26 @@ export async function* streamFromProvider<TRequest = unknown, TChunk = StreamChu
   async function* run(): AsyncIterable<TChunk> {
     armIdleTimer();
 
-    const res = await doFetch(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${authToken}`,
-        'x-requested-with': clientTag,
+    const res = await withProviderSpan(
+      {
+        providerId,
+        operation: 'stream',
+        model: requestedModel(request),
+        attributes: { 'agi.client.tag': clientTag },
       },
-      body: JSON.stringify(request),
-      ...(effectiveSignal ? { signal: effectiveSignal } : {}),
-    });
+      () =>
+        doFetch(url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${authToken}`,
+            'x-requested-with': clientTag,
+            ...traceHeaders(),
+          },
+          body: JSON.stringify(request),
+          ...(effectiveSignal ? { signal: effectiveSignal } : {}),
+        }),
+    );
 
     phase = 'read';
 
