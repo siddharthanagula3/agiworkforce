@@ -9,6 +9,12 @@ export interface SyncMemoryRecord {
   source: SyncMemorySource;
   pinned: boolean;
   isDeleted: boolean;
+  /**
+   * The same tombstone every other synced type carries. `isDeleted` says that
+   * the row is gone; only this says when, which is what a client needs to tell
+   * a deletion it has applied from one it has not.
+   */
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   serverVersion?: string;
@@ -27,6 +33,7 @@ export function mapMemoryWireDelta(delta: MemoryWireDelta): SyncMemoryRecord {
         : 'web',
     pinned: delta.pinned,
     isDeleted: delta.is_deleted,
+    deletedAt: delta.is_deleted ? delta.updated_at : null,
     createdAt: delta.created_at,
     updatedAt: delta.updated_at,
     serverVersion: delta.server_version,
@@ -77,10 +84,7 @@ export function toMemoryPushItem(record: SyncMemoryRecord): MemoryPushItem {
   };
 }
 
-export function memorySyncContentMatches(
-  left: SyncMemoryRecord,
-  right: SyncMemoryRecord,
-): boolean {
+export function memorySyncContentMatches(left: SyncMemoryRecord, right: SyncMemoryRecord): boolean {
   return (
     left.id === right.id &&
     left.content === right.content &&

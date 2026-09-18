@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+process.env['CSRF_SECRET'] = 'transfer-step-up-secret-long-enough-here';
+
 const {
   mockQuery,
   mockExecute,
@@ -44,6 +46,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 import { POST } from '../route';
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 
@@ -59,9 +63,15 @@ function member(userId: string, role: string) {
 }
 
 function transferRequest(body: unknown) {
+  const { token } = createStepUpGrant({
+    userId: 'current-owner',
+    action: 'organization.transfer_ownership',
+    resourceId: (body as { organizationId?: string }).organizationId ?? '',
+    method: 'totp',
+  });
   return new Request('http://localhost:3000/api/settings/organization/transfer-ownership', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', [STEP_UP_TOKEN_HEADER]: token },
     body: JSON.stringify(body),
   }) as never;
 }

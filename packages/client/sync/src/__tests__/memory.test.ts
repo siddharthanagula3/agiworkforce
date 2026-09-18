@@ -33,6 +33,7 @@ describe('mapMemoryWireDelta', () => {
       source: 'mobile',
       pinned: false,
       isDeleted: false,
+      deletedAt: null,
       createdAt: T,
       updatedAt: T,
       serverVersion: '1',

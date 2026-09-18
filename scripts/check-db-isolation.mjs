@@ -45,6 +45,106 @@ function mentionsSelfIdPredicate(sql, tables) {
   );
 }
 
+// 0110 made Personal (organization_id IS NULL) and each organization mutually
+// exclusive scopes for these tables. The owner role has BYPASSRLS, so on the
+// service connection `user_id = $1` alone reads BOTH scopes: personal chats and
+// memories surface inside a work context, and the workspace selector is
+// decorative for that statement.
+const WORKSPACE_SCOPED_TABLES = new Set([
+  'web_conversations',
+  'user_projects',
+  'web_artifacts',
+  'user_memories',
+  'scheduled_tasks',
+  'cloud_agent_runs',
+  'user_connectors',
+  'user_custom_connectors',
+  'search_history',
+]);
+
+const ORGANIZATION_SCOPE_TOKEN_RE = /\b(?:organization_id|org_id|current_app_org_id)\b/;
+
+// Each entry names statements that read a workspace-scoped table WITHOUT the
+// workspace predicate, and why reading every workspace at once is correct there.
+const WORKSPACE_SCOPE_ALLOWLIST = [
+  {
+    match: /api\/cron\//,
+    reason: 'cron sweeps run over every workspace by design',
+  },
+  {
+    match: /lib\/server\/account-erasure\.ts$/,
+    reason:
+      'erasure removes an account across every workspace it holds content in; a workspace ' +
+      'predicate would leave the rest behind',
+  },
+  {
+    match: /api\/user\/export\//,
+    reason:
+      'a data export is the account asking for everything it owns, in every workspace; scoping ' +
+      'it to the active one would return an incomplete export',
+  },
+  {
+    match: /lib\/services\/schedule-service\.ts$/,
+    reason:
+      'the scheduler worker writes back to the task id it claimed from the due-set; there is no ' +
+      'request workspace to constrain by',
+  },
+];
+
+function workspaceScopeExempt(relativePath) {
+  return WORKSPACE_SCOPE_ALLOWLIST.some((entry) => entry.match.test(relativePath));
+}
+
+/**
+ * A ratchet, not an allowlist: these modules predate the rule and read Personal
+ * and every organization at once. A file may only ever shrink its count, and a
+ * file not listed here may not have any. The reasons are per-file in the
+ * workspace-scope backlog; each one is a real leak until it reaches zero.
+ */
+const WORKSPACE_SCOPE_BASELINE = new Map([
+  ['apps/web/lib/services/cloud-agent-run-service.ts', 25],
+  ['apps/web/lib/services/conversation-branch-service.ts', 6],
+  ['apps/web/lib/connectors/mcp-custom-connections.ts', 5],
+  ['apps/web/lib/user-connector-tools.ts', 4],
+  ['apps/web/lib/services/product-link-resolver.ts', 3],
+  ['apps/web/lib/server/video-generation-transcript.ts', 3],
+  ['apps/web/lib/services/retrieval-index-service.ts', 2],
+  ['apps/web/lib/server/video-generation-jobs.ts', 2],
+  ['apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts', 2],
+  ['apps/web/lib/triggers/trigger-service.ts', 1],
+  ['apps/web/lib/triggers/trigger-ingest.ts', 1],
+  ['apps/web/lib/support/actions/executors/revoke-connector.ts', 1],
+  ['apps/web/lib/support/account/context-resolver.ts', 1],
+  ['apps/web/lib/services/published-artifact-service.ts', 1],
+  ['apps/web/lib/services/plugin-marketplace-installation-service.ts', 1],
+  ['apps/web/lib/services/plugin-installation-service.ts', 1],
+  ['apps/web/lib/services/cloud-code-durable-run.ts', 1],
+  ['apps/web/lib/services/cloud-agent-run-termination.ts', 1],
+  ['apps/web/lib/services/cloud-agent-execution-service.ts', 1],
+  ['apps/web/app/api/share/route.ts', 1],
+  ['apps/web/app/api/chat/conversations/[id]/messages/lib/generate-title.ts', 1],
+]);
+
+// A baseline file that is not on disk is out of scope for this run (the guard's
+// own sandbox tests scan a tree of three files), not a fixed leak.
+export function compareWorkspaceScopeToBaseline(
+  countsByFile,
+  baseline = WORKSPACE_SCOPE_BASELINE,
+  fileExists = (file) => fs.existsSync(path.join(root, file)),
+) {
+  const regressions = [];
+  const improvements = [];
+  for (const [file, count] of countsByFile) {
+    const allowed = baseline.get(file) ?? 0;
+    if (count > allowed) regressions.push({ file, count, allowed });
+  }
+  for (const [file, allowed] of baseline) {
+    const count = countsByFile.get(file) ?? 0;
+    if (count < allowed && fileExists(file)) improvements.push({ file, count, allowed });
+  }
+  return { regressions, improvements };
+}
+
 const ALLOWLIST = [
   {
     match: /api\/cron\//,
@@ -656,7 +756,15 @@ const ALLOWLIST = [
       'the target as a member, nothing else',
   },
   {
-    match: /lib\/jobs\/job-service\.ts$/,
+    match: /lib\/support\/tickets\/store\.ts$/,
+    tables: ['support_tickets'],
+    reason:
+      'every member statement carries user_id; the two staff reads (getTicketForStaff, ' +
+      'startTicketForStaff) are reached only from the requirePlatformAdmin escalation route, ' +
+      'where the escalating engineer is by definition not the ticket owner',
+  },
+  {
+    match: /lib\/jobs\/(job-service|cancellation)\.ts$/,
     tables: ['background_jobs'],
     reason:
       'the background job worker claims, retries, reaps and prunes jobs across every tenant by ' +
@@ -935,12 +1043,15 @@ const schema = readSchema(path.join(root, MIGRATIONS_DIR));
 const SCANNED_TABLES = new Set([...USER_OWNED_TABLES, ...schema.rlsEnabled]);
 
 const errors = [];
+const workspaceErrors = [];
+const workspaceCounts = new Map();
 const files = [
   ...walk(path.join(root, 'apps/web/app')),
   ...walk(path.join(root, 'apps/web/lib')),
   ...walk(path.join(root, 'apps/web/features')),
 ];
 let scanned = 0;
+let workspaceScoped = 0;
 let ownerConnectionFiles = 0;
 const policedByTable = new Map();
 
@@ -965,6 +1076,22 @@ for (const file of files) {
     scanned += 1;
     for (const t of tables) policedByTable.set(t, (policedByTable.get(t) ?? 0) + 1);
     const lower = sql.toLowerCase();
+
+    const workspaceTables = tables.filter((t) => WORKSPACE_SCOPED_TABLES.has(t));
+    if (
+      workspaceTables.length > 0 &&
+      !ORGANIZATION_SCOPE_TOKEN_RE.test(lower) &&
+      !workspaceScopeExempt(rel)
+    ) {
+      workspaceScoped += 1;
+      workspaceCounts.set(rel, (workspaceCounts.get(rel) ?? 0) + 1);
+      workspaceErrors.push(
+        `${rel}: statement over workspace-scoped table(s) [${workspaceTables.join(', ')}] carries ` +
+          `no organization_id predicate, so it reads Personal and every organization at once.\n    ` +
+          sql.replace(/\s+/g, ' ').trim().slice(0, 160),
+      );
+    }
+
     if (mentionsScopeToken(lower)) continue;
     if (mentionsSelfIdPredicate(sql, tables)) continue;
     const interpolated = scopingInterpolations(sql, lower);
@@ -984,6 +1111,34 @@ if (errors.length > 0) {
     `\nEach statement above runs on the Neon owner role, which HAS BYPASSRLS, so no policy\n` +
       `applies. Constrain it by owner, move the route to getUserScopedDb(request), or add an\n` +
       `allowlist entry in scripts/check-db-isolation.mjs WITH a reason.`,
+  );
+  process.exit(1);
+}
+
+const workspaceVerdict = compareWorkspaceScopeToBaseline(workspaceCounts);
+
+if (workspaceVerdict.regressions.length > 0 || workspaceVerdict.improvements.length > 0) {
+  console.error('Database isolation check FAILED, workspace scope ratchet:\n');
+  for (const { file, count, allowed } of workspaceVerdict.regressions) {
+    console.error(
+      `- ${file}: ${count} statement(s) over a workspace-scoped table carry no organization_id\n` +
+        `  predicate, baseline allows ${allowed}. They read Personal and every organization at once.\n`,
+    );
+    for (const e of workspaceErrors.filter((entry) => entry.startsWith(`${file}:`))) {
+      console.error(`    ${e.split('\n')[1]?.trim() ?? ''}\n`);
+    }
+  }
+  for (const { file, count, allowed } of workspaceVerdict.improvements) {
+    console.error(
+      `- ${file}: baseline says ${allowed} unscoped statement(s), ${count} remain. Lower the\n` +
+        `  WORKSPACE_SCOPE_BASELINE entry (or delete it at zero) so the ratchet holds.\n`,
+    );
+  }
+  console.error(
+    `\n0110 made Personal and each organization mutually exclusive for these tables, but the\n` +
+      `owner role bypasses that policy. Add the workspace predicate with\n` +
+      `workspaceOwnedPredicate() from apps/web/lib/server/workspace-scope, move the read to\n` +
+      `getUserScopedDb(request), or add a WORKSPACE_SCOPE_ALLOWLIST entry WITH a reason.`,
   );
   process.exit(1);
 }

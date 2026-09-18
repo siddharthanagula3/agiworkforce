@@ -525,3 +525,106 @@ test('a bare id predicate does not exempt a statement that also touches a non-se
   assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
   assert.match(result.stderr, /shared_sessions/);
 });
+
+const CONVERSATIONS_MIGRATION = `create table if not exists public.web_conversations (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  organization_id uuid,
+  title text
+);
+
+alter table public.web_conversations enable row level security;
+`;
+
+test('a workspace-scoped read carrying only user_id fails: it reads Personal and every organization', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+    'apps/web/lib/chats.ts': [
+      "import { getNeonDb } from './db';",
+      'export async function listChats(userId: string) {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from web_conversations where user_id = $1`, [userId]);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
+  assert.match(result.stderr, /workspace scope ratchet/);
+  assert.match(result.stderr, /web_conversations/);
+});
+
+test('adding the organization_id predicate satisfies the workspace rule', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+    'apps/web/lib/chats.ts': [
+      "import { getNeonDb } from './db';",
+      'export async function listChats(userId: string, organizationId: string | null) {',
+      '  const db = getNeonDb();',
+      '  return db.query(',
+      '    `select id from web_conversations where user_id = $1 and organization_id is not distinct from $2`,',
+      '    [userId, organizationId],',
+      '  );',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
+});
+
+test('a cron sweep is exempt from the workspace rule, a settings route is not', () => {
+  const exempt = runOnSandbox({
+    [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+    'apps/web/app/api/cron/purge/route.ts': [
+      "import { getNeonDb } from '@/lib/db';",
+      'export async function GET() {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from web_conversations where user_id = $1`, ["u"]);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(exempt.status, 0, `expected pass, got:\n${exempt.stderr}`);
+
+  const policed = runOnSandbox({
+    [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+    'apps/web/app/api/settings/chats/route.ts': [
+      "import { getNeonDb } from '@/lib/db';",
+      'export async function GET() {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from web_conversations where user_id = $1`, ["u"]);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(policed.status, 1, `expected failure, got:\n${policed.stdout}`);
+});
+
+test('a baselined file that no longer leaks must lower its baseline entry', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+    'apps/web/lib/triggers/trigger-service.ts': [
+      "import { getNeonDb } from '@/lib/db';",
+      'export async function listTriggers(userId: string, organizationId: string | null) {',
+      '  const db = getNeonDb();',
+      '  return db.query(',
+      '    `select id from web_conversations where user_id = $1 and organization_id is not distinct from $2`,',
+      '    [userId, organizationId],',
+      '  );',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
+  assert.match(result.stderr, /Lower the\n?\s*WORKSPACE_SCOPE_BASELINE entry/);
+});
+
+test('a baselined file may not grow past its allowance', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+    'apps/web/lib/triggers/trigger-service.ts': [
+      "import { getNeonDb } from '@/lib/db';",
+      'export async function listTriggers(userId: string) {',
+      '  const db = getNeonDb();',
+      '  await db.query(`select id from web_conversations where user_id = $1`, [userId]);',
+      '  return db.query(`select id from user_memories where user_id = $1`, [userId]);',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
+  assert.match(result.stderr, /baseline allows 1/);
+});

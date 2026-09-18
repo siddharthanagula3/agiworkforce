@@ -17,6 +17,7 @@ import { Check, Copy, Download, Loader2, ShieldCheck, ShieldOff } from 'lucide-r
 import settingsService, {
   type TwoFactorStatus,
 } from '@features/settings/services/user-preferences';
+import { StepUpDialog } from '@/features/auth/StepUpDialog';
 
 type Stage =
   | { name: 'idle' }
@@ -68,6 +69,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
 
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
+  const regeneratedCodesRef = useRef<string[]>([]);
 
   const refreshStatus = useCallback(async () => {
     const { data, error } = await settingsService.get2FAStatus();
@@ -145,37 +147,29 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
     await refreshStatus();
   }, [stage, code, refreshStatus]);
 
-  const handleDisable = useCallback(async () => {
-    setBusy(true);
-    setActionError(null);
-    const { success, error, status: httpStatus } = await settingsService.disable2FA(code.trim());
-    setBusy(false);
-    if (!success) {
-      setActionError(describeCodeFailure(error, httpStatus));
-      return;
-    }
+  const verifyDisable = useCallback(async (value: string) => {
+    const { success, error, status } = await settingsService.disable2FA(value);
+    return { ok: success, error: success ? undefined : describeCodeFailure(error, status), status };
+  }, []);
+
+  const handleDisabled = useCallback(async () => {
     resetFlow();
     await refreshStatus();
-  }, [code, refreshStatus, resetFlow]);
+  }, [refreshStatus, resetFlow]);
 
-  const handleRegenerate = useCallback(async () => {
-    setBusy(true);
-    setActionError(null);
-    const {
-      backupCodes,
-      error,
-      status: httpStatus,
-    } = await settingsService.regenerateBackupCodes(code.trim());
-    setBusy(false);
-    if (!backupCodes) {
-      setActionError(describeCodeFailure(error, httpStatus));
-      return;
-    }
+  const verifyRegenerate = useCallback(async (value: string) => {
+    const { backupCodes, error, status } = await settingsService.regenerateBackupCodes(value);
+    if (!backupCodes) return { ok: false, error: describeCodeFailure(error, status), status };
+    regeneratedCodesRef.current = backupCodes;
+    return { ok: true, status };
+  }, []);
+
+  const handleRegenerated = useCallback(async () => {
     setCode('');
     setAcknowledged(false);
-    setStage({ name: 'backup-codes', codes: backupCodes, reason: 'regenerated' });
+    setStage({ name: 'backup-codes', codes: regeneratedCodesRef.current, reason: 'regenerated' });
     await refreshStatus();
-  }, [code, refreshStatus]);
+  }, [refreshStatus]);
 
   const handleDismissBackupCodes = useCallback(async () => {
     resetFlow();
@@ -382,77 +376,23 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
           </div>
         ) : null}
 
-        {/* ---------------------------------------------------------------- */}
-        {/* Disable · requires a current TOTP or backup code                  */}
-        {/* ---------------------------------------------------------------- */}
-        {stage.name === 'disabling' ? (
-          <div className="space-y-3 rounded-lg border border-border/50 p-4">
-            <h4 className="font-medium text-foreground">Turn off two-factor authentication</h4>
-            <p className="text-sm text-muted-foreground">
-              Enter a current authenticator code, or one of your backup codes, to confirm.
-            </p>
-            <Input
-              id="totp-disable-code"
-              aria-label="Authenticator or backup code"
-              autoComplete="one-time-code"
-              placeholder="123456"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              className="max-w-[14rem] border-border bg-background font-mono text-foreground"
-            />
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={busy || code.trim().length === 0}
-                onClick={() => void handleDisable()}
-              >
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Turn off two-factor
-              </Button>
-              <Button type="button" variant="outline" disabled={busy} onClick={resetFlow}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        <StepUpDialog
+          open={stage.name === 'disabling'}
+          action="two_factor.disable"
+          consequence="Two-factor authentication is switched off. Enter a current authenticator code, or one of your backup codes, to confirm."
+          verify={verifyDisable}
+          onCancel={resetFlow}
+          onSatisfied={handleDisabled}
+        />
 
-        {/* ---------------------------------------------------------------- */}
-        {/* Regenerate backup codes                                           */}
-        {/* ---------------------------------------------------------------- */}
-        {stage.name === 'regenerating' ? (
-          <div className="space-y-3 rounded-lg border border-border/50 p-4">
-            <h4 className="font-medium text-foreground">Generate new backup codes</h4>
-            <p className="text-sm text-muted-foreground">
-              Enter a current authenticator code. Your existing backup codes stop working
-              immediately.
-            </p>
-            <Input
-              id="totp-regenerate-code"
-              aria-label="Authenticator code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              placeholder="123456"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              className="max-w-[10rem] border-border bg-background font-mono text-foreground"
-            />
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                disabled={busy || code.trim().length === 0}
-                onClick={() => void handleRegenerate()}
-              >
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Generate new codes
-              </Button>
-              <Button type="button" variant="outline" disabled={busy} onClick={resetFlow}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        <StepUpDialog
+          open={stage.name === 'regenerating'}
+          action="two_factor.regenerate_backup_codes"
+          consequence="Your existing backup codes stop working immediately. Enter a current authenticator code to confirm."
+          verify={verifyRegenerate}
+          onCancel={resetFlow}
+          onSatisfied={handleRegenerated}
+        />
 
         {/* ---------------------------------------------------------------- */}
         {/* Resting state                                                     */}

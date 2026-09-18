@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-17
+Last updated: 2026-09-18
 
 ## Monorepo Shape
 
@@ -49,6 +49,56 @@ Last updated: 2026-09-17
 | Memory                    | Local/BYOK/Managed memory stores keyed by privacy mode                                                           | Surface that collected consent                                         | Only surfaces within the same trust boundary                    | Local memory cannot be promoted to BYOK/Managed without preview and approval.                 |
 | Teams/orgs                | Enterprise control-plane tables and `packages/contracts/types/src/enterprise`                                    | Web admin routes                                                       | Web admin; other surfaces through scoped policy reads           | Managed/enterprise only; never required for Local/BYOK.                                       |
 | Billing/usage             | Enterprise control plane plus provider-cost ledger                                                               | Backend services only                                                  | Web/admin and usage-label surfaces                              | No client invents quota, reset, or credit values.                                             |
+
+## Cross-Device Sync Semantics
+
+`packages/contracts/types/src/sync/object-semantics.ts` is canonical: it names
+every synced object type with its conflict rule, deletion mode, and whether the
+cloud holds its bytes. This section is a reading of that file, not a second
+source. `packages/client/sync/src` implements the client half.
+
+Three rules the registry encodes and every surface has to honour:
+
+- Deletion is a tombstone, never a dropped row. A client that forgets a
+  deletion re-creates the row on its next push and undoes it. `deletedAt` is
+  the one spelling; `isDeleted` on memory is kept beside it, not instead of it.
+- A consent control is not content. Memory controls resolve a conflict to the
+  more restrictive side, because losing "memory off" to a stale device collects
+  what the user refused.
+- A synced row does not promise the bytes are in the cloud. Artifacts and
+  skills may keep their payload on the device that produced it, so a surface
+  asks `resourceAvailability` and can say which device holds it rather than
+  showing a failure.
+
+Web, Desktop and Mobile are inside the boundary. CLI, VS Code and Chrome are
+outside it on purpose, and the reason differs per surface: CLI and VS Code own
+developer sessions whose source of truth is the local workspace, not an account
+row, and Chrome keeps an authoritative local copy because a page's turns may
+never be eligible for the cloud at all. None of the three is waiting for a sync
+client to be written.
+
+### Session continuation
+
+`packages/contracts/types/src/sync/session-continuation.ts` answers three
+separate questions per workflow: locally persisted (opens with no network),
+rehydratable (rebuildable on a device that has never seen it), resumable
+(carries on rather than starting again). A workflow that answers no to any of
+them carries the line a surface must show instead of offering to continue.
+
+| Workflow | Locally persisted | Rehydratable | Resumable |
+| -------- | ----------------- | ------------ | --------- |
+| Chat     | yes               | yes          | yes       |
+| Agent    | no                | yes          | yes       |
+| Work     | no                | yes          | yes       |
+| Research | no                | yes          | no        |
+| Code     | no                | yes          | yes       |
+| Browser  | no                | yes          | no        |
+| Schedule | no                | yes          | no        |
+| Study    | no                | yes          | no        |
+
+Code is the one with a lease: resuming claims the session, so
+`readCloudCodeSessionContinuation` reports whether it can be claimed now and,
+when it cannot, until when another run holds it.
 
 ## Provider Strategy
 

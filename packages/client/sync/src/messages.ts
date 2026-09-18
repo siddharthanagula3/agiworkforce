@@ -11,12 +11,20 @@ export interface SyncMessageRecord {
   parentId?: string | null;
   createdAt?: string;
   metadata?: Record<string, unknown> | null;
+  /** The tombstone `projects.ts` has always carried. Optional while stores adopt it. */
+  deletedAt?: string | null;
   serverVersion?: string;
 }
 
 export interface MessageStorePort {
   getMessages(conversationId: string): ReadonlyArray<SyncMessageRecord>;
   setMessages(conversationId: string, messages: ReadonlyArray<SyncMessageRecord>): void;
+  /**
+   * Keeps deleted messages as tombstones instead of dropping them. A store
+   * without it stays correct on one device; it just cannot tell a deletion it
+   * has already applied from one it has never seen.
+   */
+  retainsTombstones?: boolean;
 }
 
 export function isSyncableMessageRole(role: string): role is SyncMessageRole {
@@ -38,7 +46,7 @@ export function applyMessageDeltas(
     const current = port.getMessages(conversationId);
     const merged = new Map<string, SyncMessageRecord>(current.map((m) => [m.id, m]));
     for (const d of conversationDeltas) {
-      if (d.deleted_at) {
+      if (d.deleted_at && !port.retainsTombstones) {
         merged.delete(d.id);
         continue;
       }
@@ -55,6 +63,7 @@ export function applyMessageDeltas(
         ...(d.parent_id !== undefined ? { parentId: d.parent_id } : {}),
         createdAt: d.created_at,
         metadata: d.metadata,
+        deletedAt: d.deleted_at,
         serverVersion: d.server_version,
       });
     }
