@@ -1,11 +1,14 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   DEFAULT_DATA_REGION,
   normaliseDataRegion,
   type DataRegionId,
 } from '@agiworkforce/compliance';
+import { classifyRetryError, type RetryDisposition } from '@agiworkforce/utils/retry-policy';
 
 import { withTraceCarrier } from '@/lib/observability/trace-propagation';
 
@@ -24,9 +27,25 @@ const CANDIDATE_POOL_PER_QUEUE = 500;
 const MAX_ERROR_LENGTH = 2_000;
 const MAX_LIST_PAGE = 100;
 const MAX_PRUNE_BATCH = 500;
+const MAX_RETRY_REASON_LENGTH = 64;
 const CLAIM_LOCK_KEY = 'background-jobs-claim';
 
+/** The two failure classes the shared retry taxonomy cannot see from an error. */
+export const JOB_RETRY_REASON = {
+  permanent: 'permanent',
+  leaseExpired: 'lease_expired',
+} as const;
+
 export type BackgroundJobStatus = 'queued' | 'running' | 'succeeded' | 'dead' | 'cancelled';
+
+/** What the job consumed, kept off the free-form result so it can be summed. */
+export interface BackgroundJobUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  costMicrousd?: number;
+  units?: number;
+  durationMs?: number;
+}
 
 export interface BackgroundJob {
   id: string;
@@ -42,10 +61,18 @@ export interface BackgroundJob {
   maxAttempts: number;
   runAfter: string;
   leaseExpiresAt: string | null;
+  /** The worker holding the lease. Every write that settles an attempt fences on it. */
+  workerId: string | null;
   idempotencyKey: string | null;
   lastError: string | null;
+  /** The class of the last failure, from the shared retry taxonomy. */
+  retryReason: string | null;
   deadReason: string | null;
   deadLetteredAt: string | null;
+  cancelRequestedAt: string | null;
+  cancelRequestedBy: string | null;
+  cancelReason: string | null;
+  usage: BackgroundJobUsage | null;
   /** Stamped from the workspace's own pin at enqueue; null is the home region. */
   originRegion: DataRegionId | null;
   createdAt: string;
@@ -66,18 +93,25 @@ interface JobRow extends Record<string, unknown> {
   max_attempts: number;
   run_after: string | Date;
   lease_expires_at: string | Date | null;
+  worker_id: string | null;
   idempotency_key: string | null;
   last_error: string | null;
+  retry_reason: string | null;
   dead_reason: string | null;
   dead_lettered_at: string | Date | null;
+  cancel_requested_at: string | Date | null;
+  cancel_requested_by: string | null;
+  cancel_reason: string | null;
+  usage: BackgroundJobUsage | null;
   origin_region: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
 
 const JOB_COLUMNS = `id, queue, kind, user_id, organization_id, tenant_key, payload, priority, status,
-  attempts, max_attempts, run_after, lease_expires_at, idempotency_key, last_error, dead_reason,
-  dead_lettered_at, origin_region, created_at, updated_at`;
+  attempts, max_attempts, run_after, lease_expires_at, worker_id, idempotency_key, last_error,
+  retry_reason, dead_reason, dead_lettered_at, cancel_requested_at, cancel_requested_by,
+  cancel_reason, usage, origin_region, created_at, updated_at`;
 
 export class PermanentJobError extends Error {
   constructor(message: string) {
@@ -107,10 +141,16 @@ function mapJob(row: JobRow): BackgroundJob {
     maxAttempts: Number(row.max_attempts),
     runAfter: iso(row.run_after) ?? '',
     leaseExpiresAt: iso(row.lease_expires_at),
+    workerId: row.worker_id ?? null,
     idempotencyKey: row.idempotency_key,
     lastError: row.last_error,
+    retryReason: row.retry_reason ?? null,
     deadReason: row.dead_reason,
     deadLetteredAt: iso(row.dead_lettered_at),
+    cancelRequestedAt: iso(row.cancel_requested_at ?? null),
+    cancelRequestedBy: row.cancel_requested_by ?? null,
+    cancelReason: row.cancel_reason ?? null,
+    usage: row.usage ?? null,
     originRegion: normaliseDataRegion(row.origin_region),
     createdAt: iso(row.created_at) ?? '',
     updatedAt: iso(row.updated_at) ?? '',
@@ -127,13 +167,55 @@ function boundedError(message: string): string {
   return trimmed.slice(0, MAX_ERROR_LENGTH);
 }
 
+let processWorkerId: string | null = null;
+
+/**
+ * Identity of this worker process. Stable for the life of the process, unique
+ * across processes, so a lease reaped from one and re-claimed by another can be
+ * told apart even when both run the same deployment in the same region.
+ */
+export function currentWorkerId(): string {
+  if (processWorkerId === null) {
+    const host = process.env['VERCEL_REGION'] ?? process.env['HOSTNAME'] ?? 'local';
+    processWorkerId = `${host}:${process.pid}:${randomUUID().slice(0, 8)}`.slice(0, 128);
+  }
+  return processWorkerId;
+}
+
+export interface JobRetryClassification {
+  reason: string;
+  disposition: RetryDisposition;
+}
+
+/**
+ * The class of a job failure, taken from the shared retry taxonomy rather than
+ * re-derived from the error text. The queue adds the two classes the taxonomy
+ * has no way to see: a handler's own permanent refusal, and a lapsed lease.
+ */
+export function classifyJobFailure(error: unknown): JobRetryClassification {
+  if (error instanceof PermanentJobError) {
+    return { reason: JOB_RETRY_REASON.permanent, disposition: 'terminal' };
+  }
+  const shared = classifyRetryError(error);
+  return {
+    reason: shared.reason.slice(0, MAX_RETRY_REASON_LENGTH),
+    disposition: shared.disposition,
+  };
+}
+
 export interface EnqueueJobInput {
   kind: JobKind;
   payload: Record<string, unknown>;
   userId?: string | null;
   organizationId?: string | null;
   priority?: number;
-  idempotencyKey?: string | null;
+  /**
+   * Required: every queue here settles something outside the database (a
+   * notification, an email, a webhook, an erasure, a provisioned render), and a
+   * producer that retries its own enqueue must get the first job back rather
+   * than a second delivery.
+   */
+  idempotencyKey: string;
   runAfter?: Date | null;
   maxAttempts?: number;
   /** Omitted, the workspace's own pin decides, which a caller cannot get wrong. */
@@ -152,8 +234,8 @@ export async function enqueueJob(
 ): Promise<EnqueuedJob> {
   const queue = queueForJobKind(input.kind);
   const policy = JOB_QUEUE_POLICIES[queue];
-  const idempotencyKey = input.idempotencyKey?.trim() || null;
-  if (idempotencyKey !== null && (idempotencyKey.length < 8 || idempotencyKey.length > 255)) {
+  const idempotencyKey = input.idempotencyKey.trim();
+  if (idempotencyKey.length < 8 || idempotencyKey.length > 255) {
     throw new Error('Job idempotency key must be 8-255 characters');
   }
   const maxAttempts = clamp(input.maxAttempts ?? policy.maxAttempts, 1, 50);
@@ -209,6 +291,8 @@ export interface ClaimJobsOptions {
    * in another jurisdiction has left the region its workspace was promised.
    */
   region?: DataRegionId | null;
+  /** Defaults to this process, so a caller cannot claim without an identity. */
+  workerId?: string;
 }
 
 export async function claimJobs(
@@ -220,6 +304,7 @@ export async function claimJobs(
   const limit = clamp(options.limit, 1, MAX_CLAIM_BATCH);
   const concurrency = queues.map((queue) => JOB_QUEUE_POLICIES[queue].maxConcurrency);
   const leases = queues.map((queue) => JOB_QUEUE_POLICIES[queue].leaseSeconds);
+  const workerId = (options.workerId ?? currentWorkerId()).slice(0, 128);
 
   return db.transaction(async (tx) => {
     await tx.query(`select pg_advisory_xact_lock(hashtext($1))`, [CLAIM_LOCK_KEY]);
@@ -290,6 +375,7 @@ export async function claimJobs(
           set status = 'running',
               attempts = job.attempts + 1,
               lease_expires_at = now() + make_interval(secs => slots.lease_seconds),
+              worker_id = $8::text,
               started_at = now(),
               updated_at = now()
          from locked
@@ -297,9 +383,10 @@ export async function claimJobs(
         where job.id = locked.id
        returning job.id, job.queue, job.kind, job.user_id, job.organization_id, job.tenant_key,
                  job.payload, job.priority, job.status, job.attempts, job.max_attempts,
-                 job.run_after, job.lease_expires_at, job.idempotency_key, job.last_error,
-                 job.dead_reason, job.dead_lettered_at, job.origin_region, job.created_at,
-                 job.updated_at`,
+                 job.run_after, job.lease_expires_at, job.worker_id, job.idempotency_key,
+                 job.last_error, job.retry_reason, job.dead_reason, job.dead_lettered_at,
+                 job.cancel_requested_at, job.cancel_requested_by, job.cancel_reason, job.usage,
+                 job.origin_region, job.created_at, job.updated_at`,
       [
         queues,
         concurrency,
@@ -308,23 +395,43 @@ export async function claimJobs(
         limit,
         options.region ?? null,
         DEFAULT_DATA_REGION,
+        workerId,
       ],
     );
     return rows.map(mapJob).sort((left, right) => right.priority - left.priority);
   });
 }
 
+/**
+ * A job as its own worker holds it. Every settle is fenced on `workerId`: a
+ * worker whose lease was reaped and re-claimed matches no row and is told the
+ * attempt is stale, rather than writing over the execution that replaced it.
+ */
+export type SettlingJob<K extends keyof BackgroundJob> = Pick<BackgroundJob, K> & {
+  workerId?: string | null;
+};
+
 export async function completeJob(
   db: DatabaseAdapter,
-  job: Pick<BackgroundJob, 'id' | 'attempts'>,
+  job: SettlingJob<'id' | 'attempts'>,
   result: Record<string, unknown> | null = null,
+  usage: BackgroundJobUsage | null = null,
 ): Promise<boolean> {
   const affected = await db.execute(
     `update public.background_jobs
         set status = 'succeeded', result = $2::jsonb, lease_expires_at = null,
-            last_error = null, completed_at = now(), updated_at = now()
-      where id = $1 and status = 'running' and attempts = $3`,
-    [job.id, JSON.stringify(result), job.attempts],
+            last_error = null, retry_reason = null,
+            usage = coalesce($5::jsonb, usage),
+            completed_at = now(), updated_at = now()
+      where id = $1 and status = 'running' and attempts = $3
+        and ($4::text is null or worker_id is not distinct from $4::text)`,
+    [
+      job.id,
+      JSON.stringify(result),
+      job.attempts,
+      job.workerId ?? null,
+      usage === null ? null : JSON.stringify(usage),
+    ],
   );
   return affected === 1;
 }
@@ -333,13 +440,15 @@ export type JobFailureOutcome = 'retry' | 'dead' | 'stale';
 
 export async function failJob(
   db: DatabaseAdapter,
-  job: Pick<BackgroundJob, 'id' | 'queue' | 'attempts' | 'maxAttempts'>,
+  job: SettlingJob<'id' | 'queue' | 'attempts' | 'maxAttempts'>,
   error: unknown,
   options: { random?: () => number } = {},
 ): Promise<JobFailureOutcome> {
   const message = boundedError(error instanceof Error ? error.message : String(error));
   const permanent = error instanceof PermanentJobError;
   const exhausted = job.attempts >= job.maxAttempts;
+  const { reason: retryReason } = classifyJobFailure(error);
+  const fence = job.workerId ?? null;
 
   if (permanent || exhausted) {
     const reason = permanent
@@ -347,10 +456,12 @@ export async function failJob(
       : `Gave up after ${job.attempts} attempts: ${message}`;
     const affected = await db.execute(
       `update public.background_jobs
-          set status = 'dead', last_error = $2, dead_reason = $3, dead_lettered_at = now(),
-              lease_expires_at = null, completed_at = now(), updated_at = now()
-        where id = $1 and status = 'running' and attempts = $4`,
-      [job.id, message, boundedError(reason), job.attempts],
+          set status = 'dead', last_error = $2, retry_reason = $5, dead_reason = $3,
+              dead_lettered_at = now(), lease_expires_at = null, completed_at = now(),
+              updated_at = now()
+        where id = $1 and status = 'running' and attempts = $4
+          and ($6::text is null or worker_id is not distinct from $6::text)`,
+      [job.id, message, boundedError(reason), job.attempts, retryReason, fence],
     );
     return affected === 1 ? 'dead' : 'stale';
   }
@@ -362,11 +473,12 @@ export async function failJob(
   );
   const affected = await db.execute(
     `update public.background_jobs
-        set status = 'queued', last_error = $2,
+        set status = 'queued', last_error = $2, retry_reason = $5,
             run_after = now() + make_interval(secs => $3),
-            lease_expires_at = null, updated_at = now()
-      where id = $1 and status = 'running' and attempts = $4`,
-    [job.id, message, delaySeconds, job.attempts],
+            lease_expires_at = null, worker_id = null, updated_at = now()
+      where id = $1 and status = 'running' and attempts = $4
+        and ($6::text is null or worker_id is not distinct from $6::text)`,
+    [job.id, message, delaySeconds, job.attempts, retryReason, fence],
   );
   return affected === 1 ? 'retry' : 'stale';
 }
@@ -386,23 +498,25 @@ export async function reapExpiredJobLeases(db: DatabaseAdapter): Promise<ReapSum
           set status = 'dead',
               last_error = 'Worker lease expired before the job reported a result',
               dead_reason = 'Gave up after ' || attempts || ' attempts: the worker lease expired on the final attempt',
-              dead_lettered_at = now(), lease_expires_at = null,
+              retry_reason = $2,
+              dead_lettered_at = now(), lease_expires_at = null, worker_id = null,
               completed_at = now(), updated_at = now()
         where queue = $1 and status = 'running' and lease_expires_at < now()
           and attempts >= max_attempts`,
-      [queue],
+      [queue, JOB_RETRY_REASON.leaseExpired],
     );
     requeued += await db.execute(
       `update public.background_jobs
           set status = 'queued',
               last_error = 'Worker lease expired before the job reported a result',
+              retry_reason = $4,
               run_after = now() + make_interval(
                 secs => least($3::double precision, $2::double precision * power(2, greatest(attempts - 1, 0)))
               ),
-              lease_expires_at = null, updated_at = now()
+              lease_expires_at = null, worker_id = null, updated_at = now()
         where queue = $1 and status = 'running' and lease_expires_at < now()
           and attempts < max_attempts`,
-      [queue, policy.backoffBaseSeconds, policy.backoffMaxSeconds],
+      [queue, policy.backoffBaseSeconds, policy.backoffMaxSeconds, JOB_RETRY_REASON.leaseExpired],
     );
   }
   return { requeued, deadLettered };
@@ -505,7 +619,8 @@ export async function retryDeadJob(db: DatabaseAdapter, jobId: string): Promise<
   const affected = await db.execute(
     `update public.background_jobs
         set status = 'queued', attempts = 0, run_after = now(), dead_reason = null,
-            dead_lettered_at = null, completed_at = null, updated_at = now()
+            dead_lettered_at = null, completed_at = null, retry_reason = null,
+            worker_id = null, updated_at = now()
       where id = $1 and status = 'dead'`,
     [jobId],
   );
