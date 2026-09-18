@@ -36,11 +36,13 @@ import {
   describePluginScan,
   diffPluginPermissions,
   isPluginSha256,
+  isPluginShippedWithProduct,
   isPluginSignatureAlgorithm,
   normalizePluginPermissions,
   pluginIntegrityVerdict,
   pluginSignaturePayload,
   scanPluginPackage,
+  type PluginIntegrityClaim,
   type PluginIntegrityVerdict,
   type PluginScanFile,
   type PluginScanResult,
@@ -96,13 +98,7 @@ export function trustedPluginPublisherKeys(): ReturnType<typeof createPublicKey>
   return keys;
 }
 
-export interface PluginPackageClaim {
-  pluginId: string;
-  version: string;
-  sha256: string | null;
-  signature: string | null;
-  signatureAlgorithm: string | null;
-}
+export type PluginPackageClaim = PluginIntegrityClaim;
 
 function hashesMatch(expected: string, actual: string): boolean {
   const left = Buffer.from(expected, 'utf8');
@@ -113,18 +109,23 @@ function hashesMatch(expected: string, actual: string): boolean {
 /**
  * Fails closed at every branch: a missing digest, a missing signature, an
  * unaccepted algorithm and an untrusted key all refuse. No "unsigned but allowed".
+ * A pack that ships inside this build is trusted by provenance, never by a null.
  */
 export function verifyPluginPackage(
   claim: PluginPackageClaim,
   artifactSha256?: string | null,
 ): PluginIntegrityVerdict {
-  if (!isPluginSha256(claim.sha256)) {
-    return pluginIntegrityVerdict('hash_missing', claim.pluginId);
-  }
-  if (artifactSha256 !== undefined && artifactSha256 !== null) {
-    if (!isPluginSha256(artifactSha256) || !hashesMatch(claim.sha256, artifactSha256)) {
+  const sha256 = isPluginSha256(claim.sha256) ? claim.sha256 : null;
+  if (sha256 !== null && artifactSha256 !== undefined && artifactSha256 !== null) {
+    if (!isPluginSha256(artifactSha256) || !hashesMatch(sha256, artifactSha256)) {
       return pluginIntegrityVerdict('hash_mismatch', claim.pluginId);
     }
+  }
+  if (isPluginShippedWithProduct(claim)) {
+    return pluginIntegrityVerdict('shipped_with_product', claim.pluginId);
+  }
+  if (sha256 === null) {
+    return pluginIntegrityVerdict('hash_missing', claim.pluginId);
   }
   if (typeof claim.signature !== 'string' || claim.signature.trim().length === 0) {
     return pluginIntegrityVerdict('signature_missing', claim.pluginId);
@@ -137,7 +138,7 @@ export function verifyPluginPackage(
     pluginSignaturePayload({
       pluginId: claim.pluginId,
       version: claim.version,
-      sha256: claim.sha256,
+      sha256,
     }),
     'utf8',
   );
@@ -264,7 +265,8 @@ export class PluginPackageRefusedError extends AppError {
 
 /**
  * A package with no recorded scan is refused, not installed: absence of a
- * verdict is not a pass.
+ * verdict is not a pass. A pack that ships with this build carries no separate
+ * artifact to scan, so provenance is what admits it.
  */
 export async function assertPluginPackageInstallable(
   db: DatabaseAdapter,
@@ -273,6 +275,7 @@ export async function assertPluginPackageInstallable(
 ): Promise<void> {
   const integrity = verifyPluginPackage(claim, artifactSha256);
   if (!integrity.ok) throw new PluginPackageRefusedError(integrity.code, integrity.reason);
+  if (integrity.code === 'shipped_with_product') return;
 
   const scan = await readPluginPackageScan(db, claim.sha256 ?? '');
   if (!scan) {

@@ -7,6 +7,7 @@ import {
   describePluginScan,
   diffPluginPermissions,
   isPluginSha256,
+  isPluginShippedWithProduct,
   isPluginSignatureAlgorithm,
   pluginIntegrityVerdict,
   pluginSignaturePayload,
@@ -140,5 +141,35 @@ describe('the signed payload', () => {
       expect(verdict.reason).toContain('research-pack');
     }
     expect(pluginIntegrityVerdict('verified', 'research-pack').ok).toBe(true);
+  });
+});
+
+describe('provenance', () => {
+  it('trusts a builtin first-party pack, which ships inside the build', () => {
+    expect(isPluginShippedWithProduct({ source: 'builtin', publisherKind: 'first-party' })).toBe(
+      true,
+    );
+    expect(pluginIntegrityVerdict('shipped_with_product', 'research-pack')).toMatchObject({
+      ok: true,
+      code: 'shipped_with_product',
+    });
+    expect(pluginIntegrityVerdict('shipped_with_product', 'research-pack').reason).toContain(
+      'research-pack',
+    );
+  });
+
+  it('trusts no other pairing, so builtin alone is not a bypass', () => {
+    expect(isPluginShippedWithProduct({ source: 'builtin', publisherKind: 'third-party' })).toBe(
+      false,
+    );
+    expect(isPluginShippedWithProduct({ source: 'builtin', publisherKind: 'partner' })).toBe(false);
+    expect(isPluginShippedWithProduct({ source: 'builtin', publisherKind: null })).toBe(false);
+    expect(
+      isPluginShippedWithProduct({ source: 'marketplace', publisherKind: 'first-party' }),
+    ).toBe(false);
+    expect(isPluginShippedWithProduct({ source: 'custom', publisherKind: 'first-party' })).toBe(
+      false,
+    );
+    expect(isPluginShippedWithProduct({ source: null, publisherKind: null })).toBe(false);
   });
 });

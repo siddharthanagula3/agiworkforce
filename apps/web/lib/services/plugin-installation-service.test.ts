@@ -11,17 +11,124 @@ vi.mock('./plugin-registry-service', () => ({
   getPluginRegistryEntry: getPluginRegistryEntryMock,
 }));
 
+import { generateKeyPairSync, sign as signPayload } from 'node:crypto';
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { PluginRegistryEntry } from '@agiworkforce/types';
+import { pluginSignaturePayload } from '@agiworkforce/client-runtime/plugins';
 import {
+  approvePendingPluginPermissions,
   countPluginInstallations,
   getPluginInstallationSettings,
   installWebPlugin,
   listEnabledPluginIds,
+  listPluginPermissionReviews,
   setWebPluginEnabled,
   uninstallWebPlugin,
   updatePluginInstallationSettings,
 } from './plugin-installation-service';
+import { verifyPluginPackage } from './plugin-marketplace-service';
+
+const ARTIFACT_SHA256 = 'b'.repeat(64);
+const OTHER_SHA256 = 'c'.repeat(64);
+
+function publisherKeys() {
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  return {
+    privateKey,
+    publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+  };
+}
+
+const publisher = publisherKeys();
+const stranger = publisherKeys();
+
+const signedIntegrity = {
+  sha256: ARTIFACT_SHA256,
+  signature: signPayload(
+    null,
+    Buffer.from(
+      pluginSignaturePayload({
+        pluginId: 'research-pack',
+        version: '1.0.0',
+        sha256: ARTIFACT_SHA256,
+      }),
+      'utf8',
+    ),
+    publisher.privateKey,
+  ).toString('base64'),
+  signatureAlgorithm: 'ed25519' as const,
+};
+
+/** Anything not shipped inside the build: the signing and scanning gates apply. */
+function signedEntry(overrides: Partial<PluginRegistryEntry> = {}) {
+  return {
+    entry: registryEntry({
+      permissions: ['network'],
+      source: 'marketplace',
+      publisher: { id: 'acme', name: 'Acme', kind: 'third-party', url: null },
+      integrity: signedIntegrity,
+      distribution: { manifestUrl: 'https://example.test/plugin.json', sha256: ARTIFACT_SHA256 },
+      ...overrides,
+    }),
+    manifest: { name: 'research-pack', version: '1.0.0', description: '', skills: [] },
+  };
+}
+
+/** The shape the five shipped packs really have: embedded manifest, no artifact. */
+function builtinEntry(overrides: Partial<PluginRegistryEntry> = {}) {
+  return {
+    entry: registryEntry({
+      permissions: ['network'],
+      source: 'builtin',
+      publisher: { id: 'agi', name: 'AGI', kind: 'first-party', url: null },
+      integrity: { sha256: null, signature: null, signatureAlgorithm: null },
+      distribution: null,
+      ...overrides,
+    }),
+    manifest: { name: 'research-pack', version: '1.0.0', description: '', skills: [] },
+  };
+}
+
+function scanRow(verdict: 'pass' | 'review' | 'block') {
+  return {
+    content_hash: ARTIFACT_SHA256,
+    plugin_key: 'research-pack',
+    verdict,
+    rules_version: 1,
+    findings:
+      verdict === 'pass'
+        ? []
+        : [{ ruleId: 'x', severity: 'block', message: 'm', path: 'p', line: 1, excerpt: 'e' }],
+    scanned_at: '2026-09-17T00:00:00.000Z',
+  };
+}
+
+type FakeDb = DatabaseAdapter & {
+  query: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
+};
+
+function installDatabase(options: {
+  scan: ReturnType<typeof scanRow> | null;
+  approved?: string[];
+}): FakeDb {
+  const query = vi.fn(async (sql: string) => {
+    const text = String(sql).toLowerCase();
+    if (text.includes('plugin_package_scans')) return options.scan ? [options.scan] : [];
+    if (text.startsWith('select approved_permissions')) {
+      return options.approved === undefined ? [] : [{ approved_permissions: options.approved }];
+    }
+    return [INSTALLATION_ROW];
+  });
+  return { query, execute: vi.fn().mockResolvedValue(0) } as unknown as FakeDb;
+}
+
+function insertCall(db: FakeDb): [string, unknown[]] | undefined {
+  return db.query.mock.calls.find((call) =>
+    String(call[0]).toLowerCase().includes('insert into public.plugin_installations'),
+  ) as [string, unknown[]] | undefined;
+}
 
 function database(
   rows: unknown[],
@@ -121,14 +228,12 @@ describe('installWebPlugin', () => {
   beforeEach(() => {
     getNeonDbMock.mockReset();
     getPluginRegistryEntryMock.mockReset();
+    process.env['PLUGIN_SIGNING_PUBLIC_KEYS'] = publisher.publicKeyPem;
   });
 
-  it('installs a published, web-installable entry', async () => {
-    getPluginRegistryEntryMock.mockResolvedValue({
-      entry: registryEntry({}),
-      manifest: { name: 'research-pack', version: '1.0.0', description: '', skills: [] },
-    });
-    const db = database([INSTALLATION_ROW]);
+  it('installs a signed, scanned, web-installable entry', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(signedEntry());
+    const db = installDatabase({ scan: scanRow('pass') });
 
     const installation = await installWebPlugin(db, 'user-1', 'research-pack');
 
@@ -139,12 +244,161 @@ describe('installWebPlugin', () => {
       installedAt: '2026-09-03T00:00:00.000Z',
       updatedAt: '2026-09-03T00:00:00.000Z',
     });
-    expect(db.query.mock.calls[0]?.[1]).toEqual([
+    expect(insertCall(db)?.[1]).toEqual([
       'user-1',
       'research-pack',
       '1.0.0',
       JSON.stringify(['literature-review']),
+      JSON.stringify(['network']),
     ]);
+  });
+
+  it('installs the first-party pack that ships with the build, unsigned and unscanned', async () => {
+    delete process.env['PLUGIN_SIGNING_PUBLIC_KEYS'];
+    getPluginRegistryEntryMock.mockResolvedValue(builtinEntry());
+    const db = installDatabase({ scan: null });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).resolves.toMatchObject({
+      pluginId: 'research-pack',
+      enabled: true,
+    });
+    expect(
+      db.query.mock.calls.some((call) => String(call[0]).includes('plugin_package_scans')),
+    ).toBe(false);
+    expect(insertCall(db)?.[1]?.[4]).toBe(JSON.stringify(['network']));
+  });
+
+  it('refuses a builtin entry whose publisher is not first-party', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(
+      builtinEntry({ publisher: { id: 'acme', name: 'Acme', kind: 'third-party', url: null } }),
+    );
+    const db = installDatabase({ scan: scanRow('pass') });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).rejects.toMatchObject({
+      refusal: 'hash_missing',
+      statusCode: 409,
+    });
+    expect(insertCall(db)).toBeUndefined();
+  });
+
+  it('refuses a package whose digest does not match the signed one', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(
+      signedEntry({ integrity: { ...signedIntegrity, sha256: OTHER_SHA256 } }),
+    );
+    const db = installDatabase({ scan: scanRow('pass') });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).rejects.toMatchObject({
+      name: 'PluginPackageRefusedError',
+      refusal: 'signature_invalid',
+      statusCode: 409,
+    });
+    expect(insertCall(db)).toBeUndefined();
+  });
+
+  it('refuses a tampered artifact even when the registry row itself verifies', () => {
+    const verdict = verifyPluginPackage(
+      {
+        pluginId: 'research-pack',
+        version: '1.0.0',
+        source: 'marketplace',
+        publisherKind: 'third-party',
+        sha256: ARTIFACT_SHA256,
+        signature: signedIntegrity.signature,
+        signatureAlgorithm: 'ed25519',
+      },
+      OTHER_SHA256,
+    );
+    expect(verdict).toMatchObject({ ok: false, code: 'hash_mismatch' });
+    expect(verdict.reason).toContain('not match the checksum');
+  });
+
+  it('refuses an unsigned entry rather than treating a null signature as trusted', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(
+      signedEntry({
+        integrity: { sha256: ARTIFACT_SHA256, signature: null, signatureAlgorithm: null },
+      }),
+    );
+    const db = installDatabase({ scan: scanRow('pass') });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).rejects.toMatchObject({
+      refusal: 'signature_missing',
+    });
+    expect(insertCall(db)).toBeUndefined();
+  });
+
+  it('refuses a signature from a publisher this deployment does not trust', async () => {
+    process.env['PLUGIN_SIGNING_PUBLIC_KEYS'] = stranger.publicKeyPem;
+    getPluginRegistryEntryMock.mockResolvedValue(signedEntry());
+    const db = installDatabase({ scan: scanRow('pass') });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).rejects.toMatchObject({
+      refusal: 'signature_invalid',
+    });
+  });
+
+  it('refuses a package that has never been scanned', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(signedEntry());
+    const db = installDatabase({ scan: null });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).rejects.toMatchObject({
+      refusal: 'scan_missing',
+    });
+    expect(insertCall(db)).toBeUndefined();
+  });
+
+  it('refuses a package the scanner blocked', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(signedEntry());
+    const db = installDatabase({ scan: scanRow('block') });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).rejects.toMatchObject({
+      refusal: 'scan_blocked',
+    });
+  });
+
+  it('blocks an update that expands permissions and disables the installation', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(
+      signedEntry({ permissions: ['network', 'shell'] }),
+    );
+    const db = installDatabase({ scan: scanRow('pass'), approved: ['network'] });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).rejects.toMatchObject({
+      name: 'PluginPermissionReviewRequiredError',
+      added: ['shell'],
+    });
+    expect(insertCall(db)).toBeUndefined();
+    const disable = db.execute.mock.calls.find((call) =>
+      String(call[0]).includes('review_required = true'),
+    );
+    expect(String(disable?.[0])).toContain('enabled = false');
+    expect(disable?.[1]).toEqual(['user-1', 'research-pack', JSON.stringify(['network', 'shell'])]);
+  });
+
+  it('lets an update through when it gives up a permission instead of asking for one', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(signedEntry({ permissions: ['network'] }));
+    const db = installDatabase({ scan: scanRow('pass'), approved: ['network', 'shell'] });
+
+    await expect(installWebPlugin(db, 'user-1', 'research-pack')).resolves.toMatchObject({
+      pluginId: 'research-pack',
+    });
+  });
+
+  it('never approves a connector scope or authenticates an app on install', async () => {
+    getPluginRegistryEntryMock.mockResolvedValue(
+      signedEntry({ requiredConnectors: ['github'], permissions: ['connectors'] }),
+    );
+    const db = installDatabase({ scan: scanRow('pass') });
+
+    await installWebPlugin(db, 'user-1', 'research-pack');
+
+    const written = [...db.query.mock.calls, ...db.execute.mock.calls]
+      .map((call) => String(call[0]).toLowerCase())
+      .filter((sql) => sql.includes('insert') || sql.includes('update') || sql.includes('delete'));
+    for (const sql of written) {
+      expect(sql).not.toContain('user_connectors');
+      expect(sql).not.toContain('connector_oauth');
+      expect(sql).not.toContain('connector_tool_permissions');
+    }
+    expect(insertCall(db)?.[1]?.[4]).toBe(JSON.stringify(['connectors']));
   });
 
   it('refuses a preview entry that is not web-installable', async () => {
@@ -156,7 +410,7 @@ describe('installWebPlugin', () => {
       }),
       manifest: null,
     });
-    const db = database([INSTALLATION_ROW]);
+    const db = installDatabase({ scan: scanRow('pass') });
 
     const installation = await installWebPlugin(db, 'user-1', 'github-automation');
 
@@ -165,11 +419,8 @@ describe('installWebPlugin', () => {
   });
 
   it('refuses an entry with no embedded manifest even if flagged web-installable', async () => {
-    getPluginRegistryEntryMock.mockResolvedValue({
-      entry: registryEntry({}),
-      manifest: null,
-    });
-    const db = database([INSTALLATION_ROW]);
+    getPluginRegistryEntryMock.mockResolvedValue({ entry: registryEntry({}), manifest: null });
+    const db = installDatabase({ scan: scanRow('pass') });
 
     const installation = await installWebPlugin(db, 'user-1', 'research-pack');
 
@@ -179,7 +430,7 @@ describe('installWebPlugin', () => {
 
   it('returns null for an unknown plugin id without querying installations', async () => {
     getPluginRegistryEntryMock.mockResolvedValue(null);
-    const db = database([INSTALLATION_ROW]);
+    const db = installDatabase({ scan: scanRow('pass') });
 
     const installation = await installWebPlugin(db, 'user-1', 'not-a-real-plugin');
 
@@ -188,17 +439,47 @@ describe('installWebPlugin', () => {
   });
 
   it('re-enables on a repeat install instead of creating a duplicate row', async () => {
-    getPluginRegistryEntryMock.mockResolvedValue({
-      entry: registryEntry({}),
-      manifest: { name: 'research-pack', version: '1.0.0', description: '', skills: [] },
-    });
-    const db = database([INSTALLATION_ROW]);
+    getPluginRegistryEntryMock.mockResolvedValue(signedEntry());
+    const db = installDatabase({ scan: scanRow('pass'), approved: ['network'] });
 
     await installWebPlugin(db, 'user-1', 'research-pack');
 
-    const sql = String(db.query.mock.calls[0]?.[0]).toLowerCase();
+    const sql = String(insertCall(db)?.[0]).toLowerCase();
     expect(sql).toContain('on conflict (user_id, plugin_id) do update');
     expect(sql).toContain('enabled = true');
+    expect(sql).toContain('review_required = false');
+  });
+});
+
+describe('approvePendingPluginPermissions', () => {
+  it('is the only way out of review, and only for a row actually in review', async () => {
+    const db = database([INSTALLATION_ROW]);
+    await approvePendingPluginPermissions(db, 'user-1', 'research-pack');
+    const sql = String(db.query.mock.calls[0]?.[0]).toLowerCase();
+    expect(sql).toContain('review_required = true');
+    expect(sql).toContain('approved_permissions = coalesce(pending_permissions');
+    expect(sql).toContain('enabled = true');
+  });
+});
+
+describe('listPluginPermissionReviews', () => {
+  it('reports what the update added over what the member approved', async () => {
+    const db = database([
+      {
+        plugin_id: 'research-pack',
+        approved_permissions: ['network'],
+        pending_permissions: ['network', 'shell'],
+      },
+    ]);
+    await expect(listPluginPermissionReviews(db, 'user-1')).resolves.toEqual([
+      {
+        pluginId: 'research-pack',
+        approved: ['network'],
+        pending: ['network', 'shell'],
+        added: ['shell'],
+        removed: [],
+      },
+    ]);
   });
 });
 
