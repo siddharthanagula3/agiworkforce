@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  FEATURE_MATURITIES as CONTRACT_MATURITIES,
+  RELEASE_CHANNELS as CONTRACT_CHANNELS,
+  modelStatusMaturity,
+  surfaceReleaseStateGaps,
+} from '@agiworkforce/types';
+import {
   DESKTOP_RELEASE_CHANNELS,
   desktopChannelCarriesMaturity,
 } from '@/lib/releases/github-desktop-releases';
@@ -12,6 +18,7 @@ import {
   MATURITY_DENIAL_REASONS,
   RELEASE_CHANNELS,
   channelCarriesMaturity,
+  flagAvailability,
   flagChannel,
   flagDenialReason,
   flagGovernanceGaps,
@@ -25,6 +32,19 @@ describe('feature maturity and release channel registry', () => {
   it('is the one channel vocabulary every surface reads', () => {
     expect([...DESKTOP_RELEASE_CHANNELS]).toEqual([...RELEASE_CHANNELS]);
     expect([...RING_CHANNELS]).toEqual([...RELEASE_CHANNELS]);
+  });
+
+  it('takes its vocabulary from the contracts package, not from the web app', () => {
+    expect(FEATURE_MATURITIES).toBe(CONTRACT_MATURITIES);
+    expect(RELEASE_CHANNELS).toBe(CONTRACT_CHANNELS);
+  });
+
+  it('states a model catalogue status in the same maturity vocabulary', () => {
+    expect(modelStatusMaturity('active')).toBe('general_availability');
+    expect(modelStatusMaturity(undefined)).toBe('general_availability');
+    expect(modelStatusMaturity('beta')).toBe('beta');
+    expect(modelStatusMaturity('experimental')).toBe('experimental');
+    expect(modelStatusMaturity('deprecated')).toBe('deprecated');
   });
 
   it('labels general availability explicitly rather than implying it', () => {
@@ -95,7 +115,35 @@ describe('feature maturity and release channel registry', () => {
     expect(flagDenialReason({ maturity: 'general_availability' })).toBeNull();
   });
 
-  it('states the mobile surface maturity and channel in the shared vocabulary', () => {
+  it('keeps availability a dimension of its own, bounded by maturity', () => {
+    expect(flagAvailability(FlagDefinitionInputSchema.parse(BASE))).toBe('internal');
+    expect(
+      flagAvailability(
+        FlagDefinitionInputSchema.parse({ ...BASE, maturity: 'general_availability' }),
+      ),
+    ).toBe('general');
+    expect(
+      flagAvailability(
+        FlagDefinitionInputSchema.parse({
+          ...BASE,
+          maturity: 'general_availability',
+          availability: 'waitlist',
+        }),
+      ),
+    ).toBe('waitlist');
+
+    const overreaching = FlagDefinitionInputSchema.safeParse({
+      ...BASE,
+      maturity: 'beta',
+      channel: 'beta',
+      availability: 'general',
+    });
+    expect(overreaching.success).toBe(false);
+    if (overreaching.success) return;
+    expect(overreaching.error.issues[0]?.path).toEqual(['availability']);
+  });
+
+  it('states the mobile surface release, maturity and availability as three facts', () => {
     const state = JSON.parse(
       readFileSync(
         path.resolve(
@@ -104,7 +152,13 @@ describe('feature maturity and release channel registry', () => {
         ),
         'utf8',
       ),
-    ) as { maturity: string; channel: string; released: boolean };
+    ) as {
+      surface: 'mobile';
+      maturity: string;
+      channel: string;
+      availability: string;
+      released: boolean;
+    };
     expect(FEATURE_MATURITIES).toContain(state.maturity);
     expect(RELEASE_CHANNELS).toContain(state.channel);
     expect(state.released).toBe(false);
@@ -114,5 +168,16 @@ describe('feature maturity and release channel registry', () => {
         state.maturity as (typeof FEATURE_MATURITIES)[number],
       ),
     ).toBe(true);
+    expect(surfaceReleaseStateGaps(state as Parameters<typeof surfaceReleaseStateGaps>[0])).toEqual(
+      [],
+    );
+    expect(
+      surfaceReleaseStateGaps({ ...state, availability: 'general' } as Parameters<
+        typeof surfaceReleaseStateGaps
+      >[0]),
+    ).toEqual([
+      expect.stringContaining('available to general users'),
+      expect.stringContaining('published no release'),
+    ]);
   });
 });

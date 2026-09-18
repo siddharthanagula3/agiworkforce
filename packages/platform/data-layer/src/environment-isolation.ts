@@ -146,6 +146,56 @@ export function assertDatabaseEnvironmentIsolation({
   );
 }
 
+export const APP_BASE_URL_VAR = 'NEXT_PUBLIC_APP_URL';
+const LOCAL_PORT_VAR = 'PORT';
+const DEFAULT_LOCAL_PORT = '3000';
+
+function localBaseUrl(env: IsolationEnvironment): string {
+  return `http://127.0.0.1:${readTrimmed(env, LOCAL_PORT_VAR) ?? DEFAULT_LOCAL_PORT}`;
+}
+
+// The origin this runtime serves, for every link it generates. A guessed origin
+// sends password resets, OAuth callbacks and email links to another deployment.
+export function resolveEnvironmentBaseUrl(env: IsolationEnvironment = process.env): string {
+  const environment = resolveRuntimeEnvironment(env);
+  const configured = readTrimmed(env, APP_BASE_URL_VAR)?.replace(/\/+$/, '');
+  const deployed = DEPLOYED_ENVIRONMENTS.has(environment);
+
+  if (!configured) {
+    if (!deployed) return localBaseUrl(env);
+    throw new DataLayerConfigError(
+      `A ${environment} runtime has no ${APP_BASE_URL_VAR}, so every generated link would name a ` +
+        'guessed origin. Set it to the origin this deployment serves.',
+    );
+  }
+
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new DataLayerConfigError(`${APP_BASE_URL_VAR} is not a URL: "${configured}".`);
+  }
+
+  if (deployed) {
+    if (url.protocol !== 'https:') {
+      throw new DataLayerConfigError(
+        `${APP_BASE_URL_VAR} must use https in ${environment}, not ${url.protocol.replace(':', '')}.`,
+      );
+    }
+    return url.origin;
+  }
+
+  if (!isLoopbackConnectionString(configured)) {
+    throw new DataLayerConfigError(
+      `A ${environment} runtime resolved the base URL "${url.origin}", which a deployed ` +
+        'environment also serves. Links, OAuth callbacks and emails generated here would point ' +
+        `at real users' deployment. Point ${APP_BASE_URL_VAR} at 127.0.0.1.`,
+    );
+  }
+
+  return url.origin;
+}
+
 export type ConfigKeySecrecy = 'secret' | 'public';
 
 /**

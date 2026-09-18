@@ -30,11 +30,19 @@ export { NeonDatabaseAdapter, type NeonDatabaseAdapterConfig } from './adapters/
 export { PostgresDatabaseAdapter, type PostgresDatabaseAdapterConfig } from './adapters/postgres';
 
 export {
+  APP_BASE_URL_VAR,
   assertDatabaseEnvironmentIsolation,
+  checkConfigKeys,
+  defineConfigKeys,
   isLoopbackConnectionString,
+  resolveEnvironmentBaseUrl,
   resolveRuntimeEnvironment,
   REMOTE_DATABASE_OVERRIDE_VALUE,
   REMOTE_DATABASE_OVERRIDE_VAR,
+  type ConfigKeyDescriptor,
+  type ConfigKeyRegistry,
+  type ConfigKeySecrecy,
+  type ConfigKeyViolation,
   type DatabaseEnvironmentIsolationOptions,
   type IsolationEnvironment,
   type RuntimeEnvironment,
