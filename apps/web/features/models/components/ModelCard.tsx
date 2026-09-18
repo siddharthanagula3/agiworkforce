@@ -9,6 +9,7 @@ import {
   creditsPerMillionLabel,
   isSelectable,
   modelSummary,
+  retirementLabel,
   statusLabel,
   tokenCeilingLabel,
 } from '../lib/model-presentation';
@@ -44,6 +45,7 @@ export function ModelCard({
   const capabilities = entryCapabilities(entry);
   const summary = modelSummary(entry);
   const status = statusLabel(entry);
+  const retirement = retirementLabel(entry);
   const selectable = isSelectable(entry);
 
   return (
@@ -144,6 +146,14 @@ export function ModelCard({
           Try model
         </button>
         <span className="text-xs text-muted-foreground">{accessLabel(entry, planLabel)}</span>
+        {retirement ? (
+          <span
+            data-testid="model-retirement"
+            className="rounded-full border border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] px-2 py-0.5 text-xs text-[var(--chat-warning-fg)]"
+          >
+            {retirement}
+          </span>
+        ) : null}
         {status ? (
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             {status}

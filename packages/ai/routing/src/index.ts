@@ -255,6 +255,21 @@ export type {
   TaskFamilyStageDecision,
   TaskFamilyStageReason,
 } from './task-family-routing';
+export {
+  isRoutingProfileId,
+  profileForTaskFamily,
+  ROUTING_PROFILES,
+  ROUTING_PROFILE_IDS,
+  routingProfile,
+  routingProfileByName,
+  weightedScore,
+} from './profiles';
+export type {
+  NamedRoutingProfile,
+  RoutingCandidateMeasurements,
+  RoutingProfileId,
+  RoutingProfileWeights,
+} from './profiles';
 export { applyTaskFamilyContinuity, decideTaskFamilyContinuity } from './task-family-continuity';
 export type {
   TaskFamilyContinuityAction,

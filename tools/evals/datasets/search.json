@@ -1,6 +1,12 @@
 {
   "suite": "search",
   "version": 1,
+  "priority": "P1",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository over synthetic sources supplied with the row",
+    "authoredOn": "2026-09-17"
+  },
   "passThreshold": 1,
   "cases": [
     {

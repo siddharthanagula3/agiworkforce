@@ -79,6 +79,12 @@ describe('jsonSchema and jsonEquals', () => {
       parseDataset({
         suite: 'structured-output',
         version: 1,
+        priority: 'P1',
+        provenance: {
+          kind: 'authored',
+          source: 'written for this test',
+          authoredOn: '2026-09-18',
+        },
         passThreshold: 1,
         cases: [
           {
@@ -151,6 +157,12 @@ describe('tool call checks', () => {
       parseDataset({
         suite: 'tools',
         version: 1,
+        priority: 'P1',
+        provenance: {
+          kind: 'authored',
+          source: 'written for this test',
+          authoredOn: '2026-09-18',
+        },
         passThreshold: 1,
         cases: [
           {

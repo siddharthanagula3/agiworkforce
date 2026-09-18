@@ -1,6 +1,12 @@
 {
   "suite": "reasoning",
   "version": 1,
+  "priority": "P1",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository, multi-step problems with a single checkable final answer",
+    "authoredOn": "2026-09-17"
+  },
   "passThreshold": 1,
   "cases": [
     {

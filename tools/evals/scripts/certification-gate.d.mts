@@ -1,4 +1,4 @@
-import type { RunReport } from '../src/report';
+import type { MeasuredRunLike } from './promotion-gate.mjs';
 
 export type CertificationKind = 'model' | 'route';
 
@@ -65,8 +65,8 @@ export const CHECKLISTS: Readonly<Record<CertificationKind, string>>;
 
 export function routingProfileEligibility(registry: RegistrySlice, modelKey: string): string[];
 export function compareRoutes(
-  reference: Pick<RunReport, 'suites'>,
-  candidate: Pick<RunReport, 'suites'>,
+  reference: MeasuredRunLike,
+  candidate: MeasuredRunLike,
   tolerance: { readonly scoreDrop: number },
 ): string[];
 export function certificationFileName(subject: CertificationSubject): string;

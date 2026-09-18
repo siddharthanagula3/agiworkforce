@@ -168,6 +168,7 @@ import {
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
+import { createAgentEventLedger, type AgentEventLedger } from '@/lib/streaming/agent-event-id';
 
 interface SendMessageOptions {
   model?: string;
@@ -951,6 +952,30 @@ interface ConsumeStreamContext {
    */
   assistantParentId?: string;
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
+}
+
+/**
+ * Events already applied to an assistant turn, kept across reconnects.
+ *
+ * The stream's own sequence counter restarts with the connection, so a turn
+ * that reconnects mid-answer re-delivers events the row has already rendered
+ * and they are applied a second time: duplicated text, duplicated tool cards.
+ * The ledger is keyed on the assistant row, which survives the reconnect, and
+ * on the event identity, which is reproduced exactly when the turn is replayed.
+ */
+const appliedAgentEvents = new Map<string, AgentEventLedger>();
+
+function admitAgentEvent(
+  turnKey: string,
+  envelope: Pick<AgentEventEnvelope, 'sessionId' | 'turnId' | 'sequence'>,
+): boolean {
+  const ledger = appliedAgentEvents.get(turnKey) ?? createAgentEventLedger();
+  appliedAgentEvents.set(turnKey, ledger);
+  return ledger.admit(envelope);
+}
+
+function forgetAgentEvents(turnKey: string): void {
+  appliedAgentEvents.delete(turnKey);
 }
 
 const EMPTY_RESPONSE_STREAM_ERROR_CODE = 'empty_response';
@@ -2181,6 +2206,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (finishReason) patchMessageMeta({ finishReason });
     if (runState !== 'awaiting_input' && runState !== 'paused') {
       settleAgentActivity();
+      forgetAgentEvents(assistantMessageId);
     }
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
@@ -2247,6 +2273,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             patchMessageMeta({ streamError: streamErrorInfo });
           }
           settleAgentActivity();
+          forgetAgentEvents(assistantMessageId);
           publishCloudRunReference({
             state: finalCloudRunState(streamErrorInfo ? 'failed' : 'ready_for_review'),
           });
@@ -2264,11 +2291,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             closeFirstTokenWait();
             sawRealAgentEvent = true;
           }
+          // Reconnect-safe: the ledger outlives this connection, so a replayed
+          // event is refused although its sequence looks new to this stream.
           const duplicateAgentEnvelope = Boolean(
-            agentEnvelope &&
-            currentAgentActivity?.sessionId === agentEnvelope.sessionId &&
-            currentAgentActivity.turnId === agentEnvelope.turnId &&
-            agentEnvelope.sequence <= currentAgentActivity.lastSequence,
+            agentEnvelope && !admitAgentEvent(assistantMessageId, agentEnvelope),
           );
           if (agentEnvelope && !duplicateAgentEnvelope) {
             if (agentEnvelope.event.type === 'text-delta') {
@@ -2724,6 +2750,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       patchMessageMeta({ streamError: streamErrorInfo });
     }
     settleAgentActivity();
+    forgetAgentEvents(assistantMessageId);
     publishCloudRunReference({
       state: finalCloudRunState(streamErrorInfo ? 'failed' : 'ready_for_review'),
     });

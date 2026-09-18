@@ -1,6 +1,12 @@
 {
   "suite": "chat",
   "version": 1,
+  "priority": "P1",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository from the conversational behaviours the chat surface promises",
+    "authoredOn": "2026-09-17"
+  },
   "passThreshold": 1,
   "cases": [
     {

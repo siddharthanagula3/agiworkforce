@@ -3,7 +3,8 @@
   "tolerance": {
     "scoreDrop": 0.05,
     "costIncreaseRatio": 0.25,
-    "latencyP95IncreaseRatio": 0.5
+    "latencyP95IncreaseRatio": 0.5,
+    "completenessDrop": 0.05
   },
   "familyOverrides": {}
 }

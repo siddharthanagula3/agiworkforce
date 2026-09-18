@@ -29,6 +29,7 @@ import {
   type TaskFamilySlotCost,
   type TaskFamilyStageDecision,
 } from './task-family-routing';
+import { profileForTaskFamily, type RoutingProfileId } from './profiles';
 import type { RoutingTaskType } from './types';
 
 export type RoutingTrustMode = 'local' | 'on_device' | 'byok' | 'managed_cloud';
@@ -308,6 +309,12 @@ export interface AutoRoutingRequest {
    */
   organizationPolicy?: ModelAccessPolicy | null;
   /**
+   * The trust modes the governing workspace permits. A caller that passes a
+   * mode outside this list is refused here rather than served, so the router
+   * cannot become the way around an administrator's privacy-mode decision.
+   */
+  allowedTrustModes?: readonly RoutingTrustMode[];
+  /**
    * The id this request is identified by, and the only input canary selection
    * hashes. A stable id means one conversation keeps landing on the same side
    * of the split instead of flipping between the canary and the promoted model
@@ -395,6 +402,15 @@ export interface SelectedAutoRoute {
   routeId: string;
   harnessId: string;
   fallbacks: AutoFallbackRoute[];
+  /**
+   * The named profile this request was routed under (Instant, High, Code,
+   * Research), from the classified task family. Null when the family stage did
+   * not classify, which is the case where no profile's trade-off applies rather
+   * than a reason to assume the cheapest one. Optional in the same sense as
+   * `taskFamilyDecision` below: every decision this module returns sets it, and
+   * a hand-built fixture need not.
+   */
+  routingProfileId?: RoutingProfileId | null;
   reason:
     | 'explicit'
     | 'continuity'
@@ -434,6 +450,7 @@ export interface UnavailableAutoRoute {
     | 'runtime_profile_mismatch'
     | 'explicit_model_ineligible'
     | 'mandatory_capability_unavailable'
+    | 'trust_mode_not_permitted'
     | 'no_eligible_route';
   requestedSelection: string;
   requestedProfile: RoutingProfile | null;
@@ -1370,6 +1387,7 @@ function selectedDecision(
     requestedSelection,
     requestedProfile,
     effectiveProfile,
+    routingProfileId: profileForTaskFamily(request.taskFamily ?? null)?.id ?? null,
     taskType: request.taskType,
     modelKey,
     provider: route.provider,
@@ -1526,9 +1544,34 @@ function isAffordable(modelKey: string, request: AutoRoutingRequest): boolean {
   return estimatedRequestCents(modelKey, request) <= request.budgetRemainingCents;
 }
 
+/**
+ * Refuses before anything is ranked. An explicitly named model is refused too:
+ * naming a model is a choice of model, never a choice of trust mode.
+ */
+function trustModeRejection(
+  request: AutoRoutingRequest,
+  requestedSelection: string,
+): UnavailableAutoRoute | null {
+  const permitted = request.allowedTrustModes;
+  if (!permitted || permitted.includes(request.trustMode)) return null;
+  return {
+    status: 'unavailable',
+    code: 'trust_mode_not_permitted',
+    requestedSelection,
+    requestedProfile: null,
+    effectiveProfile: null,
+    taskType: request.taskType,
+    reasons: [
+      `trust mode ${request.trustMode} is not permitted by workspace policy (permitted: ${permitted.join(', ') || 'none'})`,
+    ],
+  };
+}
+
 export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision {
   const policy = registry.policies.auto;
   const requestedSelection = (request.selection ?? policy.defaultAlias).toLowerCase();
+  const trustModeAdmission = trustModeRejection(request, requestedSelection);
+  if (trustModeAdmission) return trustModeAdmission;
   const capabilityAdmission = evaluateSessionCapabilityAdmission(request, requestedSelection);
   if (capabilityAdmission) return capabilityAdmission;
   const runtimeAdmission = applyRuntimeProfile(request, requestedSelection);

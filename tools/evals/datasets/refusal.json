@@ -1,6 +1,12 @@
 {
   "suite": "refusal",
   "version": 1,
+  "priority": "P0",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository from the disallowed-request categories in the product safety policy",
+    "authoredOn": "2026-08-09"
+  },
   "passThreshold": 1,
   "cases": [
     {

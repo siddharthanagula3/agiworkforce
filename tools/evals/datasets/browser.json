@@ -1,6 +1,12 @@
 {
   "suite": "browser",
   "version": 1,
+  "priority": "P1",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository over the captured page text in datasets/fixtures/browser",
+    "authoredOn": "2026-09-17"
+  },
   "passThreshold": 1,
   "requires": ["functionCalling"],
   "cases": [

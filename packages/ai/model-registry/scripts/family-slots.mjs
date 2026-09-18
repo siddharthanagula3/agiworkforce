@@ -25,6 +25,7 @@ const CATALOG_FILE = path.join(FAMILY_CATALOG_DIR, FAMILY_CATALOG_FILE);
 const CURATION_FILE = path.join(FAMILY_CATALOG_DIR, 'models.curation.json');
 const RETIRED_FILE = path.join(FAMILY_CATALOG_DIR, 'retired-models.json');
 const PROBES_FILE = path.join(FAMILY_CATALOG_DIR, 'probes.json');
+const REGISTRY_FILE = path.join(PACKAGE_ROOT, 'generated', 'registry.json');
 const ANSWERED_PROBE_OUTCOME = 'answered';
 const EVALUATION_FLOOR_STAGE = LIFECYCLE_STAGE.evaluated;
 const EVAL_GATE_SCRIPT = path.resolve(
@@ -361,6 +362,31 @@ function status() {
  * which is what makes reintroducing the id fail. A model may not skip the
  * announcement: the transition table refuses removal from any other stage.
  */
+/**
+ * The snapshot a retirement has to leave behind.
+ *
+ * Removal deletes the model from the catalog, and after that nothing can say
+ * what it was: a stored conversation keeps the id on the row and would render
+ * a raw string. The record is taken here, while the entry still exists.
+ */
+function retirementRecord(modelKey, model, retiredOn) {
+  const registry = readJson(REGISTRY_FILE);
+  const compiled = registry.models[modelKey];
+  return {
+    id: modelKey,
+    displayName: model.name,
+    provider: model.provider,
+    developer: compiled?.identity?.developer ?? model.provider,
+    modelType: model.modelType,
+    contextWindow: model.contextWindow ?? registry.limits?.[modelKey]?.contextTokens ?? null,
+    capabilities: registry.capabilities?.[modelKey] ?? {},
+    released: model.released ?? null,
+    retiredOn,
+    replacedBy: model.lifecycle?.replacedBy ?? null,
+    metadataSource: `${path.relative(PACKAGE_ROOT, CURATION_FILE)}#${modelKey}`,
+  };
+}
+
 async function retire(args) {
   const modelKey = argValue(args, '--model');
   const remove = args.includes('--remove');
@@ -400,9 +426,18 @@ async function retire(args) {
     const nextModels = { ...curation.models };
     delete nextModels[modelKey];
     const retired = readJson(RETIRED_FILE);
-    const retiredIds = [...new Set([...retired.retiredModelIds, modelKey])];
     edits.push({ file: CURATION_FILE, value: { ...curation, models: nextModels } });
-    edits.push({ file: RETIRED_FILE, value: { ...retired, retiredModelIds: retiredIds } });
+    edits.push({
+      file: RETIRED_FILE,
+      value: {
+        ...retired,
+        retiredModelIds: [...new Set([...retired.retiredModelIds, modelKey])],
+        retiredModels: [
+          ...retired.retiredModels.filter((record) => record.id !== modelKey),
+          retirementRecord(modelKey, model, now),
+        ],
+      },
+    });
   } else {
     const source = `${path.relative(PACKAGE_ROOT, CURATION_FILE)}#${modelKey}.deprecation_date`;
     const deprecated = stagedModel(

@@ -1,6 +1,12 @@
 {
   "suite": "tools",
   "version": 1,
+  "priority": "P1",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository against tool schemas that mirror the product tool definitions",
+    "authoredOn": "2026-09-17"
+  },
   "passThreshold": 1,
   "promptId": "tool.url_fetch_description",
   "requires": ["functionCalling"],

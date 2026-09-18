@@ -1,6 +1,12 @@
 {
   "suite": "golden",
   "version": 1,
+  "priority": "P0",
+  "provenance": {
+    "kind": "authored",
+    "source": "hand-written in this repository as the cross-capability smoke corpus every model must hold",
+    "authoredOn": "2026-08-09"
+  },
   "passThreshold": 0.9,
   "cases": [
     {

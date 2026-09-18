@@ -15,10 +15,16 @@ import {
   scoreFloor,
   toleranceFor,
 } from '../scripts/promotion-gate.mjs';
+import type { SuiteSummaryLike } from '../scripts/promotion-gate.mjs';
 
 const policy = {
   schemaVersion: 1,
-  tolerance: { scoreDrop: 0.05, costIncreaseRatio: 0.25, latencyP95IncreaseRatio: 0.5 },
+  tolerance: {
+    scoreDrop: 0.05,
+    costIncreaseRatio: 0.25,
+    latencyP95IncreaseRatio: 0.5,
+    completenessDrop: 0.05,
+  },
   familyOverrides: { 'lab/pro': { costIncreaseRatio: 1 } },
 };
 
@@ -51,7 +57,7 @@ function suite(
 
 function run(
   modelKey: string,
-  suites: Record<string, unknown>,
+  suites: Record<string, SuiteSummaryLike>,
   extra: Record<string, unknown> = {},
 ) {
   return {
@@ -138,6 +144,7 @@ describe('compareToBaseline', () => {
   it('ships a policy with every tolerance set', () => {
     const shipped = readGatePolicy();
     expect(Object.keys(shipped.tolerance).sort()).toEqual([
+      'completenessDrop',
       'costIncreaseRatio',
       'latencyP95IncreaseRatio',
       'scoreDrop',

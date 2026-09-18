@@ -19,6 +19,8 @@ import { fixturePath } from './request';
 import type {
   ArgumentMatcher,
   Check,
+  CorpusPriority,
+  DatasetProvenance,
   EvalAttachment,
   EvalCase,
   EvalDataset,
@@ -29,6 +31,7 @@ import type {
   EvalTurn,
   ExpectedBehaviour,
   LanguageCode,
+  ProvenanceKind,
   RiskLabel,
   SuiteName,
 } from './types';
@@ -70,6 +73,9 @@ const CHECK_KINDS = [
   'citedUrls',
   'language',
 ] as const;
+const PRIORITIES: readonly CorpusPriority[] = ['P0', 'P1'];
+const PROVENANCE_KINDS: readonly ProvenanceKind[] = ['authored', 'derived', 'captured'];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const MODULE_NAME = /^[a-z][a-z0-9-]*\.mjs$/u;
 const PROMPT_ID = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/u;
 const TOOL_NAME = /^[a-zA-Z0-9_-]{1,64}$/u;
@@ -483,6 +489,25 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
   };
 }
 
+function parseProvenance(raw: unknown, where: string): DatasetProvenance {
+  if (!isRecord(raw)) fail(where, 'provenance must be an object');
+  const kind = raw['kind'];
+  if (typeof kind !== 'string' || !(PROVENANCE_KINDS as readonly string[]).includes(kind)) {
+    fail(where, `provenance kind must be one of ${PROVENANCE_KINDS.join(', ')}`);
+  }
+  const authoredOn = readString(raw['authoredOn'], where, 'authoredOn');
+  if (!ISO_DATE.test(authoredOn)) fail(where, 'provenance authoredOn must be YYYY-MM-DD');
+  const license = raw['license'];
+  const notes = raw['notes'];
+  return {
+    kind: kind as ProvenanceKind,
+    source: readString(raw['source'], where, 'source'),
+    authoredOn,
+    ...(license === undefined ? {} : { license: readString(license, where, 'license') }),
+    ...(notes === undefined ? {} : { notes: readString(notes, where, 'notes') }),
+  };
+}
+
 export function parseDataset(raw: unknown): EvalDataset {
   if (!isRecord(raw)) fail('dataset', 'dataset must be an object');
 
@@ -498,6 +523,11 @@ export function parseDataset(raw: unknown): EvalDataset {
   if (typeof passThreshold !== 'number' || passThreshold <= 0 || passThreshold > 1) {
     fail(suite, 'passThreshold must be in (0, 1]');
   }
+  const priority = raw['priority'];
+  if (typeof priority !== 'string' || !(PRIORITIES as readonly string[]).includes(priority)) {
+    fail(suite, `priority must be one of ${PRIORITIES.join(', ')}`);
+  }
+  const provenance = parseProvenance(raw['provenance'], `${suite}.provenance`);
   const rawCases = raw['cases'];
   if (!Array.isArray(rawCases) || rawCases.length === 0) {
     fail(suite, 'cases must be a non-empty array');
@@ -521,6 +551,8 @@ export function parseDataset(raw: unknown): EvalDataset {
   return {
     suite: suiteName,
     version,
+    priority: priority as CorpusPriority,
+    provenance,
     passThreshold,
     ...(promptId === undefined ? {} : { promptId: promptId as string }),
     ...(requires === undefined ? {} : { requires: readStringArray(requires, `${suite}.requires`) }),

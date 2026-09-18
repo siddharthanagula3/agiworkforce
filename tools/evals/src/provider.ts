@@ -21,6 +21,32 @@ export interface StreamChunkLike {
 
 export interface ProviderChatRequest extends EvalRequest {
   readonly model: string;
+  /**
+   * Correlation id of this attempt. Deliberately outside `EvalRequest`, which
+   * is what the recording fingerprints: an id that changed every run would make
+   * every recording stale.
+   */
+  readonly correlationId?: string;
+}
+
+/**
+ * A stream that failed after the provider had already metered something.
+ *
+ * The tokens are spent whether or not the answer arrived, so the partial
+ * response travels with the error and the run prices the retry from it.
+ */
+export class EvalStreamError extends Error {
+  readonly partial: ModelResponse;
+
+  constructor(message: string, partial: ModelResponse) {
+    super(message);
+    this.name = 'EvalStreamError';
+    this.partial = partial;
+  }
+}
+
+export function partialResponseOf(error: unknown): ModelResponse | null {
+  return error instanceof EvalStreamError ? error.partial : null;
 }
 
 export interface StreamingAdapter {
@@ -92,6 +118,40 @@ export async function collectResponse(
   const usage: Record<string, number> = {};
   const calls = new Map<string, PendingCall>();
 
+  const finalise = (): ModelResponse => {
+    const latencyMs = Math.round(now() - startedAt);
+    const toolCalls: EvalToolCall[] = [...calls.values()].map((call) => {
+      let input: Record<string, unknown> = {};
+      try {
+        const parsed: unknown = call.json.trim().length === 0 ? {} : JSON.parse(call.json);
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          input = parsed as Record<string, unknown>;
+        }
+      } catch {
+        input = { __unparsedArguments: call.json };
+      }
+      return { id: call.id, name: call.name, input };
+    });
+    const responseUsage = usage as ResponseUsage;
+    const hasUsage = Object.keys(usage).length > 0;
+    const catalogCost =
+      hasUsage && pricing !== null ? catalogCostUsd(responseUsage, pricing) : null;
+
+    return {
+      text,
+      ...(stopReason === undefined ? {} : { stopReason }),
+      ...(toolCalls.length === 0 ? {} : { toolCalls }),
+      ...(hasUsage ? { usage: responseUsage } : {}),
+      ...(providerCost !== undefined
+        ? { costUsd: providerCost, costSource: 'provider' as const }
+        : catalogCost !== null
+          ? { costUsd: catalogCost, costSource: 'catalog' as const }
+          : {}),
+      latencyMs,
+      ...(ttfbMs === undefined ? {} : { ttfbMs }),
+    };
+  };
+
   for await (const chunk of chunks) {
     switch (chunk.type) {
       case 'text-delta':
@@ -134,42 +194,16 @@ export async function collectResponse(
         stopReason = typeof chunk['reason'] === 'string' ? chunk['reason'] : stopReason;
         break;
       case 'error':
-        throw new Error(`provider error: ${String(chunk['message'] ?? 'unknown')}`);
+        throw new EvalStreamError(
+          `provider error: ${String(chunk['message'] ?? 'unknown')}`,
+          finalise(),
+        );
       default:
         break;
     }
   }
 
-  const latencyMs = Math.round(now() - startedAt);
-  const toolCalls: EvalToolCall[] = [...calls.values()].map((call) => {
-    let input: Record<string, unknown> = {};
-    try {
-      const parsed: unknown = call.json.trim().length === 0 ? {} : JSON.parse(call.json);
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        input = parsed as Record<string, unknown>;
-      }
-    } catch {
-      input = { __unparsedArguments: call.json };
-    }
-    return { id: call.id, name: call.name, input };
-  });
-  const responseUsage = usage as ResponseUsage;
-  const hasUsage = Object.keys(usage).length > 0;
-  const catalogCost = hasUsage && pricing !== null ? catalogCostUsd(responseUsage, pricing) : null;
-
-  return {
-    text,
-    ...(stopReason === undefined ? {} : { stopReason }),
-    ...(toolCalls.length === 0 ? {} : { toolCalls }),
-    ...(hasUsage ? { usage: responseUsage } : {}),
-    ...(providerCost !== undefined
-      ? { costUsd: providerCost, costSource: 'provider' as const }
-      : catalogCost !== null
-        ? { costUsd: catalogCost, costSource: 'catalog' as const }
-        : {}),
-    latencyMs,
-    ...(ttfbMs === undefined ? {} : { ttfbMs }),
-  };
+  return finalise();
 }
 
 export interface ProviderResponderOptions {
@@ -183,7 +217,7 @@ export interface ProviderResponderOptions {
 
 export function providerResponder(options: ProviderResponderOptions): Responder {
   const now = options.now ?? (() => performance.now());
-  return async (evalCase) => {
+  return async (evalCase, context) => {
     const request = buildRequest(
       evalCase,
       options.dataset.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
@@ -195,7 +229,14 @@ export function providerResponder(options: ProviderResponderOptions): Responder 
     );
     try {
       return await collectResponse(
-        options.adapter.stream({ ...request, model: options.providerModelId }, controller.signal),
+        options.adapter.stream(
+          {
+            ...request,
+            model: options.providerModelId,
+            ...(context === undefined ? {} : { correlationId: context.correlationId }),
+          },
+          controller.signal,
+        ),
         now,
         options.pricing,
       );

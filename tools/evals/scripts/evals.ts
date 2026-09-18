@@ -3,6 +3,8 @@
  *
  *   replay                 grade committed recordings with no network (CI)
  *   live --model <key>     measure a registry model through its provider adapter (paid)
+ *   compare                hold one measured run against another, model or route
+ *   release-evidence       the committed baselines as one dated evidence report
  *   fingerprint-reference  re-pin the hand-written reference recording to the corpora
  *
  * @module evals/scripts/evals
@@ -14,6 +16,8 @@ import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { compareRuns, readGatePolicy } from './promotion-gate.mjs';
+import { auditMeasurements, readLedger, recordMeasurement } from './measurement-integrity.mjs';
 import { SUITE_NAMES, loadDatasets } from '../src/dataset';
 import {
   activeFamilies,
@@ -23,7 +27,7 @@ import {
   type RegistryLike,
 } from '../src/live';
 import { providerResponder, type StreamingAdapter } from '../src/provider';
-import { formatRun } from '../src/report';
+import { formatRun, type RunReport } from '../src/report';
 import { caseFingerprint, parseRecording, readRecording, type Recording } from '../src/replay';
 import { runLive, runReplay } from '../src/run';
 import type { SuiteName } from '../src/types';
@@ -153,9 +157,12 @@ async function live(args: readonly string[]): Promise<void> {
   print(formatRun(outcome.report, outcome.reports));
 
   const fileName = measurementFileName(target.route.isDefault ? modelKey : target.routeId);
-  writeJson(join(MEASUREMENTS, 'recordings', fileName), outcome.recording);
-  writeJson(join(MEASUREMENTS, 'runs', fileName), outcome.report);
+  recordMeasurement(join(MEASUREMENTS, 'recordings', fileName), outcome.recording);
+  recordMeasurement(join(MEASUREMENTS, 'runs', fileName), outcome.report);
   print(`[evals] wrote measurements/recordings/${fileName} and measurements/runs/${fileName}`);
+  print(
+    `[evals] run ${outcome.report.runId}: ${outcome.attempts.length} attempt(s), ${outcome.attempts.filter((attempt) => !attempt.graded).length} retried`,
+  );
 
   if (args.includes('--baseline')) {
     const families = activeFamilies(registry, modelKey);
@@ -166,15 +173,82 @@ async function live(args: readonly string[]): Promise<void> {
     }
     for (const familyId of families) {
       const baselineFile = join(MEASUREMENTS, 'baselines', measurementFileName(familyId));
-      writeJson(baselineFile, { familyId, ...outcome.report });
+      recordMeasurement(baselineFile, { familyId, ...outcome.report });
       print(`[evals] wrote baseline for ${familyId}`);
     }
   }
 }
 
+function readRun(file: string): RunReport {
+  const resolved = existsSync(file) ? file : join(MEASUREMENTS, 'runs', measurementFileName(file));
+  if (!existsSync(resolved)) throw new Error(`no measured run at ${file}`);
+  return JSON.parse(readFileSync(resolved, 'utf8')) as RunReport;
+}
+
+async function compare(args: readonly string[]): Promise<void> {
+  const baselineArg = argValue(args, '--baseline');
+  const candidateArg = argValue(args, '--candidate');
+  if (baselineArg === undefined || candidateArg === undefined) {
+    throw new Error('compare requires --baseline <run|key> and --candidate <run|key>');
+  }
+  const baseline = readRun(baselineArg);
+  const candidate = readRun(candidateArg);
+  const verdict = compareRuns({
+    baseline,
+    candidate,
+    policy: readGatePolicy(),
+    label: argValue(args, '--label') ?? 'run',
+  });
+  for (const refusal of verdict.refusals) print(`FAIL ${refusal}`);
+  for (const entry of verdict.findings) {
+    print(`${entry.passed ? 'pass' : 'FAIL'} ${entry.suite} ${entry.axis}: ${entry.detail}`);
+  }
+  const from = `${baseline.modelKey ?? 'unknown'}${baseline.routeId === null ? '' : ` via ${baseline.routeId}`} (${baseline.recordedOn ?? 'undated'})`;
+  const to = `${candidate.modelKey ?? 'unknown'}${candidate.routeId === null ? '' : ` via ${candidate.routeId}`} (${candidate.recordedOn ?? 'undated'})`;
+  print(`[evals] ${from} -> ${to}: ${verdict.passed ? 'held every suite' : 'regressed'}`);
+  if (!verdict.passed) process.exitCode = 1;
+}
+
+/**
+ * The committed baselines as one report: what was measured, through which
+ * route, on what date, and whether every suite it claims was actually met.
+ */
+async function releaseEvidence(args: readonly string[]): Promise<void> {
+  const audit = auditMeasurements();
+  for (const problem of audit.problems) print(`FAIL ${problem}`);
+  const ledger = readLedger();
+  const baselines = ledger.entries.filter((entry) => entry.path.startsWith('baselines/'));
+  const evidence = {
+    generatedOn: new Date().toISOString(),
+    integrity: audit.passed ? 'every measurement matches its digest and ledger entry' : 'FAILED',
+    baselines: baselines.map((entry) => ({
+      familyId: entry.familyId ?? null,
+      modelKey: entry.modelKey,
+      routeId: entry.routeId,
+      runId: entry.runId,
+      measuredAt: entry.measuredAt,
+      digest: entry.digest,
+      suites: entry.suites ?? {},
+      unmet: Object.entries(entry.suites ?? {})
+        .filter(([, suite]) => suite.met !== true)
+        .map(([suite]) => suite),
+    })),
+  };
+  const out = argValue(args, '--out');
+  if (out !== undefined) {
+    writeJson(out, evidence);
+    print(`[evals] wrote ${out}`);
+  } else {
+    print(JSON.stringify(evidence, null, 2));
+  }
+  if (!audit.passed) process.exitCode = 1;
+}
+
 const COMMANDS: Record<string, (args: readonly string[]) => Promise<void>> = {
   replay,
   live,
+  compare,
+  'release-evidence': releaseEvidence,
   'fingerprint-reference': fingerprintReference,
 };
 

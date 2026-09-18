@@ -24,6 +24,7 @@
     "limits",
     "benchmarks",
     "evidence",
+    "retiredModels",
     "families",
     "policies"
   ],
@@ -144,6 +145,57 @@
       "type": "array",
       "items": {
         "$ref": "#/definitions/evidence"
+      }
+    },
+    "retiredModels": {
+      "type": "object",
+      "description": "Models the catalog no longer offers, kept so a historical row that names one still resolves a label and a capability set. metadataPreserved is false for the closed grandfathered tail, whose catalog entries no longer survive to be recovered.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "metadataPreserved"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "metadataPreserved": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "developer": {
+            "type": "string"
+          },
+          "modelType": {
+            "type": "string"
+          },
+          "contextWindow": {
+            "type": ["integer", "null"]
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "released": {
+            "type": ["string", "null"]
+          },
+          "retiredOn": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "replacedBy": {
+            "type": ["string", "null"]
+          },
+          "metadataSource": {
+            "type": "string"
+          }
+        }
       }
     },
     "families": {

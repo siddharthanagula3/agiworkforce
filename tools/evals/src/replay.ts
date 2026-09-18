@@ -29,6 +29,11 @@ export interface RecordedResponse {
 export interface Recording {
   readonly schemaVersion: number;
   readonly source: RecordingSource;
+  /**
+   * The run that produced this recording, absent on recordings made before
+   * runs were correlated and on the hand-written reference.
+   */
+  readonly runId: string | null;
   readonly modelKey: string | null;
   readonly routeId: string | null;
   readonly recordedOn: string | null;
@@ -89,6 +94,7 @@ export function parseRecording(raw: unknown): Recording {
   const recording: Recording = {
     schemaVersion: RECORDING_SCHEMA_VERSION,
     source,
+    runId: nullableString(raw['runId'] ?? null, 'runId'),
     modelKey: nullableString(raw['modelKey'], 'modelKey'),
     routeId: nullableString(raw['routeId'], 'routeId'),
     recordedOn: nullableString(raw['recordedOn'], 'recordedOn'),

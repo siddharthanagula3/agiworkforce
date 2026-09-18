@@ -346,6 +346,7 @@ export async function gradeCase(evalCase: EvalCase, response: ModelResponse): Pr
     family: evalCase.family,
     risk: evalCase.risk,
     passed: checks.every((entry) => entry.passed),
+    completeness: checks.filter((entry) => entry.passed).length / checks.length,
     checks,
     response,
   };

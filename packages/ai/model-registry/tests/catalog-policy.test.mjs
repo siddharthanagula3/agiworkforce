@@ -125,6 +125,52 @@ test('permanently excludes unsupported providers and retired models from authore
   }
 });
 
+test('preserves what a retired model was, although it is gone from catalog truth', () => {
+  const preserved = retiredModels.retiredModels;
+  assert.ok(preserved.length > 0, 'at least one retirement must carry its record');
+
+  for (const record of preserved) {
+    assert.equal(
+      curation.models[record.id],
+      undefined,
+      `${record.id} is retired and must not be in catalog truth`,
+    );
+    const historical = registry.retiredModels[record.id];
+    assert.ok(historical, `${record.id} must resolve from the historical export`);
+    assert.equal(historical.metadataPreserved, true);
+    assert.equal(historical.displayName, record.displayName);
+    assert.equal(historical.provider, record.provider);
+    assert.match(historical.retiredOn, /^\d{4}-\d{2}-\d{2}$/u);
+    assert.ok(
+      Object.keys(historical.capabilities).length > 0,
+      `${record.id} must preserve a capability set, not only a name`,
+    );
+  }
+});
+
+test('accounts for every retired id and closes the tail that has no record', () => {
+  const recorded = new Set(retiredModels.retiredModels.map((record) => record.id));
+  const grandfathered = new Set(retiredModels.grandfatheredWithoutMetadata);
+
+  assert.deepEqual(
+    [...retiredModels.retiredModelIds].sort(),
+    [...recorded, ...grandfathered].sort(),
+    'retiredModelIds is exactly the recorded retirements plus the grandfathered tail',
+  );
+  assert.equal(
+    grandfathered.size,
+    21,
+    'the grandfathered tail is closed: a new retirement carries its record',
+  );
+  for (const id of grandfathered) {
+    assert.equal(registry.retiredModels[id].metadataPreserved, false);
+  }
+  for (const id of retiredModels.retiredModelIds) {
+    assert.ok(registry.retiredModels[id], `${id} must appear in the historical export`);
+    assert.equal(registry.models[id], undefined, `${id} must not be selectable`);
+  }
+});
+
 test('pins the Qwen deployment-scope pricing bands and standard Anthropic prices', () => {
   const internationalEndpoint = /dashscope-intl\.aliyuncs\.com/u;
   const qwenProviderEntry = Object.entries(curation.providers).find(([, provider]) => {

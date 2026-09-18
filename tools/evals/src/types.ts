@@ -162,9 +162,34 @@ export interface EvalCase {
   readonly haystack?: EvalHaystack;
 }
 
+/**
+ * Where a corpus came from, so a row can be argued with.
+ *
+ * `authored` rows are written in this repository, `derived` rows are adapted
+ * from a named public benchmark, `captured` rows come from real product traffic
+ * and must say how they were scrubbed.
+ */
+export type ProvenanceKind = 'authored' | 'derived' | 'captured';
+
+export interface DatasetProvenance {
+  readonly kind: ProvenanceKind;
+  readonly source: string;
+  readonly authoredOn: string;
+  readonly license?: string;
+  readonly notes?: string;
+}
+
+/**
+ * Release weight of a corpus. A P0 corpus may not regress at all, whatever the
+ * aggregate says; P1 regressions are held to the gate's score tolerance.
+ */
+export type CorpusPriority = 'P0' | 'P1';
+
 export interface EvalDataset {
   readonly suite: SuiteName;
   readonly version: number;
+  readonly priority: CorpusPriority;
+  readonly provenance: DatasetProvenance;
   readonly passThreshold: number;
   /**
    * The product prompt this corpus measures, as `id` in the web app's prompt
@@ -212,7 +237,17 @@ export interface ModelResponse {
   readonly ttfbMs?: number;
 }
 
-export type Responder = (evalCase: EvalCase) => Promise<ModelResponse>;
+/**
+ * The correlation identity of one call, carried from the run through the
+ * responder onto the provider request.
+ */
+export interface AttemptContext {
+  readonly runId: string;
+  readonly correlationId: string;
+  readonly attempt: number;
+}
+
+export type Responder = (evalCase: EvalCase, context?: AttemptContext) => Promise<ModelResponse>;
 
 export interface CheckResult {
   readonly check: Check;
@@ -225,6 +260,12 @@ export interface CaseResult {
   readonly family: string;
   readonly risk: RiskLabel;
   readonly passed: boolean;
+  /**
+   * Fraction of the row's checks the answer satisfied. `passed` is all-or-
+   * nothing; completeness is what separates an answer that missed one clause
+   * from one that answered nothing, which a pass rate alone cannot show.
+   */
+  readonly completeness: number;
   readonly checks: readonly CheckResult[];
   readonly response: ModelResponse;
   readonly notes?: string;
@@ -250,17 +291,48 @@ export interface SkippedCase {
   readonly reason: string;
 }
 
+/**
+ * One cut of a suite, by an axis the corpus already labels.
+ *
+ * An aggregate score is an average, and an average hides a slice: a corpus can
+ * hold its headline number while the rows that matter most go from passing to
+ * failing. Every axis a case carries is reported separately so the gate can
+ * hold each of them.
+ */
+export interface SliceSummary {
+  readonly total: number;
+  readonly passed: number;
+  readonly score: number;
+  readonly completeness: number;
+}
+
+export type SliceAxis = 'family' | 'risk';
+
+export type SuiteSlices = Readonly<Record<SliceAxis, Readonly<Record<string, SliceSummary>>>>;
+
+export interface RetrySummary {
+  readonly attempts: number;
+  readonly retried: number;
+  readonly retryCostUsd: number | null;
+}
+
 export interface SuiteReport {
   readonly suite: SuiteName;
   readonly version: number;
+  readonly priority: CorpusPriority;
+  readonly provenance: DatasetProvenance;
   readonly promptId?: string;
   readonly threshold: number;
   readonly total: number;
   readonly passed: number;
   readonly score: number;
+  readonly completeness: number;
   readonly met: boolean;
+  readonly measuredAt: string;
   readonly cost: CostSummary;
   readonly latency: LatencySummary;
+  readonly retries: RetrySummary;
+  readonly slices: SuiteSlices;
   readonly skipped: readonly SkippedCase[];
   readonly cases: readonly CaseResult[];
 }
