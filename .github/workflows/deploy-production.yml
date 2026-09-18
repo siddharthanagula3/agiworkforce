@@ -11,6 +11,19 @@ on:
   schedule:
     - cron: '0 7 * * *'
   workflow_dispatch:
+    inputs:
+      rollback:
+        description: 'Roll production web back to the last healthy deployment instead of deploying'
+        type: boolean
+        default: false
+      rollback_reason:
+        description: 'Why production is being rolled back (recorded in the release audit trail)'
+        type: string
+        required: false
+      rollback_to:
+        description: 'Deployment id to roll back to; empty picks the last ready build before the one serving'
+        type: string
+        required: false
 
 concurrency:
   group: production-surfaces
@@ -723,3 +736,58 @@ jobs:
             echo "- Origin: $PRODUCTION_SANDBOX_URL"
             echo "- Isolation headers: $isolation"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # A dispatch, not a failure() step in the run that broke production: builds
+  # nothing, takes the production-web approval, records to the release audit trail.
+  rollback-web:
+    name: Roll production web back to the last healthy deployment
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.rollback }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: production-web
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      AGI_DATABASE_URL: ${{ secrets.AGI_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Self-test the rollback resolver
+        run: node --test scripts/release/rollback.test.mjs
+
+      - name: Roll production back
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          ROLLBACK_REASON: ${{ inputs.rollback_reason }}
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${ROLLBACK_REASON:-}" ]; then
+            echo "::error::rollback_reason is required; it is what the audit trail records"
+            exit 1
+          fi
+          args=(--reason "$ROLLBACK_REASON" --run-url "$RUN_URL")
+          if [ -n "${ROLLBACK_TO:-}" ]; then
+            args+=(--to "$ROLLBACK_TO")
+          fi
+          node scripts/release/rollback.mjs "${args[@]}"
+
+      - name: Verify the production serving path after the rollback
+        env:
+          PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL || 'https://agiworkforce.com' }}
+        run: node scripts/verify-deployment.mjs "$PRODUCTION_WEB_URL"

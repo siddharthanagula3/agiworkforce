@@ -10,4 +10,29 @@ export type AppServerCapabilities = {
   checkpoints: boolean;
   worktrees: boolean;
   models: boolean;
+  /**
+   * v8 surfaces. Each is false on a host that does not implement that
+   * family, so a client hides the control instead of calling a method that
+   * answers "unavailable".
+   */
+  account?: boolean;
+  instructions?: boolean;
+  skills?: boolean;
+  plugins?: boolean;
+  hooks?: boolean;
+  settings?: boolean;
+  commands?: boolean;
+  /**
+   * `thread/delete` removes a thread and everything persisted with it.
+   */
+  threadDelete?: boolean;
+  /**
+   * `thread/reconnect` returns the live state of a running turn, so a
+   * client that lost its connection resumes rendering without a gap.
+   */
+  reconnect?: boolean;
+  /**
+   * Threads carry a writer lease, and `thread/writer/*` hand it over.
+   */
+  writerLease?: boolean;
 };

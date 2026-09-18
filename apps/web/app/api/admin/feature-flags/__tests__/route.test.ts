@@ -122,6 +122,29 @@ describe('feature flag admin API', () => {
     );
   });
 
+  it('refuses a definition under a reserved prefix that no reader spells', async () => {
+    const response = await createFlag(
+      request('POST', '/api/admin/feature-flags', {
+        key: 'capability.browser',
+        description: 'Browser automation',
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.insertFlagDefinition).not.toHaveBeenCalled();
+  });
+
+  it('refuses a ring definition whose default the ring gate would misread', async () => {
+    const response = await createFlag(
+      request('POST', '/api/admin/feature-flags', {
+        key: 'rollout.web.beta.wave_one',
+        description: 'Beta wave one on web',
+        defaultVariant: 'on',
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.insertFlagDefinition).not.toHaveBeenCalled();
+  });
+
   it('refuses a definition whose rules serve an undeclared variant', async () => {
     const response = await createFlag(
       request('POST', '/api/admin/feature-flags', {

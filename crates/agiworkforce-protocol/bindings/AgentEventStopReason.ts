@@ -28,10 +28,4 @@
  * not a variant here.
  */
 export type AgentEventStopReason =
-  | 'end-turn'
-  | 'max-tokens'
-  | 'tool-use'
-  | 'stop-sequence'
-  | 'refusal'
-  | 'cancelled'
-  | 'error';
+  'end-turn' | 'max-tokens' | 'tool-use' | 'stop-sequence' | 'refusal' | 'cancelled' | 'error';

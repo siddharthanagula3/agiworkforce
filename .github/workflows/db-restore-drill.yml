@@ -1,4 +1,4 @@
-name: Database Restore Drill
+name: Recovery Drills
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: db-restore-drill-${{ github.ref }}
+  group: recovery-drills-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -78,3 +78,44 @@ jobs:
           AGI_RESTORE_DRILL_SEED: '1'
           AGI_RESTORE_DRILL_MAX_SECONDS: '600'
         run: node scripts/db-restore-drill-logical.mjs
+
+  # A rollback that has never been run is a claim, not a capability. This drill
+  # resolves the deployment production would revert to and records the result in
+  # the release audit trail, so the dashboard can answer "when was the rollback
+  # path last known to work" with a row rather than an assumption.
+  #
+  # It never acts: `--drill` forces the resolver into dry run, so the only Vercel
+  # calls it makes are a project read and a deployment listing.
+  release-rollback-drill:
+    name: Rollback drill (resolve only, never acts)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      AGI_DATABASE_URL: ${{ secrets.AGI_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Self-test the rollback resolver
+        run: node --test scripts/release/rollback.test.mjs
+
+      - name: Resolve the deployment production would roll back to
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          node scripts/release/rollback.mjs --drill
+          --reason 'scheduled rollback drill' --run-url "$RUN_URL"

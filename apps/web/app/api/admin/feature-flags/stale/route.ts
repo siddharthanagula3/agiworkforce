@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
+import { flagConfigProblems } from '@/lib/feature-flags/config-schema';
 import { cleanUpStaleFlags } from '@/lib/feature-flags/flag-admin-service';
 import { readFeatureFlagConfig } from '@/lib/feature-flags/flag-config';
 import { listFlagDefinitions } from '@/lib/feature-flags/flag-store';
@@ -21,16 +22,18 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
   await requirePlatformAdmin(request);
 
   const config = readFeatureFlagConfig();
+  const definitions = await listFlagDefinitions();
+  const misconfigured = definitions
+    .map((definition) => ({ key: definition.key, problems: flagConfigProblems(definition) }))
+    .filter((entry) => entry.problems.length > 0);
   return NextResponse.json(
-    { stale: findStaleFlags(await listFlagDefinitions()), staleAfterDays: config.staleAfterDays },
+    { stale: findStaleFlags(definitions), misconfigured, staleAfterDays: config.staleAfterDays },
     { headers: NO_STORE },
   );
 }
 
-/**
- * Archive the flags that have stopped deciding anything. A kill switch is never
- * archived by this: archiving one would put back whatever it is holding off.
- */
+// Archive the flags that have stopped deciding anything. A kill switch is never
+// archived: archiving one would put back whatever it is holding off.
 async function handleCleanUp(request: NextRequest): Promise<NextResponse> {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;

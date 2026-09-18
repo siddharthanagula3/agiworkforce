@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-17
+Last updated: 2026-09-18
 
 Until 2026-08-09 nothing in this repository could reach a human when production
 broke. `/api/health` was correct and public, and no scheduled job, uptime
@@ -12,14 +12,14 @@ detection gaps that are still open.
 
 ## What detects an outage
 
-| Detector                       | Where                                                | Cadence                | Reaches a human?                            |
-| ------------------------------ | ---------------------------------------------------- | ---------------------- | ------------------------------------------- |
-| `/api/cron/health-probe`       | `apps/web/app/api/cron/health-probe/route.ts`        | every 10 minutes       | yes, through the dispatcher below           |
-| `/api/cron/evaluate-slo-burn`  | `apps/web/app/api/cron/evaluate-slo-burn/route.ts`   | :05 and :35 every hour | yes, when an error budget is burning        |
-| `/api/cron/page-security-anomalies` | `apps/web/app/api/cron/page-security-anomalies/route.ts` | every 15 minutes  | yes, on a triggered security alert          |
-| `/api/cron/reconcile-credits`  | `apps/web/app/api/cron/reconcile-credits/route.ts`   | daily, 00:30 UTC       | yes, by email, only on terminal settlements |
-| `/api/health`                  | `apps/web/app/api/health/route.ts`                   | on request             | only if something polls it                  |
-| `/status` page                 | `apps/web/app/status/page.tsx`                       | on request             | only if a human opens it                    |
+| Detector                            | Where                                                    | Cadence                | Reaches a human?                            |
+| ----------------------------------- | -------------------------------------------------------- | ---------------------- | ------------------------------------------- |
+| `/api/cron/health-probe`            | `apps/web/app/api/cron/health-probe/route.ts`            | every 10 minutes       | yes, through the dispatcher below           |
+| `/api/cron/evaluate-slo-burn`       | `apps/web/app/api/cron/evaluate-slo-burn/route.ts`       | :05 and :35 every hour | yes, when an error budget is burning        |
+| `/api/cron/page-security-anomalies` | `apps/web/app/api/cron/page-security-anomalies/route.ts` | every 15 minutes       | yes, on a triggered security alert          |
+| `/api/cron/reconcile-credits`       | `apps/web/app/api/cron/reconcile-credits/route.ts`       | daily, 00:30 UTC       | yes, by email, only on terminal settlements |
+| `/api/health`                       | `apps/web/app/api/health/route.ts`                       | on request             | only if something polls it                  |
+| `/status` page                      | `apps/web/app/status/page.tsx`                           | on request             | only if a human opens it                    |
 
 The probe runs the same `runHealthChecks()` the public endpoint and the status
 page run. It calls it directly rather than fetching `/api/health` over HTTP:
@@ -61,12 +61,12 @@ environment variables.
 The rotation is configuration, never a name in the source tree
 (`apps/web/lib/server/incident/on-call.ts`):
 
-| Variable                           | Meaning                                                      | Default |
-| ---------------------------------- | ------------------------------------------------------------ | ------- |
-| `AGI_ONCALL_ROTATION`              | Ordered `handle:email` pairs, comma separated                 | empty   |
-| `AGI_ONCALL_ROTATION_START`        | ISO timestamp the first shift began                           | epoch   |
-| `AGI_ONCALL_SHIFT_HOURS`           | Length of one shift                                           | 168     |
-| `AGI_ONCALL_ESCALATE_AFTER_MINUTES`| How long one level holds before the next one is pulled in     | 15      |
+| Variable                            | Meaning                                                   | Default |
+| ----------------------------------- | --------------------------------------------------------- | ------- |
+| `AGI_ONCALL_ROTATION`               | Ordered `handle:email` pairs, comma separated             | empty   |
+| `AGI_ONCALL_ROTATION_START`         | ISO timestamp the first shift began                       | epoch   |
+| `AGI_ONCALL_SHIFT_HOURS`            | Length of one shift                                       | 168     |
+| `AGI_ONCALL_ESCALATE_AFTER_MINUTES` | How long one level holds before the next one is pulled in | 15      |
 
 Who holds the pager at an instant is `floor((now - start) / shift)` modulo the
 number of responders, so a handover is a date, not a calendar invitation
@@ -83,11 +83,11 @@ Without a pager vendor there is no acknowledgement signal, so the dispatcher
 uses the only one it has: whether the condition is still true on the next
 evaluation.
 
-| Level | Reached when                                        | Who is notified                     |
-| ----- | ---------------------------------------------------- | ----------------------------------- |
-| 1     | first dispatch for this incident key                  | the responder on call                |
-| 2     | still firing after `AGI_ONCALL_ESCALATE_AFTER_MINUTES`| that responder and the next in turn  |
-| 3     | still firing after twice that                         | everyone in the rotation             |
+| Level | Reached when                                           | Who is notified                     |
+| ----- | ------------------------------------------------------ | ----------------------------------- |
+| 1     | first dispatch for this incident key                   | the responder on call               |
+| 2     | still firing after `AGI_ONCALL_ESCALATE_AFTER_MINUTES` | that responder and the next in turn |
+| 3     | still firing after twice that                          | everyone in the rotation            |
 
 The level is held in the key-value store under `agi-incident:<key>` for six
 hours and is cleared the moment the condition clears, so the next incident of
@@ -133,6 +133,19 @@ Publish nothing until the impact can be described accurately, then:
 
 The `degraded` split is deliberate and is asserted by a test: a Stripe outage
 must not page as a whole-platform outage.
+
+## When the bad thing is the release itself
+
+If production broke because of what was deployed rather than a dependency,
+revert first and diagnose after. The path does not live inside the run that
+deployed: dispatch **Deploy Production Surfaces** with `rollback` set, or run
+`node scripts/release/rollback.mjs --reason "..."` from a laptop when Actions is
+itself unavailable. `/admin/releases` shows what production is serving, what it
+last rolled back to, and when the rollback path was last drilled. Full procedure
+and limits: `docs/runbooks/release-rollback.md`.
+
+A rollback does not revert the database. If a destructive migration shipped with
+the build, go to `docs/runbooks/database-backup-restore.md` instead.
 
 ## Triage
 

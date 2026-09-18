@@ -7,6 +7,7 @@ import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { flagConfigProblems } from '@/lib/feature-flags/config-schema';
 import { FlagDefinitionInputSchema, FlagKeySchema } from '@/lib/feature-flags/flag-definition';
 import {
   archiveFlag,
@@ -69,6 +70,10 @@ async function handleUpdate(request: NextRequest, context: FlagRouteContext): Pr
     throw createError.badRequest('Invalid flag definition', parsed.error.flatten());
   }
   if (parsed.data.flag.key !== key) throw createError.badRequest('A flag cannot be renamed');
+  const problems = flagConfigProblems(parsed.data.flag);
+  if (problems.length > 0) {
+    throw createError.badRequest('The definition contradicts its flag namespace', { problems });
+  }
   const flag = await updateFlag(
     { userId: authorized.userId, request },
     parsed.data.flag,

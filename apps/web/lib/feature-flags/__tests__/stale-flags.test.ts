@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { FlagDefinition } from '../flag-definition';
 import { FeatureFlagConfigSchema, readFeatureFlagConfig } from '../flag-config';
-import { killSwitchDefinition } from '../kill-switches';
+import {
+  BROWSER_CAPABILITY,
+  capabilityKillSwitchKey,
+  killSwitchDefinition,
+} from '../kill-switches';
+import { rolloutRingKey } from '../rollout-rings';
 import { archivableStaleFlags, findStaleFlags } from '../stale-flags';
 
 const NOW = Date.parse('2026-09-17T12:00:00.000Z');
@@ -11,6 +16,10 @@ const CONFIG = FeatureFlagConfigSchema.parse({});
 
 function daysAgo(days: number): string {
   return new Date(NOW - days * DAY_MS).toISOString();
+}
+
+function ring(id: string): string {
+  return rolloutRingKey('web', 'beta', id);
 }
 
 function definition(key: string, patch: Partial<FlagDefinition> = {}): FlagDefinition {
@@ -47,24 +56,53 @@ describe('stale flag detection', () => {
 
   it('names a kill switch nobody has revisited, and never archives it automatically', () => {
     const stale = findStaleFlags(
+      [
+        definition(capabilityKillSwitchKey(BROWSER_CAPABILITY), {
+          killSwitch: true,
+          updatedAt: daysAgo(90),
+        }),
+      ],
+      NOW,
+      CONFIG,
+    );
+
+    expect(stale[0]).toMatchObject({ reason: 'killed_and_forgotten', killSwitch: true });
+    expect(archivableStaleFlags(stale, CONFIG)).toEqual([]);
+  });
+
+  it('names a key under a reserved prefix that no reader spells', () => {
+    const stale = findStaleFlags(
+      [
+        definition('capability.browser', { updatedAt: daysAgo(90) }),
+        definition('rollout.new_picker', { updatedAt: daysAgo(90) }),
+      ],
+      NOW,
+      CONFIG,
+    );
+
+    expect(stale.map((flag) => flag.reason)).toEqual(['no_declared_reader', 'no_declared_reader']);
+  });
+
+  it('never archives an engaged kill switch whose key no reader spells', () => {
+    const stale = findStaleFlags(
       [definition('capability.browser', { killSwitch: true, updatedAt: daysAgo(90) })],
       NOW,
       CONFIG,
     );
 
-    expect(stale[0]).toMatchObject({ reason: 'killed_and_forgotten' });
+    expect(stale[0]).toMatchObject({ reason: 'no_declared_reader', killSwitch: true });
     expect(archivableStaleFlags(stale, CONFIG)).toEqual([]);
   });
 
   it('leaves a young flag, a targeted flag and an archived flag alone', () => {
     const stale = findStaleFlags(
       [
-        definition('rollout.new_picker', { updatedAt: daysAgo(3) }),
-        definition('rollout.targeted', {
+        definition(ring('new_picker'), { updatedAt: daysAgo(3) }),
+        definition(ring('targeted'), {
           updatedAt: daysAgo(200),
           rules: [{ id: 'canary', conditions: {}, bucketBy: 'user', variant: 'on' }],
         }),
-        definition('rollout.gone', { updatedAt: daysAgo(200), archivedAt: daysAgo(10) }),
+        definition(ring('gone'), { updatedAt: daysAgo(200), archivedAt: daysAgo(10) }),
       ],
       NOW,
       CONFIG,
@@ -75,7 +113,7 @@ describe('stale flag detection', () => {
 
   it('caps one cleanup run at the configured batch size', () => {
     const definitions = Array.from({ length: 40 }, (_unused, index) =>
-      definition(`rollout.flag_${index}`, { updatedAt: daysAgo(200) }),
+      definition(ring(`flag_${index}`), { updatedAt: daysAgo(200) }),
     );
 
     const archivable = archivableStaleFlags(findStaleFlags(definitions, NOW, CONFIG), CONFIG);
