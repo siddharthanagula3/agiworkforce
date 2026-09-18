@@ -169,7 +169,9 @@ describe('incident dispatch', () => {
   it('reaches the responder on a transport that is not the email vendor when Resend is down', async () => {
     mocks.sendSupportEmail.mockResolvedValue({ delivered: false, reason: 'resend unreachable' });
     process.env[OUT_OF_BAND_WEBHOOK_ENV] = 'https://out-of-band.example.test/hook';
-    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) => new Response('', { status: 200 }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await notifyIncident(ALERT, NOW);
@@ -187,7 +189,9 @@ describe('incident dispatch', () => {
   it('does not use the fallback transport when a channel already carried the alert', async () => {
     process.env[PAGER_WEBHOOK_ENV] = 'https://pager.example.test/hook';
     process.env[OUT_OF_BAND_WEBHOOK_ENV] = 'https://out-of-band.example.test/hook';
-    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) => new Response('', { status: 200 }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await notifyIncident(ALERT, NOW);
@@ -199,7 +203,9 @@ describe('incident dispatch', () => {
   it('publishes the incident to an origin this deployment does not serve', async () => {
     mocks.sendSupportEmail.mockResolvedValue({ delivered: false, reason: 'resend unreachable' });
     process.env[STATUS_MIRROR_WRITE_URL_ENV] = 'https://mirror.example.test/status.json';
-    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) => new Response('', { status: 200 }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await notifyIncident(ALERT, NOW);

@@ -1,4 +1,6 @@
-import type { SearchCandidate, SearchHit } from './types';
+import type { RerankOptions, RerankProvider, SearchCandidate, SearchHit } from './types';
+
+export type { RerankOptions } from './types';
 
 export const RECIPROCAL_RANK_CONSTANT = 60;
 
@@ -38,11 +40,6 @@ function jaccard(left: ReadonlySet<string>, right: ReadonlySet<string>): number 
   let shared = 0;
   for (const term of left) if (right.has(term)) shared += 1;
   return shared / (left.size + right.size - shared);
-}
-
-export interface RerankOptions {
-  limit: number;
-  maxPerSource?: number;
 }
 
 /**
@@ -96,3 +93,10 @@ export function rerankCandidates(
   }
   return kept;
 }
+
+export const HYBRID_RERANK_PROVIDER_ID = 'hybrid-lexical-semantic';
+
+export const hybridRerankProvider: RerankProvider = {
+  id: HYBRID_RERANK_PROVIDER_ID,
+  rerank: rerankCandidates,
+};

@@ -77,6 +77,41 @@ export interface SearchProvider {
   search(request: SearchRequest): Promise<SearchResponse>;
 }
 
+export interface RerankOptions {
+  limit: number;
+  maxPerSource?: number;
+}
+
+/**
+ * Scoring and near-duplicate removal, named so it can be swapped for a hosted
+ * reranker without the storage layer knowing.
+ */
+export interface RerankProvider {
+  readonly id: string;
+  rerank(
+    query: string,
+    candidates: readonly SearchCandidate[],
+    options: RerankOptions,
+  ): SearchHit[];
+}
+
+/** A named index a search runs against: Postgres today, anything registered tomorrow. */
+export interface SearchStorageProvider extends SearchProvider {
+  readonly id: string;
+}
+
+export interface NamedProvider {
+  readonly id: string;
+}
+
+export interface ProviderRegistry<T extends NamedProvider> {
+  register(provider: T): void;
+  unregister(id: string): boolean;
+  get(id: string): T | undefined;
+  list(): T[];
+  ids(): string[];
+}
+
 export type EmbeddingPurpose = 'document' | 'query';
 
 export interface EmbeddingResult {

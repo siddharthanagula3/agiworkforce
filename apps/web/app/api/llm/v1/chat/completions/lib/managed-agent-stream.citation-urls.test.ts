@@ -188,7 +188,7 @@ describe('a managed agent turn resolves its citation hrefs', () => {
     await readAll(buildManagedAgentStream(input()));
     await vi.waitFor(() => expect(events).toContain('patched'));
 
-    expect(insertedMetadata()['searchResults']).toEqual([
+    expect(insertedMetadata()['searchResults']).toMatchObject([
       { url: REDIRECT, title: 'apnews.com', snippet: 'a snippet' },
     ]);
     expect(events.indexOf('patched')).toBeGreaterThan(events.indexOf('terminal-visible'));

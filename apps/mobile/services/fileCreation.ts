@@ -1,4 +1,3 @@
-
 import {
   documentDirectory,
   getInfoAsync,
@@ -10,6 +9,7 @@ import {
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
+import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agiworkforce/types';
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
@@ -29,6 +29,21 @@ export interface ExportResult {
   uri: string;
   format: ExportFormat;
   fileName: string;
+  /**
+   * The same file the web and the desktop describe. The phone used to return a
+   * bare uri, so an export taken here had no identity anything else recognised.
+   */
+  file: ManagedFile;
+}
+
+function exportedFile(uri: string, fileName: string, lineage: Partial<FileLineage> = {}) {
+  return localDeviceManagedFile({
+    path: uri,
+    name: fileName,
+    origin: 'generated',
+    sourceSurface: 'mobile',
+    lineage,
+  });
 }
 
 function sanitizeFileName(title: string): string {
@@ -170,7 +185,11 @@ function escapeHtml(text: string): string {
  * @returns The file URI and metadata
  * @throws {Error} On PDF generation or file system errors
  */
-export async function exportToPDF(content: string, title: string): Promise<ExportResult> {
+export async function exportToPDF(
+  content: string,
+  title: string,
+  lineage: Partial<FileLineage> = {},
+): Promise<ExportResult> {
   if (!content.trim()) {
     throw new Error('Cannot export empty content');
   }
@@ -189,7 +208,7 @@ export async function exportToPDF(content: string, title: string): Promise<Expor
 
   await moveAsync({ from: uri, to: destUri });
 
-  return { uri: destUri, format: 'pdf', fileName };
+  return { uri: destUri, format: 'pdf', fileName, file: exportedFile(destUri, fileName, lineage) };
 }
 
 /**
@@ -200,7 +219,11 @@ export async function exportToPDF(content: string, title: string): Promise<Expor
  * @returns The file URI and metadata
  * @throws {Error} On file system errors
  */
-export async function exportToText(content: string, title: string): Promise<ExportResult> {
+export async function exportToText(
+  content: string,
+  title: string,
+  lineage: Partial<FileLineage> = {},
+): Promise<ExportResult> {
   if (!content.trim()) {
     throw new Error('Cannot export empty content');
   }
@@ -217,7 +240,7 @@ export async function exportToText(content: string, title: string): Promise<Expo
     encoding: EncodingType.UTF8,
   });
 
-  return { uri: destUri, format: 'text', fileName };
+  return { uri: destUri, format: 'text', fileName, file: exportedFile(destUri, fileName, lineage) };
 }
 
 /**
@@ -340,9 +363,28 @@ async function writeGeneratedFileBytes(fileName: string, base64: string): Promis
   return destUri;
 }
 
-export async function downloadGeneratedFile(url: string, fileName: string): Promise<string> {
+const CLOUD_FILE_PATH = /\/api\/files\/([^/?#]+)/;
+
+/**
+ * A downloaded cloud file is the same file on this device, so it carries the
+ * cloud asset id it was copied from rather than starting a new history.
+ */
+export async function downloadGeneratedFileAsManagedFile(
+  url: string,
+  fileName: string,
+): Promise<ManagedFile> {
   const { base64 } = await fetchGeneratedFileBytes(url);
-  return writeGeneratedFileBytes(fileName, base64);
+  const destUri = await writeGeneratedFileBytes(fileName, base64);
+  const sourceFileId = CLOUD_FILE_PATH.exec(url)?.[1] ?? null;
+  return exportedFile(
+    destUri,
+    fileName,
+    sourceFileId ? { derivedFromFileId: sourceFileId, derivation: 'copy' } : {},
+  );
+}
+
+export async function downloadGeneratedFile(url: string, fileName: string): Promise<string> {
+  return (await downloadGeneratedFileAsManagedFile(url, fileName)).uri;
 }
 
 const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeType: string }>> = {
@@ -379,14 +421,23 @@ export async function shareGeneratedImage(
   });
 }
 
-export async function exportToMarkdown(content: string, title: string): Promise<ExportResult> {
+export async function exportToMarkdown(
+  content: string,
+  title: string,
+  lineage: Partial<FileLineage> = {},
+): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
   const header = `# ${title}\n\n_Exported: ${new Date().toISOString()}_\n\n---\n\n`;
   await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.md`;
   const destUri = `${EXPORTS_DIR}${fileName}`;
   await writeAsStringAsync(destUri, header + content, { encoding: EncodingType.UTF8 });
-  return { uri: destUri, format: 'markdown', fileName };
+  return {
+    uri: destUri,
+    format: 'markdown',
+    fileName,
+    file: exportedFile(destUri, fileName, lineage),
+  };
 }
 
 import type { ChatMessage } from '@/types/chat';

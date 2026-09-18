@@ -5,6 +5,10 @@ export {
   type EmbeddingProvider,
   type EmbeddingPurpose,
   type EmbeddingResult,
+  type NamedProvider,
+  type ProviderRegistry,
+  type RerankOptions,
+  type RerankProvider,
   type SearchCandidate,
   type SearchChunkMetadata,
   type SearchHit,
@@ -13,14 +17,17 @@ export {
   type SearchRequest,
   type SearchResponse,
   type SearchSourceKind,
+  type SearchStorageProvider,
   type SemanticSearchState,
   type TextWindow,
 } from './types';
 export { DEFAULT_TEXT_WINDOW, windowText, type WindowOptions } from './chunk';
+export { createProviderRegistry } from './registry';
 export {
+  HYBRID_RERANK_PROVIDER_ID,
   RECIPROCAL_RANK_CONSTANT,
+  hybridRerankProvider,
   reciprocalRankScore,
   rerankCandidates,
   searchTerms,
-  type RerankOptions,
 } from './rank';

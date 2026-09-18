@@ -13,6 +13,19 @@ import {
   hasStructuredPageData,
 } from '@/lib/url-fetch/url-fetch-tool';
 import { recordPerplexitySearchCost } from '@/lib/web-search/perplexity-search-cost';
+import {
+  configuredWebSearchProviders,
+  registerWebSearchProvider,
+  webSearchProviderDescriptorForHost,
+  webSearchProviderDescriptors,
+  webSearchDelivery,
+  webSearchSources,
+  type WebSearchProvider,
+  type WebSearchProviderItem,
+  type WebSearchProviderOutcome,
+  type WebSearchProviderRequest,
+} from '@/lib/web-search/search-provider';
+import { sourceDeliveryLabel, type SearchSource } from '@agiworkforce/types';
 
 export const WEB_SEARCH_TOOL = 'web_search';
 
@@ -90,7 +103,15 @@ export type WebSearchErrorCode =
   | 'timeout';
 
 export type WebSearchOutcome =
-  | { ok: true; query: string; results: WebSearchResultItem[]; queryTruncated?: boolean }
+  | {
+      ok: true;
+      query: string;
+      results: WebSearchResultItem[];
+      /** Which registered provider answered, so provenance names it. */
+      providerId: string;
+      retrievedAt: string;
+      queryTruncated?: boolean;
+    }
   | {
       ok: false;
       errorCode: WebSearchErrorCode;
@@ -132,7 +153,7 @@ function err(
   errorCode: WebSearchErrorCode,
   error: string,
   extra: { status?: number; retryable?: boolean } = {},
-): WebSearchOutcome {
+): Extract<WebSearchOutcome, { ok: false }> {
   return {
     ok: false,
     errorCode,
@@ -196,7 +217,7 @@ function isHttpUrl(url: string): boolean {
 }
 
 export function webSearchBackendConfigured(overrides: { apiKey?: string } = {}): boolean {
-  return Boolean(overrides.apiKey ?? process.env['PERPLEXITY_API_KEY']);
+  return configuredWebSearchProviders(overrides).length > 0;
 }
 
 interface PerplexitySearchResultWire {
@@ -204,42 +225,40 @@ interface PerplexitySearchResultWire {
   url?: unknown;
   snippet?: unknown;
   date?: unknown;
+  last_updated?: unknown;
 }
 
 interface PerplexitySearchResponseWire {
   results?: unknown;
 }
 
-export async function executeWebSearch(
-  args: Record<string, unknown>,
-  overrides: WebSearchOverrides = {},
-): Promise<WebSearchOutcome> {
-  const callerSignal = overrides.signal;
-  if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
+function providerErr(
+  errorCode: Exclude<WebSearchErrorCode, 'invalid_tool_input'>,
+  error: string,
+  extra: { status?: number; retryable?: boolean } = {},
+): Extract<WebSearchProviderOutcome, { ok: false }> {
+  return {
+    ok: false,
+    errorCode,
+    error,
+    ...(extra.status !== undefined ? { status: extra.status } : {}),
+    ...(extra.retryable ? { retryable: true } : {}),
+  };
+}
 
-  const rawQuery = args['query'];
-  if (typeof rawQuery !== 'string' || rawQuery.trim().length === 0) {
-    return err('invalid_tool_input', 'web_search requires a non-empty string "query" argument.');
-  }
-  const trimmedQuery = rawQuery.trim();
-  const query = trimmedQuery.slice(0, MAX_QUERY_LENGTH);
-  const queryTruncated = query.length < trimmedQuery.length;
+const perplexityDescriptor = webSearchProviderDescriptorForHost(
+  new URL(PERPLEXITY_SEARCH_URL).hostname,
+);
 
-  const apiKey = overrides.apiKey ?? process.env['PERPLEXITY_API_KEY'];
-  if (!apiKey) {
-    return err(
-      'not_configured',
-      'Web search is not configured on this server (missing PERPLEXITY_API_KEY).',
-    );
-  }
+async function perplexitySearch(
+  request: WebSearchProviderRequest,
+): Promise<WebSearchProviderOutcome> {
+  const apiKey = request.apiKey ?? process.env[perplexityDescriptor?.apiKeyEnv ?? ''];
+  if (!apiKey) return providerErr('not_configured', 'no API key is configured.');
 
-  const fetchImpl = overrides.fetchImpl ?? fetch;
-  const timeoutMs = overrides.timeoutMs ?? WEB_SEARCH_TIMEOUT_MS;
-  const maxResults = Math.max(
-    1,
-    Math.min(overrides.maxResults ?? WEB_SEARCH_MAX_RESULTS, WEB_SEARCH_MAX_RESULTS),
-  );
-
+  const callerSignal = request.signal;
+  const fetchImpl = request.fetchImpl ?? fetch;
+  const timeoutMs = request.timeoutMs ?? WEB_SEARCH_TIMEOUT_MS;
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), timeoutMs);
   const cancel = () => controller.abort();
@@ -253,9 +272,11 @@ export async function executeWebSearch(
     for (let attempt = 0; attempt <= WEB_SEARCH_TRANSIENT_RETRIES; attempt += 1) {
       if (attempt > 0) {
         await delayUnlessAborted(WEB_SEARCH_TRANSIENT_RETRY_DELAY_MS, controller.signal);
-        if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
+        if (callerSignal?.aborted) return providerErr('cancelled', CANCELLED_MESSAGE);
         if (controller.signal.aborted) {
-          return err('timeout', `Web search timed out after ${timeoutMs}ms.`, { retryable: true });
+          return providerErr('timeout', `Web search timed out after ${timeoutMs}ms.`, {
+            retryable: true,
+          });
         }
       }
       try {
@@ -266,16 +287,20 @@ export async function executeWebSearch(
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ query, max_results: maxResults }),
+          body: JSON.stringify({ query: request.query, max_results: request.maxResults }),
         });
       } catch (fetchErr) {
-        if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
+        if (callerSignal?.aborted) return providerErr('cancelled', CANCELLED_MESSAGE);
         if (controller.signal.aborted) {
-          return err('timeout', `Web search timed out after ${timeoutMs}ms.`, { retryable: true });
+          return providerErr('timeout', `Web search timed out after ${timeoutMs}ms.`, {
+            retryable: true,
+          });
         }
         if (attempt < WEB_SEARCH_TRANSIENT_RETRIES) continue;
         const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
-        return err('upstream_error', `Web search request failed: ${msg}`, { retryable: true });
+        return providerErr('upstream_error', `Web search request failed: ${msg}`, {
+          retryable: true,
+        });
       }
       if (
         response.ok ||
@@ -287,7 +312,7 @@ export async function executeWebSearch(
     }
 
     if (!response) {
-      return err('upstream_error', 'Web search produced no response.', { retryable: true });
+      return providerErr('upstream_error', 'Web search produced no response.', { retryable: true });
     }
 
     if (!response.ok) {
@@ -299,7 +324,7 @@ export async function executeWebSearch(
       }
       const retryable =
         response.status === RATE_LIMITED_STATUS || response.status >= SERVER_ERROR_FLOOR;
-      return err(
+      return providerErr(
         response.status === RATE_LIMITED_STATUS ? 'rate_limited' : 'upstream_error',
         `the search backend answered HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`,
         { status: response.status, retryable },
@@ -311,28 +336,103 @@ export async function executeWebSearch(
       parsed = (await response.json()) as PerplexitySearchResponseWire;
     } catch (parseErr) {
       const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-      return err('upstream_error', `Failed to parse Perplexity Search API response: ${msg}`);
+      return providerErr('upstream_error', `Failed to parse the search response: ${msg}`);
     }
 
     const rawResults = Array.isArray(parsed.results)
       ? (parsed.results as PerplexitySearchResultWire[])
       : [];
-    const results: WebSearchResultItem[] = [];
+    const items: WebSearchProviderItem[] = [];
     for (const r of rawResults) {
-      if (results.length >= maxResults) break;
+      if (items.length >= request.maxResults) break;
       if (typeof r?.url !== 'string' || !isHttpUrl(r.url)) continue;
-      const title = typeof r.title === 'string' ? r.title : '';
       const rawSnippet = typeof r.snippet === 'string' ? r.snippet : '';
-      const snippet =
-        rawSnippet.length > MAX_SNIPPET_LENGTH
-          ? `${rawSnippet.slice(0, MAX_SNIPPET_LENGTH)}…`
-          : rawSnippet;
-      const date = typeof r.date === 'string' ? r.date : undefined;
-      results.push({ url: r.url, title, snippet, ...(date ? { date } : {}) });
+      items.push({
+        url: r.url,
+        title: typeof r.title === 'string' ? r.title : '',
+        snippet:
+          rawSnippet.length > MAX_SNIPPET_LENGTH
+            ? `${rawSnippet.slice(0, MAX_SNIPPET_LENGTH)}…`
+            : rawSnippet,
+        publishedAt: typeof r.date === 'string' ? r.date : null,
+        indexedAt: typeof r.last_updated === 'string' ? r.last_updated : null,
+      });
+    }
+    return { ok: true, items };
+  } finally {
+    clearTimeout(deadline);
+    callerSignal?.removeEventListener('abort', cancel);
+  }
+}
+
+if (perplexityDescriptor) {
+  const provider: WebSearchProvider = {
+    id: perplexityDescriptor.id,
+    delivery: perplexityDescriptor.delivery,
+    isConfigured: (overrides) =>
+      Boolean(overrides?.apiKey ?? process.env[perplexityDescriptor.apiKeyEnv]),
+    search: perplexitySearch,
+    recordCost: recordPerplexitySearchCost,
+  };
+  registerWebSearchProvider(provider);
+}
+
+function notConfiguredMessage(): string {
+  const names = webSearchProviderDescriptors().map((descriptor) => descriptor.apiKeyEnv);
+  return `Web search is not configured on this server (no key for ${names.join(', ')}).`;
+}
+
+/**
+ * Runs the turn's search against the configured providers in declaration
+ * order. A retryable failure falls through to the next provider, so one
+ * backend being down is not the turn losing its search.
+ */
+export async function executeWebSearch(
+  args: Record<string, unknown>,
+  overrides: WebSearchOverrides = {},
+): Promise<WebSearchOutcome> {
+  if (overrides.signal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
+
+  const rawQuery = args['query'];
+  if (typeof rawQuery !== 'string' || rawQuery.trim().length === 0) {
+    return err('invalid_tool_input', 'web_search requires a non-empty string "query" argument.');
+  }
+  const trimmedQuery = rawQuery.trim();
+  const query = trimmedQuery.slice(0, MAX_QUERY_LENGTH);
+  const queryTruncated = query.length < trimmedQuery.length;
+
+  const providers = configuredWebSearchProviders(
+    overrides.apiKey !== undefined ? { apiKey: overrides.apiKey } : {},
+  );
+  if (providers.length === 0) return err('not_configured', notConfiguredMessage());
+
+  const maxResults = Math.max(
+    1,
+    Math.min(overrides.maxResults ?? WEB_SEARCH_MAX_RESULTS, WEB_SEARCH_MAX_RESULTS),
+  );
+
+  let lastFailure: Extract<WebSearchOutcome, { ok: false }> | null = null;
+  for (const provider of providers) {
+    const outcome = await provider.search({
+      query,
+      maxResults,
+      ...(overrides.apiKey !== undefined ? { apiKey: overrides.apiKey } : {}),
+      ...(overrides.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {}),
+      ...(overrides.timeoutMs !== undefined ? { timeoutMs: overrides.timeoutMs } : {}),
+      ...(overrides.signal ? { signal: overrides.signal } : {}),
+    });
+
+    if (!outcome.ok) {
+      lastFailure = err(outcome.errorCode, outcome.error, {
+        ...(outcome.status !== undefined ? { status: outcome.status } : {}),
+        ...(outcome.retryable ? { retryable: true } : {}),
+      });
+      if (outcome.errorCode === 'cancelled') return lastFailure;
+      continue;
     }
 
-    if (overrides.userId) {
-      await recordPerplexitySearchCost({
+    if (overrides.userId && provider.recordCost) {
+      await provider.recordCost({
         userId: overrides.userId,
         organizationId: overrides.organizationId ?? null,
         turnRef: overrides.turnRef ?? query,
@@ -342,11 +442,36 @@ export async function executeWebSearch(
       });
     }
 
-    return { ok: true, query, results, ...(queryTruncated ? { queryTruncated: true } : {}) };
-  } finally {
-    clearTimeout(deadline);
-    callerSignal?.removeEventListener('abort', cancel);
+    return {
+      ok: true,
+      query,
+      providerId: provider.id,
+      retrievedAt: new Date().toISOString(),
+      results: outcome.items.map((item) => ({
+        url: item.url,
+        title: item.title,
+        snippet: item.snippet,
+        ...(item.publishedAt ? { date: item.publishedAt } : {}),
+      })),
+      ...(queryTruncated ? { queryTruncated: true } : {}),
+    };
   }
+
+  return lastFailure ?? err('upstream_error', 'Web search produced no response.');
+}
+
+/**
+ * The turn's results as canonical sources: stable citation id, the provider
+ * that returned them, and a delivery tag so an indexed result is never
+ * presented as a live fetch.
+ */
+export function webSearchSourcesFromOutcome(outcome: WebSearchOutcome): SearchSource[] {
+  if (!outcome.ok) return [];
+  return webSearchSources({
+    providerId: outcome.providerId,
+    retrievedAt: outcome.retrievedAt,
+    results: outcome.results,
+  });
 }
 
 const UNTRUSTED_WEB_RESULTS_TAG = 'untrusted_web_results';
@@ -386,6 +511,9 @@ export function formatWebSearchResultForModel(
     numbered.length < outcome.results.length
       ? `\n(Note: ${outcome.results.length - numbered.length} further result(s) were not added; this turn has reached its source limit.)`
       : '';
+  // The model is told how the results reached it, so an answer never presents
+  // an indexed or cached copy as a live read of the page.
+  const deliveryNote = ` (results ${sourceDeliveryLabel(webSearchDelivery(outcome.providerId))})`;
   const lines = numbered.map(({ result: r, position }) => {
     const datePart = r.date ? ` (${r.date})` : '';
     const snippetPart = r.snippet ? `\n   ${r.snippet}` : '';
@@ -402,7 +530,7 @@ export function formatWebSearchResultForModel(
     UNTRUSTED_WEB_RESULTS_SENTINEL,
   );
 
-  return `Search results for "${outcome.query.replaceAll('<', '&lt;')}"${truncationNote}${droppedNote}\n\n${fenced}`;
+  return `Search results for "${outcome.query.replaceAll('<', '&lt;')}"${deliveryNote}${truncationNote}${droppedNote}\n\n${fenced}`;
 }
 
 export function searchPlanBoundExhaustedMessage(limit: number, windowDays: number): string {

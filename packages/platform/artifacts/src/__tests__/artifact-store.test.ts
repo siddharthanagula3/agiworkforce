@@ -108,4 +108,34 @@ describe('createArtifactStore', () => {
     expect(s.getState().artifacts).toHaveLength(0);
     expect(s.getState().versionsById).toEqual({});
   });
+
+  it('restoreArtifactVersion appends the older content as the newest version', () => {
+    const s = createArtifactStore();
+    s.getState().upsertArtifact(artifact({ content: 'v1' }));
+    s.getState().upsertArtifact(artifact({ content: 'v2' }));
+    s.getState().upsertArtifact(artifact({ content: 'v3' }));
+
+    expect(s.getState().restoreArtifactVersion('a1', 1)).toBe(true);
+
+    const current = s.getState().getArtifact('a1');
+    expect(current?.content).toBe('v1');
+    expect(current?.version).toBe(4);
+    expect(
+      s
+        .getState()
+        .getArtifactVersions('a1')
+        .map((v) => v.content),
+    ).toEqual(['v1', 'v2', 'v3', 'v1']);
+  });
+
+  it('restoreArtifactVersion refuses a version that is already current or unknown', () => {
+    const s = createArtifactStore();
+    s.getState().upsertArtifact(artifact({ content: 'v1' }));
+    s.getState().upsertArtifact(artifact({ content: 'v2' }));
+
+    expect(s.getState().restoreArtifactVersion('a1', 2)).toBe(false);
+    expect(s.getState().restoreArtifactVersion('a1', 9)).toBe(false);
+    expect(s.getState().restoreArtifactVersion('missing', 1)).toBe(false);
+    expect(s.getState().getArtifactVersions('a1')).toHaveLength(2);
+  });
 });

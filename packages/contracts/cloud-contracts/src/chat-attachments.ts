@@ -1,7 +1,10 @@
 import {
   createFileReference,
   isTextLikeFileMediaType,
+  toManagedFile,
+  type FileLineage,
   type FileReference,
+  type ManagedFile,
   type SourceSurface,
 } from '@agiworkforce/types';
 import { z } from 'zod';
@@ -188,4 +191,21 @@ export function chatAttachmentFileReference(
     checksumSha256: options.checksumSha256 ?? null,
     sourceSurface: options.sourceSurface ?? null,
   });
+}
+
+/**
+ * The same reference carrying the version and lineage every surface stores it
+ * with. An upload is always version 1 of its own chain: it was not derived from
+ * anything the platform holds, which is exactly what an empty
+ * `derivedFromFileId` says.
+ */
+export function chatAttachmentManagedFile(
+  attachment: ManagedCloudChatAttachment,
+  options: {
+    sourceSurface?: SourceSurface | null;
+    checksumSha256?: string | null;
+    lineage?: Partial<FileLineage>;
+  } = {},
+): ManagedFile {
+  return toManagedFile(chatAttachmentFileReference(attachment, options), options.lineage ?? {});
 }

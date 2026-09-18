@@ -207,7 +207,11 @@ describe('cancellation', () => {
 
     const missing = vi.fn().mockResolvedValue([]);
     await expect(
-      requestJobCancellation(database(missing), { jobId: 'job-9', requestedBy: 'user-1' }),
+      requestJobCancellation(database(missing), {
+        jobId: 'job-9',
+        userId: 'user-1',
+        requestedBy: 'user-1',
+      }),
     ).resolves.toBe('unknown');
   });
 

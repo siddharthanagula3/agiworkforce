@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createHash } from 'crypto';
 import type { GeneratedFileSurface } from '@agiworkforce/cloud-contracts';
-import { resolveGeneratedFileKind } from '@agiworkforce/types';
+import { resolveGeneratedFileKind, type FileDerivation } from '@agiworkforce/types';
 import {
   deleteStoredMedia,
   isGeneratedMediaStorageConfigured,
@@ -33,8 +33,90 @@ const _generatedFileWireContractCheck: (
 void _generatedFileWireContractCheck;
 
 export type PersistGeneratedFileOutcome =
-  | { ok: true; file: GeneratedFileWire }
+  | { ok: true; file: GeneratedFileWire; version: number; parentFileId: string | null }
   | { ok: false; reason: 'not_configured' | 'too_large' | 'storage_error' };
+
+type MediaAssetDb = Parameters<typeof insertMediaAsset>[1];
+
+/**
+ * The file this one was made out of. A `parentFileId` is a different file the
+ * bytes derive from (an upload turned into an export); `supersedesFileId` is an
+ * earlier revision of the same file, which is a version rather than a lineage
+ * edge and is why the two cannot be one field.
+ */
+export interface GeneratedFileProvenance {
+  parentFileId?: string;
+  derivation?: FileDerivation;
+  supersedesFileId?: string;
+  generatedByTurnId?: string;
+}
+
+async function recordFileLineage(
+  db: MediaAssetDb,
+  input: {
+    userId: string;
+    organizationId: string | null;
+    childFileId: string;
+    parentFileId: string;
+    derivation: FileDerivation;
+    generatedByTurnId: string | null;
+    conversationId: string | null;
+  },
+): Promise<void> {
+  try {
+    await db.query(
+      `insert into public.file_lineage
+         (user_id, organization_id, child_file_id, parent_file_id, derivation,
+          generated_by_turn_id, conversation_id)
+       values ($1, $2::uuid, $3, $4, $5, $6, $7::uuid)
+       on conflict (child_file_id, parent_file_id, derivation) do nothing`,
+      [
+        input.userId,
+        input.organizationId,
+        input.childFileId,
+        input.parentFileId,
+        input.derivation,
+        input.generatedByTurnId,
+        input.conversationId,
+      ],
+    );
+  } catch (err) {
+    // The bytes are already stored and usable; only the provenance edge is lost,
+    // so this is reported rather than rolled back.
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err), ...input },
+      'Failed to record file lineage for a generated file',
+    );
+  }
+}
+
+async function recordFileRevision(
+  db: MediaAssetDb,
+  input: { userId: string; assetId: string; supersedesFileId: string },
+): Promise<number> {
+  try {
+    const rows = await db.query<{ version: number | string }>(
+      `update public.media_assets as revised
+          set version = coalesce(parent.version, 1) + 1,
+              parent_version_id = parent.id
+         from public.media_assets as parent
+        where revised.id = $1::uuid
+          and parent.id = $2::uuid
+          and revised.user_id = $3
+          and parent.user_id = $3
+        returning revised.version`,
+      [input.assetId, input.supersedesFileId, input.userId],
+    );
+    const version = Number(rows[0]?.version ?? 1);
+    return Number.isFinite(version) && version > 0 ? Math.floor(version) : 1;
+  } catch (err) {
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err), ...input },
+      'Failed to record a generated file revision',
+    );
+    return 1;
+  }
+}
 
 export function generatedFileKind(fileName: string, mime: string): string {
   return resolveGeneratedFileKind(fileName, mime);
@@ -143,8 +225,9 @@ export async function persistGeneratedFileBytes(
     prompt?: string;
     conversationId?: string;
     extraMetadata?: Record<string, unknown>;
+    provenance?: GeneratedFileProvenance;
   },
-  callerDb?: Parameters<typeof insertMediaAsset>[1],
+  callerDb?: MediaAssetDb,
 ): Promise<PersistGeneratedFileOutcome> {
   const { userId, organizationId, data, mimeType, filename, provider, origin, model, prompt } =
     params;
@@ -204,8 +287,31 @@ export async function persistGeneratedFileBytes(
       return { ok: false, reason: 'storage_error' };
     }
 
+    const provenance = params.provenance ?? {};
+    const version = provenance.supersedesFileId
+      ? await recordFileRevision(db, {
+          userId,
+          assetId,
+          supersedesFileId: provenance.supersedesFileId,
+        })
+      : 1;
+
+    if (provenance.parentFileId) {
+      await recordFileLineage(db, {
+        userId,
+        organizationId,
+        childFileId: assetId,
+        parentFileId: provenance.parentFileId,
+        derivation: provenance.derivation ?? 'export',
+        generatedByTurnId: provenance.generatedByTurnId ?? null,
+        conversationId: params.conversationId ?? null,
+      });
+    }
+
     return {
       ok: true,
+      version,
+      parentFileId: provenance.parentFileId ?? null,
       file: {
         id: assetId,
         file_name: filename,
