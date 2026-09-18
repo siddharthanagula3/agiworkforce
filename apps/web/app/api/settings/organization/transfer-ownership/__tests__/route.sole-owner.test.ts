@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+process.env['CSRF_SECRET'] = 'transfer-step-up-secret-long-enough-here';
+
 const { mockQuery, mockExecute, mockTransaction } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockExecute: vi.fn(),
@@ -53,6 +55,8 @@ vi.mock('@/lib/server/rls-db', () => ({
 
 import { BUILT_IN_ORGANIZATION_ROLES } from '@agiworkforce/types';
 import { POST } from '../route';
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { PATCH, DELETE } from '@/app/api/settings/team/[memberId]/route';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
@@ -76,9 +80,16 @@ function ownerPermissions() {
 }
 
 function transferRequest(body: unknown) {
+  const organizationId = (body as { organizationId?: string }).organizationId ?? '';
+  const { token } = createStepUpGrant({
+    userId: 'current-owner',
+    action: 'organization.transfer_ownership',
+    resourceId: organizationId,
+    method: 'totp',
+  });
   return new Request('http://localhost:3000/api/settings/organization/transfer-ownership', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', [STEP_UP_TOKEN_HEADER]: token },
     body: JSON.stringify(body),
   }) as never;
 }

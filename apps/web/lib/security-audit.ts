@@ -1,6 +1,8 @@
 import 'server-only';
+import { AUDIT_EVENT_SCHEMA_VERSION, type AuditRetentionClass } from '@agiworkforce/types';
 import { getNeonDb } from './server/neon-db';
 import { logger } from './logger';
+import { getRequestId } from './observability/trace-context';
 import { getKeyValueStore } from './server/key-value';
 import { trackAuditedProductEvent } from './server/product-analytics';
 
@@ -280,6 +282,20 @@ export type AuditEventType =
   | 'skill_installed'
   | 'skill_uninstalled'
   | 'remote_pairing_initiated'
+  /**
+   * The pairing code was redeemed by a device. Distinct from initiation: the
+   * trail has to say which side completed the link, not only that one was asked
+   * for, because an unclaimed code is not access and a claimed one is.
+   */
+  | 'remote_pairing_claimed'
+  /**
+   * A named high-risk action demanded a fresh second factor. All three outcomes
+   * are recorded: the demand, the proof that satisfied it, and every rejected
+   * attempt, so a failed run at an irreversible action is visible on its own.
+   */
+  | 'step_up_challenged'
+  | 'step_up_satisfied'
+  | 'step_up_failed'
   | 'encryption_key_rotated'
   /**
    * A workspace brought its own key, retired the one it was using, or withdrew
@@ -291,6 +307,12 @@ export type AuditEventType =
   | 'encryption_key_revoked'
   | 'data_region_change_requested'
   | 'data_region_changed'
+  /**
+   * A provider call was refused because it would have crossed the trust
+   * boundary the caller chose: a platform key on a BYOK account, an
+   * unapproved fallback in Local, or a credential found in the payload.
+   */
+  | 'provider_egress_refused'
   | 'tool_executed'
   | 'browser_action'
   | 'computer_use_action'
@@ -377,6 +399,49 @@ export interface AuditEvent {
   detail?: AuditEventDetail;
   organizationId?: string | null;
   surface?: string;
+  /** Joins this record to the request and span that caused it. */
+  correlationId?: string;
+  /** The event this one is a consequence of, absent when it starts a chain. */
+  causationId?: string;
+  operationRef?: string;
+  retentionClass?: AuditRetentionClass;
+}
+
+/**
+ * Obligations that outlive the security record of the same subject: an export,
+ * a deletion, a legal hold and a retention sweep are what a compliance reader
+ * asks for years later. Everything else this module writes is security.
+ */
+const COMPLIANCE_AUDIT_EVENT_TYPES: ReadonlySet<AuditEventType> = new Set<AuditEventType>([
+  'data_exported',
+  'account_deletion_requested',
+  'account_deletion_cancelled',
+  'organization_deletion_requested',
+  'organization_deletion_cancelled',
+  'organization_deletion_blocked',
+  'organization_deletion_completed',
+  'legal_hold_created',
+  'legal_hold_released',
+  'retention_sweep_completed',
+  'domain_retention_sweep_completed',
+  'retention_policy_changed',
+  'data_region_change_requested',
+  'data_region_changed',
+]);
+
+export function auditRetentionClassFor(eventType: AuditEventType): AuditRetentionClass {
+  return COMPLIANCE_AUDIT_EVENT_TYPES.has(eventType) ? 'compliance' : 'security';
+}
+
+export function auditEnvelopeFields(event: AuditEvent): Record<string, unknown> {
+  const correlationId = event.correlationId ?? getRequestId() ?? undefined;
+  return {
+    schema_version: AUDIT_EVENT_SCHEMA_VERSION,
+    retention_class: event.retentionClass ?? auditRetentionClassFor(event.eventType),
+    ...(correlationId ? { correlation_id: correlationId } : {}),
+    ...(event.causationId ? { causation_id: event.causationId } : {}),
+    ...(event.operationRef ? { operation_ref: event.operationRef } : {}),
+  };
 }
 
 const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & string>([
@@ -505,7 +570,10 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
   }
 
   try {
-    const detailsForSecurityLog: Record<string, unknown> = { ...detail };
+    const detailsForSecurityLog: Record<string, unknown> = {
+      ...detail,
+      ...auditEnvelopeFields(event),
+    };
     if (typeof detail['resourceType'] === 'string') {
       detailsForSecurityLog['resource_type'] = detail['resourceType'];
     }
@@ -547,7 +615,10 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
   if (!event.organizationId) return;
 
   try {
-    const enterpriseMetadata: Record<string, unknown> = { ...detail };
+    const enterpriseMetadata: Record<string, unknown> = {
+      ...detail,
+      ...auditEnvelopeFields(event),
+    };
     if (ipAddress) enterpriseMetadata['ipAddress'] = ipAddress;
     if (userAgent) enterpriseMetadata['userAgent'] = userAgent;
 
@@ -645,7 +716,12 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'skill_uninstalled':
       return 'skill';
     case 'remote_pairing_initiated':
+    case 'remote_pairing_claimed':
       return 'remote_pairing';
+    case 'step_up_challenged':
+    case 'step_up_satisfied':
+    case 'step_up_failed':
+      return 'step_up';
     case 'identity_linked':
     case 'identity_unlinked':
       return 'identity';
@@ -661,6 +737,8 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'data_region_change_requested':
     case 'data_region_changed':
       return 'data_region';
+    case 'provider_egress_refused':
+      return 'provider_egress';
     case 'tool_executed':
       return 'tool';
     case 'browser_action':

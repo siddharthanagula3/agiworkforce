@@ -18,6 +18,7 @@ import {
   type CloudCodePullRequestResponse,
   type CloudCodeSession,
   type CloudCodeSessionChanges,
+  type CloudCodeSessionState,
   type CloudCodeSessionStatusFilter,
   type CloudCodeTerminalEntry,
   type CreateCloudCodeSessionInput,
@@ -1299,6 +1300,68 @@ export async function claimCloudCodeSessionForRun(
   );
   const row = rows[0];
   return row ? { session: mapCloudCodeSession(row), leaseToken } : null;
+}
+
+export interface CloudCodeSessionContinuation {
+  sessionId: string;
+  /** Rebuildable on a device that has never seen this session. */
+  rehydratable: boolean;
+  /** Claimable right now, so a second device can carry the session on. */
+  resumable: boolean;
+  blockedBy: 'closed' | 'archived' | 'provisioning' | 'held-by-another-run' | null;
+  /** When the current holder's lease lapses, so a caller can say how long to wait. */
+  heldUntil: string | null;
+}
+
+/**
+ * Whether this session can be picked up from another device, and if not, why.
+ *
+ * A session is single-writer, so "resumable" is a question about the lease, not
+ * about the row existing. A surface that offers to continue without asking
+ * hands the user a 409 it could have predicted.
+ */
+export async function readCloudCodeSessionContinuation(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeSessionContinuation | null> {
+  const scoped = ownerSql(owner, 2);
+  const [row] = await db.query<{
+    state: CloudCodeSessionState;
+    archived_at: string | Date | null;
+    run_lease_expires_at: string | Date | null;
+  }>(
+    `select state, archived_at, run_lease_expires_at
+       from cloud_code_sessions
+      where id = $1 and ${scoped.clause}`,
+    [sessionId, ...scoped.params],
+  );
+  if (!row) return null;
+
+  const leaseExpiresAt = row.run_lease_expires_at
+    ? new Date(row.run_lease_expires_at).toISOString()
+    : null;
+  const leaseHeld =
+    row.state === 'running' && leaseExpiresAt !== null && Date.parse(leaseExpiresAt) > Date.now();
+
+  const blockedBy: CloudCodeSessionContinuation['blockedBy'] =
+    row.state === 'closed'
+      ? 'closed'
+      : row.archived_at !== null
+        ? 'archived'
+        : row.state === 'provisioning'
+          ? 'provisioning'
+          : leaseHeld
+            ? 'held-by-another-run'
+            : null;
+
+  return {
+    sessionId,
+    rehydratable: true,
+    resumable: blockedBy === null,
+    blockedBy,
+    heldUntil: leaseHeld ? leaseExpiresAt : null,
+  };
 }
 
 export async function releaseCloudCodeSessionAfterRun(

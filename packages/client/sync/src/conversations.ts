@@ -1,3 +1,5 @@
+import { applySyncTombstone, type TombstoneStorePort } from './tombstones';
+
 import type { ConversationWireDelta } from '@agiworkforce/cloud-contracts';
 
 export interface SyncConversationRecord {
@@ -10,10 +12,12 @@ export interface SyncConversationRecord {
   model?: string;
   projectId?: string;
   activeLeafMessageId?: string | null;
+  /** The tombstone `projects.ts` has always carried. Optional while stores adopt it. */
+  deletedAt?: string | null;
   serverVersion?: string;
 }
 
-export interface ConversationStorePort {
+export interface ConversationStorePort extends TombstoneStorePort {
   get(id: string): SyncConversationRecord | undefined;
   insert(record: SyncConversationRecord): void;
   patch(id: string, patch: Partial<SyncConversationRecord>): void;
@@ -42,7 +46,7 @@ export function applyConversationDeltas(
 ): void {
   for (const d of deltas) {
     if (d.deleted_at) {
-      port.remove(d.id);
+      applySyncTombstone(port, d.id, d.deleted_at);
       continue;
     }
     const existing = port.get(d.id);
@@ -60,6 +64,7 @@ export function applyConversationDeltas(
       model: d.model ?? undefined,
       projectId: d.project_id ?? undefined,
       ...branchPointer,
+      deletedAt: null,
       serverVersion: d.server_version,
     };
     if (existing && dirtyConversationIds.includes(d.id)) {

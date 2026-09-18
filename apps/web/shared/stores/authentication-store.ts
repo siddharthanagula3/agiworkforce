@@ -172,6 +172,104 @@ export async function cleanupAllStores(): Promise<void> {
   }
 }
 
+const CACHE_SCOPE_STORAGE_KEY = 'agi.cache-scope';
+const ANONYMOUS_ACCOUNT_SEGMENT = 'anonymous';
+const PERSONAL_WORKSPACE_SEGMENT = 'personal';
+
+/**
+ * Stopped before the caches are dropped: a stream, a listening microphone or a
+ * running tool belongs to the workspace it started in and must not deliver into
+ * the next one.
+ */
+const IN_FLIGHT_CANCEL_METHODS = [
+  'stopStreaming',
+  'cancelListening',
+  'cancelActiveOperations',
+] as const;
+
+export interface CacheScopeSelector {
+  accountId: string | null;
+  /** Omitted keeps the recorded workspace; null is the personal workspace. */
+  workspaceId?: string | null;
+}
+
+function cacheScopeSegments(id: string | null): { account: string; workspace: string } {
+  const [account, workspace] = (id ?? '').split('/');
+  return {
+    account: account || ANONYMOUS_ACCOUNT_SEGMENT,
+    workspace: workspace || PERSONAL_WORKSPACE_SEGMENT,
+  };
+}
+
+function readRecordedCacheScope(): string | null {
+  try {
+    return window.localStorage.getItem(CACHE_SCOPE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function recordCacheScope(id: string): void {
+  try {
+    window.localStorage.setItem(CACHE_SCOPE_STORAGE_KEY, id);
+  } catch {
+    logger.debug('Could not record the active cache scope');
+  }
+}
+
+async function cancelWorkspaceBoundOperations(): Promise<void> {
+  await Promise.allSettled(
+    USER_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
+      try {
+        const mod = await load();
+        if (!mod || typeof mod !== 'object') return;
+        for (const exported of Object.values(mod as Record<string, unknown>)) {
+          const handle = asZustandStore(exported);
+          if (!handle) continue;
+          const state = handle.getState();
+          for (const method of IN_FLIGHT_CANCEL_METHODS) invokeStateMethod(state, method);
+        }
+      } catch (error) {
+        logger.error(`Error cancelling in-flight work in ${label}:`, error);
+      }
+    }),
+  );
+}
+
+/**
+ * Binds the local caches to one account and workspace. A change of either stops
+ * the work the previous scope started and drops its cached content before the
+ * new scope can read it. Returns true when a change was acted on.
+ */
+export async function applyCacheScope(scope: CacheScopeSelector): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  const recorded = readRecordedCacheScope();
+  const previous = cacheScopeSegments(recorded);
+  const next = {
+    account: scope.accountId?.trim() || ANONYMOUS_ACCOUNT_SEGMENT,
+    workspace:
+      scope.workspaceId === undefined
+        ? previous.workspace
+        : scope.workspaceId?.trim() || PERSONAL_WORKSPACE_SEGMENT,
+  };
+  const nextId = `${next.account}/${next.workspace}`;
+
+  if (recorded === nextId) return false;
+  // First observation is not a switch: adopting it must not wipe the state of
+  // the account already signed in when this shipped.
+  if (recorded === null) {
+    recordCacheScope(nextId);
+    return false;
+  }
+
+  await cancelWorkspaceBoundOperations();
+  await cleanupAllStores();
+  recordCacheScope(nextId);
+  logger.auth(`Cache scope changed from ${recorded} to ${nextId}; local caches dropped`);
+  return true;
+}
+
 export interface AuthResult {
   success: boolean;
   error: string | null;
@@ -321,6 +419,7 @@ export const useAuthStore = create<AuthState>()(
             }
           } else {
             logger.auth('Restored user session:', user?.email);
+            await applyCacheScope({ accountId: user?.id ?? null });
             set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
           }
 
@@ -432,6 +531,7 @@ export const useAuthStore = create<AuthState>()(
             initialized: true,
           }));
         } else {
+          await applyCacheScope({ accountId: user?.id ?? null });
           set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
         }
         _sessionSettled = settled;
