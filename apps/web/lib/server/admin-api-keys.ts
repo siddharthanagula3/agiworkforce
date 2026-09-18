@@ -9,6 +9,8 @@ import {
   type OrganizationPermission,
 } from '@agiworkforce/types';
 
+import type { ServicePrincipalIdentity } from '@/lib/server/service-principal';
+
 export const ADMIN_API_KEY_PREFIX = 'agiadm_';
 const PREFIX_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const PREFIX_LENGTH = 8;
@@ -21,6 +23,7 @@ export interface AdminApiKey {
   name: string;
   keyPrefix: string;
   scopes: OrganizationPermission[];
+  servicePrincipalId: string | null;
   createdBy: string | null;
   createdAt: string;
   expiresAt: string | null;
@@ -28,11 +31,7 @@ export interface AdminApiKey {
   revokedAt: string | null;
 }
 
-export interface VerifiedAdminApiKey {
-  id: string;
-  organizationId: string;
-  scopes: ReadonlySet<OrganizationPermission>;
-}
+export type VerifiedAdminApiKey = ServicePrincipalIdentity;
 
 interface AdminApiKeyRow {
   id: string;
@@ -41,6 +40,7 @@ interface AdminApiKeyRow {
   key_prefix: string;
   key_hash?: string;
   scopes: string[];
+  service_principal_id: string | null;
   created_by: string | null;
   created_at: string | Date;
   expires_at: string | Date | null;
@@ -48,8 +48,19 @@ interface AdminApiKeyRow {
   revoked_at: string | Date | null;
 }
 
+interface VerifiedKeyRow {
+  id: string;
+  organization_id: string;
+  key_hash: string;
+  scopes: string[];
+  service_principal_id: string | null;
+  principal_name: string | null;
+  principal_max_scopes: string[] | null;
+  principal_disabled_at: string | Date | null;
+}
+
 const PUBLIC_COLUMNS =
-  'id, organization_id, name, key_prefix, scopes, created_by, created_at, expires_at, last_used_at, revoked_at';
+  'id, organization_id, name, key_prefix, scopes, service_principal_id, created_by, created_at, expires_at, last_used_at, revoked_at';
 
 function toIso(value: string | Date | null): string | null {
   if (value === null) return null;
@@ -63,6 +74,7 @@ function present(row: AdminApiKeyRow): AdminApiKey {
     name: row.name,
     keyPrefix: row.key_prefix,
     scopes: row.scopes.filter(isOrganizationPermission),
+    servicePrincipalId: row.service_principal_id,
     createdBy: row.created_by,
     createdAt: toIso(row.created_at) ?? '',
     expiresAt: toIso(row.expires_at),
@@ -114,6 +126,7 @@ export async function createAdminApiKey(
     organizationId: string;
     name: string;
     scopes: readonly OrganizationPermission[];
+    servicePrincipalId: string;
     createdBy: string;
     expiresAt: string | null;
   },
@@ -121,8 +134,8 @@ export async function createAdminApiKey(
   const { key, prefix } = generateAdminApiKey();
   const [row] = await db.query<AdminApiKeyRow>(
     `insert into public.organization_admin_api_keys
-       (organization_id, name, key_prefix, key_hash, scopes, created_by, expires_at)
-     values ($1, $2, $3, $4, $5::text[], $6, $7)
+       (organization_id, name, key_prefix, key_hash, scopes, service_principal_id, created_by, expires_at)
+     values ($1, $2, $3, $4, $5::text[], $6, $7, $8)
      returning ${PUBLIC_COLUMNS}`,
     [
       input.organizationId,
@@ -130,6 +143,7 @@ export async function createAdminApiKey(
       prefix,
       hashAdminApiKey(key),
       [...input.scopes],
+      input.servicePrincipalId,
       input.createdBy,
       input.expiresAt,
     ],
@@ -175,26 +189,44 @@ export async function verifyAdminApiKey(
   const match = KEY_PATTERN.exec(token);
   if (!match) return null;
   const hash = hashAdminApiKey(token);
-  const [row] = await db.query<AdminApiKeyRow>(
-    `update public.organization_admin_api_keys
+  const [row] = await db.query<VerifiedKeyRow>(
+    `update public.organization_admin_api_keys k
         set last_used_at = now()
-      where key_hash = $1
-        and revoked_at is null
-        and (expires_at is null or expires_at > now())
-      returning id, organization_id, key_hash, scopes`,
+       from public.organization_service_principals p
+      where k.key_hash = $1
+        and k.revoked_at is null
+        and (k.expires_at is null or k.expires_at > now())
+        and p.id = k.service_principal_id
+      returning k.id, k.organization_id, k.key_hash, k.scopes, k.service_principal_id,
+                p.name as principal_name, p.max_scopes as principal_max_scopes,
+                p.disabled_at as principal_disabled_at`,
     [hash],
   );
-  if (!row?.key_hash) return null;
+  if (!row?.key_hash || !row.service_principal_id) return null;
+  if (row.principal_disabled_at !== null) return null;
   const stored = Buffer.from(row.key_hash, 'hex');
   const presented = Buffer.from(hash, 'hex');
   if (stored.length !== presented.length || !timingSafeEqual(stored, presented)) return null;
+  // The key's scopes are bounded by the principal's ceiling at every call, not
+  // only at creation, so narrowing a principal narrows keys already in the wild.
+  const ceiling = new Set(
+    (row.principal_max_scopes ?? []).filter(isOrganizationPermission).filter(isGrantable),
+  );
   return {
-    id: row.id,
+    kind: 'service_principal',
+    principalId: row.service_principal_id,
+    keyId: row.id,
     organizationId: row.organization_id,
+    name: row.principal_name ?? '',
     scopes: new Set(
       row.scopes
         .filter(isOrganizationPermission)
-        .filter((scope) => GRANTABLE_ORGANIZATION_PERMISSIONS.includes(scope)),
+        .filter(isGrantable)
+        .filter((scope) => ceiling.has(scope)),
     ),
   };
+}
+
+function isGrantable(scope: OrganizationPermission): boolean {
+  return GRANTABLE_ORGANIZATION_PERMISSIONS.includes(scope);
 }

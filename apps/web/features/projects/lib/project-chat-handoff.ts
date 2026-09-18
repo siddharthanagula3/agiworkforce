@@ -14,47 +14,47 @@ const ProjectChatHandoffSchema = z.object({
   projectId: z.string().min(1).max(200),
   attachmentCount: z.number().int().min(0).max(20),
   skillId: z.string().min(1).max(200).optional(),
-  meta: z
-    .object({
-      workMode: z.enum(['chat', 'agiwork']),
-      projectId: z.string().min(1).max(200).nullable(),
-      webSearchEnabled: z.boolean().optional(),
-      thinkingEnabled: z.boolean().optional(),
-      codeExecutionEnabled: z.boolean().optional(),
-      officeCreationEnabled: z.boolean().optional(),
-      researchEnabled: z.boolean().optional(),
-      styleInstruction: z.string().max(10_000).optional(),
-      skillName: z.string().min(1).max(200).optional(),
-      agiWorkGoal: z
-        .object({
-          goal: z.string().min(1).max(100_000),
-          constraints: z.string().max(20_000).optional(),
-          deliverable: z.string().max(20_000).optional(),
-        })
-        .optional(),
-      disabledConnectorIds: z.array(z.string().min(1).max(200)).max(200).optional(),
-      memoryEnabled: z.boolean().optional(),
-      mcpContext: z
-        .object({
-          prompt: z
-            .object({
+  meta: z.object({
+    workMode: z.enum(['chat', 'agiwork']),
+    projectId: z.string().min(1).max(200).nullable(),
+    webSearchEnabled: z.boolean().optional(),
+    thinkingEnabled: z.boolean().optional(),
+    codeExecutionEnabled: z.boolean().optional(),
+    officeCreationEnabled: z.boolean().optional(),
+    researchEnabled: z.boolean().optional(),
+    searchRequested: z.boolean().optional(),
+    styleInstruction: z.string().max(10_000).optional(),
+    skillName: z.string().min(1).max(200).optional(),
+    agiWorkGoal: z
+      .object({
+        goal: z.string().min(1).max(100_000),
+        constraints: z.string().max(20_000).optional(),
+        deliverable: z.string().max(20_000).optional(),
+      })
+      .optional(),
+    disabledConnectorIds: z.array(z.string().min(1).max(200)).max(200).optional(),
+    memoryEnabled: z.boolean().optional(),
+    mcpContext: z
+      .object({
+        prompt: z
+          .object({
+            connectorId: z.string(),
+            name: z.string(),
+            arguments: z.record(z.string(), z.string()).optional(),
+          })
+          .optional(),
+        resources: z
+          .array(
+            z.object({
               connectorId: z.string(),
-              name: z.string(),
-              arguments: z.record(z.string(), z.string()).optional(),
-            })
-            .optional(),
-          resources: z
-            .array(
-              z.object({
-                connectorId: z.string(),
-                uri: z.string(),
-                name: z.string().optional(),
-              }),
-            )
-            .optional(),
-        })
-        .optional(),
-    }),
+              uri: z.string(),
+              name: z.string().optional(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
+  }),
 });
 
 type StoredProjectChatHandoff = z.infer<typeof ProjectChatHandoffSchema>;

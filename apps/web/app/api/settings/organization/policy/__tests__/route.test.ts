@@ -66,13 +66,20 @@ interface Fixture {
   role?: 'owner' | 'admin' | 'member' | 'viewer';
   policyRow?: Record<string, unknown> | null;
   upsertResult?: Record<string, unknown>;
+  revision?: number;
 }
 
-function bindCaller({ role = 'admin', policyRow = null, upsertResult }: Fixture = {}): void {
+function bindCaller({
+  role = 'admin',
+  policyRow = null,
+  upsertResult,
+  revision = 0,
+}: Fixture = {}): void {
   currentRole.value = role;
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
     if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG_ID }];
+    if (/from public\.organization_policy_revisions/i.test(text)) return [{ revision }];
     if (/from public\.organization_members/i.test(text)) {
       return [{ organization_id: ORG_ID, role }];
     }
@@ -533,5 +540,68 @@ describe('PATCH /api/settings/organization/policy', () => {
     const response = await PATCH(request({ controls: { featureAccess: { code: true } } }) as never);
 
     expect(response.status).toBe(403);
+  });
+});
+
+describe('optimistic concurrency on policy writes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { query: (...args: unknown[]) => mockQuery(...args) },
+      userId: 'user-1',
+    });
+  });
+
+  it('hands the reader the revision it must send back', async () => {
+    bindCaller({ policyRow: SAVED_POLICY, revision: 7 });
+
+    const response = await GET(request() as never);
+
+    expect((await response.json()).revision).toBe(7);
+    expect(response.headers.get('ETag')).toBe('W/"wsrev-7"');
+  });
+
+  it('refuses a write against a revision another administrator has moved past', async () => {
+    bindCaller({ policyRow: SAVED_POLICY, revision: 8 });
+
+    const response = await PATCH(
+      request({ allowMemory: false }, { 'If-Match': 'W/"wsrev-7"' }) as never,
+    );
+
+    expect(response.status).toBe(409);
+    expect(
+      mockQuery.mock.calls.some(([sql]) =>
+        /insert into public\.organization_admin_policies/i.test(String(sql)),
+      ),
+    ).toBe(false);
+  });
+
+  it('accepts a write whose revision is still current and reports the new one', async () => {
+    bindCaller({ policyRow: SAVED_POLICY, revision: 8 });
+
+    const response = await PATCH(
+      request({ allowMemory: false }, { 'If-Match': 'W/"wsrev-8"' }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('ETag')).toBe('W/"wsrev-8"');
+  });
+
+  it('still accepts a client that states no revision, so nothing existing breaks', async () => {
+    bindCaller({ policyRow: SAVED_POLICY, revision: 8 });
+
+    const response = await PATCH(request({ allowMemory: false }) as never);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('refuses an If-Match this endpoint never issued instead of ignoring it', async () => {
+    bindCaller({ policyRow: SAVED_POLICY, revision: 8 });
+
+    const response = await PATCH(
+      request({ allowMemory: false }, { 'If-Match': '"deadbeef"' }) as never,
+    );
+
+    expect(response.status).toBe(400);
   });
 });

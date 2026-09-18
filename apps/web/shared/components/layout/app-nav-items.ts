@@ -20,6 +20,7 @@
  */
 
 import {
+  BookOpen,
   Brain,
   CalendarClock,
   FolderOpen,
@@ -41,6 +42,7 @@ const CHAT_SECTION_PREFIXES = [
   '/chat/library',
   '/chat/schedules',
   '/chat/customize',
+  '/chat/study',
 ] as const;
 
 function isChatSectionPath(pathname: string): boolean {
@@ -129,6 +131,15 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: Brain,
     href: '/models',
     isActive: (pathname) => isUnder(pathname, '/models'),
+    hideable: true,
+  },
+  {
+    id: 'study',
+    label: 'Study',
+    labelKey: 'navStudy',
+    icon: BookOpen,
+    href: '/chat/study',
+    isActive: (pathname) => isUnder(pathname, '/chat/study'),
     hideable: true,
   },
   {
