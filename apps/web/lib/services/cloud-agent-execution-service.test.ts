@@ -14,7 +14,9 @@ import {
   claimCloudAgentExecutionOperation,
   completeCloudAgentExecutionOperation,
   getCloudAgentExecutionUsage,
+  reconcileCloudAgentExecutionOperation,
   renewCloudAgentExecutionOperationLease,
+  summarizeCloudAgentRunOutcome,
 } from './cloud-agent-execution-service';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
@@ -722,5 +724,131 @@ describe('cloud agent execution service', () => {
       },
     );
     expect(incorrectlyAggregatedCost).toBeGreaterThan(separatedCost);
+  });
+});
+
+describe('unknown outcomes and partial run completion', () => {
+  let db: DatabaseAdapter;
+
+  const outcomeRow = (
+    operationKey: string,
+    status: string,
+    error: Record<string, unknown> | null = null,
+  ) => ({
+    operation_key: operationKey,
+    operation_kind: 'tool',
+    status,
+    retry_safety: 'unsafe',
+    error,
+  });
+
+  beforeEach(() => {
+    db = database();
+  });
+
+  it('settles an unresolved operation against the observed external result', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      { ...RUNNING_ROW, status: 'completed', result: { id: 'comment-9' }, lease_token: null },
+    ]);
+
+    const settled = await reconcileCloudAgentExecutionOperation(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      operationKey: 'tool:post-comment:1',
+      observed: { outcome: 'completed', result: { id: 'comment-9' } },
+    });
+
+    expect(settled?.status).toBe('completed');
+    const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
+    expect(sql).toContain("status = 'outcome_unknown'");
+    expect(params).toEqual([
+      RUN_ID,
+      'user-1',
+      'tool:post-comment:1',
+      'completed',
+      { id: 'comment-9' },
+      null,
+      null,
+    ]);
+  });
+
+  it('reports no settlement when the operation was no longer unresolved', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([]);
+
+    await expect(
+      reconcileCloudAgentExecutionOperation(db, {
+        userId: 'user-1',
+        runId: RUN_ID,
+        operationKey: 'tool:post-comment:1',
+        observed: { outcome: 'failed', error: { message: 'never created' } },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('calls a run partially completed when one step failed and another landed', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      outcomeRow('tool:a', 'completed'),
+      outcomeRow('tool:b', 'failed', { message: 'The spreadsheet is read-only.' }),
+    ]);
+
+    const summary = await summarizeCloudAgentRunOutcome(db, { userId: 'user-1', runId: RUN_ID });
+
+    expect(summary.status).toBe('completed_partial');
+    expect(summary.failures).toHaveLength(1);
+    expect(summary.failures[0]).toMatchObject({
+      operationKey: 'tool:b',
+      reason: 'The spreadsheet is read-only.',
+    });
+    expect(summary.unresolved).toHaveLength(0);
+  });
+
+  it('calls a run failed when nothing landed at all', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      outcomeRow('tool:a', 'failed', { message: 'The connector is disconnected.' }),
+    ]);
+
+    await expect(
+      summarizeCloudAgentRunOutcome(db, { userId: 'user-1', runId: RUN_ID }),
+    ).resolves.toMatchObject({ status: 'failed' });
+  });
+
+  it('keeps a run with an unresolved step out of every ending', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      outcomeRow('tool:a', 'completed'),
+      outcomeRow('tool:b', 'outcome_unknown'),
+    ]);
+
+    const summary = await summarizeCloudAgentRunOutcome(db, { userId: 'user-1', runId: RUN_ID });
+
+    expect(summary.status).toBe('outcome_unknown');
+    expect(summary.unresolved.map((outcome) => outcome.operationKey)).toEqual(['tool:b']);
+    expect(summary.unresolved[0]?.reason).toContain('never confirmed');
+  });
+
+  it('gives every failed step its own reason rather than one verdict for the run', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      outcomeRow('tool:a', 'failed', { message: 'The file was not found.' }),
+      outcomeRow('tool:b', 'failed', null),
+      outcomeRow('tool:c', 'completed'),
+    ]);
+
+    const summary = await summarizeCloudAgentRunOutcome(db, { userId: 'user-1', runId: RUN_ID });
+
+    expect(summary.status).toBe('completed_partial');
+    expect(summary.failures.map((outcome) => outcome.reason)).toEqual([
+      'The file was not found.',
+      'This step failed without a recorded reason.',
+    ]);
+  });
+
+  it('calls a run with nothing but successes completed', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      outcomeRow('tool:a', 'completed'),
+      outcomeRow('tool:b', 'completed'),
+    ]);
+
+    await expect(
+      summarizeCloudAgentRunOutcome(db, { userId: 'user-1', runId: RUN_ID }),
+    ).resolves.toMatchObject({ status: 'completed', failures: [] });
   });
 });
