@@ -14,7 +14,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Zap, ZapOff, Send, RotateCcw, Camera, SwitchCamera } from 'lucide-react-native';
+import {
+  X,
+  Zap,
+  ZapOff,
+  Send,
+  RotateCcw,
+  Camera,
+  SwitchCamera,
+  Flashlight,
+  FlashlightOff,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
@@ -29,6 +39,7 @@ export default function CameraScreen() {
   const params = useLocalSearchParams<{ imageUri?: string; question?: string }>();
 
   const [flashMode, setFlashMode] = useState<FlashMode>('off');
+  const [torchOn, setTorchOn] = useState(false);
   const [facing, setFacing] = useState<CameraType>('back');
   const [capturedUri, setCapturedUri] = useState<string | null>(params.imageUri ?? null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -126,9 +137,19 @@ export default function CameraScreen() {
     setFlashMode((prev) => (prev === 'off' ? 'on' : 'off'));
   }, []);
 
+  const toggleTorch = useCallback(() => {
+    setTorchOn((prev) => !prev);
+  }, []);
+
+  // The torch belongs to the rear module, so a switch to the front camera puts
+  // it out rather than leaving a lamp lit that nothing on screen controls.
   const toggleFacing = useCallback(() => {
     setCameraReady(false);
-    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+    setFacing((prev) => {
+      const next = prev === 'back' ? 'front' : 'back';
+      if (next === 'front') setTorchOn(false);
+      return next;
+    });
   }, []);
 
   const handleCameraReady = useCallback(() => {
@@ -258,6 +279,7 @@ export default function CameraScreen() {
         style={StyleSheet.absoluteFill}
         facing={facing}
         flash={flashMode}
+        enableTorch={torchOn}
         mode="picture"
         onCameraReady={handleCameraReady}
       />
@@ -286,6 +308,23 @@ export default function CameraScreen() {
             >
               <SwitchCamera size={20} color={c.cameraOverlayText} />
             </Pressable>
+
+            {facing === 'back' && (
+              <Pressable
+                testID="camera-torch-toggle"
+                onPress={toggleTorch}
+                style={styles.iconButton}
+                accessibilityRole="button"
+                accessibilityState={{ selected: torchOn }}
+                accessibilityLabel={torchOn ? 'Turn torch off' : 'Turn torch on'}
+              >
+                {torchOn ? (
+                  <Flashlight size={20} color={c.agentWarning} />
+                ) : (
+                  <FlashlightOff size={20} color={c.cameraOverlayText} />
+                )}
+              </Pressable>
+            )}
 
             <Pressable
               onPress={toggleFlash}

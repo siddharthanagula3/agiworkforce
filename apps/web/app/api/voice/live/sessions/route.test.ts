@@ -203,6 +203,78 @@ describe('POST /api/voice/live/sessions', () => {
     );
   });
 
+  it('carries the conversation the call continues into both instruction slots', async () => {
+    const conversationId = '11111111-1111-4111-8111-111111111111';
+    mocks.userScopedDb.mockResolvedValue({
+      db: {
+        query: vi.fn(async (sql: string) => {
+          if (sql.includes('from web_conversations')) {
+            return [
+              {
+                id: conversationId,
+                project_id: null,
+                is_temporary: false,
+                active_leaf_message_id: null,
+              },
+            ];
+          }
+          if (sql.includes('from web_messages')) {
+            return [
+              { role: 'assistant', content: 'The rollout lands on Thursday.' },
+              { role: 'user', content: 'When does the rollout land?' },
+            ];
+          }
+          return [];
+        }),
+      },
+      userId: 'user-1',
+      organizationId: null,
+    });
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ session: { id: 'live_2' }, transport: { type: 'webrtc', sdp: 'answer' } }),
+        { status: 201 },
+      ),
+    );
+
+    const response = await POST(request({ sdp: OFFER, conversationId }));
+    expect(response.status).toBe(201);
+
+    const [, init] = mocks.fetch.mock.calls[0] as [string, RequestInit];
+    const sent = JSON.parse(String(init.body)) as {
+      session: { instructions: string; delegation: { responses: { instructions: string } } };
+    };
+    expect(sent.session.instructions).toContain('When does the rollout land?');
+    expect(sent.session.instructions).toContain('The rollout lands on Thursday.');
+    expect(sent.session.delegation.responses.instructions).toContain('When does the rollout land?');
+  });
+
+  it('starts the session without prior context when the context read fails', async () => {
+    mocks.userScopedDb.mockResolvedValue({
+      db: {
+        query: vi.fn(async () => {
+          throw new Error('context read failed');
+        }),
+      },
+      userId: 'user-1',
+      organizationId: null,
+    });
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ session: { id: 'live_3' }, transport: { type: 'webrtc', sdp: 'answer' } }),
+        { status: 201 },
+      ),
+    );
+
+    const response = await POST(
+      request({ sdp: OFFER, conversationId: '11111111-1111-4111-8111-111111111111' }),
+    );
+    expect(response.status).toBe(201);
+    const [, init] = mocks.fetch.mock.calls[0] as [string, RequestInit];
+    const sent = JSON.parse(String(init.body)) as { session: { instructions: string } };
+    expect(sent.session.instructions).not.toContain('conversation_so_far');
+  });
+
   it('rejects a body without an offer before any reservation', async () => {
     const response = await POST(request({ voice: 'marin' }));
     expect(response.status).toBe(400);
