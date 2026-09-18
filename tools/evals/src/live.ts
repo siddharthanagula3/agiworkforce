@@ -130,6 +130,17 @@ export function unsupportedSuiteReason(dataset: EvalDataset, target: LiveTarget)
   return missing.length === 0 ? null : `${target.modelKey} lacks ${missing.join(', ')}`;
 }
 
+/**
+ * A row the target cannot physically answer, e.g. an image row on a text-only
+ * model. Skipped and recorded, never scored as a wrong answer.
+ */
+export function capabilitySkipReason(evalCase: EvalCase, target: LiveTarget): string | null {
+  const missing = (evalCase.requires ?? []).filter(
+    (capability) => target.capabilities[capability] !== true,
+  );
+  return missing.length === 0 ? null : `${target.modelKey} lacks ${missing.join(', ')}`;
+}
+
 export function contextSkipReason(
   dataset: EvalDataset,
   evalCase: EvalCase,

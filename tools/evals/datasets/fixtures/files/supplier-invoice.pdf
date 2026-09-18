@@ -1,0 +1,63 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 791 >>
+stream
+BT
+/F1 24 Tf
+1 0 0 1 72 760 Tm
+(Northwind Supply Co.) Tj
+/F1 12 Tf
+1 0 0 1 72 730 Tm
+(Invoice INV-2026-0418) Tj
+/F1 11 Tf
+1 0 0 1 72 712 Tm
+(Issued 2026-03-04, due 2026-04-03) Tj
+/F1 11 Tf
+1 0 0 1 72 660 Tm
+(Line 1  Workstation dock         2 x 240.00      480.00) Tj
+/F1 11 Tf
+1 0 0 1 72 640 Tm
+(Line 2  Calibration service      1 x 515.00      515.00) Tj
+/F1 11 Tf
+1 0 0 1 72 620 Tm
+(Line 3  Onsite install           4 x  70.00      280.00) Tj
+/F1 11 Tf
+1 0 0 1 72 590 Tm
+(Subtotal                                       1275.00) Tj
+/F1 11 Tf
+1 0 0 1 72 572 Tm
+(Freight                                           0.00) Tj
+/F1 13 Tf
+1 0 0 1 72 550 Tm
+(Total due                                      1275.00 USD) Tj
+/F1 11 Tf
+1 0 0 1 72 520 Tm
+(Remit to account 00-1184 within 30 days.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001082 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1152
+%%EOF

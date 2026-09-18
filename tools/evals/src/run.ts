@@ -7,7 +7,12 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { contextSkipReason, unsupportedSuiteReason, type LiveTarget } from './live';
+import {
+  capabilitySkipReason,
+  contextSkipReason,
+  unsupportedSuiteReason,
+  type LiveTarget,
+} from './live';
 import type { RetryCost } from './metrics';
 import { partialResponseOf } from './provider';
 import { buildRunReport, type RunIdentity, type RunReport } from './report';
@@ -204,7 +209,9 @@ export async function runLive(
     };
     reports.push(
       await runSuite(dataset, recordingResponder, {
-        skip: (evalCase) => contextSkipReason(dataset, evalCase, options.target),
+        skip: (evalCase) =>
+          capabilitySkipReason(evalCase, options.target) ??
+          contextSkipReason(dataset, evalCase, options.target),
         attempts: () => recorder.costsFor(dataset.suite),
       }),
     );

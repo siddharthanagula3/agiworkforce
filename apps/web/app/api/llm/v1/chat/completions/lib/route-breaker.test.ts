@@ -29,6 +29,9 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   getFreeLaneRuntimeState: vi.fn(async () => ({})),
 }));
 
+import { ROUTE_RPM_REFUSAL } from '@agiworkforce/routing';
+import { classifyError, RouteBudgetExhaustedError } from '@agiworkforce/provider-runtime';
+
 import { recordCredentialRejection, resolveFailoverBreakerView } from './route-breaker';
 import type { ProcessedRequest } from './request-processor';
 
@@ -100,6 +103,52 @@ describe('resolveFailoverBreakerView', () => {
     );
     const view = await resolveFailoverBreakerView(makeProcessed(), NOW);
     expect(view.isCandidateBreakerOpen({ modelKey: 'candidate-a', provider: 'openai' })).toBe(true);
+  });
+
+  it('treats a candidate over its dispatch budget as unselectable, and names the refusal', async () => {
+    const candidate = { modelKey: 'candidate-a', provider: 'openai' };
+    const view = await resolveFailoverBreakerView(makeProcessed(), NOW, {
+      'openai/candidate-a': {
+        admitted: false,
+        refusal: ROUTE_RPM_REFUSAL,
+        retryAfterMs: 4_000,
+        requestsInWindow: 60,
+        tokensInWindow: 0,
+      },
+    });
+
+    expect(view.isCandidateBreakerOpen(candidate)).toBe(true);
+    expect(view.rateLimitRefusal(candidate)).toBe(ROUTE_RPM_REFUSAL);
+    expect(view.rateLimitRefusal({ modelKey: 'primary-model', provider: 'anthropic' })).toBeNull();
+  });
+
+  it('admits a candidate inside its budget, and admits every candidate when no budget was read', async () => {
+    const candidate = { modelKey: 'candidate-a', provider: 'openai' };
+    const withinBudget = await resolveFailoverBreakerView(makeProcessed(), NOW, {
+      'openai/candidate-a': {
+        admitted: true,
+        retryAfterMs: 0,
+        requestsInWindow: 1,
+        tokensInWindow: 10,
+      },
+    });
+    const noBudget = await resolveFailoverBreakerView(makeProcessed(), NOW);
+
+    expect(withinBudget.isCandidateBreakerOpen(candidate)).toBe(false);
+    expect(withinBudget.rateLimitRefusal(candidate)).toBeNull();
+    expect(noBudget.isCandidateBreakerOpen(candidate)).toBe(false);
+    expect(noBudget.rateLimitRefusal(candidate)).toBeNull();
+  });
+
+  it('classifies the refusal as a rate limit that is worth another route', () => {
+    const classified = classifyError(
+      new RouteBudgetExhaustedError('openai/candidate-a', ROUTE_RPM_REFUSAL, 4_000),
+    );
+
+    expect(classified.category).toBe('rate_limit');
+    expect(classified.code).toBe(ROUTE_RPM_REFUSAL);
+    expect(classified.fallbackable).toBe(true);
+    expect(classified.retryAfterSeconds).toBe(4);
   });
 });
 

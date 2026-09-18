@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 1,
+    "policyVersion": 13,
     "records": [
       {
         "version": 1,
@@ -11,8 +11,126 @@
         "effectiveOn": "2026-09-18",
         "reason": "the Auto routing policy as it served when the staged-release ledger landed; no slot carries a canary or a shadow",
         "bootstrap": "records what was already serving. An internal and a canary stage for it would be runs that never happened, exactly as the lifecycle shortcuts say"
+      },
+      {
+        "version": 2,
+        "artifact": "prompt",
+        "id": "chat.system@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the chat system prompt as it served when it entered the prompt manifest",
+        "bootstrap": "records the text that was already serving every chat surface before the manifest held it"
+      },
+      {
+        "version": 3,
+        "artifact": "prompt",
+        "id": "chat.system@2",
+        "channel": "internal",
+        "effectiveOn": "2026-09-18",
+        "reason": "adds the instruction-precedence clause; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 4,
+        "artifact": "prompt",
+        "id": "support.system@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the support agent system prompt as it served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 5,
+        "artifact": "prompt",
+        "id": "research.system@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the deep research system prompt as it served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 6,
+        "artifact": "prompt",
+        "id": "voice.live_instructions@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the live voice instructions as they served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 7,
+        "artifact": "prompt",
+        "id": "voice.live_backend_instructions@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the live voice delegation instructions as they served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 8,
+        "artifact": "prompt",
+        "id": "voice.live_context_rules@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the live voice context rules as they served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 9,
+        "artifact": "prompt",
+        "id": "product.memory_fact_extraction@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the memory fact extraction prompt as it served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 10,
+        "artifact": "prompt",
+        "id": "agent.cloud_code_system@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the cloud code agent system prompt as it served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 11,
+        "artifact": "prompt",
+        "id": "tool.url_fetch_description@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the url fetch tool description as it served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 12,
+        "artifact": "prompt",
+        "id": "tool.places_search_description@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the places search tool description as it served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 13,
+        "artifact": "prompt",
+        "id": "safety.untrusted_context@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-18",
+        "reason": "the untrusted context safety preamble as it served when the ledger took the prompt manifest",
+        "bootstrap": "records what was already serving"
       }
     ]
+  },
+  "rateLimits": {
+    "kind": "route_rate_limits",
+    "windowMs": 60000,
+    "note": "This deployment's own dispatch budget per provider/model route, enforced before a request is sent so a route is never discovered to be over its limit by receiving a 429. The defaults are ours, not a claim about what any provider publishes; add a byProvider or byRoute entry when a limit is published or measured, with the source in its note.",
+    "defaults": {
+      "requestsPerMinute": 600,
+      "tokensPerMinute": 2000000
+    },
+    "byProvider": {},
+    "byRoute": {}
   },
   "auto": {
     "kind": "routing_policy",

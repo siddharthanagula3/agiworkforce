@@ -71,6 +71,8 @@ const CHECK_KINDS = [
   'toolSequence',
   'citations',
   'citedUrls',
+  'sourceQuality',
+  'sourceRestriction',
   'language',
 ] as const;
 const PRIORITIES: readonly CorpusPriority[] = ['P0', 'P1'];
@@ -284,6 +286,31 @@ function parseCheck(raw: unknown, where: string): Check {
       }
       return { kind: 'citedUrls', allowed, required };
     }
+    case 'sourceQuality': {
+      const authoritative = readStringArray(raw['authoritative'], where);
+      const weak = readStringArray(raw['weak'], where);
+      for (const url of authoritative) {
+        if (weak.includes(url)) fail(where, `${url} is both authoritative and weak`);
+      }
+      const minAuthoritative = raw['minAuthoritative'];
+      if (minAuthoritative === undefined) return { kind: 'sourceQuality', authoritative, weak };
+      const minimum = readPositiveInteger(
+        minAuthoritative,
+        where,
+        'minAuthoritative must be a positive integer',
+      );
+      if (minimum > authoritative.length) {
+        fail(where, `minAuthoritative ${minimum} exceeds the ${authoritative.length} listed`);
+      }
+      return { kind: 'sourceQuality', authoritative, weak, minAuthoritative: minimum };
+    }
+    case 'sourceRestriction': {
+      const sources = readStringArray(raw['sources'], where);
+      const urls = raw['urls'];
+      return urls === undefined
+        ? { kind: 'sourceRestriction', sources }
+        : { kind: 'sourceRestriction', sources, urls: readStringArray(urls, where) };
+    }
     case 'language': {
       const expected = raw['expected'];
       if (
@@ -372,12 +399,32 @@ function parseTurns(raw: unknown, where: string): readonly EvalTurn[] {
   return turns;
 }
 
+/**
+ * Declared rather than free text: a typo in a media type reaches the provider
+ * as a different modality, and the row then measures whether the adapter
+ * tolerated the mistake instead of whether the model read the file.
+ */
+export const ATTACHMENT_MEDIA_TYPES = [
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/json',
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'audio/mpeg',
+  'audio/wav',
+] as const;
+
 function parseAttachment(raw: unknown, where: string): EvalAttachment {
   if (!isRecord(raw)) fail(where, 'attachment must be an object');
-  return {
-    fixture: readString(raw['fixture'], where, 'fixture'),
-    mediaType: readString(raw['mediaType'], where, 'mediaType'),
-  };
+  const mediaType = readString(raw['mediaType'], where, 'mediaType');
+  if (!(ATTACHMENT_MEDIA_TYPES as readonly string[]).includes(mediaType)) {
+    fail(where, `mediaType ${mediaType} is not one of ${ATTACHMENT_MEDIA_TYPES.join(', ')}`);
+  }
+  return { fixture: readString(raw['fixture'], where, 'fixture'), mediaType };
 }
 
 function parseSource(raw: unknown, where: string): EvalSource {
@@ -486,6 +533,9 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
     ...(raw['haystack'] === undefined
       ? {}
       : { haystack: parseHaystack(raw['haystack'], `${where}.haystack`) }),
+    ...(raw['requires'] === undefined
+      ? {}
+      : { requires: readStringArray(raw['requires'], `${where}.requires`) }),
   };
 }
 

@@ -1,13 +1,14 @@
 {
   "suite": "chat",
-  "version": 1,
+  "version": 2,
   "priority": "P1",
   "provenance": {
     "kind": "authored",
-    "source": "hand-written in this repository from the conversational behaviours the chat surface promises",
-    "authoredOn": "2026-09-17"
+    "source": "hand-written in this repository from the conversational behaviours the chat surface promises, plus factual and citation rows over synthetic sources supplied with the row",
+    "authoredOn": "2026-09-18"
   },
   "passThreshold": 1,
+  "promptId": "chat.system",
   "cases": [
     {
       "id": "chat/system-sign-off",
@@ -160,6 +161,92 @@
           "limit": 8
         }
       ]
+    },
+    {
+      "id": "chat/states-a-settled-fact",
+      "family": "factual",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "In which year did the Chernobyl nuclear accident happen? Reply with 'Answer: <year>'.",
+      "checks": [
+        {
+          "kind": "exactAnswer",
+          "expected": "1986"
+        },
+        {
+          "kind": "maxWords",
+          "limit": 6
+        }
+      ],
+      "notes": "Chat core owns plain factual recall; golden.json measures longer answers, not this."
+    },
+    {
+      "id": "chat/says-it-does-not-know",
+      "family": "factual",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What was the closing share price of Harbourline Energy on 14 March 2031? Answer in one sentence.",
+      "checks": [
+        {
+          "kind": "includesAny",
+          "values": [
+            "do not know",
+            "don't know",
+            "cannot know",
+            "no way to know",
+            "is in the future",
+            "has not happened",
+            "not able to know",
+            "I do not have"
+          ]
+        },
+        {
+          "kind": "matches",
+          "pattern": "^(?![\\s\\S]*\\$\\s?\\d)[\\s\\S]*$"
+        },
+        {
+          "kind": "maxWords",
+          "limit": 60
+        }
+      ],
+      "notes": "A date past every training cutoff. Naming any price at all is the failure, so the row rejects a dollar figure outright."
+    },
+    {
+      "id": "chat/cites-the-supplied-source",
+      "family": "citations",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Using only the sources above, say in one sentence how many public charging points Harbourline opened in 2025. Put the source number in square brackets, like [1], directly after the claim.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Harbourline annual review 2025",
+          "text": "Harbourline opened 1240 public charging points in 2025, up from 810 in 2024."
+        },
+        {
+          "id": "2",
+          "title": "Harbourline staff newsletter, February 2026",
+          "text": "The company moved its head office to the west quay during 2025."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "citations",
+          "sources": ["1", "2"],
+          "minDistinct": 1,
+          "required": [
+            {
+              "claim": "1,?240",
+              "source": "1"
+            }
+          ]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 45
+        }
+      ],
+      "notes": "The 810 figure belongs to 2024; citing it to [1] is the near miss."
     }
   ]
 }

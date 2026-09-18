@@ -268,6 +268,28 @@ export class FallbackTriggeredError extends Error {
   }
 }
 
+export const ROUTE_BUDGET_EXHAUSTED_ERROR_NAME = 'RouteBudgetExhaustedError';
+
+/**
+ * The router's own per-route requests/tokens-per-minute ceiling, refused before
+ * dispatch. Classified as `rate_limit` because the correct response is the one
+ * a 429 gets, a wait or another route, and the code names which budget it was
+ * so the log does not read as a provider rejection that never happened.
+ */
+export class RouteBudgetExhaustedError extends Error {
+  readonly code: string;
+  readonly routeId: string;
+  readonly retryAfterSeconds: number;
+
+  constructor(routeId: string, code: string, retryAfterMs: number) {
+    super(`Route ${routeId} is over its dispatch budget (${code})`);
+    this.name = ROUTE_BUDGET_EXHAUSTED_ERROR_NAME;
+    this.code = code;
+    this.routeId = routeId;
+    this.retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  }
+}
+
 /**
  * Synthetic error a tool loop constructs to route a clean-but-empty provider
  * step through the same `classifyError` / failover pipeline a thrown error
@@ -676,6 +698,17 @@ export function classifyError(err: unknown): ClassifiedError {
       code: 'unsupported_input',
       retryable: false,
       fallbackable: true,
+      message: err.message,
+    };
+  }
+
+  if (err instanceof RouteBudgetExhaustedError) {
+    return {
+      category: 'rate_limit',
+      code: err.code,
+      retryable: true,
+      fallbackable: true,
+      retryAfterSeconds: err.retryAfterSeconds,
       message: err.message,
     };
   }

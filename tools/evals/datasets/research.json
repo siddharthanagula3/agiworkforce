@@ -1,11 +1,12 @@
 {
   "suite": "research",
-  "version": 1,
+  "version": 2,
   "priority": "P1",
   "provenance": {
     "kind": "authored",
     "source": "hand-written in this repository over synthetic sources supplied with the row, so citations are verifiable offline",
-    "authoredOn": "2026-09-17"
+    "authoredOn": "2026-09-18",
+    "notes": "source restriction is graded as its own check rather than implied by the citation rule: a claim can be cited correctly and still come from outside the brief"
   },
   "passThreshold": 1,
   "promptId": "research.system",
@@ -48,6 +49,10 @@
               "source": "2"
             }
           ]
+        },
+        {
+          "kind": "sourceRestriction",
+          "sources": ["1", "2", "3"]
         }
       ]
     },
@@ -201,6 +206,47 @@
           ]
         }
       ]
+    },
+    {
+      "id": "research/stays-inside-the-brief",
+      "family": "source-restriction",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Using only the sources above, and nothing else you know, report what the Calderwood pilot measured. Cite each claim with its source number in square brackets, and do not bring in outside sources or links.",
+      "sources": [
+        {
+          "id": "1",
+          "title": "Calderwood district heating pilot, interim report",
+          "text": "Over the first winter the Calderwood pilot cut household heating demand by 18 percent across 220 homes."
+        },
+        {
+          "id": "2",
+          "title": "Calderwood council minutes, June 2026",
+          "text": "The council agreed to extend the pilot to a second district after the interim report."
+        }
+      ],
+      "checks": [
+        {
+          "kind": "sourceRestriction",
+          "sources": ["1", "2"]
+        },
+        {
+          "kind": "citations",
+          "sources": ["1", "2"],
+          "minDistinct": 1,
+          "required": [
+            {
+              "claim": "18",
+              "source": "1"
+            }
+          ]
+        },
+        {
+          "kind": "maxWords",
+          "limit": 90
+        }
+      ],
+      "notes": "A model that reaches for a real district-heating study, or offers a link, has broken the restriction even if what it says is true."
     }
   ]
 }

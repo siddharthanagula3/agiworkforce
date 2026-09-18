@@ -4,6 +4,12 @@ import { getDefaultModelFor } from '@agiworkforce/types';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 import type { Skill } from '@agiworkforce/skills';
 
+import {
+  instructionOrderProblems,
+  isContextOnlyInstructionLayer,
+  type InstructionLayer,
+} from '@/lib/prompts/instruction-precedence';
+
 const PRO_CHAT_MODEL = getDefaultModelFor('pro', 'chat');
 
 const mocks = vi.hoisted(() => ({
@@ -291,5 +297,95 @@ describe('managed system prompt assembly order', () => {
     expect(memoryIndex).toBeGreaterThan(boundaryIndex);
     expect(pastChatIndex).toBeGreaterThan(memoryIndex);
     expect(joined).toContain('Release polish');
+  });
+});
+
+describe('canonical instruction precedence', () => {
+  it('assembles system, personalized and memory in the order the hierarchy declares', async () => {
+    mocks.customInstructions.mockResolvedValue('Preferred name: Ada. Keep answers short.');
+    mocks.loadPolicy.mockResolvedValue({
+      enabled: true,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+      searchPastChats: false,
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from user_memories')
+        ? [{ content: 'User prefers morning meetings.', category: 'preference', pinned: true }]
+        : [],
+    );
+
+    const result = await processRequest(chatRequestFor('precedence-1'), auth());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+
+    const markers: Array<{ layer: InstructionLayer; needle: string }> = [
+      { layer: 'system', needle: 'You are AGI Workforce' },
+      { layer: 'personalized', needle: 'Preferred name: Ada' },
+      { layer: 'memory', needle: 'User prefers morning meetings.' },
+    ];
+    for (const marker of markers) {
+      expect(joined.indexOf(marker.needle), marker.layer).toBeGreaterThan(-1);
+    }
+
+    const observed = [...markers]
+      .sort((left, right) => joined.indexOf(left.needle) - joined.indexOf(right.needle))
+      .map((marker) => marker.layer);
+
+    expect(observed).toEqual(markers.map((marker) => marker.layer));
+    expect(instructionOrderProblems(observed)).toEqual([]);
+  });
+
+  it('keeps every context-only layer behind the cache boundary, where instructions never sit', async () => {
+    mocks.customInstructions.mockResolvedValue('Preferred name: Ada. Keep answers short.');
+    mocks.loadPolicy.mockResolvedValue({
+      enabled: true,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+      searchPastChats: true,
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from user_memories')) {
+        return [
+          { content: 'User prefers morning meetings.', category: 'preference', pinned: true },
+        ];
+      }
+      if (sql.includes('from web_messages')) {
+        return [
+          {
+            id: 'message-1',
+            conversation_id: 'conversation-1',
+            role: 'user',
+            content: 'Remember the interface polish checklist I wrote for the release.',
+            created_at: '2026-09-08T10:00:00.000Z',
+            title: 'Release polish',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const result = await processRequest(chatRequestFor('precedence-2'), auth());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+    const boundaryIndex = joined.indexOf(SYSTEM_PROMPT_CACHE_BOUNDARY);
+
+    expect(isContextOnlyInstructionLayer('memory')).toBe(true);
+    expect(boundaryIndex).toBeGreaterThan(-1);
+    expect(joined.indexOf('Preferred name: Ada')).toBeLessThan(boundaryIndex);
+    expect(joined.indexOf('User prefers morning meetings.')).toBeGreaterThan(boundaryIndex);
+    expect(joined.indexOf('<past_chats>')).toBeGreaterThan(boundaryIndex);
   });
 });

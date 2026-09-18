@@ -14,6 +14,12 @@ import {
   readRoutingHealth,
 } from '@/features/admin/services/routing-health-metrics';
 
+import {
+  fleetReliability,
+  withFallbackReadings,
+  withProviderFallbackReadings,
+} from './fallback-metrics';
+
 const PROVIDER_PARAM = 'provider';
 const NO_STORE = 'private, no-store';
 
@@ -33,15 +39,20 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     if (!isKnownRoutingProvider(provider)) {
       throw createError.badRequest('No live route is registered for that provider');
     }
+    const routes = withFallbackReadings(await readProviderRouteHealth(provider));
     return NextResponse.json(
-      { provider, routes: await readProviderRouteHealth(provider) },
+      { provider, routes, reliability: fleetReliability(routes) },
       { headers: { 'Cache-Control': NO_STORE } },
     );
   }
 
   const [health, definitions] = await Promise.all([readRoutingHealth(), listFlagDefinitions()]);
   return NextResponse.json(
-    { ...health, killSwitches: activeKillSwitches(definitions) },
+    {
+      ...health,
+      providers: withProviderFallbackReadings(health.providers),
+      killSwitches: activeKillSwitches(definitions),
+    },
     { headers: { 'Cache-Control': NO_STORE } },
   );
 }
