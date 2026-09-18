@@ -316,6 +316,8 @@ export {
   nearestProjectAccentId,
   type ProjectIconEntry,
   type ProjectAccentEntry,
+  OPEN_SEARCH_SHORTCUT,
+  openSearchShortcutLabel,
 } from './sidebar';
 export {
   SETTINGS_NAV,

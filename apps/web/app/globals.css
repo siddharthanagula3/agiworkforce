@@ -1408,6 +1408,21 @@
     animation-delay: 0.3s;
   }
 } /* Custom scrollbar */
+
+/* Firefox implements none of the ::-webkit-scrollbar rules below; scrollbar-width
+   and scrollbar-color are the standard equivalent, off the same two values. */
+:root {
+  --scrollbar-thumb: rgba(156, 163, 175, 0.5);
+  --scrollbar-thumb-hover: rgba(156, 163, 175, 0.8);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.dark {
+  --scrollbar-thumb: rgba(75, 85, 99, 0.5);
+  --scrollbar-thumb-hover: rgba(75, 85, 99, 0.8);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -1418,20 +1433,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.5);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.8);
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: rgba(75, 85, 99, 0.5);
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(75, 85, 99, 0.8);
+  background: var(--scrollbar-thumb-hover);
 } /* Selection styles */
 ::selection {
   background: hsl(var(--primary) / 0.2);
