@@ -153,6 +153,8 @@ interface ErasureFixture {
   avatarUrl?: string | null;
   failStatementMatching?: string;
   activeVideoJobs?: boolean;
+  activeImageJobs?: boolean;
+  imageSchemaAbsent?: boolean;
   pendingVideoIncident?: boolean;
   pendingVideoSettlement?: boolean;
   videoGateError?: Error;
@@ -169,7 +171,7 @@ function primeDb(fixture: ErasureFixture = {}): void {
       return [{ held: fixture.underLegalHold ?? false }];
     }
     if (sql.includes("to_regclass('public.video_generation_jobs')")) {
-      return [{ provisioned: true }];
+      return [{ video: true, image: !(fixture.imageSchemaAbsent ?? false) }];
     }
     if (sql.includes('update public.profiles') && sql.includes('deletion_requested_at')) {
       return fixture.missingProfileFence || fixture.liveDataFence ? [] : [{ id: 'user-1' }];
@@ -180,14 +182,15 @@ function primeDb(fixture: ErasureFixture = {}): void {
     ) {
       return fixture.missingProfileFence ? [] : [{ id: 'user-1' }];
     }
-    if (sql.includes('from public.video_generation_jobs')) {
+    if (sql.includes('as video_blocking')) {
       if (fixture.videoGateError) throw fixture.videoGateError;
       return [
         {
-          has_blocking:
+          video_blocking:
             (fixture.activeVideoJobs ?? false) ||
             (fixture.pendingVideoIncident ?? false) ||
             (fixture.pendingVideoSettlement ?? false),
+          image_blocking: fixture.activeImageJobs ?? false,
         },
       ];
     }
@@ -464,6 +467,64 @@ describe('eraseUserAccountData', () => {
     expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
     expect(mocks.deleteObject).not.toHaveBeenCalled();
     expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('touches nothing while an image job is still queued or still owes a settlement', async () => {
+    primeDb({ activeImageJobs: true, mediaRows: [{ id: 'asset-1', storage_pathname: 'image' }] });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
+    expect(report.tables['image_generation_jobs']).toEqual({
+      deleted: false,
+      retainedForRetry: true,
+    });
+    expect(report.tables['video_generation_jobs']).toBeUndefined();
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('asks about image jobs by their own status and settlement columns', async () => {
+    primeDb({});
+
+    await eraseUserAccountData('user-1');
+
+    const gate = mocks.query.mock.calls
+      .map((call) => String(call[0]))
+      .find((sql) => sql.includes('as image_blocking'));
+    expect(gate).toContain('from public.image_generation_jobs');
+    expect(gate).toMatch(/status in \('queued', 'processing'\)/);
+    expect(gate).toContain("billing_settlement_status = 'pending'");
+  });
+
+  it('erases normally on a deployment where the image migration has not been applied', async () => {
+    primeDb({ imageSchemaAbsent: true });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(true);
+    const gate = mocks.query.mock.calls
+      .map((call) => String(call[0]))
+      .find((sql) => sql.includes('as image_blocking'));
+    expect(gate).not.toContain('from public.image_generation_jobs');
+  });
+
+  it('deletes terminal image rows before their managed-usage parent', async () => {
+    primeDb({});
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(true);
+    const statements = executedStatements();
+    const imageIndex = statements.findIndex((sql) =>
+      sql.includes('delete from public.image_generation_jobs'),
+    );
+    const managedIndex = statements.findIndex((sql) =>
+      sql.includes('delete from public.managed_usage_requests'),
+    );
+    expect(imageIndex).toBeGreaterThanOrEqual(0);
+    expect(imageIndex).toBeLessThan(managedIndex);
   });
 
   it('never converts a data-only erasure blocked by video into an account purge', async () => {

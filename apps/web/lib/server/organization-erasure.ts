@@ -45,6 +45,7 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'organization_retention_sweeps', column: 'organization_id' },
   { table: 'legal_holds', column: 'organization_id' },
   { table: 'support_cases', column: 'organization_id' },
+  { table: 'support_access_grants', column: 'organization_id' },
   { table: 'web_conversations', column: 'organization_id' },
   { table: 'web_artifacts', column: 'organization_id' },
   { table: 'user_memories', column: 'organization_id' },
@@ -74,6 +75,8 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'retrieval_documents', column: 'organization_id' },
   { table: 'organization_billing_contracts', column: 'organization_id' },
   { table: 'organization_billing_invoices', column: 'organization_id' },
+  { table: 'organization_commercial_agreements', column: 'organization_id' },
+  { table: 'organization_subscription_state_transitions', column: 'organization_id' },
   { table: 'feature_flags', column: 'organization_id' },
   { table: 'event_trigger_events', column: 'organization_id' },
   { table: 'event_triggers', column: 'organization_id' },
@@ -124,6 +127,14 @@ export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
     'organization_id is ON DELETE SET NULL (0187_device_refresh_token_workspace_binding). The credential belongs to the member, not to the workspace it was paired in: decommissioning a workspace demotes the binding to personal rather than signing the member’s device out of their own account.',
   product_analytics_events:
     'organization_id is ON DELETE SET NULL (0213_product_analytics_events). A product event says that a member did something and from which client, never what they wrote, and the member keeps their own account after the workspace is decommissioned; the workspace reference is detached and the row retires on the analytics retention window the rollup cron enforces. The member’s own rows are deleted outright by account erasure.',
+  workspaces:
+    'organization_id is ON DELETE CASCADE (0234_workspaces_membership_status_and_installations), and refuse_primary_workspace_delete() raises on a direct delete of the primary workspace while the organizations row still exists, exactly as assert_organization_has_owner() does for organization_members. A decommissioned tenant’s workspaces go with the final organizations row delete below, which the trigger allows because the organization is already gone; a scoped delete here would fail on the primary row and abandon the purge.',
+  image_generation_jobs:
+    'organization_id is ON DELETE SET NULL (0226_durable_image_generation_jobs). A billed image job is a financial and asset record that must survive the workspace it ran in, the same reasoning this list applies to video_generation_jobs and account-erasure.ts applies to both for an erased user. The member’s own rows are deleted outright by account erasure.',
+  image_generation_job_assets:
+    'organization_id is ON DELETE SET NULL and asset_id cascades from media_assets (0226): eraseOrganizationMedia deletes the workspace’s media rows before this loop runs, so the join rows pointing at them go with the bytes they describe.',
+  support_access_events:
+    'Append-only break-glass trail (0229_support_access_grants), hash-chained on previous_hash. support_access_events_are_append_only() refuses DELETE from every role including the owner connection this module uses, organization_id is NOT NULL so it cannot be detached either, and the table deliberately carries no foreign key: the record of what support looked at has to outlive the workspace it names, which is exactly the workspace a deletion would otherwise clear the evidence for. account-erasure.ts fences the same table for an erased user.',
   routing_decision_traces:
     'organization_id is ON DELETE SET NULL (0212_routing_decision_traces). The trace records which model this product routed a request to and how that turn ended, which is platform routing telemetry rather than workspace content; the workspace reference is detached and the row retires on the routing-trace retention window that deletes every trace.',
 };
