@@ -19,6 +19,7 @@ import {
   LiveVoiceSessionError,
   type LiveSessionClosed,
   type LiveTranscriptTurn,
+  type LiveVoiceToolActivity,
 } from '@features/chat/lib/live-voice-session';
 
 const MESSAGE = {
@@ -45,6 +46,8 @@ export interface VoiceSessionController {
   reducedMotion: boolean;
   deviceName: string;
   backendBusy: boolean;
+  toolActivity: readonly LiveVoiceToolActivity[];
+  cancelBackendWork: () => void;
   reconnecting: boolean;
   reconnectAttempt: number;
   reconnectMaxAttempts: number;
@@ -168,6 +171,7 @@ function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Pr
           seconds: closed.seconds ?? session.lastUsageSeconds ?? 0,
           reason: closed.reason,
           settlement: session.settlement,
+          ...(session.lastTurnId ? { lastTurnId: session.lastTurnId } : {}),
         }),
       }),
     )
@@ -195,6 +199,7 @@ export function endLiveVoiceSession(reason: string): void {
   controller.conversation = null;
   stopVoiceReconnect();
   useVoiceSessionStore.getState().setBackendBusy(false);
+  useVoiceSessionStore.getState().setToolActivity([]);
   if (starting) {
     void starting.then(
       (started) => started.close().then((closed) => settleSession(started, { ...closed, reason })),
@@ -230,79 +235,98 @@ function resumeVoiceSessionAfterNavigation(): void {
   controller.handoff = null;
 }
 
-function startLiveVoiceSession(voice: string): Promise<LiveVoiceSession> {
+interface LiveVoiceStartSettings {
+  voice: string;
+  language: string | null;
+  pace: number;
+}
+
+function currentVoiceSettings(): LiveVoiceStartSettings {
+  const { voice, language, pace } = useVoiceSessionStore.getState();
+  return { voice, language: language || null, pace };
+}
+
+function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVoiceSession> {
   const store = useVoiceSessionStore.getState();
-  controller.starting ??= LiveVoiceSession.start({
-    voice,
-    conversationId: controller.sink?.conversationId ?? null,
-    callbacks: {
-      onStarted: () => store.dispatch({ type: VOICE_SESSION_EVENT.ready, listening: true }),
-      onSpeaking: (speaking) =>
-        store.dispatch({ type: VOICE_SESSION_EVENT.assistantSpeech, active: speaking }),
-      onBackendBusy: store.setBackendBusy,
-      onTranscript: deliverTranscript,
-      onUsage: () => undefined,
-      onClosed: (closed) => {
-        const session = controller.session;
-        controller.session = null;
-        store.setBackendBusy(false);
-        if (session) void settleSession(session, closed);
-        if (REMOTE_CLOSE_REASONS_WITH_NOTICE.has(closed.reason)) {
-          store.dispatch({
-            type: VOICE_SESSION_EVENT.fail,
-            message: LIVE_SESSION_MESSAGE.sessionEnded,
-          });
-        } else {
-          store.dispatch({ type: VOICE_SESSION_EVENT.exit });
-        }
+  // The conversation is settled before the offer, so the session the server
+  // records is bound to exactly one conversation rather than to none.
+  controller.starting ??= ensureConversation()
+    .catch(() => null)
+    .then((conversationId) =>
+      LiveVoiceSession.start({
+        voice: settings.voice,
+        conversationId: conversationId ?? controller.sink?.conversationId ?? null,
+        language: settings.language,
+        pace: settings.pace,
+        callbacks: {
+          onStarted: () => store.dispatch({ type: VOICE_SESSION_EVENT.ready, listening: true }),
+          onSpeaking: (speaking) =>
+            store.dispatch({ type: VOICE_SESSION_EVENT.assistantSpeech, active: speaking }),
+          onBackendBusy: store.setBackendBusy,
+          onTranscript: deliverTranscript,
+          onUsage: () => undefined,
+          onClosed: (closed) => {
+            const session = controller.session;
+            controller.session = null;
+            store.setBackendBusy(false);
+            if (session) void settleSession(session, closed);
+            if (REMOTE_CLOSE_REASONS_WITH_NOTICE.has(closed.reason)) {
+              store.dispatch({
+                type: VOICE_SESSION_EVENT.fail,
+                message: LIVE_SESSION_MESSAGE.sessionEnded,
+              });
+            } else {
+              store.dispatch({ type: VOICE_SESSION_EVENT.exit });
+            }
+          },
+          onError: (message) => {
+            controller.session = null;
+            store.setBackendBusy(false);
+            stopVoiceReconnect();
+            store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
+          },
+          onConnectionLost: (message) => {
+            const dropped = controller.session;
+            controller.session = null;
+            store.setBackendBusy(false);
+            if (dropped) {
+              void settleSession(dropped, {
+                reason: 'connection_lost',
+                seconds: dropped.lastUsageSeconds,
+              });
+            }
+            const retrying = scheduleVoiceReconnect();
+            if (!retrying) stopVoiceReconnect();
+            store.dispatch({
+              type: VOICE_SESSION_EVENT.fail,
+              message: retrying ? message : LIVE_SESSION_MESSAGE.reconnectFailed,
+            });
+          },
+        },
+      }),
+    )
+    .then(
+      (session) => {
+        controller.starting = null;
+        controller.session = session;
+        markVoiceReconnected();
+        return session;
       },
-      onError: (message) => {
-        controller.session = null;
-        store.setBackendBusy(false);
-        stopVoiceReconnect();
+      (error: unknown) => {
+        controller.starting = null;
+        const message =
+          error instanceof LiveVoiceSessionError
+            ? error.message
+            : LIVE_SESSION_MESSAGE.connectionFailed;
+        const recoverable =
+          !(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code);
+        if (!(reconnectState.active && recoverable && scheduleVoiceReconnect())) {
+          stopVoiceReconnect();
+        }
         store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
+        throw error;
       },
-      onConnectionLost: (message) => {
-        const dropped = controller.session;
-        controller.session = null;
-        store.setBackendBusy(false);
-        if (dropped) {
-          void settleSession(dropped, {
-            reason: 'connection_lost',
-            seconds: dropped.lastUsageSeconds,
-          });
-        }
-        const retrying = scheduleVoiceReconnect();
-        if (!retrying) stopVoiceReconnect();
-        store.dispatch({
-          type: VOICE_SESSION_EVENT.fail,
-          message: retrying ? message : LIVE_SESSION_MESSAGE.reconnectFailed,
-        });
-      },
-    },
-  }).then(
-    (session) => {
-      controller.starting = null;
-      controller.session = session;
-      markVoiceReconnected();
-      void ensureConversation();
-      return session;
-    },
-    (error: unknown) => {
-      controller.starting = null;
-      const message =
-        error instanceof LiveVoiceSessionError
-          ? error.message
-          : LIVE_SESSION_MESSAGE.connectionFailed;
-      const recoverable =
-        !(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code);
-      if (!(reconnectState.active && recoverable && scheduleVoiceReconnect())) {
-        stopVoiceReconnect();
-      }
-      store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
-      throw error;
-    },
-  );
+    );
   return controller.starting;
 }
 
@@ -315,7 +339,10 @@ export function useVoiceSession({
 }: UseVoiceSessionOptions): VoiceSessionController {
   const state = useVoiceSessionStore((store) => store.session);
   const voice = useVoiceSessionStore((store) => store.voice);
+  const language = useVoiceSessionStore((store) => store.language);
+  const pace = useVoiceSessionStore((store) => store.pace);
   const backendBusy = useVoiceSessionStore((store) => store.backendBusy);
+  const toolActivity = useVoiceSessionStore((store) => store.toolActivity);
   const dispatch = useVoiceSessionStore((store) => store.dispatch);
   const reducedMotion = usePrefersReducedMotion();
   const reconnect = useSyncExternalStore(
@@ -334,10 +361,12 @@ export function useVoiceSession({
     resumeVoiceSessionAfterNavigation();
   }, []);
 
+  // The settings a session starts with are read once, so a later change
+  // re-negotiates the open session below instead of restarting the connection.
   useEffect(() => {
     if (status !== VOICE_SESSION_STATUS.entering) return undefined;
     let cancelled = false;
-    startLiveVoiceSession(voice).then(
+    startLiveVoiceSession(currentVoiceSettings()).then(
       (session) => {
         if (!cancelled) setDeviceName(session.microphoneLabel);
       },
@@ -346,7 +375,15 @@ export function useVoiceSession({
     return () => {
       cancelled = true;
     };
-  }, [status, voice]);
+  }, [status]);
+
+  // A voice, language or pace change while the session is up re-negotiates it,
+  // so a language switch lands without dropping the utterance in flight.
+  useEffect(() => {
+    if (!isVoiceSessionActive(status) || status === VOICE_SESSION_STATUS.entering) return undefined;
+    void controller.session?.updateSettings({ voice, language: language || null, pace });
+    return undefined;
+  }, [status, voice, language, pace]);
 
   useEffect(() => {
     if (status !== VOICE_SESSION_STATUS.streaming || turnActive) return undefined;
@@ -408,6 +445,10 @@ export function useVoiceSession({
     dispatch({ type: VOICE_SESSION_EVENT.cancelUtterance });
   }, [dispatch]);
 
+  const cancelBackendWork = useCallback(() => {
+    controller.session?.cancelBackendWork();
+  }, []);
+
   const submitTyped = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -431,6 +472,8 @@ export function useVoiceSession({
     reducedMotion,
     deviceName,
     backendBusy,
+    toolActivity,
+    cancelBackendWork,
     reconnecting: reconnect.active,
     reconnectAttempt: reconnect.attempt,
     reconnectMaxAttempts: RECONNECT_MAX_ATTEMPTS,

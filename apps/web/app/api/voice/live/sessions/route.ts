@@ -42,7 +42,11 @@ import {
   LIVE_VOICE_INSTRUCTIONS,
 } from '@/lib/voice/live-voice-prompts';
 import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
-import { resolveLiveVoiceDelegationTools } from '@/lib/voice/live-voice-tools';
+import {
+  describeDelegationTools,
+  describeLiveVoiceTools,
+  resolveLiveVoiceDelegationTools,
+} from '@/lib/voice/live-voice-tools';
 import {
   describeLiveSessionFailure,
   LIVE_SESSION_BLOCK_MINUTES,
@@ -56,6 +60,15 @@ import {
   loadLiveVoiceContext,
   type LiveVoiceContextBundle,
 } from './lib/live-voice-context';
+import {
+  clampVoicePace,
+  createVoiceSession,
+  isVoiceSessionStoreReady,
+  VOICE_PACE_DEFAULT,
+  VOICE_PACE_MAX,
+  VOICE_PACE_MIN,
+  type VoiceSessionSurface,
+} from './lib/voice-session-store';
 
 const LIVE_SESSION_LEASE_SECONDS = 4 * 60 * 60;
 const SESSION_CREATE_TIMEOUT_MS = 20_000;
@@ -66,6 +79,9 @@ const CreateLiveSessionSchema = z.object({
   sdp: z.string().min(1).max(MAX_SDP_LENGTH),
   voice: z.string().min(1).max(64).nullable().optional(),
   conversationId: z.string().min(1).max(128).nullable().optional(),
+  language: z.string().min(2).max(32).nullable().optional(),
+  pace: z.number().min(VOICE_PACE_MIN).max(VOICE_PACE_MAX).optional(),
+  surface: z.enum(['web', 'mobile', 'desktop']).optional(),
 });
 
 function jsonError(
@@ -265,6 +281,9 @@ async function handleCreateLiveSession(request: NextRequest) {
   };
 
   const voice = isLiveVoice(body.voice) ? body.voice : LIVE_DEFAULT_VOICE;
+  const language = body.language?.trim() ? body.language.trim() : null;
+  const pace = clampVoicePace(body.pace ?? VOICE_PACE_DEFAULT);
+  const surface: VoiceSessionSurface = body.surface ?? 'web';
   let context: LiveVoiceContextBundle = EMPTY_LIVE_VOICE_CONTEXT;
   try {
     context = await loadLiveVoiceContext(scoped.db, {
@@ -285,6 +304,8 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
+  const delegationTools = resolveLiveVoiceDelegationTools(backendModel);
+  const offeredToolIds = describeDelegationTools(delegationTools);
   let response: Response;
   let responseText: string;
   try {
@@ -295,8 +316,11 @@ async function handleCreateLiveSession(request: NextRequest) {
       body: JSON.stringify({
         session: {
           model: liveModel.apiModelId ?? liveModel.id,
-          instructions: buildLiveVoiceInstructions(LIVE_VOICE_INSTRUCTIONS, context),
-          audio: { output: { voice } },
+          instructions: buildLiveVoiceInstructions(LIVE_VOICE_INSTRUCTIONS, context, { language }),
+          audio: {
+            output: { voice, speed: pace },
+            ...(language ? { input: { transcription: { language } } } : {}),
+          },
           delegation: {
             type: 'responses',
             responses: {
@@ -305,7 +329,7 @@ async function handleCreateLiveSession(request: NextRequest) {
                 LIVE_VOICE_BACKEND_INSTRUCTIONS,
                 context,
               ),
-              tools: resolveLiveVoiceDelegationTools(backendModel),
+              tools: delegationTools,
               tool_choice: 'auto',
             },
           },
@@ -357,12 +381,44 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
+  // The canonical record, written after the provider accepted so a row never
+  // names a session that does not exist. A conversation is required for it,
+  // which is why the client settles one before it offers.
+  let voiceSessionId: string | null = null;
+  if (body.conversationId) {
+    try {
+      if (await isVoiceSessionStoreReady(scoped.db)) {
+        const record = await createVoiceSession({
+          db: scoped.db,
+          userId,
+          organizationId: scoped.organizationId,
+          conversationId: body.conversationId,
+          provider,
+          providerSessionId: sessionId,
+          modelId: liveModel.id,
+          surface,
+          voice,
+          language,
+          pace,
+          activeTools: offeredToolIds,
+        });
+        voiceSessionId = record?.id ?? null;
+      }
+    } catch (error) {
+      logger.error(
+        { event: 'voice_session_not_persisted', error, userId, sessionId },
+        'Live voice session could not be recorded; the session continues unpersisted',
+      );
+    }
+  }
+
   logger.info(
     {
       userId,
       provider,
       model: liveModel.id,
       sessionId,
+      voiceSessionId,
       estimatedCostCents,
       contextTurns: context.turns.length,
       contextProject: context.projectPrompt !== null,
@@ -374,6 +430,9 @@ async function handleCreateLiveSession(request: NextRequest) {
     {
       sessionId,
       sdp: answer,
+      voiceSessionId,
+      settings: { voice, language, pace },
+      tools: describeLiveVoiceTools(offeredToolIds),
       settlement: {
         idempotencyKey: reservation.idempotencyKey,
         leaseToken: reservation.leaseToken,

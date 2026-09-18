@@ -162,6 +162,63 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.finalize).not.toHaveBeenCalled();
   });
 
+  it('applies the requested pace and language and records the session against the conversation', async () => {
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ session: { id: 'live_2' }, transport: { type: 'webrtc', sdp: 'answer' } }),
+        { status: 201 },
+      ),
+    );
+    const rows: Array<[string, unknown[]]> = [];
+    mocks.userScopedDb.mockResolvedValue({
+      db: {
+        query: async (sql: string, params: unknown[] = []) => {
+          rows.push([sql, params]);
+          if (sql.includes('to_regclass')) return [{ ready: true }];
+          if (sql.includes('insert into public.voice_sessions')) return [{ id: 'vs_1' }];
+          return [];
+        },
+      },
+      userId: 'user-1',
+      organizationId: null,
+    });
+
+    const response = await POST(
+      request({
+        sdp: OFFER,
+        voice: 'quartz',
+        conversationId: 'conv-1',
+        language: 'es',
+        pace: 1.25,
+      }),
+    );
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      settings: { voice: string; language: string | null; pace: number };
+    };
+    expect(body.settings).toEqual({ voice: 'quartz', language: 'es', pace: 1.25 });
+
+    const sent = JSON.parse(
+      String((mocks.fetch.mock.calls[0] as [string, RequestInit])[1].body),
+    ) as {
+      session: {
+        instructions: string;
+        audio: {
+          output: { voice: string; speed: number };
+          input: { transcription: { language: string } };
+        };
+      };
+    };
+    expect(sent.session.audio.output.speed).toBe(1.25);
+    expect(sent.session.audio.input.transcription.language).toBe('es');
+    expect(sent.session.instructions).toContain('es');
+
+    const insert = rows.find(([sql]) => sql.includes('insert into public.voice_sessions'));
+    expect(insert?.[1]).toEqual(
+      expect.arrayContaining(['user-1', 'conv-1', 'live_2', 'web', 'quartz', 'es', 1.25]),
+    );
+  });
+
   it('answers 503 with a configuration code when the provider key is missing', async () => {
     mocks.requireEnv.mockImplementation(() => {
       throw new Error('FATAL: OPENAI_API_KEY environment variable is required but not set.');

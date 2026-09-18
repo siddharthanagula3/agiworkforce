@@ -30,9 +30,12 @@ import {
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
   matchDenylistedUpload,
+  moderateGeneratedMedia,
   moderateManagedPrompt,
+  moderateUploadedImage,
   recordModerationEvent,
   PLATFORM_POLICY_REFUSAL,
+  UPLOADED_IMAGE_REFUSAL,
 } from '@/lib/moderation';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey, type ManagedMediaSurface } from '@agiworkforce/utils';
@@ -309,10 +312,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   // for and must never leave this process. Covers every operation the handler
   // serves, generate and the edit paths (inpaint/outpaint/variation), which
   // all reach a provider through this same prompt.
-  // NOTE: the helper's surface label has no 'managed-image' member yet, so
-  // these events are reported under the default surface.
   const moderation = moderateManagedPrompt({
     userId,
+    surface: 'managed-image',
     segments: negative_prompt ? [prompt, negative_prompt] : [prompt],
   });
   if (!moderation.allowed) {
@@ -632,23 +634,52 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       : [['source_image', sourceBytes]];
     for (const [param, bytes] of suppliedUploads) {
       const hashMatch = matchDenylistedUpload(bytes);
-      if (!hashMatch.matched) continue;
-      recordMediaSafety({ media: 'image', decision: 'blocked', reason: 'upload_hash_denylist' });
+      if (hashMatch.matched) {
+        recordMediaSafety({ media: 'image', decision: 'blocked', reason: 'upload_hash_denylist' });
+        recordModerationEvent({
+          surface: 'upload',
+          action: 'block',
+          categories: ['known_illegal_media'],
+          ruleIds: [`managed-image.${param}.hash-denylist`],
+          userId,
+          contentSha256: hashMatch.sha256,
+          ...(hashMatch.listLabel ? { listLabel: hashMatch.listLabel } : {}),
+        });
+        return NextResponse.json(
+          {
+            error: {
+              message: PLATFORM_POLICY_REFUSAL,
+              type: 'invalid_request_error',
+              code: 'content_policy_violation',
+            },
+          },
+          {
+            status: 422,
+            headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+          },
+        );
+      }
+
+      // Generated output is parsed at the provider boundary; a client upload is
+      // parsed here so a polyglot cannot ride an edit into a provider call.
+      const structure = moderateUploadedImage(bytes);
+      if (structure.allowed) continue;
+      recordMediaSafety({ media: 'image', decision: 'blocked', reason: 'upload_structure' });
       recordModerationEvent({
         surface: 'upload',
         action: 'block',
-        categories: ['known_illegal_media'],
-        ruleIds: [`managed-image.${param}.hash-denylist`],
+        categories: ['malformed_media'],
+        ruleIds: [`managed-image.${param}.${structure.reason}`],
         userId,
         contentSha256: hashMatch.sha256,
-        ...(hashMatch.listLabel ? { listLabel: hashMatch.listLabel } : {}),
       });
       return NextResponse.json(
         {
           error: {
-            message: PLATFORM_POLICY_REFUSAL,
+            message: UPLOADED_IMAGE_REFUSAL,
             type: 'invalid_request_error',
-            code: 'content_policy_violation',
+            code: 'invalid_source_image',
+            param,
           },
         },
         {
@@ -952,6 +983,32 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     outcome.images.length > 0
       ? outcome.images
       : await imageJobDeliveredImages(scopedDb, outcome.job);
+
+  // Output-side floor on every image this response carries inline, and the only
+  // re-check an edit's result gets before it reaches the caller.
+  for (const image of images) {
+    if (!image.b64_json) continue;
+    const outputModeration = await moderateGeneratedMedia({
+      userId,
+      media: 'image',
+      operation,
+      bytes: Buffer.from(image.b64_json, 'base64'),
+      mimeType: catalogModel.imageOutputMimeType,
+      prompt,
+    });
+    if (outputModeration.allowed) continue;
+    recordMediaSafety({ media: 'image', decision: 'blocked', reason: outputModeration.reason });
+    return NextResponse.json(
+      {
+        error: {
+          message: outputModeration.refusal,
+          type: 'invalid_request_error',
+          code: 'content_policy_violation',
+        },
+      },
+      { status: 422, headers: corsHeaders },
+    );
+  }
 
   try {
     await markManagedUsageClientDelivered(reservationForImageJob(scopedDb, outcome.job));

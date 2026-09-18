@@ -5,6 +5,8 @@ const live = vi.hoisted(() => ({
   start: vi.fn(),
   setMuted: vi.fn(),
   close: vi.fn(),
+  updateSettings: vi.fn(async () => undefined),
+  cancelBackendWork: vi.fn(),
 }));
 
 vi.mock('@features/chat/lib/live-voice-session', async (importOriginal) => {
@@ -45,8 +47,11 @@ function fakeSession() {
     settlement: SETTLEMENT,
     microphoneLabel: 'Built-in Microphone',
     lastUsageSeconds: 12,
+    lastTurnId: null,
     setMuted: live.setMuted,
     close: live.close,
+    updateSettings: live.updateSettings,
+    cancelBackendWork: live.cancelBackendWork,
     dispose: vi.fn(),
   };
 }
@@ -90,9 +95,13 @@ describe('useVoiceSession', () => {
     useVoiceSessionStore.setState({
       session: INITIAL_VOICE_SESSION_STATE,
       backendBusy: false,
+      toolActivity: [],
       voice: 'marin',
+      language: '',
+      pace: 1,
     });
     live.start.mockReset();
+    live.updateSettings.mockClear();
     live.setMuted.mockReset();
     live.close.mockReset();
     live.start.mockResolvedValue(fakeSession());
@@ -115,13 +124,43 @@ describe('useVoiceSession', () => {
     });
     await waitFor(() => expect(live.start).toHaveBeenCalledTimes(1));
     expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.entering);
-    expect(live.start.mock.calls[0]?.[0]).toMatchObject({ voice: 'marin', conversationId: null });
+    expect(live.start.mock.calls[0]?.[0]).toMatchObject({
+      voice: 'marin',
+      conversationId: 'conv-1',
+      language: null,
+      pace: 1,
+    });
 
     await act(async () => {
       lastCallbacks().onStarted();
     });
     expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
     await waitFor(() => expect(result.current.deviceName).toBe('Built-in Microphone'));
+  });
+
+  it('renegotiates the open session when the language or pace changes mid-conversation', async () => {
+    const { result } = mount();
+    await enterAndStart(result);
+    live.updateSettings.mockClear();
+
+    await act(async () => {
+      useVoiceSessionStore.getState().setLanguage('es');
+    });
+    await waitFor(() =>
+      expect(live.updateSettings).toHaveBeenCalledWith({ voice: 'marin', language: 'es', pace: 1 }),
+    );
+
+    await act(async () => {
+      useVoiceSessionStore.getState().setPace(1.25);
+    });
+    await waitFor(() =>
+      expect(live.updateSettings).toHaveBeenCalledWith({
+        voice: 'marin',
+        language: 'es',
+        pace: 1.25,
+      }),
+    );
+    expect(live.start).toHaveBeenCalledTimes(1);
   });
 
   it('mirrors incoming assistant audio and backend work without leaving the session', async () => {

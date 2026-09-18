@@ -6,7 +6,9 @@ import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
+import { SELECTABLE_LANGUAGES } from '@/app/i18n/index';
 import { useTTS } from '@/lib/hooks/useTTS';
+import { clampVoicePace, useVoiceSessionStore } from '@/features/chat/stores/voice-session-store';
 import { useModelStore } from '@shared/stores/model-store';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
 import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
@@ -57,6 +59,30 @@ const RESPONSE_STYLES = [
 
 type ResponseStyle = (typeof RESPONSE_STYLES)[number]['value'];
 
+const TECHNICAL_LEVELS = [
+  { value: 'unspecified', label: 'Not set' },
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'expert', label: 'Expert' },
+] as const;
+
+type TechnicalLevel = (typeof TECHNICAL_LEVELS)[number]['value'];
+
+const PREFERRED_FORMATTINGS = [
+  { value: 'unspecified', label: 'Not set' },
+  { value: 'prose', label: 'Prose' },
+  { value: 'bullets', label: 'Bullet lists' },
+  { value: 'headings_and_bullets', label: 'Headings and bullets' },
+  { value: 'tables_and_code', label: 'Tables and code' },
+] as const;
+
+type PreferredFormatting = (typeof PREFERRED_FORMATTINGS)[number]['value'];
+
+// Separate from the display language on purpose: that picker says in its own
+// help text that conversations are unaffected, and someone reading the
+// interface in one language often writes in another.
+const RESPONSE_LANGUAGE_AUTO = 'auto';
+
 // The four traits mobile ships, on the same 0-100 scale with 50 neutral. The
 // server only acts on a value 20 or more away from neutral, so the three
 // levels below sit safely past that threshold in either direction.
@@ -83,6 +109,9 @@ function traitLevelFor(value: number): TraitLevel {
 
 interface PersonalizationSettings {
   style: ResponseStyle;
+  technicalLevel: TechnicalLevel;
+  preferredFormatting: PreferredFormatting;
+  responseLanguage: string;
   warmth: number;
   enthusiasm: number;
   headersLists: number;
@@ -91,11 +120,22 @@ interface PersonalizationSettings {
 
 const DEFAULT_PERSONALIZATION: PersonalizationSettings = {
   style: 'default',
+  technicalLevel: 'unspecified',
+  preferredFormatting: 'unspecified',
+  responseLanguage: RESPONSE_LANGUAGE_AUTO,
   warmth: 50,
   enthusiasm: 50,
   headersLists: 50,
   emoji: 50,
 };
+
+function storedChoice<T extends string>(
+  value: unknown,
+  allowed: readonly { value: T }[],
+  fallback: T,
+): T {
+  return allowed.some((entry) => entry.value === value) ? (value as T) : fallback;
+}
 
 function storedTrait(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -109,6 +149,7 @@ interface GeneralSettings {
   preferredName: string;
   workDescription: WorkDescription;
   instructions: string;
+  instructionsEnabled: boolean;
 }
 
 function storedText(value: unknown): string | undefined {
@@ -133,6 +174,7 @@ export function GeneralSection() {
   const [preferredName, setPreferredName] = useState('');
   const [workDescription, setWorkDescription] = useState<WorkDescription>('');
   const [instructions, setInstructions] = useState<string>('');
+  const [instructionsEnabled, setInstructionsEnabled] = useState(true);
   const [personalization, setPersonalization] =
     useState<PersonalizationSettings>(DEFAULT_PERSONALIZATION);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -184,14 +226,23 @@ export function GeneralSection() {
           '',
       );
       setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
+      setInstructionsEnabled(stored.instructionsEnabled !== false);
 
       const storedStyle = await fetchStoredPreferenceNamespace<Partial<PersonalizationSettings>>(
         PERSONALIZATION_NAMESPACE,
       ).catch(() => ({}) as Partial<PersonalizationSettings>);
       setPersonalization({
-        style: RESPONSE_STYLES.some((entry) => entry.value === storedStyle.style)
-          ? (storedStyle.style as ResponseStyle)
-          : 'default',
+        style: storedChoice(storedStyle.style, RESPONSE_STYLES, 'default'),
+        technicalLevel: storedChoice(storedStyle.technicalLevel, TECHNICAL_LEVELS, 'unspecified'),
+        preferredFormatting: storedChoice(
+          storedStyle.preferredFormatting,
+          PREFERRED_FORMATTINGS,
+          'unspecified',
+        ),
+        responseLanguage:
+          typeof storedStyle.responseLanguage === 'string' && storedStyle.responseLanguage
+            ? storedStyle.responseLanguage
+            : RESPONSE_LANGUAGE_AUTO,
         warmth: storedTrait(storedStyle.warmth) ?? 50,
         enthusiasm: storedTrait(storedStyle.enthusiasm) ?? 50,
         headersLists: storedTrait(storedStyle.headersLists) ?? 50,
@@ -217,9 +268,16 @@ export function GeneralSection() {
     preferredName,
     workDescription,
     instructions,
+    instructionsEnabled,
     personalization,
   });
-  latestFormValuesRef.current = { preferredName, workDescription, instructions, personalization };
+  latestFormValuesRef.current = {
+    preferredName,
+    workDescription,
+    instructions,
+    instructionsEnabled,
+    personalization,
+  };
 
   const flushPendingSave = useCallback(() => {
     if (!dirtyRef.current) return;
@@ -234,6 +292,7 @@ export function GeneralSection() {
         preferredName: values.preferredName.trim(),
         workDescription: values.workDescription,
         instructions: values.instructions,
+        instructionsEnabled: values.instructionsEnabled,
       }),
       savePreferenceNamespace(PERSONALIZATION_NAMESPACE, values.personalization),
     ]).catch(() => {});
@@ -248,6 +307,7 @@ export function GeneralSection() {
         preferredName: preferredName.trim(),
         workDescription,
         instructions,
+        instructionsEnabled,
       };
       void Promise.all([
         savePreferenceNamespace(PREF_NAMESPACE, next),
@@ -267,6 +327,7 @@ export function GeneralSection() {
     };
   }, [
     instructions,
+    instructionsEnabled,
     loadError,
     mounted,
     personalization,
@@ -346,6 +407,7 @@ export function GeneralSection() {
         preferredName: trimmedPreferred,
         workDescription,
         instructions,
+        instructionsEnabled,
       });
       setPreferredName(trimmedPreferred);
 
@@ -520,6 +582,73 @@ export function GeneralSection() {
             </select>
           </FieldRow>
 
+          <FieldRow label="Technical level" htmlFor="general-technical-level">
+            <select
+              id="general-technical-level"
+              value={personalization.technicalLevel}
+              onChange={(e) => {
+                markDirty();
+                setPersonalization((current) => ({
+                  ...current,
+                  technicalLevel: e.target.value as TechnicalLevel,
+                }));
+              }}
+              disabled={!profilePreferencesReady || saving}
+              className={SELECT_CLASS}
+            >
+              {TECHNICAL_LEVELS.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
+          <FieldRow label="Preferred formatting" htmlFor="general-preferred-formatting">
+            <select
+              id="general-preferred-formatting"
+              value={personalization.preferredFormatting}
+              onChange={(e) => {
+                markDirty();
+                setPersonalization((current) => ({
+                  ...current,
+                  preferredFormatting: e.target.value as PreferredFormatting,
+                }));
+              }}
+              disabled={!profilePreferencesReady || saving}
+              className={SELECT_CLASS}
+            >
+              {PREFERRED_FORMATTINGS.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
+          <FieldRow label="Response language" htmlFor="general-response-language">
+            <select
+              id="general-response-language"
+              value={personalization.responseLanguage}
+              onChange={(e) => {
+                markDirty();
+                setPersonalization((current) => ({
+                  ...current,
+                  responseLanguage: e.target.value,
+                }));
+              }}
+              disabled={!profilePreferencesReady || saving}
+              className={SELECT_CLASS}
+            >
+              <option value={RESPONSE_LANGUAGE_AUTO}>Match my message</option>
+              {SELECTABLE_LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.nativeName}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
           {STYLE_TRAITS.map((trait) => (
             <FieldRow key={trait.key} label={trait.label} htmlFor={`general-trait-${trait.key}`}>
               <select
@@ -545,13 +674,47 @@ export function GeneralSection() {
           ))}
 
           {/* Instructions for AGI, full-width textarea (matches reference) */}
-          <label className="flex flex-col gap-1.5 pt-1">
-            <span className="text-[13px] font-medium text-foreground">Instructions for AGI</span>
-            <span className="text-xs leading-relaxed text-muted-foreground">
-              AGI will keep these in mind across chats. They help tailor tone, format, and
-              explanations to how you work best.
-            </span>
+          <div className="flex flex-col gap-1.5 pt-1">
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="general-instructions"
+                className="text-[13px] font-medium text-foreground"
+              >
+                Instructions for AGI
+              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={instructionsEnabled}
+                aria-label="Apply instructions for AGI"
+                disabled={!profilePreferencesReady || saving}
+                onClick={() => {
+                  markDirty();
+                  setInstructionsEnabled((current) => !current);
+                }}
+                className={`h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  instructionsEnabled ? 'bg-primary' : 'bg-muted'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`block h-5 w-5 rounded-full bg-background transition-transform ${
+                    instructionsEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            <p
+              id="general-instructions-hint"
+              className="text-xs leading-relaxed text-muted-foreground"
+            >
+              {instructionsEnabled
+                ? 'AGI will keep these in mind across chats. They help tailor tone, format, and explanations to how you work best.'
+                : 'Switched off. Your instructions are kept here and are not sent to the model until you switch them back on.'}
+            </p>
             <textarea
+              id="general-instructions"
+              aria-describedby="general-instructions-hint"
               value={instructions}
               onChange={(e) => {
                 markDirty();
@@ -567,7 +730,7 @@ export function GeneralSection() {
             <span className="text-right text-[12px] text-muted-foreground">
               {instructions.length} / 2000
             </span>
-          </label>
+          </div>
 
           {/* Save row */}
           <div className="flex items-center gap-3">
@@ -662,6 +825,7 @@ export function GeneralSection() {
           {/* Read-aloud voice */}
           <ReadAloudVoiceRow />
           <VoiceSpeedRow />
+          <LiveVoicePaceRow />
 
           {/* Keyboard shortcuts */}
           <KeyboardShortcutsRow />
@@ -1060,6 +1224,44 @@ function VoiceSpeedRow() {
             onClick={() => setVoiceSpeed(option.value)}
             className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
               voiceSpeed === option.value
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </Row>
+  );
+}
+
+// The row above sets the read-aloud rate. This one sets the pace of a live
+// voice conversation, which is negotiated with the session rather than spoken
+// by the browser.
+function LiveVoicePaceRow() {
+  const pace = useVoiceSessionStore((state) => state.pace);
+  const setPace = useVoiceSessionStore((state) => state.setPace);
+
+  const options = [
+    { value: 0.75, label: 'Slower' },
+    { value: 1, label: 'Normal' },
+    { value: 1.25, label: 'Faster' },
+    { value: 1.5, label: 'Fastest' },
+  ];
+
+  return (
+    <Row label="Voice conversation pace">
+      <div className="flex gap-1" role="group" aria-label="Voice conversation pace">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={clampVoicePace(pace) === option.value}
+            aria-label={`${option.label} voice conversation pace`}
+            onClick={() => setPace(option.value)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              clampVoicePace(pace) === option.value
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             }`}

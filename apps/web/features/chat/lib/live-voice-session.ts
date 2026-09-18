@@ -16,6 +16,7 @@ const ASSISTANT_TURN_SETTLE_MS = 1_500;
 const OVERLAP_GRACE_MS = 800;
 const ASSISTANT_TRANSCRIPT_IDLE_MS = 2_500;
 const CLIENT_EVENT_PREFIX = 'agi';
+const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
 
 export const LIVE_SESSION_MESSAGE = {
   microphoneDenied: 'Microphone access was denied. Allow the microphone to use voice mode.',
@@ -27,6 +28,8 @@ export const LIVE_SESSION_MESSAGE = {
   reconnectFailed: 'The voice connection could not be restored.',
   sessionEnded: 'The voice session ended.',
   sessionRejected: 'The voice session could not be started.',
+  usageExhausted:
+    'Voice ran out of included minutes on this plan, so the session ended. Nothing was lost from the conversation.',
 } as const;
 
 export type LiveTranscriptRole = 'user' | 'assistant';
@@ -51,10 +54,49 @@ export interface LiveSessionClosed {
   seconds: number | null;
 }
 
+export interface LiveVoiceToolDescriptor {
+  id: string;
+  label: string;
+  timeoutMs: number;
+  requiresApproval: boolean;
+}
+
+export type LiveVoiceToolState = 'running' | 'timed_out';
+
+export interface LiveVoiceToolActivity {
+  delegationId: string;
+  toolId: string;
+  label: string;
+  state: LiveVoiceToolState;
+  startedAt: number;
+}
+
+/**
+ * The prompt tells the model never to claim an action it did not take. This is
+ * the app-level half: a spoken claim of completion with no tool result behind
+ * it in this session is reported rather than trusted.
+ */
+const SUCCESS_CLAIM =
+  /\b(?:i(?:'|’)?ve|i\s+have|i\s+just)\s+(?:done|finished|completed|sent|saved|created|updated|deleted|booked|scheduled|posted|cancell?ed|started|run|ran)\b|\b(?:it(?:'|’)?s|that(?:'|’)?s)\s+(?:done|sent|saved|created|updated|deleted|booked|scheduled|posted)\b|\b(?:all\s+set|taken\s+care\s+of|went\s+through)\b/i;
+const CLAIM_HEDGE =
+  /\b(?:cannot|can(?:'|’)?t|could\s+not|couldn(?:'|’)?t|unable|failed|did\s+not|didn(?:'|’)?t|would\s+you\s+like|do\s+you\s+want|shall\s+i)\b/i;
+
+export function checkSpokenSuccessClaim(
+  text: string,
+  completedTools: readonly string[],
+): { claimsSuccess: boolean; verified: boolean } {
+  const claimsSuccess = SUCCESS_CLAIM.test(text) && !CLAIM_HEDGE.test(text);
+  return { claimsSuccess, verified: !claimsSuccess || completedTools.length > 0 };
+}
+
 export interface LiveVoiceSessionCallbacks {
   onStarted: () => void;
   onSpeaking: (active: boolean) => void;
   onBackendBusy: (active: boolean) => void;
+  /** Per-tool detail behind the busy flag, for the label and the cancel affordance. */
+  onToolActivity?: (activities: readonly LiveVoiceToolActivity[]) => void;
+  /** A spoken claim of a completed action with no tool result behind it. */
+  onUnverifiedClaim?: (turn: LiveTranscriptTurn) => void;
   onTranscript: (turn: LiveTranscriptTurn) => void;
   onUsage: (seconds: number) => void;
   onClosed: (closed: LiveSessionClosed) => void;
@@ -64,9 +106,17 @@ export interface LiveVoiceSessionCallbacks {
   onConnectionLost?: (message: string) => void;
 }
 
+export interface LiveVoiceSettings {
+  voice?: string | null;
+  language?: string | null;
+  pace?: number;
+}
+
 export interface LiveVoiceSessionOptions {
   voice: string | null;
   conversationId: string | null;
+  language?: string | null;
+  pace?: number;
   callbacks: LiveVoiceSessionCallbacks;
 }
 
@@ -74,6 +124,9 @@ interface CreateSessionResponse {
   sessionId: string;
   sdp: string;
   settlement: LiveSessionSettlement;
+  voiceSessionId?: string | null;
+  settings?: { voice: string; language: string | null; pace: number };
+  tools?: LiveVoiceToolDescriptor[];
 }
 
 interface ServerEvent {
@@ -98,19 +151,27 @@ export class LiveVoiceSessionError extends Error {
   }
 }
 
+// A spend or quota refusal gets its own code and its own sentence: the generic
+// 'could not be started' left the user with no idea why voice stopped.
+function isUsageRefusal(status: number): boolean {
+  return status === 402 || status === 429;
+}
+
 async function readErrorMessage(response: Response): Promise<LiveVoiceSessionError> {
+  const fallback = isUsageRefusal(response.status)
+    ? LIVE_SESSION_MESSAGE.usageExhausted
+    : LIVE_SESSION_MESSAGE.sessionRejected;
+  const fallbackCode = isUsageRefusal(response.status)
+    ? 'usage_exhausted'
+    : `http_${response.status}`;
   try {
     const body = (await response.json()) as {
       error?: { message?: string; code?: string };
     };
     const message = body.error?.message?.trim();
-    const code = body.error?.code ?? `http_${response.status}`;
-    return new LiveVoiceSessionError(message || LIVE_SESSION_MESSAGE.sessionRejected, code);
+    return new LiveVoiceSessionError(message || fallback, body.error?.code ?? fallbackCode);
   } catch {
-    return new LiveVoiceSessionError(
-      LIVE_SESSION_MESSAGE.sessionRejected,
-      `http_${response.status}`,
-    );
+    return new LiveVoiceSessionError(fallback, fallbackCode);
   }
 }
 
@@ -169,9 +230,13 @@ export class LiveVoiceSession {
   private assistantTurn: { id: string; text: string; lastDeltaAt: number } | null = null;
   private overlapTimer: number | null = null;
   private idleTimer: number | null = null;
-  private readonly pendingDelegations = new Set<string>();
+  private readonly pendingDelegations = new Map<string, LiveVoiceToolActivity>();
+  private readonly delegationTimers = new Map<string, number>();
+  private readonly completedTools: string[] = [];
+  private readonly toolDescriptors = new Map<string, LiveVoiceToolDescriptor>();
   private closeResolve: (() => void) | null = null;
   private usageSeconds: number | null = null;
+  private lastDeliveredTurnId: string | null = null;
 
   private constructor(
     microphone: MediaStream,
@@ -188,6 +253,7 @@ export class LiveVoiceSession {
     this.sessionId = created.sessionId;
     this.settlement = created.settlement;
     this.callbacks = callbacks;
+    for (const tool of created.tools ?? []) this.toolDescriptors.set(tool.id, tool);
   }
 
   static async start(options: LiveVoiceSessionOptions): Promise<LiveVoiceSession> {
@@ -244,6 +310,9 @@ export class LiveVoiceSession {
           sdp,
           voice: options.voice,
           conversationId: options.conversationId,
+          language: options.language ?? null,
+          ...(options.pace === undefined ? {} : { pace: options.pace }),
+          surface: 'web',
         }),
       });
       if (!response.ok) throw await readErrorMessage(response);
@@ -270,6 +339,38 @@ export class LiveVoiceSession {
     return this.usageSeconds;
   }
 
+  get lastTurnId(): string | null {
+    return this.lastDeliveredTurnId;
+  }
+
+  /**
+   * A mid-session change: the provider is re-negotiated over the open data
+   * channel so the current utterance keeps its connection, and the record is
+   * updated so a reconnect or a second device reads the same settings.
+   */
+  async updateSettings(settings: LiveVoiceSettings): Promise<void> {
+    const audio: Record<string, unknown> = {};
+    const output: Record<string, unknown> = {};
+    if (settings.voice) output['voice'] = settings.voice;
+    if (settings.pace !== undefined) output['speed'] = settings.pace;
+    if (Object.keys(output).length > 0) audio['output'] = output;
+    if (settings.language !== undefined) {
+      audio['input'] = { transcription: { language: settings.language } };
+    }
+    if (Object.keys(audio).length > 0) this.send({ type: 'session.update', session: { audio } });
+
+    const body: Record<string, unknown> = {};
+    if (settings.voice) body['voice'] = settings.voice;
+    if (settings.language !== undefined) body['language'] = settings.language;
+    if (settings.pace !== undefined) body['pace'] = settings.pace;
+    if (Object.keys(body).length === 0) return;
+    await fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(this.sessionId)}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: await getCsrfToken() },
+      body: JSON.stringify(body),
+    }).catch(() => undefined);
+  }
+
   setMuted(muted: boolean): void {
     this.microphone.getAudioTracks().forEach((track) => {
       track.enabled = !muted;
@@ -279,6 +380,7 @@ export class LiveVoiceSession {
 
   async close(): Promise<LiveSessionClosed> {
     if (this.disposed) return { reason: 'disposed', seconds: this.usageSeconds };
+    this.cancelBackendWork();
     this.closing = true;
     this.microphone.getTracks().forEach((track) => track.stop());
     this.audio.pause();
@@ -426,18 +528,23 @@ export class LiveVoiceSession {
         this.appendAssistant(String(parsed['delta'] ?? ''));
         return;
       case 'session.delegation.created': {
-        const delegation = parsed['delegation'] as { id?: string } | undefined;
-        if (delegation?.id) this.pendingDelegations.add(delegation.id);
-        this.callbacks.onBackendBusy(this.pendingDelegations.size > 0);
+        const delegation = parsed['delegation'] as
+          { id?: string; tool?: string; type?: string } | undefined;
+        if (delegation?.id) this.beginDelegation(delegation.id, delegation.tool ?? delegation.type);
+        this.publishToolActivity();
         return;
       }
       case 'response.event': {
-        const nested = parsed['event'] as { type?: string } | undefined;
+        const nested = parsed['event'] as { type?: string; item?: { type?: string } } | undefined;
         const delegationId = parsed['delegation_id'];
+        const toolId = nested?.item?.type;
+        if (typeof delegationId === 'string' && toolId) this.nameDelegation(delegationId, toolId);
         if (nested?.type && DELEGATION_TERMINAL_EVENTS.has(nested.type)) {
-          if (typeof delegationId === 'string') this.pendingDelegations.delete(delegationId);
-          else this.pendingDelegations.clear();
-          this.callbacks.onBackendBusy(this.pendingDelegations.size > 0);
+          const succeeded = nested.type === 'response.completed';
+          if (typeof delegationId === 'string') this.endDelegation(delegationId, succeeded);
+          else
+            for (const id of [...this.pendingDelegations.keys()]) this.endDelegation(id, succeeded);
+          this.publishToolActivity();
         }
         return;
       }
@@ -466,6 +573,73 @@ export class LiveVoiceSession {
       default:
         return;
     }
+  }
+
+  private beginDelegation(delegationId: string, toolId: string | undefined): void {
+    const descriptor = this.describeTool(toolId);
+    this.pendingDelegations.set(delegationId, {
+      delegationId,
+      toolId: descriptor.id,
+      label: descriptor.label,
+      state: 'running',
+      startedAt: Date.now(),
+    });
+    const timer = window.setTimeout(() => {
+      this.delegationTimers.delete(delegationId);
+      const activity = this.pendingDelegations.get(delegationId);
+      if (!activity) return;
+      this.pendingDelegations.set(delegationId, { ...activity, state: 'timed_out' });
+      this.publishToolActivity();
+    }, descriptor.timeoutMs);
+    this.delegationTimers.set(delegationId, timer);
+  }
+
+  private nameDelegation(delegationId: string, toolId: string): void {
+    const activity = this.pendingDelegations.get(delegationId);
+    if (!activity || activity.toolId !== 'unknown') return;
+    const descriptor = this.describeTool(toolId);
+    this.pendingDelegations.set(delegationId, {
+      ...activity,
+      toolId: descriptor.id,
+      label: descriptor.label,
+    });
+  }
+
+  private endDelegation(delegationId: string, succeeded: boolean): void {
+    const timer = this.delegationTimers.get(delegationId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    this.delegationTimers.delete(delegationId);
+    const activity = this.pendingDelegations.get(delegationId);
+    this.pendingDelegations.delete(delegationId);
+    if (succeeded && activity) this.completedTools.push(activity.toolId);
+  }
+
+  private describeTool(toolId: string | undefined): LiveVoiceToolDescriptor {
+    const known = toolId ? this.toolDescriptors.get(toolId) : undefined;
+    if (known) return known;
+    return {
+      id: toolId ?? 'unknown',
+      label: 'Working on it',
+      timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
+      requiresApproval: false,
+    };
+  }
+
+  private publishToolActivity(): void {
+    this.callbacks.onBackendBusy(this.pendingDelegations.size > 0);
+    this.callbacks.onToolActivity?.([...this.pendingDelegations.values()]);
+  }
+
+  /**
+   * An explicit cancel for the delegated turn. Tearing the peer down on our
+   * side leaves the provider running the tool it was asked for, and billing it.
+   */
+  cancelBackendWork(): void {
+    for (const delegationId of [...this.pendingDelegations.keys()]) {
+      this.send({ type: 'session.delegation.cancel', delegation_id: delegationId });
+      this.endDelegation(delegationId, false);
+    }
+    this.publishToolActivity();
   }
 
   private nextTurnId(): string {
@@ -538,6 +712,7 @@ export class LiveVoiceSession {
     const turn = this.userTurn;
     this.userTurn = null;
     if (!turn || !turn.text.trim()) return;
+    this.lastDeliveredTurnId = turn.id;
     this.callbacks.onTranscript({ turnId: turn.id, role: 'user', text: turn.text, final: true });
   }
 
@@ -547,12 +722,17 @@ export class LiveVoiceSession {
     const turn = this.assistantTurn;
     this.assistantTurn = null;
     if (!turn || !turn.text.trim()) return;
-    this.callbacks.onTranscript({
+    this.lastDeliveredTurnId = turn.id;
+    const delivered: LiveTranscriptTurn = {
       turnId: turn.id,
       role: 'assistant',
       text: turn.text,
       final: true,
-    });
+    };
+    this.callbacks.onTranscript(delivered);
+    if (!checkSpokenSuccessClaim(turn.text, this.completedTools).verified) {
+      this.callbacks.onUnverifiedClaim?.(delivered);
+    }
   }
 
   private finalizeTurns(): void {
@@ -567,6 +747,8 @@ export class LiveVoiceSession {
   }
 
   private stopTimers(): void {
+    for (const timer of this.delegationTimers.values()) window.clearTimeout(timer);
+    this.delegationTimers.clear();
     if (this.levelTimer !== null) window.clearInterval(this.levelTimer);
     if (this.keepaliveTimer !== null) window.clearInterval(this.keepaliveTimer);
     if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);

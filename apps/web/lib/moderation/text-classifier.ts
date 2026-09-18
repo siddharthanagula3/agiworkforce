@@ -1,5 +1,5 @@
-
-export type ModerationCategory = 'csae' | 'wmd' | 'illegal_weapons' | 'targeted_violence';
+export type ModerationCategory =
+  'csae' | 'wmd' | 'illegal_weapons' | 'targeted_violence' | 'likeness';
 
 export type ModerationAction = 'allow' | 'flag' | 'block';
 
@@ -155,6 +155,15 @@ const VIOLENCE_TARGET =
 const VIOLENCE_EXEMPT =
   /\b(?:process|processes|pid|daemon|server|servers|container|containers|port|thread|threads|session|sessions|kernel|signal|sigkill|kill\s*-9|npm|pnpm|docker|kubectl|query|queries|terminal|shell|tab|app|program|script|job|task|build|watcher|tunnel|game|games|npc|boss\s+(?:fight|battle)|character|characters|novel|screenplay|fiction|fictional|chess|pawn|weed|weeds|bacteria|germs|news|article|headline|documentary)\b/;
 
+const REAL_PERSON =
+  /\b(?:real\s+person|real\s+people|celebrity|celebrities|public\s+figure|politician|president|prime\s+minister|senator|congressman|congresswoman|governor|mayor|actor|actress|singer|pop\s+star|musician|athlete|influencer|streamer|ceo\s+of|my\s+(?:ex|classmate|coworker|co[-\s]?worker|neighbou?r|teacher|professor|boss|friend|roommate|sister|brother)|someone\s+i\s+know)\b/;
+const IMPERSONATION =
+  /\b(?:deep\s*fake|deep\s*fakes|face[-\s]?swap\w*|swap\s+(?:his|her|their|the)\s+face|impersonat\w*|pretend(?:ing)?\s+to\s+be|voice\s+clon\w*|clone\s+(?:his|her|their)\s+voice|put\s+(?:his|her|their)\s+face|likeness\s+of|look\s+like\s+(?:he|she|they)\s+(?:said|did))\b/;
+const PHOTOREALISM =
+  /\b(?:photo\s*realistic|photorealism|hyper\s*realistic|real\s+photo|actual\s+photo|photograph\s+of|headshot|paparazzi|candid\s+shot|passport\s+photo|id\s+photo|selfie\s+of)\b/;
+const LIKENESS_EXEMPT =
+  /\b(?:fictional|fictitious|original\s+character|made[-\s]?up|invented|cartoon|anime\s+character|caricature|satir\w*|parody|editorial\s+illustration|consent(?:ed|ing|ual)?|with\s+(?:their|his|her)\s+permission|myself|my\s+own\s+(?:face|likeness|photo|portrait)|self[-\s]portrait|public\s+domain|historical\s+figure|detect(?:s|ing|ion)?|research|policy|journalis\w*|news\s+article|essay|explain\w*|how\s+deepfakes\s+(?:work|affect|spread))\b/;
+
 const RULES: readonly ModerationRule[] = [
   {
     id: 'csae.term-request',
@@ -246,6 +255,30 @@ const RULES: readonly ModerationRule[] = [
     requires: [VIOLENCE_ACT, VIOLENCE_TARGET],
     proximity: 100,
     unless: [VIOLENCE_EXEMPT],
+  },
+
+  {
+    id: 'likeness.sexualized-real-person',
+    category: 'likeness',
+    weight: 100,
+    requires: [GENERATION_VERB, SEXUAL_EXPLICIT, REAL_PERSON],
+    proximity: 140,
+  },
+  {
+    id: 'likeness.impersonation-request',
+    category: 'likeness',
+    weight: 100,
+    requires: [GENERATION_VERB, IMPERSONATION, REAL_PERSON],
+    proximity: 140,
+    unless: [LIKENESS_EXEMPT],
+  },
+  {
+    id: 'likeness.photoreal-depiction',
+    category: 'likeness',
+    weight: 50,
+    requires: [GENERATION_VERB, PHOTOREALISM, REAL_PERSON],
+    proximity: 160,
+    unless: [LIKENESS_EXEMPT],
   },
 ];
 

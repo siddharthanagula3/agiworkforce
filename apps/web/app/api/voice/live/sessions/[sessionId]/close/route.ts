@@ -24,6 +24,7 @@ import {
   liveSessionProviderCostCents,
 } from '@/lib/voice/live-voice-billing';
 import { recordLiveVoiceBackendCost } from '@/lib/voice/live-voice-backend-cost';
+import { closeVoiceSession, isVoiceSessionStoreReady } from '../../lib/voice-session-store';
 
 const CloseLiveSessionSchema = z.object({
   seconds: z
@@ -31,6 +32,7 @@ const CloseLiveSessionSchema = z.object({
     .min(0)
     .max(24 * 60 * 60),
   reason: z.string().max(64).optional(),
+  lastTurnId: z.string().min(1).max(128).optional(),
   /**
    * What the delegated backend responses model spent during the session. The
    * provider bills it separately from the per-minute session rate, and nothing
@@ -155,6 +157,22 @@ async function handleCloseLiveSession(
       'Live voice delivery marker could not be persisted',
     );
   }
+  // The record closes after settlement: a row that still says active is a
+  // session that was never billed, which is the state worth noticing.
+  try {
+    if (await isVoiceSessionStoreReady(scoped.db)) {
+      await closeVoiceSession({
+        db: scoped.db,
+        userId,
+        providerSessionId: sessionId,
+        reason: body.reason ?? 'close_requested',
+        ...(body.lastTurnId ? { lastTurnId: body.lastTurnId } : {}),
+      });
+    }
+  } catch (error) {
+    logger.warn({ error, userId, sessionId }, 'Voice session record could not be closed');
+  }
+
   logger.info(
     { userId, sessionId, billedSeconds, actualCostCents, reason: body.reason },
     'Live voice session settled',

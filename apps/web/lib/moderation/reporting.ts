@@ -4,7 +4,8 @@ import { logger } from '@/lib/logger';
 import { sha256Hex } from './hash-denylist';
 import type { ModerationCategory } from './text-classifier';
 
-export type ModerationSurface = 'managed-chat' | 'managed-video' | 'upload';
+export type ModerationSurface =
+  'managed-chat' | 'managed-image' | 'managed-video' | 'upload' | 'generated-output';
 
 export interface ModerationEvent {
   surface: ModerationSurface;

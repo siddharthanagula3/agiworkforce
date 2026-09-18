@@ -5,8 +5,14 @@ import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
-const { LIVE_VOICE_EXCLUDED_TOOLS, resolveLiveVoiceDelegationTools } =
-  await import('../live-voice-tools');
+const {
+  LIVE_VOICE_EXCLUDED_TOOLS,
+  LIVE_VOICE_TOOL_REGISTRY,
+  describeDelegationTools,
+  describeLiveVoiceTool,
+  describeLiveVoiceTools,
+  resolveLiveVoiceDelegationTools,
+} = await import('../live-voice-tools');
 const { appendWebSearchTool } =
   await import('@/app/api/llm/v1/chat/completions/lib/request-processor');
 const { resolveCodeExecutionTools } = await import('@/lib/e2b/execution-tools');
@@ -92,5 +98,50 @@ describe('live voice delegation tools', () => {
       expect(record['function']).toBeUndefined();
       expect(Object.keys(LIVE_VOICE_EXCLUDED_TOOLS)).not.toContain(record['name']);
     }
+  });
+
+  /**
+   * The registry is the single answer to "can voice reach this, and why", so a
+   * new tool that is neither offered nor refused with a reason is a gap.
+   */
+  it('gives every registered tool a reason and a bounded timeout', () => {
+    expect(LIVE_VOICE_TOOL_REGISTRY.length).toBeGreaterThan(0);
+    for (const tool of LIVE_VOICE_TOOL_REGISTRY) {
+      expect(tool.reason.length).toBeGreaterThan(20);
+      expect(tool.timeoutMs).toBeGreaterThan(0);
+      if (!tool.reachable) expect(tool.toolClass).toBe('function');
+    }
+  });
+
+  it('refuses every write-risk tool, so no voice turn reaches one without approval', () => {
+    for (const tool of LIVE_VOICE_TOOL_REGISTRY) {
+      if (tool.risk !== 'write') continue;
+      expect(tool.reachable).toBe(false);
+      expect(tool.requiresApproval).toBe(true);
+    }
+  });
+
+  it('derives the exclusion list from the registry rather than repeating it', () => {
+    expect(Object.keys(LIVE_VOICE_EXCLUDED_TOOLS).sort()).toEqual(
+      LIVE_VOICE_TOOL_REGISTRY.filter((tool) => !tool.reachable)
+        .map((tool) => tool.id)
+        .sort(),
+    );
+  });
+
+  it('describes the tools it actually offered, with a label the voice UI can speak', () => {
+    const offered = describeDelegationTools(resolveLiveVoiceDelegationTools(BACKEND_MODEL));
+    expect(offered.length).toBeGreaterThan(0);
+    for (const descriptor of describeLiveVoiceTools(offered)) {
+      expect(descriptor.label.length).toBeGreaterThan(0);
+      expect(descriptor.timeoutMs).toBeGreaterThan(0);
+    }
+  });
+
+  it('falls back to a neutral label for a tool the registry has never seen', () => {
+    expect(describeLiveVoiceTool('something_new')).toMatchObject({
+      id: 'something_new',
+      requiresApproval: false,
+    });
   });
 });
