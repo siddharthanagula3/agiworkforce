@@ -21,6 +21,14 @@ describe('parseToolApprovalPolicy', () => {
     ).toBe('auto_approve_read_only');
   });
 
+  it('reads the autonomous choice the panel can now write', () => {
+    expect(
+      parseToolApprovalPolicy({
+        [TOOL_APPROVAL_PREFERENCE_NAMESPACE]: { defaultPolicy: 'autonomous' },
+      }),
+    ).toBe('autonomous');
+  });
+
   it('refuses an unrecognized stored policy instead of widening access', () => {
     expect(
       parseToolApprovalPolicy({

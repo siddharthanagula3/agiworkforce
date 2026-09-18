@@ -17,6 +17,7 @@ let snapshotInFlight: Promise<Record<string, unknown>> | null = null;
 let snapshotLoadedAt = 0;
 let storedVersion: string | null = null;
 let organizationMemoryAllowed = true;
+let autonomousToolApprovalsAllowed = false;
 
 export class PreferenceVersionConflictError extends Error {
   readonly namespace: string;
@@ -56,9 +57,11 @@ async function requestPreferencesSnapshot(): Promise<Record<string, unknown>> {
     settings?: unknown;
     version?: unknown;
     organizationMemoryAllowed?: unknown;
+    autonomousToolApprovalsAllowed?: unknown;
   };
   storedVersion = readVersion(data.version);
   organizationMemoryAllowed = data.organizationMemoryAllowed !== false;
+  autonomousToolApprovalsAllowed = data.autonomousToolApprovalsAllowed === true;
   return data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)
     ? (data.settings as Record<string, unknown>)
     : {};
@@ -72,6 +75,13 @@ export async function readPreferencesVersion(): Promise<string | null> {
 export async function readOrganizationMemoryAllowed(): Promise<boolean> {
   await loadPreferencesSnapshot();
   return organizationMemoryAllowed;
+}
+
+// The workspace answers this, never the client. A snapshot that will not load
+// leaves the answer at its fail-closed initial value.
+export async function readAutonomousToolApprovalsAllowed(): Promise<boolean> {
+  await loadPreferencesSnapshot();
+  return autonomousToolApprovalsAllowed;
 }
 
 function loadPreferencesSnapshot(): Promise<Record<string, unknown>> {

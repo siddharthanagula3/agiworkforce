@@ -30,10 +30,22 @@ import { GET, PUT } from '../route';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.query.mockResolvedValue([{ settings: { general: { preferredName: 'Sid' } } }]);
+  h.query.mockImplementation(async (sql: string) =>
+    String(sql).includes('user_settings')
+      ? [{ settings: { general: { preferredName: 'Sid' } } }]
+      : [],
+  );
   h.getUserScopedDb.mockResolvedValue({ db: { query: h.query }, userId: 'user-1' });
   h.resolveActiveOrganizationId.mockResolvedValue(null);
 });
+
+function executedSql(): string[] {
+  return h.query.mock.calls.map(([sql]) => String(sql));
+}
+
+function sqlTouching(table: string): string[] {
+  return executedSql().filter((sql) => sql.includes(table));
+}
 
 // The Memory section's four switches are gated by the workspace policy, and the
 // policy route is admin-only, so this GET is the only place a member can learn
@@ -110,13 +122,61 @@ describe('settings preferences reads through the RLS-scoped client', () => {
     expect(params).toEqual(['user-1']);
   });
 
-  it('reads the settings row exactly once per request and skips organization resolution', async () => {
+  // The whole-document read also answers whether the workspace lets this member
+  // choose "Skip approvals", which costs the governing-organization lookup and,
+  // for a member of one, that workspace's policy row. The settings row itself is
+  // still read once, and all of it goes through the one scoped handshake.
+  it('reads the settings row once and takes the workspace switch through the same scoped client', async () => {
     await GET(new NextRequest('http://localhost:3000/api/settings/preferences'));
 
-    expect(h.query).toHaveBeenCalledTimes(1);
+    expect(sqlTouching('user_settings')).toHaveLength(1);
+    expect(sqlTouching('organization_members')).toHaveLength(1);
+    expect(sqlTouching('organization_admin_policies')).toHaveLength(0);
+    expect(executedSql()).toHaveLength(2);
+    expect(h.getUserScopedDb).toHaveBeenCalledTimes(1);
     expect(h.getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
       resolveOrganization: false,
     });
+  });
+
+  it('reads the workspace switch as a member, through the scoped client, not the owner connection', async () => {
+    h.query.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes('user_settings')) return [{ settings: {} }];
+      if (text.includes('organization_admin_policies')) {
+        return [
+          {
+            organization_id: 'org-1',
+            allowed_privacy_modes: [],
+            chat_sync_surfaces: [],
+            metadata: { allowAutonomousToolApprovals: false },
+            updated_at: '2026-09-18T00:00:00.000Z',
+          },
+        ];
+      }
+      return [{ organization_id: 'org-1' }];
+    });
+
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/settings/preferences?namespace=tool-approvals'),
+    );
+
+    expect(await response.json()).toMatchObject({ autonomousToolApprovalsAllowed: false });
+    expect(sqlTouching('organization_admin_policies')).toHaveLength(1);
+    expect(h.getUserScopedDb).toHaveBeenCalledTimes(1);
+    expect(h.getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      resolveOrganization: false,
+    });
+  });
+
+  it('leaves an unrelated namespace read free of the workspace switch lookup', async () => {
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/settings/preferences?namespace=general'),
+    );
+
+    expect(await response.json()).not.toHaveProperty('autonomousToolApprovalsAllowed');
+    expect(executedSql()).toHaveLength(1);
+    expect(sqlTouching('user_settings')).toHaveLength(1);
   });
 
   it('writes through the scoped client too', async () => {

@@ -14,6 +14,8 @@ import {
 } from '@/lib/services/active-workspace-service';
 import { organizationMemoryGate } from '@/lib/services/managed-memory-context-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
+import { autonomousToolApprovalsAvailable } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
+import { TOOL_APPROVAL_PREFERENCE_NAMESPACE } from '@shared/types/toolApprovalPolicy';
 
 const SettingsPatchSchema = z.object({
   namespace: z
@@ -87,11 +89,20 @@ async function handleGet(request: NextRequest) {
       ? await organizationMemoryGate(db, await resolveActiveOrganizationId(db, userId, request))
       : undefined;
 
+  // Whether the account may choose "Skip approvals" is the workspace's answer,
+  // not the client's: the settings pane has to render a control it is allowed
+  // to offer rather than one the tool gate would silently overrule.
+  const autonomousToolApprovalsAllowed =
+    !namespace || namespace === TOOL_APPROVAL_PREFERENCE_NAMESPACE
+      ? await autonomousToolApprovalsAvailable(db, userId)
+      : undefined;
+
   if (namespace) {
     return NextResponse.json({
       settings: stored.settings[namespace] ?? {},
       version: stored.version,
       ...(organizationMemoryAllowed === undefined ? {} : { organizationMemoryAllowed }),
+      ...(autonomousToolApprovalsAllowed === undefined ? {} : { autonomousToolApprovalsAllowed }),
     });
   }
 
@@ -99,6 +110,7 @@ async function handleGet(request: NextRequest) {
     settings: stored.settings,
     version: stored.version,
     organizationMemoryAllowed,
+    autonomousToolApprovalsAllowed,
   });
 }
 
