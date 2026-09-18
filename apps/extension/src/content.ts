@@ -44,8 +44,8 @@ import {
   validateShortcutActions,
   MAX_CONTEXT_HTML_CHARS,
   sanitizePageText,
-  SITE_ALLOWLIST_STORAGE_KEY,
 } from './background/policy';
+import { evaluateSiteAccess } from './features/site-policy/store';
 
 function extractPageHtmlSafely(): string {
   try {
@@ -94,11 +94,9 @@ const automationState: AutomationState = {
 const originApproved: Promise<boolean> = (async () => {
   if (!/^https?:/.test(location.protocol)) return false;
   try {
-    const result = await chrome.storage.local.get(SITE_ALLOWLIST_STORAGE_KEY);
-    const list = result[SITE_ALLOWLIST_STORAGE_KEY];
-    return Array.isArray(list) && (list as string[]).includes(window.location.origin);
+    return (await evaluateSiteAccess(window.location.href, 'automation')).allowed;
   } catch (err) {
-    logger.debug('Could not read the site allowlist, treating this origin as unapproved', err);
+    logger.debug('Could not read the site policy, treating this origin as unapproved', err);
     return false;
   }
 })();
@@ -1086,12 +1084,9 @@ const AUTOFILL_ORIGIN_BLOCKED_ERROR =
 
 async function isAutofillOriginAllowed(): Promise<boolean> {
   try {
-    const res = await chrome.storage.local.get(SITE_ALLOWLIST_STORAGE_KEY);
-    const list = (res as Record<string, unknown>)[SITE_ALLOWLIST_STORAGE_KEY];
-    if (!Array.isArray(list)) return false;
-    return list.includes(window.location.origin);
+    return (await evaluateSiteAccess(window.location.href, 'automation')).allowed;
   } catch (err) {
-    logger.debug('Could not read site allowlist for autofill gating', err);
+    logger.debug('Could not read the site policy for autofill gating', err);
     return false;
   }
 }

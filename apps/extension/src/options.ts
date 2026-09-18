@@ -10,6 +10,8 @@ import {
 import { createSitePermissionPolicySection } from './features/options/site-permission-policy';
 import { createDataHandlingSection } from './features/options/data-handling-section';
 import { SITE_ALLOWLIST_STORAGE_KEY } from './background/policy';
+import { loadSitePolicyInput } from './features/site-policy/store';
+import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
 import {
   BROWSER_CONTROL_CONSENT_BODY,
   BROWSER_CONTROL_CONSENT_HEADLINE,
@@ -1171,14 +1173,24 @@ function buildPage(): void {
   async function refreshAllowlist(): Promise<void> {
     const origins = await loadAllowlist();
     const controlled = await readBrowserControlConsent();
+    const policy = await loadSitePolicyInput();
+    const withheldBy = (origin: string): string | null => {
+      const evaluation = evaluateSitePolicy(policy, origin, 'automation');
+      if (evaluation.allowed || evaluation.reason === 'not-allowlisted') return null;
+      return sitePolicyDenialMessage(evaluation, '');
+    };
     allowlistUl.replaceChildren();
     allowlistEmpty.hidden = origins.length > 0;
     for (const origin of origins) {
       const li = el('li', { class: 'opt-allowlist-item' });
+      const approvedLabel = controlled.includes(origin)
+        ? `${origin}, browser control granted`
+        : origin;
+      const withheld = withheldBy(origin);
       const originSpan = el(
         'span',
         { class: 'opt-allowlist-item-origin' },
-        controlled.includes(origin) ? `${origin}, browser control granted` : origin,
+        withheld ? `${approvedLabel}, ${withheld}` : approvedLabel,
       );
       const removeBtn = el(
         'button',
@@ -1214,10 +1226,12 @@ function buildPage(): void {
     }
     if (currentSiteOrigin) {
       const isAdded = origins.includes(currentSiteOrigin);
+      const withheld = withheldBy(currentSiteOrigin);
       addBtn.textContent = isAdded ? 'Remove' : 'Add';
       addBtn.className = isAdded ? 'opt-allowlist-toggle-btn remove' : 'opt-allowlist-toggle-btn';
-      addBtn.disabled = false;
-      addBtn.removeAttribute('title');
+      addBtn.disabled = !isAdded && withheld !== null;
+      if (addBtn.disabled && withheld) addBtn.title = withheld;
+      else addBtn.removeAttribute('title');
     } else {
       addBtn.textContent = 'Add';
       addBtn.className = 'opt-allowlist-toggle-btn';

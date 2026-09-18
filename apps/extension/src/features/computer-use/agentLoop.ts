@@ -27,6 +27,8 @@ import {
   approvalRequirement,
   type ActionApprovalRequirement,
 } from './approvalPolicy';
+import { evaluateSiteAccess } from '../site-policy/store';
+import { sitePolicyDenialMessage } from '@agiworkforce/types';
 
 export interface AgentLoopOptions {
   maxSteps?: number;
@@ -508,6 +510,23 @@ export async function resolveApprovalRequirement(
   return approvalRequirement({ toolName, args, pageUrl, targetSignature });
 }
 
+const UPLOAD_SITE_NOT_APPROVED =
+  'This site is not approved for file uploads. Add it in the extension options first.';
+
+/**
+ * Uploads are their own capability: a site the agent may otherwise work on can
+ * have uploads withheld by the org, and no approval prompt can grant what the
+ * policy refuses.
+ */
+async function uploadPolicyRefusal(
+  tabId: number,
+  options: AgentLoopOptions,
+): Promise<string | null> {
+  const pageUrl = await runOwnedOperation(options, () => getTabUrl(tabId));
+  const evaluation = await evaluateSiteAccess(pageUrl ?? '', 'upload');
+  return evaluation.allowed ? null : sitePolicyDenialMessage(evaluation, UPLOAD_SITE_NOT_APPROVED);
+}
+
 async function dispatchToolCall(
   tabId: number,
   toolCall: ToolCall,
@@ -531,6 +550,15 @@ async function dispatchToolCall(
   });
 
   const requirement = await resolveApprovalRequirement(tabId, toolName, args, options);
+
+  const uploadRefusal =
+    requirement.reason === 'upload' ? await uploadPolicyRefusal(tabId, options) : null;
+  if (uploadRefusal) {
+    await assertRunOwnership(options);
+    options.onProgress?.({ kind: 'tool_result', stepNumber, toolName, toolResult: uploadRefusal });
+    return { role: 'tool', content: uploadRefusal, tool_call_id: toolCall.id, name: toolName };
+  }
+
   if (requirement.alwaysAsk && options.onBeforeAction === undefined) {
     const refusal = alwaysAskRefusal(requirement);
     await assertRunOwnership(options);

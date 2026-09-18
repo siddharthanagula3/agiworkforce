@@ -91,6 +91,7 @@ export default defineConfig(({ mode }) => {
         targets: [
           { src: 'icons', dest: '.' },
           { src: '_locales', dest: '.' },
+          { src: 'managed-schema.json', dest: '.' },
           { src: 'src/side_panel.html', dest: 'src' },
           { src: 'src/side_panel.css', dest: 'src' },
           { src: 'src/options.html', dest: 'src' },

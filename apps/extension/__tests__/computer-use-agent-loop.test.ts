@@ -484,6 +484,51 @@ describe('computer-use agent loop, one round-trip', () => {
     });
   });
 
+  it('refuses a file input outright when the org withholds uploads on the site', async () => {
+    await chromeMock.storage.local.set({
+      agi_admin_site_policy: {
+        version: 1,
+        blocklist: [{ pattern: 'https://example.com', capabilities: ['upload'] }],
+      },
+    });
+    stubDomResponses([
+      {
+        raw: true,
+        summary: JSON.stringify({
+          summary: CLEAN_DOM_SUMMARY,
+          indexMap: {
+            '1': { selector: 'html > body > input', signature: 'input||file|resume|Upload resume' },
+          },
+        }),
+      },
+    ]);
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: makeNamedToolCallSseStream('click', { index: 1 }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    const onBeforeAction = vi.fn().mockResolvedValue(true);
+
+    try {
+      await runAgentLoop('Attach my resume', 42, { maxSteps: 10, onBeforeAction });
+    } finally {
+      await chromeMock.storage.local.set({ agi_admin_site_policy: null });
+    }
+
+    expect(onBeforeAction).not.toHaveBeenCalled();
+    const secondCallArgs = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(secondCallArgs[1].body as string) as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const toolResult = body.messages.find((m) => m.role === 'tool');
+    expect(toolResult?.content as string).toContain(
+      'File upload on "https://example.com" is blocked by your organization\'s site policy',
+    );
+  });
+
   it('respects onBeforeAction, skips the tool if the callback returns false', async () => {
     const onBeforeAction = vi.fn().mockResolvedValue(false);
 

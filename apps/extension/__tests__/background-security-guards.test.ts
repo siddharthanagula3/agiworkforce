@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface CapturedAgentLoopOptions {
   signal: AbortSignal;
@@ -348,6 +348,61 @@ describe('background service worker security guards', () => {
         /not on your AGI site allowlist/,
       );
       await expect(assertDestinationAllowlisted(`${SITE_B}/inbox`)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('the org site policy outranks the user allowlist', () => {
+    const ADMIN_KEY = 'agi_admin_site_policy';
+
+    async function putAdminPolicy(document: unknown): Promise<void> {
+      putStorage(ADMIN_KEY, document);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    afterEach(async () => {
+      await putAdminPolicy(null);
+    });
+
+    it('refuses to start a run on an origin the user approved and the org blocked', async () => {
+      await putAdminPolicy({ version: 1, blocklist: [{ pattern: SITE_A }] });
+
+      const response = await dispatch({
+        type: 'AGI_START_COMPUTER_USE',
+        goal: 'complete the application',
+        tabId: RUN_TAB_ID,
+        runId: 'cu_run_admin_blocked',
+      });
+
+      expect(response['success']).toBe(false);
+      expect(String(response['error'])).toMatch(/not on the site allowlist/);
+    });
+
+    it('cancels a running agent when the org blocks its origin mid-run', async () => {
+      const options = await startRun('cu_run_admin_blocked_midrun');
+
+      await putAdminPolicy({ version: 1, blocklist: [{ pattern: `https://*.example` }] });
+
+      expect(options.signal.aborted).toBe(true);
+      await expect(options.assertOwnership()).rejects.toThrow(/tab intent changed/);
+    });
+
+    it('stops navigation to an approved origin the org blocked', async () => {
+      putStorage(CONSENT_KEY, [SITE_A, SITE_B]);
+      await putAdminPolicy({ version: 1, blocklist: [{ pattern: SITE_B }] });
+
+      await expect(navigate(RUN_TAB_ID, `${SITE_B}/inbox`)).rejects.toThrow(
+        /blocked by your organization's site policy/,
+      );
+      expect(pageNavigations()).toEqual([]);
+    });
+
+    it('denies every origin while the org policy is present but unparseable', async () => {
+      await putAdminPolicy({ version: 1, blocklist: ['site-b.example'] });
+
+      await expect(navigate(RUN_TAB_ID, `${SITE_A}/jobs`)).rejects.toThrow(
+        /site policy could not be read/,
+      );
+      expect(pageNavigations()).toEqual([]);
     });
   });
 

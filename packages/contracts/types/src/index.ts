@@ -117,6 +117,8 @@ export * from './dispatch';
 
 export * from './remote-code';
 
+export * from './workspace';
+
 export * from './workspace-analytics';
 
 export * from './product-analytics';
@@ -218,3 +220,33 @@ export {
   type ProductLinkTarget,
   type ProductLinkUnavailableState,
 } from './product-links';
+
+export {
+  BROWSER_SESSION_CAPABILITIES,
+  BROWSER_SESSION_KINDS,
+  CLOUD_BROWSER_UNAVAILABLE_REASON,
+  browserSessionCapability,
+  isBrowserSessionKind,
+  resolveBrowserSession,
+  type BrowserSessionCapability,
+  type BrowserSessionKind,
+  type BrowserSessionResolution,
+} from './browser-session';
+
+export {
+  SITE_POLICY_ADMIN_UNAVAILABLE,
+  SITE_POLICY_CAPABILITIES,
+  evaluateSitePolicy,
+  isSitePolicyCapability,
+  parseAdminSitePolicy,
+  parseSitePolicyPattern,
+  sitePolicyDenialMessage,
+  type AdminSitePolicy,
+  type AdminSitePolicyParseResult,
+  type SitePolicyAdminState,
+  type SitePolicyCapability,
+  type SitePolicyEvaluation,
+  type SitePolicyInput,
+  type SitePolicyReason,
+  type SitePolicyRule,
+} from './site-policy';
