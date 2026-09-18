@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import type { CustomModelConfig } from '@agiworkforce/types';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { validateCustomModelEndpoint } from './customModelEndpoint';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,9 +32,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/ui/Switch';
 
 const PROVIDER_PRESETS: Record<string, string> = {
-  Ollama: 'http://localhost:11434/v1',
-  'LM Studio': 'http://localhost:1234/v1',
-  vLLM: 'http://localhost:8000/v1',
   Groq: 'https://api.groq.com/openai/v1',
   OpenRouter: 'https://openrouter.ai/api/v1',
   'Together AI': 'https://api.together.xyz/v1',
@@ -202,14 +200,15 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
   };
 
   const handleTest = useCallback(async () => {
-    if (!form.baseUrl.trim()) {
-      setFormError('Base URL is required to test the connection.');
+    const endpoint = validateCustomModelEndpoint(form.baseUrl);
+    if (!endpoint.valid || !endpoint.normalized) {
+      setFormError(endpoint.error ?? 'Base URL is required to test the connection.');
       return;
     }
     setTesting(true);
     setTestResult(null);
     setIsVerified(false);
-    const result = await verifyCustomModel(form.baseUrl.trim(), form.modelId.trim(), form.apiKey);
+    const result = await verifyCustomModel(endpoint.normalized, form.modelId.trim(), form.apiKey);
     setTestResult(result);
     if (result.connected) {
       setIsVerified(true);
@@ -222,8 +221,9 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
       setFormError('Display name is required.');
       return;
     }
-    if (!form.baseUrl.trim()) {
-      setFormError('Base URL is required.');
+    const endpoint = validateCustomModelEndpoint(form.baseUrl);
+    if (!endpoint.valid || !endpoint.normalized) {
+      setFormError(endpoint.error ?? 'Base URL is required.');
       return;
     }
     if (!form.modelId.trim()) {
@@ -235,7 +235,7 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
       id: initial?.id ?? generateId(form.provider, form.modelId),
       displayName: form.displayName.trim(),
       provider: form.provider,
-      baseUrl: form.baseUrl.trim(),
+      baseUrl: endpoint.normalized,
       modelId: form.modelId.trim(),
       apiKeyRef: form.apiKey.trim() ? 'stored' : null,
       contextWindow: form.contextWindow,
@@ -264,8 +264,9 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Custom Model' : 'Add Custom Model'}</DialogTitle>
           <DialogDescription>
-            Configure an OpenAI-compatible endpoint, verify connectivity, and save the model for
-            routing and manual selection.
+            Configure a hosted OpenAI-compatible endpoint, verify connectivity, and save the model
+            for routing and manual selection. The endpoint must be an https address on a public
+            host.
           </DialogDescription>
         </DialogHeader>
 
@@ -485,7 +486,8 @@ export function CustomModelsSettings() {
         <div>
           <h4 className="font-semibold">Custom Model Endpoints</h4>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Add OpenAI-compatible endpoints: Groq, OpenRouter, vLLM, LM Studio, and more.
+            Add hosted OpenAI-compatible endpoints: Groq, OpenRouter, Together, and more. Models
+            running on this machine belong under Local Models.
           </p>
         </div>
         <Button size="sm" onClick={handleAdd}>
