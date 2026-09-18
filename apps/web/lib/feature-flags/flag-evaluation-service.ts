@@ -43,11 +43,17 @@ export function buildFlagSubject(request: Request, facts: FlagSubjectFacts): Fla
 
 export async function evaluateFlagsForSubject(
   subject: FlagSubject,
-  options: { keyPrefix?: string } = {},
+  options: { keyPrefix?: string; keyPrefixes?: readonly string[] } = {},
   nowMs: number = Date.now(),
 ): Promise<Record<string, FlagEvaluation>> {
+  const prefixes = [
+    ...(options.keyPrefix === undefined ? [] : [options.keyPrefix]),
+    ...(options.keyPrefixes ?? []),
+  ];
   const definitions = (await getActiveFlagDefinitions(nowMs)).filter(
-    (definition) => !options.keyPrefix || definition.key.startsWith(options.keyPrefix),
+    (definition) =>
+      prefixes.length === 0 ||
+      prefixes.some((prefix) => definition.key === prefix || definition.key.startsWith(prefix)),
   );
   if (definitions.length === 0) return {};
   const overrides = await getSubjectOverrides(

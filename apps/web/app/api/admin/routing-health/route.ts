@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { listFlagDefinitions } from '@/lib/feature-flags/flag-store';
+import { activeKillSwitches } from '@/lib/feature-flags/kill-switches';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
   isKnownRoutingProvider,
@@ -37,9 +39,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  return NextResponse.json(await readRoutingHealth(), {
-    headers: { 'Cache-Control': NO_STORE },
-  });
+  const [health, definitions] = await Promise.all([readRoutingHealth(), listFlagDefinitions()]);
+  return NextResponse.json(
+    { ...health, killSwitches: activeKillSwitches(definitions) },
+    { headers: { 'Cache-Control': NO_STORE } },
+  );
 }
 
 export const GET = withErrorHandler(handleGet);

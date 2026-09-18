@@ -4,11 +4,16 @@ import type { MobileIapCatalogResponse } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
+import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { getMobileIapCatalogState } from '@/lib/server/mobile-iap-catalog';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
 
 const QuerySchema = z.object({ platform: z.enum(['ios', 'android']) });
+const MOBILE_SURFACE = 'mobile';
+const PURCHASES_SWITCHED_OFF =
+  'In-app purchases are temporarily switched off. Nothing was charged.';
 
 async function handleCatalog(
   request: NextRequest,
@@ -23,13 +28,25 @@ async function handleCatalog(
   if (!parsed.success) throw createError.badRequest('platform must be ios or android');
 
   const catalog = getMobileIapCatalogState(parsed.data.platform);
-  if (!catalog.enabled) {
+  const gate = catalog.enabled
+    ? await readKillSwitchGate(
+        buildFlagSubject(request, {
+          userId,
+          workspaceId: null,
+          role: null,
+          plan: null,
+          surface: MOBILE_SURFACE,
+        }),
+      )
+    : null;
+  const switchedOff = gate !== null && !gate.capabilityAllowed('in_app_purchase');
+  if (!catalog.enabled || switchedOff) {
     return NextResponse.json({
       enabled: false,
       platform: parsed.data.platform,
       appAccountToken: null,
       products: [],
-      unavailableReason: catalog.unavailableReason,
+      unavailableReason: switchedOff ? PURCHASES_SWITCHED_OFF : catalog.unavailableReason,
     });
   }
 

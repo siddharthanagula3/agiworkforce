@@ -1,4 +1,5 @@
 import type { FlagEvaluation } from './evaluate-flags';
+import { PROVIDER_FLAG_PREFIX, TENANT_LOCKDOWN_FLAG_KEY } from './kill-switches';
 
 export const ROUTING_FLAG_PREFIX = 'routing.';
 
@@ -46,6 +47,17 @@ export function routingFlagInputs(
   return inputs;
 }
 
+/**
+ * Which supplier carries a model, and which workspace an operator has isolated,
+ * are ours rather than the client's: both are held back here, while capability
+ * switches go out, since every surface has to know what it may still offer.
+ */
+const SERVER_ONLY_FLAG_PREFIXES: readonly string[] = [
+  ROUTING_FLAG_PREFIX,
+  PROVIDER_FLAG_PREFIX,
+  TENANT_LOCKDOWN_FLAG_KEY,
+];
+
 export function clientVisibleFlags(evaluations: Readonly<Record<string, FlagEvaluation>>): {
   enabled: Record<string, boolean>;
   variants: Record<string, string>;
@@ -53,7 +65,7 @@ export function clientVisibleFlags(evaluations: Readonly<Record<string, FlagEval
   const enabled: Record<string, boolean> = {};
   const variants: Record<string, string> = {};
   for (const [key, evaluation] of Object.entries(evaluations)) {
-    if (key.startsWith(ROUTING_FLAG_PREFIX)) continue;
+    if (SERVER_ONLY_FLAG_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
     enabled[key] = evaluation.enabled;
     variants[key] = evaluation.variant;
   }

@@ -19,7 +19,7 @@
 use crate::sys::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 #[cfg(feature = "vad")]
@@ -68,6 +68,38 @@ impl Default for WakeWordConfig {
     }
 }
 
+/// Server-driven switch for the dictation pipeline.
+///
+/// The build has no say in this: the server answers for the client version it
+/// was asked about, so a release that turns out to mishandle audio is stopped
+/// by a flag flip rather than by a signed update every user has to install. A
+/// gate nobody set is open, so an unreachable server never silences a working
+/// microphone.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RemoteSpeechGate {
+    /// Why the server closed it. `None` means the server closed nothing.
+    pub disabled_reason: Option<String>,
+    /// The client version the server answered for.
+    pub client_version: Option<String>,
+}
+
+impl RemoteSpeechGate {
+    pub fn open() -> Self {
+        Self::default()
+    }
+
+    pub fn closed(reason: impl Into<String>, client_version: impl Into<String>) -> Self {
+        Self {
+            disabled_reason: Some(reason.into()),
+            client_version: Some(client_version.into()),
+        }
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.disabled_reason.is_none()
+    }
+}
+
 /// Event emitted when wake word is detected
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WakeWordEvent {
@@ -95,6 +127,7 @@ enum SpeechState {
 pub struct VoiceWake {
     config: WakeWordConfig,
     is_listening: Arc<AtomicBool>,
+    remote_gate: Arc<Mutex<RemoteSpeechGate>>,
     event_tx: Option<mpsc::Sender<WakeWordEvent>>,
     #[cfg(feature = "vad")]
     vad: Option<SharedVad>,
@@ -106,10 +139,38 @@ impl VoiceWake {
         Self {
             config,
             is_listening: Arc::new(AtomicBool::new(false)),
+            remote_gate: Arc::new(Mutex::new(RemoteSpeechGate::open())),
             event_tx: None,
             #[cfg(feature = "vad")]
             vad: None,
         }
+    }
+
+    /// Apply what the server last said about this build. Closing the gate stops
+    /// a detector that is already running, so a switch thrown mid-session takes
+    /// effect without waiting for the user to restart anything.
+    pub fn apply_remote_gate(&self, gate: RemoteSpeechGate) {
+        if !gate.is_open() {
+            self.is_listening.store(false, Ordering::SeqCst);
+            tracing::warn!(
+                "Wake word detection switched off by the server: {}",
+                gate.disabled_reason.clone().unwrap_or_default()
+            );
+        }
+        let mut current = self
+            .remote_gate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *current = gate;
+    }
+
+    /// The reason the server is holding this capability off, if it is.
+    pub fn remote_block_reason(&self) -> Option<String> {
+        self.remote_gate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .disabled_reason
+            .clone()
     }
 
     /// Initialize the VAD (WebRTC VAD doesn't require model downloads)
@@ -142,6 +203,13 @@ impl VoiceWake {
     pub async fn start(&self) -> Result<mpsc::Receiver<WakeWordEvent>> {
         if !self.config.enabled {
             return Err(Error::Config("Wake word detection is disabled".into()));
+        }
+
+        if let Some(reason) = self.remote_block_reason() {
+            return Err(Error::Config(format!(
+                "Wake word detection is switched off for this version: {}",
+                reason
+            )));
         }
 
         let (tx, rx) = mpsc::channel(10);
@@ -608,6 +676,47 @@ mod tests {
         assert_eq!(config.silence_duration_ms, 500);
         assert_eq!(config.min_speech_duration_ms, 200);
         assert_eq!(config.max_speech_duration_ms, 5000);
+    }
+
+    #[test]
+    fn remote_gate_is_open_until_the_server_closes_it() {
+        let wake = VoiceWake::new(WakeWordConfig::default());
+        assert!(wake.remote_block_reason().is_none());
+
+        wake.apply_remote_gate(RemoteSpeechGate::closed(
+            "bad transcription in 2.4.1",
+            "2.4.1",
+        ));
+        assert_eq!(
+            wake.remote_block_reason().as_deref(),
+            Some("bad transcription in 2.4.1")
+        );
+
+        wake.apply_remote_gate(RemoteSpeechGate::open());
+        assert!(wake.remote_block_reason().is_none());
+    }
+
+    #[tokio::test]
+    async fn start_refuses_while_the_server_holds_the_capability_off() {
+        let config = WakeWordConfig {
+            enabled: true,
+            ..WakeWordConfig::default()
+        };
+        let wake = VoiceWake::new(config);
+        wake.apply_remote_gate(RemoteSpeechGate::closed("incident 412", "2.4.1"));
+
+        let error = wake.start().await.expect_err("start must refuse");
+        assert!(error.to_string().contains("switched off for this version"));
+    }
+
+    #[test]
+    fn closing_the_gate_stops_a_detector_that_is_already_listening() {
+        let wake = VoiceWake::new(WakeWordConfig::default());
+        wake.is_listening.store(true, Ordering::SeqCst);
+
+        wake.apply_remote_gate(RemoteSpeechGate::closed("incident 412", "2.4.1"));
+
+        assert!(!wake.is_listening.load(Ordering::SeqCst));
     }
 
     #[test]

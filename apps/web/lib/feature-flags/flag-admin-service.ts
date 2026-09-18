@@ -7,12 +7,15 @@ import type { FlagDefinition, FlagDefinitionInput, FlagOverrideInput } from './f
 import {
   archiveFlagDefinition,
   deleteFlagOverride,
+  ensureFlagDefinition,
   getFlagDefinition,
   insertFlagDefinition,
   setFlagKillSwitch,
   updateFlagDefinition,
   upsertFlagOverride,
 } from './flag-store';
+import { killSwitchDefinition } from './kill-switches';
+import { archivableStaleFlags, findStaleFlags, type StaleFlag } from './stale-flags';
 
 const FLAG_RESOURCE_TYPE = 'feature_flag';
 const FLAG_ADMIN_SURFACE = 'operator';
@@ -95,6 +98,44 @@ export async function toggleFlagKillSwitch(
   if (!updated) throw createError.notFound('No active flag by that name');
   await auditFlagChange(actor, updated, killSwitch ? 'killed' : 'restored', ['killSwitch']);
   return updated;
+}
+
+/**
+ * Flip a named kill switch whether or not anybody created the flag first. An
+ * incident is the wrong moment to discover that the switch for the capability
+ * you need off was never defined, so the definition is created open and closed
+ * in the same request.
+ */
+export async function engageKillSwitch(
+  actor: AdminActor,
+  key: string,
+  description: string,
+  engaged: boolean,
+): Promise<FlagDefinition> {
+  const definition = await ensureFlagDefinition(killSwitchDefinition(key, description));
+  if (!definition) {
+    throw createError.internal('The switch could not be prepared. Nothing was changed.');
+  }
+  if (definition.killSwitch === engaged) return definition;
+  return toggleFlagKillSwitch(actor, key, engaged);
+}
+
+export async function cleanUpStaleFlags(
+  actor: AdminActor,
+  definitions: readonly FlagDefinition[],
+  nowMs: number = Date.now(),
+): Promise<{ archived: StaleFlag[]; retained: StaleFlag[] }> {
+  const stale = findStaleFlags(definitions, nowMs);
+  const archivable = archivableStaleFlags(stale);
+  const archived: StaleFlag[] = [];
+  for (const flag of archivable) {
+    const definition = await archiveFlagDefinition(flag.key);
+    if (!definition) continue;
+    await auditFlagChange(actor, definition, `archived_stale:${flag.reason}`, []);
+    archived.push(flag);
+  }
+  const archivedKeys = new Set(archived.map((flag) => flag.key));
+  return { archived, retained: stale.filter((flag) => !archivedKeys.has(flag.key)) };
 }
 
 export async function archiveFlag(actor: AdminActor, key: string): Promise<FlagDefinition> {

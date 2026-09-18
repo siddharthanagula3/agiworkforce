@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 
+import { readFeatureFlagConfig } from './flag-config';
 import {
   FlagRuleSchema,
   type FlagDefinition,
@@ -14,7 +15,7 @@ import {
   type FlagOverrideInput,
 } from './flag-definition';
 
-const DEFINITION_CACHE_TTL_MS = 30_000;
+const DEFINITION_CACHE_TTL_MS = readFeatureFlagConfig().definitionCacheTtlMs;
 
 interface DefinitionRow {
   key: string;
@@ -192,6 +193,22 @@ export async function insertFlagDefinition(
   return row ? toDefinition(row) : null;
 }
 
+/**
+ * The definition an operator action needs in place before it can write an
+ * override against it. Creating it is idempotent, so the first lockdown of a
+ * fresh deployment does not fail for want of a flag nobody created by hand.
+ */
+export async function ensureFlagDefinition(
+  input: FlagDefinitionInput,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<FlagDefinition | null> {
+  const existing = await getFlagDefinition(input.key, db);
+  if (existing) {
+    return existing.archivedAt === null ? existing : restoreFlagDefinition(input.key, db);
+  }
+  return (await insertFlagDefinition(input, db)) ?? getFlagDefinition(input.key, db);
+}
+
 export async function updateFlagDefinition(
   input: FlagDefinitionInput,
   expectedVersion: number,
@@ -242,6 +259,21 @@ export async function archiveFlagDefinition(
     `update public.feature_flag_definitions
         set archived_at = now(), version = version + 1, updated_at = now()
       where key = $1 and archived_at is null
+      returning ${DEFINITION_COLUMNS}`,
+    [key],
+  );
+  resetFlagDefinitionCache();
+  return row ? toDefinition(row) : null;
+}
+
+export async function restoreFlagDefinition(
+  key: string,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<FlagDefinition | null> {
+  const [row] = await db.query<DefinitionRow>(
+    `update public.feature_flag_definitions
+        set archived_at = null, version = version + 1, updated_at = now()
+      where key = $1 and archived_at is not null
       returning ${DEFINITION_COLUMNS}`,
     [key],
   );
