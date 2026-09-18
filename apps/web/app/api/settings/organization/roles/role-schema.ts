@@ -8,6 +8,9 @@ export const CustomRoleSchema = z
     name: z.string().trim().min(1).max(80),
     description: z.string().trim().max(500).nullable().default(null),
     permissions: z.array(PermissionSchema).min(1).max(GRANTABLE_ORGANIZATION_PERMISSIONS.length),
+    // The role's own counter, not the workspace revision: two administrators
+    // editing different roles must not conflict with each other.
+    version: z.number().int().nonnegative().nullable().default(null),
   })
   .strict();
 

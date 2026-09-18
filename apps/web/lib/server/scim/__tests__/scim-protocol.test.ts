@@ -202,7 +202,7 @@ describe('SCIM responses', () => {
     expect(config.filter.supported).toBe(true);
     expect(config.bulk.supported).toBe(false);
     expect(config.sort.supported).toBe(false);
-    expect(config.etag.supported).toBe(false);
+    expect(config.etag.supported).toBe(true);
     expect(config.authenticationSchemes[0]?.type).toBe('oauthbearertoken');
   });
 });

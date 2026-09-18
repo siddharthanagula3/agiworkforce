@@ -36,6 +36,40 @@ const MAX_USER_NAME = 320;
 const MAX_EXTERNAL_ID = 255;
 const MAX_NAME_PART = 255;
 
+// A display name is rendered in the member roster, the audit trail and the
+// directory log. Control characters, bidi overrides and zero-width joiners let
+// an IdP-side attacker forge those lines, so the name never enters storage.
+const UNSAFE_CODE_POINT_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x0000, 0x001f],
+  [0x007f, 0x009f],
+  [0x00ad, 0x00ad],
+  [0x200b, 0x200f],
+  [0x2028, 0x2029],
+  [0x202a, 0x202e],
+  [0x2060, 0x2064],
+  [0x2066, 0x2069],
+  [0xfeff, 0xfeff],
+];
+
+function hasUnsafeDirectoryText(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (UNSAFE_CODE_POINT_RANGES.some(([low, high]) => code >= low && code <= high)) return true;
+  }
+  return false;
+}
+
+function assertRenderableText(value: string, field: string): string {
+  if (hasUnsafeDirectoryText(value)) {
+    throw new ScimError(
+      400,
+      `\`${field}\` must not contain control or text-direction characters`,
+      'invalidValue',
+    );
+  }
+  return value;
+}
+
 function requireString(value: unknown, field: string, maxLength: number): string {
   if (typeof value !== 'string') {
     throw new ScimError(400, `\`${field}\` is required and must be a string`, 'invalidValue');
@@ -47,7 +81,7 @@ function requireString(value: unknown, field: string, maxLength: number): string
   if (trimmed.length > maxLength) {
     throw new ScimError(400, `\`${field}\` exceeds ${maxLength} characters`, 'invalidValue');
   }
-  return trimmed;
+  return assertRenderableText(trimmed, field);
 }
 
 function optionalString(value: unknown, field: string, maxLength: number): string | null {
@@ -60,7 +94,7 @@ function optionalString(value: unknown, field: string, maxLength: number): strin
   if (trimmed.length > maxLength) {
     throw new ScimError(400, `\`${field}\` exceeds ${maxLength} characters`, 'invalidValue');
   }
-  return trimmed;
+  return assertRenderableText(trimmed, field);
 }
 
 function asRecord(value: unknown, field: string): Record<string, unknown> {
@@ -80,7 +114,12 @@ function extractEmail(emails: unknown, userName: string): string | null {
         value: typeof entry['value'] === 'string' ? entry['value'].trim() : '',
         primary: entry['primary'] === true || entry['primary'] === 'true',
       }))
-      .filter((entry) => entry.value.length > 0 && entry.value.length <= MAX_USER_NAME);
+      .filter(
+        (entry) =>
+          entry.value.length > 0 &&
+          entry.value.length <= MAX_USER_NAME &&
+          !hasUnsafeDirectoryText(entry.value),
+      );
 
     const primary = entries.find((entry) => entry.primary) ?? entries[0];
     if (primary) return primary.value;
@@ -622,6 +661,50 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string })?.code === '23505';
 }
 
+/**
+ * RFC 7644 §3.14. Okta and Entra ID retry and replay writes, so a PUT built
+ * from a stale read must not silently undo the newer one; with If-Match the
+ * out-of-order write is refused instead of applied.
+ */
+export function parseScimResourceVersion(ifMatch: string | null | undefined): number | null {
+  const raw = ifMatch?.trim();
+  if (!raw || raw === '*') return null;
+  const match = /^(?:W\/)?"(\d+)"$/u.exec(raw);
+  if (!match?.[1]) {
+    throw new ScimError(
+      400,
+      'If-Match must be the resource version, for example W/"3"',
+      'invalidValue',
+    );
+  }
+  return Number.parseInt(match[1], 10);
+}
+
+function assertVersionMatches(
+  current: number,
+  expected: number | null,
+  resource: 'User' | 'Group',
+  id: string,
+): void {
+  if (expected === null || expected === current) return;
+  throw new ScimError(
+    412,
+    `${resource} ${id} is at version ${current}, not ${expected}. Re-read the resource and retry.`,
+  );
+}
+
+// The precondition is checked before the write and again in its WHERE clause,
+// so a writer that lost the race is refused rather than reported as missing.
+function missingOrStale(
+  resource: 'User' | 'Group',
+  id: string,
+  expected: number | null,
+): ScimError {
+  return expected === null
+    ? new ScimError(404, `${resource} ${id} not found`)
+    : new ScimError(412, `${resource} ${id} changed while this write was in flight.`);
+}
+
 export async function createScimUser(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -703,9 +786,11 @@ export async function replaceScimUser(
   userId: string,
   input: ParsedScimUser,
   rawBody: Record<string, unknown>,
+  expectedVersion: number | null = null,
 ): Promise<ScimProvisionedUserRow> {
   const existing = await getScimUser(db, ctx, userId);
   if (!existing) throw new ScimError(404, `User ${userId} not found`);
+  assertVersionMatches(existing.version, expectedVersion, 'User', userId);
 
   if (emailChanged(existing.email, input.email)) {
     await assertProvisionableEmail(db, ctx, input.email);
@@ -726,6 +811,7 @@ export async function replaceScimUser(
               raw_attributes = $11::jsonb,
               version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
+          ${expectedVersion === null ? '' : 'and version = $12'}
         returning ${USER_COLUMNS}`,
         [
           userId,
@@ -739,6 +825,7 @@ export async function replaceScimUser(
           input.displayName,
           input.active,
           JSON.stringify(stripScimSensitiveAttributes(rawBody)),
+          ...(expectedVersion === null ? [] : [expectedVersion]),
         ],
       );
     } catch (error) {
@@ -749,7 +836,7 @@ export async function replaceScimUser(
     }
 
     const replaced = rows[0];
-    if (!replaced) throw new ScimError(404, `User ${userId} not found`);
+    if (!replaced) throw missingOrStale('User', userId, expectedVersion);
 
     return { row: replaced, outcome: await reconcileMembership(tx, ctx, replaced) };
   });
@@ -938,9 +1025,11 @@ export async function patchScimUser(
   ctx: ScimConnectionContext,
   userId: string,
   operations: ScimPatchOperation[],
+  expectedVersion: number | null = null,
 ): Promise<ScimProvisionedUserRow> {
   const existing = await getScimUser(db, ctx, userId);
   if (!existing) throw new ScimError(404, `User ${userId} not found`);
+  assertVersionMatches(existing.version, expectedVersion, 'User', userId);
 
   const state = applyUserPatchOperations(existing, operations);
 
@@ -962,6 +1051,7 @@ export async function patchScimUser(
               active = $10,
               version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
+          ${expectedVersion === null ? '' : 'and version = $11'}
         returning ${USER_COLUMNS}`,
         [
           userId,
@@ -974,6 +1064,7 @@ export async function patchScimUser(
           state.familyName,
           state.displayName,
           state.active,
+          ...(expectedVersion === null ? [] : [expectedVersion]),
         ],
       );
     } catch (error) {
@@ -984,7 +1075,7 @@ export async function patchScimUser(
     }
 
     const patched = rows[0];
-    if (!patched) throw new ScimError(404, `User ${userId} not found`);
+    if (!patched) throw missingOrStale('User', userId, expectedVersion);
 
     return { row: patched, outcome: await reconcileMembership(tx, ctx, patched) };
   });
@@ -1021,9 +1112,11 @@ export async function deleteScimUser(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
   userId: string,
+  expectedVersion: number | null = null,
 ): Promise<void> {
   const existing = await getScimUser(db, ctx, userId);
   if (!existing) throw new ScimError(404, `User ${userId} not found`);
+  assertVersionMatches(existing.version, expectedVersion, 'User', userId);
 
   let membershipRevoked = false;
   if (existing.linked_user_id) {
@@ -1501,9 +1594,11 @@ export async function replaceScimGroup(
   ctx: ScimConnectionContext,
   groupId: string,
   input: ParsedScimGroup,
+  expectedVersion: number | null = null,
 ): Promise<ScimGroupRow> {
   const existing = await getScimGroup(db, ctx, groupId);
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
+  assertVersionMatches(existing.version, expectedVersion, 'Group', groupId);
 
   const row = await db.transaction(async (tx) => {
     const previousMembers = await getScimGroupMembers(tx, ctx, groupId);
@@ -1514,8 +1609,16 @@ export async function replaceScimGroup(
         `update scim_groups
           set display_name = $4, external_id = $5, version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
+          ${expectedVersion === null ? '' : 'and version = $6'}
         returning ${GROUP_COLUMNS}`,
-        [groupId, ctx.connectionId, ctx.organizationId, input.displayName, input.externalId],
+        [
+          groupId,
+          ctx.connectionId,
+          ctx.organizationId,
+          input.displayName,
+          input.externalId,
+          ...(expectedVersion === null ? [] : [expectedVersion]),
+        ],
       );
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -1525,7 +1628,7 @@ export async function replaceScimGroup(
     }
 
     const updated = rows[0];
-    if (!updated) throw new ScimError(404, `Group ${groupId} not found`);
+    if (!updated) throw missingOrStale('Group', groupId, expectedVersion);
 
     await tx.execute(
       'delete from scim_group_members where group_id = $1 and organization_id = $2',
@@ -1583,9 +1686,11 @@ export async function patchScimGroup(
   ctx: ScimConnectionContext,
   groupId: string,
   operations: ScimPatchOperation[],
+  expectedVersion: number | null = null,
 ): Promise<ScimGroupRow> {
   const existing = await getScimGroup(db, ctx, groupId);
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
+  assertVersionMatches(existing.version, expectedVersion, 'Group', groupId);
 
   const row = await db.transaction(async (tx) => {
     let displayName = existing.display_name;
@@ -1656,8 +1761,16 @@ export async function patchScimGroup(
         `update scim_groups
           set display_name = $4, external_id = $5, version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
+          ${expectedVersion === null ? '' : 'and version = $6'}
         returning ${GROUP_COLUMNS}`,
-        [groupId, ctx.connectionId, ctx.organizationId, displayName, externalId],
+        [
+          groupId,
+          ctx.connectionId,
+          ctx.organizationId,
+          displayName,
+          externalId,
+          ...(expectedVersion === null ? [] : [expectedVersion]),
+        ],
       );
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -1667,7 +1780,7 @@ export async function patchScimGroup(
     }
 
     const patched = rows[0];
-    if (!patched) throw new ScimError(404, `Group ${groupId} not found`);
+    if (!patched) throw missingOrStale('Group', groupId, expectedVersion);
 
     await reconcileGroupMembers(tx, ctx, [...affected]);
     return patched;
@@ -1687,9 +1800,11 @@ export async function deleteScimGroup(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
   groupId: string,
+  expectedVersion: number | null = null,
 ): Promise<void> {
   const existing = await getScimGroup(db, ctx, groupId);
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
+  assertVersionMatches(existing.version, expectedVersion, 'Group', groupId);
 
   const members = await getScimGroupMembers(db, ctx, groupId);
 

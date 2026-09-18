@@ -2,7 +2,13 @@
 
 import { useState } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
-import type { OrganizationPermission } from '@agiworkforce/types';
+import {
+  canonicalOrganizationPermission,
+  expandOrganizationPermissions,
+  ORGANIZATION_PERMISSIONS,
+  type CanonicalOrganizationPermission,
+  type OrganizationPermission,
+} from '@agiworkforce/types';
 
 import { useTeamMembers, type TeamMember } from '@/features/settings/hooks/use-settings-queries';
 import {
@@ -20,26 +26,65 @@ import {
   type WorkspaceRolesResult,
 } from '../hooks/use-workspace-roles';
 
-export const PERMISSION_COPY: Readonly<Record<OrganizationPermission, string>> = Object.freeze({
-  'content.read': 'Open what the workspace shares',
-  'content.share': 'Share projects, conversations and artifacts into the workspace',
-  'content.govern': 'See members’ workspace conversations and projects',
-  'sharing.manage': 'Change or withdraw anything shared',
-  'members.manage': 'Invite, remove and change members',
-  'owners.manage': 'Change other owners',
-  'roles.manage': 'Create roles and assign them',
-  'groups.manage': 'Give directory groups roles and managers',
-  'policy.manage': 'Change workspace policy, models and connectors',
-  'identity.read': 'See single sign-on settings',
-  'identity.manage': 'Change single sign-on settings',
-  'directory.manage': 'Manage directory sync',
-  'audit.read': 'Read the audit trail and usage',
-  'billing.read': 'See the contract and invoices',
-  'workspace.settings': 'Rename the workspace',
-  'ownership.transfer': 'Transfer ownership',
-  'workspace.delete': 'Delete the workspace',
-  'billing.contracts.manage': 'Manage the billing contract',
-});
+const CANONICAL_PERMISSION_COPY: Readonly<Record<CanonicalOrganizationPermission, string>> =
+  Object.freeze({
+    'feature.content.view': 'Open what the workspace shares',
+    'feature.content.share': 'Share projects, conversations and artifacts into the workspace',
+    'feature.content.govern': 'See members’ workspace conversations and projects',
+    'feature.sharing.manage': 'Change or withdraw anything shared',
+    'admin.members.view': 'See the member list',
+    'admin.members.manage': 'Invite, remove and change members',
+    'admin.owners.view': 'See who owns the workspace',
+    'admin.owners.manage': 'Change other owners',
+    'admin.roles.view': 'See roles and who holds them',
+    'admin.roles.manage': 'Create roles and assign them',
+    'admin.groups.view': 'See directory groups and their roles',
+    'admin.groups.manage': 'Give directory groups roles and managers',
+    'admin.policy.view': 'See workspace policy, models and connectors',
+    'admin.policy.manage': 'Change workspace policy, models and connectors',
+    'admin.identity.view': 'See single sign-on settings',
+    'admin.identity.manage': 'Change single sign-on settings',
+    'admin.directory.view': 'See directory sync and its log',
+    'admin.directory.manage': 'Manage directory sync',
+    'admin.audit.view': 'Read the audit trail and usage',
+    'admin.audit.manage': 'Change audit retention and export the trail',
+    'admin.billing.view': 'See the contract and invoices',
+    'admin.billing.manage': 'Change the plan, seats and spend limit',
+    'admin.workspace.view': 'See workspace settings',
+    'admin.workspace.manage': 'Rename the workspace',
+    'admin.ownership.view': 'See who the Primary Owner is',
+    'admin.ownership.manage': 'Transfer ownership',
+    'admin.lifecycle.view': 'See the workspace deletion state',
+    'admin.lifecycle.manage': 'Delete the workspace',
+    'admin.contracts.view': 'See the billing contract',
+    'admin.contracts.manage': 'Manage the billing contract',
+  });
+
+function permissionCopy(permission: OrganizationPermission): string {
+  const canonical = canonicalOrganizationPermission(permission);
+  return canonical ? CANONICAL_PERMISSION_COPY[canonical] : permission;
+}
+
+// A legacy key still names a stored grant and an admin key scope, so both
+// vocabularies read the same sentence rather than one of them falling back.
+export const PERMISSION_COPY: Readonly<Record<OrganizationPermission, string>> = Object.freeze(
+  Object.fromEntries(
+    ORGANIZATION_PERMISSIONS.map((permission) => [permission, permissionCopy(permission)]),
+  ) as Record<OrganizationPermission, string>,
+);
+
+// A grant carries the legacy key beside its namespaced replacement so stored
+// roles keep resolving; both name one permission, and the surface shows one.
+function distinctPermissions(
+  permissions: readonly OrganizationPermission[],
+): CanonicalOrganizationPermission[] {
+  const seen = new Set<CanonicalOrganizationPermission>();
+  for (const permission of permissions) {
+    const canonical = canonicalOrganizationPermission(permission);
+    if (canonical) seen.add(canonical);
+  }
+  return [...seen];
+}
 
 export const PRIMARY_OWNER_DEFINITION =
   'The Primary Owner is the one person who can transfer ownership, delete the workspace and manage its billing contract. Owners can do everything else, and there can be several.';
@@ -101,9 +146,9 @@ function RoleEditor({
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [permissions, setPermissions] = useState<OrganizationPermission[]>(
-    initial?.permissions ?? ['content.read'],
+    initial?.permissions ?? ['feature.content.view'],
   );
-  const held = new Set(data.currentUserPermissions);
+  const held = expandOrganizationPermissions(data.currentUserPermissions);
   const pending = create.isPending || update.isPending;
   const canSave = name.trim().length > 0 && permissions.length > 0 && !pending;
 
@@ -119,7 +164,11 @@ function RoleEditor({
       description: description.trim() || null,
       permissions,
     };
-    if (initial) await update.mutateAsync({ roleId: initial.id, draft });
+    if (initial)
+      await update.mutateAsync({
+        roleId: initial.id,
+        draft: { ...draft, version: initial.version },
+      });
     else await create.mutateAsync(draft);
     onDone();
   }
@@ -159,7 +208,7 @@ function RoleEditor({
         <legend className="mb-1 text-xs" style={{ color: 'var(--text-3)' }}>
           Permissions. You can only grant what your own role holds.
         </legend>
-        {data.grantablePermissions.map((permission) => (
+        {distinctPermissions(data.grantablePermissions).map((permission) => (
           <label
             key={permission}
             className="flex min-h-8 items-start gap-2 text-xs"
@@ -199,6 +248,10 @@ function RoleEditor({
   );
 }
 
+function isHeld(role: WorkspaceRole): boolean {
+  return role.memberCount > 0 || role.groupCount > 0;
+}
+
 function RoleList({ data }: { data: WorkspaceRolesResult }) {
   const remove = useDeleteWorkspaceRole();
   const { confirm, dialog } = useConfirmAction();
@@ -232,8 +285,15 @@ function RoleList({ data }: { data: WorkspaceRolesResult }) {
                 </p>
               ) : null}
               <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-2)' }}>
-                {role.permissions.map((permission) => PERMISSION_COPY[permission]).join(' · ')}
+                {distinctPermissions(role.permissions).map(permissionCopy).join(' · ')}
               </p>
+              {!role.builtIn && data.canManageRoles && isHeld(role) ? (
+                <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                  Held by {role.memberCount} member{role.memberCount === 1 ? '' : 's'} and{' '}
+                  {role.groupCount} directory group{role.groupCount === 1 ? '' : 's'}. Take it off
+                  them before deleting it, so nobody loses access without a decision.
+                </p>
+              ) : null}
             </div>
             {!role.builtIn && data.canManageRoles ? (
               <div className="flex shrink-0 gap-2">
@@ -248,14 +308,14 @@ function RoleList({ data }: { data: WorkspaceRolesResult }) {
                 <button
                   type="button"
                   className={secondaryButton}
-                  disabled={remove.isPending}
+                  disabled={remove.isPending || isHeld(role)}
                   style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
                   onClick={() =>
                     confirm({
                       title: `Delete the ${role.name} role?`,
-                      description: `${role.memberCount} member${role.memberCount === 1 ? '' : 's'} and ${role.groupCount} directory group${role.groupCount === 1 ? '' : 's'} lose every permission this role gave them, and policy exceptions written for it are removed. A deleted role cannot be restored; you would have to create it again.`,
+                      description: `Nobody holds ${role.name}, so no one loses access. A deleted role cannot be restored; you would have to create it again, and policy exceptions written for it are removed.`,
                       confirmLabel: 'Delete role',
-                      onConfirm: () => remove.mutate(role.id),
+                      onConfirm: () => remove.mutate({ roleId: role.id, version: role.version }),
                     })
                   }
                 >
@@ -295,7 +355,7 @@ function MemberRoleRow({ member, data }: { member: TeamMember; data: WorkspaceRo
   const current = data.memberRoleGrants[member.userId] ?? [];
   const [selected, setSelected] = useState<string[]>(current);
   const dirty = JSON.stringify([...selected].sort()) !== JSON.stringify([...current].sort());
-  const held = new Set(data.currentUserPermissions);
+  const held = expandOrganizationPermissions(data.currentUserPermissions);
 
   return (
     <li
@@ -375,13 +435,19 @@ function MemberRoles({ data }: { data: WorkspaceRolesResult }) {
   );
 }
 
+type DirectoryGroup = WorkspaceDirectoryGroup;
+
+function sourceLabel(group: DirectoryGroup): string {
+  return group.source?.connectionName?.trim() || 'your identity provider';
+}
+
 function GroupRow({
   group,
   data,
   members,
   canManageGroups,
 }: {
-  group: WorkspaceDirectoryGroup;
+  group: DirectoryGroup;
   data: WorkspaceRolesResult;
   members: TeamMember[];
   canManageGroups: boolean;
@@ -390,7 +456,7 @@ function GroupRow({
   const setManagers = useSetGroupManagers();
   const [roleIds, setRoleIds] = useState(group.roleIds);
   const [managerIds, setManagerIds] = useState(group.managerUserIds);
-  const held = new Set(data.currentUserPermissions);
+  const held = expandOrganizationPermissions(data.currentUserPermissions);
   const rolesDirty =
     JSON.stringify([...roleIds].sort()) !== JSON.stringify([...group.roleIds].sort());
   const managersDirty =
@@ -406,6 +472,10 @@ function GroupRow({
         <span className="ml-2 text-xs" style={{ color: 'var(--text-3)' }}>
           {group.memberCount} member{group.memberCount === 1 ? '' : 's'}
         </span>
+      </p>
+      <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+        Managed by {sourceLabel(group)}. Its name and members are read-only here and are replaced by
+        the next sync; only the roles below are yours to set.
       </p>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {data.roles
@@ -479,7 +549,8 @@ function DirectoryGroupRoles({ data }: { data: WorkspaceRolesResult }) {
     <section style={cardStyle} aria-labelledby="workspace-group-roles-heading">
       <CardHeader id="workspace-group-roles-heading" title="Directory groups">
         Every active member your identity provider places in a group holds the roles checked for
-        that group, and loses them when the provider removes them.
+        that group, and loses them when the provider removes them. Membership belongs to the
+        provider: it cannot be edited here, and a change made there wins.
       </CardHeader>
       <ul className="flex flex-col">
         {result.groups.map((group) => (
