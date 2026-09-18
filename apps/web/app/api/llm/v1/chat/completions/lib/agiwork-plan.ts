@@ -1,5 +1,7 @@
+import { contextSource, type ContextSource } from '@agiworkforce/context';
 import type { AgentEvent } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
+import { assertNoExternalInstructions } from './context/context-manifest';
 
 export const AGIWORK_PLAN_MIN_STEPS = 3;
 export const AGIWORK_PLAN_MAX_STEPS = 6;
@@ -28,16 +30,51 @@ export const AgiWorkGoalSchema = z
 export type AgiWorkGoal = z.infer<typeof AgiWorkGoalSchema>;
 
 export type AgiWorkPlanStepStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
 export interface AgiWorkPlanStep {
   id: string;
   description: string;
   status: AgiWorkPlanStepStatus;
+}
+
+export interface AgiWorkContextIdentity {
+  turnId: string;
+  conversationId?: string | null;
+  planId?: string | null;
+  version?: number | null;
+}
+
+// The goal and the plan are the two sources an AGI Work turn trusts as instruction.
+// Re-checking here keeps a taxonomy edit from quietly granting that to fetched content.
+function agiWorkInstructionSource(source: ContextSource): ContextSource {
+  assertNoExternalInstructions([source]);
+  return source;
+}
+
+export function agiWorkGoalContextSource(identity: AgiWorkContextIdentity): ContextSource {
+  return agiWorkInstructionSource(
+    contextSource({
+      sourceClass: 'agent_instruction',
+      locator: identity.planId
+        ? `work_plans/${identity.planId}`
+        : `agiwork/${identity.turnId}/goal`,
+      conversationId: identity.conversationId ?? null,
+    }),
+  );
+}
+
+export function agiWorkPlanContextSource(identity: AgiWorkContextIdentity): ContextSource {
+  const revision = identity.version == null ? '' : `@${identity.version}`;
+  return agiWorkInstructionSource(
+    contextSource({
+      sourceClass: 'current_task_state',
+      locator: identity.planId
+        ? `work_plans/${identity.planId}${revision}`
+        : `agiwork/${identity.turnId}/plan${revision}`,
+      conversationId: identity.conversationId ?? null,
+    }),
+  );
 }
 
 export function parseAgiWorkGoal(raw: unknown): AgiWorkGoal | null {

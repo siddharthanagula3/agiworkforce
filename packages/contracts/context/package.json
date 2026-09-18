@@ -1,0 +1,21 @@
+{
+  "name": "@agiworkforce/context",
+  "version": "0.0.1",
+  "description": "Canonical taxonomy for every class of context a turn can carry: provenance, authorship and trust as typed fields. Pure classification; performs no I/O.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
+  }
+}

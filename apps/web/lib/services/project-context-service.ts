@@ -1,3 +1,4 @@
+import { contextSource, type ContextSource } from '@agiworkforce/context';
 import { MAX_PROJECT_KNOWLEDGE_FILES } from '@agiworkforce/types';
 
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
@@ -53,6 +54,12 @@ export interface ProjectContext {
     };
   }>;
   siblingChats: Array<{ title: string; preview: string | null }>;
+}
+
+// Callers that build a ProjectContext by hand have no provenance to declare, which
+// is why the sources sit on the loaded shape rather than on ProjectContext itself.
+export interface LoadedProjectContext extends ProjectContext {
+  sources: ContextSource[];
 }
 
 const MAX_INSTRUCTIONS_CHARS = 8_000;
@@ -169,7 +176,7 @@ export async function loadProjectContext(
     currentConversationId?: string;
     currentUserQuery?: string;
   },
-): Promise<ProjectContext | null> {
+): Promise<LoadedProjectContext | null> {
   const [project] = await db.query<{
     id: string;
     name: string;
@@ -275,8 +282,8 @@ export async function loadProjectContext(
     }
     candidates.set(row.id, candidate);
   }
-  const rankedSiblingChats = Array.from(candidates.values())
-    .map((candidate, recencyIndex) => {
+  const rankedSiblingChats = Array.from(candidates.entries())
+    .map(([conversationId, candidate], recencyIndex) => {
       const excerpt = candidate.messages
         .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
         .join('\n');
@@ -287,7 +294,7 @@ export async function loadProjectContext(
           score + (titleText.includes(term) ? 6 : 0) + (excerptText.includes(term) ? 2 : 0),
         0,
       );
-      return { ...candidate, excerpt, relevance, recencyIndex };
+      return { ...candidate, conversationId, excerpt, relevance, recencyIndex };
     })
     .sort(
       (left, right) =>
@@ -298,6 +305,7 @@ export async function loadProjectContext(
 
   let remainingSiblingChars = MAX_TOTAL_SIBLING_CHARS;
   const siblingChats: ProjectContext['siblingChats'] = [];
+  const siblingSources: ContextSource[] = [];
   for (const candidate of rankedSiblingChats.slice(0, MAX_SIBLING_CHATS)) {
     if (remainingSiblingChars <= 0) break;
     const preview = candidate.excerpt
@@ -305,6 +313,17 @@ export async function loadProjectContext(
       : null;
     remainingSiblingChars -= preview?.length ?? 0;
     siblingChats.push({ title: candidate.title, preview });
+    siblingSources.push(
+      contextSource({
+        sourceClass: 'project_sibling_chat',
+        locator: `web_conversations/${candidate.conversationId}`,
+        recordId: candidate.conversationId,
+        conversationId: candidate.conversationId,
+        projectId: project.id,
+        ownerUserId: params.userId,
+        organizationId: project.organization_id ?? null,
+      }),
+    );
   }
 
   const query = params.currentUserQuery ?? '';
@@ -318,11 +337,42 @@ export async function loadProjectContext(
       .map((file) => ({ fileId: file.id, extractedText: file.extracted_text ?? '' })),
   });
 
+  const projectProvenance = {
+    projectId: project.id,
+    ownerUserId: params.userId,
+    organizationId: project.organization_id ?? null,
+  };
+
   return {
     projectId: project.id,
     name: project.name,
     description: project.description,
     instructions: project.instructions,
+    sources: [
+      ...(project.instructions?.trim()
+        ? [
+            contextSource({
+              sourceClass: 'project_instruction',
+              locator: `user_projects/${project.id}`,
+              recordId: project.id,
+              ...projectProvenance,
+            }),
+          ]
+        : []),
+      ...files.flatMap((file) =>
+        file.id
+          ? [
+              contextSource({
+                sourceClass: 'project_knowledge_file',
+                locator: `project_knowledge_files/${file.id}`,
+                recordId: file.id,
+                ...projectProvenance,
+              }),
+            ]
+          : [],
+      ),
+      ...siblingSources,
+    ],
     knowledgeFiles: files
       .map((file, addedIndex) => ({
         fileId: file.id ?? null,
