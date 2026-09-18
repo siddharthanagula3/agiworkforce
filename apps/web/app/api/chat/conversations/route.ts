@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { CreateConversationSchema } from '@/lib/validations/chat';
 import { CONVERSATION_WORK_MODE_SELECT, type ChatConversationRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { buildPage, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
 import { assertSessionInvariants } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
@@ -14,6 +15,11 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { buildCloudChatSessionLabel } from '@/lib/services/chat-session-label-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+
+const PAGE_SORT_COLUMN = 'page_sort_key';
+// Pinned-first then newest-first, as one fixed-width text key: lexicographic
+// order is the product's order, so a single cursor can name a row in it.
+const PAGE_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
 
 function parsePositiveInt(raw: string | null, fallback: number, max?: number): number {
   const parsed = Number.parseInt(raw ?? '', 10);
@@ -51,6 +57,9 @@ async function handleGetConversations(request: NextRequest) {
       MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
     ) || MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
+  // A cursor names the last row, so a conversation touched while the reader
+  // pages cannot repeat or hide a row. Offset stays for clients still sending it.
+  const cursor = decodeKeysetCursor(url.searchParams.get('cursor'));
   const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
   const statsOnly = includeHistoryStats && url.searchParams.get('statsOnly') === '1';
 
@@ -78,18 +87,30 @@ async function handleGetConversations(request: NextRequest) {
     params.push(limit + 1, offset);
     const limitParameter = params.length - 1;
     const offsetParameter = params.length;
+    const keyset = keysetSql({
+      sortColumn: PAGE_SORT_COLUMN,
+      idColumn: 'id',
+      ...(cursor ? { cursor } : {}),
+      firstParamIndex: params.length + 1,
+    });
+    params.push(...keyset.params);
 
     const [rows, historyStatsRows] = await Promise.all([
       statsOnly
         ? Promise.resolve([])
-        : db.query<ChatConversationRow>(
+        : db.query<ChatConversationRow & { page_sort_key: string }>(
             `
-          select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at,
-            ${CONVERSATION_WORK_MODE_SELECT}
-          from web_conversations
-          where ${where.join(' and ')}
-          order by pinned desc, updated_at desc
-          limit $${limitParameter} offset $${offsetParameter}
+          select * from (
+            select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at,
+              (case when pinned then '1' else '0' end)
+                || to_char(updated_at at time zone 'utc', ${PAGE_SORT_KEY_FORMAT}) as ${PAGE_SORT_COLUMN},
+              ${CONVERSATION_WORK_MODE_SELECT}
+            from web_conversations
+            where ${where.join(' and ')}
+          ) conversations
+          ${keyset.where ? `where ${keyset.where}` : ''}
+          ${keyset.orderBy}
+          limit $${limitParameter} ${cursor ? '' : `offset $${offsetParameter}`}
         `,
             params,
           ),
@@ -117,8 +138,11 @@ async function handleGetConversations(request: NextRequest) {
         : Promise.resolve([]),
     ]);
 
-    const hasMore = rows.length > limit;
-    const conversations = hasMore ? rows.slice(0, limit) : rows;
+    const page = buildPage(rows, limit, (row) => ({
+      sortValue: row.page_sort_key,
+      id: row.id,
+    }));
+    const conversations = page.items.map(({ page_sort_key: _sortKey, ...row }) => row);
     const historyStatsRow = historyStatsRows[0];
     const historyStats = historyStatsRow
       ? {
@@ -129,8 +153,9 @@ async function handleGetConversations(request: NextRequest) {
 
     return NextResponse.json({
       conversations,
-      hasMore,
+      hasMore: page.hasMore,
       nextOffset: offset + conversations.length,
+      nextCursor: page.nextCursor,
       ...(historyStats ? { historyStats } : {}),
     });
   } catch (error) {

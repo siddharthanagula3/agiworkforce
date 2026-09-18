@@ -2,9 +2,19 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
-import type { ResolvedWorkspaceControls, WorkspaceFeature } from '@agiworkforce/types';
+import {
+  trustModeOrStrictest,
+  type ResolvedWorkspaceControls,
+  type WorkspaceFeature,
+} from '@agiworkforce/types';
 import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { recordAuditEvent } from '@/lib/security-audit';
+import {
+  evaluateProviderEgress,
+  type CrossingRefusalReason,
+  type ProviderEgressRequest,
+} from '@/lib/server/trust-boundary-crossing';
 import { evaluateModelAccessForRequest } from '@/lib/services/model-policy-gate';
 import { evaluateSpendLimit } from '@/lib/services/spend-limit-service';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
@@ -179,6 +189,89 @@ export async function buildWorkspaceFeatureGateResponse(
       },
     },
     { status: isPolicyUnavailable(decision) ? 503 : 403, headers },
+  );
+}
+
+const PROVIDER_EGRESS_REFUSALS: Readonly<
+  Record<CrossingRefusalReason, { status: number; code: string; message: string }>
+> = {
+  'secret-in-payload': {
+    status: 400,
+    code: 'secret_in_payload',
+    message:
+      'This request carries what looks like a credential. Remove it and send it again: a key that reaches a provider is disclosed to that provider whoever owns the route.',
+  },
+  'platform-key-not-permitted': {
+    status: 403,
+    code: 'platform_key_not_permitted',
+    message:
+      'This conversation runs on your own provider key. The available route would have used our platform key instead, so the call was refused rather than served under a weaker promise.',
+  },
+  'fallback-needs-approval': {
+    status: 403,
+    code: 'fallback_needs_approval',
+    message:
+      'The route you chose is unavailable, and Local mode never falls back on its own. Approve a fallback to continue.',
+  },
+  'fallback-leaves-trust-boundary': {
+    status: 403,
+    code: 'fallback_leaves_trust_boundary',
+    message:
+      'The only available fallback sits outside the trust boundary this conversation was started under, so the call was refused.',
+  },
+};
+
+/**
+ * One decision for every provider call, whichever mode the caller chose. The
+ * managed and BYOK paths used to be separated here and each answered for
+ * itself, so a fallback could serve a BYOK turn on a platform key.
+ *
+ * Returns null when the crossing is allowed, so a call site reads the same way
+ * as the other gates in this file.
+ */
+export async function buildProviderEgressGateResponse(
+  egress: Omit<ProviderEgressRequest, 'mode'> & { mode: string | null | undefined },
+  headers?: HeadersInit,
+): Promise<NextResponse | null> {
+  const mode = trustModeOrStrictest(egress.mode);
+  const outcome = evaluateProviderEgress({ ...egress, mode });
+  if (outcome.decision === 'allowed' || outcome.reason === null) return null;
+
+  const refusal = PROVIDER_EGRESS_REFUSALS[outcome.reason];
+  logger.warn(
+    {
+      userId: egress.userId,
+      trustMode: mode,
+      reason: outcome.reason,
+      keyAttribution: egress.routeKeyAttribution,
+      detections: outcome.secrets.length,
+    },
+    '[provider-egress] refused by the trust-mode contract',
+  );
+
+  await recordAuditEvent({
+    eventType: 'provider_egress_refused',
+    userId: egress.userId,
+    outcome: 'denied',
+    severity: 'warning',
+    surface: egress.surface,
+    detail: { reason: outcome.reason, scope: mode },
+    ...(outcome.audit.correlationId === undefined
+      ? {}
+      : { correlationId: outcome.audit.correlationId }),
+    ...(outcome.audit.causationId === undefined ? {} : { causationId: outcome.audit.causationId }),
+    ...(outcome.audit.operationRef === undefined
+      ? {}
+      : { operationRef: outcome.audit.operationRef }),
+    retentionClass: outcome.audit.retentionClass,
+  });
+
+  return NextResponse.json(
+    {
+      error: { message: refusal.message, type: 'trust_boundary', code: refusal.code },
+      trust_mode: { mode, allowed: false, reason: outcome.reason },
+    },
+    { status: refusal.status, headers },
   );
 }
 

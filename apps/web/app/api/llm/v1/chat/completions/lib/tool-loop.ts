@@ -50,6 +50,12 @@
 
 import 'server-only';
 
+import {
+  beginOperation,
+  nextAttempt as nextOperationAttempt,
+  operationLogFields,
+  type OperationIdentity,
+} from '@/lib/identity/operation-identity';
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { recordBrowserTask, recordToolOutcome } from '@/lib/observability/metrics';
@@ -111,6 +117,12 @@ import {
   toOpenAiToolDef,
   type WebMcpToolDef,
 } from '@/lib/mcp-tool-executor';
+import {
+  expandDeferredToolSchemas,
+  selectToolSchemas,
+  toolDirectoryToolDef,
+  TOOL_DIRECTORY_TOOL_NAME,
+} from './tool-schema-loader';
 import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
 import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
@@ -507,6 +519,8 @@ export interface ToolLoopProviderStepResult {
 
 export interface ToolLoopProviderExecution {
   operationKey: string;
+  /** Stable across every retry of this step; only `attemptId` changes. */
+  identity: OperationIdentity;
   step: number;
   attempt: number;
   request: ProcessedRequest['llmRequest'];
@@ -2257,6 +2271,7 @@ function recordProviderStepSuccess(input: {
   result: ToolLoopProviderStepResult;
   attemptStartedAtMs: number;
   firstProviderLineAtMs: number | undefined;
+  identity: OperationIdentity;
   nowMs: number;
 }): string | undefined {
   try {
@@ -2299,7 +2314,10 @@ function recordProviderStepSuccess(input: {
     });
     return routeId;
   } catch (error) {
-    logger.warn({ error }, '[tool-loop] route outcome / affinity was not recorded');
+    logger.warn(
+      { ...operationLogFields(input.identity), error },
+      '[tool-loop] route outcome / affinity was not recorded',
+    );
     return undefined;
   }
 }
@@ -2309,8 +2327,13 @@ function recordProviderStepFailure(input: {
   attemptRequest: ProcessedRequest['llmRequest'];
   err: unknown;
   classified: ClassifiedError;
+  identity: OperationIdentity;
   nowMs: number;
 }): void {
+  logger.warn(
+    { ...operationLogFields(input.identity), errorCode: input.classified.code },
+    '[tool-loop] provider attempt failed',
+  );
   try {
     persistRoutingDecisionOutcome({
       requestId: input.attemptProcessed.requestId,
@@ -2326,7 +2349,10 @@ function recordProviderStepFailure(input: {
       input.nowMs,
     );
   } catch (error) {
-    logger.warn({ error }, '[tool-loop] route outcome was not recorded');
+    logger.warn(
+      { ...operationLogFields(input.identity), error },
+      '[tool-loop] route outcome was not recorded',
+    );
   }
 }
 
@@ -2515,6 +2541,9 @@ export async function* runToolLoop(
   const agiWorkGoal = showWorkPhases ? processed.chatRequest?.agi_work_goal : undefined;
   let agiWorkPlan: AgiWorkPlanStep[] = [];
   const taskId = turnId;
+  // The turn is the parent task; each provider step below is one operation of
+  // it and each retry of that step is one attempt.
+  const operationRequestId = processed.requestId || turnId;
   let taskState: AgentTaskState | undefined = options.resume
     ? 'awaiting_input'
     : options.invocationContinuation
@@ -2543,7 +2572,42 @@ export async function* runToolLoop(
 
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const mcpTools = options.mcpTools ?? [];
-  const openAiTools: unknown[] = mcpTools.map(toOpenAiToolDef);
+  // Schemas are admitted against a byte budget rather than sent whole, so the
+  // prompt payload stays bounded as the connected count grows. Nothing is
+  // hidden: what is left out is listed on TOOL_DIRECTORY_TOOL_NAME.
+  const toolSchemaSelection = selectToolSchemas({
+    tools: mcpTools,
+    turnText: lastUserTurnText(processed.chatRequest?.messages),
+  });
+  const loadedToolNames = new Set(toolSchemaSelection.tools.map((tool) => tool.qualifiedName));
+  let deferredToolSchemas = toolSchemaSelection.deferred;
+  const offeredMcpToolDefs = (): WebMcpToolDef[] => {
+    const loaded = mcpTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
+    const directory = toolDirectoryToolDef(deferredToolSchemas);
+    return directory ? [...loaded, directory] : loaded;
+  };
+  const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
+    const raw = args['names'];
+    const requested = Array.isArray(raw) ? raw.filter((name) => typeof name === 'string') : [];
+    const loaded = expandDeferredToolSchemas(mcpTools, requested);
+    for (const tool of loaded) loadedToolNames.add(tool.qualifiedName);
+    deferredToolSchemas = deferredToolSchemas.filter(
+      (entry) => !loadedToolNames.has(entry.qualifiedName),
+    );
+    if (loaded.length === 0) {
+      return {
+        content:
+          'No connected tool matched those names. Use the exact qualified names from the list on this tool.',
+        isError: true,
+      };
+    }
+    return {
+      content: `Loaded ${loaded.length} tool schema(s): ${loaded
+        .map((tool) => tool.qualifiedName)
+        .join(', ')}. Call them on the next step.`,
+      isError: false,
+    };
+  };
   const availableTools = new Set([
     ...mcpTools.map((tool) => tool.qualifiedName),
     ...(processed.llmRequest.tools ?? []).map(functionToolName).filter(Boolean),
@@ -2587,14 +2651,9 @@ export async function* runToolLoop(
       ...(durationMs === undefined ? {} : { durationMs }),
     });
   };
-  const llmRequest = {
-    ...processed.llmRequest,
-    tools:
-      openAiTools.length > 0
-        ? [...(processed.llmRequest.tools ?? []), ...openAiTools]
-        : processed.llmRequest.tools,
-    stream: true,
-  };
+  // The connector schemas are added per step, not here: the directory tool can
+  // load a deferred one mid-turn and the next step has to carry it.
+  const llmRequest = { ...processed.llmRequest, stream: true };
   let mapSearchBatchCompleted = false;
   const observedUsage = options.usage ?? createObservedProviderUsage();
 
@@ -2710,6 +2769,7 @@ export async function* runToolLoop(
     let rootQuotaExhaustedError: unknown | undefined;
     let liveLinesReachedClient = false;
     let attempt = 0;
+    let identity = beginOperation({ requestId: operationRequestId, parentTaskId: taskId });
     for (;;) {
       const attemptProcessed = servingProcessed;
       const attemptRequest: ProcessedRequest['llmRequest'] = {
@@ -2766,6 +2826,7 @@ export async function* runToolLoop(
         const result = options.providerExecutor
           ? await options.providerExecutor({
               operationKey: providerAttemptOperationKey(step, attempt),
+              identity,
               step,
               attempt,
               request: attemptRequest,
@@ -2795,6 +2856,7 @@ export async function* runToolLoop(
             emptyResponseRotationUsed = true;
             servingProcessed = rotated.processed;
             attempt += 1;
+            identity = nextOperationAttempt(identity);
             continue;
           }
         }
@@ -2806,6 +2868,7 @@ export async function* runToolLoop(
             result,
             attemptStartedAtMs,
             firstProviderLineAtMs,
+            identity,
             nowMs: now(),
           }) ?? servedRouteId;
         return result;
@@ -2819,6 +2882,7 @@ export async function* runToolLoop(
           attemptRequest,
           err,
           classified,
+          identity,
           nowMs: now(),
         });
         if (!rootQuotaExhaustedError && classified.category === 'quota_exhausted') {
@@ -2832,6 +2896,7 @@ export async function* runToolLoop(
         }
         servingProcessed = nextAttempt.processed;
         attempt += 1;
+        identity = nextOperationAttempt(identity);
       }
     }
   }
@@ -3443,6 +3508,9 @@ export async function* runToolLoop(
           content: withdrawnToolMessage(tc.qualifiedName),
           isError: false,
         });
+      }
+      if (tc.qualifiedName === TOOL_DIRECTORY_TOOL_NAME) {
+        return Promise.resolve(loadDeferredToolSchemas(tc.args));
       }
       if (isWebSearchTool(tc.qualifiedName)) {
         searchObserved = true;
@@ -4280,9 +4348,12 @@ export async function* runToolLoop(
         );
       }
 
+      const stepMcpTools = offeredMcpToolDefs().map(toOpenAiToolDef);
+      const turnTools =
+        stepMcpTools.length > 0 ? [...(llmRequest.tools ?? []), ...stepMcpTools] : llmRequest.tools;
       const offeredTools = mapSearchBatchCompleted
-        ? llmRequest.tools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
-        : llmRequest.tools;
+        ? turnTools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
+        : turnTools;
       const stepTools = toolGovernor.capReached()
         ? undefined
         : toolGovernor.offered(offeredTools, offeredToolName);

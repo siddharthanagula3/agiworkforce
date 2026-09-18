@@ -1,6 +1,7 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import type { AuditRetentionClass } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
 
 export interface AuditEvent {
@@ -14,6 +15,13 @@ export interface AuditEvent {
   action: string;
   status: 'success' | 'failure' | 'blocked' | 'pending';
   metadata?: Record<string, unknown>;
+  // The shared envelope. Absent on rows written before it existed, which is why
+  // every field is optional and a reader must not drop a row that lacks them.
+  schema_version?: number;
+  correlation_id?: string;
+  causation_id?: string;
+  operation_ref?: string;
+  retention_class?: AuditRetentionClass;
 }
 
 export interface AuditFilters {

@@ -27,11 +27,18 @@ import {
   approvalRequirement,
   type ActionApprovalRequirement,
 } from './approvalPolicy';
+import { planSiteToolCall, type SiteToolDescriptor } from '../tools/siteToolRegistry';
 import { evaluateSiteAccess } from '../site-policy/store';
 import { sitePolicyDenialMessage } from '@agiworkforce/types';
 
 export interface AgentLoopOptions {
   maxSteps?: number;
+  /**
+   * Tools the page itself declared. Their effect is the page's claim, so a
+   * write is gated like an action and a run with no approval channel refuses
+   * it rather than acting on an untrusted party's word.
+   */
+  siteTools?: readonly SiteToolDescriptor[];
   onBeforeAction?: (
     toolName: string,
     args: Record<string, unknown>,
@@ -504,11 +511,23 @@ export async function resolveApprovalRequirement(
   options: AgentLoopOptions = {},
 ): Promise<ActionApprovalRequirement> {
   const pageUrl = await runOwnedOperation(options, () => getTabUrl(tabId));
+  const siteTool = siteToolNamed(options, toolName);
+  if (siteTool) return planSiteToolCall(siteTool, args, pageUrl).requirement;
   const index = args['index'];
   const targetSignature =
     typeof index === 'number' ? (cdp.resolveIndexedElement(tabId, index)?.signature ?? null) : null;
   return approvalRequirement({ toolName, args, pageUrl, targetSignature });
 }
+
+function siteToolNamed(
+  options: AgentLoopOptions,
+  toolName: string,
+): SiteToolDescriptor | undefined {
+  return options.siteTools?.find((tool) => tool.name === toolName);
+}
+
+export const SITE_TOOL_WRITE_UNATTENDED_REFUSAL =
+  'This tool is declared by the page and changes something. This run has nobody to approve it, so it was not called.';
 
 const UPLOAD_SITE_NOT_APPROVED =
   'This site is not approved for file uploads. Add it in the extension options first.';
@@ -557,6 +576,25 @@ async function dispatchToolCall(
     await assertRunOwnership(options);
     options.onProgress?.({ kind: 'tool_result', stepNumber, toolName, toolResult: uploadRefusal });
     return { role: 'tool', content: uploadRefusal, tool_call_id: toolCall.id, name: toolName };
+  }
+
+  if (
+    options.onBeforeAction === undefined &&
+    siteToolNamed(options, toolName)?.effect === 'write'
+  ) {
+    await assertRunOwnership(options);
+    options.onProgress?.({
+      kind: 'tool_result',
+      stepNumber,
+      toolName,
+      toolResult: SITE_TOOL_WRITE_UNATTENDED_REFUSAL,
+    });
+    return {
+      role: 'tool',
+      content: SITE_TOOL_WRITE_UNATTENDED_REFUSAL,
+      tool_call_id: toolCall.id,
+      name: toolName,
+    };
   }
 
   if (requirement.alwaysAsk && options.onBeforeAction === undefined) {

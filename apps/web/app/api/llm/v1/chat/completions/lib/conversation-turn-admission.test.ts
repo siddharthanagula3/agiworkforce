@@ -107,7 +107,8 @@ vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
   createCloudAgentRun: runServiceMocks.createRun,
   findActiveCloudAgentRunForConversation: runServiceMocks.findActive,
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
   loadUserConnectorToolCatalog: workflowMocks.loadConnectorTools,
   makeUserConnectorExecutor: vi.fn(),
 }));

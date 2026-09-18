@@ -9,6 +9,7 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { buildPage, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
   getProjectLimit,
@@ -30,6 +31,11 @@ import {
 
 const PG_UNDEFINED_COLUMN = '42703';
 
+const PAGE_SORT_COLUMN = 'page_sort_key';
+// Fixed-width UTC text, so lexicographic order is chronological order and the
+// cursor round-trips at the microsecond precision the column actually stores.
+const PAGE_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
+
 async function handleGetProjects(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -41,40 +47,63 @@ async function handleGetProjects(request: NextRequest) {
   const parsedOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
   const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
   const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
+  // A cursor names the last row, so a project updated while the reader pages
+  // cannot shift the window. Offset stays for clients that still send it.
+  const cursor = decodeKeysetCursor(url.searchParams.get('cursor'));
 
   const sharedScope = await resolveSharedProjectScope(db, userId);
   const sharedProjectIds =
     sharedScope?.organizationId === organizationId ? sharedScope.projectIds : [];
 
+  const params: unknown[] = [userId, limit + 1, offset, sharedProjectIds, organizationId];
+  const keyset = keysetSql({
+    sortColumn: PAGE_SORT_COLUMN,
+    idColumn: 'id',
+    ...(cursor ? { cursor } : {}),
+    firstParamIndex: params.length + 1,
+  });
+  params.push(...keyset.params);
+
   let data: Record<string, unknown>[];
   try {
     data = await db.query<Record<string, unknown>>(
-      `select p.id, p.user_id, p.organization_id, p.name, p.description, p.instructions,
-              p.color, p.is_archived, p.uses_global_memory, p.metadata, p.default_privacy_mode,
-              p.default_provider_mode, p.allowed_surfaces, p.default_model_id, p.last_used_at,
-              p.icon_emoji, p.accent_color, p.imported_from, p.created_at, p.updated_at,
-              (p.user_id <> $1) as is_org_shared,
-              (select count(*)::int
-                 from web_conversations c
-                where c.project_id = p.id::text
-                  and c.user_id = $1
-                  and c.organization_id is not distinct from $5::uuid
-                  and c.deleted_at is null) as conversation_count
-        from user_projects p
-       where p.deleted_at is null
-          and p.organization_id is not distinct from $5::uuid
-          and (p.user_id = $1 or p.id = any($4::uuid[]))
-       order by p.updated_at desc
-       limit $2 offset $3`,
-      [userId, limit, offset, sharedProjectIds, organizationId],
+      `select * from (
+         select p.id, p.user_id, p.organization_id, p.name, p.description, p.instructions,
+                p.color, p.is_archived, p.uses_global_memory, p.metadata, p.default_privacy_mode,
+                p.default_provider_mode, p.allowed_surfaces, p.default_model_id, p.last_used_at,
+                p.icon_emoji, p.accent_color, p.imported_from, p.created_at, p.updated_at,
+                to_char(p.updated_at at time zone 'utc', ${PAGE_SORT_KEY_FORMAT}) as ${PAGE_SORT_COLUMN},
+                (p.user_id <> $1) as is_org_shared,
+                (select count(*)::int
+                   from web_conversations c
+                  where c.project_id = p.id::text
+                    and c.user_id = $1
+                    and c.organization_id is not distinct from $5::uuid
+                    and c.deleted_at is null) as conversation_count
+           from user_projects p
+          where p.deleted_at is null
+             and p.organization_id is not distinct from $5::uuid
+             and (p.user_id = $1 or p.id = any($4::uuid[]))
+       ) projects
+       ${keyset.where ? `where ${keyset.where}` : ''}
+       ${keyset.orderBy}
+       limit $2 ${cursor ? '' : 'offset $3'}`,
+      params,
     );
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch projects');
     throw createError.internal('Failed to fetch projects');
   }
 
+  const page = buildPage(data, limit, (row) => ({
+    sortValue: String(row[PAGE_SORT_COLUMN] ?? ''),
+    id: String(row['id']),
+  }));
+
   return NextResponse.json({
-    projects: data.map((p) => mapProjectRow(p)),
+    projects: page.items.map((p) => mapProjectRow(p)),
+    hasMore: page.hasMore,
+    nextCursor: page.nextCursor,
   });
 }
 

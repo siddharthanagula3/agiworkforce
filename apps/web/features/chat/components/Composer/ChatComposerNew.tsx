@@ -133,6 +133,7 @@ import {
   writePersistedDraft,
 } from './composer-draft-storage';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
+import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
@@ -2465,6 +2466,19 @@ const ChatComposerNewComponent = ({
         'This message looks like it contains an API key or credential. Send again to continue, or edit it first.',
       );
       return;
+    }
+
+    if (sendImageMode && outgoingContent.trim()) {
+      // A diagram, chart or vector is structured text the Artifacts system
+      // renders exactly; a raster model draws an unreadable picture of one.
+      const visualRoute = routeVisualRequest({
+        prompt: outgoingContent.trim(),
+        hasSourceImage: attachments.length > 0,
+      });
+      if (visualRoute.destination === 'artifact') {
+        outgoingContent = visualRoute.prompt;
+        sendImageMode = false;
+      }
     }
 
     if (sendImageMode) {

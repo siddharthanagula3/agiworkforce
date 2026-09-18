@@ -59,6 +59,7 @@ const builtIn = Object.values(BUILT_IN_ORGANIZATION_ROLES).map((role) => ({
   permissions: [...role.permissions],
   memberCount: 0,
   groupCount: 0,
+  version: 1,
 }));
 
 const auditor = {
@@ -71,6 +72,7 @@ const auditor = {
   permissions: ['content.read', 'audit.read'],
   memberCount: 2,
   groupCount: 1,
+  version: 3,
 };
 
 function withRoles(overrides: Record<string, unknown> = {}) {
@@ -166,7 +168,7 @@ describe('WorkspaceRoles', () => {
     expect(dialog).toHaveTextContent('Nobody holds Auditor, so no one loses access.');
     expect(dialog).toHaveTextContent('cannot be restored');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete role' }));
-    expect(mocks.deleteRole).toHaveBeenCalledWith('role-auditor');
+    expect(mocks.deleteRole).toHaveBeenCalledWith({ roleId: 'role-auditor', version: 3 });
   });
 
   it('gives a member an additional role on top of their membership role', () => {

@@ -1,5 +1,6 @@
 import {
   getModelMetadataById,
+  getRetiredModelMetadataById,
   type ModelAvailability,
   type ModelQualityTier,
 } from '@agiworkforce/types';
@@ -75,8 +76,12 @@ export function getManagedModelPresentationLabel(
   presentation?: ManagedModelPresentation,
 ): string {
   const normalizedModelId = modelId?.trim() ?? '';
+  // A retired model still answered the turns it answered. The retirement record
+  // is the only place its name survives, so a historical row says what it was.
+  const retired = getRetiredModelMetadataById(normalizedModelId);
   const name = normalizedModelId
-    ? (getModelMetadataById(normalizedModelId)?.name ?? UNAVAILABLE_MODEL_LABEL)
+    ? (getModelMetadataById(normalizedModelId)?.name ??
+      (retired?.metadataPreserved === true ? retired.name : UNAVAILABLE_MODEL_LABEL))
     : UNAVAILABLE_MODEL_LABEL;
 
   return presentation?.freePool === true ? `${name}${FREE_POOL_SUFFIX}` : name;
