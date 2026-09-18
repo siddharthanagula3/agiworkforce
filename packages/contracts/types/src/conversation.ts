@@ -159,6 +159,95 @@ export interface MessageBase {
   provider?: string;
 }
 
+export const RETRIEVED_HISTORY_SOURCES = [
+  'conversation',
+  'artifact',
+  'research_report',
+  'project_knowledge',
+  'developer_session',
+] as const;
+
+export type RetrievedHistorySource = (typeof RETRIEVED_HISTORY_SOURCES)[number];
+
+/**
+ * One passage of the account's own history that was retrieved for a turn. The
+ * shared shape exists so a surface can cite what it read back without each
+ * surface inventing its own citation type.
+ */
+export interface RetrievedHistoryPassage {
+  source: RetrievedHistorySource;
+  sourceId: string;
+  title: string;
+  snippet: string;
+  score: number;
+  messageId?: MessageId;
+  indexedAt: string | null;
+}
+
+export interface RetrievedHistory {
+  query: string;
+  passages: readonly RetrievedHistoryPassage[];
+  /** True when the retriever stopped at its candidate ceiling, not at the end. */
+  truncated: boolean;
+}
+
+export const CONVERSATION_DERIVED_STATE_KINDS = [
+  'title',
+  'summary',
+  'search_index',
+  'embedding',
+  'retrieved_history',
+] as const;
+
+export type ConversationDerivedStateKind = (typeof CONVERSATION_DERIVED_STATE_KINDS)[number];
+
+export type DerivedStateRegeneration =
+  'on_write' | 'on_read_if_missing' | 'scheduled' | 'manual' | 'per_request';
+
+export type DerivedStateDeletionPropagation =
+  'foreign_key_cascade' | 'background_job' | 'not_stored';
+
+/**
+ * Every piece of state derived from a conversation, with the two answers a
+ * derived value must have: how it is rebuilt, and what removes it when the
+ * source is deleted. A kind with neither is an orphan waiting to happen.
+ */
+export interface ConversationDerivedStateDescriptor {
+  kind: ConversationDerivedStateKind;
+  regeneratedBy: DerivedStateRegeneration;
+  deletionPropagation: DerivedStateDeletionPropagation;
+}
+
+export const CONVERSATION_DERIVED_STATE: Readonly<
+  Record<ConversationDerivedStateKind, ConversationDerivedStateDescriptor>
+> = Object.freeze({
+  title: {
+    kind: 'title',
+    regeneratedBy: 'on_read_if_missing',
+    deletionPropagation: 'foreign_key_cascade',
+  },
+  summary: {
+    kind: 'summary',
+    regeneratedBy: 'on_write',
+    deletionPropagation: 'foreign_key_cascade',
+  },
+  search_index: {
+    kind: 'search_index',
+    regeneratedBy: 'on_write',
+    deletionPropagation: 'foreign_key_cascade',
+  },
+  embedding: {
+    kind: 'embedding',
+    regeneratedBy: 'scheduled',
+    deletionPropagation: 'background_job',
+  },
+  retrieved_history: {
+    kind: 'retrieved_history',
+    regeneratedBy: 'per_request',
+    deletionPropagation: 'not_stored',
+  },
+});
+
 export interface ActionBase {
   id: ActionId;
 

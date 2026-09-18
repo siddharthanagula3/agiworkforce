@@ -5,7 +5,16 @@ import {
   MANAGED_CLOUD_ORGANIZATION_HEADER,
   MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
 } from '@agiworkforce/cloud-contracts';
+import {
+  createWorkspaceKeyValueStore,
+  defineCacheRegistry,
+  purgeWorkspaceCache,
+  type KeyValueStore,
+  type WorkspaceCacheScope,
+} from '@agiworkforce/key-value';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import {
   getCachedActiveOrganizationId,
   setCachedActiveOrganizationId,
@@ -156,6 +165,8 @@ async function writeActiveWorkspaceSelection(
     throw createError.validation('organizationId must be a UUID or null');
   }
 
+  const previous = await getCachedActiveOrganizationId(userId);
+
   await db.execute(
     `insert into public.user_settings (user_id, settings, updated_at)
      values (
@@ -175,6 +186,10 @@ async function writeActiveWorkspaceSelection(
   );
 
   await setCachedActiveOrganizationId(userId, organizationId);
+
+  if (previous !== undefined && previous !== organizationId) {
+    await invalidateWorkspaceScopedCaches(userId, previous);
+  }
 }
 
 export async function persistActiveWorkspaceSelection(
@@ -197,4 +212,108 @@ export async function persistProvenActiveWorkspaceSelection(
   organizationId: string,
 ): Promise<void> {
   await writeActiveWorkspaceSelection(db, userId, organizationId);
+}
+
+/**
+ * Every cache whose contents belong to one workspace. A cache absent from here
+ * is not purged on a workspace switch, so adding a workspace-scoped cache
+ * without registering it is the bug this registry exists to make visible.
+ */
+export const WORKSPACE_CACHE_REGISTRY = defineCacheRegistry([
+  {
+    id: 'personalization',
+    namespace: 'personalization',
+    sourceOfTruth: 'postgres',
+    workspaceScoped: true,
+    invalidatedBy: ['workspace-switch', 'record-write', 'ttl'],
+  },
+  {
+    id: 'search-index',
+    namespace: 'search-index',
+    sourceOfTruth: 'postgres',
+    workspaceScoped: true,
+    invalidatedBy: ['workspace-switch', 'record-write', 'deletion', 'ttl'],
+  },
+  {
+    id: 'notifications',
+    namespace: 'notifications',
+    sourceOfTruth: 'postgres',
+    workspaceScoped: true,
+    invalidatedBy: ['workspace-switch', 'record-write', 'ttl'],
+  },
+  {
+    id: 'schedules',
+    namespace: 'schedules',
+    sourceOfTruth: 'postgres',
+    workspaceScoped: true,
+    invalidatedBy: ['workspace-switch', 'record-write', 'deletion', 'ttl'],
+  },
+]);
+
+export type WorkspaceCacheId = 'personalization' | 'search-index' | 'notifications' | 'schedules';
+
+export function workspaceCacheScope(
+  userId: string,
+  organizationId: string | null,
+  cacheId?: WorkspaceCacheId,
+): WorkspaceCacheScope {
+  return { workspaceId: organizationId, userId, cacheId };
+}
+
+function resolveStore(): KeyValueStore | null {
+  try {
+    return getKeyValueStore();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The only way a route should reach cached workspace data: the returned store
+ * can address keys under this workspace and cache alone, so a stale binding
+ * reads nothing rather than another workspace's entry.
+ */
+export function getWorkspaceScopedCache(
+  cacheId: WorkspaceCacheId,
+  userId: string,
+  organizationId: string | null,
+): KeyValueStore | null {
+  if (!WORKSPACE_CACHE_REGISTRY.get(cacheId)) {
+    throw createError.internal(`Unregistered workspace cache: ${cacheId}`);
+  }
+  const store = resolveStore();
+  if (!store) return null;
+  return createWorkspaceKeyValueStore(store, workspaceCacheScope(userId, organizationId, cacheId));
+}
+
+export async function invalidateWorkspaceScopedCaches(
+  userId: string,
+  organizationId: string | null,
+): Promise<number> {
+  const store = resolveStore();
+  if (!store) return 0;
+  try {
+    return await purgeWorkspaceCache(store, workspaceCacheScope(userId, organizationId));
+  } catch (err) {
+    logger.warn(
+      { err, userId },
+      '[active-workspace] workspace cache purge failed; namespacing still isolates the switch',
+    );
+    return 0;
+  }
+}
+
+/**
+ * A stream that started in one workspace must not finish writing into another.
+ * Callers hold the workspace they bound to and re-check it at each checkpoint.
+ */
+export async function assertWorkspaceBindingCurrent(
+  db: DatabaseAdapter,
+  userId: string,
+  boundOrganizationId: string | null,
+): Promise<void> {
+  const current = await resolveActiveOrganizationId(db, userId);
+  if (current !== boundOrganizationId) {
+    throw createError.conflict('Your active workspace changed while this request was running');
+  }
 }
