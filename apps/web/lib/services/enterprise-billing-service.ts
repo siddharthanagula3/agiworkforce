@@ -8,6 +8,31 @@ import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getEnterpriseProductId, isEnterpriseProductId } from '@/lib/price-tier-mapping';
 import { getSubscriptionPeriod } from '@/lib/stripe-types';
+import { normalizeStripeSubscription } from '@/lib/server/payments/stripe-provider';
+import { recordSubscriptionStateTransition } from '@/lib/server/payments/subscription-history';
+import {
+  auditActivationState,
+  isExecutedAgreement,
+  paymentMethodViolations,
+  readCurrentCommercialAgreement,
+  readEnterpriseActivationState,
+  type ActivationBlockedReason,
+  type ExecutedCommercialAgreement,
+} from '@/lib/services/enterprise-contracts';
+import {
+  CONTRACT_METADATA_KEY_BILLING_CONTACT_EMAIL,
+  CONTRACT_METADATA_KEY_BILLING_CONTACT_NAME,
+  CONTRACT_METADATA_KEY_COMMITTED_USAGE_BLOCK_CENTS,
+  CONTRACT_METADATA_KEY_CUSTOMER_LEGAL_ENTITY,
+  CONTRACT_METADATA_KEY_INCLUDED_USAGE_CENTS_PER_MONTH,
+  CONTRACT_METADATA_KEY_MINIMUM_ANNUAL_SPEND_CENTS,
+  CONTRACT_METADATA_KEY_NET_TERMS_DAYS,
+  CONTRACT_METADATA_KEY_OVERAGE_PRICE_ID,
+  CONTRACT_METADATA_KEY_PROCUREMENT_CONTACT_EMAIL,
+  CONTRACT_METADATA_KEY_PROCUREMENT_CONTACT_NAME,
+  CONTRACT_METADATA_KEY_PROCUREMENT_REFERENCE,
+  CONTRACT_METADATA_KEY_SUPPORT_TIER,
+} from '@/lib/services/enterprise-contracts/stripe-metadata';
 import type {
   BillingCadence,
   OrganizationBillingContractRow,
@@ -18,18 +43,7 @@ const QUARTERLY_INTERVAL_COUNT = 3;
 const DEFAULT_BILLING_CADENCE: BillingCadence = 'annual';
 const QUARTERLY_BILLING_CADENCE: BillingCadence = 'quarterly';
 const PROCUREMENT_CUSTOM_FIELD_NAME_PATTERN = /^(po|po\s*number|purchase\s*order)$/iu;
-const PROCUREMENT_METADATA_KEY = 'po_number';
-const CONTRACT_METADATA_KEY_INCLUDED_USAGE_CENTS_PER_MONTH = 'included_usage_cents_per_month';
-const CONTRACT_METADATA_KEY_OVERAGE_PRICE_ID = 'overage_price_id';
-const CONTRACT_METADATA_KEY_COMMITTED_USAGE_BLOCK_CENTS = 'committed_usage_block_cents';
-const CONTRACT_METADATA_KEY_MINIMUM_ANNUAL_SPEND_CENTS = 'minimum_annual_spend_cents';
-const CONTRACT_METADATA_KEY_SUPPORT_TIER = 'support_tier';
-const CONTRACT_METADATA_KEY_CUSTOMER_LEGAL_ENTITY = 'customer_legal_entity';
-const CONTRACT_METADATA_KEY_BILLING_CONTACT_NAME = 'billing_contact_name';
-const CONTRACT_METADATA_KEY_BILLING_CONTACT_EMAIL = 'billing_contact_email';
-const CONTRACT_METADATA_KEY_PROCUREMENT_CONTACT_NAME = 'procurement_contact_name';
-const CONTRACT_METADATA_KEY_PROCUREMENT_CONTACT_EMAIL = 'procurement_contact_email';
-const CONTRACT_METADATA_KEY_NET_TERMS_DAYS = 'net_terms_days';
+const PROCUREMENT_METADATA_KEY = CONTRACT_METADATA_KEY_PROCUREMENT_REFERENCE;
 const MAX_PAYMENT_TERMS_DAYS = 180;
 const SECONDS_PER_DAY = 86_400;
 const CONTACT_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/u;
@@ -39,6 +53,7 @@ const AUDIT_SURFACE = 'stripe_webhook';
 const UNMAPPED_ENTERPRISE_PRICE_AUDIT_REASON = 'unmapped_stripe_price';
 const COLLECTION_STAGE_CHANGED_AUDIT_REASON = 'collection_stage_changed';
 const RESTORED_COLLECTION_STAGE = 'current';
+const PAYMENT_METHOD_VIOLATION_AUDIT_REASON = 'enterprise_payment_method_not_permitted';
 
 function extractProductId(
   product: string | Stripe.Product | Stripe.DeletedProduct | null | undefined,
@@ -285,6 +300,25 @@ function resolveNegotiatedContractMetadata(
   };
 }
 
+function negotiatedFromAgreement(
+  agreement: ExecutedCommercialAgreement,
+): NegotiatedContractMetadata {
+  const { terms } = agreement;
+  return {
+    includedUsageCentsPerPeriod: terms.includedUsageCentsPerPeriod,
+    overagePriceId: terms.overageStripePriceId,
+    committedUsageBlockCents: terms.committedUsageBlockCents,
+    minimumAnnualSpendCents: terms.minimumAnnualSpendCents,
+    supportTier: terms.supportTier,
+    customerLegalEntity: terms.customerLegalEntity,
+    billingContactName: terms.billingContact?.name ?? null,
+    billingContactEmail: terms.billingContact?.email ?? null,
+    procurementContactName: terms.procurementContact?.name ?? null,
+    procurementContactEmail: terms.procurementContact?.email ?? null,
+    paymentTermsDays: terms.paymentTermsDays,
+  };
+}
+
 async function resolveCustomerTaxExemptStatus(
   stripe: Stripe,
   customer: Stripe.Subscription['customer'],
@@ -342,16 +376,23 @@ export async function syncEnterpriseContractFromSubscription(
   }
 
   const period = getSubscriptionPeriod(subscription);
-  const cadence = resolveBillingCadence(resolvedPrice.recurring);
-  const procurementReference = await resolveProcurementReference(stripe, subscription);
-  const committedSeats = resolveCommittedSeats(subscription);
+  const activation = await readEnterpriseActivationState(db, organizationId, subscription.metadata);
+  const agreement = isExecutedAgreement(activation.agreement) ? activation.agreement : null;
+
+  const cadence = agreement?.terms.billingCadence ?? resolveBillingCadence(resolvedPrice.recurring);
+  const procurementReference =
+    agreement?.terms.procurementReference ??
+    (await resolveProcurementReference(stripe, subscription));
+  const committedSeats = agreement?.terms.committedSeats ?? resolveCommittedSeats(subscription);
+  const termStart = agreement?.terms.contractTermStart ?? (period ? isoDate(period.start) : null);
+  const termEnd = agreement?.terms.contractTermEnd ?? (period ? isoDate(period.end) : null);
   const stripeCustomerId = extractCustomerId(subscription.customer);
-  const negotiated = resolveNegotiatedContractMetadata(subscription);
-  const taxExemptStatus = await resolveCustomerTaxExemptStatus(
-    stripe,
-    subscription.customer,
-    subscription.id,
-  );
+  const negotiated = agreement
+    ? negotiatedFromAgreement(agreement)
+    : resolveNegotiatedContractMetadata(subscription);
+  const taxExemptStatus =
+    agreement?.terms.taxExemptStatus ??
+    (await resolveCustomerTaxExemptStatus(stripe, subscription.customer, subscription.id));
   const eventCreatedAt = typeof options.eventCreatedAt === 'number' ? options.eventCreatedAt : null;
   const subscriptionEnded = ENDED_SUBSCRIPTION_STATUSES.has(subscription.status);
 
@@ -362,13 +403,15 @@ export async function syncEnterpriseContractFromSubscription(
         included_usage_cents_per_period, overage_stripe_price_id, committed_usage_block_cents,
         minimum_annual_spend_cents, support_tier, customer_legal_entity, last_stripe_event_at, ended_at,
         billing_contact_name, billing_contact_email, procurement_contact_name, procurement_contact_email,
-        payment_terms_days, tax_exempt_status)
+        payment_terms_days, tax_exempt_status, commercial_agreement_id, commercial_agreement_version,
+        signed_order_reference, signed_order_signed_at, activation_blocked_reason)
      values (
        $1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text, $7::date, $8::date, $9::text, $10::integer,
        coalesce($11::bigint, 0), $12::text, coalesce($13::bigint, 0), coalesce($14::bigint, 0), $15::text, $16::text,
        to_timestamp($17::double precision),
        case when $18::boolean then now() else null end,
-       $19::text, $20::text, $21::text, $22::text, $23::integer, coalesce($24::text, 'none')
+       $19::text, $20::text, $21::text, $22::text, $23::integer, coalesce($24::text, 'none'),
+       $25::uuid, $26::integer, $27::text, $28::timestamptz, $29::text
      )
      on conflict (organization_id) do update set
        ended_at = case
@@ -420,6 +463,11 @@ export async function syncEnterpriseContractFromSubscription(
        ),
        payment_terms_days = coalesce($23::integer, organization_billing_contracts.payment_terms_days),
        tax_exempt_status = coalesce($24::text, organization_billing_contracts.tax_exempt_status),
+       commercial_agreement_id = $25::uuid,
+       commercial_agreement_version = $26::integer,
+       signed_order_reference = $27::text,
+       signed_order_signed_at = $28::timestamptz,
+       activation_blocked_reason = $29::text,
        last_stripe_event_at = coalesce(
          excluded.last_stripe_event_at,
          organization_billing_contracts.last_stripe_event_at
@@ -435,8 +483,8 @@ export async function syncEnterpriseContractFromSubscription(
       productId,
       resolvedPrice.id,
       procurementReference,
-      period ? isoDate(period.start) : null,
-      period ? isoDate(period.end) : null,
+      termStart,
+      termEnd,
       cadence,
       committedSeats,
       negotiated.includedUsageCentsPerPeriod,
@@ -453,6 +501,11 @@ export async function syncEnterpriseContractFromSubscription(
       negotiated.procurementContactEmail,
       negotiated.paymentTermsDays,
       taxExemptStatus,
+      agreement?.id ?? null,
+      agreement?.version ?? null,
+      activation.signedOrderReference,
+      activation.signedAt,
+      activation.blockedReason,
     ],
   );
 
@@ -464,8 +517,24 @@ export async function syncEnterpriseContractFromSubscription(
     return;
   }
 
+  await auditActivationState(organizationId, activation, organizationId);
+
+  await recordSubscriptionStateTransition(db, {
+    organizationId,
+    subscription: normalizeStripeSubscription(subscription),
+    providerEventId: eventCreatedAt === null ? null : `${subscription.id}:${eventCreatedAt}`,
+    occurredAt: eventCreatedAt === null ? null : new Date(eventCreatedAt * 1000),
+  });
+
   logger.info(
-    { organizationId, subscriptionId: subscription.id, committedSeats, cadence },
+    {
+      organizationId,
+      subscriptionId: subscription.id,
+      committedSeats,
+      cadence,
+      agreementVersion: agreement?.version ?? null,
+      activationBlockedReason: activation.blockedReason,
+    },
     'Enterprise billing contract synced from Stripe subscription',
   );
 }
@@ -577,6 +646,40 @@ export function resolveInvoiceDueAt(
   return stripeDueAt;
 }
 
+async function auditPaymentMethodPolicy(
+  db: DatabaseAdapter,
+  organizationId: string,
+  invoice: Stripe.Invoice,
+): Promise<void> {
+  const agreement = await readCurrentCommercialAgreement(db, organizationId);
+  if (!isExecutedAgreement(agreement)) return;
+
+  const violations = paymentMethodViolations(agreement.terms.paymentMethodPolicy, {
+    collectionMethod: invoice.collection_method ?? null,
+    paymentMethodTypes: invoice.payment_settings?.payment_method_types ?? [],
+  });
+  if (violations.length === 0) return;
+
+  logger.error(
+    { organizationId, invoiceId: invoice.id, violations },
+    'Enterprise invoice offers a payment method the signed agreement does not permit',
+  );
+  await recordAuditEvent({
+    organizationId,
+    eventType: 'plan_changed',
+    severity: 'warning',
+    endpoint: AUDIT_ENDPOINT,
+    surface: AUDIT_SURFACE,
+    detail: {
+      resourceType: 'organization_billing_invoice',
+      resourceId: invoice.id ?? organizationId,
+      reason: PAYMENT_METHOD_VIOLATION_AUDIT_REASON,
+      status: agreement.terms.paymentMethodPolicy,
+      changedKeys: violations,
+    },
+  });
+}
+
 export async function recordEnterpriseInvoiceEvent(
   db: DatabaseAdapter,
   invoice: Stripe.Invoice,
@@ -670,6 +773,7 @@ export async function recordEnterpriseInvoiceEvent(
   }
 
   await recomputeOldestOpenInvoice(db, organizationId);
+  await auditPaymentMethodPolicy(db, organizationId, invoice);
 }
 
 export async function endEnterpriseContractIfPresent(
@@ -692,6 +796,14 @@ export async function endEnterpriseContractIfPresent(
 
 export type { OrganizationBillingContractRow, OrganizationBillingInvoiceRow };
 
+type EnterpriseContractRow = OrganizationBillingContractRow & {
+  signed_order_reference: string | null;
+  signed_order_signed_at: string | Date | null;
+  commercial_agreement_id: string | null;
+  commercial_agreement_version: number | string | null;
+  activation_blocked_reason: ActivationBlockedReason | null;
+};
+
 export interface EnterpriseContractContact {
   name: string | null;
   email: string | null;
@@ -711,6 +823,10 @@ export interface EnterpriseContractSummary {
   ended: boolean;
   billingContact: EnterpriseContractContact | null;
   procurementContact: EnterpriseContractContact | null;
+  signedOrderReference: string | null;
+  signedOrderSignedAt: string | null;
+  commercialAgreementVersion: number | null;
+  activationBlockedReason: ActivationBlockedReason | null;
 }
 
 export interface EnterpriseInvoiceSummary {
@@ -745,11 +861,12 @@ export async function readEnterpriseContractSummary(
   db: DatabaseAdapter,
   organizationId: string,
 ): Promise<{ contract: EnterpriseContractSummary | null; invoices: EnterpriseInvoiceSummary[] }> {
-  const [contract] = await db.query<OrganizationBillingContractRow>(
+  const [contract] = await db.query<EnterpriseContractRow>(
     `select customer_legal_entity, procurement_reference, contract_term_start, contract_term_end,
             billing_cadence, committed_seats, support_tier, payment_terms_days, tax_exempt_status,
             collection_stage, ended_at, billing_contact_name, billing_contact_email,
-            procurement_contact_name, procurement_contact_email
+            procurement_contact_name, procurement_contact_email, signed_order_reference,
+            signed_order_signed_at, commercial_agreement_version, activation_blocked_reason
        from public.organization_billing_contracts
       where organization_id = $1::uuid
       limit 1`,
@@ -786,6 +903,14 @@ export async function readEnterpriseContractSummary(
         contract.procurement_contact_name,
         contract.procurement_contact_email,
       ),
+      signedOrderReference: contract.signed_order_reference ?? null,
+      signedOrderSignedAt: isoOrNull(contract.signed_order_signed_at ?? null),
+      commercialAgreementVersion:
+        contract.commercial_agreement_version === null ||
+        contract.commercial_agreement_version === undefined
+          ? null
+          : Number(contract.commercial_agreement_version),
+      activationBlockedReason: contract.activation_blocked_reason ?? null,
     },
     invoices: invoices.map((invoice) => ({
       invoiceNumber: invoice.invoice_number,

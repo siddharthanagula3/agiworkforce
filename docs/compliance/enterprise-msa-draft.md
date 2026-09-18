@@ -2,7 +2,7 @@
 
 Status: Draft. Not reviewed by counsel. Do not send to a customer.
 Owner: Founder, pending counsel review
-Last updated: 2026-09-04
+Last updated: 2026-09-17
 
 This is an engineer-drafted Master Services Agreement ("MSA") for AGI
 Enterprise, written to be consistent with the published
@@ -92,18 +92,26 @@ use determines which applies, per seat, per request.
    Order Form and applies as written there.
 2. **Cadence.** Billing is annual, in advance, unless the Order Form states
    a quarterly cadence as a negotiated exception.
-3. **Collection.** AGI issues an invoice for each period; payment is due
-   within 30 days of the invoice date ("Net 30"). AGI's preferred payment
-   rails are ACH debit and bank transfer; card payment is available as a
-   fallback. All amounts are in USD.
-4. **Purchase orders.** Where Customer requires a purchase order number on
+3. **Collection and permitted payment methods.** AGI issues an invoice for
+   each period; payment is due within the number of days stated on the Order
+   Form, which is 30 days from the invoice date ("Net 30") unless the Order
+   Form states otherwise. The payment rails AGI accepts are the ones the
+   Order Form permits: by default ACH debit, ACH credit transfer and bank
+   transfer against an invoice, with card available only where the Order Form
+   says so. AGI checks every enterprise invoice against the permitted rails
+   and does not charge a method this Customer did not agree to. All amounts
+   are in USD.
+4. **Invoice routing.** Invoices are issued to the billing contact named on
+   the Order Form and copied to the procurement contact. Changing either
+   contact is an amendment to the Order Form, not an informal request.
+5. **Purchase orders.** Where Customer requires a purchase order number on
    invoices, Customer provides it at signature or before the first invoice
    is issued; AGI includes it as a line item on every invoice for the
    Contract Term and records it internally as the procurement reference for
    the account.
-5. **Taxes.** Fees exclude taxes; Customer is responsible for applicable
+6. **Taxes.** Fees exclude taxes; Customer is responsible for applicable
    sales, use, VAT, GST, and similar taxes, excluding taxes on AGI's income.
-6. **Late payment and the collection schedule.** If an invoice remains
+7. **Late payment and the collection schedule.** If an invoice remains
    unpaid past its due date, AGI applies the following schedule, measured
    from the due date of the oldest open invoice. At no stage does AGI delete
    Customer data for non-payment.
@@ -117,6 +125,19 @@ use determines which applies, per seat, per request.
 
    Reinstatement to full service is automatic on payment in full,
    effective on AGI's confirmation of receipt.
+
+8. **A signed Order Form is a precondition to billing.** AGI does not bill an
+   enterprise workspace that has no executed Order Form on file. The
+   reference of the signed Order Form, the signature method and the signing
+   time are recorded against the workspace, and billing operations treat a
+   workspace with none as unbilled rather than as a contract to be inferred
+   from a payment record.
+
+9. **Amendments.** A change to any term on the Order Form, including seats,
+   term dates, payment terms, permitted payment methods, contacts or the
+   procurement reference, takes effect by a newly signed Order Form. Each
+   amendment is recorded as a new version; the version it replaces is
+   retained in full, so what was agreed on any past date remains answerable.
 
 ## 6. Term, renewal, and termination
 
@@ -132,7 +153,7 @@ use determines which applies, per seat, per request.
    Party's insolvency, dissolution, or assignment for the benefit of
    creditors.
 4. **Termination for non-payment.** AGI may terminate an Order Form for
-   non-payment that persists after the read-only stage in section 5.6,
+   non-payment that persists after the read-only stage in section 5.7,
    subject to the notice period stated on the Order Form. Termination for
    non-payment does not itself delete Customer data; deletion follows the
    same account-deletion mechanism described in the Terms of Service, and

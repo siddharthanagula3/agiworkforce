@@ -11,6 +11,8 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import type { MobileIapCatalogProduct, MobileIapPlatform } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+import type { NormalizedEnvironment } from '@/lib/server/payments/domain';
+import { normalizeEnvironment, normalizeProviderTimestamp } from '@/lib/server/payments/normalize';
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_PUBLISHER_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
@@ -70,7 +72,7 @@ export interface VerifiedMobileIapPurchase {
   originalTransactionId: string | null;
   purchasedAt: Date;
   expiresAt: Date | null;
-  environment: string;
+  environment: NormalizedEnvironment;
   entitlementStatus: 'active' | 'expired' | 'revoked';
 }
 
@@ -116,15 +118,43 @@ function configuredAppleEnvironment(): Environment {
   throw createError.serviceUnavailable('App Store verification environment is invalid.');
 }
 
+export type AppleNotificationChannel = 'production' | 'sandbox';
+
+function sandboxNotificationsEnabled(): boolean {
+  return (
+    process.env['APPLE_APP_STORE_SANDBOX_NOTIFICATIONS_ENABLED']?.trim().toLowerCase() === 'true'
+  );
+}
+
+// Apple configures a production and a sandbox notification URL separately, and the
+// two are signed by different certificate chains. The channel a notification arrived
+// on is the caller's to state -- a route, or a second route -- and a sandbox one is
+// refused unless this deployment is itself sandbox or has opted in, so a test
+// notification can never move a production entitlement.
+export function appleNotificationEnvironment(channel: AppleNotificationChannel): Environment {
+  const configured = configuredAppleEnvironment();
+  if (channel === 'production') return Environment.PRODUCTION;
+  if (configured !== Environment.SANDBOX && !sandboxNotificationsEnabled()) {
+    throw createError.forbidden('App Store sandbox notifications are not enabled here.');
+  }
+  return Environment.SANDBOX;
+}
+
+export function configuredAppleNotificationChannel(): AppleNotificationChannel {
+  return configuredAppleEnvironment() === Environment.SANDBOX ? 'sandbox' : 'production';
+}
+
 export interface VerifiedAppleStoreNotification {
   notification: ResponseBodyV2DecodedPayload;
   transaction: JWSTransactionDecodedPayload | null;
+  channel: AppleNotificationChannel;
 }
 
 export async function verifyAppleStoreNotification(
   signedPayload: string,
+  channel: AppleNotificationChannel = configuredAppleNotificationChannel(),
 ): Promise<VerifiedAppleStoreNotification> {
-  const verifier = createAppleVerifier(configuredAppleEnvironment());
+  const verifier = createAppleVerifier(appleNotificationEnvironment(channel));
   try {
     const notification = await verifier.verifyAndDecodeNotification(signedPayload);
     const signedTransaction = notification.data?.signedTransactionInfo;
@@ -133,6 +163,7 @@ export async function verifyAppleStoreNotification(
       transaction: signedTransaction
         ? await verifier.verifyAndDecodeTransaction(signedTransaction)
         : null,
+      channel,
     };
   } catch {
     throw createError.badRequest('Apple could not verify this server notification.');
@@ -171,7 +202,11 @@ async function verifyApplePurchase(input: {
     throw createError.badRequest('Top-up purchases must have quantity one.');
   }
 
-  const expiresAt = transaction.expiresDate ? new Date(transaction.expiresDate) : null;
+  const expiresAt = normalizeProviderTimestamp(transaction.expiresDate, 'milliseconds');
+  const purchasedAt = normalizeProviderTimestamp(transaction.purchaseDate, 'milliseconds');
+  if (!purchasedAt) {
+    throw createError.badRequest('App Store transaction is incomplete.');
+  }
   const revoked = typeof transaction.revocationDate === 'number';
   const expired = expiresAt !== null && expiresAt.getTime() <= Date.now();
 
@@ -181,9 +216,9 @@ async function verifyApplePurchase(input: {
     storeTransactionId: transaction.transactionId,
     purchaseTokenHash: hashMobileIapPurchaseToken(input.purchaseToken),
     originalTransactionId: transaction.originalTransactionId ?? null,
-    purchasedAt: new Date(transaction.purchaseDate),
+    purchasedAt,
     expiresAt,
-    environment: String(transaction.environment ?? environment),
+    environment: normalizeEnvironment(transaction.environment ?? environment),
     entitlementStatus: revoked ? 'revoked' : expired ? 'expired' : 'active',
   };
 }
@@ -279,9 +314,11 @@ async function verifyGooglePurchase(input: {
       storeTransactionId: response.data.orderId,
       purchaseTokenHash: hashMobileIapPurchaseToken(input.purchaseToken),
       originalTransactionId: null,
-      purchasedAt: new Date(response.data.purchaseCompletionTime),
+      purchasedAt: normalizeProviderTimestamp(response.data.purchaseCompletionTime) ?? new Date(),
       expiresAt: null,
-      environment: response.data.testPurchaseContext ? 'test' : 'production',
+      environment: normalizeEnvironment(
+        response.data.testPurchaseContext ? 'sandbox' : 'production',
+      ),
       entitlementStatus: grantable ? 'active' : 'revoked',
     };
   }
@@ -306,7 +343,14 @@ async function verifyGooglePurchase(input: {
     throw createError.forbidden('This Google Play subscription does not belong to this account.');
   }
 
-  const expiresAt = new Date(lineItem.expiryTime);
+  const expiresAt = normalizeProviderTimestamp(lineItem.expiryTime);
+  if (!expiresAt) {
+    throw createError.badRequest('Google Play returned an invalid subscription.');
+  }
+  const purchasedAt = normalizeProviderTimestamp(response.data.startTime) ?? new Date();
+  const storeEnvironment = normalizeEnvironment(
+    response.data.testPurchase ? 'sandbox' : 'production',
+  );
   const state = response.data.subscriptionState;
   const activeState = [
     'SUBSCRIPTION_STATE_ACTIVE',
@@ -323,9 +367,9 @@ async function verifyGooglePurchase(input: {
       originalTransactionId: response.data.linkedPurchaseToken
         ? hashMobileIapPurchaseToken(response.data.linkedPurchaseToken)
         : null,
-      purchasedAt: new Date(response.data.startTime ?? Date.now()),
+      purchasedAt,
       expiresAt,
-      environment: response.data.testPurchase ? 'test' : 'production',
+      environment: storeEnvironment,
       entitlementStatus: 'expired',
     };
   }
@@ -338,9 +382,9 @@ async function verifyGooglePurchase(input: {
     originalTransactionId: response.data.linkedPurchaseToken
       ? hashMobileIapPurchaseToken(response.data.linkedPurchaseToken)
       : null,
-    purchasedAt: new Date(response.data.startTime ?? Date.now()),
+    purchasedAt,
     expiresAt,
-    environment: response.data.testPurchase ? 'test' : 'production',
+    environment: storeEnvironment,
     entitlementStatus: expired ? 'expired' : 'active',
   };
 }

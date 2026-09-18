@@ -1,21 +1,11 @@
 import { redirect } from 'next/navigation';
-import Stripe from 'stripe';
 import { isSelfServePaidPlanTier } from '@agiworkforce/types';
-import { requireEnv } from '@shared/utils/env';
-import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { isStripeCheckoutSessionId } from '@/lib/server/stripe-resource-ids';
+import { stripePaymentProvider } from '@/lib/server/payments';
+import type { NormalizedPurchase } from '@/lib/server/payments';
 import { UpgradeWelcome } from './UpgradeWelcome';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
-
-let stripeClient: Stripe | null = null;
-
-function getStripe(): Stripe {
-  if (!stripeClient) {
-    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
-  }
-  return stripeClient;
-}
 
 export default async function BillingPage({
   searchParams,
@@ -32,28 +22,29 @@ export default async function BillingPage({
     return redirect(sessionExpiredRedirect('/settings/billing'));
   }
 
-  let session: Stripe.Checkout.Session;
+  let purchase: NormalizedPurchase;
   try {
-    session = await getStripe().checkout.sessions.retrieve(params.session_id);
+    purchase = await stripePaymentProvider.verifyPurchase({
+      reference: params.session_id,
+      ownerReference: userId,
+    });
   } catch {
     return redirect('/settings/billing');
   }
 
-  const sessionOwner = session.client_reference_id ?? session.metadata?.['user_id'];
-  if (sessionOwner !== userId) {
+  if (purchase.ownerReference !== userId) {
     return redirect('/settings/billing');
   }
 
-  const expectedPlan = session.metadata?.['plan_tier'];
-  if (!isSelfServePaidPlanTier(expectedPlan)) {
+  if (!isSelfServePaidPlanTier(purchase.planTier)) {
     return redirect('/settings/billing');
   }
 
   const checkoutState =
-    session.payment_status === 'paid'
+    purchase.state === 'paid'
       ? 'paid'
-      : session.status === 'complete'
+      : purchase.state === 'confirmed'
         ? 'confirmed'
         : 'processing';
-  return <UpgradeWelcome checkoutState={checkoutState} expectedPlan={expectedPlan} />;
+  return <UpgradeWelcome checkoutState={checkoutState} expectedPlan={purchase.planTier} />;
 }
