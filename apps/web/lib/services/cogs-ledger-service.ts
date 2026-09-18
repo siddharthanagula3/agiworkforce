@@ -110,6 +110,8 @@ export interface CostEventAttribution extends UsageAttribution {
 export interface ProviderCostEvent extends CostEventAttribution {
   userId?: string | null;
   organizationId?: string | null;
+  /** The container the usage happened in, distinct from the plan that funds it. */
+  workspaceId?: string | null;
   capability: CogsCapability;
   provider: string;
   model?: string | null;
@@ -502,10 +504,11 @@ export async function recordProviderCostEvent(
        provider_estimated_cost_microusd, provider_reported_cost_microusd,
        reconciliation_status, feature, route_id, surface,
        input_tokens, cached_tokens, output_tokens, reasoning_tokens,
-       workload, project_id, session_id, prompt_ids, cache_hit, avoided_cost_microusd
+       workload, project_id, session_id, prompt_ids, cache_hit, avoided_cost_microusd,
+       workspace_id
      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17,
                $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
-               $34::text[], $35, $36)
+               $34::text[], $35, $36, $37)
      on conflict (source_ref) do nothing`,
     [
       event.userId ?? null,
@@ -544,6 +547,7 @@ export async function recordProviderCostEvent(
       normalizePromptStamps(event.promptIds),
       event.cacheHit === true,
       nonNegativeInt(event.avoidedCostMicrousd),
+      event.workspaceId ?? null,
     ],
   );
 
@@ -567,6 +571,7 @@ export async function recordCacheHitCostEvent(
   input: CostEventAttribution & {
     userId: string;
     organizationId?: string | null;
+    workspaceId?: string | null;
     capability?: CogsCapability;
     provider: string;
     model?: string | null;
@@ -618,6 +623,7 @@ export async function recordInfrastructureCostEvent(
   input: CostEventAttribution & {
     userId?: string | null;
     organizationId?: string | null;
+    workspaceId?: string | null;
     capability: InfrastructureCogsCapability;
     provider: string;
     units: number;
@@ -845,6 +851,7 @@ export async function recordSettledProviderCost(
   input: CostEventAttribution & {
     userId: string;
     organizationId?: string | null;
+    workspaceId?: string | null;
     provider: string;
     model?: string | null;
     routeId?: string | null;
@@ -909,6 +916,7 @@ export async function recordSettledProviderCost(
       {
         userId: input.userId,
         organizationId,
+        workspaceId: input.workspaceId ?? null,
         capability,
         provider: input.provider,
         model: input.model ?? null,
@@ -1154,6 +1162,27 @@ export async function getOrganizationMonthToDateSpendCents(
         and event.occurred_at >= $2::timestamptz
         and event.occurred_at < $3::timestamptz`,
     [organizationId, period.start, period.end],
+  );
+  return numberFrom(row?.spend_cents);
+}
+
+/**
+ * Spend by container rather than by payer. A personal workspace funds nothing
+ * and so never appears in the organization total, which is why this cannot be
+ * derived from the organization query.
+ */
+export async function getWorkspaceMonthToDateSpendCents(
+  workspaceId: string,
+  db: DatabaseAdapter = getNeonDb(),
+  period: OrganizationSpendPeriod = utcMonthPeriod(new Date()),
+): Promise<number> {
+  const [row] = await db.query<OrganizationSpendRow>(
+    `select coalesce(sum(event.provider_cost_cents), 0)::bigint as spend_cents
+       from public.provider_cost_events event
+      where event.workspace_id = $1
+        and event.occurred_at >= $2::timestamptz
+        and event.occurred_at < $3::timestamptz`,
+    [workspaceId, period.start, period.end],
   );
   return numberFrom(row?.spend_cents);
 }

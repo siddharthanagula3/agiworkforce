@@ -40,6 +40,12 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 }));
 
 import { GET } from '@/app/api/search/route';
+import {
+  lifecycleScopeClauses,
+  lifecycleStatesExcludedFromSearch,
+  readableVisibilities,
+  workspaceScopeSql,
+} from '@/lib/resources';
 
 type QueryCall = [string, unknown[]];
 
@@ -187,6 +193,76 @@ describe('GET /api/search message scoping', () => {
     const [archivedProjectSql] = projectQuery();
     expect(archivedProjectSql).toContain('deleted_at is null');
     expect(archivedProjectSql).not.toContain('is_archived = false');
+  });
+
+  it('carries the canonical lifecycle predicates on every searchable root', async () => {
+    await GET(searchRequest());
+
+    const [sessionSql] = sessionQuery();
+    for (const clause of lifecycleScopeClauses('web_conversations')) {
+      expect(sessionSql, clause).toContain(clause);
+    }
+
+    const [projectSql] = projectQuery();
+    for (const clause of lifecycleScopeClauses('user_projects')) {
+      expect(projectSql, clause).toContain(clause);
+    }
+
+    const [messageSql] = messageQuery();
+    for (const clause of [
+      ...lifecycleScopeClauses('web_conversations', { alias: 'c' }),
+      ...lifecycleScopeClauses('web_messages', { alias: 'm' }),
+    ]) {
+      expect(messageSql, clause).toContain(clause);
+    }
+
+    const mediaCall = (mockNeonQuery.mock.calls as QueryCall[]).find(([sql]) =>
+      sql.includes('from media_assets'),
+    );
+    for (const clause of lifecycleScopeClauses('media_assets')) {
+      expect(mediaCall?.[0], clause).toContain(clause);
+    }
+  });
+
+  it('drops only the archive clause when the caller asks for archived rows', async () => {
+    await GET(searchRequest('&includeArchived=true'));
+
+    const [sessionSql] = sessionQuery();
+    expect(sessionSql).toContain(lifecycleScopeClauses('web_conversations')[0]);
+    for (const clause of lifecycleScopeClauses('web_conversations', { includeArchived: true })) {
+      expect(sessionSql, clause).toContain(clause);
+    }
+    expect(sessionSql).not.toContain('archived = false');
+
+    expect(lifecycleStatesExcludedFromSearch()).toEqual(['archived', 'soft_deleted', 'purged']);
+  });
+
+  it('scopes by the canonical workspace predicate and returns nothing shared to it', async () => {
+    await GET(searchRequest());
+
+    const contentCalls = (mockNeonQuery.mock.calls as QueryCall[]).filter(([sql]) =>
+      /from (web_conversations|user_projects|media_assets|web_messages)/.test(sql),
+    );
+    expect(contentCalls).toHaveLength(4);
+    for (const [sql] of contentCalls) {
+      const predicate = workspaceScopeSql(3, sql.includes('from web_messages') ? 'c' : null);
+      expect(sql, predicate).toContain(predicate);
+      // Search reads only the requester's own content, so no row reaches it
+      // through a visibility value. Selecting one here would need the
+      // canonical visibility filter beside it.
+      expect(sql, 'search selects a visibility column without filtering on it').not.toMatch(
+        /\bvisibility\b/u,
+      );
+    }
+  });
+
+  it('never lets a signed-out reader past public visibility', () => {
+    expect(readableVisibilities({ userId: null, organizationId: null })).toEqual(['public']);
+    expect(readableVisibilities({ userId: 'user-abc', organizationId: null })).toEqual(['public']);
+    expect(readableVisibilities({ userId: 'user-abc', organizationId: 'org-1' })).toEqual([
+      'public',
+      'organization',
+    ]);
   });
 
   it('attributes full-search telemetry to the workspace captured for the request', async () => {
