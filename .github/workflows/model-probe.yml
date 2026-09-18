@@ -1,11 +1,23 @@
 name: Model Probe
 
-# Asks every registered model whether it still answers, once a week.
+# Asks every registered model whether it still answers, once a week, and runs
+# the staged-release gate over the answer.
 #
 # It commits nothing. The probe file is uploaded as an artifact so a stage
 # advance stays a deliberate local act, and the job fails only on the finding
 # it exists to report: a promoted model that stopped answering. A model whose
 # credential is absent from CI is recorded as unprobed, never as a failure.
+#
+# The three release stages read the ledger in
+# `packages/ai/model-registry/catalog/routing-policies.json#release`, which is
+# what authorises a canary or a shadow on a routing slot:
+#
+#   publish-internal  every model the ledger stages answered in THIS run, not
+#                     only in the committed probe record.
+#   canary            nothing advances without the `evals-quality` commit
+#                     status that .github/workflows/evals.yml posts on this sha.
+#   stable            every release rolls back in one command, proved by a dry
+#                     run of the routing rollback and of family-slots.mjs.
 
 on:
   schedule:
@@ -15,6 +27,9 @@ on:
     paths:
       - 'scripts/probe-models.mjs'
       - 'scripts/probe-models.test.mjs'
+      - 'packages/ai/routing/src/promotion/**'
+      - 'packages/ai/model-registry/catalog/routing-policies.json'
+      - 'packages/ai/model-registry/catalog/probes.json'
       - '.github/workflows/model-probe.yml'
 
 permissions:
@@ -79,6 +94,143 @@ jobs:
           name: model-probe-${{ github.run_id }}
           path: ${{ runner.temp }}/model-probe.json
           retention-days: 90
+
+      - name: Leave the checkout untouched
+        if: always()
+        run: git diff --exit-code
+
+  release-contract:
+    name: The staged-release ledger matches what serves
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Every channel in the ledger is justified by the evidence beside it: a
+      # contiguous version history, a legal channel transition, an eval verdict
+      # for anything serving traffic, an answered probe for anything staged, and
+      # a routing slot that declares exactly what a record authorised.
+      - name: Verify the ledger against the committed catalog
+        run: pnpm exec tsx packages/ai/routing/src/promotion/release-cli.mjs verify
+
+      - name: Report the channel of every release
+        run: pnpm exec tsx packages/ai/routing/src/promotion/release-cli.mjs status
+
+      - name: Test the release contract itself
+        run: |
+          pnpm --filter @agiworkforce/routing exec vitest run \
+            src/__tests__/release-ledger.test.ts src/__tests__/release-splice.test.ts
+
+  publish-internal:
+    name: Publish internal (every staged model answered in this run)
+    needs: [probe-logic, probe-providers, release-contract]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Fetch the probe record this run produced
+        uses: actions/download-artifact@v8
+        with:
+          name: model-probe-${{ github.run_id }}
+          path: ${{ runner.temp }}/probe
+
+      # The committed probe record can be weeks old. Internal publication means
+      # the staged set is reachable from this account now, so the ledger is
+      # checked against the record this run just wrote.
+      - name: Every internally staged model answers today
+        run: |
+          pnpm exec tsx packages/ai/routing/src/promotion/release-cli.mjs verify \
+            --probes "${RUNNER_TEMP}/probe/model-probe.json"
+
+  canary:
+    name: Canary (gated on the eval quality signal for this commit)
+    needs: publish-internal
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Read the eval quality signal
+        id: signal
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/status" \
+            --jq '[.statuses[] | select(.context == "evals-quality")][0].state // "missing"')
+          echo "the evals-quality signal for ${GITHUB_SHA} is ${state}"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+
+      # Without a green signal the gate is offered nothing, and every artifact
+      # waiting on internal refuses to advance. With one, the advance is planned
+      # and printed but never written: a stage advance stays a deliberate local
+      # act, run with `release-cli advance --apply` and reviewed as a diff.
+      - name: Ask whether every internal release may take canary traffic
+        env:
+          SIGNAL: ${{ steps.signal.outputs.state }}
+        run: |
+          if [ "$SIGNAL" = "success" ]; then
+            pnpm exec tsx packages/ai/routing/src/promotion/release-cli.mjs drill \
+              --require-quality --quality-commit "${GITHUB_SHA}" --quality-verdict held
+          else
+            pnpm exec tsx packages/ai/routing/src/promotion/release-cli.mjs drill --require-quality
+          fi
+
+  stable:
+    name: Stable (every release rolls back in one command)
+    needs: canary
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Rolling back is a lookup in the ledger and a delegation to the tool that
+      # owns the family slot, not a git revert. Both are dry-run here, and the
+      # checkout check below is what proves they wrote nothing.
+      - name: Drill the rollback of every release and every family slot
+        run: pnpm exec tsx packages/ai/routing/src/promotion/release-cli.mjs drill --families
 
       - name: Leave the checkout untouched
         if: always()

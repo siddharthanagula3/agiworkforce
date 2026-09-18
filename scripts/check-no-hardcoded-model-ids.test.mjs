@@ -489,6 +489,9 @@ test('allows live eval measurement files but not other files beside them', () =>
       modelKey: canonicalId,
     }),
     'tools/evals/measurements/recordings/measured.json': JSON.stringify({ modelKey: canonicalId }),
+    'tools/evals/measurements/ledger.json': JSON.stringify({
+      entries: [{ modelKey: canonicalId }],
+    }),
     'tools/evals/measurements/notes.md': `measured ${canonicalId}\n`,
     'tools/evals/measurements/runs/nested/measured.json': JSON.stringify({ modelKey: canonicalId }),
     'tools/evals/datasets/chat.json': JSON.stringify({ model: canonicalId }),
