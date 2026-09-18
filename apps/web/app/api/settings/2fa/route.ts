@@ -6,13 +6,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { TWO_FACTOR_SCOPE } from './lib/scope';
-import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { claimTotpStep } from '@/lib/server/two-factor-replay';
-import { verifyTOTPStep, verifyBackupCode } from '@/features/settings/services/user-preferences';
-import { openTotpSecret } from '@/lib/crypto/totp-envelope';
-import { readJsonBody } from '@/lib/read-json-body';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 import { recordAuditEvent } from '@/lib/security-audit';
+
+const ENDPOINT = '/api/settings/2fa';
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
@@ -58,60 +56,34 @@ async function handleDisable2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const body = await readJsonBody<{ code?: string }>(request);
-  const code = typeof body.code === 'string' ? body.code.trim() : '';
-  if (!code) {
-    throw createError.badRequest('code is required to disable 2FA');
-  }
-
+  // Ahead of the challenge: an account with 2FA already off has nothing to
+  // prove a second factor with, and this answer is idempotent.
   const row = await getTwoFactorRow(db, userId);
   if (!row || !row.enabled) {
     return NextResponse.json({ success: true, message: '2FA was not enabled' });
   }
 
-  const secret = openTotpSecret(row.totp_secret_enc);
-  const step = await verifyTOTPStep(secret, code);
-  let backupCodeIndex = -1;
+  const grant = await requireStepUp({
+    userId,
+    action: 'two_factor.disable',
+    organizationId,
+    request,
+    endpoint: ENDPOINT,
+  });
 
-  if (step === null) {
-    backupCodeIndex = await verifyBackupCode(code, row.backup_codes_hashed ?? []);
-    if (backupCodeIndex === -1) {
-      logger.warn({ userId }, '2FA disable: invalid code provided');
-      throw createError.unauthorized('Invalid TOTP or backup code');
-    }
-  } else if (!(await claimTotpStep(db, userId, step))) {
-    logger.warn({ userId }, '2FA disable: refused a replayed TOTP code');
-    throw createError.unauthorized('Invalid TOTP or backup code');
-  }
-
-  if (backupCodeIndex !== -1) {
-    const updatedCodes = (row.backup_codes_hashed ?? []).filter((_, i) => i !== backupCodeIndex);
-    await db.query(
-      `update user_two_factor
-          set enabled = false,
-              enabled_at = null,
-              backup_codes_hashed = $2,
-              last_verified_at = now(),
-              updated_at = now()
-        where user_id = $1`,
-      [userId, updatedCodes],
-    );
-  } else {
-    await db.query(
-      `update user_two_factor
-          set enabled = false,
-              enabled_at = null,
-              last_verified_at = now(),
-              updated_at = now()
-        where user_id = $1`,
-      [userId],
-    );
-  }
+  await db.query(
+    `update user_two_factor
+        set enabled = false,
+            enabled_at = null,
+            updated_at = now()
+      where user_id = $1`,
+    [userId],
+  );
 
   logger.info({ userId }, '2FA disabled successfully');
 
@@ -120,10 +92,8 @@ async function handleDisable2FA(request: NextRequest) {
     eventType: 'two_factor_disabled',
     severity: 'warning',
     request,
-    detail: {
-      resourceType: 'two_factor',
-      source: backupCodeIndex !== -1 ? 'backup_code' : 'totp_code',
-    },
+    organizationId,
+    detail: { resourceType: 'two_factor', source: grant.method },
   });
 
   return NextResponse.json({ success: true });

@@ -8,18 +8,13 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { TWO_FACTOR_SCOPE } from '../lib/scope';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { claimTotpStep } from '@/lib/server/two-factor-replay';
-import {
-  verifyTOTPStep,
-  generateBackupCodes,
-  hashBackupCode,
-} from '@/features/settings/services/user-preferences';
-import { openTotpSecret } from '@/lib/crypto/totp-envelope';
-import { readJsonBody } from '@/lib/read-json-body';
+import { generateBackupCodes, hashBackupCode } from '@/features/settings/services/user-preferences';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 import { recordAuditEvent } from '@/lib/security-audit';
 
+const ENDPOINT = '/api/settings/2fa/backup-codes';
+
 interface TwoFactorRow {
-  totp_secret_enc: string;
   enabled: boolean;
 }
 
@@ -27,19 +22,13 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const body = await readJsonBody<{ code?: string }>(request);
-  const code = typeof body.code === 'string' ? body.code.trim() : '';
-  if (!code) {
-    throw createError.badRequest('code is required to regenerate backup codes');
-  }
-
   const [row] = await db.query<TwoFactorRow>(
-    'select totp_secret_enc, enabled from user_two_factor where user_id = $1 limit 1',
+    'select enabled from user_two_factor where user_id = $1 limit 1',
     [userId],
   );
 
@@ -47,16 +36,13 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
     throw createError.badRequest('2FA is not enabled on this account');
   }
 
-  const secret = openTotpSecret(row.totp_secret_enc);
-  const step = await verifyTOTPStep(secret, code);
-  if (step === null) {
-    logger.warn({ userId }, 'backup-codes regenerate: invalid TOTP code');
-    throw createError.unauthorized('Invalid TOTP code');
-  }
-  if (!(await claimTotpStep(db, userId, step))) {
-    logger.warn({ userId }, 'backup-codes regenerate: refused a replayed TOTP code');
-    throw createError.unauthorized('Invalid TOTP code');
-  }
+  const grant = await requireStepUp({
+    userId,
+    action: 'two_factor.regenerate_backup_codes',
+    organizationId,
+    request,
+    endpoint: ENDPOINT,
+  });
 
   const newCodes = generateBackupCodes();
   const hashedCodes = await Promise.all(newCodes.map((c) => hashBackupCode(c)));
@@ -78,7 +64,8 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
     eventType: 'two_factor_backup_codes_regenerated',
     severity: 'warning',
     request,
-    detail: { resourceType: 'two_factor', count: newCodes.length, source: 'totp_code' },
+    organizationId,
+    detail: { resourceType: 'two_factor', count: newCodes.length, source: grant.method },
   });
 
   return NextResponse.json({ backup_codes: newCodes });

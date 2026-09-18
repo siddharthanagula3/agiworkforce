@@ -120,6 +120,20 @@ describe('POST /api/settings/2fa/validate, backup codes', () => {
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ valid: false });
+    expect(mocks.logAuthFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      'spent_backup_code',
+      'user-1',
+    );
+  });
+
+  it('says 2FA is off rather than reporting an invalid code', async () => {
+    mocks.query.mockResolvedValueOnce([{ ...ROW, enabled: false }]);
+
+    const response = await POST(request('123456'));
+
+    expect(response.status).toBe(400);
+    expect(mocks.logAuthFailure).not.toHaveBeenCalled();
   });
 
   it('rejects a code that is neither a current TOTP nor a live backup code', async () => {

@@ -16,14 +16,6 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import type { StepUpAction } from '@/lib/server/step-up/actions';
 
-export const STEP_UP_TOKEN_HEADER = 'x-step-up-token';
-
-export interface StepUpVerifyResult {
-  ok: boolean;
-  error?: string;
-  status?: number;
-}
-
 export interface StepUpDialogProps {
   open: boolean;
   action: StepUpAction;
@@ -31,13 +23,8 @@ export interface StepUpDialogProps {
   consequence: string;
   /** Binds the proof to one target; must match what the route requires. */
   resourceId?: string | null;
-  /**
-   * For endpoints that still take the code themselves: they verify it, so the
-   * dialog must not also spend it minting a grant.
-   */
-  verify?: (code: string) => Promise<StepUpVerifyResult>;
   onCancel: () => void;
-  onSatisfied: (token: string | null) => void | Promise<void>;
+  onSatisfied: (token: string) => void | Promise<void>;
 }
 
 interface ChallengeResponse {
@@ -78,7 +65,6 @@ export function StepUpDialog({
   action,
   consequence,
   resourceId = null,
-  verify,
   onCancel,
   onSatisfied,
 }: StepUpDialogProps) {
@@ -98,28 +84,16 @@ export function StepUpDialog({
   const submit = useCallback(async () => {
     setBusy(true);
     setError(null);
-    const trimmed = code.trim();
-    let result: StepUpVerifyResult & { token?: string };
-    if (verify) {
-      result = await verify(trimmed);
-    } else {
-      const minted = await requestStepUpToken(action, trimmed, resourceId);
-      result = {
-        ok: Boolean(minted.token),
-        error: minted.error,
-        status: minted.status,
-        token: minted.token,
-      };
-    }
+    const minted = await requestStepUpToken(action, code.trim(), resourceId);
     setBusy(false);
-    if (!result.ok) {
-      setNotEnrolled(result.status === 409);
-      setError(result.error ?? 'That code was not accepted.');
+    if (!minted.token) {
+      setNotEnrolled(minted.status === 409);
+      setError(minted.error ?? 'That code was not accepted.');
       return;
     }
     setCode('');
-    await onSatisfied(result.token ?? null);
-  }, [action, code, resourceId, verify, onSatisfied]);
+    await onSatisfied(minted.token);
+  }, [action, code, resourceId, onSatisfied]);
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onCancel())}>
