@@ -153,6 +153,56 @@ export function researchFileSourcesFromHits(
   return [...byDocument.values()];
 }
 
+export const MAX_RESEARCH_CONNECTOR_SOURCES = 8;
+
+export interface ResearchConnectorPolicy {
+  /** Connectors the run may read, in the order the reader chose them. */
+  readonly allowed: readonly string[];
+  /** Connectors the reader asked for that this account may not read here. */
+  readonly refused: readonly string[];
+}
+
+/**
+ * Which of the chosen connectors a run may actually read.
+ *
+ * `available` is the account's own connector catalog, already narrowed by the
+ * workspace policy and the per-tool permissions that govern a chat call, so a
+ * connector reaches research on exactly the terms it reaches the model. Asking
+ * for one that is not there is refused rather than silently dropped, because a
+ * reader who named a source is owed the difference.
+ */
+export function resolveResearchConnectorPolicy(
+  requested: readonly string[],
+  available: ReadonlySet<string>,
+): ResearchConnectorPolicy {
+  const allowed: string[] = [];
+  const refused: string[] = [];
+  for (const connectorId of new Set(requested)) {
+    if (allowed.length >= MAX_RESEARCH_CONNECTOR_SOURCES) break;
+    if (available.has(connectorId)) allowed.push(connectorId);
+    else refused.push(connectorId);
+  }
+  return { allowed, refused };
+}
+
+/** The sentence the gathering directive adds about the chosen connectors. */
+export function researchConnectorDirective(policy: ResearchConnectorPolicy): string {
+  const parts: string[] = [];
+  if (policy.allowed.length > 0) {
+    parts.push(
+      `These connected apps were chosen as sources for this run: ${policy.allowed.join(', ')}.` +
+        ' Read them for material the web cannot answer, and cite what you take from them.',
+    );
+  }
+  if (policy.refused.length > 0) {
+    parts.push(
+      `These apps were asked for but are not connected to this account: ${policy.refused.join(', ')}.` +
+        ' Say so in the report rather than substituting a web result for them.',
+    );
+  }
+  return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+}
+
 /**
  * The excerpts, fenced as reference material. Untrusted in exactly the way a
  * fetched page is: it is the user's own content, but it reaches the model as
