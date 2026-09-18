@@ -2,8 +2,6 @@ import { logger } from './logger';
 import {
   getPlanPriceUsd,
   getPlanPriceInr,
-  isBasicPlanTier,
-  isTeamPlanTier,
   type BillingInterval,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
@@ -33,45 +31,86 @@ function validatePriceId(priceId: string | undefined, name: string): string | un
   return normalizedPriceId;
 }
 
+export type CheckoutCurrency = 'usd' | 'inr';
+
+export const DEFAULT_CHECKOUT_CURRENCY: CheckoutCurrency = 'usd';
+
+/**
+ * A price point is the product identity: plan, interval, currency. The Stripe
+ * price id is one provider's value for that identity, read from the env var
+ * named here, and nothing else in the app may key off the raw id.
+ */
+export interface StripePricePoint {
+  plan: ConfiguredCheckoutPlan;
+  interval: BillingInterval;
+  currency: CheckoutCurrency;
+  envVar: string;
+}
+
+export const STRIPE_PRICE_POINTS: readonly StripePricePoint[] = [
+  { plan: 'basic', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_BASIC_MONTHLY_USD' },
+  { plan: 'basic', interval: 'monthly', currency: 'inr', envVar: 'STRIPE_PRICE_BASIC_MONTHLY_INR' },
+  { plan: 'pro', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_PRO_MONTHLY' },
+  { plan: 'pro', interval: 'yearly', currency: 'usd', envVar: 'STRIPE_PRICE_PRO_YEARLY' },
+  { plan: 'max', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_MAX_MONTHLY' },
+  { plan: 'max_15x', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_MAX_15X_MONTHLY' },
+  { plan: 'team', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_TEAM_MONTHLY_USD' },
+  { plan: 'team', interval: 'monthly', currency: 'inr', envVar: 'STRIPE_PRICE_TEAM_MONTHLY_INR' },
+  { plan: 'team', interval: 'yearly', currency: 'usd', envVar: 'STRIPE_PRICE_TEAM_YEARLY_USD' },
+];
+
+export function normalizeCheckoutCurrency(currency: string | undefined): CheckoutCurrency {
+  return currency?.toLowerCase() === 'inr' ? 'inr' : DEFAULT_CHECKOUT_CURRENCY;
+}
+
+function pricePointKey(
+  plan: ConfiguredCheckoutPlan,
+  interval: BillingInterval,
+  currency: CheckoutCurrency,
+): string {
+  return `${plan}:${interval}:${currency}`;
+}
+
+// Resolved once, at module load: the environment is read at boot so a missing
+// or malformed price id is reported once rather than on every checkout.
+const CONFIGURED_PRICE_IDS: ReadonlyMap<string, string> = new Map(
+  STRIPE_PRICE_POINTS.flatMap((point) => {
+    const priceId = validatePriceId(process.env[point.envVar], point.envVar);
+    return priceId === undefined
+      ? []
+      : [[pricePointKey(point.plan, point.interval, point.currency), priceId] as const];
+  }),
+);
+
+function priceIdAt(
+  plan: ConfiguredCheckoutPlan,
+  interval: BillingInterval,
+  currency: CheckoutCurrency,
+): string | undefined {
+  return CONFIGURED_PRICE_IDS.get(pricePointKey(plan, interval, currency));
+}
+
 export const STRIPE_PRICE_IDS = {
   basic: {
-    monthlyUsd: validatePriceId(
-      process.env['STRIPE_PRICE_BASIC_MONTHLY_USD'],
-      'STRIPE_PRICE_BASIC_MONTHLY_USD',
-    ),
-    monthlyInr: validatePriceId(
-      process.env['STRIPE_PRICE_BASIC_MONTHLY_INR'],
-      'STRIPE_PRICE_BASIC_MONTHLY_INR',
-    ),
+    monthlyUsd: priceIdAt('basic', 'monthly', 'usd'),
+    monthlyInr: priceIdAt('basic', 'monthly', 'inr'),
   },
   pro: {
-    monthly: validatePriceId(process.env['STRIPE_PRICE_PRO_MONTHLY'], 'STRIPE_PRICE_PRO_MONTHLY'),
-    yearly: validatePriceId(process.env['STRIPE_PRICE_PRO_YEARLY'], 'STRIPE_PRICE_PRO_YEARLY'),
+    monthly: priceIdAt('pro', 'monthly', 'usd'),
+    yearly: priceIdAt('pro', 'yearly', 'usd'),
   },
   max: {
-    monthly: validatePriceId(process.env['STRIPE_PRICE_MAX_MONTHLY'], 'STRIPE_PRICE_MAX_MONTHLY'),
-    yearly: undefined, // Max plan is monthly-only
+    monthly: priceIdAt('max', 'monthly', 'usd'),
+    yearly: priceIdAt('max', 'yearly', 'usd'),
   },
   max_15x: {
-    monthly: validatePriceId(
-      process.env['STRIPE_PRICE_MAX_15X_MONTHLY'],
-      'STRIPE_PRICE_MAX_15X_MONTHLY',
-    ),
-    yearly: undefined, // Max 15x is monthly-only
+    monthly: priceIdAt('max_15x', 'monthly', 'usd'),
+    yearly: priceIdAt('max_15x', 'yearly', 'usd'),
   },
   team: {
-    monthlyUsd: validatePriceId(
-      process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'],
-      'STRIPE_PRICE_TEAM_MONTHLY_USD',
-    ),
-    monthlyInr: validatePriceId(
-      process.env['STRIPE_PRICE_TEAM_MONTHLY_INR'],
-      'STRIPE_PRICE_TEAM_MONTHLY_INR',
-    ),
-    yearlyUsd: validatePriceId(
-      process.env['STRIPE_PRICE_TEAM_YEARLY_USD'],
-      'STRIPE_PRICE_TEAM_YEARLY_USD',
-    ),
+    monthlyUsd: priceIdAt('team', 'monthly', 'usd'),
+    monthlyInr: priceIdAt('team', 'monthly', 'inr'),
+    yearlyUsd: priceIdAt('team', 'yearly', 'usd'),
   },
 };
 
@@ -88,17 +127,25 @@ export function getConfiguredPriceId(
   interval: BillingInterval,
   currency?: string,
 ): string | undefined {
-  if (isBasicPlanTier(plan) || isTeamPlanTier(plan)) {
-    const prices = STRIPE_PRICE_IDS[plan];
-    if (interval === 'monthly') {
-      return currency?.toLowerCase() === 'inr'
-        ? (prices.monthlyInr ?? prices.monthlyUsd)
-        : prices.monthlyUsd;
-    }
-    if (isTeamPlanTier(plan)) return STRIPE_PRICE_IDS.team.yearlyUsd;
-    return undefined;
-  }
-  return STRIPE_PRICE_IDS[plan][interval];
+  const requested = normalizeCheckoutCurrency(currency);
+  return (
+    priceIdAt(plan, interval, requested) ??
+    (requested === DEFAULT_CHECKOUT_CURRENCY
+      ? undefined
+      : priceIdAt(plan, interval, DEFAULT_CHECKOUT_CURRENCY))
+  );
+}
+
+/**
+ * The price point a Stripe price id belongs to, or null when the id is not one
+ * this deployment configured.
+ */
+export function getPricePointForPriceId(priceId: string): StripePricePoint | null {
+  return (
+    STRIPE_PRICE_POINTS.find(
+      (point) => priceIdAt(point.plan, point.interval, point.currency) === priceId,
+    ) ?? null
+  );
 }
 
 export const PRICING_CONFIG = {
@@ -152,27 +199,6 @@ export const PRICING_CONFIG = {
       stripe_price_ids: STRIPE_PRICE_IDS.team,
     },
   ],
-  getPlanFromPriceId: (priceId: string): string | null => {
-    if (
-      STRIPE_PRICE_IDS.basic.monthlyUsd === priceId ||
-      STRIPE_PRICE_IDS.basic.monthlyInr === priceId
-    ) {
-      return 'basic';
-    }
-    if (
-      STRIPE_PRICE_IDS.team.monthlyUsd === priceId ||
-      STRIPE_PRICE_IDS.team.monthlyInr === priceId ||
-      STRIPE_PRICE_IDS.team.yearlyUsd === priceId
-    ) {
-      return 'team';
-    }
-    const allPlans = ['pro', 'max', 'max_15x'] as const;
-    for (const plan of allPlans) {
-      const prices = STRIPE_PRICE_IDS[plan];
-      if (prices.monthly === priceId || prices.yearly === priceId) {
-        return plan;
-      }
-    }
-    return null;
-  },
+  getPlanFromPriceId: (priceId: string): ConfiguredCheckoutPlan | null =>
+    getPricePointForPriceId(priceId)?.plan ?? null,
 };

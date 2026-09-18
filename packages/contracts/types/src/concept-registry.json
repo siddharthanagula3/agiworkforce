@@ -1,0 +1,477 @@
+{
+  "columnContract": {
+    "baselineMigration": 239,
+    "roles": {
+      "owner": {
+        "column": "user_id",
+        "why": "the account the row belongs to, the value every RLS policy compares against"
+      },
+      "tenant": {
+        "column": "organization_id",
+        "why": "the organization the row is scoped to, null for a personal row"
+      },
+      "parent": {
+        "column": "conversation_id",
+        "why": "the owning row, for a child object that has no owner of its own"
+      },
+      "project": {
+        "column": "project_id",
+        "why": "the project the row is filed under, null when it is loose"
+      },
+      "createdBy": {
+        "column": "created_by",
+        "why": "the principal that created the row, which is not always its owner"
+      },
+      "updatedBy": {
+        "column": "updated_by",
+        "why": "the principal that last wrote the row"
+      },
+      "version": {
+        "column": "server_version",
+        "why": "the optimistic-concurrency token an If-Match precondition quotes"
+      },
+      "createdAt": { "column": "created_at", "why": "when the row came into existence" },
+      "updatedAt": { "column": "updated_at", "why": "when the row was last written" },
+      "deletedAt": {
+        "column": "deleted_at",
+        "why": "when the row was soft deleted, null while it is alive"
+      },
+      "originSurface": {
+        "column": "origin_surface",
+        "why": "which product surface produced the row"
+      }
+    }
+  },
+  "originSurfaces": ["web", "desktop", "mobile", "cli", "vscode", "chrome", "api"],
+  "concepts": [
+    {
+      "name": "conversation",
+      "label": "Conversation",
+      "schema": "packages/contracts/cloud-contracts/src/conversations.ts",
+      "symbol": "ManagedCloudConversationWire",
+      "tables": ["web_conversations"],
+      "writeFunctions": [],
+      "mutators": [
+        "apps/web/app/api/chat/conversations/[id]/route.ts",
+        "apps/web/app/api/chat/conversations/bulk/route.ts"
+      ],
+      "projections": ["packages/contracts/cloud-contracts/src/sync.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "server-version",
+      "lifecycle": "soft_deleted",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "project": "project_id",
+        "createdBy": "created_by",
+        "updatedBy": "updated_by",
+        "version": "server_version",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "deletedAt": "deleted_at",
+        "originSurface": "origin_surface"
+      }
+    },
+    {
+      "name": "message",
+      "label": "Message",
+      "schema": "packages/contracts/cloud-contracts/src/conversations.ts",
+      "symbol": "ManagedCloudMessageWire",
+      "tables": ["web_messages"],
+      "writeFunctions": [],
+      "mutators": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",
+        "apps/web/app/api/chat/conversations/[id]/messages/lib/message-thread.ts"
+      ],
+      "projections": ["packages/contracts/cloud-contracts/src/message-metadata-projection.ts"],
+      "providerCopies": [],
+      "ownership": "parent",
+      "parent": "conversation",
+      "sync": "server-authoritative",
+      "versioning": "server-version",
+      "lifecycle": "soft_deleted",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "parent": "conversation_id",
+        "createdBy": "created_by",
+        "updatedBy": "updated_by",
+        "version": "server_version",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "deletedAt": "deleted_at",
+        "originSurface": "origin_surface"
+      }
+    },
+    {
+      "name": "project",
+      "label": "Project",
+      "schema": "packages/contracts/cloud-contracts/src/projects.ts",
+      "symbol": "ManagedCloudProject",
+      "tables": ["user_projects"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/app/api/projects/route.ts", "apps/web/app/api/projects/[id]/route.ts"],
+      "projections": ["packages/contracts/cloud-contracts/src/sync.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "server-version",
+      "lifecycle": "soft_deleted",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "version": "server_version",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "deletedAt": "deleted_at"
+      }
+    },
+    {
+      "name": "memory",
+      "label": "Memory",
+      "schema": "packages/contracts/types/src/memory.ts",
+      "symbol": "Memory",
+      "tables": ["user_memories"],
+      "writeFunctions": [],
+      "mutators": [
+        "apps/web/app/api/memory/[id]/route.ts",
+        "apps/web/lib/services/managed-memory-context-service.ts"
+      ],
+      "projections": ["packages/contracts/cloud-contracts/src/sync.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "server-version",
+      "lifecycle": "soft_deleted",
+      "childDisposition": "detach",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "project": "project_id",
+        "version": "server_version",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "deletedAt": "is_deleted"
+      }
+    },
+    {
+      "name": "schedule",
+      "label": "Scheduled task",
+      "schema": "packages/contracts/cloud-contracts/src/schedules.ts",
+      "symbol": "ManagedCloudScheduleTask",
+      "tables": ["scheduled_tasks", "scheduled_task_runs"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/lib/services/schedule-service.ts"],
+      "projections": [],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "project": "project_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    },
+    {
+      "name": "skill",
+      "label": "Skill",
+      "schema": "packages/contracts/cloud-contracts/src/skills.ts",
+      "symbol": "ManagedSkillSummary",
+      "tables": ["user_skills"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/lib/services/user-skill-service.ts"],
+      "projections": [],
+      "providerCopies": [],
+      "ownership": "user",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    },
+    {
+      "name": "connector",
+      "label": "Connector connection",
+      "schema": "packages/contracts/cloud-contracts/src/connectors.ts",
+      "symbol": "ConnectorConnection",
+      "tables": ["user_connectors", "user_custom_connectors", "connector_oauth_grants"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/app/api/connectors/route.ts"],
+      "projections": [],
+      "providerCopies": ["apps/web/app/api/connectors/oauth/start/route.ts"],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "organization",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "createdAt": "connected_at",
+        "updatedAt": "updated_at"
+      }
+    },
+    {
+      "name": "artifact",
+      "label": "Artifact",
+      "schema": "packages/contracts/types/src/artifacts.ts",
+      "symbol": "SharedArtifact",
+      "tables": ["web_artifacts", "web_artifact_versions", "published_artifacts"],
+      "writeFunctions": [],
+      "mutators": [
+        "apps/web/lib/services/published-artifact-service.ts",
+        "apps/web/app/api/chat/sync/route.ts"
+      ],
+      "projections": ["packages/contracts/cloud-contracts/src/artifact-index.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "server-version",
+      "lifecycle": "soft_deleted",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "version": "server_version",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "deletedAt": "deleted_at"
+      }
+    },
+    {
+      "name": "workspace",
+      "label": "Workspace",
+      "schema": "packages/contracts/types/src/workspace.ts",
+      "symbol": "Workspace",
+      "tables": ["workspaces", "organizations", "organization_members"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/app/api/settings/organization/route.ts"],
+      "projections": ["packages/contracts/types/src/workspace-analytics.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "purged",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "retained-after-tenant-deletion",
+      "columns": {
+        "owner": "owner_account_id",
+        "tenant": "organization_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    },
+    {
+      "name": "subscription",
+      "label": "Subscription",
+      "schema": "packages/contracts/types/src/managed-usage-balance.ts",
+      "symbol": "ManagedUsageSubscription",
+      "tables": ["subscriptions"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/app/api/stripe-webhook/lib/db.ts"],
+      "projections": ["packages/contracts/types/src/subscription-entitlement.ts"],
+      "providerCopies": ["apps/web/app/api/stripe-webhook/lib/handlers.ts"],
+      "ownership": "user",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "retain",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    },
+    {
+      "name": "credit-bucket",
+      "label": "Credit bucket",
+      "schema": "packages/contracts/types/src/credits.ts",
+      "symbol": "MICROUSD_PER_CREDIT",
+      "tables": ["credit_transactions", "token_credits", "credit_idempotency_keys"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/lib/services/credit-service.ts"],
+      "projections": ["packages/contracts/types/src/usage-vocabulary.ts"],
+      "providerCopies": [],
+      "ownership": "user",
+      "sync": "server-authoritative",
+      "versioning": "append-only",
+      "lifecycle": "active",
+      "childDisposition": "retain",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "createdAt": "created_at"
+      }
+    },
+    {
+      "name": "usage-reservation",
+      "label": "Usage reservation",
+      "schema": "apps/web/lib/services/managed-usage-request-service.ts",
+      "symbol": "ManagedUsageRequestReservation",
+      "tables": ["managed_usage_requests", "managed_usage_request_extensions"],
+      "writeFunctions": ["reserve_managed_usage_request_with_limits_microusd"],
+      "mutators": ["apps/web/lib/services/managed-usage-request-service.ts"],
+      "projections": ["packages/contracts/types/src/managed-usage-balance.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "none",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    },
+    {
+      "name": "audit-event",
+      "label": "Audit event",
+      "schema": "packages/contracts/types/src/audit.ts",
+      "symbol": "AuditEvent",
+      "tables": ["enterprise_audit_events", "security_audit_logs"],
+      "writeFunctions": ["record_enterprise_audit_event"],
+      "mutators": ["apps/web/lib/security-audit.ts"],
+      "projections": ["apps/web/lib/services/audit-streaming-service.ts"],
+      "providerCopies": [],
+      "ownership": "organization",
+      "sync": "none",
+      "versioning": "append-only",
+      "lifecycle": "active",
+      "childDisposition": "retain",
+      "auditBoundary": "retained-after-tenant-deletion",
+      "columns": {
+        "tenant": "organization_id",
+        "createdAt": "created_at"
+      }
+    }
+  ],
+  "duplicateVocabularies": [
+    {
+      "first": {
+        "file": "packages/contracts/types/src/billing-catalog.ts",
+        "name": "BillingPlanTier"
+      },
+      "second": {
+        "file": "packages/contracts/types/src/model-catalog.ts",
+        "name": "SubscriptionAccessTier"
+      },
+      "resolution": "merge",
+      "migrateBy": "2026-12-01",
+      "why": "both spell free/pro/max, one as what the account pays for and one as what a model requires. Every predicate in billing-catalog.ts already refuses to answer for the second, which is why scripts/check-plan-tier-predicates.mjs has to exempt six files."
+    },
+    {
+      "first": { "file": "packages/contracts/types/src/design-system/effort.ts", "name": "Effort" },
+      "second": {
+        "file": "packages/contracts/types/src/enterprise/workspace-controls.ts",
+        "name": "WORKSPACE_REASONING_EFFORTS"
+      },
+      "resolution": "merge",
+      "migrateBy": "2026-12-01",
+      "why": "the workspace policy list is the composer's Effort vocabulary retyped; a value added to one is silently unenforceable in the other."
+    },
+    {
+      "first": { "file": "packages/contracts/types/src/design-system/effort.ts", "name": "Effort" },
+      "second": {
+        "file": "packages/contracts/types/src/suite-contracts.ts",
+        "name": "ChatReasoningEffort"
+      },
+      "resolution": "merge",
+      "migrateBy": "2026-12-01",
+      "why": "the cross-surface chat contract carries its own spelling of the same six efforts."
+    },
+    {
+      "first": {
+        "file": "packages/contracts/types/src/enterprise/workspace-controls.ts",
+        "name": "WORKSPACE_REASONING_EFFORTS"
+      },
+      "second": {
+        "file": "packages/contracts/types/src/suite-contracts.ts",
+        "name": "ChatReasoningEffort"
+      },
+      "resolution": "merge",
+      "migrateBy": "2026-12-01",
+      "why": "the third copy of the effort vocabulary, and the pair that decides whether a policy can name what a client can send."
+    },
+    {
+      "first": {
+        "file": "packages/contracts/types/src/product-analytics.ts",
+        "name": "PRODUCT_ANALYTICS_SURFACES"
+      },
+      "second": {
+        "file": "packages/contracts/types/src/suite-contracts.ts",
+        "name": "SourceSurface"
+      },
+      "resolution": "merge",
+      "migrateBy": "2026-12-01",
+      "why": "analytics names the product surfaces a second time, so a new surface reports under no name until both lists are edited."
+    },
+    {
+      "first": {
+        "file": "packages/contracts/types/src/agent-status.ts",
+        "name": "AgentSessionStatus"
+      },
+      "second": { "file": "packages/contracts/types/src/workflow.ts", "name": "WorkflowStatus" },
+      "resolution": "keep-distinct",
+      "migrateBy": "2026-12-01",
+      "why": "an agent session and a durable workflow run reach the same five terminal states but are separate objects with separate owners; the pair is registered so a divergence is a decision rather than a drift."
+    },
+    {
+      "first": {
+        "file": "packages/contracts/types/src/database.ts",
+        "name": "WorkforceTaskStatus"
+      },
+      "second": {
+        "file": "packages/contracts/types/src/runtime.ts",
+        "name": "RuntimeActivityStatus"
+      },
+      "resolution": "merge",
+      "migrateBy": "2026-12-01",
+      "why": "identical member sets for the same lifecycle, one named for the row and one for the activity rendered from it."
+    },
+    {
+      "first": {
+        "file": "packages/contracts/types/src/database.ts",
+        "name": "WorkforceTaskStatus"
+      },
+      "second": { "file": "packages/contracts/types/src/workflow.ts", "name": "WorkflowStatus" },
+      "resolution": "keep-distinct",
+      "migrateBy": "2026-12-01",
+      "why": "the stored task row and the durable run are different objects; registered so the overlap stays deliberate."
+    },
+    {
+      "first": {
+        "file": "packages/contracts/types/src/runtime.ts",
+        "name": "RuntimeActivityStatus"
+      },
+      "second": { "file": "packages/contracts/types/src/workflow.ts", "name": "WorkflowStatus" },
+      "resolution": "keep-distinct",
+      "migrateBy": "2026-12-01",
+      "why": "the third corner of the status triangle, kept only until the task and activity vocabularies above merge."
+    }
+  ],
+  "columnExemptions": []
+}
