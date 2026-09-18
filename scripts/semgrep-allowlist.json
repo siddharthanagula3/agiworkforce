@@ -27,11 +27,12 @@
       "rule": "yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout",
       "paths": [
         ".github/workflows/deploy-production.yml",
-        ".github/workflows/deploy-signaling-server.yml"
+        ".github/workflows/deploy-signaling-server.yml",
+        ".github/workflows/deploy-staging.yml"
       ],
       "owner": "@siddhartha",
       "expires": "2027-08-31",
-      "reason": "The pwn-request shape in the deploy workflows. Each checkout is gated on github.event.workflow_run.head_repository.full_name == github.repository, which scripts/production-deploy-scope.test.mjs asserts for both workflows."
+      "reason": "The pwn-request shape in the deploy workflows. Each checkout is gated on github.event.workflow_run.head_repository.full_name == github.repository, which scripts/production-deploy-scope.test.mjs asserts for all three workflows; deploy-staging.yml additionally requires workflow_run.head_branch == main and event == push."
     },
     {
       "rule": "javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",

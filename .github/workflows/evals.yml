@@ -161,7 +161,9 @@ jobs:
       # need a name, a date and evidence. A branch that adds neither passes
       # without doing anything.
       - name: Certify every model and route this branch adds
-        run: node tools/evals/scripts/certification-gate.mjs --base "origin/${{ github.base_ref }}"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node tools/evals/scripts/certification-gate.mjs --base "origin/$BASE_REF"
 
   live-quality:
     name: Live model quality (paid, weekly + on demand)
@@ -202,3 +204,60 @@ jobs:
 
       - name: Measure output quality
         run: pnpm exec vitest run tools/evals
+
+  # The signal the staged-release gate reads. `harness` passing is not the same
+  # reading: `--audit` exits 0 on a baseline whose suite scored under its own
+  # corpus threshold, and prints it as `unmet`. A channel advance may not stand
+  # on that, so the verdict here is "every committed baseline met every corpus
+  # threshold" and it is posted as a commit status on the sha it measured.
+  # `.github/workflows/model-probe.yml` refuses a canary without it.
+  quality-signal:
+    name: Publish the eval quality signal for the staged-release gate
+    needs: harness
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Read the committed baselines
+        id: verdict
+        run: |
+          set +e
+          audit=$(node tools/evals/scripts/promotion-gate.mjs --audit 2>&1)
+          code=$?
+          set -e
+          printf '%s\n' "$audit"
+          unmet=$(printf '%s\n' "$audit" | grep -c '^unmet ' || true)
+          if [ "$code" -ne 0 ]; then
+            state=error
+            description="the committed eval baselines are malformed or orphaned"
+          elif [ "$unmet" -ne 0 ]; then
+            state=failure
+            description="$unmet eval suite(s) scored under their own corpus threshold"
+          else
+            state=success
+            description="every committed baseline met every corpus threshold"
+          fi
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "description=$description" >> "$GITHUB_OUTPUT"
+
+      - name: Post the verdict on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ steps.verdict.outputs.state }}
+          DESCRIPTION: ${{ steps.verdict.outputs.description }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='evals-quality' \
+            -f description="$DESCRIPTION" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
