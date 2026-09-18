@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { AppState, Pressable, StyleSheet, View, type AppStateStatus } from 'react-native';
 import { create } from 'zustand';
 import {
   ALL_PLATFORM_CAPABILITIES,
@@ -9,6 +10,8 @@ import {
 } from '@agiworkforce/types';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
+import { Text } from '@/components/ui/text';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
 const CapabilityContext = createContext<SyncedAppSurface>('mobile');
 
@@ -70,6 +73,12 @@ export function CapabilityProvider({
 }) {
   useEffect(() => {
     void refreshRemoteCapabilities();
+    // A switch thrown while the app sits in the background has to reach it on
+    // the next resume, or a mitigation waits for a cold start.
+    const subscription = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') void refreshRemoteCapabilities();
+    });
+    return () => subscription.remove();
   }, []);
   return <CapabilityContext.Provider value={platform}>{children}</CapabilityContext.Provider>;
 }
@@ -78,6 +87,76 @@ export function useCapability(capability: PlatformCapability): boolean {
   const platform = useContext(CapabilityContext);
   const switchedOff = useRemoteCapabilityStore((state) => state.switchedOff[capability] === true);
   return matrixIsCapabilityEnabled(platform, capability) && !switchedOff;
+}
+
+export const CAPABILITY_SWITCHED_OFF_BODY =
+  'It was switched off from the server while an issue is fixed. Nothing else in the app is affected, and it comes back without an update.';
+
+export function CapabilityUnavailable({
+  label,
+  onDismiss,
+  dismissLabel = 'Go back',
+}: {
+  label: string;
+  onDismiss?: () => void;
+  dismissLabel?: string;
+}) {
+  const c = useThemeColors();
+  const styles = useMemo(() => createUnavailableStyles(c), [c]);
+  return (
+    <View style={styles.container} testID="capability.unavailable">
+      <Text style={styles.title}>{label} is unavailable right now</Text>
+      <Text style={styles.body}>{CAPABILITY_SWITCHED_OFF_BODY}</Text>
+      {onDismiss ? (
+        <Pressable
+          onPress={onDismiss}
+          style={styles.button}
+          accessibilityRole="button"
+          accessibilityLabel={dismissLabel}
+        >
+          <Text style={styles.buttonText}>{dismissLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function createUnavailableStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 32,
+      backgroundColor: colors.background,
+    },
+    title: {
+      color: colors.textPrimary,
+      textAlign: 'center',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    body: {
+      color: colors.textSecondary,
+      textAlign: 'center',
+      fontSize: 14,
+      lineHeight: 20,
+      marginTop: 8,
+    },
+    button: {
+      marginTop: 24,
+      minHeight: 44,
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      backgroundColor: colors.teal,
+    },
+    buttonText: {
+      color: colors.accentText,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+  });
 }
 
 export function useCapabilities() {

@@ -83,9 +83,29 @@ pub struct RemoteSpeechGate {
     pub client_version: Option<String>,
 }
 
+/// The switch key the server publishes for dictation. It must stay equal to
+/// `capabilityKillSwitchKey('dictation')` in apps/web/lib/feature-flags.
+pub const DICTATION_KILL_SWITCH_KEY: &str = "capability.dictation";
+
+const DICTATION_SWITCHED_OFF_REASON: &str =
+    "Dictation is switched off from the server for this version.";
+
 impl RemoteSpeechGate {
     pub fn open() -> Self {
         Self::default()
+    }
+
+    /// Read the gate out of the flag map `/api/me` answers with for this build.
+    /// A map that does not carry the key leaves the gate open, so a failed or
+    /// empty read never silences a working microphone.
+    pub fn from_feature_flags(
+        feature_flags: &std::collections::HashMap<String, bool>,
+        client_version: impl Into<String>,
+    ) -> Self {
+        match feature_flags.get(DICTATION_KILL_SWITCH_KEY) {
+            Some(false) => Self::closed(DICTATION_SWITCHED_OFF_REASON, client_version),
+            _ => Self::open(),
+        }
     }
 
     pub fn closed(reason: impl Into<String>, client_version: impl Into<String>) -> Self {
@@ -707,6 +727,23 @@ mod tests {
 
         let error = wake.start().await.expect_err("start must refuse");
         assert!(error.to_string().contains("switched off for this version"));
+    }
+
+    #[test]
+    fn the_server_flag_map_decides_the_gate() {
+        let mut flags = std::collections::HashMap::new();
+        assert!(RemoteSpeechGate::from_feature_flags(&flags, "2.4.1").is_open());
+
+        flags.insert("capability.can_use_voice".to_string(), false);
+        assert!(RemoteSpeechGate::from_feature_flags(&flags, "2.4.1").is_open());
+
+        flags.insert(DICTATION_KILL_SWITCH_KEY.to_string(), false);
+        let closed = RemoteSpeechGate::from_feature_flags(&flags, "2.4.1");
+        assert!(!closed.is_open());
+        assert_eq!(closed.client_version.as_deref(), Some("2.4.1"));
+
+        flags.insert(DICTATION_KILL_SWITCH_KEY.to_string(), true);
+        assert!(RemoteSpeechGate::from_feature_flags(&flags, "2.4.1").is_open());
     }
 
     #[test]

@@ -61,6 +61,7 @@ import {
 } from '@/src/features/chat/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
+import { useCapability } from '@/src/lib/capabilities';
 import {
   LARGE_PASTE_THRESHOLD,
   PASTED_TEXT_MIME_TYPE,
@@ -132,6 +133,7 @@ export function ChatInput({
   selectedSkillName,
   onClearSelectedSkill,
 }: ChatInputProps) {
+  const voiceAllowed = useCapability('canUseVoice');
   const [text, setText] = useState(() =>
     draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance) || (initialText ?? ''),
   );
@@ -547,7 +549,7 @@ export function ChatInput({
 
   const availableCommands: ChatCommand[] = [
     ...(FEATURES.imageGen ? (['/image'] as const) : []),
-    ...(onOpenVoiceMode ? (['/voice'] as const) : []),
+    ...(onOpenVoiceMode && voiceAllowed ? (['/voice'] as const) : []),
     ...(onOpenCompare ? (['/compare'] as const) : []),
     ...(onOpenExport ? (['/export'] as const) : []),
   ];
@@ -1052,16 +1054,18 @@ export function ChatInput({
                 <View style={{ flex: 1 }} />
               </>
             ) : null}
-            <VoiceInputButton
-              onTranscription={handleTranscription}
-              onRecordingStart={handleRecordingStart}
-              onRecordingStop={handleRecordingStop}
-              onMetering={handleMetering}
-              onLongPress={onOpenVoiceMode}
-              onError={handleVoiceError}
-              resetSignal={voiceResetSignal}
-              disabled={isStreaming}
-            />
+            {voiceAllowed ? (
+              <VoiceInputButton
+                onTranscription={handleTranscription}
+                onRecordingStart={handleRecordingStart}
+                onRecordingStop={handleRecordingStop}
+                onMetering={handleMetering}
+                onLongPress={onOpenVoiceMode}
+                onError={handleVoiceError}
+                resetSignal={voiceResetSignal}
+                disabled={isStreaming}
+              />
+            ) : null}
           </View>
         </View>
 

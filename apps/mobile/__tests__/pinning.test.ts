@@ -192,6 +192,29 @@ describe('provisioning the pins and turning pinning on are separate changes (CWE
     }
   });
 
+  it('lets the server stand enforcement down without a store release', () => {
+    const pins = provisionedTable();
+
+    expect(
+      pinningStageFor({ isDevOrTest: false, pins, rollout: 'enforced', remoteRelief: true }),
+    ).toBe('report-only');
+    expect(
+      pinningEnforcedFor({ isDevOrTest: false, pins, rollout: 'enforced', remoteRelief: true }),
+    ).toBe(false);
+  });
+
+  it('relief never turns pinning on, and an absent relief changes nothing', () => {
+    const pins = provisionedTable();
+
+    expect(pinningStageFor({ isDevOrTest: false, pins, rollout: 'off', remoteRelief: true })).toBe(
+      'off',
+    );
+    expect(
+      pinningStageFor({ isDevOrTest: false, pins, rollout: 'enforced', remoteRelief: false }),
+    ).toBe('enforced');
+    expect(pinningStageFor({ isDevOrTest: false, pins, rollout: 'enforced' })).toBe('enforced');
+  });
+
   it('stages nothing in dev and test runtimes, so a pin cannot break the local loop', () => {
     expect(
       pinningStageFor({ isDevOrTest: true, pins: provisionedTable(), rollout: 'enforced' }),
