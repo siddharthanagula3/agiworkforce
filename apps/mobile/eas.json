@@ -15,11 +15,11 @@
         "EXPO_NO_TELEMETRY": "1"
       },
       "ios": {
-        "image": "latest",
+        "image": "macos-tahoe-26.5-xcode-26.6",
         "resourceClass": "m-medium"
       },
       "android": {
-        "image": "latest",
+        "image": "ubuntu-26.04-jdk-17-ndk-r27b-sdk-57",
         "resourceClass": "medium",
         "ndk": "27.1.12297006"
       },

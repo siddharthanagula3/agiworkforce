@@ -1,5 +1,6 @@
 import React from 'react';
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 
 const mockGet = jest.fn();
 jest.mock('@/services/api', () => ({ api: { get: (...args: unknown[]) => mockGet(...args) } }));
@@ -78,6 +79,25 @@ describe('server-driven mobile capabilities', () => {
 
     await waitFor(() => expect(result.current.canUseConnectors).toBe(false));
     expect(result.current.canUseCamera).toBe(true);
+  });
+
+  it('re-reads the switches when the app comes back to the foreground', async () => {
+    const listeners: ((state: AppStateStatus) => void)[] = [];
+    const subscription = jest
+      .spyOn(AppState, 'addEventListener')
+      .mockImplementation((_type: string, listener: (state: AppStateStatus) => void) => {
+        listeners.push(listener);
+        return { remove: jest.fn() } as unknown as ReturnType<typeof AppState.addEventListener>;
+      });
+
+    const { result } = renderHook(() => useCapability('canUseCamera'), { wrapper });
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+
+    mockGet.mockResolvedValue(meResponse({ 'capability.can_use_camera': false }));
+    act(() => listeners.forEach((listener) => listener('active')));
+
+    await waitFor(() => expect(result.current).toBe(false));
+    subscription.mockRestore();
   });
 
   it('leaves every capability alone when the server cannot be reached', async () => {

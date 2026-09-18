@@ -17,6 +17,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureCloudAccountEpoch,
@@ -571,6 +572,7 @@ export default function CloudConnectorsScreen({
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
+  const connectorsSwitchedOn = useCapability('canUseConnectors');
   const canUseConnectors = useTierStore((s) => s.grantedCapabilities.includes('canUseConnectors'));
   const isTierRefreshing = useTierStore((s) => s.isRefreshing);
   const lastTierRefreshAt = useTierStore((s) => s.lastRefreshedAt);
@@ -786,6 +788,14 @@ export default function CloudConnectorsScreen({
     return (
       <SettingsScreenShell title="Connectors" backHref={backHref}>
         <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
+      </SettingsScreenShell>
+    );
+  }
+
+  if (!connectorsSwitchedOn) {
+    return (
+      <SettingsScreenShell title="Connectors" backHref={backHref}>
+        <CapabilityUnavailable label="Connectors" />
       </SettingsScreenShell>
     );
   }

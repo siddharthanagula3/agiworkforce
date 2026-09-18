@@ -101,6 +101,16 @@ export type PinningStage = 'off' | 'report-only' | 'enforced';
 export const PINNING_ROLLOUT: PinningStage = 'report-only';
 
 /**
+ * What the server can still relieve after the flip: the app's own refusal drops
+ * back to reporting, so a pin that turns out to refuse real users is stood down
+ * without a store release. The native pin-sets keep verifying either way, they
+ * are compiled into the binary, so this relieves the JS gate and nothing else.
+ */
+function reliefStage(rollout: PinningStage = PINNING_ROLLOUT): PinningStage {
+  return rollout === 'enforced' ? 'report-only' : rollout;
+}
+
+/**
  * The stage a build really runs at: never more than the rollout asks for, and
  * nothing at all until every required host carries a well-formed,
  * non-placeholder hash. A half-provisioned table stages nothing rather than
@@ -111,8 +121,10 @@ export function pinningStageFor(opts: {
   isDevOrTest: boolean;
   pins?: PinTable;
   rollout?: PinningStage;
+  remoteRelief?: boolean;
 }): PinningStage {
-  const rollout = opts.rollout ?? PINNING_ROLLOUT;
+  const rollout =
+    opts.remoteRelief === true ? reliefStage(opts.rollout) : (opts.rollout ?? PINNING_ROLLOUT);
   if (rollout === 'off' || opts.isDevOrTest) return 'off';
   const pins = opts.pins ?? PINS_BY_HOST;
   const provisioned = REQUIRED_PINNED_HOSTS.every((host) => pinsAreProvisioned(pins[host] ?? []));
@@ -123,6 +135,7 @@ export function pinningEnforcedFor(opts: {
   isDevOrTest: boolean;
   pins?: PinTable;
   rollout?: PinningStage;
+  remoteRelief?: boolean;
 }): boolean {
   return pinningStageFor(opts) === 'enforced';
 }

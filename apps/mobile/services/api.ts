@@ -34,6 +34,9 @@ let _refreshBackoffUntil = 0;
 let _accountGeneration = 0;
 const _activeAccountUploads = new Set<UploadTask>();
 const MAX_REFRESH_FAILURES = 3;
+// The account's own identity route. A 403 there is the server refusing the
+// account itself (deleted, suspended, locked), not one action being denied.
+const ACCOUNT_IDENTITY_PATH = '/api/me';
 const REFRESH_TIMEOUT_MS = 10_000;
 
 class StaleApiAccountOperationError extends Error {
@@ -100,6 +103,10 @@ async function tryRefreshToken(): Promise<boolean> {
 
   _refreshing = operation;
   return operation;
+}
+
+function isAccountIdentityPath(path: string): boolean {
+  return path === ACCOUNT_IDENTITY_PATH || path.startsWith(`${ACCOUNT_IDENTITY_PATH}?`);
 }
 
 function handleUnrecoverableAuth(): void {
@@ -220,6 +227,12 @@ async function sendRequest(
 
       handleUnrecoverableAuth();
       throw new Error('HTTP 401: Session expired. Please sign in again.');
+    }
+
+    if (response.status === 403 && isAccountIdentityPath(path)) {
+      release();
+      handleUnrecoverableAuth();
+      throw new Error('HTTP 403: This account can no longer be used on this device.');
     }
 
     return { response, release };
