@@ -4,6 +4,7 @@ import {
   memoryConflictTopic,
   memoryConsolidationKey,
 } from '@agiworkforce/agent-core';
+import { contextFenceTag, contextSource, type ContextSource } from '@agiworkforce/context';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
 import { withSpan } from '@/lib/observability/span';
 import { logger } from '@/lib/logger';
@@ -17,6 +18,10 @@ export interface ManagedMemoryContextItem {
   content: string;
   category: string | null;
   pinned: boolean;
+}
+
+export interface ManagedMemoryContextSource extends ManagedMemoryContextItem {
+  source: ContextSource;
 }
 
 export interface ManagedMemoryPolicy {
@@ -40,6 +45,13 @@ const MAX_AUTO_MEMORIES_PER_TURN = 5;
 
 function truncate(value: string, maxChars: number): string {
   return value.length > maxChars ? `${value.slice(0, Math.max(0, maxChars - 1))}…` : value;
+}
+
+function isoTimestamp(value: string | Date | null): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
 }
 
 /**
@@ -449,7 +461,7 @@ export async function loadManagedMemoryContext(
     suppressedSources?: readonly MemorySource[];
     scope?: MemoryScope;
   },
-): Promise<ManagedMemoryContextItem[]> {
+): Promise<ManagedMemoryContextSource[]> {
   return withSpan(
     'memory.context.load',
     { domain: 'retrieval', attributes: { 'retrieval.source': 'user_memories' } },
@@ -468,13 +480,17 @@ export async function loadManagedMemoryContext(
       const workspaceFilter = workspaceMemoryPredicate(values.push(params.organizationId ?? null));
 
       const rows = await db.query<{
+        id: string;
         content: string;
         category: string | null;
         pinned: boolean;
+        updated_at: string | Date | null;
       }>(
-        `select content,
+        `select id,
+            content,
             category,
-            coalesce((to_jsonb(user_memories)->>'pinned')::boolean, false) as pinned
+            coalesce((to_jsonb(user_memories)->>'pinned')::boolean, false) as pinned,
+            updated_at
        from user_memories
       where user_id = $1 and ${activeMemoryPredicate()} ${sourceFilter} ${projectFilter}
         and ${workspaceFilter}
@@ -491,7 +507,20 @@ export async function loadManagedMemoryContext(
             : 'project-only'
           : 'global',
       });
-      return rows;
+      return rows.map((row) => ({
+        content: row.content,
+        category: row.category,
+        pinned: row.pinned,
+        source: contextSource({
+          sourceClass: 'account_memory',
+          locator: `user_memories/${row.id}`,
+          recordId: row.id,
+          ownerUserId: params.userId,
+          organizationId: params.organizationId ?? null,
+          projectId: scope.projectId,
+          capturedAt: isoTimestamp(row.updated_at),
+        }),
+      }));
     },
   );
 }
@@ -538,7 +567,7 @@ export function formatManagedMemorySystemPrompt(
 
   if (bounded.length === 0) return null;
 
-  return fenceUntrustedMemoryContent(JSON.stringify(bounded), 'account_memories');
+  return fenceUntrustedMemoryContent(JSON.stringify(bounded), contextFenceTag('account_memory'));
 }
 
 export function applyManagedMemoryContext(
