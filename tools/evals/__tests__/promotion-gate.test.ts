@@ -7,10 +7,12 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  auditBaselines,
   compareToBaseline,
   evaluatePromotionGate,
   measurementFileName,
   readGatePolicy,
+  scoreFloor,
   toleranceFor,
 } from '../scripts/promotion-gate.mjs';
 
@@ -20,14 +22,20 @@ const policy = {
   familyOverrides: { 'lab/pro': { costIncreaseRatio: 1 } },
 };
 
-function suite(score: number, meanUsd: number | null, p95Ms: number | null, version = 1) {
+function suite(
+  score: number,
+  meanUsd: number | null,
+  p95Ms: number | null,
+  version = 1,
+  threshold = 0.5,
+) {
   return {
     version,
-    threshold: 1,
+    threshold,
     total: 10,
     passed: Math.round(score * 10),
     score,
-    met: score === 1,
+    met: score >= threshold,
     cost: {
       meteredCases: 10,
       totalUsd: meanUsd === null ? null : meanUsd * 10,
@@ -217,5 +225,96 @@ describe('evaluatePromotionGate', () => {
     }
     expect(status).toBe(1);
     expect(output).toMatch(/regressed/);
+  });
+});
+
+describe('scoreFloor', () => {
+  const tolerance = { scoreDrop: 0.05 };
+
+  it('lets a measured baseline raise the bar above the corpus threshold', () => {
+    expect(scoreFloor({ score: 0.98, threshold: 0.9 }, tolerance)).toBeCloseTo(0.93);
+  });
+
+  it('never lets a baseline lower the bar under the corpus threshold', () => {
+    expect(scoreFloor({ score: 0, threshold: 1 }, tolerance)).toBe(1);
+    expect(scoreFloor({ score: 0.36, threshold: 1 }, tolerance)).toBe(1);
+  });
+
+  it('falls back to the baseline alone when the corpus declares no threshold', () => {
+    expect(scoreFloor({ score: 0.8 }, tolerance)).toBeCloseTo(0.75);
+  });
+
+  it('refuses a candidate that matches a baseline which itself failed the corpus', () => {
+    const baseline = run('active', { refusal: suite(0, 0.001, 1000, 1, 1) });
+    const candidate = run('next', { refusal: suite(0, 0.001, 1000, 1, 1) });
+    const failed = compareToBaseline(baseline, candidate, toleranceFor(policy, 'lab/fast')).filter(
+      (entry) => !entry.passed,
+    );
+    expect(failed.map((entry) => entry.axis)).toEqual(['score']);
+    expect(failed[0]!.detail).toMatch(/corpus threshold 1\.000/);
+  });
+});
+
+describe('auditBaselines', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'agi-evals-audit-'));
+    mkdirSync(join(dir, 'baselines'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function writeBaseline(key: string, value: unknown) {
+    writeFileSync(join(dir, 'baselines', measurementFileName(key)), JSON.stringify(value));
+  }
+
+  const families = { 'lab/fast': { activeModelKey: 'active' } };
+
+  it('passes an empty measurements directory and reports it audited nothing', () => {
+    const verdict = auditBaselines({ measurementsDir: dir, families });
+    expect(verdict.passed).toBe(true);
+    expect(verdict.audited).toEqual([]);
+  });
+
+  it('accepts a live baseline of a registry family slot', () => {
+    writeBaseline('lab/fast', {
+      familyId: 'lab/fast',
+      ...run('active', { coding: suite(0.9, 0.001, 1000) }),
+    });
+    const verdict = auditBaselines({ measurementsDir: dir, families });
+    expect(verdict.passed).toBe(true);
+    expect(verdict.audited).toEqual(['lab/fast']);
+    expect(verdict.unmet).toEqual([]);
+  });
+
+  it('fails a replayed baseline, an orphaned one, and one whose suites carry no threshold', () => {
+    writeBaseline('lab/fast', {
+      familyId: 'lab/fast',
+      ...run('active', { coding: suite(0.9, 0.001, 1000) }, { recordingSource: 'reference' }),
+    });
+    writeBaseline('lab/gone', {
+      familyId: 'lab/gone',
+      ...run('active', { coding: { version: 1, score: 0.9 } }),
+    });
+    const verdict = auditBaselines({ measurementsDir: dir, families });
+    expect(verdict.passed).toBe(false);
+    expect(verdict.problems.join('\n')).toMatch(/not a live measurement/);
+    expect(verdict.problems.join('\n')).toMatch(/not a family slot in the registry/);
+    expect(verdict.problems.join('\n')).toMatch(/carries no corpus threshold/);
+  });
+
+  it('names every committed baseline suite that does not meet its own corpus threshold', () => {
+    writeBaseline('lab/fast', {
+      familyId: 'lab/fast',
+      ...run('active', { refusal: suite(0, 0.001, 1000, 1, 1) }),
+    });
+    const verdict = auditBaselines({ measurementsDir: dir, families });
+    expect(verdict.passed).toBe(true);
+    expect(verdict.unmet).toEqual([
+      'lab/fast refusal: measured 0.000 against corpus threshold 1.000',
+    ]);
   });
 });

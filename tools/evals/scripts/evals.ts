@@ -152,7 +152,7 @@ async function live(args: readonly string[]): Promise<void> {
   });
   print(formatRun(outcome.report, outcome.reports));
 
-  const fileName = measurementFileName(modelKey);
+  const fileName = measurementFileName(target.route.isDefault ? modelKey : target.routeId);
   writeJson(join(MEASUREMENTS, 'recordings', fileName), outcome.recording);
   writeJson(join(MEASUREMENTS, 'runs', fileName), outcome.report);
   print(`[evals] wrote measurements/recordings/${fileName} and measurements/runs/${fileName}`);
