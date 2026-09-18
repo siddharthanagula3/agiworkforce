@@ -767,9 +767,18 @@ mod tests {
             .args(["merge", "feature"])
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.test")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.test")
             .output()
             .expect("git runs");
         assert!(!merge.status.success(), "the merge must conflict");
+        assert!(
+            String::from_utf8_lossy(&merge.stdout).contains("CONFLICT"),
+            "the merge must stop on a content conflict: {}",
+            String::from_utf8_lossy(&merge.stderr)
+        );
         dir
     }
 

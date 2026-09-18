@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  CAPABILITY_DENIAL_REASONS,
   CAPABILITY_LAYERS,
   CAPABILITY_LIMIT_UNITS,
   CAPABILITY_LIMIT_WINDOWS,
@@ -29,6 +30,7 @@ export const EffectiveCapabilityDocumentSchema = z.object({
   }),
   granted: z.array(z.string()),
   deniedBy: z.record(z.string(), z.array(CapabilityLayerSchema)),
+  denialReasons: z.record(z.string(), z.enum(CAPABILITY_DENIAL_REASONS)).optional(),
   limits: z.array(CapabilityLimitSchema).default([]),
 });
 
