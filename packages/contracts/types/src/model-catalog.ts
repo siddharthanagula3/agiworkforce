@@ -19,6 +19,7 @@
  */
 
 import modelsCatalogJson from './models.json';
+import type { SourceSurface } from './suite-contracts';
 import {
   PROVIDER_DISPLAY,
   PROVIDER_DISPLAY_ALIASES,
@@ -185,7 +186,127 @@ export interface ModelBenchmarks {
   tau2Telecom?: number;
 }
 
-export type ModelStatus = 'active' | 'beta' | 'deprecated';
+export type ModelStatus = 'experimental' | 'beta' | 'active' | 'deprecated';
+
+// How finished a capability is, on any surface. The release channel is how far
+// the build carrying it has been handed out, availability is who may reach it.
+export const FEATURE_MATURITIES = [
+  'experimental',
+  'beta',
+  'general_availability',
+  'deprecated',
+] as const;
+
+export type FeatureMaturity = (typeof FEATURE_MATURITIES)[number];
+
+export const RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const;
+
+export type ReleaseChannel = (typeof RELEASE_CHANNELS)[number];
+
+/** The narrowest channel, handed to the fewest people: the canary build. */
+export const CANARY_CHANNEL: ReleaseChannel = 'nightly';
+
+export const RELEASE_AVAILABILITIES = [
+  'unavailable',
+  'internal',
+  'waitlist',
+  'limited',
+  'general',
+] as const;
+
+export type ReleaseAvailability = (typeof RELEASE_AVAILABILITIES)[number];
+
+export const FEATURE_MATURITY_DEFAULT: FeatureMaturity = 'experimental';
+export const RELEASE_CHANNEL_DEFAULT: ReleaseChannel = 'stable';
+export const RELEASE_AVAILABILITY_DEFAULT: ReleaseAvailability = 'unavailable';
+
+const MATURITY_WIDEST_CHANNEL: Readonly<Record<FeatureMaturity, ReleaseChannel>> = {
+  experimental: 'nightly',
+  beta: 'beta',
+  general_availability: 'stable',
+  deprecated: 'stable',
+};
+
+const CHANNEL_REACH: Readonly<Record<ReleaseChannel, number>> = { nightly: 0, beta: 1, stable: 2 };
+
+export function channelCarriesMaturity(
+  channel: ReleaseChannel,
+  maturity: FeatureMaturity,
+): boolean {
+  return CHANNEL_REACH[channel] <= CHANNEL_REACH[MATURITY_WIDEST_CHANNEL[maturity]];
+}
+
+const MATURITY_WIDEST_AVAILABILITY: Readonly<Record<FeatureMaturity, ReleaseAvailability>> = {
+  experimental: 'internal',
+  beta: 'limited',
+  general_availability: 'general',
+  deprecated: 'general',
+};
+
+const AVAILABILITY_REACH: Readonly<Record<ReleaseAvailability, number>> = {
+  unavailable: 0,
+  internal: 1,
+  waitlist: 2,
+  limited: 3,
+  general: 4,
+};
+
+export function maturityWidestAvailability(maturity: FeatureMaturity): ReleaseAvailability {
+  return MATURITY_WIDEST_AVAILABILITY[maturity];
+}
+
+export function maturityAdmitsAvailability(
+  maturity: FeatureMaturity,
+  availability: ReleaseAvailability,
+): boolean {
+  return (
+    AVAILABILITY_REACH[availability] <= AVAILABILITY_REACH[MATURITY_WIDEST_AVAILABILITY[maturity]]
+  );
+}
+
+// A catalogue entry with no status is routable, which is general availability.
+export function modelStatusMaturity(status: ModelStatus | undefined): FeatureMaturity {
+  switch (status) {
+    case 'experimental':
+      return 'experimental';
+    case 'beta':
+      return 'beta';
+    case 'deprecated':
+      return 'deprecated';
+    default:
+      return 'general_availability';
+  }
+}
+
+// Three separate facts: what has been published, how finished it is, and who
+// may reach it. A store listing cannot stand in for the other two.
+export interface SurfaceReleaseState {
+  readonly surface: SourceSurface;
+  readonly released: boolean;
+  readonly maturity: FeatureMaturity;
+  readonly channel: ReleaseChannel;
+  readonly availability: ReleaseAvailability;
+}
+
+export function surfaceReleaseStateGaps(state: SurfaceReleaseState): string[] {
+  const gaps: string[] = [];
+  if (!channelCarriesMaturity(state.channel, state.maturity)) {
+    gaps.push(
+      `${state.surface} is ${state.maturity} but is handed to the ${state.channel} channel`,
+    );
+  }
+  if (!maturityAdmitsAvailability(state.maturity, state.availability)) {
+    gaps.push(
+      `${state.surface} is ${state.maturity} but is available to ${state.availability} users`,
+    );
+  }
+  if (!state.released && AVAILABILITY_REACH[state.availability] > AVAILABILITY_REACH.internal) {
+    gaps.push(
+      `${state.surface} has published no release but claims ${state.availability} availability`,
+    );
+  }
+  return gaps;
+}
 
 export type ReasoningControl =
   'none' | 'always_on' | 'thinking_toggle' | 'thinking_budget' | 'effort_levels';
@@ -927,7 +1048,7 @@ const MANUAL_OVERRIDE_MODEL_IDS: readonly string[] = Object.entries(
   .filter(([, model]) => {
     if (model.deprecated) return false;
     if (model.status === 'deprecated') return false;
-    if ((model.status as string | undefined) === 'experimental') return false;
+    if (model.status === 'experimental') return false;
     return MANUAL_OVERRIDE_MODEL_TYPES.has(model.modelType);
   })
   .map(([id]) => id);

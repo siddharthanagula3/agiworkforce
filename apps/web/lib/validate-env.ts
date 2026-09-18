@@ -1,4 +1,11 @@
-import { isLoopbackConnectionString, resolveRuntimeEnvironment } from '@agiworkforce/data-layer';
+import {
+  checkConfigKeys,
+  defineConfigKeys,
+  isLoopbackConnectionString,
+  resolveRuntimeEnvironment,
+  type ConfigKeyDescriptor,
+  type RuntimeEnvironment,
+} from '@agiworkforce/data-layer';
 import {
   hasObjectStorageCredentials,
   resolveObjectStorageConfig,
@@ -447,14 +454,7 @@ export function validateAppUrl(): ValidationResult {
   };
 }
 
-type ConfigKeySecrecy = 'secret' | 'public';
-type ConfigEnvironment = ReturnType<typeof resolveRuntimeEnvironment>;
-
-interface ConfigKeyDescriptor {
-  key: string;
-  secrecy: ConfigKeySecrecy;
-  allowedEnvironments: readonly ConfigEnvironment[];
-}
+type ConfigEnvironment = RuntimeEnvironment;
 
 const EVERY_ENVIRONMENT: readonly ConfigEnvironment[] = [
   'development',
@@ -470,7 +470,7 @@ const LOCAL_ONLY: readonly ConfigEnvironment[] = ['development', 'test'];
  * inlines it into client JavaScript is not a secret, and a key meant for one
  * environment set in another is that environment reaching into this one.
  */
-const CONFIG_KEY_REGISTRY: readonly ConfigKeyDescriptor[] = [
+const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
   { key: 'CLERK_SECRET_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
   { key: 'STRIPE_SECRET_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
   { key: 'STRIPE_WEBHOOK_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
@@ -503,28 +503,14 @@ const CONFIG_KEY_REGISTRY: readonly ConfigKeyDescriptor[] = [
   { key: 'AGI_ALLOW_REMOTE_DATABASE', secrecy: 'public', allowedEnvironments: LOCAL_ONLY },
 ];
 
-const CLIENT_READABLE_PREFIX = 'NEXT_PUBLIC_';
+const CONFIG_KEY_REGISTRY = defineConfigKeys(CONFIG_KEY_DESCRIPTORS);
 
 export function validateConfigKeyRegistry(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const environment = resolveRuntimeEnvironment();
-
-  for (const descriptor of CONFIG_KEY_REGISTRY) {
-    if (descriptor.secrecy === 'secret' && descriptor.key.startsWith(CLIENT_READABLE_PREFIX)) {
-      errors.push(
-        `${descriptor.key} is registered as a secret but its ${CLIENT_READABLE_PREFIX} name ships ` +
-          'its value to every browser.',
-      );
-    }
-    if (!process.env[descriptor.key]?.trim()) continue;
-    if (descriptor.allowedEnvironments.includes(environment)) continue;
-    warnings.push(
-      `${descriptor.key} is set in a ${environment} runtime but is only allowed in ` +
-        `${descriptor.allowedEnvironments.join(', ')}.`,
-    );
+  for (const violation of checkConfigKeys(CONFIG_KEY_REGISTRY)) {
+    (violation.reason === 'secret_exposed_to_client' ? errors : warnings).push(violation.message);
   }
-
   return { valid: errors.length === 0, errors, warnings };
 }
 

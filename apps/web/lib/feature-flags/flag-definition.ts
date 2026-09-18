@@ -1,48 +1,37 @@
-import type { CapabilityDenialReason } from '@agiworkforce/types';
+import {
+  CANARY_CHANNEL,
+  FEATURE_MATURITIES,
+  FEATURE_MATURITY_DEFAULT,
+  RELEASE_AVAILABILITIES,
+  RELEASE_CHANNELS,
+  RELEASE_CHANNEL_DEFAULT,
+  channelCarriesMaturity,
+  maturityAdmitsAvailability,
+  maturityWidestAvailability,
+  type CapabilityDenialReason,
+  type FeatureMaturity,
+  type ReleaseAvailability,
+  type ReleaseChannel,
+} from '@agiworkforce/types';
 import { z } from 'zod';
 
 export const FLAG_OFF_VARIANT = 'off';
 export const FLAG_ON_VARIANT = 'on';
 
-/**
- * How finished a feature is, for every surface. Distinct from the release
- * channel, which is how far a build has been handed out, and from the rollout
- * ring in `./rollout-rings`, which is the mechanism that hands it out.
- */
-export const FEATURE_MATURITIES = [
-  'experimental',
-  'beta',
-  'general_availability',
-  'deprecated',
-] as const;
-
-export type FeatureMaturity = (typeof FEATURE_MATURITIES)[number];
-
-/**
- * The canonical channel vocabulary. `@/lib/releases/github-desktop-releases`
- * derives the desktop feed's channels from this, so the desktop release feed
- * and a flag's channel can never name different sets.
- */
-export const RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const;
-
-export type ReleaseChannel = (typeof RELEASE_CHANNELS)[number];
-
-/** The narrowest channel a feature at each maturity may reach. */
-const MATURITY_MINIMUM_CHANNEL: Readonly<Record<FeatureMaturity, ReleaseChannel>> = {
-  experimental: 'nightly',
-  beta: 'beta',
-  general_availability: 'stable',
-  deprecated: 'stable',
+// The vocabulary is the contracts package's, so mobile, desktop and the CLI
+// read the same names without importing anything from the web app.
+export {
+  CANARY_CHANNEL,
+  FEATURE_MATURITIES,
+  FEATURE_MATURITY_DEFAULT,
+  RELEASE_AVAILABILITIES,
+  RELEASE_CHANNELS,
+  RELEASE_CHANNEL_DEFAULT,
+  channelCarriesMaturity,
+  maturityAdmitsAvailability,
+  maturityWidestAvailability,
 };
-
-const CHANNEL_WIDTH: Readonly<Record<ReleaseChannel, number>> = { nightly: 0, beta: 1, stable: 2 };
-
-export function channelCarriesMaturity(
-  channel: ReleaseChannel,
-  maturity: FeatureMaturity,
-): boolean {
-  return CHANNEL_WIDTH[channel] <= CHANNEL_WIDTH[MATURITY_MINIMUM_CHANNEL[maturity]];
-}
+export type { FeatureMaturity, ReleaseAvailability, ReleaseChannel };
 
 /** Why a feature at this maturity refuses an account it has not been opened to. */
 export const MATURITY_DENIAL_REASONS: Readonly<
@@ -54,11 +43,9 @@ export const MATURITY_DENIAL_REASONS: Readonly<
   deprecated: 'feature_deprecated',
 };
 
-export const FEATURE_MATURITY_DEFAULT: FeatureMaturity = 'experimental';
-export const RELEASE_CHANNEL_DEFAULT: ReleaseChannel = 'stable';
-
 export const FeatureMaturitySchema = z.enum(FEATURE_MATURITIES);
 export const ReleaseChannelSchema = z.enum(RELEASE_CHANNELS);
+export const ReleaseAvailabilitySchema = z.enum(RELEASE_AVAILABILITIES);
 
 const FLAG_KEY_PATTERN = /^[a-z][a-z0-9_]*([.:-][a-z0-9_]+)*$/;
 const VARIANT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -167,6 +154,7 @@ export const FlagDefinitionInputSchema = z
     expiresAt: z.string().datetime({ offset: true }).nullable().default(null),
     maturity: FeatureMaturitySchema.optional(),
     channel: ReleaseChannelSchema.optional(),
+    availability: ReleaseAvailabilitySchema.optional(),
     /** Who answers for this flag, and who removes it when it expires. */
     owner: z.string().trim().min(1).max(120).optional(),
   })
@@ -179,6 +167,16 @@ export const FlagDefinitionInputSchema = z
         code: 'custom',
         path: ['channel'],
         message: `A ${maturity} feature may not be handed to the ${channel} channel`,
+      });
+    }
+    if (
+      definition.availability !== undefined &&
+      !maturityAdmitsAvailability(maturity, definition.availability)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['availability'],
+        message: `A ${maturity} feature may not be made ${definition.availability} yet`,
       });
     }
     const variants = new Set(definition.variants);
@@ -230,6 +228,12 @@ export function flagMaturity(definition: Pick<FlagDefinitionInput, 'maturity'>):
 
 export function flagChannel(definition: Pick<FlagDefinitionInput, 'channel'>): ReleaseChannel {
   return definition.channel ?? RELEASE_CHANNEL_DEFAULT;
+}
+
+export function flagAvailability(
+  definition: Pick<FlagDefinitionInput, 'maturity' | 'availability'>,
+): ReleaseAvailability {
+  return definition.availability ?? maturityWidestAvailability(flagMaturity(definition));
 }
 
 /**
