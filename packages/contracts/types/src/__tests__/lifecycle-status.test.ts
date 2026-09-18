@@ -196,6 +196,14 @@ describe('domain projections', () => {
     );
   });
 
+  it('keeps a partially completed run apart from a failed one', () => {
+    expect(LIFECYCLE_STATUS_BY_AGENT_TASK_STATE.partial).toBe('completed_partial');
+    expect(LIFECYCLE_STATUS_BY_AGENT_TASK_STATE.failed).toBe('failed');
+    expect(LIFECYCLE_STATUS_BY_AGENT_TASK_STATE.partial).not.toBe(
+      LIFECYCLE_STATUS_BY_AGENT_TASK_STATE.failed,
+    );
+  });
+
   it('agrees with the engine on which agent task states are endings', () => {
     for (const [state, status] of Object.entries(LIFECYCLE_STATUS_BY_AGENT_TASK_STATE)) {
       const engineSaysTerminal = TERMINAL_AGENT_TASK_STATES.has(

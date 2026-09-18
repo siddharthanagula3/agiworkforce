@@ -27,6 +27,12 @@ vi.mock('@/lib/services/cloud-agent-execution-service', async () => {
   };
 });
 
+const budgetMocks = vi.hoisted(() => ({ authorize: vi.fn() }));
+
+vi.mock('@/lib/services/cloud-agent-budget', () => ({
+  authorizeCloudAgentOperation: budgetMocks.authorize,
+}));
+
 import { OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS } from '@/lib/services/cloud-agent-execution-service';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 
@@ -37,6 +43,68 @@ describe('durable cloud agent operation executor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     receiptMocks.renew.mockResolvedValue(true);
+    budgetMocks.authorize.mockResolvedValue({ allowed: true });
+  });
+
+  it('refuses a newly claimed operation the run budget will not pay for, and records why', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'acquired',
+      operationId: '0190a000-0000-7000-8000-000000000002',
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+      attempt: 1,
+    });
+    receiptMocks.fail.mockResolvedValue({ status: 'failed' });
+    budgetMocks.authorize.mockResolvedValue({
+      allowed: false,
+      refusal: { code: 'run_cost_cap', message: 'This run reached its spend limit of $20.00.' },
+    });
+    const execute = vi.fn();
+
+    await expect(
+      executeCloudAgentOperation(db, {
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+        billingIdempotencyKey: 'agi.chat.web.request-1',
+        operationKey: 'provider:1',
+        operationKind: 'provider',
+        retrySafety: 'unsafe',
+        payload: { model: 'test' },
+        resultSchema: ResultSchema,
+        execute,
+      }),
+    ).rejects.toBeInstanceOf(FatalError);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(receiptMocks.fail).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        error: expect.objectContaining({ code: 'run_cost_cap' }),
+      }),
+    );
+  });
+
+  it('replays a completed receipt without asking the budget to pay again', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'completed',
+      result: { answer: 7 },
+      usage: null,
+    });
+
+    await expect(
+      executeCloudAgentOperation(db, {
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+        billingIdempotencyKey: 'agi.chat.web.request-1',
+        operationKey: 'provider:1',
+        operationKind: 'provider',
+        retrySafety: 'unsafe',
+        payload: { model: 'test' },
+        resultSchema: ResultSchema,
+        execute: vi.fn(),
+      }),
+    ).resolves.toEqual({ answer: 7 });
+
+    expect(budgetMocks.authorize).not.toHaveBeenCalled();
   });
 
   it('records a newly acquired result with billing-scoped usage', async () => {

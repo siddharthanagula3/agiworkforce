@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   completeCheckpoint: vi.fn(),
   assistantText: vi.fn(),
   recordRunUsage: vi.fn(),
+  summarize: vi.fn(),
 }));
 
 const db = {
@@ -31,6 +32,7 @@ vi.mock('workflow', () => ({
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
   getCloudAgentExecutionUsage: mocks.usage,
+  summarizeCloudAgentRunOutcome: mocks.summarize,
   OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS: 30,
   claimCloudAgentExecutionOperation: vi.fn(),
   completeCloudAgentExecutionOperation: vi.fn(),
@@ -128,6 +130,12 @@ describe('durable cloud agent workflow settlement', () => {
     vi.clearAllMocks();
     // A conversation that has never branched: the single-statement write.
     mocks.query.mockResolvedValue([{ active_leaf_message_id: null }]);
+    mocks.summarize.mockResolvedValue({
+      status: 'completed',
+      outcomes: [],
+      failures: [],
+      unresolved: [],
+    });
     mocks.usage.mockResolvedValue({
       providerCalls: 2,
       inputTokens: 1_200,
@@ -172,6 +180,42 @@ describe('durable cloud agent workflow settlement', () => {
       state: 'ready_for_review',
     });
     expect(turn?.metadata['truncated']).toBeUndefined();
+  });
+
+  it('ends a turn whose steps did not all land as partial, with the per-step reasons', async () => {
+    mocks.summarize.mockResolvedValue({
+      status: 'completed_partial',
+      outcomes: [],
+      failures: [
+        {
+          operationKey: 'tool:search:2',
+          operationKind: 'tool',
+          status: 'failed',
+          retrySafety: 'safe',
+          reason: 'The search provider refused the query.',
+        },
+      ],
+      unresolved: [
+        {
+          operationKey: 'tool:post:3',
+          operationKind: 'tool',
+          status: 'outcome_unknown',
+          retrySafety: 'unsafe',
+          reason: 'This step reached an external system, but its outcome was never confirmed.',
+        },
+      ],
+    });
+
+    await settleWorkflowInvocation(makeInput(), 'completed');
+
+    expect(mocks.transition).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ runId: RUN_ID, state: 'partial' }),
+    );
+    const turn = persistedTurn();
+    expect(turn?.metadata['cloudAgentRun']).toMatchObject({ state: 'partial' });
+    expect(turn?.content).toContain('The search provider refused the query.');
+    expect(turn?.content).toContain('its outcome was never confirmed');
   });
 
   it('marks a cancelled turn truncated but still saves what was generated', async () => {

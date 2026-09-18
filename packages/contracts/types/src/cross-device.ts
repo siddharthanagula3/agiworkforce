@@ -274,6 +274,8 @@ export function agentTaskStateForDispatchStatus(
 /**
  * `archived` and `ready_for_review` project onto `completed`: the work ended,
  * and what happens to the record afterwards is a resource lifecycle question.
+ * `partial` is its own ending, not a failure: part of the work landed, and a
+ * caller that is told `failed` will offer to redo work that is already done.
  */
 export const LIFECYCLE_STATUS_BY_AGENT_TASK_STATE: LifecycleProjection<AgentTaskState> =
   Object.freeze({
@@ -287,7 +289,7 @@ export const LIFECYCLE_STATUS_BY_AGENT_TASK_STATE: LifecycleProjection<AgentTask
     ready_for_review: 'completed',
     completed: 'completed',
     archived: 'completed',
-    partial: 'failed',
+    partial: 'completed_partial',
     failed: 'failed',
     timed_out: 'failed',
     cancelled: 'cancelled',

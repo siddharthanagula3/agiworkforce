@@ -3,12 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { setMarketplaceInstallationEnabled } from '@/lib/services/plugin-marketplace-installation-service';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
@@ -31,16 +30,16 @@ function notInstalled(): NextResponse {
 }
 
 async function authenticateMutation(request: NextRequest) {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const csrf = await requireCsrfToken(request, userId);
-  if (csrf) return { userId, response: csrf as NextResponse };
+  if (csrf) return { db, userId, response: csrf as NextResponse };
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
-  return { userId, response: limited };
+  return { db, userId, response: limited };
 }
 
 async function handlePatch(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const auth = await authenticateMutation(request);
-  if (auth.response) return auth.response;
+  const { db, userId, response } = await authenticateMutation(request);
+  if (response) return response;
   const params = ParamsSchema.safeParse(await context.params);
   const body = PatchBodySchema.safeParse(await request.json().catch(() => null));
   if (!params.success || !body.success) {
@@ -51,16 +50,15 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
   }
 
   try {
-    const db = getNeonDb();
     const installation = await setMarketplaceInstallationEnabled(
       db,
-      auth.userId,
+      userId,
       params.data.id,
       body.data.enabled,
     );
     if (!installation) return notInstalled();
     await recordWorkspaceAuditEvent(db, request, {
-      userId: auth.userId,
+      userId: userId,
       eventType: 'plugin_setting_changed',
       detail: {
         resourceType: 'plugin',
@@ -79,17 +77,16 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
 }
 
 async function handleDelete(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const auth = await authenticateMutation(request);
-  if (auth.response) return auth.response;
+  const { db, userId, response } = await authenticateMutation(request);
+  if (response) return response;
   const params = ParamsSchema.safeParse(await context.params);
   if (!params.success) return notInstalled();
 
   try {
-    const db = getNeonDb();
-    const removed = await uninstallDirectoryInstallation(db, auth.userId, params.data.id);
+    const removed = await uninstallDirectoryInstallation(db, userId, params.data.id);
     if (!removed) return notInstalled();
     await recordWorkspaceAuditEvent(db, request, {
-      userId: auth.userId,
+      userId: userId,
       eventType: 'plugin_removed',
       detail: { resourceType: 'plugin', resourceId: params.data.id, source: 'marketplace' },
     });
