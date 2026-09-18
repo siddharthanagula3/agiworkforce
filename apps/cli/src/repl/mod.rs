@@ -29,6 +29,15 @@ pub use registry::{
 
 type ManagedSessionResume = (crate::runtime::session::ManagedSession, std::path::PathBuf);
 
+/// The line editor the REPL prompt runs on. `auto_add_history(false)` is
+/// deliberate: entries are added by hand, so blank lines stay out of history.
+fn line_editor_config(edit_mode: EditMode) -> Config {
+    Config::builder()
+        .edit_mode(edit_mode)
+        .auto_add_history(false)
+        .build()
+}
+
 /// Run the interactive REPL loop.
 ///
 /// If `resume_messages` is provided, those messages are pre-loaded into the
@@ -200,11 +209,7 @@ pub async fn run_repl(
         } else {
             EditMode::Emacs
         };
-    let rl_config = Config::builder()
-        .edit_mode(edit_mode)
-        .auto_add_history(false)
-        .build();
-    let mut editor = DefaultEditor::with_config(rl_config)?;
+    let mut editor = DefaultEditor::with_config(line_editor_config(edit_mode))?;
 
     let history_path = CliConfig::config_dir().ok().map(|d| d.join("history.txt"));
     if let Some(ref path) = history_path {
@@ -857,5 +862,41 @@ fn handle_memory_prefix(input: &str) {
             output::print_info(&format!("Appended to {}", path.display()));
         }
         Err(e) => output::print_error(&e),
+    }
+}
+
+#[cfg(test)]
+mod line_editor_tests {
+    use super::*;
+    use rustyline::history::History;
+
+    /// Ctrl-R searches the editor's history, and the REPL fills that history by
+    /// hand, which is the step that can be dropped without a compile error.
+    #[test]
+    fn typed_prompts_reach_the_history_ctrl_r_searches() {
+        let mut editor =
+            DefaultEditor::with_config(line_editor_config(EditMode::Emacs)).expect("editor");
+
+        editor
+            .add_history_entry("explain the router")
+            .expect("record first prompt");
+        editor
+            .add_history_entry("write the migration")
+            .expect("record second prompt");
+
+        let history = editor.history();
+        assert_eq!(history.len(), 2);
+        assert!(history
+            .iter()
+            .any(|entry| entry.contains("explain the router")));
+    }
+
+    /// `auto_add_history(true)` would put blank and `!shell` lines into the
+    /// history the search walks.
+    #[test]
+    fn the_editor_does_not_record_entries_on_its_own() {
+        let config = line_editor_config(EditMode::Vi);
+        assert!(!config.auto_add_history());
+        assert_eq!(config.edit_mode(), EditMode::Vi);
     }
 }

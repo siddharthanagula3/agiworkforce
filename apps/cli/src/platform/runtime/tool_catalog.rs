@@ -613,7 +613,7 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
                             "type": "object",
                             "properties": {
                                 "description": {"type": "string", "description": "What this step does."},
-                                "status": {"type": "string", "enum": ["pending", "in_progress", "complete"], "description": "Step status; defaults to pending."},
+                                "status": {"type": "string", "enum": crate::features::plan::plan_mode::StepStatus::schema_enum(), "description": "Step status; defaults to pending. `blocked` means the step cannot proceed, `skipped` means it will not be done, `superseded` means a later step replaced it."},
                                 "notes": {"type": "string", "description": "Optional notes about the step."}
                             },
                             "required": ["description"]
@@ -640,13 +640,13 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
         ).with_size_cap(5_000).deferred(),
         def(
             "todo_read",
-            "Read the current TODO list for this session.",
+            "Read the persisted TODO list for this workspace. Survives across turns and restarts.",
             serde_json::json!({"type":"object","properties":{},"required":[]}),
         ).read_only().with_size_cap(10_000).deferred(),
         def(
             "todo_write",
-            "Write or update the TODO list for this session.",
-            serde_json::json!({"type":"object","properties":{"todos":{"type":"array","description":"Array of todo item strings","items":{"type":"string"}}},"required":["todos"]}),
+            "Write or update the persisted TODO list for this workspace. Replaces the whole list.",
+            serde_json::json!({"type":"object","properties":{"todos":{"type":"array","description":"The complete todo list, replacing the current one.","items":{"type":"object","properties":{"content":{"type":"string","description":"What this item covers."},"status":{"type":"string","enum": crate::features::plan::plan_mode::StepStatus::schema_enum(),"description":"Item status; defaults to pending."},"priority":{"type":"string","description":"Relative priority, e.g. high, medium, low."}},"required":["content"]}}},"required":["todos"]}),
         ).control().with_size_cap(2_000).deferred(),
         def(
             "ask_user",

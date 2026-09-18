@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use crate::diff_model::FileChangeKind;
 use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
 
@@ -32,6 +33,7 @@ impl ReviewDecision {
 #[derive(Debug, Clone)]
 pub struct FileDiff {
     pub path: PathBuf,
+    pub kind: FileChangeKind,
     pub hunks: Vec<String>,
     pub additions: usize,
     pub deletions: usize,
@@ -46,9 +48,27 @@ impl FileDiff {
     ) -> Self {
         Self {
             path: path.into(),
+            kind: FileChangeKind::Modified,
             hunks,
             additions,
             deletions,
+        }
+    }
+
+    /// Counts and status come from the parsed model, so the overlay cannot
+    /// disagree with the diff it is showing.
+    pub fn from_model(file: &crate::diff_model::FileDiff) -> Self {
+        let mut preview = Vec::new();
+        for hunk in &file.hunks {
+            preview.push(hunk.header());
+            preview.extend(hunk.lines.iter().map(crate::diff_model::DiffLine::render));
+        }
+        Self {
+            path: file.path().to_path_buf(),
+            kind: file.kind,
+            hunks: preview,
+            additions: file.additions(),
+            deletions: file.deletions(),
         }
     }
 }
@@ -131,7 +151,10 @@ impl InteractiveView for DiffReviewView {
                     .unwrap_or("?"),
             );
             let stat = format!("+{} -{}", file.additions, file.deletions);
-            let row = pad_to_cols(&format!("{decision_str}  {name}  {stat}"), 58);
+            let row = pad_to_cols(
+                &format!("{decision_str}  {}  {name}  {stat}", file.kind.code()),
+                58,
+            );
             out.push_str(&format!("│ {cursor} {row}│\n"));
         }
 
@@ -196,7 +219,10 @@ impl InteractiveView for DiffReviewView {
                     .unwrap_or("?"),
             );
             let stat = format!("+{} -{}", file.additions, file.deletions);
-            let row = pad_to_cols(&format!("{decision_str}  {name}  {stat}"), 58);
+            let row = pad_to_cols(
+                &format!("{decision_str}  {}  {name}  {stat}", file.kind.code()),
+                58,
+            );
             // Color just the leading decision label (ASCII → byte len == char count).
             let dlen = decision_str.len().min(row.len());
             let (dec_part, rest_part) = row.split_at(dlen);

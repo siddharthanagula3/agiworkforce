@@ -28,6 +28,7 @@ pub mod custom_commands;
 pub mod daemon;
 pub mod design_system;
 pub mod device_registry;
+pub mod diff_model;
 pub mod doctor;
 pub mod errors;
 pub mod hex;
@@ -407,6 +408,11 @@ pub struct Cli {
     /// Add an extra working directory to the session context. Repeatable.
     #[arg(long = "add-dir", value_name = "DIR")]
     add_dir: Vec<String>,
+
+    /// Operate on this repository instead of the current directory, the way
+    /// `git -C` does. Applied before config, trust and workspace roots resolve.
+    #[arg(long = "repo", short = 'C', value_name = "PATH", global = true)]
+    repo: Option<String>,
 
     /// Start with a named agent definition.
     #[arg(long, value_name = "AGENT")]
@@ -2922,9 +2928,43 @@ fn is_git_plugin_source(source: &str) -> bool {
     source.ends_with(".git")
 }
 
+/// Move the process into the repository `--repo/-C` names. Config discovery,
+/// the trust prompt and containment all read the cwd, so this runs before them.
+fn resolve_repo_directory(repo: &str) -> Result<std::path::PathBuf> {
+    let expanded = if repo == "~" {
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("--repo ~: no home directory"))?
+    } else if let Some(rest) = repo.strip_prefix("~/") {
+        dirs::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("--repo {repo}: no home directory"))?
+            .join(rest)
+    } else {
+        std::path::PathBuf::from(repo)
+    };
+
+    let canonical = expanded
+        .canonicalize()
+        .map_err(|e| anyhow::anyhow!("--repo {repo}: {e}"))?;
+    if !canonical.is_dir() {
+        anyhow::bail!("--repo {repo}: not a directory");
+    }
+    Ok(canonical)
+}
+
+fn enter_repo_directory(repo: &str) -> Result<std::path::PathBuf> {
+    let canonical = resolve_repo_directory(repo)?;
+    std::env::set_current_dir(&canonical)
+        .map_err(|e| anyhow::anyhow!("--repo {repo}: cannot enter directory: {e}"))?;
+    Ok(canonical)
+}
+
 /// Main async entry point, called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Before anything reads the working directory.
+    if let Some(repo) = cli.repo.as_deref() {
+        enter_repo_directory(repo)?;
+    }
 
     // Install the single logging owner before anything else runs so `-v/--verbose`
     // and `--debug[=categories]` actually change what `tracing` emits. Without
@@ -5425,6 +5465,47 @@ mod tests {
     fn the_yes_flag_is_how_a_script_answers_the_prompt() {
         assert!(confirm_destructive_when("Delete it?", true, false));
         assert!(confirm_destructive_when("Delete it?", true, true));
+    }
+
+    /// `--repo`/`-C` moves the session; `--add-dir` only adds a second root.
+    #[test]
+    fn the_repo_flag_moves_the_session_to_the_named_repository() {
+        for argv in [
+            vec!["agi", "--repo", "/tmp/other", "exec", "go"],
+            vec!["agi", "-C", "/tmp/other", "exec", "go"],
+        ] {
+            let cli = Cli::try_parse_from(&argv).expect("--repo parses");
+            assert_eq!(cli.repo.as_deref(), Some("/tmp/other"), "{argv:?}");
+            assert!(cli.add_dir.is_empty(), "--repo is not --add-dir");
+        }
+
+        let none = Cli::try_parse_from(["agi", "exec", "go"]).expect("plain exec parses");
+        assert!(none.repo.is_none());
+    }
+
+    /// Tested apart from the `set_current_dir` it feeds: the process cwd is
+    /// shared by every test thread.
+    #[test]
+    fn a_repo_target_resolves_canonically_and_refuses_anything_that_is_not_a_directory() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let nested = workspace.path().join("project");
+        std::fs::create_dir(&nested).expect("create project dir");
+        let file = nested.join("marker.txt");
+        std::fs::write(&file, "here").expect("write marker");
+
+        assert_eq!(
+            resolve_repo_directory(nested.to_str().expect("utf8")).expect("directory resolves"),
+            nested.canonicalize().expect("canonical nested")
+        );
+        assert!(
+            resolve_repo_directory(file.to_str().expect("utf8")).is_err(),
+            "a file is not a repository"
+        );
+        assert!(
+            resolve_repo_directory(workspace.path().join("absent").to_str().expect("utf8"))
+                .is_err(),
+            "a missing directory must fail loudly rather than run against the cwd"
+        );
     }
 
     #[test]

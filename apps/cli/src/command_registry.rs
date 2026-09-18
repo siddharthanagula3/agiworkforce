@@ -204,6 +204,12 @@ fn append_repl_shortcuts(help: &mut String) {
         "# <text>"
     );
     let _ = writeln!(help, "  {:<22} Multi-line input", "\\");
+    let _ = writeln!(
+        help,
+        "  {:<22} Search previous prompts (reverse history search)",
+        "Ctrl-R"
+    );
+    let _ = writeln!(help, "  {:<22} Previous / next prompt", "Up/Down");
     let _ = writeln!(help, "  {:<22} Cancel input / Ctrl-D exits", "Ctrl-C");
     let _ = writeln!(help, "  {:<22} Enable vi editing", "ui.edit_mode = \"vi\"");
     let _ = writeln!(help, "  {:<22} Show active bindings", "/keybindings");
