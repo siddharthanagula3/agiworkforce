@@ -9,7 +9,13 @@ import {
   RENDER_CACHE_TAGS,
 } from '@/lib/server/render-cache';
 
-import { alertableSlos, measuredSlos, type SloDefinition } from './catalogue';
+import {
+  alertableSlos,
+  measuredSlos,
+  segmentColumn,
+  type SloDefinition,
+  type SloSegment,
+} from './catalogue';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
 const HOUR_MS = 60 * 60 * 1_000;
@@ -103,6 +109,73 @@ export async function measureSlo(
         : Math.max(0, 1 - (1 - attainment) / errorBudget),
     latencyP95Ms: toLatency(row?.latency_p95_ms ?? null),
   };
+}
+
+export interface SloSegmentAttainment {
+  segment: SloSegment;
+  value: string;
+  samples: number;
+  good: number;
+  attainment: number | null;
+  latencyP95Ms: number | null;
+}
+
+interface SegmentRow extends AttainmentRow {
+  segment_value: string | null;
+}
+
+const UNSEGMENTED_VALUE = 'unattributed';
+
+/**
+ * The same objective read per region, provider or model. An aggregate that
+ * meets its target while one region is down is the failure mode this exists
+ * for, so a row whose dimension was never recorded is kept as its own bucket
+ * rather than folded into a healthy one.
+ */
+export async function measureSloBySegment(
+  definition: SloDefinition,
+  segment: SloSegment,
+  from: Date,
+  to: Date,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<SloSegmentAttainment[]> {
+  const source = definition.source;
+  const column = segmentColumn(definition, segment);
+  if (!source || !column) return [];
+
+  const latency = source.latencyMs
+    ? `percentile_cont(${LATENCY_PERCENTILE}) within group (order by ${source.latencyMs})
+         filter (where (${source.eligible}) and ${source.latencyMs} is not null)`
+    : 'null::numeric';
+
+  const rows = await db.query<SegmentRow>(
+    `select
+       coalesce(${column}, '${UNSEGMENTED_VALUE}') as segment_value,
+       count(*) filter (where ${source.eligible})::bigint as eligible,
+       count(*) filter (where (${source.eligible}) and (${source.good}))::bigint as good,
+       ${latency} as latency_p95_ms
+     from public.${source.table}
+     where ${source.occurredAt} >= $1::timestamptz
+       and ${source.occurredAt} < $2::timestamptz
+     group by 1
+     order by 1`,
+    parameters(definition, from, to),
+  );
+
+  return rows
+    .map((row) => {
+      const samples = toCount(row.eligible);
+      const good = toCount(row.good);
+      return {
+        segment,
+        value: row.segment_value ?? UNSEGMENTED_VALUE,
+        samples,
+        good,
+        attainment: samples > 0 ? good / samples : null,
+        latencyP95Ms: toLatency(row.latency_p95_ms),
+      };
+    })
+    .filter((entry) => entry.samples > 0);
 }
 
 export async function measureSloCatalogue(

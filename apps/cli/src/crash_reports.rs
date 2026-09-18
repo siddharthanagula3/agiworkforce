@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::config::CliConfig;
 use crate::platform::runtime::session::PrivacyMode;
 
+pub mod startup_metrics;
+
+use startup_metrics::TerminalErrorKind;
+
 pub const CRASH_REPORTS_ENV: &str = "AGI_CRASH_REPORTS";
 
 const CRASH_REPORT_DIR: &str = "crash-reports";
@@ -72,14 +76,22 @@ fn describe_location(at: &std::panic::Location<'_>) -> String {
 }
 
 /// The panic payload is deliberately left out: it routinely carries a path, a
-/// prompt fragment or a tool argument, and the location already identifies the
-/// defect.
+/// prompt fragment or a tool argument, and the location already identifies the.
 pub fn install_panic_hook(dir: PathBuf) {
+    let _ = startup_metrics::record_ready(&dir);
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let location = info.location().map(describe_location);
         let thread = std::thread::current().name().map(str::to_string);
-        let _ = write_report(&dir, &build_report(location, thread));
+        let written = write_report(&dir, &build_report(location, thread));
+        let _ = startup_metrics::record_terminal_error(
+            &dir,
+            if written.is_ok() {
+                TerminalErrorKind::Unhandled
+            } else {
+                TerminalErrorKind::ReportUnwritable
+            },
+        );
         previous(info);
     }));
 }
@@ -101,10 +113,12 @@ fn report_paths(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
+    let ledger = startup_metrics::metrics_path(dir);
     let mut paths: Vec<PathBuf> = entries
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .filter(|path| {
-            path.extension().and_then(|ext| ext.to_str()) == Some(CRASH_REPORT_EXTENSION)
+            path != &ledger
+                && path.extension().and_then(|ext| ext.to_str()) == Some(CRASH_REPORT_EXTENSION)
         })
         .collect();
     paths.sort();
@@ -276,6 +290,34 @@ mod tests {
         let location = describe_location(std::panic::Location::caller());
         assert!(location.contains("src/crash_reports.rs:"), "{location}");
         assert_eq!(location.split(':').count(), 3);
+    }
+
+    #[test]
+    fn installing_the_hook_records_a_ready_launch_without_writing_a_crash_report() {
+        let dir = tempfile::tempdir().unwrap();
+        startup_metrics::record_ready(dir.path()).unwrap();
+
+        let metrics = startup_metrics::load(dir.path());
+        assert_eq!(metrics.ready_count(&startup_metrics::current_version()), 1);
+        assert!(pending_reports(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn the_startup_ledger_is_never_pruned_or_uploaded_as_a_crash_report() {
+        let dir = tempfile::tempdir().unwrap();
+        startup_metrics::record_ready(dir.path()).unwrap();
+        for index in 0..(MAX_PENDING_REPORTS + 5) {
+            let mut report = build_report(None, None);
+            report.occurred_at_ms = 2_000 + index as u64;
+            write_report(dir.path(), &report).unwrap();
+        }
+
+        assert_eq!(pending_reports(dir.path()).len(), MAX_PENDING_REPORTS);
+        assert!(startup_metrics::metrics_path(dir.path()).exists());
+        assert_eq!(
+            startup_metrics::load(dir.path()).ready_count(&startup_metrics::current_version()),
+            1
+        );
     }
 
     #[test]

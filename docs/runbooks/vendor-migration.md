@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-17
+Last updated: 2026-09-18
 
 What it takes to replace each third-party dependency, and which of them can be
 replaced today without a code change. This is the operational companion to
@@ -85,6 +85,15 @@ endpoint written into it. Every caller already goes through
 `sendTransactionalEmail`, so the seam exists at the call sites even though the
 implementation is single-vendor: introducing a provider interface behind that one
 function is the whole change, and no caller moves.
+
+Incident alerting does not wait for that change. `notifyIncident` tries the
+email, the pager webhook and the incident channel, and when none of them carried
+the alert it falls through to `sendOutOfBandAlert`
+(`apps/web/lib/server/incident/out-of-band.ts`), which posts to
+`INCIDENT_OUT_OF_BAND_WEBHOOK_URL`. That endpoint must not be hosted by this
+deployment and must not be reached through the email vendor, or it is a fourth
+copy of the same dependency rather than a fallback. See
+`docs/runbooks/incident-communication.md`.
 
 **Billing.** Stripe is not abstracted, and abstracting it is not obviously
 correct. Subscriptions, tax, invoicing, webhooks and the customer portal are

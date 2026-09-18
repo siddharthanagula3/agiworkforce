@@ -1,9 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import { checkReadiness } from '../../src/readiness.js';
+import { releaseIdentity } from '../../src/release.js';
 
-function createHealthTestApp() {
+const DEPLOY_ENV = {
+  AGI_DEPLOYMENT_ID: 'machine-7a1f',
+  AGI_RELEASE_SHA: 'a1b2c3d4e5f6',
+  FLY_REGION: 'sjc',
+  FLY_APP_NAME: 'agiworkforce-signaling',
+  AGI_DEPLOY_ENV: 'production',
+};
+
+function createHealthTestApp(deployEnv: Record<string, string | undefined> = DEPLOY_ENV) {
   const app = express();
+  const release = releaseIdentity(deployEnv);
 
   let isReady = true;
   let isShuttingDown = false;
@@ -29,6 +40,7 @@ function createHealthTestApp() {
       status: isShuttingDown ? 'shutting_down' : isReady ? 'healthy' : 'starting',
       uptime: process.uptime(),
       timestamp: Date.now(),
+      deployment: release,
       connections: {
         total: 0,
         uniqueIps: 0,
@@ -135,6 +147,104 @@ describe('Health Endpoints', () => {
 
       expect(response.status).toBe(503);
       expect(response.body.status).toBe('shutting_down');
+    });
+
+    it('names the deployment serving the response', async () => {
+      const response = await request(app).get('/health');
+
+      expect(response.body.deployment).toEqual({
+        target: 'fly',
+        id: 'machine-7a1f',
+        version: 'a1b2c3d4e5f6',
+        region: 'sjc',
+        environment: 'production',
+      });
+    });
+
+    it('omits deployment fields the host does not set rather than inventing them', async () => {
+      const bare = createHealthTestApp({});
+      const response = await request(bare).get('/health');
+
+      expect(response.body.deployment).toEqual({ target: 'local' });
+      expect(JSON.stringify(response.body)).not.toContain('unknown');
+    });
+  });
+
+  describe('automated readiness check', () => {
+    function probeFetch(target: express.Application): typeof fetch {
+      return (async (input: RequestInfo | URL) => {
+        const path = new URL(String(input)).pathname;
+        const response = await request(target).get(path);
+        return new Response(JSON.stringify(response.body), {
+          status: response.status,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+    }
+
+    it('passes and reports the deployment it reached', async () => {
+      const report = await checkReadiness(['https://signal.example'], {
+        fetchImpl: probeFetch(app),
+        attempts: 1,
+      });
+
+      expect(report.ready).toBe(true);
+      expect(report.probes[0]?.deploymentId).toBe('machine-7a1f');
+    });
+
+    it('fails while the server is not ready, and retries before giving up', async () => {
+      app.setReady(false);
+      const report = await checkReadiness(['https://signal.example'], {
+        fetchImpl: probeFetch(app),
+        attempts: 3,
+        sleep: async () => {},
+      });
+
+      expect(report.ready).toBe(false);
+      expect(report.probes[0]?.attempts).toBe(3);
+      expect(report.probes[0]?.failure).toBe('starting');
+    });
+
+    it('reports degraded when one deploy target is down and the other answers', async () => {
+      const down = createHealthTestApp();
+      down.setShuttingDown(true);
+      const routes = new Map([
+        ['signal-a.example', app],
+        ['signal-b.example', down],
+      ]);
+      const fetchImpl = (async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        const target = routes.get(url.hostname);
+        if (!target) throw new Error('unreachable');
+        const response = await request(target).get(url.pathname);
+        return new Response(JSON.stringify(response.body), {
+          status: response.status,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      const report = await checkReadiness(
+        ['https://signal-a.example', 'https://signal-b.example'],
+        { fetchImpl, attempts: 1 },
+      );
+
+      expect(report.ready).toBe(false);
+      expect(report.degraded).toBe(true);
+      expect(report.probes.filter((probe) => probe.ok)).toHaveLength(1);
+    });
+
+    it('treats an unreachable endpoint as down rather than as ready', async () => {
+      const report = await checkReadiness(['https://signal.example'], {
+        fetchImpl: (async () => {
+          throw new Error('ECONNREFUSED');
+        }) as typeof fetch,
+        attempts: 2,
+        sleep: async () => {},
+      });
+
+      expect(report.ready).toBe(false);
+      expect(report.degraded).toBe(false);
+      expect(report.probes[0]?.failure).toBe('unreachable');
     });
   });
 });

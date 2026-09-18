@@ -58,6 +58,10 @@ export const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30_000;
 
 export const SHUTDOWN_DRAIN_TIMEOUT_MS = 5_000;
 
+export const CLOSE_ALL_TIMEOUT_MS = 5_000;
+
+export const CONFIG_BACKUP_RETENTION = 10;
+
 export const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
@@ -99,3 +103,11 @@ export const AUTH_LOCKOUT_DURATION_MS_DEFAULT = 900_000;
 export const RATE_LIMIT_METRICS = 30;
 
 export const RATE_LIMIT_ADMIN = 20;
+
+export const HEALTH_PATH = '/health';
+
+export const READINESS_TIMEOUT_MS = 5_000;
+
+export const READINESS_ATTEMPTS = 3;
+
+export const READINESS_RETRY_DELAY_MS = 2_000;

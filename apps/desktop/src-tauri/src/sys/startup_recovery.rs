@@ -1,13 +1,10 @@
 //! Fail-closed Desktop startup recovery.
-//!
-//! The normal React application depends on the encrypted main database. When
-//! that database cannot be opened safely, this module keeps the native window
-//! alive and exposes only a small, sanitized recovery surface. Raw database,
-//! Keychain, and filesystem errors stay in native logs and are never returned
-//! to the webview or included in exported diagnostics.
+//!.
 
 use crate::data::db::encryption::DatabaseOpenError;
 use crate::data::db::key_management::DatabaseKeyError;
+use crate::upgrade::installed::{read_installed_versions, record_installed_versions};
+use crate::upgrade::recovery::{recovery_action, RecoveryAction, StartupState};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -56,10 +53,7 @@ impl StartupRecoveryInfo {
     }
 
     /// The database key lives in OS secure storage because it is what decrypts
-    /// the database. A *denied* permission prompt is by far the most common way
-    /// to reach this screen and is fully recoverable, so the copy names that
-    /// case and the fix instead of stopping at "unavailable", which reads like
-    /// a broken install and gives the user nothing to do.
+    /// the database. A *denied* permission prompt is by far the most common way.
     fn secure_storage() -> Self {
         Self {
             code: "DB_SECURE_STORAGE".to_string(),
@@ -90,6 +84,59 @@ impl StartupRecoveryInfo {
             data_preserved: true,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpgradeStatus {
+    pub action: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub found_data_format: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supported_data_format: Option<u32>,
+}
+
+impl From<RecoveryAction> for UpgradeStatus {
+    fn from(action: RecoveryAction) -> Self {
+        match action {
+            RecoveryAction::Start => Self {
+                action: "start",
+                found_data_format: None,
+                supported_data_format: None,
+            },
+            RecoveryAction::RebuildRuntimeArtifacts => Self {
+                action: "rebuildRuntimeArtifacts",
+                found_data_format: None,
+                supported_data_format: None,
+            },
+            RecoveryAction::RebuildFromCloud => Self {
+                action: "rebuildFromCloud",
+                found_data_format: None,
+                supported_data_format: None,
+            },
+            RecoveryAction::HoldForNewerData { found, supported } => Self {
+                action: "holdForNewerData",
+                found_data_format: Some(found),
+                supported_data_format: Some(supported),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupStateReport {
+    pub recovery: Option<StartupRecoveryInfo>,
+    pub upgrade: UpgradeStatus,
+}
+
+/// An unreadable or migrating database is the synced store being unusable; a
+/// key-store or initialization failure is not, so it must not trigger a cloud.
+fn synced_store_unreadable(recovery: Option<&StartupRecoveryInfo>) -> bool {
+    matches!(
+        recovery.map(|info| info.code.as_str()),
+        Some("DB_UNLOCK") | Some("DB_MIGRATION")
+    )
 }
 
 #[derive(Clone)]
@@ -124,6 +171,24 @@ impl StartupRecoveryState {
                 .or_else(|| Some(StartupRecoveryInfo::database_initialization())),
         }
     }
+
+    fn report(&self) -> StartupStateReport {
+        let recovery = self.current();
+        let action = recovery_action(StartupState {
+            installed: read_installed_versions(&self.data_dir),
+            crashed_last_run: recovery.is_some(),
+            synced_store_unreadable: synced_store_unreadable(recovery.as_ref()),
+        });
+        if action == RecoveryAction::Start {
+            if let Err(error) = record_installed_versions(&self.data_dir) {
+                tracing::warn!("Failed to record the installed local-format versions: {error}");
+            }
+        }
+        StartupStateReport {
+            recovery,
+            upgrade: action.into(),
+        }
+    }
 }
 
 pub fn show_recovery_window(app: &AppHandle) {
@@ -144,10 +209,8 @@ pub fn show_recovery_window(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn startup_get_recovery_state(
-    state: State<'_, StartupRecoveryState>,
-) -> Option<StartupRecoveryInfo> {
-    state.current()
+pub fn startup_get_recovery_state(state: State<'_, StartupRecoveryState>) -> StartupStateReport {
+    state.report()
 }
 
 #[tauri::command]
@@ -258,8 +321,7 @@ mod tests {
     #[test]
     fn denied_credential_prompt_tells_the_user_how_to_recover() {
         // Reaching this screen by dismissing a Keychain prompt is recoverable,
-        // and the previous copy ("Secure storage is unavailable") gave no way
-        // back, it read like a broken install for a one-click fix.
+        // and the previous copy ("Secure storage is unavailable") gave no way.
         let info = StartupRecoveryInfo::from_database_error(&DatabaseKeyError::SecureStorage(
             "User denied access".to_string(),
         ));
@@ -279,6 +341,81 @@ mod tests {
             info.data_preserved,
             "a denied prompt must never imply data loss"
         );
+    }
+
+    fn state_in(dir: &Path) -> StartupRecoveryState {
+        StartupRecoveryState::new(dir.to_path_buf(), dir.join("agiworkforce.db"))
+    }
+
+    #[test]
+    fn a_healthy_start_reports_no_recovery_and_records_the_installed_formats() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let state = state_in(temp_dir.path());
+
+        let report = state.report();
+
+        assert!(report.recovery.is_none());
+        assert_eq!(report.upgrade.action, "start");
+        assert!(crate::upgrade::installed::installed_versions_path(temp_dir.path()).exists());
+    }
+
+    #[test]
+    fn data_written_by_a_newer_build_holds_and_names_both_formats() {
+        use crate::upgrade::{LOCAL_DATA_FORMAT_VERSION, LOCAL_RUNTIME_VERSION};
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        std::fs::write(
+            crate::upgrade::installed::installed_versions_path(temp_dir.path()),
+            serde_json::json!({
+                "runtime": LOCAL_RUNTIME_VERSION,
+                "data_format": LOCAL_DATA_FORMAT_VERSION + 1,
+            })
+            .to_string(),
+        )
+        .expect("seed marker");
+
+        let report = state_in(temp_dir.path()).report();
+
+        assert_eq!(report.upgrade.action, "holdForNewerData");
+        assert_eq!(
+            report.upgrade.found_data_format,
+            Some(LOCAL_DATA_FORMAT_VERSION + 1)
+        );
+        assert_eq!(
+            report.upgrade.supported_data_format,
+            Some(LOCAL_DATA_FORMAT_VERSION)
+        );
+    }
+
+    #[test]
+    fn an_unreadable_database_rebuilds_from_the_cloud_and_keeps_the_recovery_screen() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let state = state_in(temp_dir.path());
+        state.record(StartupRecoveryInfo::from_database_error(
+            &DatabaseKeyError::UnidentifiedDatabase,
+        ));
+
+        let report = state.report();
+
+        assert_eq!(
+            report.recovery.map(|info| info.code).as_deref(),
+            Some("DB_UNLOCK")
+        );
+        assert_eq!(report.upgrade.action, "rebuildFromCloud");
+        assert!(
+            !crate::upgrade::installed::installed_versions_path(temp_dir.path()).exists(),
+            "a build that could not open its data must not claim it installed the format"
+        );
+    }
+
+    #[test]
+    fn a_denied_key_store_does_not_rebuild_from_the_cloud() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let state = state_in(temp_dir.path());
+        state.record(StartupRecoveryInfo::from_database_error(
+            &DatabaseKeyError::SecureStorage("denied".to_string()),
+        ));
+
+        assert_eq!(state.report().upgrade.action, "start");
     }
 
     #[test]

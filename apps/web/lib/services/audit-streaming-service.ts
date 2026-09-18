@@ -282,6 +282,82 @@ export interface DrainResult {
   delivered: number;
   status: 'delivered' | 'nothing_due' | 'skipped' | 'failed';
   error: string | null;
+  /** Events held for this destination because delivery has not succeeded. */
+  buffered?: number;
+}
+
+/**
+ * How long a destination may be behind before the outage is worth waking
+ * someone for. Events are never dropped while it is down, so the alert is about
+ * a receiver that has stopped reading, not about data loss.
+ */
+export const AUDIT_STREAM_CONTINUITY_ALERT_MINUTES = 60;
+
+export interface AuditStreamContinuity {
+  organizationId: string;
+  buffered: number;
+  oldestUndeliveredAt: string | null;
+  behindMinutes: number | null;
+  consecutiveFailures: number;
+  /** Always true: a failed delivery holds the cursor instead of advancing it. */
+  eventsRetained: boolean;
+  alerting: boolean;
+}
+
+interface ContinuityRow {
+  organization_id: string;
+  buffered: string | number | null;
+  oldest_undelivered_at: string | Date | null;
+  consecutive_failures: number;
+}
+
+const MINUTE_MS = 60 * 1_000;
+
+/**
+ * What each destination is holding. A SIEM that stopped answering shows as a
+ * growing backlog here rather than as silence, and the backlog is what proves
+ * the events were buffered instead of dropped.
+ */
+export async function auditStreamContinuity(
+  db: DatabaseAdapter,
+  now: Date = new Date(),
+): Promise<AuditStreamContinuity[]> {
+  const rows = await db.query<ContinuityRow>(
+    `select d.organization_id,
+            count(e.id)::bigint as buffered,
+            min(e.created_at) as oldest_undelivered_at,
+            d.consecutive_failures
+       from public.organization_audit_destinations d
+       left join public.enterprise_audit_events e
+         on e.organization_id = d.organization_id
+        and (
+          d.last_delivered_at is null
+          or d.last_delivered_id is null
+          or (e.created_at, e.id) > (d.last_delivered_at, d.last_delivered_id)
+        )
+      where d.enabled = true
+      group by d.organization_id, d.consecutive_failures`,
+  );
+
+  return rows.map((row) => {
+    const parsed = typeof row.buffered === 'string' ? Number(row.buffered) : (row.buffered ?? 0);
+    const buffered = Number.isFinite(parsed) ? Number(parsed) : 0;
+    const oldest = toIso(row.oldest_undelivered_at);
+    const behindMinutes =
+      oldest === null ? null : Math.floor((now.getTime() - Date.parse(oldest)) / MINUTE_MS);
+    return {
+      organizationId: row.organization_id,
+      buffered,
+      oldestUndeliveredAt: oldest,
+      behindMinutes,
+      consecutiveFailures: row.consecutive_failures,
+      eventsRetained: true,
+      alerting:
+        buffered > 0 &&
+        behindMinutes !== null &&
+        behindMinutes >= AUDIT_STREAM_CONTINUITY_ALERT_MINUTES,
+    };
+  });
 }
 
 interface CursorRow {
@@ -442,8 +518,11 @@ export async function drainAuditDestination(
     [organizationId, (error ?? 'Delivery failed').slice(0, 300)],
   );
 
-  logger.warn({ organizationId, status, error }, '[audit-stream] delivery failed; cursor held');
-  return { organizationId, delivered: 0, status: 'failed', error };
+  logger.warn(
+    { organizationId, status, error, buffered: events.length },
+    '[audit-stream] delivery failed; cursor held, events retained',
+  );
+  return { organizationId, delivered: 0, status: 'failed', error, buffered: events.length };
 }
 
 /**

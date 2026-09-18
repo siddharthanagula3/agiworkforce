@@ -2,15 +2,27 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from '../../lib/runtimeEnvironment';
+import { recordLaunchOutcome } from '../../services/errorTracking';
+import {
+  upgradeNotice,
+  type UpgradeNotice,
+  type UpgradeStatus,
+} from '../upgrade/localRuntimeUpgrade';
+import { UpgradeNoticeBanner } from '../upgrade/UpgradeNoticeBanner';
 import {
   StartupRecoveryLoading,
   StartupRecoveryScreen,
   type StartupRecoveryInfo,
 } from './StartupRecoveryScreen';
 
+export interface StartupStateReport {
+  recovery: StartupRecoveryInfo | null;
+  upgrade: UpgradeStatus;
+}
+
 type StartupPhase =
   | { kind: 'checking' }
-  | { kind: 'ready' }
+  | { kind: 'ready'; notice: UpgradeNotice | null }
   | { kind: 'recovery'; info: StartupRecoveryInfo };
 
 export type StartupRecoveryInvoke = <T>(command: string) => Promise<T>;
@@ -41,31 +53,50 @@ export function StartupRecoveryBootstrap({
   timeoutMs = STARTUP_STATE_TIMEOUT_MS,
 }: StartupRecoveryBootstrapProps) {
   const [phase, setPhase] = useState<StartupPhase>(() =>
-    nativeRuntime ? { kind: 'checking' } : { kind: 'ready' },
+    nativeRuntime ? { kind: 'checking' } : { kind: 'ready', notice: null },
   );
 
   useEffect(() => {
     if (!nativeRuntime) return;
 
     let active = true;
+    const startedAt = Date.now();
+    const failLaunch = (info: StartupRecoveryInfo) => {
+      recordLaunchOutcome({
+        outcome: 'failed',
+        reason: info.code,
+        durationMs: Date.now() - startedAt,
+      });
+      setPhase({ kind: 'recovery', info });
+    };
     const timer = setTimeout(() => {
       if (!active) return;
       active = false;
-      setPhase({ kind: 'recovery', info: startupStateUnavailable });
+      failLaunch(startupStateUnavailable);
     }, timeoutMs);
 
-    void invokeCommand<StartupRecoveryInfo | null>('startup_get_recovery_state')
-      .then((info) => {
+    void invokeCommand<StartupStateReport | null>('startup_get_recovery_state')
+      .then((report) => {
         if (!active) return;
         active = false;
         clearTimeout(timer);
-        setPhase(info ? { kind: 'recovery', info } : { kind: 'ready' });
+        if (report?.recovery) {
+          failLaunch(report.recovery);
+          return;
+        }
+        const notice = report ? upgradeNotice(report.upgrade) : null;
+        recordLaunchOutcome({
+          outcome: notice?.blocking ? 'failed' : 'succeeded',
+          reason: notice?.blocking ? report?.upgrade.action : undefined,
+          durationMs: Date.now() - startedAt,
+        });
+        setPhase({ kind: 'ready', notice });
       })
       .catch(() => {
         if (!active) return;
         active = false;
         clearTimeout(timer);
-        setPhase({ kind: 'recovery', info: startupStateUnavailable });
+        failLaunch(startupStateUnavailable);
       });
 
     return () => {
@@ -74,8 +105,10 @@ export function StartupRecoveryBootstrap({
     };
   }, [invokeCommand, nativeRuntime, timeoutMs]);
 
+  const blocked = phase.kind === 'recovery' || (phase.kind === 'ready' && phase.notice?.blocking);
+
   useEffect(() => {
-    if (phase.kind !== 'recovery') return;
+    if (!blocked) return;
 
     const previousTitle = document.title;
     const previousHtmlBackground = document.documentElement.style.backgroundColor;
@@ -88,7 +121,7 @@ export function StartupRecoveryBootstrap({
       document.documentElement.style.backgroundColor = previousHtmlBackground;
       document.body.style.backgroundColor = previousBodyBackground;
     };
-  }, [phase.kind]);
+  }, [blocked]);
 
   if (phase.kind === 'checking') {
     return <StartupRecoveryLoading />;
@@ -106,5 +139,14 @@ export function StartupRecoveryBootstrap({
     );
   }
 
-  return children;
+  if (phase.notice?.blocking) {
+    return <UpgradeNoticeBanner notice={phase.notice} />;
+  }
+
+  return (
+    <>
+      {phase.notice ? <UpgradeNoticeBanner notice={phase.notice} /> : null}
+      {children}
+    </>
+  );
 }
