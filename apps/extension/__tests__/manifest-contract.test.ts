@@ -3,7 +3,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { SITE_POLICY_CAPABILITIES } from '@agiworkforce/types';
+
 import { GATEWAY_URL_ALLOWLIST_EXACT } from '../src/background/policy';
+import { ADMIN_SITE_POLICY_STORAGE_KEY } from '../src/features/site-policy/store';
 
 const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8')) as Record<
@@ -103,8 +106,7 @@ describe('Chrome manifest trust contract', () => {
 
   it('names every gateway origin exactly, with no agiworkforce.com wildcard', () => {
     const contentSecurityPolicy = manifest['content_security_policy'] as
-      | { extension_pages?: unknown }
-      | undefined;
+      { extension_pages?: unknown } | undefined;
     const connectSource = /connect-src ([^;]+)/.exec(
       String(contentSecurityPolicy?.extension_pages ?? ''),
     )?.[1];
@@ -122,10 +124,38 @@ describe('Chrome manifest trust contract', () => {
     expect(manifest['offline_enabled']).toBeUndefined();
   });
 
+  it('declares the managed schema, without which chrome.storage.managed is always empty', () => {
+    const storage = manifest['storage'] as { managed_schema?: unknown } | undefined;
+    expect(storage?.managed_schema).toBe('managed-schema.json');
+  });
+
+  it('ships the managed schema in the package, because a missing file fails the load', () => {
+    expect(readFileSync(join(APP_ROOT, 'vite.config.ts'), 'utf8')).toContain(
+      "{ src: 'managed-schema.json', dest: '.' }",
+    );
+  });
+
+  it('describes the site policy an admin distributes, with the capabilities the engine knows', () => {
+    const schema = JSON.parse(readFileSync(join(APP_ROOT, 'managed-schema.json'), 'utf8')) as {
+      properties?: Record<string, { type?: string; properties?: Record<string, unknown> }>;
+    };
+    const policy = schema.properties?.[ADMIN_SITE_POLICY_STORAGE_KEY];
+    expect(policy?.type).toBe('object');
+    expect(Object.keys(policy?.properties ?? {})).toEqual(['version', 'blocklist', 'allowlist']);
+
+    for (const list of ['blocklist', 'allowlist'] as const) {
+      const rule = (
+        policy?.properties?.[list] as { items?: { properties?: Record<string, unknown> } }
+      )?.items;
+      expect(Object.keys(rule?.properties ?? {})).toEqual(['pattern', 'capabilities']);
+      const capabilities = rule?.properties?.['capabilities'] as { items?: { enum?: unknown } };
+      expect(capabilities.items?.enum).toEqual([...SITE_POLICY_CAPABILITIES]);
+    }
+  });
+
   it('allows Clerk runtime styles without weakening the extension script policy', () => {
     const contentSecurityPolicy = manifest['content_security_policy'] as
-      | { extension_pages?: unknown }
-      | undefined;
+      { extension_pages?: unknown } | undefined;
     const extensionPages = String(contentSecurityPolicy?.extension_pages ?? '');
 
     expect(extensionPages).toContain("style-src 'self' 'unsafe-inline'");

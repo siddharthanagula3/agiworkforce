@@ -113,6 +113,7 @@ import {
   validateBridgeUrl,
   type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
+import { ADMIN_SITE_POLICY_STORAGE_KEY, readAdminSitePolicy } from './features/site-policy/store';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_DESTINATION,
@@ -144,6 +145,9 @@ import {
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
   NATIVE_BROWSER_UNPAIR_MESSAGE,
+  SITE_POLICY_ADMIN_UNAVAILABLE,
+  evaluateSitePolicy,
+  type SitePolicyAdminState,
 } from '@agiworkforce/types';
 import {
   captureThroughDebugger,
@@ -1332,7 +1336,7 @@ async function handleReplayShortcut(
   if (
     shortcut.createdByOrigin &&
     shortcut.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
-    !siteAllowlistCache.has(shortcut.createdByOrigin)
+    !isOriginApprovedForAutomation(shortcut.createdByOrigin)
   ) {
     logger.warn('Auto-deleting shortcut whose origin is no longer allowlisted', {
       shortcutId: shortcut.id,
@@ -2391,7 +2395,7 @@ async function executeScheduledTask(
     if (
       task.createdByOrigin &&
       task.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
-      !siteAllowlistCache.has(task.createdByOrigin)
+      !isOriginApprovedForAutomation(task.createdByOrigin)
     ) {
       logger.warn('Auto-deleting scheduled task whose origin is no longer allowlisted', {
         taskId: task.id,
@@ -2566,27 +2570,54 @@ export const SITE_NOT_APPROVED_MESSAGE =
   'Open the extension options and use the "Approved sites" section to add this origin, then reload.';
 
 let siteAllowlistCache = new Set<string>();
+let adminSitePolicyCache: SitePolicyAdminState = null;
 let siteAllowlistLoaded = false;
 // Held rather than dropped: the message that wakes a dormant MV3 worker arrives
 // before this read resolves, and a floating promise left that first message
 // deciding against an empty set.
-const siteAllowlistReady: Promise<void> = chrome.storage.local
-  .get(SITE_ALLOWLIST_STORAGE_KEY)
-  .then((res) => {
-    const list = res[SITE_ALLOWLIST_STORAGE_KEY];
-    if (Array.isArray(list)) {
-      siteAllowlistCache = new Set(list as string[]);
-    }
-  })
-  .catch(() => {})
+const siteAllowlistReady: Promise<void> = Promise.all([
+  chrome.storage.local
+    .get(SITE_ALLOWLIST_STORAGE_KEY)
+    .then((res) => {
+      const list = res[SITE_ALLOWLIST_STORAGE_KEY];
+      if (Array.isArray(list)) {
+        siteAllowlistCache = new Set(list as string[]);
+      }
+    })
+    .catch(() => {}),
+  readAdminSitePolicy()
+    .then((policy) => {
+      adminSitePolicyCache = policy;
+    })
+    .catch(() => {
+      adminSitePolicyCache = SITE_POLICY_ADMIN_UNAVAILABLE;
+    }),
+])
+  .then(() => undefined)
   .finally(() => {
     siteAllowlistLoaded = true;
   });
-function cancelActiveRunUnlessOriginStillApproved(approvedOrigins: ReadonlySet<string>): void {
+
+/**
+ * The one approval question the worker asks. The user's allowlist grants, the
+ * org's site policy can withhold, and a policy that cannot be read withholds
+ * everything until it can.
+ */
+function isOriginApprovedForAutomation(origin: string): boolean {
+  return evaluateSitePolicy(
+    { admin: adminSitePolicyCache, userAllowlist: [...siteAllowlistCache] },
+    origin,
+    'automation',
+  ).allowed;
+}
+
+function cancelActiveRunUnlessOriginStillApproved(
+  isStillApproved: (origin: string) => boolean,
+): void {
   const lease = computerUseRuns.getActive();
   if (!lease) return;
   try {
-    if (approvedOrigins.has(new URL(lease.tabIntentUrl).origin)) return;
+    if (isStillApproved(new URL(lease.tabIntentUrl).origin)) return;
   } catch {
     // Invalid stored intent is handled by the same fail-closed cancellation.
   }
@@ -2598,14 +2629,25 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY]) return;
   const next = changes[SITE_ALLOWLIST_STORAGE_KEY].newValue;
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
-  cancelActiveRunUnlessOriginStillApproved(siteAllowlistCache);
+  cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if ((area !== 'local' && area !== 'managed') || !changes[ADMIN_SITE_POLICY_STORAGE_KEY]) return;
+  void readAdminSitePolicy()
+    .catch(() => SITE_POLICY_ADMIN_UNAVAILABLE as SitePolicyAdminState)
+    .then((policy) => {
+      adminSitePolicyCache = policy;
+      cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+    });
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[BROWSER_CONTROL_CONSENT_STORAGE_KEY]) return;
-  cancelActiveRunUnlessOriginStillApproved(
-    new Set(sanitizeBrowserControlConsent(changes[BROWSER_CONTROL_CONSENT_STORAGE_KEY].newValue)),
+  const consented = new Set(
+    sanitizeBrowserControlConsent(changes[BROWSER_CONTROL_CONSENT_STORAGE_KEY].newValue),
   );
+  cancelActiveRunUnlessOriginStillApproved((origin) => consented.has(origin));
 });
 
 let quickModeCache = false;
@@ -2661,7 +2703,7 @@ async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<s
   } catch {
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
-  if (!siteAllowlistCache.has(origin)) {
+  if (!isOriginApprovedForAutomation(origin)) {
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
 
@@ -2746,7 +2788,7 @@ function isAllowlistedSender(
   } catch {
     return false;
   }
-  return siteAllowlistCache.has(origin);
+  return isOriginApprovedForAutomation(origin);
 }
 
 function senderTabAllowedToMutate(
@@ -3940,7 +3982,7 @@ async function handleMessageAsync(
       } catch {
         return failStart('AGI_START_COMPUTER_USE: invalid tab URL');
       }
-      if (!siteAllowlistCache.has(cuOrigin)) {
+      if (!isOriginApprovedForAutomation(cuOrigin)) {
         return failStart(
           `AGI_START_COMPUTER_USE: tab origin "${cuOrigin}" is not on the site allowlist. ` +
             `${SITE_NOT_APPROVED_MESSAGE} Then start computer use again.`,

@@ -1,4 +1,4 @@
-import { SITE_ALLOWLIST_STORAGE_KEY } from '../../background/policy';
+import { assertSiteAccess } from '../site-policy/store';
 import { authorizeBrowserToolTab } from './tabAuthority';
 
 export const DOWNLOAD_LEDGER_STORAGE_KEY = 'agi_session_downloads';
@@ -88,17 +88,6 @@ function put(record: DownloadRecord): void {
   broadcast?.(record);
 }
 
-async function readSiteAllowlist(): Promise<ReadonlySet<string>> {
-  try {
-    const result = await chrome.storage.local.get([SITE_ALLOWLIST_STORAGE_KEY]);
-    const list = result[SITE_ALLOWLIST_STORAGE_KEY];
-    if (Array.isArray(list)) return new Set(list as string[]);
-  } catch {
-    return new Set<string>();
-  }
-  return new Set<string>();
-}
-
 function stateFromDelta(value: string | undefined): DownloadState | null {
   if (value === 'in_progress' || value === 'complete' || value === 'interrupted') return value;
   return null;
@@ -156,9 +145,9 @@ export function initDownloadLedger(onUpdate: DownloadBroadcast): void {
  * from, and refuses any destination the user has not approved.
  *
  * Page text reaches the model untrusted, so an injected "download this" cannot
- * be allowed to pull a file from an arbitrary host. Same-origin with the
- * approved tab, or an origin that is itself on the allowlist, are the two cases
- * the user has actually authorized.
+ * be allowed to pull a file from an arbitrary host. The destination is put to
+ * the site policy's download capability, which an org can withhold on a site it
+ * otherwise allows the agent to work on.
  */
 export async function resolveDownloadUrl(rawUrl: string, tabUrl: string): Promise<string> {
   let resolved: URL;
@@ -172,15 +161,12 @@ export async function resolveDownloadUrl(rawUrl: string, tabUrl: string): Promis
       `download: only http and https URLs can be downloaded, got ${resolved.protocol}`,
     );
   }
-  const tabOrigin = new URL(tabUrl).origin;
-  if (resolved.origin === tabOrigin) return resolved.toString();
-  const allowlist = await readSiteAllowlist();
-  if (!allowlist.has(resolved.origin)) {
-    throw new Error(
-      `download: "${resolved.origin}" is neither the page's own origin nor on your AGI ` +
-        'site allowlist. Add it in the extension options before downloading from there.',
-    );
-  }
+  await assertSiteAccess(
+    resolved.toString(),
+    'download',
+    `download: "${resolved.origin}" is neither the page's own origin nor on your AGI ` +
+      'site allowlist. Add it in the extension options before downloading from there.',
+  );
   return resolved.toString();
 }
 

