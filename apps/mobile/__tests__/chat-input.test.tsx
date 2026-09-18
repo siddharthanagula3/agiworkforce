@@ -871,7 +871,7 @@ describe('ChatInput', () => {
         `${LONG_PASTE} edited`,
       );
 
-      fireEvent.press(getByTestId('chat.composer.fullscreen.collapse'));
+      fireEvent.press(getByTestId('chat.composer.fullscreen.back'));
 
       expect(queryByTestId('chat.composer.fullscreen.input')).toBeNull();
       expect(getByLabelText('Message input').props.value).toBe(`${LONG_PASTE} edited`);
@@ -972,6 +972,89 @@ describe('ChatInput', () => {
       });
 
       expect(capturedAttachmentPreviewProps?.attachments).toHaveLength(1);
+    });
+  });
+  describe('keyboard gate', () => {
+    function openKeyboard() {
+      const add = Keyboard.addListener as unknown as jest.Mock;
+      act(() => {
+        for (const call of add.mock.calls) {
+          if (call[0] === 'keyboardWillShow' || call[0] === 'keyboardDidShow') {
+            (call[1] as () => void)();
+          }
+        }
+      });
+    }
+
+    function closeKeyboard() {
+      const add = Keyboard.addListener as unknown as jest.Mock;
+      act(() => {
+        for (const call of add.mock.calls) {
+          if (call[0] === 'keyboardWillHide' || call[0] === 'keyboardDidHide') {
+            (call[1] as () => void)();
+          }
+        }
+      });
+    }
+
+    beforeEach(() => {
+      jest
+        .spyOn(Keyboard, 'addListener')
+        .mockImplementation(() => ({ remove: jest.fn() }) as never);
+    });
+
+    it('drops the safe-area padding while the keyboard is up and restores it on close', () => {
+      const screen = renderInput();
+      const bar = screen.getByLabelText('Message input').parent;
+      const paddingOf = () => {
+        let node = bar;
+        while (node) {
+          const style = node.props?.style as { paddingBottom?: number } | undefined;
+          if (style && typeof style.paddingBottom === 'number') return style.paddingBottom;
+          node = node.parent;
+        }
+        return undefined;
+      };
+
+      const resting = paddingOf();
+      openKeyboard();
+      expect(paddingOf()).toBe(8);
+      closeKeyboard();
+      expect(paddingOf()).toBe(resting);
+    });
+
+    it('keeps the send, attachment and model controls reachable with the keyboard up', () => {
+      const screen = renderInput({ onOpenAddToChat: jest.fn(), onOpenModelPicker: jest.fn() });
+      fireEvent.changeText(screen.getByLabelText('Message input'), 'hello');
+      openKeyboard();
+
+      stackComposer(screen.getByLabelText);
+      expect(screen.getAllByLabelText('Add to chat').length).toBeGreaterThan(0);
+      expect(screen.getByTestId('send-button')).toBeTruthy();
+      expect(screen.getByTestId('chat.composer.model')).toBeTruthy();
+    });
+
+    it('keeps a multiline composer stacked while the keyboard is up', () => {
+      const screen = renderInput();
+      fireEvent.changeText(screen.getByLabelText('Message input'), 'line one\nline two');
+      stackComposer(screen.getByLabelText);
+      openKeyboard();
+
+      expect(screen.getByLabelText('Message input').props.multiline).toBe(true);
+      expect(screen.getByTestId('chat.composer.expand')).toBeTruthy();
+    });
+
+    it('dismisses the keyboard before the model sheet opens over the composer', () => {
+      const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+      const onOpenModelPicker = jest.fn();
+      const screen = renderInput({ onOpenModelPicker });
+      stackComposer(screen.getByLabelText);
+      openKeyboard();
+
+      fireEvent.press(screen.getByTestId('chat.composer.model'));
+
+      expect(onOpenModelPicker).toHaveBeenCalled();
+      dismiss.mockRestore();
     });
   });
 });

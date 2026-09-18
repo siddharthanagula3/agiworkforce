@@ -17,7 +17,7 @@ jest.mock('@/components/ui/text', () => {
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  return { Sparkles: Icon, ArrowLeft: Icon };
+  return { Sparkles: Icon, ArrowLeft: Icon, Lock: Icon, CreditCard: Icon, ShieldOff: Icon };
 });
 
 const mockBack = jest.fn();
@@ -65,6 +65,36 @@ describe('FeatureUnavailable', () => {
     fireEvent.press(getByLabelText('Go back'));
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('names a permission block as a permission block, not as a missing feature', () => {
+    const { getByText } = render(<FeatureUnavailable feature="Connectors" reason="permission" />);
+    expect(getByText('Connectors needs permission you do not have')).toBeTruthy();
+    expect(getByText(/workspace admin can grant it/)).toBeTruthy();
+  });
+
+  it('names an entitlement block as a plan limit', () => {
+    const { getByText } = render(
+      <FeatureUnavailable feature="Scheduled tasks" reason="entitlement" />,
+    );
+    expect(getByText('Scheduled tasks is not on your plan')).toBeTruthy();
+    expect(getByText(/available on a higher plan/)).toBeTruthy();
+  });
+
+  it('names a policy block as an administrator decision', () => {
+    const { getByText } = render(<FeatureUnavailable feature="Remote" reason="policy" />);
+    expect(getByText('Remote is turned off for this workspace')).toBeTruthy();
+    expect(getByText(/administrator turned it off/)).toBeTruthy();
+  });
+
+  it('marks each blocked reason distinctly so two of them never read the same', () => {
+    const seen = new Set<string>();
+    for (const reason of ['unsupported', 'permission', 'entitlement', 'policy'] as const) {
+      const { getByLabelText } = render(<FeatureUnavailable feature="Remote" reason={reason} />);
+      expect(getByLabelText(`unavailable-${reason}`)).toBeTruthy();
+      seen.add(reason);
+    }
+    expect(seen.size).toBe(4);
   });
 
   it('replaces to the chat tab when there is no history to go back to', () => {

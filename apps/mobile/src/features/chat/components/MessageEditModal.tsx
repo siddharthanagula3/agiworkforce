@@ -1,15 +1,9 @@
-import {
-  View,
-  Pressable,
-  Modal,
-  TextInput,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import { View, Pressable, Modal, TextInput, StyleSheet, KeyboardAvoidingView } from 'react-native';
 import { Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
+import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import type { MessageAttachment } from '@/types/chat';
 
 interface MessageEditModalProps {
@@ -30,13 +24,26 @@ export function MessageEditModal({
   onSubmit,
 }: MessageEditModalProps) {
   const colors = useThemeColors();
+  const keyboard = useKeyboardSafeComposer('modal');
+  const discard = {
+    onPress: onClose,
+    label: 'Cancel edit',
+    hint: 'Closes without changing the message',
+  };
+  const chrome = useFullScreenChrome({
+    surface: 'chat.message.edit',
+    back: discard,
+    close: discard,
+    cancel: discard,
+  });
+  const cancelControl = chrome.cancel ?? chrome.close;
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={chrome.onRequestClose}
       accessibilityViewIsModal
     >
       {/*
@@ -49,7 +56,8 @@ export function MessageEditModal({
        */}
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={keyboard.behavior}
+        keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
         <Pressable
           style={[styles.backdrop, { backgroundColor: colors.scrim }]}
@@ -108,12 +116,7 @@ export function MessageEditModal({
             ) : null}
 
             <View style={styles.buttonRow}>
-              <Pressable
-                style={styles.cancelBtn}
-                onPress={onClose}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel edit"
-              >
+              <Pressable {...cancelControl} style={[styles.cancelBtn, cancelControl.style]}>
                 <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
               </Pressable>
               <Pressable

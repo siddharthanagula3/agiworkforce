@@ -63,6 +63,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
       animationType="slide"
       onRequestClose={closeSheet}
       statusBarTranslucent
+      accessibilityViewIsModal
     >
       <View
         style={{
@@ -130,7 +131,11 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
           </View>
 
           {/* Options */}
-          <View style={{ paddingHorizontal: 20, gap: 4 }}>
+          <View
+            style={{ paddingHorizontal: 20, gap: 4 }}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Chat style"
+          >
             {STYLE_OPTIONS.map((option) => {
               const isSelected = chatStyle === option.id;
               return (
@@ -149,8 +154,8 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                       : themeColors.transparent,
                   }}
                   accessibilityLabel={`${option.label} style${isSelected ? ', selected' : ''}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: isSelected }}
                 >
                   {/* Radio circle */}
                   <View

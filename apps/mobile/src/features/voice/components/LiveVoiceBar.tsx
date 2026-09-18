@@ -10,6 +10,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { StatusStep } from '@/src/features/chat/components/StatusStep';
 import { VoiceOrb } from './VoiceOrb';
+import { AudioRoutePicker } from './AudioRoutePicker';
 import type { LiveVoiceStatus } from '@/src/features/voice/hooks/useLiveVoiceSession';
 import type { LiveTranscriptTurn } from '@/src/features/voice/services/liveVoiceSession';
 
@@ -216,6 +217,8 @@ export function LiveVoiceBar({
           <Keyboard size={20} color={colors.textSecondary} />
           <Text style={{ color: colors.textMuted, fontSize: 16 }}>Type instead</Text>
         </Pressable>
+
+        <AudioRoutePicker compact />
 
         <Pressable
           onPress={tap(onToggleMute)}

@@ -463,6 +463,7 @@ export default function ProjectsTabScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={resetEditor}
+        accessibilityViewIsModal
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

@@ -12,7 +12,7 @@ function run(deltas: StreamDelta[]) {
 }
 
 describe('toolCallAccumulator', () => {
-  it('accumulates a SERVER web_search tool into one running→completed entry', () => {
+  it('accumulates a SERVER web_search tool into one running to succeeded entry', () => {
     const tools = run([
       { x_tool_status: { type: 'server_tool_use', name: 'web_search', status: 'searching' } },
       { tool_calls: [{ index: 1, function: { arguments: '{"query":"AGI ' } }] },
@@ -29,11 +29,11 @@ describe('toolCallAccumulator', () => {
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe('web_search');
     expect(tools[0].input).toBe('{"query":"AGI Workforce"}');
-    expect(tools[0].status).toBe('completed');
+    expect(tools[0].status).toBe('succeeded');
     expect(tools[0].output).toContain('example.com');
   });
 
-  it('accumulates a SERVER code-execution tool and completes it', () => {
+  it('accumulates a SERVER code-execution tool and succeeds it', () => {
     const tools = run([
       { x_tool_status: { type: 'server_tool_use', name: 'code_execution', status: 'executing' } },
       { tool_calls: [{ index: 0, function: { arguments: '{"code":"print(2+2)"}' } }] },
@@ -41,7 +41,7 @@ describe('toolCallAccumulator', () => {
     ]);
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe('code_execution');
-    expect(tools[0].status).toBe('completed');
+    expect(tools[0].status).toBe('succeeded');
     expect(tools[0].output).toContain('4');
   });
 
@@ -72,7 +72,7 @@ describe('toolCallAccumulator', () => {
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe('get_weather');
     expect(tools[0].input).toBe('{"city":"SF"}');
-    expect(tools[0].status).toBe('completed');
+    expect(tools[0].status).toBe('succeeded');
     expect(tools[0].output).toBe('72F sunny');
   });
 
@@ -97,7 +97,7 @@ describe('toolCallAccumulator', () => {
     expect(tools.map((t) => t.name)).toEqual(['web_search', 'fetch_url']);
   });
 
-  it('surfaces an MCP approval request as a running step', () => {
+  it('surfaces an MCP approval request as an awaiting-approval step', () => {
     const tools = run([
       {
         x_tool_approval_request: {
@@ -109,7 +109,8 @@ describe('toolCallAccumulator', () => {
     ]);
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe('delete_file');
-    expect(tools[0].status).toBe('running');
+    expect(tools[0].status).toBe('awaiting-approval');
+    expect(tools[0].requiresApproval).toBe(true);
     expect(tools[0].input).toContain('/tmp/x');
   });
 

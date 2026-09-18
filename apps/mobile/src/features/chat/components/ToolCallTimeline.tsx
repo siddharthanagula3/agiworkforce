@@ -5,6 +5,9 @@ import {
   ChevronDown,
   ChevronRight,
   CircleCheck,
+  CircleDashed,
+  CircleSlash,
+  Clock,
   AlertCircle,
   Loader2,
   Maximize2,
@@ -15,13 +18,40 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { lucideRNToolIcon, lucideRNIconByName } from './toolIconRN';
 import { WebSearchResultCard } from './WebSearchResultCard';
+import { WebSearchToolCard, isWebSearchTool } from './WebSearchToolCard';
+import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import {
   getToolDisplayLabel,
   getToolSourceBadge,
   getFileExtensionIconName,
+  isTerminalToolStatus,
   TOOL_APPROVAL_ACTION_LABELS,
+  TOOL_STATUS_PRESENTATION,
 } from '@agiworkforce/types';
+import type { ToolStatus } from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
+
+const STATUS_GLYPH: Record<Exclude<ToolStatus, 'succeeded'>, typeof CircleCheck> = {
+  pending: Clock,
+  'awaiting-approval': ShieldAlert,
+  running: Loader2,
+  partial: CircleDashed,
+  canceled: CircleSlash,
+  failed: AlertCircle,
+};
+
+function effectiveStatus(tool: ToolCall): ToolStatus {
+  return tool.requiresApproval && !isTerminalToolStatus(tool.status)
+    ? 'awaiting-approval'
+    : tool.status;
+}
+
+const OUTCOME_PRECEDENCE: readonly ToolStatus[] = ['failed', 'partial', 'canceled', 'succeeded'];
+
+function groupOutcome(toolCalls: ToolCall[]): ToolStatus {
+  const statuses = new Set(toolCalls.map((t) => t.status));
+  return OUTCOME_PRECEDENCE.find((s) => statuses.has(s)) ?? 'succeeded';
+}
 
 function TimelineConnector({
   tone,
@@ -52,9 +82,12 @@ function TimelineConnector({
 function ToolRowIcon({ tool }: { tool: ToolCall }) {
   const colors = useThemeColors();
   const sourceBadge = getToolSourceBadge(tool.name);
+  const status = effectiveStatus(tool);
 
-  if (tool.requiresApproval) {
-    return <ShieldAlert size={15} strokeWidth={1.75} color={colors.agentWarning} />;
+  if (status !== 'succeeded') {
+    const Glyph = STATUS_GLYPH[status];
+    const tone = toolStatusColor(status, colors);
+    return <Glyph size={15} strokeWidth={1.75} color={tone} />;
   }
 
   if (sourceBadge) {
@@ -78,13 +111,6 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
     );
   }
 
-  if (tool.status === 'running') {
-    return <Loader2 size={15} strokeWidth={1.75} color={colors.agentActive} />;
-  }
-  if (tool.status === 'failed') {
-    return <AlertCircle size={15} strokeWidth={1.75} color={colors.agentError} />;
-  }
-
   const Icon = tool.filePath
     ? lucideRNIconByName(getFileExtensionIconName(tool.filePath))
     : lucideRNToolIcon(tool.name);
@@ -92,9 +118,11 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
 }
 
 function trailingChipLabel(tool: ToolCall): string | null {
-  if (tool.requiresApproval) return 'Needs approval';
-  if (tool.status === 'failed') {
-    return tool.duration !== undefined ? `Failed · ${formatToolDuration(tool.duration)}` : 'Failed';
+  const status = effectiveStatus(tool);
+  const { label } = TOOL_STATUS_PRESENTATION[status];
+  if (status === 'awaiting-approval' || status === 'pending') return label;
+  if (status !== 'succeeded' && status !== 'running') {
+    return tool.duration !== undefined ? `${label} · ${formatToolDuration(tool.duration)}` : label;
   }
   if (tool.duration !== undefined) return formatToolDuration(tool.duration);
   if (tool.searchResults?.length) {
@@ -136,14 +164,21 @@ function ToolCallTimelineRow({
   const colors = useThemeColors();
   const [expanded, setExpanded] = useState(false);
   const label = getToolDisplayLabel(tool.name);
+  const status = effectiveStatus(tool);
   const nameText =
-    tool.status === 'running'
+    status === 'running'
       ? label.activeForm
-      : tool.status === 'completed'
+      : status === 'succeeded'
         ? label.completedForm
         : label.displayName;
   const chip = trailingChipLabel(tool);
   const hasBody = Boolean(tool.searchResults?.length || tool.input || tool.output || tool.command);
+  const isSearch = isWebSearchTool(tool.name);
+  const statusLabel = TOOL_STATUS_PRESENTATION[status].label;
+  const statusTone = TOOL_STATUS_PRESENTATION[status].tone;
+  const spokenStatus = chip?.startsWith(statusLabel)
+    ? chip
+    : `${statusLabel}${chip ? `, ${chip}` : ''}`;
 
   const toggle = useCallback(() => {
     if (hasBody) setExpanded((prev) => !prev);
@@ -155,7 +190,7 @@ function ToolCallTimelineRow({
         onPress={toggle}
         disabled={!hasBody}
         accessibilityRole={hasBody ? 'button' : 'text'}
-        accessibilityLabel={`${nameText}${tool.status === 'failed' ? ', failed' : ''}${chip ? `, ${chip}` : ''}`}
+        accessibilityLabel={`${nameText}, ${spokenStatus.toLowerCase()}`}
         accessibilityHint={hasBody ? 'Double tap to expand details' : undefined}
         style={{ flexDirection: 'row', alignItems: 'stretch', minHeight: 30 }}
       >
@@ -179,7 +214,7 @@ function ToolCallTimelineRow({
             style={{
               flex: 1,
               fontSize: 13,
-              color: tool.status === 'failed' ? colors.agentError : colors.textSecondary,
+              color: statusTone === 'error' ? colors.agentError : colors.textSecondary,
             }}
           >
             {nameText}
@@ -210,6 +245,8 @@ function ToolCallTimelineRow({
           ) : null}
         </View>
       </Pressable>
+
+      {isSearch ? <WebSearchToolCard tool={tool} showSources={!expanded} /> : null}
 
       {tool.requiresApproval && tool.toolCallId ? (
         <View style={{ paddingLeft: 20, paddingBottom: 10 }}>
@@ -411,7 +448,13 @@ export function ToolCallDetailsSheet({
   if (!tool) return null;
   const label = getToolDisplayLabel(tool.name);
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+      accessibilityViewIsModal
+    >
       <View style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
         <View
           style={{
@@ -540,9 +583,11 @@ export function ToolCallTimeline({
   const [fullScreenTool, setFullScreenTool] = useRecyclingState<ToolCall | null>(null, [messageId]);
   const closeFullScreen = useCallback(() => setFullScreenTool(null), [setFullScreenTool]);
   const allDone = useMemo(
-    () => toolCalls.length > 0 && toolCalls.every((t) => t.status !== 'running'),
+    () => toolCalls.length > 0 && toolCalls.every((t) => isTerminalToolStatus(effectiveStatus(t))),
     [toolCalls],
   );
+  const outcome = useMemo(() => groupOutcome(toolCalls), [toolCalls]);
+  const OutcomeGlyph = outcome === 'succeeded' ? CircleCheck : STATUS_GLYPH[outcome];
 
   const userToggledRef = useRef(false);
   const autoCollapsedRef = useRef(false);
@@ -599,9 +644,9 @@ export function ToolCallTimeline({
               <View
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 }}
               >
-                <CircleCheck size={15} strokeWidth={1.75} color={colors.textMuted} />
+                <OutcomeGlyph size={15} strokeWidth={1.75} color={colors.textMuted} />
                 <Text style={{ fontSize: 13, color: colors.textSecondary, fontWeight: '600' }}>
-                  Done
+                  {TOOL_STATUS_PRESENTATION[outcome].label}
                 </Text>
               </View>
             </View>
