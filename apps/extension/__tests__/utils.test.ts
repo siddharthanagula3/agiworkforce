@@ -126,9 +126,16 @@ describe('originOfUrl', () => {
 describe('sleep', () => {
   it('resolves after approximately the specified milliseconds', async () => {
     vi.useFakeTimers();
-    const promise = sleep(500);
-    vi.advanceTimersByTime(500);
+    let settled = false;
+    const promise = sleep(500).then(() => {
+      settled = true;
+    });
+    vi.advanceTimersByTime(499);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    vi.advanceTimersByTime(1);
     await promise;
+    expect(settled).toBe(true);
     vi.useRealTimers();
   });
 

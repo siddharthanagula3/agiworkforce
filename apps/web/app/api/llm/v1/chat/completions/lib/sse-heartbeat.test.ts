@@ -107,5 +107,7 @@ describe('withSseHeartbeat', () => {
     await reader.cancel('client disconnected');
 
     await vi.advanceTimersByTimeAsync(60_000);
+    expect(source.stream.locked).toBe(true);
+    await expect(reader.read()).resolves.toEqual({ value: undefined, done: true });
   });
 });
