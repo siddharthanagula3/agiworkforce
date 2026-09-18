@@ -26,8 +26,11 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { DataRegionUnavailableError } from '@agiworkforce/compliance';
 
 import {
+  CustomerKeyRegionError,
+  assertCustomerKeyRegion,
   completeOrganizationRegionMove,
   getRegionDb,
+  keyManagementRegions,
   regionExcludedTransports,
   regionInfrastructure,
   isRegionProvisioned,
@@ -245,5 +248,52 @@ describe('the objects, logs and keys a region pins', () => {
     });
     expect(excluded.has('open_router')).toBe(true);
     expect(excluded.has('mistral_eu')).toBe(false);
+  });
+});
+
+describe('where a customer-managed key may live', () => {
+  const MULTI_VENDOR = {
+    ...TWO_REGIONS,
+    AGI_DATA_REGION_EU_KMS_REGION: 'eu-central-1, europe-west3 ,,westeurope',
+  };
+
+  it('reads the vendor regions a jurisdiction declares as a list, not as one string', () => {
+    expect(keyManagementRegions('eu', MULTI_VENDOR)).toEqual([
+      'eu-central-1',
+      'europe-west3',
+      'westeurope',
+    ]);
+  });
+
+  it('declares none for a region that names none, rather than an empty-string region', () => {
+    expect(keyManagementRegions('us', HOME_ONLY)).toEqual([]);
+  });
+
+  it('admits a key in a vendor region the workspace region declares', () => {
+    expect(() => assertCustomerKeyRegion('eu', 'europe-west3', MULTI_VENDOR)).not.toThrow();
+    expect(() => assertCustomerKeyRegion('eu', '  EU-Central-1 ', MULTI_VENDOR)).not.toThrow();
+  });
+
+  it('refuses a key outside them and names what the region does admit', () => {
+    let thrown: unknown;
+    try {
+      assertCustomerKeyRegion('eu', 'us-east-1', MULTI_VENDOR);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(CustomerKeyRegionError);
+    const error = thrown as CustomerKeyRegionError;
+    expect(error.region).toBe('eu');
+    expect(error.keyRegion).toBe('us-east-1');
+    expect(error.admitted).toEqual(['eu-central-1', 'europe-west3', 'westeurope']);
+    expect(error.message).toContain('eu-central-1');
+  });
+
+  // A region that declares nothing must refuse rather than admit everything: an
+  // unconfigured deployment is the case activation most needs to fail closed on.
+  it('refuses outright when the region declares no key-management region at all', () => {
+    expect(() => assertCustomerKeyRegion('us', 'us-east-1', HOME_ONLY)).toThrow(
+      CustomerKeyRegionError,
+    );
   });
 });

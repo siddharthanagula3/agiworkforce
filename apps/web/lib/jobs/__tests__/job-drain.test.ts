@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   failJob: vi.fn(),
   reapExpiredJobLeases: vi.fn(),
   pruneFinishedJobs: vi.fn(),
+  readJobQueueStats: vi.fn(),
+  recordQueueDepth: vi.fn(),
+  recordQueueWait: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -18,6 +21,10 @@ vi.mock('@/lib/observability/span', () => ({
   withSpan: (_name: string, _options: unknown, run: (span: unknown) => unknown) =>
     run({ setAttributes: vi.fn() }),
 }));
+vi.mock('@/lib/observability/metrics', () => ({
+  recordQueueDepth: mocks.recordQueueDepth,
+  recordQueueWait: mocks.recordQueueWait,
+}));
 vi.mock('../job-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../job-service')>();
   return {
@@ -27,8 +34,11 @@ vi.mock('../job-service', async (importOriginal) => {
     failJob: mocks.failJob,
     reapExpiredJobLeases: mocks.reapExpiredJobLeases,
     pruneFinishedJobs: mocks.pruneFinishedJobs,
+    readJobQueueStats: mocks.readJobQueueStats,
   };
 });
+
+import { getTraceContext } from '@/lib/observability/trace-context';
 
 import { drainBackgroundJobs } from '../job-drain';
 import { PermanentJobError, type BackgroundJob } from '../job-service';
@@ -54,6 +64,7 @@ function job(overrides: Partial<BackgroundJob> = {}): BackgroundJob {
     lastError: null,
     deadReason: null,
     deadLetteredAt: null,
+    originRegion: null,
     createdAt: '2026-09-17T00:00:00.000Z',
     updatedAt: '2026-09-17T00:00:00.000Z',
     ...overrides,
@@ -67,6 +78,7 @@ beforeEach(() => {
   mocks.completeJob.mockResolvedValue(true);
   mocks.failJob.mockResolvedValue('retry');
   mocks.claimJobs.mockResolvedValue([]);
+  mocks.readJobQueueStats.mockResolvedValue([]);
 });
 
 describe('drainBackgroundJobs', () => {
@@ -184,6 +196,78 @@ describe('drainBackgroundJobs', () => {
 
     expect(mocks.claimJobs).not.toHaveBeenCalled();
     expect(summary.drained).toBe(false);
+  });
+
+  it('runs the job inside the trace the payload carried from the enqueuer', async () => {
+    const traceId = 'a'.repeat(32);
+    mocks.claimJobs
+      .mockResolvedValueOnce([
+        job({ payload: { traceparent: `00-${traceId}-${'b'.repeat(16)}-01` } }),
+      ])
+      .mockResolvedValue([]);
+    let seen: string | null = null;
+    const handler = vi.fn(async () => {
+      seen = getTraceContext()?.traceId ?? null;
+    });
+
+    await drainBackgroundJobs({
+      db,
+      handlers: { 'notifications.schedule-completed': handler },
+      budgetMs: 120_000,
+      maxInFlight: 4,
+    });
+
+    expect(seen).toBe(traceId);
+  });
+
+  it('records how long each claimed job waited to become runnable', async () => {
+    const runAfter = '2026-09-17T00:00:00.000Z';
+    mocks.claimJobs.mockResolvedValueOnce([job({ runAfter })]).mockResolvedValue([]);
+    const claimedAt = Date.parse(runAfter) + 7_500;
+
+    await drainBackgroundJobs({
+      db,
+      handlers: { 'notifications.schedule-completed': async () => undefined },
+      budgetMs: 120_000,
+      maxInFlight: 4,
+      now: () => claimedAt,
+    });
+
+    expect(mocks.recordQueueWait).toHaveBeenCalledWith({
+      queue: 'notifications',
+      waitMs: 7_500,
+    });
+  });
+
+  it('records the backlog every queue is left holding', async () => {
+    mocks.readJobQueueStats.mockResolvedValue([
+      {
+        queue: 'notifications',
+        queued: 3,
+        running: 1,
+        dead: 2,
+        maxConcurrency: 4,
+        oldestQueuedAt: null,
+      },
+    ]);
+
+    await drainBackgroundJobs({ db, handlers: {}, budgetMs: 120_000, maxInFlight: 4 });
+
+    expect(mocks.recordQueueDepth).toHaveBeenCalledWith({
+      queue: 'notifications',
+      status: 'queued',
+      count: 3,
+    });
+    expect(mocks.recordQueueDepth).toHaveBeenCalledWith({
+      queue: 'notifications',
+      status: 'running',
+      count: 1,
+    });
+    expect(mocks.recordQueueDepth).toHaveBeenCalledWith({
+      queue: 'notifications',
+      status: 'dead',
+      count: 2,
+    });
   });
 
   it('stops a handler that ignores its budget and lets the queue decide the outcome', async () => {

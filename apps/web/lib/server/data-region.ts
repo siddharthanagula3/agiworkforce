@@ -248,6 +248,58 @@ export function regionInfrastructure(
   };
 }
 
+export class CustomerKeyRegionError extends Error {
+  readonly region: DataRegionId;
+  readonly keyRegion: string;
+  readonly admitted: readonly string[];
+
+  constructor(region: DataRegionId, keyRegion: string, admitted: readonly string[]) {
+    super(
+      admitted.length === 0
+        ? `Data region "${region}" declares no key-management regions, so a key in "${keyRegion}" ` +
+            'cannot be shown to sit inside it. Set the region’s KMS_REGION variable to the ' +
+            'vendor regions customer keys may live in before activating one.'
+        : `A key in "${keyRegion}" is outside data region "${region}", which admits ` +
+            `${admitted.join(', ')}. A workspace whose rows are pinned to one jurisdiction and ` +
+            'whose key is held in another has residency in neither.',
+    );
+    this.name = 'CustomerKeyRegionError';
+    this.region = region;
+    this.keyRegion = keyRegion;
+    this.admitted = admitted;
+  }
+}
+
+/**
+ * Comma separated because one jurisdiction covers several vendor regions, and
+ * empty because the deployment has not said, which activation refuses.
+ */
+export function keyManagementRegions(
+  region: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): readonly string[] {
+  return regionRuntime(region, env)
+    .keyManagementRegion.split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/**
+ * An EU-pinned workspace whose key lives in a US KMS is not out of reach of a
+ * US legal process, so the association is refused at activation, not in review.
+ */
+export function assertCustomerKeyRegion(
+  dataRegion: string | null | undefined,
+  keyRegion: string,
+  env: Record<string, string | undefined> = process.env,
+): void {
+  const runtime = regionRuntime(dataRegion, env);
+  const admitted = keyManagementRegions(dataRegion, env);
+  const candidate = keyRegion.trim().toLowerCase();
+  if (admitted.some((entry) => entry.toLowerCase() === candidate)) return;
+  throw new CustomerKeyRegionError(runtime.region, keyRegion, admitted);
+}
+
 /**
  * The transports a region refuses, in the shape the routing request already
  * takes. The home region's answer is the exclusion list the product has always

@@ -58,7 +58,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 82 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 84 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -151,7 +151,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 128 of 241 database-backed hosted API route files. Counted against the 241 route files that reach the database; the other 102 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 113 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-17.',
+      'Partial: 155 of 242 database-backed hosted API route files. Counted against the 242 route files that reach the database; the other 110 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 87 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-18.',
   },
   {
     label: 'Authentication and CSRF',
@@ -191,7 +191,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Production access governance',
     value:
-      'Not implemented. Production database credentials exist and are held by the operator. There is no just-in-time access approval, no periodic access review, and no break-glass procedure. As of 2026-08-05.',
+      'Implemented, with one gap named. Support access to a workspace needs a grant naming the workspace and its scopes, requested by one operator and approved by a second, expiring within eight hours by database constraint. Grants, reads taken under them and reads refused for want of one are appended to a hash-chained log the workspace itself can read and verify, and resolving a workspace’s encryption keys as support passes the same check whether the key is ours or theirs. Offboarding from production is a written runbook. Still open: no periodic access review on a schedule. As of 2026-09-17.',
   },
   {
     label: 'Business continuity evidence',
@@ -316,6 +316,16 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-18',
+                        value:
+                          'Production access governance moved from not implemented to implemented with one gap named. Support access to a workspace now needs a grant that names the workspace and the scopes it opens, requested by one operator and approved by a second, with the expiry written at approval and capped at eight hours by a database constraint rather than by the code that asks. Every grant transition, every read taken under a grant and every read refused for want of one is appended to a log the workspace can read and verify: it is append-only because the application role holds no write on it, a trigger refuses updates and deletes for every role including the owner, and each row carries a hash of the one before it, so a row removed through a direct connection is detectable rather than silent. Resolving a workspace’s encryption keys as support passes the same check whether the key is customer-managed or ours, which closes the path that previously served the platform key without a grant. What is still open is a periodic access review on a schedule; the row says so rather than claiming completeness.',
+                      },
+                      {
+                        label: '2026-09-18',
+                        value:
+                          'Re-measured after a batch of hosted routes moved off the owner connection onto the policy-scoped client, among them the workspace console, the plugin and skills surfaces, analytics ingest and the account routes. One console helper was the root cause of several: it opened a caller-scoped handle, discarded it, and re-read as the owner, so every route built on it bypassed policy for no reason; it now returns the handle it opened. The row-level-isolation count moved from 128 to 155 of 242 database-backed routes and the owner-connection remainder from 113 to 87, while eight new hosted routes touching no database moved the count excluded from both sides from 102 to 110. Of the 87 that remain, most are owner by design: the queue receivers and device-pairing routes that have no caller identity to bind, the tables whose policy denies the application role outright, and the reads whose whole purpose is to answer for a row the caller cannot see. Five others read the member roster to name somebody in a role or group assignment, which the roster read policy admits only for holders of the members permission, so they wait on that policy rather than on route code. Each figure is derived from the deciding source by a test, not maintained by hand.',
+                      },
                       {
                         label: '2026-09-17',
                         value:
