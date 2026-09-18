@@ -100,16 +100,13 @@ class DurableStreamStalledError extends Error {
 import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
-  loadConnectorToolPermissions,
   withDisabledConnectorIds,
   withoutStandingApprovals,
-  EMPTY_CONNECTOR_TOOL_PERMISSIONS,
 } from './lib/connector-tool-permissions';
 import { admitConversationTurn } from './lib/conversation-turn-admission';
-import { loadToolApprovalPolicy, policyAutoApprovesTool } from './lib/tool-approval-policy';
+import { loadTurnToolPermissions, policyAutoApprovesTool } from './lib/tool-approval-policy';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
-import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import type { StreamChunk } from '@agiworkforce/types';
 import { getModelMetadataById, isFreeBillingPlanTier } from '@agiworkforce/types';
 import {
@@ -682,17 +679,15 @@ async function dispatchChatCompletions(
     // (so a Blocked tool is never advertised to the model and stops re-surfacing
     // an approval card every turn), and the full verdict map is handed to the
     // tool loop, which enforces it before any execution.
-    const toolPolicyDb = modelSupportsTools
-      ? (processed.managedUsage?.db ?? (await getUserScopedDb(request)).db)
-      : null;
-    const [connectorPermissions, toolApprovalPolicy] = toolPolicyDb
-      ? await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
-          Promise.all([
-            loadConnectorToolPermissions(toolPolicyDb, userId),
-            loadToolApprovalPolicy(toolPolicyDb, userId),
-          ]),
-        )
-      : [EMPTY_CONNECTOR_TOOL_PERMISSIONS, DEFAULT_TOOL_APPROVAL_POLICY];
+    // The policy is read on every turn, tools:false included: it also decides
+    // whether the provider-native search below is withdrawn for the gated
+    // shape, so skipping the read forced the default onto accounts that had
+    // chosen otherwise and broke search-native models.
+    const toolPolicyDb = processed.managedUsage?.db ?? (await getUserScopedDb(request)).db;
+    const { connectorPermissions, toolApprovalPolicy } = await timePhase(
+      CHAT_TURN_PHASE.toolPermissions,
+      () => loadTurnToolPermissions(toolPolicyDb, userId, { modelSupportsTools }),
+    );
     // Per-conversation connector opt-out: connectors the client switched off
     // for THIS turn only, layered on top of the user's standing allow/ask/deny
     // verdicts. Neither replaces the other -- a connector can be off for one

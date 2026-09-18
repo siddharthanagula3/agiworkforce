@@ -295,11 +295,18 @@ export function toContractToolDefinition(
  * move bytes outside the trust boundary; or when its metadata names it one of
  * the leaders' automatic tools, web search, page fetch and sandboxed code
  * (D-2026-09-15-01).
+ *
+ * `autonomous` is a superset: the same tools plus everything not classified as
+ * destructive. An undeclared MCP or connector tool still asks, because
+ * `UNKNOWN_TOOL_METADATA` is an irreversible write. The remaining hard blocks,
+ * a per-tool `deny` and the lethal-trifecta escalation, are decided by the gate
+ * before this predicate is reached.
  */
 export function policyAutoApprovesTool(policy: ToolApprovalPolicy, qualifiedName: string): boolean {
-  if (policy !== 'auto_approve_read_only') return false;
+  if (policy === 'ask_every_time') return false;
   const metadata = resolveToolMetadata(qualifiedName);
   if (metadata.declared && metadata.autoInReadOnlyMode === true) return true;
+  if (policy === 'autonomous') return !isDestructiveToolMetadata(metadata);
   return (
     metadata.declared &&
     metadata.actionClass === 'read' &&

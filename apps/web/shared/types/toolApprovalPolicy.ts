@@ -2,12 +2,15 @@ import { z } from 'zod';
 import { TOOL_APPROVAL_POLICIES, TOOL_APPROVAL_PREFERENCE_NAMESPACE } from '@agiworkforce/types';
 
 export {
+  AUTONOMOUS_TOOL_APPROVALS_ORGANIZATION_KEY,
   DEFAULT_TOOL_APPROVAL_POLICY,
   DEFAULT_TOOL_APPROVAL_PREFERENCES,
   TOOL_APPROVAL_POLICIES,
   TOOL_APPROVAL_POLICY_OPTIONS,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
   isToolApprovalPolicy,
+  organizationPermitsAutonomousToolApprovals,
+  resolveEffectiveToolApprovalPolicy,
   toolApprovalPolicyOption,
 } from '@agiworkforce/types';
 export type {
