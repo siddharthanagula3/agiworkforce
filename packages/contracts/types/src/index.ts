@@ -26,6 +26,9 @@ export * from './auth';
 
 export * from './voice';
 
+export * from './visual-session';
+export * from './visual-session-capture';
+
 export * from './time-focus';
 export * from './tool-approval-policy';
 export * from './surface-binding';

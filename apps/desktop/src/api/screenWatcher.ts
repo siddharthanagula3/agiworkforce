@@ -1,6 +1,13 @@
-
 import { invoke } from '../lib/tauri-mock';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import {
+  admitVisualFrame,
+  idleVisualSessionStatus,
+  visualSessionConfig,
+  type VisualFrame,
+  type VisualSessionConfig,
+  type VisualSessionStatus,
+} from '@agiworkforce/types';
 
 export interface ScreenCapture {
   id: string;
@@ -151,6 +158,122 @@ export class ScreenWatcherClient {
 
   static getAge(capture: ScreenCapture): number {
     return Date.now() - capture.timestamp;
+  }
+}
+
+/**
+ * The Rust watcher's own hash is a u64 carried as a JS number, so it is folded
+ * into the two halves the shared frame hash uses. Dedup stays meaningful: the
+ * distance still separates a changed screen from an unchanged one.
+ */
+export function screenCaptureToFrame(capture: ScreenCapture): VisualFrame {
+  const hash = Math.trunc(Math.abs(capture.imageHash));
+  return {
+    frameId: capture.id,
+    capturedAtMs: capture.timestamp,
+    width: capture.width,
+    height: capture.height,
+    hash: [Math.trunc(hash / 0x1_0000_0000) >>> 0, hash >>> 0],
+    dataUrl: ScreenWatcherClient.toDataUrl(capture),
+  };
+}
+
+export function watcherVisualStatus(
+  status: WatcherStatus,
+  previous: VisualSessionStatus,
+): VisualSessionStatus {
+  if (!status.isRunning) return { ...previous, state: 'stopped' };
+  return { ...previous, state: status.isPaused ? 'paused' : 'active' };
+}
+
+/**
+ * The Rust watcher as a {@link VisualSession}: the same sampling, dedup and
+ * buffer bound every other surface gets, over the capture loop that already
+ * runs natively.
+ */
+export class ScreenWatcherVisualSession {
+  private readonly config: VisualSessionConfig;
+  private readonly onFrame?: (frame: VisualFrame, buffer: readonly VisualFrame[]) => void;
+  private readonly onStatus?: (status: VisualSessionStatus) => void;
+  private readonly client = new ScreenWatcherClient();
+
+  private state: VisualSessionStatus = idleVisualSessionStatus('screen');
+  private buffer: VisualFrame[] = [];
+
+  constructor(
+    options: {
+      config?: Partial<Omit<VisualSessionConfig, 'source'>>;
+      onFrame?: (frame: VisualFrame, buffer: readonly VisualFrame[]) => void;
+      onStatus?: (status: VisualSessionStatus) => void;
+    } = {},
+  ) {
+    this.config = visualSessionConfig('screen', options.config ?? {});
+    this.onFrame = options.onFrame;
+    this.onStatus = options.onStatus;
+  }
+
+  get status(): VisualSessionStatus {
+    return this.state;
+  }
+
+  get frames(): readonly VisualFrame[] {
+    return this.buffer;
+  }
+
+  latestFrame(): VisualFrame | null {
+    return this.buffer.length > 0 ? (this.buffer[this.buffer.length - 1] ?? null) : null;
+  }
+
+  async start(): Promise<void> {
+    this.update({ state: 'starting', startedAtMs: Date.now() });
+    await this.client.subscribe((capture) => this.admit(screenCaptureToFrame(capture)));
+    await this.client.start({
+      intervalMs: this.config.intervalMs,
+      changeDetection: this.config.changeDetection,
+    });
+    this.update({ state: 'active' });
+  }
+
+  async pause(): Promise<void> {
+    await this.client.pause();
+    this.update({ state: 'paused' });
+  }
+
+  async resume(): Promise<void> {
+    await this.client.resume();
+    this.update({ state: 'active' });
+  }
+
+  async stop(): Promise<void> {
+    await this.client.stop();
+    this.buffer = [];
+    this.update({ state: 'stopped' });
+  }
+
+  async refreshStatus(): Promise<VisualSessionStatus> {
+    this.state = watcherVisualStatus(await this.client.getStatus(), this.state);
+    this.onStatus?.(this.state);
+    return this.state;
+  }
+
+  private admit(frame: VisualFrame): void {
+    const admission = admitVisualFrame(this.buffer, frame, this.config);
+    if (!admission.admitted) {
+      this.update({ droppedFrames: this.state.droppedFrames + 1 });
+      return;
+    }
+    this.buffer = admission.buffer;
+    this.update({
+      sampledFrames: this.state.sampledFrames + 1,
+      droppedFrames: this.state.droppedFrames + (admission.evicted ? 1 : 0),
+      lastFrameAtMs: frame.capturedAtMs,
+    });
+    this.onFrame?.(frame, this.buffer);
+  }
+
+  private update(patch: Partial<VisualSessionStatus>): void {
+    this.state = { ...this.state, ...patch };
+    this.onStatus?.(this.state);
   }
 }
 
