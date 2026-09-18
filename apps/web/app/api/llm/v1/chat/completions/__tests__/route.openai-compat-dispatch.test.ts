@@ -241,6 +241,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/user-connector-tools', () => ({
+  MAX_CONNECTOR_TOOLS_PER_USER: 32,
   loadUserConnectorToolCatalog: workflowRouteMocks.loadConnectorTools,
   makeUserConnectorExecutor: vi.fn(),
   withUserConnectorMcpHandle: vi.fn(async () => null),

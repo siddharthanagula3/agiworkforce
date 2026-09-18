@@ -46,6 +46,7 @@ const NON_DOC_MARKDOWN = [
   '.claude/rules/',
   '.github/',
   'scripts/__fixtures__/',
+  'packages/client/client-runtime/src/plugins/__fixtures__/',
   'tools/skill-vetting/samples/',
   'apps/cli/src/output_styles/',
   'apps/extension-vscode/media/walkthrough/',
