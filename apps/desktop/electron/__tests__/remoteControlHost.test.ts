@@ -90,6 +90,16 @@ describe('remote control host in the desktop main process', () => {
     expect(clientOptions).toBeNull();
   });
 
+  // This accepted 8 to 32 characters, a shape the relay never mints, so a code
+  // that could not exist was carried all the way to the relay before refusal.
+  it('refuses a code the relay could not have issued', () => {
+    const host = makeHost();
+    for (const code of ['ABCD1234', 'ABCD1234WXY', 'ABCD1234WXYZ9', 'abcd1234wxyz']) {
+      expect(() => host.start({ ...startRequest(), code })).toThrow();
+    }
+    expect(clientOptions).toBeNull();
+  });
+
   it('keys the session from the phone salt, acknowledges signed controls and answers over the relay', async () => {
     const host = makeHost();
     const secret = secretFrom(host.start(startRequest()));

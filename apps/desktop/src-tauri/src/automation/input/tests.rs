@@ -1,7 +1,27 @@
 #[cfg(test)]
 mod clipboard_tests {
     use super::super::clipboard::ClipboardManager;
+    use crate::automation::computer_use::{
+        record_clipboard_read_decision, revoke_clipboard_read, PermissionDecision,
+    };
     use serial_test::serial;
+
+    /// These cases round-trip the real clipboard, so they hold the read
+    /// grant the gate requires for as long as the case runs.
+    struct ReadGranted;
+
+    impl ReadGranted {
+        fn held() -> Self {
+            record_clipboard_read_decision(PermissionDecision::AlwaysAllow);
+            Self
+        }
+    }
+
+    impl Drop for ReadGranted {
+        fn drop(&mut self) {
+            revoke_clipboard_read();
+        }
+    }
 
     #[test]
     #[serial]
@@ -22,6 +42,7 @@ mod clipboard_tests {
         if std::env::var("CI").is_ok() {
             return;
         }
+        let _granted = ReadGranted::held();
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -45,6 +66,7 @@ mod clipboard_tests {
         if std::env::var("CI").is_ok() {
             return;
         }
+        let _granted = ReadGranted::held();
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -64,6 +86,7 @@ mod clipboard_tests {
         if std::env::var("CI").is_ok() {
             return;
         }
+        let _granted = ReadGranted::held();
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -86,6 +109,7 @@ mod clipboard_tests {
         if std::env::var("CI").is_ok() {
             return;
         }
+        let _granted = ReadGranted::held();
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();
@@ -108,6 +132,7 @@ mod clipboard_tests {
         if std::env::var("CI").is_ok() {
             return;
         }
+        let _granted = ReadGranted::held();
         let mut clipboard = ClipboardManager::new().unwrap();
 
         let original = clipboard.get_text().unwrap_or_default();

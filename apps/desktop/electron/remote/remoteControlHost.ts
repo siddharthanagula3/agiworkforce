@@ -1,4 +1,5 @@
 import { SignalingClient, type SignalingEvent } from '@agiworkforce/utils';
+import { isRelayPairingCode } from '@agiworkforce/types';
 import {
   IDLE_REMOTE_CONTROL_STATE,
   type DeveloperSessionEvent,
@@ -16,7 +17,6 @@ import {
   type DispatchSession,
 } from './dispatchEnvelope';
 
-const PAIRING_CODE_PATTERN = /^[A-Z0-9]{8,32}$/;
 const MAX_TOKEN_LENGTH = 16_384;
 const MAX_ID_LENGTH = 128;
 const HEARTBEAT_INTERVAL_MS = 25_000;
@@ -42,7 +42,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseStartRequest(args: Record<string, unknown>): RemoteControlStartRequest {
   const { code, wsUrl, pairToken, expiresAt } = args;
-  if (typeof code !== 'string' || !PAIRING_CODE_PATTERN.test(code)) {
+  if (typeof code !== 'string' || !isRelayPairingCode(code)) {
     throw new RemoteControlRefused('The pairing code is not valid.');
   }
   if (typeof wsUrl !== 'string') throw new RemoteControlRefused('The relay address is missing.');

@@ -417,6 +417,16 @@ describe('QR Pairing, isValidPairingCode', () => {
     expect(isValidPairingCode('ABC12345')).toBe(false);
   });
 
+  it('rejects a payload whose secret segment is not 64 hex characters', () => {
+    expect(isValidPairingCode('agiw:ABCDEF123456:not-a-secret')).toBe(false);
+    expect(isValidPairingCode(`agiw:ABCDEF123456:${'9f'.repeat(31)}`)).toBe(false);
+  });
+
+  it('rejects a payload carrying more segments than the shape allows', () => {
+    const secret = '9f'.repeat(32);
+    expect(isValidPairingCode(`agiw:ABCDEF123456:${secret}:extra`)).toBe(false);
+  });
+
   it('rejects a six-character raw code', () => {
     expect(isValidPairingCode('abc123')).toBe(false);
   });

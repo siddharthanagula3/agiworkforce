@@ -16,7 +16,9 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import {
+  authorizePairTokenClaim,
   issuePairToken as mintPairToken,
+  pairingAccountId,
   verifyPairToken as checkPairToken,
 } from './pair-token.js';
 import {
@@ -129,8 +131,8 @@ function buildPairTokenSecret(): string {
   return SIGNALING_SECRET ?? COMPARE_KEY.toString('hex');
 }
 
-function issuePairToken(code: string, role: Role, createdAt: number): string {
-  return mintPairToken(buildPairTokenSecret(), code, role, createdAt);
+function issuePairToken(code: string, role: Role, createdAt: number, accountId: string): string {
+  return mintPairToken(buildPairTokenSecret(), { code, role, createdAt, accountId });
 }
 
 function verifyPairToken(
@@ -138,9 +140,11 @@ function verifyPairToken(
   code: string,
   role: Role,
   createdAt: number,
+  accountId: string | null,
 ): boolean {
   if (!REQUIRE_PAIR_TOKEN) return true;
-  return checkPairToken(buildPairTokenSecret(), presented, code, role, createdAt);
+  if (!accountId) return false;
+  return checkPairToken(buildPairTokenSecret(), presented, { code, role, createdAt, accountId });
 }
 
 const DEFAULT_TTL_SECONDS = Number(
@@ -360,6 +364,7 @@ const pairingRequestSchema = z.object({
 const manualPairingClaimSchema = z
   .object({
     role: z.literal('mobile'),
+    accountId: z.string().min(1).max(200),
   })
   .strict();
 
@@ -534,6 +539,13 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
 
   const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata } = parseResult.data;
 
+  const accountId = pairingAccountId(metadata);
+  if (!accountId) {
+    logger.warn({ correlationId }, 'Pairing request names no account');
+    metrics.recordError('pairing_without_account');
+    return res.status(400).json({ error: 'account_required' });
+  }
+
   logger.info({ correlationId, ttlSeconds }, 'Creating pairing session');
 
   const result = await insertSessionWithRetry(ttlSeconds, metadata);
@@ -549,8 +561,8 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   logger.info({ correlationId, code, expiresAt }, 'Pairing session created');
   metrics.recordPairingRequest(true);
 
-  const desktopPairToken = issuePairToken(code, 'desktop', createdAt);
-  const mobilePairToken = issuePairToken(code, 'mobile', createdAt);
+  const desktopPairToken = issuePairToken(code, 'desktop', createdAt, accountId);
+  const mobilePairToken = issuePairToken(code, 'mobile', createdAt, accountId);
 
   return res.json({
     code,
@@ -606,7 +618,17 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
   });
 });
 
+// Minting a pair token is minting the right to take part in someone's pairing,
+// so the caller states which account it has authenticated and must be the one
+// the session was created for. A code alone is not a credential.
 app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace('Bearer ', '');
+
+  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const generic404 = { error: 'pairing_not_found' };
   const parsedBody = manualPairingClaimSchema.safeParse(req.body ?? {});
   const codeValidation = pairingCodeSchema.safeParse(req.params['code']);
@@ -620,6 +642,16 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
     return res.status(404).json(generic404);
   }
 
+  const claim = authorizePairTokenClaim(sessionData.metadata, parsedBody.data.accountId);
+  if (!claim.ok) {
+    logger.warn(
+      { code, role: parsedBody.data.role, reason: claim.reason },
+      'Pairing claim refused',
+    );
+    metrics.recordError('pairing_account_mismatch');
+    return res.status(403).json({ error: claim.reason });
+  }
+
   const activeSession = activeSessions.get(code);
   if (activeSession?.participants.mobile) {
     return res.status(409).json({ error: 'pairing_role_in_use' });
@@ -628,7 +660,7 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
   return res.json({
     code,
     role: parsedBody.data.role,
-    pairToken: issuePairToken(code, parsedBody.data.role, sessionData.created_at),
+    pairToken: issuePairToken(code, parsedBody.data.role, sessionData.created_at, claim.accountId),
     expiresAt: sessionData.expires_at,
     wsUrl: publicWsUrl,
   });
@@ -1146,7 +1178,15 @@ async function handleRegister(
     return;
   }
 
-  if (!verifyPairToken(message.pairToken, message.code, message.role, session.createdAt)) {
+  if (
+    !verifyPairToken(
+      message.pairToken,
+      message.code,
+      message.role,
+      session.createdAt,
+      pairingAccountId(session.metadata),
+    )
+  ) {
     logger.warn(
       {
         correlationId,

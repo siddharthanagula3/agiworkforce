@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 
-const PAIRING_CODE_LENGTH = 12;
-const PAIRING_CODE_PATTERN = /^[A-Z0-9]{12}$/;
+import {
+  PAIRING_CODE_LENGTH,
+  RELAY_PAIRING_CODE_PATTERN as PAIRING_CODE_PATTERN,
+} from '../../../../packages/contracts/types/src/pairing';
+
 const MAX_SDP_SIZE = 65536;
 const MAX_ICE_CANDIDATE_SIZE = 2048;
 const MAX_SDP_MID_SIZE = 64;

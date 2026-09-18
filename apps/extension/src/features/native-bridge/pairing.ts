@@ -1,10 +1,5 @@
 export type PairingPhase =
-  | 'idle'
-  | 'requesting'
-  | 'awaiting-code'
-  | 'confirming'
-  | 'paired'
-  | 'error';
+  'idle' | 'requesting' | 'awaiting-code' | 'confirming' | 'paired' | 'error';
 
 export interface PairingState {
   phase: PairingPhase;
@@ -15,6 +10,7 @@ export interface PairingState {
   expiresAt: number | null;
 }
 
+import { isBridgePairingCode, normalizePairingCode } from '@agiworkforce/types';
 import { ALLOWED_BRIDGE_HOSTS, DEFAULT_AGI_BRIDGE_URL } from '../../background/policy';
 
 // SEC-11: two separate credentials, two separate keys. The bridge secret is
@@ -31,7 +27,6 @@ const STORAGE_KEY_DESKTOP_PAIRED = 'connectedToDesktop';
 const PAIRING_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
 const PAIRING_FINGERPRINT_RE = /^[A-Za-z0-9_-]{4,32}$/;
 const PAIRING_REQUEST_ID_RE = /^[a-f0-9]{16,64}$/;
-const PAIRING_CODE_RE = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6,12}$/;
 
 export function isValidPairingToken(value: string): boolean {
   return typeof value === 'string' && PAIRING_TOKEN_RE.test(value);
@@ -41,16 +36,10 @@ export function isValidPairingFingerprint(value: string): boolean {
   return typeof value === 'string' && PAIRING_FINGERPRINT_RE.test(value);
 }
 
-export function normalizePairingCode(value: string): string {
-  return (value ?? '')
-    .split('')
-    .filter((c) => /[A-Za-z0-9]/.test(c))
-    .join('')
-    .toUpperCase();
-}
+export { normalizePairingCode };
 
 export function isValidPairingCode(value: string): boolean {
-  return PAIRING_CODE_RE.test(normalizePairingCode(value));
+  return isBridgePairingCode(normalizePairingCode(value));
 }
 
 const DEFAULT_BRIDGE_URL = DEFAULT_AGI_BRIDGE_URL;

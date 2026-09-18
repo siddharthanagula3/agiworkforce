@@ -1,9 +1,8 @@
-
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
 import type { ConnectionQuality } from '@/stores/connectionStore';
 import type { RiskLevel } from '@/types/chat';
-import type { CompanionApprovalResponse } from '@agiworkforce/types';
+import { isRelayPairingCode, type CompanionApprovalResponse } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { normalizePairingInput } from '@/services/manualPairing';
@@ -16,13 +15,24 @@ const RECONNECT_COUNTDOWN_SECONDS = 15;
 
 const DISPATCH_ACK_TIMEOUT_MS = 15_000;
 
-const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{12}:[a-fA-F0-9]{64}$/;
+const LEGACY_PAYLOAD_PREFIX = 'agiw:';
 
-const RAW_CODE_PATTERN = /^(?:agiw:)?[A-Za-z0-9]{12}$/;
+const PAIRING_SECRET_PATTERN = /^[a-fA-F0-9]{64}$/;
 
+// normalizePairingInput folds every payload shape down to `agiw:<code>` or
+// `agiw:<code>:<secret>`, so the code is uppercased here and nothing else about
+// it is restated: the shape lives in @agiworkforce/types.
 export function isValidPairingCode(code: string): boolean {
   const normalized = normalizePairingInput(code);
-  return PAIRING_CODE_PATTERN.test(normalized) || RAW_CODE_PATTERN.test(normalized);
+  if (!normalized.startsWith(LEGACY_PAYLOAD_PREFIX)) {
+    return isRelayPairingCode(normalized.toUpperCase());
+  }
+  const [rawCode = '', secret, ...extra] = normalized
+    .slice(LEGACY_PAYLOAD_PREFIX.length)
+    .split(':');
+  if (extra.length > 0) return false;
+  if (!isRelayPairingCode(rawCode.toUpperCase())) return false;
+  return secret === undefined || PAIRING_SECRET_PATTERN.test(secret);
 }
 
 export function extractPairingCode(raw: string): string {
