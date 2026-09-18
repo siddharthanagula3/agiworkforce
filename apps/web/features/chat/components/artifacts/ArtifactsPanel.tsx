@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button, EmptyState } from '@agiworkforce/ui';
-import { useChatProjectStore, useChatUIStore } from '@agiworkforce/unified-chat';
+import {
+  MAX_SIDE_PANEL_WIDTH,
+  MIN_SIDE_PANEL_WIDTH,
+  useChatProjectStore,
+  useChatUIStore,
+} from '@agiworkforce/unified-chat';
 import type { PrivacyMode, SharedArtifact } from '@agiworkforce/types';
 import {
   publishArtifact as publishArtifactService,
@@ -194,8 +199,8 @@ export function resolveArtifactOriginPrivacyMode(
   ]);
 }
 
-const MIN_PANEL_WIDTH = 280;
-const MAX_PANEL_WIDTH = 900;
+const MIN_PANEL_WIDTH = MIN_SIDE_PANEL_WIDTH;
+const MAX_PANEL_WIDTH = MAX_SIDE_PANEL_WIDTH;
 const PANEL_WIDTH_KEY_STEP = 24;
 
 function useOverlayLayout(): 'unknown' | 'mobile' | 'desktop' {

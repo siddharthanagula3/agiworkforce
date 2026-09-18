@@ -1,5 +1,6 @@
 import { detectExplicitWebSearchIntent } from '@agiworkforce/search';
 
+import { annotateActiveSpan } from '@/lib/observability/span';
 import {
   forcedFunctionToolChoice,
   isForcedToolChoiceFor,
@@ -8,7 +9,8 @@ import {
 
 import { WEB_SEARCH_TOOL, webSearchToolDef } from './web-search-tool';
 
-export type RequiredSearchSource = 'work_mode' | 'explicit_intent' | 'research_task';
+export type RequiredSearchSource =
+  'explicit_mode' | 'work_mode' | 'explicit_intent' | 'freshness' | 'research_task';
 
 export type WebSearchRequirement = {
   required: boolean;
@@ -16,6 +18,85 @@ export type WebSearchRequirement = {
 };
 
 const NOT_REQUIRED: WebSearchRequirement = { required: false, source: null };
+
+// Phrasing that dates an answer: whatever the model recalls is from training
+// time, and the user asked about now.
+const FRESHNESS_PHRASES = [
+  'yesterday',
+  'last night',
+  'this afternoon',
+  'this evening',
+  'this quarter',
+  'this year',
+  'last week',
+  'last month',
+  'as of today',
+  'at the moment',
+  'so far this year',
+  'newest',
+  'just announced',
+  'just released',
+  'just launched',
+  'recently',
+];
+
+/** Subjects whose correct answer changes without anyone republishing a page. */
+const VOLATILE_SUBJECTS = [
+  'stock price',
+  'share price',
+  'exchange rate',
+  'interest rate',
+  'election results',
+  'who won',
+  'final score',
+  'release date',
+  'weather',
+  'forecast',
+];
+
+const FRESHNESS_PATTERNS = [...FRESHNESS_PHRASES, ...VOLATILE_SUBJECTS].map(
+  (phrase) => new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}\\b`, 'i'),
+);
+
+const YEAR_PATTERN = /\b(20\d{2})\b/g;
+
+// The recency keywords stay owned by `@agiworkforce/search`; this adds the
+// phrasings, volatile subjects and dates that list does not carry.
+export function detectFreshnessIntent(message: string, now: Date = new Date()): boolean {
+  if (!message.trim()) return false;
+  if (detectExplicitWebSearchIntent(message) === 'recency') return true;
+  if (FRESHNESS_PATTERNS.some((pattern) => pattern.test(message))) return true;
+  const currentYear = now.getUTCFullYear();
+  for (const match of message.matchAll(YEAR_PATTERN)) {
+    if (Number(match[1]) >= currentYear) return true;
+  }
+  return false;
+}
+
+export type WebSearchRequirementInput = {
+  webSearchEnabled: boolean | undefined;
+  agiWorkRun: boolean;
+  researchTask: boolean;
+  userMessage: string;
+  /** The turn asked for a search outright (Search mode, `/search`). */
+  searchRequested?: boolean;
+  /** Injectable clock so the year classifier is deterministic under test. */
+  now?: Date;
+};
+
+function classifyWebSearchRequirement(input: WebSearchRequirementInput): WebSearchRequirement {
+  if (input.webSearchEnabled === false) return NOT_REQUIRED;
+  if (input.searchRequested === true) return { required: true, source: 'explicit_mode' };
+  if (input.agiWorkRun) return { required: true, source: 'work_mode' };
+  if (detectExplicitWebSearchIntent(input.userMessage) !== null) {
+    return { required: true, source: 'explicit_intent' };
+  }
+  if (input.researchTask) return { required: true, source: 'research_task' };
+  if (detectFreshnessIntent(input.userMessage, input.now)) {
+    return { required: true, source: 'freshness' };
+  }
+  return NOT_REQUIRED;
+}
 
 /**
  * Is a search mandatory for this turn, and which signal made it so?
@@ -25,26 +106,19 @@ const NOT_REQUIRED: WebSearchRequirement = { required: false, source: null };
  * free to answer from memory, which is what produced answers with no sources
  * on turns whose whole point was current information.
  */
-export function resolveWebSearchRequirement(input: {
-  webSearchEnabled: boolean | undefined;
-  agiWorkRun: boolean;
-  researchTask: boolean;
-  userMessage: string;
-}): WebSearchRequirement {
-  if (input.webSearchEnabled === false) return NOT_REQUIRED;
-  if (input.agiWorkRun) return { required: true, source: 'work_mode' };
-  if (detectExplicitWebSearchIntent(input.userMessage) !== null) {
-    return { required: true, source: 'explicit_intent' };
-  }
-  if (input.researchTask) return { required: true, source: 'research_task' };
-  return NOT_REQUIRED;
+export function resolveWebSearchRequirement(
+  input: WebSearchRequirementInput,
+): WebSearchRequirement {
+  const requirement = classifyWebSearchRequirement(input);
+  annotateActiveSpan({
+    'web_search.required': requirement.required,
+    'web_search.source': requirement.source ?? 'none',
+  });
+  return requirement;
 }
 
 export type AttachedSearchToolKind =
-  | 'generic-function'
-  | 'openai-hosted'
-  | 'anthropic-server'
-  | 'google-builtin';
+  'generic-function' | 'openai-hosted' | 'anthropic-server' | 'google-builtin';
 
 const ANTHROPIC_SERVER_SEARCH_TYPE_PREFIX = `${WEB_SEARCH_TOOL}_`;
 const GOOGLE_BUILTIN_SEARCH_KEY = 'google_search';

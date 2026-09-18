@@ -367,6 +367,7 @@ export const ChatCompletionRequestSchema = z
       .optional(),
     seed: z.number().int().optional(),
     web_search: z.boolean().optional(),
+    search_requested: z.boolean().optional(),
     web_fetch: z.boolean().optional(),
     /** Per-chat Memory override. False skips memory injection and memory writes for this turn. */
     memory_enabled: z.boolean().optional(),
@@ -4021,6 +4022,7 @@ export async function processRequest(
 
   const searchRequirement = resolveWebSearchRequirement({
     webSearchEnabled: chatRequest.web_search,
+    searchRequested: chatRequest.search_requested === true,
     agiWorkRun: chatRequest.work_mode === 'agiwork',
     researchTask: resolvedTaskType === 'research',
     userMessage: lastUserText,

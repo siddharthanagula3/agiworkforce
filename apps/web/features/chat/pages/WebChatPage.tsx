@@ -292,6 +292,8 @@ type SendMeta = {
   /** Project scoping the send; threads into createConversation → project_id. */
   projectId?: string | null;
   webSearchEnabled?: boolean;
+  /** `/search` on this turn: the server makes the search mandatory. */
+  searchRequested?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
@@ -1810,6 +1812,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             },
             attachments: resolvedAttachments,
             webSearch: options.meta?.webSearchEnabled,
+            searchRequested: options.meta?.searchRequested,
             webFetch: options.meta?.webSearchEnabled,
             thinkingEnabled: options.meta?.thinkingEnabled,
             codeExecution: options.meta?.codeExecutionEnabled,

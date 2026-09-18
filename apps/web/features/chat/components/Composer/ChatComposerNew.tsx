@@ -294,6 +294,9 @@ export interface ComposerSendMeta {
   /** Project scoping the send (threads into conversation creation). */
   projectId: string | null;
   webSearchEnabled?: boolean;
+  /** Asked for a search, not merely allowed one. `webSearchEnabled` is ambient:
+   * it tracks model capability, so it cannot express intent. */
+  searchRequested?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
@@ -575,6 +578,8 @@ type SlashCommandOutcome =
       toggles: Partial<ComposerToggleState>;
       /** Extended thinking lives in its own store, so it is reported separately. */
       enableThinking?: boolean;
+      /** The command asked for a search outright, not merely for the tool to be offered. */
+      searchRequested?: boolean;
     };
 
 /**
@@ -2230,6 +2235,7 @@ const ChatComposerNewComponent = ({
             status: 'applied',
             content: argument,
             toggles: { webSearchEnabled: true },
+            searchRequested: true,
           };
         case 'think':
           if (!isAutoModeModelId(composerSelectedModelId) && !modelSupportsThinkingCap) {
@@ -2425,6 +2431,7 @@ const ChatComposerNewComponent = ({
      * form go through exactly the same capability checks.
      */
     let outgoingContent = message;
+    let sendSearchRequested = false;
     let sendWebSearchEnabled = webSearchEnabled;
     let sendCodeExecutionEnabled = codeExecutionEnabled;
     let sendThinkingEnabled = thinkingEnabled;
@@ -2440,6 +2447,7 @@ const ChatComposerNewComponent = ({
       }
       outgoingContent = commitSlashCommand(outcome);
       sendWebSearchEnabled = outcome.toggles.webSearchEnabled ?? sendWebSearchEnabled;
+      sendSearchRequested = outcome.searchRequested === true;
       sendCodeExecutionEnabled = outcome.toggles.codeExecutionEnabled ?? sendCodeExecutionEnabled;
       sendImageMode = outcome.toggles.imageMode ?? sendImageMode;
       sendThinkingEnabled = outcome.enableThinking === true || sendThinkingEnabled;
@@ -2596,6 +2604,7 @@ const ChatComposerNewComponent = ({
         workMode: canUseAgiWork ? workMode : 'chat',
         projectId: pickerActiveProjectId,
         webSearchEnabled: sendWebSearchEnabled,
+        ...(sendSearchRequested ? { searchRequested: true } : {}),
         thinkingEnabled:
           sendThinkingEnabled &&
           (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),

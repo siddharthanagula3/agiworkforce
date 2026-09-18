@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { safePlatform } from '@shared/utils/browser-utils';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { OPEN_SEARCH_SHORTCUT } from '@agiworkforce/ui';
 
 // A fresh [] each render changes the identity every time and defeats the
 // memoization below, which is what the exhaustive-deps warning was pointing at.
@@ -22,13 +23,7 @@ export type KeyboardShortcutDoc = Omit<KeyboardShortcut, 'action'> & { id: strin
 
 export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
   {
-    // Not Cmd/Ctrl+K: CommandPaletteProvider binds that on `document` in the
-    // capture phase and stops propagation, so this listener never saw it and
-    // the row the settings list advertised opened a different surface.
-    key: 'F',
-    ctrl: true,
-    meta: true,
-    shift: true,
+    ...OPEN_SEARCH_SHORTCUT,
     id: 'open-search',
     description: 'Open search',
     category: 'navigation',

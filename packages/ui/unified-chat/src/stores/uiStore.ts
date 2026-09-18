@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ThemeMode } from '../lib/tokens';
 
+/** The resizable side panel's width bounds, shared with every surface that drags it. */
+export const MIN_SIDE_PANEL_WIDTH = 280;
+export const MAX_SIDE_PANEL_WIDTH = 900;
+
+export function clampSidePanelWidth(width: number): number {
+  return Math.max(MIN_SIDE_PANEL_WIDTH, Math.min(MAX_SIDE_PANEL_WIDTH, width));
+}
+
 type ActiveView = 'chat' | 'projects' | 'project-detail' | 'skills' | 'connectors' | 'customize';
 type ActiveRightPanel = 'artifact' | null;
 
@@ -52,8 +60,7 @@ export const useUIStore = create<UIState>()(
 
       closeArtifactPanel: () => set({ activeRightPanel: null }),
 
-      setArtifactPanelWidth: (width) =>
-        set({ artifactPanelWidth: Math.max(280, Math.min(900, width)) }),
+      setArtifactPanelWidth: (width) => set({ artifactPanelWidth: clampSidePanelWidth(width) }),
 
       openSettings: (tab) => set({ settingsOpen: true, settingsTab: tab ?? 'general' }),
 
