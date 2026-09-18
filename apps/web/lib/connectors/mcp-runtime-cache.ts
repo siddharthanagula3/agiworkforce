@@ -68,8 +68,9 @@ export class NeonMcpResponseCacheStore implements ResponseCacheStore {
       const rows = await db.query<CacheRow>(
         `select value, stamp, expires_at_ms, scope
            from public.mcp_response_cache
-          where method = $1 and params_key = $2 and partition_key = $3`,
-        normalizedKey(key),
+          where method = $1 and params_key = $2 and partition_key = $3
+            and (expires_at_ms is null or expires_at_ms >= $4)`,
+        [...normalizedKey(key), Date.now()],
       );
       const row = rows[0];
       if (!row) return undefined;
@@ -193,6 +194,84 @@ export async function saveMcpDiscovery(
     );
   } catch (error) {
     if (!isCacheSchemaUnavailable(error)) throw error;
+  }
+}
+
+/**
+ * The cache is keyed by a digest of the authorization context, so these are
+ * the only handles anything has on a subject's cached response bodies. They
+ * live here because erasure and disconnect have to build the same string the
+ * runtime cached under.
+ */
+export const mcpAuthorizationContext = {
+  userCustomConnector: (userId: string, rowId: string) => `user:${userId}:custom:${rowId}`,
+  userCustomUrl: (userId: string, url: string) => `user:${userId}:custom-url:${url}`,
+  userOauthConnector: (userId: string, connectorId: string) =>
+    `user:${userId}:oauth:${connectorId}`,
+  operatorConnector: (connectorId: string) => `operator:${connectorId}`,
+  organizationSharedServer: (organizationId: string, rowId: string) =>
+    `organization:${organizationId}:shared:${rowId}`,
+} as const;
+
+export function mcpResponseCachePartitionKey(authorizationContext: string): string {
+  return digest(authorizationContext);
+}
+
+/**
+ * The table has no subject column, so a partition digest is the only way to
+ * reach one holder's rows. Without this call a disconnected connector's
+ * response bodies outlive the grant that produced them.
+ */
+export async function purgeMcpResponseCachePartitions(
+  authorizationContexts: readonly string[],
+): Promise<number> {
+  const partitions = [...new Set(authorizationContexts.map(mcpResponseCachePartitionKey))];
+  if (partitions.length === 0) return 0;
+  try {
+    const rows = await getNeonDb().query<{ partition_key: string }>(
+      `delete from public.mcp_response_cache
+        where partition_key = any($1::text[])
+        returning partition_key`,
+      [partitions],
+    );
+    return rows.length;
+  } catch (error) {
+    if (isCacheSchemaUnavailable(error)) return 0;
+    throw error;
+  }
+}
+
+/**
+ * expires_at_ms is written and indexed but nothing ever read it back, so an
+ * expired body stayed readable for as long as the row existed.
+ */
+export async function sweepExpiredMcpResponseCache(nowMs: number = Date.now()): Promise<number> {
+  try {
+    const rows = await getNeonDb().query<{ partition_key: string }>(
+      `delete from public.mcp_response_cache
+        where expires_at_ms is not null and expires_at_ms < $1
+        returning partition_key`,
+      [nowMs],
+    );
+    return rows.length;
+  } catch (error) {
+    if (isCacheSchemaUnavailable(error)) return 0;
+    logger.warn({ error }, '[mcp-cache] expired response sweep failed');
+    return 0;
+  }
+}
+
+export async function sweepExpiredMcpDiscoveryCache(): Promise<number> {
+  try {
+    const rows = await getNeonDb().query<{ server_key: string }>(
+      `delete from public.mcp_discovery_cache where expires_at < now() returning server_key`,
+      [],
+    );
+    return rows.length;
+  } catch (error) {
+    if (isCacheSchemaUnavailable(error)) return 0;
+    logger.warn({ error }, '[mcp-cache] expired discovery sweep failed');
+    return 0;
   }
 }
 

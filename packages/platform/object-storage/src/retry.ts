@@ -1,12 +1,19 @@
 import {
   ObjectStorageTimeoutError,
+  supportsMultipartUploads,
+  type CompleteMultipartUploadInput,
   type CopyObjectIfMatchInput,
+  type CreateMultipartUploadInput,
+  type MultipartUploadHandle,
   type ObjectStore,
+  type PendingMultipartUpload,
   type PresignPutInput,
   type PutObjectInput,
   type StoredObjectBytes,
   type StoredObjectHead,
   type StoredObjectStream,
+  type UploadPartInput,
+  type UploadedPart,
 } from './types';
 
 export const OBJECT_STORAGE_RETRY_MAX_ATTEMPTS_ENV = 'AGI_STORAGE_RETRY_MAX_ATTEMPTS';
@@ -208,5 +215,38 @@ export function createRetryingObjectStore(
     presignPut(input: PresignPutInput): Promise<string> {
       return run('presignPut', () => store.presignPut(input));
     },
+
+    ...(supportsMultipartUploads(store)
+      ? {
+          createMultipartUpload(input: CreateMultipartUploadInput): Promise<MultipartUploadHandle> {
+            return run('createMultipartUpload', () => store.createMultipartUpload(input));
+          },
+
+          uploadPart(input: UploadPartInput): Promise<UploadedPart> {
+            return run('uploadPart', () => store.uploadPart(input));
+          },
+
+          listUploadedParts(handle: MultipartUploadHandle): Promise<UploadedPart[]> {
+            return run('listUploadedParts', () => store.listUploadedParts(handle));
+          },
+
+          completeMultipartUpload(input: CompleteMultipartUploadInput): Promise<void> {
+            return run('completeMultipartUpload', () => store.completeMultipartUpload(input));
+          },
+
+          abortMultipartUpload(handle: MultipartUploadHandle): Promise<void> {
+            return run('abortMultipartUpload', () => store.abortMultipartUpload(handle));
+          },
+
+          listPendingMultipartUploads(
+            bucket: string,
+            prefix?: string,
+          ): Promise<PendingMultipartUpload[]> {
+            return run('listPendingMultipartUploads', () =>
+              store.listPendingMultipartUploads(bucket, prefix),
+            );
+          },
+        }
+      : {}),
   };
 }

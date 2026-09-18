@@ -1,16 +1,44 @@
 export type {
+  CompleteMultipartUploadInput,
   CopyObjectIfMatchInput,
+  CreateMultipartUploadInput,
+  MultipartObjectStore,
+  MultipartUploadHandle,
   ObjectBody,
+  ObjectEncryption,
   ObjectStorageProvider,
   ObjectStore,
+  PendingMultipartUpload,
   PresignPutInput,
   PutObjectInput,
   StoredObjectBytes,
   StoredObjectHead,
   StoredObjectStream,
+  UploadPartInput,
+  UploadedPart,
 } from './types';
 
-export { ObjectStorageConfigError, ObjectStorageTimeoutError } from './types';
+export {
+  ObjectChecksumMismatchError,
+  ObjectStorageConfigError,
+  ObjectStorageTimeoutError,
+  supportsMultipartUploads,
+} from './types';
+
+export {
+  assertObjectChecksum,
+  getVerifiedObject,
+  objectChecksum,
+  putVerifiedObject,
+  type PutVerifiedObjectInput,
+} from './checksum';
+
+export {
+  abortOrphanedMultipartUploads,
+  DEFAULT_ORPHAN_MULTIPART_AGE_MS,
+  type AbortOrphanedMultipartUploadsInput,
+  type OrphanedMultipartSweep,
+} from './lifecycle';
 
 export {
   hasObjectStorageCredentials,
@@ -18,6 +46,8 @@ export {
   resolveObjectStorageConfig,
   OBJECT_STORAGE_ACCESS_KEY_ID_ENV,
   OBJECT_STORAGE_BUCKET_ENV,
+  OBJECT_STORAGE_ENCRYPTION_ENV,
+  OBJECT_STORAGE_ENCRYPTION_KEY_ID_ENV,
   OBJECT_STORAGE_ENDPOINT_ENV,
   OBJECT_STORAGE_FORCE_PATH_STYLE_ENV,
   OBJECT_STORAGE_PRIVATE_BUCKET_ENV,
@@ -48,7 +78,13 @@ export {
   type S3ObjectStoreOptions,
 } from './adapters/s3';
 
-export { bindPresignedUpload, type BoundPresignUpload } from './presign';
+export {
+  bindPresignedUpload,
+  isPresignedUrlExpired,
+  presignedUrlExpiresAt,
+  PRESIGNED_URL_MAX_TTL_SECONDS,
+  type BoundPresignUpload,
+} from './presign';
 
 export {
   createRetryingObjectStore,

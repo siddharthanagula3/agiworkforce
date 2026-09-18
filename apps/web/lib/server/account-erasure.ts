@@ -20,6 +20,10 @@ import {
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
 import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
+import {
+  mcpAuthorizationContext,
+  purgeMcpResponseCachePartitions,
+} from '@/lib/connectors/mcp-runtime-cache';
 
 export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }> = [
   { table: 'retrieval_chunks', column: 'user_id' },
@@ -105,6 +109,13 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'token_credits', column: 'user_id' },
   { table: 'subscriptions', column: 'user_id' },
   { table: 'organization_members', column: 'user_id' },
+  { table: 'study_sessions', column: 'user_id' },
+  { table: 'context_manifests', column: 'user_id' },
+  { table: 'notebook_runs', column: 'user_id' },
+  { table: 'file_lineage', column: 'user_id' },
+  { table: 'identity_risk_observations', column: 'user_id' },
+  { table: 'account_compromise_responses', column: 'user_id' },
+  { table: 'authentication_attempts', column: 'user_id' },
   { table: 'profiles', column: 'id' },
 ];
 
@@ -127,6 +138,47 @@ async function deleteBetaApplicationsByEmail(
     logger.error({ userId, error }, 'Account erasure failed to clear beta applications by email');
     throw error;
   }
+}
+
+/**
+ * mcp_response_cache is keyed by a digest of the authorization context and has
+ * no subject column, so the rows can only be reached by rebuilding each context
+ * this account's connectors cached under. Deleting the connector rows first
+ * would leave the cached bodies unreachable and permanent.
+ */
+async function eraseConnectorResponseCache(
+  db: { query: <T>(sql: string, params: unknown[]) => Promise<T[]> },
+  userId: string,
+): Promise<number> {
+  const contexts: string[] = [];
+
+  try {
+    const custom = await db.query<{ id: string; url: string }>(
+      'select id, url from public.user_custom_connectors where user_id = $1',
+      [userId],
+    );
+    for (const row of custom) {
+      contexts.push(mcpAuthorizationContext.userCustomConnector(userId, row.id));
+      contexts.push(mcpAuthorizationContext.userCustomUrl(userId, row.url));
+    }
+  } catch (error) {
+    if (!isSchemaAbsent(error)) throw error;
+  }
+
+  try {
+    const granted = await db.query<{ connector_id: string }>(
+      'select connector_id from public.connector_oauth_grants where user_id = $1',
+      [userId],
+    );
+    for (const row of granted) {
+      contexts.push(mcpAuthorizationContext.userOauthConnector(userId, row.connector_id));
+      contexts.push(mcpAuthorizationContext.operatorConnector(row.connector_id));
+    }
+  } catch (error) {
+    if (!isSchemaAbsent(error)) throw error;
+  }
+
+  return purgeMcpResponseCachePartitions(contexts);
 }
 
 export const ANONYMIZED_USER_COLUMNS: ReadonlyArray<{
@@ -221,6 +273,11 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   organizations:
     'Deleting an organization because its creator left would erase every other member. Ownership transfer is a separate flow.',
   support_agent_presence: 'Support-staff roster, not customer data.',
+  web_messages: 'Cascades from web_conversations (0001).',
+  published_artifact_versions:
+    'Cascades from published_artifacts (0257), which carries every version of an artifact this account published.',
+  organization_admin_delegations:
+    'Cascades from profiles (0256) on delegate_user_id and on granted_by_user_id. A delegation this user granted to somebody else is workspace configuration, and revoking it when the grantor leaves would drop the other member’s admin access.',
 };
 
 export interface AccountErasureReport {
@@ -757,6 +814,7 @@ export async function eraseUserAccountData(
     // Without this sweep an erased user's name and email survive in the intake
     // table indefinitely.
     await deleteBetaApplicationsByEmail(db, userId);
+    await eraseConnectorResponseCache(db, userId);
 
     for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
       try {

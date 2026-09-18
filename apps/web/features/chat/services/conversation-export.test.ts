@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ChatExportService } from './conversation-export';
+import { ChatExportService, EXPIRING_LINK_PLACEHOLDER } from './conversation-export';
 import type { ChatMessage, ChatSession } from '../types';
 
 const HOSTILE_TITLE = '</title><img src=x onerror=alert(1)>';
@@ -91,5 +91,102 @@ describe('includeTimestamps reaches every format that offers it', () => {
 
   it('keeps timestamps when the option is omitted', () => {
     expect(service.exportAsMarkdown(session('t'), messages())).toContain(stamp);
+  });
+});
+
+const SIGNED_ATTACHMENT_URL =
+  'https://bucket.objects.example.test/private-media/clip.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256' +
+  '&X-Amz-Date=20260901T000000Z&X-Amz-Expires=300&X-Amz-Signature=deadbeef';
+
+function messageWithSignedAttachment(): ChatMessage[] {
+  return [
+    {
+      id: 'message-1',
+      role: 'user',
+      content: 'here it is',
+      createdAt: new Date('2026-01-01T12:00:00.000Z'),
+      metadata: {
+        attachments: [
+          { id: 'a-1', type: 'video', name: 'clip.mp4', size: 2048, url: SIGNED_ATTACHMENT_URL },
+          {
+            id: 'a-2',
+            type: 'document',
+            name: 'note.pdf',
+            size: 12,
+            url: '/api/files/3f1d6c52-9a4e-4f2b-9c1a-2d5e7b8a0c11',
+          },
+        ],
+        sourceUrl: SIGNED_ATTACHMENT_URL,
+      },
+    } as ChatMessage,
+  ];
+}
+
+describe('a downloaded export outlives the session that made it', () => {
+  const service = new ChatExportService();
+
+  it('strips every link that expires on its own instead of shipping a live one', () => {
+    const exported = new ChatExportService().exportAsJSON(
+      session('t'),
+      messageWithSignedAttachment(),
+    );
+
+    expect(exported).not.toContain('X-Amz-Signature');
+    expect(exported).not.toContain('X-Amz-Expires');
+    expect(exported).toContain(EXPIRING_LINK_PLACEHOLDER);
+  });
+
+  it('keeps the authenticated link, which is authorised per request', () => {
+    const exported = service.exportAsJSON(session('t'), messageWithSignedAttachment());
+    const parsed = JSON.parse(exported) as {
+      messages: Array<{ attachments: Array<{ name: string; url: string }> }>;
+    };
+
+    expect(parsed.messages[0]?.attachments[1]?.url).toBe(
+      '/api/files/3f1d6c52-9a4e-4f2b-9c1a-2d5e7b8a0c11',
+    );
+    expect(parsed.messages[0]?.attachments[0]?.url).toBe(EXPIRING_LINK_PLACEHOLDER);
+    expect(parsed.messages[0]?.attachments[0]?.name).toBe('clip.mp4');
+  });
+
+  it('never puts an attachment link into the readable formats at all', () => {
+    const msgs = messageWithSignedAttachment();
+
+    for (const content of [
+      service.exportAsMarkdown(session('t'), msgs),
+      service.exportAsHTML(session('t'), msgs),
+      service.exportAsText(session('t'), msgs),
+    ]) {
+      expect(content).not.toContain('X-Amz-Signature');
+      expect(content).toContain('clip.mp4');
+    }
+  });
+
+  it('revokes the object url it handed the browser, so the blob does not outlive the click', () => {
+    const created: string[] = [];
+    const revoked: string[] = [];
+    const objectUrl = 'blob:https://agiworkforce.com/export';
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = () => undefined;
+    URL.createObjectURL = () => {
+      created.push(objectUrl);
+      return objectUrl;
+    };
+    URL.revokeObjectURL = (value: string) => {
+      revoked.push(value);
+    };
+
+    try {
+      service.downloadFile('body', 'chat.json', 'application/json');
+    } finally {
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+      HTMLAnchorElement.prototype.click = originalClick;
+    }
+
+    expect(created).toEqual([objectUrl]);
+    expect(revoked).toEqual([objectUrl]);
   });
 });

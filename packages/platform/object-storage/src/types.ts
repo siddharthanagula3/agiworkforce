@@ -4,12 +4,19 @@ export type ObjectStorageProvider = 's3' | 'memory' | 'none';
 
 export type ObjectBody = Uint8Array | Readable;
 
+export interface ObjectEncryption {
+  algorithm: string;
+  keyId: string | undefined;
+}
+
 export interface PutObjectInput {
   bucket: string;
   key: string;
   body: ObjectBody;
   contentType: string;
   contentLength?: number;
+  checksumSha256?: string;
+  metadata?: Readonly<Record<string, string>>;
 }
 
 export interface StoredObjectBytes {
@@ -28,6 +35,9 @@ export interface StoredObjectHead {
   contentLength: number | undefined;
   contentType: string | undefined;
   etag: string | undefined;
+  checksumSha256: string | undefined;
+  encryption: ObjectEncryption | undefined;
+  metadata: Readonly<Record<string, string>> | undefined;
 }
 
 export interface CopyObjectIfMatchInput {
@@ -43,6 +53,48 @@ export interface PresignPutInput {
   contentType: string;
   contentLength: number;
   expiresInSeconds: number;
+}
+
+export interface CreateMultipartUploadInput {
+  bucket: string;
+  key: string;
+  contentType: string;
+  metadata?: Readonly<Record<string, string>>;
+}
+
+export interface MultipartUploadHandle {
+  bucket: string;
+  key: string;
+  uploadId: string;
+}
+
+export interface UploadPartInput {
+  bucket: string;
+  key: string;
+  uploadId: string;
+  partNumber: number;
+  body: Uint8Array;
+  checksumSha256?: string;
+}
+
+export interface UploadedPart {
+  partNumber: number;
+  etag: string;
+  size: number;
+  checksumSha256: string;
+}
+
+export interface CompleteMultipartUploadInput {
+  bucket: string;
+  key: string;
+  uploadId: string;
+  parts: readonly UploadedPart[];
+}
+
+export interface PendingMultipartUpload {
+  key: string;
+  uploadId: string;
+  initiatedAtMs: number;
 }
 
 /**
@@ -69,12 +121,65 @@ export interface ObjectStore {
   copyIfMatch(input: CopyObjectIfMatchInput): Promise<boolean>;
 
   presignPut(input: PresignPutInput): Promise<string>;
+
+  /**
+   * Multipart is optional because a host may not offer it; every consumer goes
+   * through `supportsMultipartUploads` rather than assuming it is there.
+   */
+  createMultipartUpload?(input: CreateMultipartUploadInput): Promise<MultipartUploadHandle>;
+
+  uploadPart?(input: UploadPartInput): Promise<UploadedPart>;
+
+  listUploadedParts?(handle: MultipartUploadHandle): Promise<UploadedPart[]>;
+
+  completeMultipartUpload?(input: CompleteMultipartUploadInput): Promise<void>;
+
+  abortMultipartUpload?(handle: MultipartUploadHandle): Promise<void>;
+
+  listPendingMultipartUploads?(bucket: string, prefix?: string): Promise<PendingMultipartUpload[]>;
+}
+
+export type MultipartObjectStore = ObjectStore &
+  Required<
+    Pick<
+      ObjectStore,
+      | 'createMultipartUpload'
+      | 'uploadPart'
+      | 'listUploadedParts'
+      | 'completeMultipartUpload'
+      | 'abortMultipartUpload'
+      | 'listPendingMultipartUploads'
+    >
+  >;
+
+const MULTIPART_OPERATIONS = [
+  'createMultipartUpload',
+  'uploadPart',
+  'listUploadedParts',
+  'completeMultipartUpload',
+  'abortMultipartUpload',
+  'listPendingMultipartUploads',
+] as const;
+
+export function supportsMultipartUploads(store: ObjectStore): store is MultipartObjectStore {
+  return MULTIPART_OPERATIONS.every((operation) => typeof store[operation] === 'function');
 }
 
 export class ObjectStorageConfigError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ObjectStorageConfigError';
+  }
+}
+
+export class ObjectChecksumMismatchError extends Error {
+  constructor(
+    readonly key: string,
+    readonly expected: string,
+    readonly actual: string,
+  ) {
+    super(`Object ${key} does not match the checksum it was stored with.`);
+    this.name = 'ObjectChecksumMismatchError';
   }
 }
 
