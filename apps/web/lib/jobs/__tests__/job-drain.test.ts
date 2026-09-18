@@ -46,6 +46,15 @@ vi.mock('../job-service', async (importOriginal) => {
   };
 });
 
+vi.mock('../cancellation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../cancellation')>();
+  return {
+    ...actual,
+    watchJobCancellation: () => ({ stop: () => undefined }),
+    reapAbandonedCancellations: async () => 0,
+  };
+});
+
 import { getTraceContext } from '@/lib/observability/trace-context';
 
 import { drainBackgroundJobs } from '../job-drain';
@@ -68,10 +77,16 @@ function job(overrides: Partial<BackgroundJob> = {}): BackgroundJob {
     maxAttempts: 6,
     runAfter: '2026-09-17T00:00:00.000Z',
     leaseExpiresAt: '2026-09-17T00:00:30.000Z',
+    workerId: 'worker-a',
     idempotencyKey: null,
     lastError: null,
+    retryReason: null,
     deadReason: null,
     deadLetteredAt: null,
+    cancelRequestedAt: null,
+    cancelRequestedBy: null,
+    cancelReason: null,
+    usage: null,
     originRegion: null,
     createdAt: '2026-09-17T00:00:00.000Z',
     updatedAt: '2026-09-17T00:00:00.000Z',
