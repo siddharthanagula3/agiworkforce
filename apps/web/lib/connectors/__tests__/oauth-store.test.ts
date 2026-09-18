@@ -22,9 +22,12 @@ import {
   listPendingConnectorIds,
   getConnectorOAuthGrant,
   getUserConnectorOAuthGrantSummaries,
+  listConnectorAccounts,
   revokeConnectorOAuthGrant,
   upsertConnectorOAuthGrant,
+  __resetConnectorAccountColumnProbeForTests,
 } from '../oauth-store';
+import { selectConnectorAccount } from '../accounts';
 import { encryptConnectorToken } from '@/lib/custom-connector-crypto';
 
 const STATE = 'c'.repeat(64);
@@ -234,6 +237,10 @@ describe('grants', () => {
       connectedAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-01T00:00:00.000Z',
       needsReauthorization: true,
+      accountKey: 'default',
+      accountLabel: null,
+      accountScope: 'personal',
+      isDefault: true,
     });
     expect(JSON.stringify(summaries)).not.toMatch(/token_enc|accessToken|refreshToken/);
   });
@@ -270,5 +277,111 @@ describe('listing unfinished authorizations', () => {
       Object.assign(new Error('relation does not exist'), { code: '42P01' }),
     );
     expect(await listPendingConnectorIds('user_1')).toEqual([]);
+  });
+});
+
+describe('multiple accounts per connector', () => {
+  beforeEach(() => {
+    __resetConnectorAccountColumnProbeForTests();
+  });
+
+  it('keys a second account of the same connector on its own row', async () => {
+    await upsertConnectorOAuthGrant(
+      'user-1',
+      'gmail',
+      {
+        accessToken: 'token',
+        refreshToken: null,
+        tokenType: 'Bearer',
+        grantedScopes: ['gmail.readonly'],
+        accessTokenExpiresAt: null,
+        tokenEndpoint: 'https://oauth2.googleapis.com/token',
+      },
+      { accountKey: 'work', accountLabel: 'work@example.com', accountScope: 'work' },
+    );
+
+    const { sql, params } = insertCall();
+    expect(sql).toContain('on conflict (user_id, connector_id, account_key)');
+    expect(params).toContain('work');
+    expect(params).toContain('work@example.com');
+  });
+
+  it('reads back every connected account with its scope and default flag', async () => {
+    mockQuery.mockResolvedValue([
+      {
+        connector_id: 'gmail',
+        granted_scopes: ['gmail.readonly'],
+        access_token_expires_at: null,
+        refresh_token_enc: 'enc',
+        connected_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+        account_key: 'work',
+        account_label: 'work@example.com',
+        account_scope: 'work',
+        is_default: false,
+      },
+      {
+        connector_id: 'gmail',
+        granted_scopes: ['gmail.readonly'],
+        access_token_expires_at: null,
+        refresh_token_enc: 'enc',
+        connected_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-01T00:00:00.000Z',
+        account_key: 'default',
+        account_label: 'me@example.com',
+        account_scope: 'personal',
+        is_default: true,
+      },
+    ]);
+
+    const accounts = await listConnectorAccounts('user-1', 'gmail');
+
+    expect(accounts).toHaveLength(2);
+    expect(accounts.map((account) => account.scope).sort()).toEqual(['personal', 'work']);
+    expect(accounts.find((account) => account.scope === 'work')?.isDefault).toBe(false);
+  });
+
+  it('never resolves a work request to the personal account of the same connector', async () => {
+    mockQuery.mockResolvedValue([
+      {
+        connector_id: 'gmail',
+        granted_scopes: [],
+        access_token_expires_at: null,
+        refresh_token_enc: 'enc',
+        connected_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-01T00:00:00.000Z',
+        account_key: 'default',
+        account_label: 'me@example.com',
+        account_scope: 'personal',
+        is_default: true,
+      },
+    ]);
+
+    const accounts = await listConnectorAccounts('user-1', 'gmail');
+    const selection = selectConnectorAccount(accounts, 'gmail', { scope: 'work' });
+
+    expect(selection.status).toBe('unresolved');
+    if (selection.status === 'unresolved') {
+      expect(selection.reason).toBe('scope-mismatch');
+      expect(selection.message).toContain('me@example.com');
+    }
+  });
+
+  it('falls back to the single-account statements when 0253 is not applied', async () => {
+    mockExecute.mockRejectedValueOnce(
+      Object.assign(new Error('column "account_key" does not exist'), { code: '42703' }),
+    );
+
+    await upsertConnectorOAuthGrant('user-1', 'gmail', {
+      accessToken: 'token',
+      refreshToken: null,
+      tokenType: 'Bearer',
+      grantedScopes: [],
+      accessTokenExpiresAt: null,
+      tokenEndpoint: 'https://oauth2.googleapis.com/token',
+    });
+
+    const fallback = mockExecute.mock.calls.at(-1);
+    expect(String(fallback?.[0])).toContain('on conflict (user_id, connector_id) do update');
   });
 });

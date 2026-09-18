@@ -88,3 +88,49 @@ describe('saving a research report into a project', () => {
     expect(screen.queryByTestId('research-report-saved-to-project')).toBeNull();
   });
 });
+
+describe('ResearchReportView save to library', () => {
+  it('is its own action, separate from the artifact hand-off and from a project', async () => {
+    setProjects([{ id: 'proj-1', name: 'Runway model' }]);
+    const onSaveToLibrary = vi.fn(async (_file: File) => {});
+    const onCreateArtifact = vi.fn();
+
+    render(
+      <ResearchReportView
+        report={makeReport()}
+        onSaveToLibrary={onSaveToLibrary}
+        onCreateArtifact={onCreateArtifact}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('research-report-save-to-library'));
+
+    await waitFor(() => expect(onSaveToLibrary).toHaveBeenCalledTimes(1));
+    const file = onSaveToLibrary.mock.calls[0]?.[0] as File;
+    expect(file.name.endsWith('.md')).toBe(true);
+    expect(await readFile(file)).toContain('# Node.js release status');
+    expect(onCreateArtifact).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('research-report-saved-to-library')).toHaveTextContent(
+      /Saved to your library/,
+    );
+  });
+
+  it('is not offered by a host that cannot write to the library', () => {
+    setProjects([]);
+    render(<ResearchReportView report={makeReport()} />);
+    expect(screen.queryByTestId('research-report-save-to-library')).toBeNull();
+  });
+
+  it('reports a failed library save instead of claiming it worked', async () => {
+    setProjects([]);
+    const onSaveToLibrary = vi.fn(async (_file: File) => {
+      throw new Error('Your library is full');
+    });
+    render(<ResearchReportView report={makeReport()} onSaveToLibrary={onSaveToLibrary} />);
+
+    fireEvent.click(screen.getByTestId('research-report-save-to-library'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Your library is full/);
+    expect(screen.queryByTestId('research-report-saved-to-library')).toBeNull();
+  });
+});
