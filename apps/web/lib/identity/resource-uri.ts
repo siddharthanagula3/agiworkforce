@@ -39,6 +39,23 @@ export function formatResourceUri(ref: ResourceUri): string {
   return `${RESOURCE_URI_SCHEME}://${ref.kind}/${ref.id}${query}${fragment}`;
 }
 
+/**
+ * The canonical address for a resource named by a free-form type and id, or
+ * null when that pair is not addressable.
+ */
+export function resourceUriFor(ref: {
+  kind: string;
+  id: string | null | undefined;
+  workspaceId?: string | null;
+}): string | null {
+  if (!isConceptName(ref.kind) || !ref.id || !isCanonicalResourceId(ref.id)) return null;
+  return formatResourceUri({
+    kind: ref.kind,
+    id: ref.id,
+    ...(ref.workspaceId ? { workspaceId: ref.workspaceId } : {}),
+  });
+}
+
 export function parseResourceUri(value: string): ResourceUri | null {
   let url: URL;
   try {

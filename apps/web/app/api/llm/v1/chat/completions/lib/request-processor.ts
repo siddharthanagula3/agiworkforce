@@ -172,6 +172,11 @@ import {
 } from '@/lib/services/model-rollout/rollout-routing-inputs';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
+import {
+  orderInstructionBlocks,
+  type InstructionBlock,
+  type InstructionLayer,
+} from '@/lib/prompts/instruction-precedence';
 import { scheduleShadowDispatch } from '@/lib/services/model-rollout/shadow-dispatch-service';
 import { ROUTE_LANES, type FreeLanePlan, type RouteLane } from '@/lib/services/free-lane/plan';
 import {
@@ -1114,11 +1119,12 @@ export function composeManagedSystemPreamble(input: {
     systemPromptAddition: input.dynamicSystemAddition,
   });
   const split = splitSystemPromptCacheBoundary(withDynamicAddition);
-  const stableBlock = [
-    split ? split.stablePrefix : withDynamicAddition,
-    input.customInstructionsPreamble,
-  ]
-    .filter((block): block is string => Boolean(block))
+  const stableBlock = orderInstructionBlocks([
+    { layer: 'system', text: split ? split.stablePrefix : withDynamicAddition },
+    { layer: 'personalized', text: input.customInstructionsPreamble ?? '' },
+  ])
+    .map((block) => block.text)
+    .filter((text) => text.length > 0)
     .join('\n\n');
   const dynamicBlock = split ? split.dynamicSuffix : '';
   return dynamicBlock
@@ -1251,7 +1257,10 @@ export const RESEARCH_SYSTEM_PROMPT_ID = 'research.system';
 // Exported so it can be unit-tested without importing the full processRequest stack.
 export const RESEARCH_SYSTEM_PROMPT = resolvePromptText(RESEARCH_SYSTEM_PROMPT_ID);
 
-const NO_DYNAMIC_SYSTEM_MESSAGE_REFS: ReadonlySet<object> = new Set();
+/** Membership only, so a caller may track the layer of each ref as well. */
+type DynamicSystemMessageRefs = { has(value: object): boolean };
+
+const NO_DYNAMIC_SYSTEM_MESSAGE_REFS: DynamicSystemMessageRefs = new Set<object>();
 
 /**
  * The first static (non-memory, non-skill) system message, so a directive
@@ -1261,7 +1270,7 @@ const NO_DYNAMIC_SYSTEM_MESSAGE_REFS: ReadonlySet<object> = new Set();
  */
 function firstStaticSystemMessageIndex(
   messages: ChatCompletionRequest['messages'],
-  dynamicSystemMessageRefs: ReadonlySet<object>,
+  dynamicSystemMessageRefs: DynamicSystemMessageRefs,
 ): number {
   return messages.findIndex(
     (message) => message.role === 'system' && !dynamicSystemMessageRefs.has(message as object),
@@ -1270,7 +1279,7 @@ function firstStaticSystemMessageIndex(
 
 function applyStaticSystemDirective(
   chatRequest: ChatCompletionRequest,
-  dynamicSystemMessageRefs: ReadonlySet<object>,
+  dynamicSystemMessageRefs: DynamicSystemMessageRefs,
   directive: string,
   join: (existing: string, directive: string) => string,
 ): void {
@@ -1285,7 +1294,7 @@ function applyStaticSystemDirective(
 
 export function applyJsonObjectMode(
   chatRequest: ChatCompletionRequest,
-  dynamicSystemMessageRefs: ReadonlySet<object> = NO_DYNAMIC_SYSTEM_MESSAGE_REFS,
+  dynamicSystemMessageRefs: DynamicSystemMessageRefs = NO_DYNAMIC_SYSTEM_MESSAGE_REFS,
 ): void {
   applyStaticSystemDirective(
     chatRequest,
@@ -1318,7 +1327,7 @@ export function turnPromptStamps(
 
 export function applyResearchMode(
   chatRequest: ChatCompletionRequest,
-  dynamicSystemMessageRefs: ReadonlySet<object> = NO_DYNAMIC_SYSTEM_MESSAGE_REFS,
+  dynamicSystemMessageRefs: DynamicSystemMessageRefs = NO_DYNAMIC_SYSTEM_MESSAGE_REFS,
   promptVariants: Readonly<Record<string, number>> = {},
 ): void {
   chatRequest.web_search = true;
@@ -2634,7 +2643,7 @@ export async function processRequest(
     };
   }
 
-  const dynamicSystemMessageRefs = new Set<object>();
+  const dynamicSystemMessageRefs = new Map<object, InstructionLayer>();
 
   if (chatRequest.mcp_context) {
     try {
@@ -2690,7 +2699,7 @@ export async function processRequest(
         projectId: conversationProjectId,
       });
       if (recall.injected) {
-        dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
+        dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
         pastChatSources = recall.citations;
       }
     } catch (error) {
@@ -2720,7 +2729,7 @@ export async function processRequest(
         }),
       );
       if (chatRequest.messages.length > preMemoryMessageCount) {
-        dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
+        dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
       }
     } catch (error) {
       logger.error(
@@ -3456,7 +3465,7 @@ export async function processRequest(
     }
   }
   if (chatRequest.messages.length > preSkillMessageCount) {
-    dynamicSystemMessageRefs.add(chatRequest.messages[0] as object);
+    dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'developer');
   }
 
   if (chatRequest.office_creation) {
@@ -3966,9 +3975,11 @@ export async function processRequest(
       }) ?? computerUseSoftCapWarning;
   }
 
-  const dynamicSystemSourceMessages = chatRequest.messages.filter((msg) =>
-    dynamicSystemMessageRefs.has(msg),
-  );
+  const dynamicSystemBlocks: InstructionBlock[] = [];
+  for (const msg of chatRequest.messages) {
+    const layer = dynamicSystemMessageRefs.get(msg);
+    if (layer) dynamicSystemBlocks.push({ layer, text: extractTextContent(msg.content) });
+  }
   const staticSourceMessages = chatRequest.messages.filter(
     (msg) => !dynamicSystemMessageRefs.has(msg),
   );
@@ -3979,8 +3990,8 @@ export async function processRequest(
     tool_calls: msg.tool_calls as unknown[] | undefined,
     tool_call_id: msg.tool_call_id,
   }));
-  const dynamicSkillMemoryText = dynamicSystemSourceMessages
-    .map((msg) => extractTextContent(msg.content))
+  const dynamicSkillMemoryText = orderInstructionBlocks(dynamicSystemBlocks)
+    .map((block) => block.text)
     .filter((text) => text.length > 0)
     .join('\n\n');
 
