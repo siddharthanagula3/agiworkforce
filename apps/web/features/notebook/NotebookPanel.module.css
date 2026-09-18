@@ -276,3 +276,22 @@
 .fileDownload:hover {
   color: var(--chat-text-primary);
 }
+
+.runProvenance {
+  margin: 0;
+  color: var(--chat-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cellNotes {
+  padding: 10px 12px;
+  border-top: 1px solid var(--chat-border);
+  background: var(--chat-surface-base);
+  color: var(--chat-text-primary);
+  font-size: 13px;
+}
+
+.cell[data-cell-kind='markdown'] .cellCode {
+  font-family: inherit;
+}

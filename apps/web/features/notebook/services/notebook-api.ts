@@ -55,6 +55,22 @@ const executeSchema = z.object({
   error: z.string().optional(),
 });
 
+const runAllSchema = z.object({
+  session: sessionSchema,
+  runId: z.string(),
+  fromTop: z.boolean(),
+  networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS),
+  completed: z.boolean(),
+  results: z.array(
+    z.object({
+      cellId: z.string(),
+      ok: z.boolean(),
+      outputs: z.array(outputSchema),
+      error: z.string().optional(),
+    }),
+  ),
+});
+
 const fileSchema = z.object({
   path: z.string(),
   name: z.string(),
@@ -66,6 +82,13 @@ const listFilesSchema = z.object({ session: sessionSchema, files: z.array(fileSc
 const uploadSchema = z.object({ session: sessionSchema, file: fileSchema });
 
 export type NotebookCellExecuteResult = z.infer<typeof executeSchema>;
+export type NotebookRunAllResult = z.infer<typeof runAllSchema>;
+
+export interface NotebookRunAllInput {
+  cells: Array<{ id: string; code: string; language: NotebookCellLanguage }>;
+  fromTop: boolean;
+  requireNetworkAccess?: (typeof CLOUD_CODE_NETWORK_ACCESS)[number];
+}
 export type NotebookFile = z.infer<typeof fileSchema>;
 export type NotebookListFilesResult = z.infer<typeof listFilesSchema>;
 export type NotebookUploadResult = z.infer<typeof uploadSchema>;
@@ -78,9 +101,14 @@ export interface NotebookApiDependencies {
 export interface NotebookApi {
   execute(
     sessionId: string,
-    input: { code: string; language: NotebookCellLanguage },
+    input: { cellId?: string; code: string; language: NotebookCellLanguage },
     signal?: AbortSignal,
   ): Promise<NotebookCellExecuteResult>;
+  runAll(
+    sessionId: string,
+    input: NotebookRunAllInput,
+    signal?: AbortSignal,
+  ): Promise<NotebookRunAllResult>;
   listFiles(sessionId: string, signal?: AbortSignal): Promise<NotebookListFilesResult>;
   uploadFile(
     sessionId: string,
@@ -162,6 +190,18 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
           signal,
         },
         executeSchema,
+      );
+    },
+    async runAll(sessionId, input, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/notebook/run-all`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': await getCsrfToken() },
+          body: JSON.stringify(input),
+          signal,
+        },
+        runAllSchema,
       );
     },
     async listFiles(sessionId, signal) {

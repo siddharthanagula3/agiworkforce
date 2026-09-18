@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   formatPastChatContext,
   loadPastChatExcerpts,
+  resolvePastChatContext,
   retrievePastChatContext,
   selectRelevantPastChatExcerpts,
+  PAST_CHAT_DEGRADED_NOTICE,
   type PastChatExcerpt,
 } from '../past-chat-context-service';
 
@@ -150,11 +152,99 @@ describe('retrievePastChatContext', () => {
     expect(prompt).toContain('<past_chats>');
   });
 
-  it('returns nothing when the read fails', async () => {
+  it('tells the turn its recall is degraded rather than answering as if nothing matched', async () => {
     const query = vi.fn().mockRejectedValue(new Error('past chats unavailable'));
 
+    const result = await resolvePastChatContext({ query }, { userId: 'user-1', query: KNOT_QUERY });
+
+    expect(result.degraded).toBe(true);
+    expect(result.mode).toBe('failed');
+    expect(result.prompt).toBe(PAST_CHAT_DEGRADED_NOTICE);
+    expect(result.citations).toEqual([]);
     await expect(
       retrievePastChatContext({ query }, { userId: 'user-1', query: KNOT_QUERY }),
-    ).resolves.toBeNull();
+    ).resolves.toBe(PAST_CHAT_DEGRADED_NOTICE);
+  });
+
+  it('attaches a citation carrying the conversation and the message for every excerpt', async () => {
+    const query = vi.fn().mockResolvedValue([row()]);
+
+    const result = await resolvePastChatContext({ query }, { userId: 'user-1', query: KNOT_QUERY });
+
+    expect(result.mode).toBe('keyword');
+    expect(result.citations).toEqual([
+      {
+        id: 'past_chat:web_messages/message-1',
+        conversationId: 'conversation-1',
+        messageId: 'message-1',
+        title: 'Sailing notes',
+        createdAt: '2026-09-08T10:00:00.000Z',
+      },
+    ]);
+  });
+});
+
+describe('semantic recall', () => {
+  function semanticDb(hits: unknown[]) {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([{ present: true }])
+      .mockResolvedValueOnce(hits)
+      .mockResolvedValueOnce([row()]);
+    return {
+      query,
+      transaction: vi.fn(),
+      execute: vi.fn(),
+    };
+  }
+
+  it('ranks by the conversation index and reads the rows back under the ownership predicates', async () => {
+    const db = semanticDb([
+      {
+        chunk_id: 'chunk-1',
+        document_id: 'document-1',
+        source_kind: 'conversation',
+        source_id: 'conversation-1',
+        title: 'Sailing notes',
+        content: 'My favourite mooring knot is the bowline.',
+        start_offset: 0,
+        end_offset: 40,
+        metadata: { messageId: 'message-1', role: 'user' },
+        chunk_version: 1,
+        indexed_at: '2026-09-09T10:00:00.000Z',
+        lexical_rank: 1,
+        semantic_rank: 1,
+      },
+    ]);
+
+    const result = await resolvePastChatContext(db as never, {
+      userId: 'user-1',
+      query: KNOT_QUERY,
+    });
+
+    expect(result.mode).toBe('semantic');
+    expect(result.citations[0]?.messageId).toBe('message-1');
+    const hydrateSql = (db.query.mock.calls[2] as [string, unknown[]])[0];
+    expect(hydrateSql).toContain('c.user_id = $1');
+    expect(hydrateSql).toContain('coalesce(c.is_temporary, false) = false');
+    expect(hydrateSql).toContain('m.id = any($4::uuid[])');
+    expect(result.prompt).toContain('bowline');
+  });
+
+  it('falls back to the keyword scan when the account has nothing indexed', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([{ present: false }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([row()]);
+    const db = { query, transaction: vi.fn(), execute: vi.fn() };
+
+    const result = await resolvePastChatContext(db as never, {
+      userId: 'user-1',
+      query: KNOT_QUERY,
+    });
+
+    expect(result.mode).toBe('keyword');
+    expect(result.citations).toHaveLength(1);
   });
 });
