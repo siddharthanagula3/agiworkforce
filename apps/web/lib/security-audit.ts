@@ -306,6 +306,14 @@ export type AuditEventType =
   | 'ediscovery_export'
   | 'dlp_content_blocked'
   | 'device_renamed'
+  | 'device_trust_revoked'
+  /**
+   * The account id outlives every identity mapped onto it, so which provider
+   * subject could reach it, and when that changed, is its own trail.
+   */
+  | 'identity_linked'
+  | 'identity_unlinked'
+  | 'refresh_family_compromised'
   | 'schedule_missed_execution'
   | 'event_trigger_created'
   | 'event_trigger_updated'
@@ -354,6 +362,9 @@ export interface AuditEventDetail {
   region?: string;
   previousRegion?: string;
   keyProvider?: string;
+  provider?: string;
+  surface?: string;
+  trusted?: boolean;
 }
 
 export interface AuditEvent {
@@ -404,6 +415,9 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'region',
   'previousRegion',
   'keyProvider',
+  'provider',
+  'surface',
+  'trusted',
 ]);
 
 const SECRET_KEY_NAME_RE =
@@ -632,6 +646,14 @@ function inferResourceType(eventType: AuditEventType): string {
       return 'skill';
     case 'remote_pairing_initiated':
       return 'remote_pairing';
+    case 'identity_linked':
+    case 'identity_unlinked':
+      return 'identity';
+    case 'device_renamed':
+    case 'device_trust_revoked':
+      return 'device';
+    case 'refresh_family_compromised':
+      return 'refresh_token_family';
     case 'encryption_key_rotated':
     case 'encryption_key_provisioned':
     case 'encryption_key_revoked':

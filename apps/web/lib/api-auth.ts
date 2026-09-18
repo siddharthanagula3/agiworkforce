@@ -16,15 +16,24 @@ import {
 import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { getIdentityProvider, getRequestIdentity } from '@/lib/server/identity';
-import { resolveIdentityUserId } from '@/lib/server/identity-user';
+import {
+  resolveAuthenticatedAccount,
+  type AuthenticatedAccount,
+} from '@/lib/server/identity-account';
+import { accountAccessDecision, effectiveAccountStatus } from '@/lib/auth/account-status';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
 import { bindSurfaceFromClaims, type BoundSurface } from '@/lib/free-chat-surface-policy';
 
 export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
+/**
+ * `userId` is this product's own account id, resolved through the identities
+ * bridge (0174); `identityId` is the one (provider, subject) pair it came from.
+ */
 export interface AuthResult {
   userId: string;
+  identityId?: string;
   email?: string;
   surfaceClass?: 'developer';
   boundSurface?: BoundSurface;
@@ -87,24 +96,43 @@ async function withDeadline<T>(
   }
 }
 
+function assertStatusAllowsAccess(status: string | null): void {
+  const decision = accountAccessDecision(status);
+  if (decision.allowed) return;
+  throw createError.forbidden(decision.message);
+}
+
+/**
+ * Joined to erasure_tombstones because erasure deletes the profile row, and the
+ * subject row is synthesised so "no row" means the database did not answer.
+ */
+const ACCOUNT_LIFECYCLE = `
+  select profile.account_status,
+         profile.deletion_scheduled_for,
+         (tombstone.user_id is not null) as erased
+    from (select $1::text as id) subject
+    left join public.profiles profile on profile.id = subject.id
+    left join public.erasure_tombstones tombstone on tombstone.user_id = subject.id`;
+
+interface AccountLifecycleRow {
+  account_status: string | null;
+  deletion_scheduled_for: unknown;
+  erased: boolean | null;
+}
+
 export async function assertAccountActive(userId: string): Promise<void> {
   const cachedStatus = await getCachedAccountStatus(userId);
   if (cachedStatus !== undefined) {
-    if (cachedStatus === 'suspended' || cachedStatus === 'banned') {
-      throw createError.forbidden('Your account has been suspended. Please contact support.');
-    }
+    assertStatusAllowsAccess(cachedStatus);
     return;
   }
 
   let lastError: unknown;
   for (let attempt = 0; attempt < ACCOUNT_STATUS_ATTEMPTS; attempt++) {
-    let rows: { account_status: string | null }[];
+    let rows: AccountLifecycleRow[];
     try {
       const raced = await withDeadline(
-        getNeonDb().query<{ account_status: string | null }>(
-          'select account_status from profiles where id = $1 limit 1',
-          [userId],
-        ),
+        getNeonDb().query<AccountLifecycleRow>(ACCOUNT_LIFECYCLE, [userId]),
         ACCOUNT_STATUS_DEADLINE_MS,
       );
       if (raced === DEADLINE_EXCEEDED) {
@@ -116,11 +144,18 @@ export async function assertAccountActive(userId: string): Promise<void> {
       lastError = lookupError;
       continue;
     }
-    const status = rows[0]?.account_status ?? null;
-    await setCachedAccountStatus(userId, status);
-    if (status === 'suspended' || status === 'banned') {
-      throw createError.forbidden('Your account has been suspended. Please contact support.');
+    const row = rows[0];
+    if (!row) {
+      lastError = new Error('account lifecycle lookup returned no row');
+      continue;
     }
+    const status = effectiveAccountStatus({
+      status: row.account_status,
+      deletionScheduled: row.deletion_scheduled_for != null,
+      erased: row.erased === true,
+    });
+    await setCachedAccountStatus(userId, status);
+    assertStatusAllowsAccess(status);
     return;
   }
 
@@ -141,6 +176,30 @@ export async function assertAccountActive(userId: string): Promise<void> {
   throw createError.serviceUnavailable(
     'Unable to verify account status. Please try again shortly.',
   );
+}
+
+/**
+ * Erasure deletes the profile row, so erasure_tombstones (0103) is the only
+ * record that can turn away a provider callback still holding the old subject.
+ */
+async function accountForSubject(
+  subject: string,
+  request: NextRequest,
+): Promise<AuthenticatedAccount | null> {
+  const resolution = await resolveAuthenticatedAccount(subject);
+  if (resolution.outcome === 'resolved') return resolution.account;
+  if (resolution.outcome === 'erased') {
+    await logAuthFailure(request, 'erased_account', resolution.accountId);
+  }
+  return null;
+}
+
+function authResultFor(account: AuthenticatedAccount, email?: string | null): AuthResult {
+  return {
+    userId: account.accountId,
+    ...(account.identityId ? { identityId: account.identityId } : {}),
+    ...(email ? { email } : {}),
+  };
 }
 
 async function verifyBearerToken(token: string, request: NextRequest): Promise<AuthResult | null> {
@@ -182,12 +241,11 @@ async function verifyBearerToken(token: string, request: NextRequest): Promise<A
 
   const claims = await identity.verifySessionToken(token, { authorizedParties });
   if (claims) {
-    const userId = await resolveIdentityUserId(claims.subject);
-    if (!userId) return null;
+    const account = await accountForSubject(claims.subject, request);
+    if (!account) return null;
     const boundSurface = bindSurfaceFromClaims(claims.raw);
     return {
-      userId,
-      email: claims.email ?? undefined,
+      ...authResultFor(account, claims.email),
       ...(boundSurface ? { boundSurface } : {}),
     };
   }
@@ -252,13 +310,14 @@ export async function getClerkAuthUser(
   }
 
   const { subject } = await getRequestIdentity();
-  const userId = subject === null ? null : await resolveIdentityUserId(subject);
-  if (userId) {
+  const account = subject === null ? null : await accountForSubject(subject, request);
+  if (account) {
+    const userId = account.accountId;
     await assertAccountActive(userId);
     setTenantScope({ userId });
     await assertMfaPolicyUnlessExemptOwner(userId, options.mfaGateExemptForOwner ?? false);
     await assertIpAllowList(userId, request);
-    return { userId };
+    return authResultFor(account);
   }
 
   throw createError.unauthorized();

@@ -13,11 +13,22 @@ vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
+/**
+ * The identity bridge read and the account lifecycle read that follows it:
+ * an active account, mapped to itself, with no erasure record.
+ */
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({
-    query: vi.fn(async (sql: string) =>
-      /select account_status from profiles/.test(sql) ? [{ account_status: 'active' }] : [],
-    ),
+    query: vi.fn(async (sql: string, params: unknown[] = []) => {
+      const statement = String(sql).toLowerCase();
+      if (statement.includes('left join public.identities')) {
+        return [{ identity_id: null, account_id: params[2] ?? null, erased: false }];
+      }
+      if (statement.includes('account_status')) {
+        return [{ account_status: 'active', deletion_scheduled_for: null, erased: false }];
+      }
+      return [];
+    }),
   }),
 }));
 

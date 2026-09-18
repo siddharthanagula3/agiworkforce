@@ -67,16 +67,63 @@ vi.mock('@agiworkforce/data-layer', async (importOriginal) => {
 
 type FakeRow = Record<string, unknown>;
 
+/**
+ * A fixture that stubs the whole query implementation must answer the bridge
+ * and lifecycle reads too, or its subject never authenticates.
+ */
+function identityResolutionRows(sql: string, params: unknown[]): FakeRow[] | null {
+  const s = sql.toLowerCase();
+  if (s.includes('left join public.identities')) {
+    const fallback = params[2] as string | null;
+    return [{ identity_id: null, account_id: fallback ?? null, erased: false }];
+  }
+  if (s.includes('account_status')) {
+    return [{ account_status: null, deletion_scheduled_for: null, erased: false }];
+  }
+  return null;
+}
+
 function makeFakeDb() {
   const store = new Map<string, FakeRow>();
   const revokedJtis = new Set<string>();
+  const identities = new Map<string, { identityId: string | null; accountId: string }>();
+  const accountStatuses = new Map<string, string>();
+  const erasedAccounts = new Set<string>();
+  const deletionScheduled = new Map<string, string>();
+  const linkAttempts: string[] = [];
   let counter = 0;
 
   async function query(sql: string, params: unknown[] = []): Promise<FakeRow[]> {
     const s = sql.toLowerCase();
 
-    if (s.includes('from profiles')) {
+    if (s.includes('insert into public.identities')) {
+      const [provider, subject, accountId] = params as [string, string, string];
+      linkAttempts.push(`${provider}:${subject}:${accountId}`);
       return [];
+    }
+
+    if (s.includes('left join public.identities')) {
+      const [provider, subject, fallback] = params as [string, string, string | null];
+      const mapped = identities.get(`${provider}:${subject}`);
+      const accountId = mapped?.accountId ?? fallback ?? null;
+      return [
+        {
+          identity_id: mapped?.identityId ?? null,
+          account_id: accountId,
+          erased: accountId !== null && erasedAccounts.has(accountId),
+        },
+      ];
+    }
+
+    if (s.includes('account_status')) {
+      const userId = params[0] as string;
+      return [
+        {
+          account_status: accountStatuses.get(userId) ?? null,
+          deletion_scheduled_for: deletionScheduled.get(userId) ?? null,
+          erased: erasedAccounts.has(userId),
+        },
+      ];
     }
 
     if (s.includes('from revoked_jwts')) {
@@ -158,7 +205,15 @@ function makeFakeDb() {
 
   mockNeonQuery.mockImplementation(query);
   mockNeonExecute.mockImplementation(execute);
-  return { store, revokedJtis };
+  return {
+    store,
+    revokedJtis,
+    identities,
+    accountStatuses,
+    erasedAccounts,
+    deletionScheduled,
+    linkAttempts,
+  };
 }
 
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
@@ -575,7 +630,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
     function bindOrgPolicy(organizationId: string | null, requireMfa: boolean) {
-      mockNeonQuery.mockImplementation(async (sql: string) => {
+      mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+        const identityRows = identityResolutionRows(sql, params);
+        if (identityRows) return identityRows;
         const s = sql.toLowerCase();
         if (s.includes(') governing')) {
           return organizationId ? [{ organization_id: organizationId }] : [];
@@ -645,7 +702,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     const ORGANIZATION_ID = '22222222-2222-4222-8222-222222222222';
 
     function bindOrgIpPolicy(organizationId: string | null, ipAllowList: string[]) {
-      mockNeonQuery.mockImplementation(async (sql: string) => {
+      mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+        const identityRows = identityResolutionRows(sql, params);
+        if (identityRows) return identityRows;
         const s = sql.toLowerCase();
         if (s.includes(') governing')) {
           return organizationId ? [{ organization_id: organizationId }] : [];
@@ -740,7 +799,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       requireMfa: boolean,
       role: 'owner' | 'admin' | 'member' | 'viewer',
     ) {
-      mockNeonQuery.mockImplementation(async (sql: string) => {
+      mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+        const identityRows = identityResolutionRows(sql, params);
+        if (identityRows) return identityRows;
         const s = sql.toLowerCase();
         if (s.includes(') governing')) {
           return [{ organization_id: organizationId }];
@@ -824,6 +885,143 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   });
 });
 
+describe('getClerkAuthUser · the identity bridge resolves an internal account id', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+  });
+
+  function cookieRequest(): NextRequest {
+    return new NextRequest('http://localhost/api/some-route');
+  }
+
+  function auditedReasons(): string[] {
+    return mockNeonExecute.mock.calls
+      .filter(([sql]) => String(sql).includes('INSERT INTO security_audit_logs'))
+      .flatMap(([, params]) => (Array.isArray(params) ? params : []))
+      .filter((value): value is string => typeof value === 'string' && value.startsWith('{'))
+      .map((value) => String(value));
+  }
+
+  it('returns the account id the identities row names, not the provider subject', async () => {
+    const db = makeFakeDb();
+    db.identities.set('clerk:provider-subject-9', {
+      identityId: 'identity-9',
+      accountId: 'account-7',
+    });
+    mockAuth.mockResolvedValueOnce(authSession('provider-subject-9'));
+
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'account-7',
+      identityId: 'identity-9',
+    });
+  });
+
+  it('links an account that predates the mapping rather than failing its request', async () => {
+    const db = makeFakeDb();
+    mockAuth.mockResolvedValueOnce(authSession('unmapped-user'));
+
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'unmapped-user' });
+    expect(db.linkAttempts).toEqual(['clerk:unmapped-user:unmapped-user']);
+  });
+
+  it('refuses a stale provider callback for an account that has already been erased', async () => {
+    const db = makeFakeDb();
+    db.erasedAccounts.add('erased-user');
+    mockAuth.mockResolvedValueOnce(authSession('erased-user'));
+
+    await expect(getClerkAuthUser(cookieRequest())).rejects.toMatchObject({ statusCode: 401 });
+    expect(auditedReasons()).toContainEqual(JSON.stringify({ reason: 'erased_account' }));
+    expect(db.linkAttempts).toEqual([]);
+  });
+
+  it('keeps a locked account out with the recovery a lockout actually has', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('locked-user', 'locked');
+    mockAuth.mockResolvedValueOnce(authSession('locked-user'));
+
+    await expect(getClerkAuthUser(cookieRequest())).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'Your account is locked. Reset your password at /auth/reset-password to unlock it.',
+    });
+  });
+
+  it('sends a suspended account somewhere else than a locked one', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('suspended-user', 'suspended');
+    mockAuth.mockResolvedValueOnce(authSession('suspended-user'));
+
+    await expect(getClerkAuthUser(cookieRequest())).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'Your account has been suspended. Please contact support.',
+    });
+  });
+
+  it('lets a scheduled deletion sign in, because cancelling it is done signed in', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('leaving-user', 'deletion_scheduled');
+    mockAuth.mockResolvedValueOnce(authSession('leaving-user'));
+
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'leaving-user' });
+  });
+
+  it('derives a scheduled deletion from the date 0071 records, and still lets it sign in', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('leaving-by-date', 'active');
+    db.deletionScheduled.set('leaving-by-date', '2026-10-01T00:00:00.000Z');
+    mockAuth.mockResolvedValueOnce(authSession('leaving-by-date'));
+
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'leaving-by-date',
+    });
+  });
+
+  it('applies the same erasure gate to a device token, which never touches the bridge', async () => {
+    const db = makeFakeDb();
+    db.erasedAccounts.add('device-user');
+    const token = jwt.sign(
+      { userId: 'device-user', sub: 'device-user', surface: 'developer' },
+      TEST_DEVELOPER_JWT_SECRET,
+      {
+        expiresIn: 3600,
+        issuer: 'agiworkforce-api-gateway',
+        audience: 'agiworkforce',
+        jwtid: 'device-jti-erased',
+      },
+    );
+
+    await expect(getClerkAuthUser(makeBearerRequest(token))).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'This account has been deleted.',
+    });
+  });
+
+  it('applies the same erasure gate to an API key, which carries the account id already', async () => {
+    const db = makeFakeDb();
+    mockAuth.mockResolvedValue(authSession('erased-key-owner'));
+    const createRes = await createApiKeyRoute(makeCreateRequest('still valid', ['models:read']));
+    const created = (await createRes.json()) as { full_key: string };
+
+    db.erasedAccounts.add('erased-key-owner');
+    mockAuth.mockResolvedValue(authSession(null));
+
+    await expect(
+      getClerkAuthUser(makeBearerRequest(created.full_key), { apiKeyScope: 'models:read' }),
+    ).rejects.toMatchObject({ statusCode: 403, message: 'This account has been deleted.' });
+  });
+
+  it('turns away an account whose erasure was ordered but whose row is still there', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('gone-user', 'deleted');
+    mockAuth.mockResolvedValueOnce(authSession('gone-user'));
+
+    await expect(getClerkAuthUser(cookieRequest())).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'This account has been deleted.',
+    });
+  });
+});
+
 describe('assertAccountActive, warm Redis cache', () => {
   function asKeyValueStore(client: unknown): KeyValueStore {
     return createUpstashKeyValueStore(client as UpstashRedisLike);
@@ -863,5 +1061,46 @@ describe('assertAccountActive, warm Redis cache', () => {
     await expect(assertAccountActive('user-warm-2')).rejects.toMatchObject({ statusCode: 403 });
 
     expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getClerkAuthUser · a database without the identity bridge', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+  });
+
+  it('resolves the account it always did rather than failing every request', async () => {
+    makeFakeDb();
+    mockNeonQuery.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('public.identities')) {
+        throw Object.assign(new Error('relation "public.identities" does not exist'), {
+          code: '42P01',
+        });
+      }
+      return String(sql).includes('account_status')
+        ? [{ account_status: null, deletion_scheduled_for: null, erased: false }]
+        : [];
+    });
+    mockAuth.mockResolvedValueOnce(authSession('pre-bridge-user'));
+
+    await expect(
+      getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+    ).resolves.toEqual({ userId: 'pre-bridge-user' });
+  });
+
+  it('fails closed on a database error that is not a missing bridge', async () => {
+    makeFakeDb();
+    mockNeonQuery.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('public.identities')) throw new Error('connection terminated');
+      return String(sql).includes('account_status')
+        ? [{ account_status: null, deletion_scheduled_for: null, erased: false }]
+        : [];
+    });
+    mockAuth.mockResolvedValueOnce(authSession('unreachable-db-user'));
+
+    await expect(
+      getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
+    ).rejects.toThrow();
   });
 });
