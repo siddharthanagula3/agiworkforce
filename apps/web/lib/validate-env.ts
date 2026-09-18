@@ -1,3 +1,4 @@
+import { isLoopbackConnectionString, resolveRuntimeEnvironment } from '@agiworkforce/data-layer';
 import {
   hasObjectStorageCredentials,
   resolveObjectStorageConfig,
@@ -446,6 +447,152 @@ export function validateAppUrl(): ValidationResult {
   };
 }
 
+type ConfigKeySecrecy = 'secret' | 'public';
+type ConfigEnvironment = ReturnType<typeof resolveRuntimeEnvironment>;
+
+interface ConfigKeyDescriptor {
+  key: string;
+  secrecy: ConfigKeySecrecy;
+  allowedEnvironments: readonly ConfigEnvironment[];
+}
+
+const EVERY_ENVIRONMENT: readonly ConfigEnvironment[] = [
+  'development',
+  'test',
+  'preview',
+  'production',
+];
+const DEPLOYED_ONLY: readonly ConfigEnvironment[] = ['preview', 'production'];
+const LOCAL_ONLY: readonly ConfigEnvironment[] = ['development', 'test'];
+
+/**
+ * What each key is and where it may be set. A secret named so the bundler
+ * inlines it into client JavaScript is not a secret, and a key meant for one
+ * environment set in another is that environment reaching into this one.
+ */
+const CONFIG_KEY_REGISTRY: readonly ConfigKeyDescriptor[] = [
+  { key: 'CLERK_SECRET_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'STRIPE_SECRET_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'STRIPE_WEBHOOK_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'CSRF_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'CRON_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'DEVICE_TOKEN_ENCRYPTION_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'TOTP_ENCRYPTION_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'GITHUB_WEBHOOK_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'GITHUB_TOKEN_ENCRYPTION_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'EMAIL_HASH_PEPPER', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'LOG_SALT', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  {
+    key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+    secrecy: 'public',
+    allowedEnvironments: EVERY_ENVIRONMENT,
+  },
+  {
+    key: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+    secrecy: 'public',
+    allowedEnvironments: EVERY_ENVIRONMENT,
+  },
+  { key: 'NEXT_PUBLIC_APP_URL', secrecy: 'public', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'NEXT_PUBLIC_SANDBOX_ORIGIN', secrecy: 'public', allowedEnvironments: EVERY_ENVIRONMENT },
+  {
+    key: 'CONNECTOR_OAUTH_REDIRECT_BASE_URL',
+    secrecy: 'public',
+    allowedEnvironments: EVERY_ENVIRONMENT,
+  },
+  { key: 'VERCEL_ENV', secrecy: 'public', allowedEnvironments: DEPLOYED_ONLY },
+  { key: 'AGI_ALLOW_REMOTE_DATABASE', secrecy: 'public', allowedEnvironments: LOCAL_ONLY },
+];
+
+const CLIENT_READABLE_PREFIX = 'NEXT_PUBLIC_';
+
+export function validateConfigKeyRegistry(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const environment = resolveRuntimeEnvironment();
+
+  for (const descriptor of CONFIG_KEY_REGISTRY) {
+    if (descriptor.secrecy === 'secret' && descriptor.key.startsWith(CLIENT_READABLE_PREFIX)) {
+      errors.push(
+        `${descriptor.key} is registered as a secret but its ${CLIENT_READABLE_PREFIX} name ships ` +
+          'its value to every browser.',
+      );
+    }
+    if (!process.env[descriptor.key]?.trim()) continue;
+    if (descriptor.allowedEnvironments.includes(environment)) continue;
+    warnings.push(
+      `${descriptor.key} is set in a ${environment} runtime but is only allowed in ` +
+        `${descriptor.allowedEnvironments.join(', ')}.`,
+    );
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+/**
+ * Every OAuth callback this deployment sends a user to. Each one is a URL an
+ * identity provider will hand an authorization code back to.
+ */
+const OAUTH_CALLBACK_VARS = ['CONNECTOR_OAUTH_REDIRECT_BASE_URL', 'NEXT_PUBLIC_APP_URL'] as const;
+
+/**
+ * A callback registered for one environment and reachable from another hands
+ * that environment's authorization codes to the wrong deployment. The rule
+ * mirrors the database isolation rule: a development runtime redirects to
+ * loopback, a deployed runtime redirects to its own https origin.
+ */
+export function validateOAuthCallbackIsolation(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const environment = resolveRuntimeEnvironment();
+  const deployed = environment === 'preview' || environment === 'production';
+  const appOrigin = process.env['NEXT_PUBLIC_APP_URL']?.trim();
+
+  for (const name of OAUTH_CALLBACK_VARS) {
+    const value = process.env[name]?.trim();
+    if (!value) continue;
+
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      errors.push(`${name} is not a URL, so an OAuth callback through it redirects nowhere.`);
+      continue;
+    }
+
+    if (!deployed) {
+      if (isLoopbackConnectionString(value)) continue;
+      warnings.push(
+        `${name} sends OAuth callbacks to ${url.host} from a ${environment} runtime. A deployed ` +
+          'environment can also reach that host, so authorization codes issued here can land in ' +
+          'the wrong deployment. Point it at 127.0.0.1.',
+      );
+      continue;
+    }
+
+    if (url.protocol !== 'https:') {
+      errors.push(
+        `${name} must use https in ${environment}, not ${url.protocol.replace(':', '')}.`,
+      );
+      continue;
+    }
+
+    if (!appOrigin || name === 'NEXT_PUBLIC_APP_URL') continue;
+    try {
+      const expected = new URL(appOrigin);
+      if (expected.host !== url.host) {
+        errors.push(
+          `${name} redirects OAuth to ${url.host} while this deployment serves ${expected.host}, ` +
+            'so another environment receives its authorization codes.',
+        );
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
 export function validateEnvironment(): ValidationResult {
   const results = [
     validateRequiredEnvVars(),
@@ -457,6 +604,8 @@ export function validateEnvironment(): ValidationResult {
     validateEmailPseudonymPepper(),
     validateSandboxOriginConfigured(),
     validateGeneratedMediaStorage(),
+    validateOAuthCallbackIsolation(),
+    validateConfigKeyRegistry(),
     validateOptionalFeatureConfig(),
   ];
 

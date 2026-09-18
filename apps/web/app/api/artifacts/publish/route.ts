@@ -117,10 +117,10 @@ async function recordPublishedVersion(
   const [newest] = await db.query<PublishedVersionRow>(
     `select id, version, title, kind, language, content, created_at
        from public.published_artifact_versions
-      where published_artifact_id = $1
+      where published_artifact_id = $1 and user_id = $2
       order by version desc
       limit 1`,
-    [input.publishedArtifactId],
+    [input.publishedArtifactId, input.userId],
   );
 
   if (
