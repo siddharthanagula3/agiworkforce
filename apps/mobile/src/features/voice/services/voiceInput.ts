@@ -3,8 +3,9 @@ import * as Localization from 'expo-localization';
 import {
   ExpoSpeechRecognitionModule,
   type ExpoSpeechRecognitionErrorCode,
-  type SetCategoryOptions,
 } from 'expo-speech-recognition';
+import { audioSessionCategoryFor, type AudioRoute } from './audioRoute';
+import { activeAudioRoute } from './speechSettings';
 
 export type VoiceCaptureErrorCode =
   | 'mic-permission-denied'
@@ -53,6 +54,7 @@ export interface VoiceCaptureSession {
 export interface VoiceCaptureOptions {
   lang?: string;
   maxDurationMs?: number;
+  audioRoute?: AudioRoute;
 }
 
 type MeteringCallback = (event: VoiceInputMeteringEvent) => void;
@@ -62,16 +64,8 @@ type PartialCallback = (event: VoicePartialResult) => void;
 export const MAX_LISTEN_MS = 60_000;
 const STOP_GRACE_MS = 1_500;
 
-/**
- * The recognizer keeps the audio session on this device. Naming the category
- * explicitly keeps a Bluetooth headset or speaker route working instead of
- * relying on whatever the last session left behind.
- */
-const IOS_AUDIO_CATEGORY: SetCategoryOptions = {
-  category: 'playAndRecord',
-  categoryOptions: ['allowBluetooth', 'defaultToSpeaker'],
-  mode: 'measurement',
-};
+// The recognizer keeps the audio session on this device, so the chosen route has
+// to be named on every start or the last session's routing is what you get.
 
 let _active = false;
 let _startedAt = 0;
@@ -298,7 +292,7 @@ export async function startCaptureSession(
       continuous: false,
       requiresOnDeviceRecognition: true,
       addsPunctuation: true,
-      iosCategory: IOS_AUDIO_CATEGORY,
+      iosCategory: audioSessionCategoryFor(options?.audioRoute ?? activeAudioRoute()),
       volumeChangeEventOptions: onMetering ? { enabled: true, intervalMillis: 100 } : undefined,
     });
 

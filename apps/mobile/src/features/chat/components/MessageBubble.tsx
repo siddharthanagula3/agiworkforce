@@ -650,9 +650,10 @@ export const MessageBubble = memo(function MessageBubble({
     ],
   );
 
+  const isStreamingRow = message.isStreaming === true;
   const contentElements = useMemo(
-    () => renderMarkdownContent(displayContent, themeColors),
-    [displayContent, themeColors],
+    () => renderMarkdownContent(displayContent, themeColors, { highlightCode: !isStreamingRow }),
+    [displayContent, themeColors, isStreamingRow],
   );
 
   const imageWidth = Math.min(width - 80, 320);

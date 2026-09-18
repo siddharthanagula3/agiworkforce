@@ -58,7 +58,7 @@ describe('ComposerFullScreenEditor', () => {
   it('collapses without sending', () => {
     const { getByTestId, onClose, onSend } = renderEditor();
 
-    fireEvent.press(getByTestId('chat.composer.fullscreen.collapse'));
+    fireEvent.press(getByTestId('chat.composer.fullscreen.back'));
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onSend).not.toHaveBeenCalled();

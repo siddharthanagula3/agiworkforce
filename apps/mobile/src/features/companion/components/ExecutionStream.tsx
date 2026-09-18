@@ -32,6 +32,8 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useAgentStore } from '@/stores/agentStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { isTerminalToolStatus } from '@agiworkforce/types';
+import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import type { ToolCall } from '@/types/chat';
 
 export interface ExecutionStreamProps {
@@ -117,12 +119,7 @@ interface ToolCallRowProps {
 
 function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
   const colors = useThemeColors();
-  const statusColor =
-    call.status === 'completed'
-      ? colors.agentSuccess
-      : call.status === 'failed'
-        ? colors.agentError
-        : colors.agentActive;
+  const statusColor = toolStatusColor(call.status, colors);
 
   return (
     <Animated.View
@@ -136,9 +133,9 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
           className="w-5 h-5 rounded-full items-center justify-center"
           style={{ backgroundColor: `${statusColor}18` }}
         >
-          {call.status === 'running' ? (
+          {!isTerminalToolStatus(call.status) ? (
             <SpinningLoader size={11} color={statusColor} />
-          ) : call.status === 'completed' ? (
+          ) : call.status === 'succeeded' ? (
             <CheckCircle2 size={11} color={statusColor} />
           ) : (
             <XCircle size={11} color={statusColor} />
@@ -172,7 +169,7 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
         </View>
 
         {/* Brief result */}
-        {call.output && call.status !== 'running' && (
+        {call.output && isTerminalToolStatus(call.status) && (
           <Text className="text-[11px] text-white/40 leading-4" numberOfLines={2}>
             {call.output}
           </Text>

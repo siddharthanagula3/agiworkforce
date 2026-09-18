@@ -401,6 +401,7 @@ export default function TranslateScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setLangPickerFor(null)}
+        accessibilityViewIsModal
       >
         <Pressable
           accessible={false}

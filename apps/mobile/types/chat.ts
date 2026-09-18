@@ -1,4 +1,4 @@
-import type { InteractiveCard } from '@agiworkforce/types';
+import type { InteractiveCard, ToolStatus } from '@agiworkforce/types';
 import type {
   ArtifactManifest,
   ChatMessage as CanonicalChatMessage,
@@ -45,7 +45,7 @@ export interface ToolCall {
   filePath?: string;
   input?: string;
   output?: string;
-  status: 'running' | 'completed' | 'failed';
+  status: ToolStatus;
   duration?: number;
   searchResults?: ToolSearchResult[];
   requiresApproval?: boolean;

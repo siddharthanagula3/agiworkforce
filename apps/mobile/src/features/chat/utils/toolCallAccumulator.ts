@@ -1,3 +1,4 @@
+import { normalizeToolStatus } from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
 import type { StreamDelta } from '@/services/streaming';
 
@@ -33,16 +34,10 @@ export function seedToolCallAccumulator(existing: ToolCall[]): ToolCallAccumulat
   return acc;
 }
 
-function mapStatus(status?: string): ToolCall['status'] {
-  if (status === 'completed') return 'completed';
-  if (status === 'failed' || status === 'error') return 'failed';
-  return 'running';
-}
-
 function ensure(acc: ToolCallAccumulator, key: string, defaults: Partial<ToolCall>): ToolCall {
   let t = acc.byKey.get(key);
   if (!t) {
-    t = { id: key, name: defaults.name ?? '', status: defaults.status ?? 'running' };
+    t = { id: key, name: defaults.name ?? '', status: defaults.status ?? 'pending' };
     acc.byKey.set(key, t);
     acc.order.push(key);
   }
@@ -70,9 +65,9 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     }
     const t = ensure(acc, key, { name: st.name });
     t.name = st.name;
-    t.status = mapStatus(st.status);
+    t.status = normalizeToolStatus(st.status);
     if (st.args !== undefined && !t.input) t.input = safeStringify(st.args);
-    t.requiresApproval = false;
+    t.requiresApproval = t.status === 'awaiting-approval';
     acc.lastKey = key;
     changed = true;
   }
@@ -109,7 +104,7 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
       (tuid ? acc.idToKey.get(tuid) : undefined) ?? acc.lastKey ?? `result:${acc.order.length}`;
     const t = ensure(acc, key, { name: delta.x_search_results ? 'web_search' : 'code_execution' });
     t.output = safeStringify(resultBlock);
-    t.status = 'completed';
+    t.status = 'succeeded';
 
     if (delta.x_code_result) {
       const inner = (
@@ -152,7 +147,7 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     const t = ensure(acc, key, { name: r.name ?? '' });
     if (r.name) t.name = r.name;
     t.output = safeStringify(r.content);
-    t.status = r.is_error ? 'failed' : 'completed';
+    t.status = r.is_error ? 'failed' : 'succeeded';
     t.requiresApproval = false;
     changed = true;
   }
@@ -164,7 +159,7 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     const t = ensure(acc, key, { name: appr.name });
     if (appr.name) t.name = appr.name;
     if (appr.args !== undefined && !t.input) t.input = safeStringify(appr.args);
-    t.status = 'running';
+    t.status = 'awaiting-approval';
     t.requiresApproval = true;
     t.toolCallId = appr.tool_call_id;
     changed = true;

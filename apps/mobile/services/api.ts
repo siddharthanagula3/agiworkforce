@@ -366,6 +366,10 @@ export interface UploadFileInput {
   base64?: string;
 }
 
+export interface UploadProgressOptions extends RequestOptions {
+  onProgress?: (sentBytes: number, totalBytes: number) => void;
+}
+
 export interface UploadFileResult {
   id: string;
   url: string;
@@ -392,7 +396,7 @@ export const api = {
 
   uploadFile: async (
     file: UploadFileInput,
-    options?: RequestOptions,
+    options?: UploadProgressOptions,
   ): Promise<UploadFileResult> => {
     const accountGeneration = _accountGeneration;
     const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
@@ -472,11 +476,20 @@ export const api = {
         throw new Error(`Refusing an insecure upload destination for "${file.name}".`);
       }
 
-      const uploadTask = createUploadTask(uploadUrl.toString(), file.uri, {
-        httpMethod: 'PUT',
-        uploadType: FileSystemUploadType.BINARY_CONTENT,
-        headers: presign.uploadHeaders,
-      });
+      const onProgress = options?.onProgress;
+      const uploadTask = createUploadTask(
+        uploadUrl.toString(),
+        file.uri,
+        {
+          httpMethod: 'PUT',
+          uploadType: FileSystemUploadType.BINARY_CONTENT,
+          headers: presign.uploadHeaders,
+        },
+        onProgress
+          ? (progress) =>
+              onProgress(progress.totalBytesSent, progress.totalBytesExpectedToSend || byteCount)
+          : undefined,
+      );
       _activeAccountUploads.add(uploadTask);
       const cancelUpload = () => {
         void uploadTask.cancelAsync().catch((error) => {

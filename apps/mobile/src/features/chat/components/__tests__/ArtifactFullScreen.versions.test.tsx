@@ -191,4 +191,14 @@ describe('ArtifactFullScreen version history', () => {
     fireEvent.press(view.getByLabelText('Previous version'));
     expect(view.getByTestId('artifact-restore-version')).toBeTruthy();
   });
+  it('carries the full-screen chrome contract on its dismiss control', () => {
+    const onClose = jest.fn();
+    const view = render(<ArtifactFullScreen artifact={viewerArtifact} visible onClose={onClose} />);
+
+    const close = view.getByTestId('chat.artifact.fullscreen.close');
+    expect(close.props.accessibilityLabel).toBe('Close');
+    expect(close.props.style).toMatchObject({ minWidth: 44, minHeight: 44 });
+    fireEvent.press(close);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

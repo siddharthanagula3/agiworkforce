@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useChatStore } from '@/stores/chatStore';
 import { requestMicPermission } from '@/src/features/voice/services/voiceInput';
+import { applyAudioRoute } from '@/src/features/voice/services/audioRoute';
+import { activeAudioRoute } from '@/src/features/voice/services/speechSettings';
 import {
   LIVE_VOICE_MESSAGE,
   liveVoiceUnavailableReason,
@@ -122,6 +124,7 @@ export function useLiveVoiceSession({
           'microphone_denied',
         );
       }
+      applyAudioRoute(activeAudioRoute());
       conversationRef.current = (await ensureRef.current()) ?? conversationRef.current;
       return module.LiveVoiceSession.start({
         voice: null,

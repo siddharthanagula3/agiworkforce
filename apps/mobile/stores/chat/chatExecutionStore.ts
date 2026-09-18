@@ -119,6 +119,7 @@ import {
   canUseBillingPlanCapability,
   getModelMetadataById,
   isAutoModeModelId,
+  isTerminalToolStatus,
   type ResearchStep,
 } from '@agiworkforce/types';
 import {
@@ -131,12 +132,16 @@ import {
 } from '@/src/features/chat/utils/researchRunState';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type { AgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
+import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
+import {
+  unsentAttachmentMessage,
+  uploadWithRetry,
+} from '@/src/features/chat/upload/uploadAttachment';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { managedCloudChat } from '@/services/managedCloudChat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
-import type { UploadFileInput, UploadFileResult } from '@/services/api';
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 import { getConversationMessageStore } from './conversationRepository';
 import { useChatCloudMessageStore } from './chatCloudMessageStore';
@@ -345,6 +350,10 @@ function streamingFlags(): { isStreaming: boolean; streamingConversationIds: str
 }
 
 AppState.addEventListener('change', (nextState) => {
+  if (nextState === 'background') {
+    useUploadLifecycleStore.getState().markBackgrounded();
+    return;
+  }
   if (nextState !== 'active') return;
   const now = Date.now();
   for (const cid of Array.from(streamingConversations)) {
@@ -359,7 +368,6 @@ const MAX_RETRY_ATTEMPTS = 3;
 const thinkingStartTimes = new Map<string, number>();
 const thinkingEndTimes = new Map<string, number>();
 const lastDeltaTimes = new Map<string, number>();
-const MAX_UPLOAD_RETRIES = 2;
 const DEFAULT_LOCAL_SYSTEM_PROMPT =
   "You are AGI, a concise helpful assistant running locally on this device. Answer the user's current request directly. Keep final answers separate from any thinking or reasoning text. Do not invent a different prompt or test unless the user explicitly asks you to create one.";
 
@@ -584,34 +592,6 @@ function localSetupMessage(error: unknown): string {
   return 'Local inference failed. Check device storage, thermal state, and installed model status.';
 }
 
-async function uploadWithRetry(
-  file: UploadFileInput,
-  fileName: string,
-): Promise<UploadFileResult | null> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
-    try {
-      return await api.uploadFile(file);
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (lastError.message.includes('session expired') || lastError.message.includes('401')) {
-        throw lastError;
-      }
-      if (attempt < MAX_UPLOAD_RETRIES) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
-      }
-    }
-  }
-
-  Alert.alert(
-    'Upload Failed',
-    `Could not upload "${fileName}". Please check your connection and try again.`,
-    [{ text: 'OK' }],
-  );
-  return null;
-}
-
 function getMsgStore() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   const { useChatMessageStore } =
@@ -656,6 +636,25 @@ function pushCloudAssistantUpdate(
   void syncNow();
 }
 
+function settleToolCalls(
+  toolCalls: ToolCall[] | undefined,
+  status: 'failed' | 'cancelled',
+): ToolCall[] | undefined {
+  if (!toolCalls?.length) return toolCalls;
+  let changed = false;
+  const settled = toolCalls.map((tool) => {
+    if (isTerminalToolStatus(tool.status)) return tool;
+    changed = true;
+    const partial = Boolean(tool.output || tool.searchResults?.length);
+    return {
+      ...tool,
+      requiresApproval: false,
+      status: partial ? 'partial' : status === 'cancelled' ? 'canceled' : 'failed',
+    } satisfies ToolCall;
+  });
+  return changed ? settled : toolCalls;
+}
+
 function settleMessageTurnState(
   message: ChatMessage,
   status: 'failed' | 'cancelled',
@@ -668,9 +667,13 @@ function settleMessageTurnState(
     status === 'cancelled' ? 'interrupted' : 'error',
     error,
   );
-  if (!activity && !research) return message;
+  const toolCalls = settleToolCalls(message.toolCalls, status);
+  if (!activity && !research) {
+    return toolCalls === message.toolCalls ? message : { ...message, toolCalls };
+  }
   return {
     ...message,
+    ...(toolCalls === message.toolCalls ? {} : { toolCalls }),
     metadata: {
       ...message.metadata,
       ...(activity
@@ -1126,13 +1129,25 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         try {
           const uploadResults = await Promise.all(
             attachmentsNeedingUpload.map((a) =>
-              uploadWithRetry({ uri: a.uri, name: a.fileName, type: a.mimeType }, a.fileName),
+              uploadWithRetry({ uri: a.uri, name: a.fileName, type: a.mimeType }, a.fileName, a.id),
             ),
           );
           if (!isTurnAccountCurrent()) return false;
           const successful = uploadResults
             .map((result, i) => ({ result, attachment: attachmentsNeedingUpload[i]! }))
             .filter((x) => x.result !== null);
+
+          const unsent = uploadResults
+            .map((result, i) => ({ result, attachment: attachmentsNeedingUpload[i]! }))
+            .filter((x) => x.result === null);
+          if (unsent.length > 0) {
+            set({
+              error: unsentAttachmentMessage(unsent.map((x) => x.attachment.fileName)),
+              paywallError: null,
+              ...streamingFlags(),
+            });
+            return false;
+          }
 
           if (successful.length > 0) {
             uploadedAttachments = [
@@ -1156,9 +1171,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             });
             return false;
           }
-          // For other errors, continue without newly selected attachments
-          // (transient network errors already showed an Alert via
-          // uploadWithRetry). Previously owned Cloud assets remain attached.
+          set({
+            error: unsentAttachmentMessage(attachmentsNeedingUpload.map((a) => a.fileName)),
+            paywallError: null,
+            ...streamingFlags(),
+          });
+          return false;
         }
       }
     }
@@ -2189,25 +2207,26 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }
             turnResearch =
               settleResearchRun(turnResearch, 'error', failure.message) ?? turnResearch;
-            const updatedMsgs = msgs.map((m) =>
-              m.id === assistantMessageId
-                ? {
-                    ...m,
-                    content: currentContent || failure.message,
-                    isStreaming: false,
-                    ...(agentActivity || cloudAgentRun || turnResearch
-                      ? {
-                          metadata: {
-                            ...m.metadata,
-                            ...(agentActivity ? { agentActivity } : {}),
-                            ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
-                            ...(turnResearch ? { research: { ...turnResearch } } : {}),
-                          },
-                        }
-                      : {}),
-                  }
-                : m,
-            );
+            const updatedMsgs = msgs.map((m) => {
+              if (m.id !== assistantMessageId) return m;
+              const toolCalls = settleToolCalls(m.toolCalls, 'failed');
+              return {
+                ...m,
+                content: currentContent || failure.message,
+                isStreaming: false,
+                ...(toolCalls === m.toolCalls ? {} : { toolCalls }),
+                ...(agentActivity || cloudAgentRun || turnResearch
+                  ? {
+                      metadata: {
+                        ...m.metadata,
+                        ...(agentActivity ? { agentActivity } : {}),
+                        ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+                        ...(turnResearch ? { research: { ...turnResearch } } : {}),
+                      },
+                    }
+                  : {}),
+              };
+            });
             currentMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
             }));
@@ -2738,7 +2757,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       t.toolCallId && checkpointIds.has(t.toolCallId)
                         ? {
                             ...t,
-                            status: 'running' as const,
+                            status: 'awaiting-approval' as const,
                             requiresApproval: true,
                             approvalDecision: undefined,
                             output: undefined,
@@ -2783,7 +2802,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   tool.toolCallId && turn.calls.some((call) => call.toolCallId === tool.toolCallId)
                     ? {
                         ...tool,
-                        status: 'running' as const,
+                        status: 'awaiting-approval' as const,
                         requiresApproval: true,
                         approvalDecision: undefined,
                         output: undefined,

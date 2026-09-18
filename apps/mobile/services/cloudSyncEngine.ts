@@ -263,7 +263,7 @@ function hydrateApprovalToolCalls(
         ? {
             ...call,
             requiresApproval: false,
-            status: call.approvalDecision === 'rejected' ? 'failed' : 'completed',
+            status: call.approvalDecision === 'rejected' ? 'failed' : 'succeeded',
           }
         : call,
     );
@@ -283,7 +283,7 @@ function hydrateApprovalToolCalls(
     toolCallId: call.toolCallId,
     name: call.name,
     ...(call.input !== undefined ? { input: call.input } : {}),
-    status: 'running' as const,
+    status: 'awaiting-approval' as const,
     requiresApproval: true,
     ...(call.approvalDecision ? { approvalDecision: call.approvalDecision } : {}),
   }));

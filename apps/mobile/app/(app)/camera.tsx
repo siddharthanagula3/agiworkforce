@@ -7,7 +7,6 @@ import {
   TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,7 +29,10 @@ import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
+import { IMAGE_CAPTURE_QUALITY } from '@/src/features/media/image-normalization';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
+import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
+import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -75,7 +77,10 @@ export default function CameraScreen() {
 
     setIsCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: IMAGE_CAPTURE_QUALITY,
+        exif: false,
+      });
       if (photo?.uri) {
         setCapturedUri(photo.uri);
       }
@@ -96,6 +101,23 @@ export default function CameraScreen() {
     setCameraReady(false);
     setCameraSlow(false);
   }, []);
+
+  const keyboard = useKeyboardSafeComposer('screen');
+  const chrome = useFullScreenChrome({
+    surface: 'camera',
+    back: { onPress: handleClose, label: 'Close camera' },
+    close: { onPress: handleClose, label: 'Close camera' },
+    ...(capturedUri
+      ? {
+          cancel: {
+            onPress: handleRetake,
+            label: 'Retake photo',
+            hint: 'Discards this photo and returns to the viewfinder',
+          },
+        }
+      : {}),
+    interceptHardwareBack: true,
+  });
 
   const handleSend = useCallback(async () => {
     if (!capturedUri || isSending) return;
@@ -203,12 +225,7 @@ export default function CameraScreen() {
             >
               <Text style={styles.outlineButtonText}>Open Settings</Text>
             </Pressable>
-            <Pressable
-              onPress={handleClose}
-              className="items-center py-3"
-              accessibilityRole="button"
-              accessibilityLabel="Close camera"
-            >
+            <Pressable {...chrome.close} className="items-center py-3" style={chrome.close.style}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
           </View>
@@ -221,7 +238,8 @@ export default function CameraScreen() {
     return (
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={keyboard.behavior}
+        keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
         <View style={styles.previewContainer}>
           {/* Captured photo fills screen */}
@@ -230,22 +248,14 @@ export default function CameraScreen() {
           {/* Top controls */}
           <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
             <View style={styles.topBar}>
-              <Pressable
-                onPress={handleClose}
-                style={styles.iconButton}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
+              <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
                 <X size={22} color={c.cameraOverlayText} />
               </Pressable>
-              <Pressable
-                onPress={handleRetake}
-                style={styles.iconButton}
-                accessibilityRole="button"
-                accessibilityLabel="Retake photo"
-              >
-                <RotateCcw size={20} color={c.cameraOverlayText} />
-              </Pressable>
+              {chrome.cancel ? (
+                <Pressable {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
+                  <RotateCcw size={20} color={c.cameraOverlayText} />
+                </Pressable>
+              ) : null}
             </View>
           </SafeAreaView>
 
@@ -297,12 +307,7 @@ export default function CameraScreen() {
       {/* Top bar: close + flash */}
       <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
         <View style={styles.topBar}>
-          <Pressable
-            onPress={handleClose}
-            style={styles.iconButton}
-            accessibilityRole="button"
-            accessibilityLabel="Close camera"
-          >
+          <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
             <X size={22} color={c.cameraOverlayText} />
           </Pressable>
 

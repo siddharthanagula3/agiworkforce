@@ -7,7 +7,7 @@ import {
   useLayoutEffect,
   useMemo,
 } from 'react';
-import { Alert, View, TextInput, Pressable, Keyboard, Platform } from 'react-native';
+import { Alert, View, TextInput, Pressable, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Plus,
@@ -38,6 +38,9 @@ import { ModelSelectorButton } from './ModelSelectorButton';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { MediaModeChip } from './MediaModeChip';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
+import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
+import { useKeyboardVisible } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import { Waveform } from '@/src/features/voice/components/Waveform';
@@ -138,7 +141,7 @@ export function ChatInput({
     draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance) || (initialText ?? ''),
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const keyboardVisible = useKeyboardVisible();
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -273,17 +276,6 @@ export function ChatInput({
     if (!draftKey || !draftProvenance) return;
     setDraft(draftKey, text, draftProvenance);
   }, [draftIdentity, draftKey, draftProvenance, text]);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   const sendComposerMessage = useCallback(
     (sourceText: string) => {
@@ -444,8 +436,39 @@ export function ChatInput({
   }, []);
 
   const handleRemoveAttachment = useCallback((id: string) => {
+    useUploadLifecycleStore.getState().clear(id);
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
+
+  const handleRetryUpload = useCallback(
+    (id: string) => {
+      const target = attachments.find((a) => a.id === id);
+      if (!target) return;
+      void uploadWithRetry(
+        { uri: target.uri, name: target.fileName, type: target.mimeType },
+        target.fileName,
+        target.id,
+      ).then((result) => {
+        if (!result) return;
+        // A resumed upload owns a Cloud asset, so the next send reuses it
+        // instead of uploading the same bytes again.
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.id === id
+              ? {
+                  ...a,
+                  assetId: result.id,
+                  uri: result.url,
+                  fileSize: result.byteCount,
+                  sendFailed: false,
+                }
+              : a,
+          ),
+        );
+      });
+    },
+    [attachments],
+  );
 
   const handleTranscription = useCallback(
     (transcribedText: string) => {
@@ -701,6 +724,7 @@ export function ChatInput({
         attachments={attachments}
         onRemove={handleRemoveAttachment}
         onExpandPastedText={handleExpandPastedText}
+        onRetryUpload={handleRetryUpload}
         privacyShortLabel={attachmentPrivacyShortLabel}
       />
 

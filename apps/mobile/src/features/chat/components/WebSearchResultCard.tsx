@@ -1,7 +1,7 @@
 import { Alert, View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
-import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
+import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import type { ToolSearchResult } from '@/types/chat';
 
@@ -13,14 +13,6 @@ function badgePalette(colors: ColorScheme): readonly string[] {
     colors.agentWarning,
     colors.agentThinking,
   ];
-}
-
-function hostnameOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
 }
 
 function badgeColorFor(hostname: string, colors: ColorScheme): string {

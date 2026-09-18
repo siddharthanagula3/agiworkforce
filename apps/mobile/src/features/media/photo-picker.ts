@@ -1,5 +1,10 @@
 import * as ImagePicker from 'expo-image-picker';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
+import {
+  SAFE_IMAGE_PICKER_OPTIONS,
+  imageFileNameFor,
+  imageMimeTypeFor,
+} from '@/src/features/media/image-normalization';
 
 type PickImageAssetsOptions = {
   allowsMultipleSelection?: boolean;
@@ -13,12 +18,22 @@ export async function pickImageAssetsFromLibrary({
   selectionLimit,
 }: PickImageAssetsOptions = {}): Promise<ImagePicker.ImagePickerAsset[]> {
   const result = await ImagePicker.launchImageLibraryAsync({
+    ...SAFE_IMAGE_PICKER_OPTIONS,
     mediaTypes: ['images'],
-    quality: 0.85,
     allowsMultipleSelection,
     selectionLimit,
     orderedSelection,
-    exif: false,
+  });
+
+  if (result.canceled) return [];
+  return result.assets;
+}
+
+export async function captureImageAssetsFromCamera(): Promise<ImagePicker.ImagePickerAsset[]> {
+  const result = await ImagePicker.launchCameraAsync({
+    ...SAFE_IMAGE_PICKER_OPTIONS,
+    mediaTypes: ['images'],
+    allowsEditing: false,
   });
 
   if (result.canceled) return [];
@@ -33,8 +48,8 @@ export function imageAssetsToChatAttachments(
   return assets.map((asset, index) => ({
     id: `${prefix}-${createdAt}-${index}`,
     uri: asset.uri,
-    mimeType: asset.mimeType ?? 'image/jpeg',
-    fileName: asset.fileName ?? 'image.jpg',
+    mimeType: imageMimeTypeFor(asset),
+    fileName: imageFileNameFor(asset, `${prefix}-${createdAt}-${index}`),
     width: asset.width,
     height: asset.height,
     fileSize: asset.fileSize,

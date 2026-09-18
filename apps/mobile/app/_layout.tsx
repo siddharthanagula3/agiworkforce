@@ -82,6 +82,7 @@ import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { resolveRootRedirect } from '@/src/features/auth/services/rootRouting';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
+import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
 import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
 import '../global.css';
@@ -156,7 +157,9 @@ function ClerkTokenBridge() {
       });
       setClerkSignedIn(true);
       setClerkLoaded(true);
+      void refreshRolloutRings();
     } else {
+      useRolloutStore.getState().clear();
       clearPostAuthIntent();
       setClerkTokenGetter(null, null, null);
       setClerkUserId(null);
@@ -311,6 +314,7 @@ export default function RootLayout() {
         refreshTier().catch((err) => {
           console.warn('[RootLayout] Foreground tier refresh failed:', err);
         });
+        void refreshRolloutRings();
       }
     };
 

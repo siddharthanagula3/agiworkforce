@@ -29,6 +29,7 @@ import {
   downloadGeneratedFile,
 } from '@/services/fileCreation';
 import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
+import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import type { Artifact } from '@/types/chat';
 import { renderMarkdownContent } from './MessageContentRenderer';
 import { GeneratedFileCard } from './GeneratedFileCard';
@@ -304,6 +305,13 @@ export function ArtifactFullScreen({
     await Share.share({ title: artifact.title, message: publishedUrl });
   }, [publishedUrl, artifact]);
 
+  const dismiss = { onPress: onClose, label: 'Close', hint: 'Returns to the conversation' };
+  const chrome = useFullScreenChrome({
+    surface: 'chat.artifact.fullscreen',
+    back: dismiss,
+    close: dismiss,
+  });
+
   if (!artifact) return null;
 
   const canPreview = isPreviewable(artifact);
@@ -318,7 +326,7 @@ export function ArtifactFullScreen({
       animationType="slide"
       presentationStyle="overFullScreen"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={chrome.onRequestClose}
       statusBarTranslucent
       accessibilityViewIsModal
     >
@@ -503,14 +511,14 @@ export function ArtifactFullScreen({
 
             {/* Close */}
             <Pressable
-              onPress={onClose}
+              {...chrome.close}
               style={{
-                padding: 8,
+                ...chrome.close.style,
+                alignItems: 'center',
+                justifyContent: 'center',
                 borderRadius: 8,
                 backgroundColor: colors.neutralSurface,
               }}
-              accessibilityLabel="Close"
-              accessibilityRole="button"
             >
               <X size={17} color={colors.textSecondary} />
             </Pressable>

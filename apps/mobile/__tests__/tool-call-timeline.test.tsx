@@ -19,16 +19,25 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
+jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn() }));
+jest.mock('expo-linking', () => ({ openURL: jest.fn() }));
+
 jest.mock('../src/ui/theme', () => ({
   useThemeColors: () => ({
     surfaceBase: '#111',
     surfaceOverlay: '#222',
+    surfaceHover: '#252525',
     border: '#333',
     borderLight: '#444',
     textPrimary: '#fff',
     textSecondary: '#ccc',
     textMuted: '#888',
+    accentText: '#000',
+    transparent: 'transparent',
     agentActive: '#1e90ff',
+    agentSuccess: '#10a37f',
+    agentError: '#f87171',
+    agentThinking: '#a78bfa',
     agentWarning: '#f90',
     warningSurface: '#332200',
   }),
@@ -36,12 +45,13 @@ jest.mock('../src/ui/theme', () => ({
 
 import { ToolCallTimeline } from '../src/features/chat/components/ToolCallTimeline';
 import type { ToolCall } from '../types/chat';
+import type { ToolStatus } from '@agiworkforce/types';
 
 function makeTool(overrides: Partial<ToolCall> = {}): ToolCall {
   return {
     id: 'tool-1',
     name: 'web_search',
-    status: 'completed',
+    status: 'succeeded',
     ...overrides,
   };
 }
@@ -173,5 +183,134 @@ describe('ToolCallTimeline auto-collapse', () => {
 
     rerender(<ToolCallTimeline toolCalls={[...tools]} summary="Used 1 tool" />);
     expect(queryByText('Done')).toBeTruthy();
+  });
+});
+
+describe('ToolCallTimeline, the seven tool statuses', () => {
+  const STATUS_GLYPHS = [
+    'icon-Clock',
+    'icon-ShieldAlert',
+    'icon-Loader2',
+    'icon-CircleDashed',
+    'icon-CircleSlash',
+    'icon-AlertCircle',
+  ];
+
+  const EXPECTED: ReadonlyArray<[ToolStatus, string, string | null]> = [
+    ['pending', 'Queued', 'icon-Clock'],
+    ['awaiting-approval', 'Needs approval', 'icon-ShieldAlert'],
+    ['running', 'Running', 'icon-Loader2'],
+    ['succeeded', 'Done', null],
+    ['partial', 'Partial result', 'icon-CircleDashed'],
+    ['canceled', 'Canceled', 'icon-CircleSlash'],
+    ['failed', 'Failed', 'icon-AlertCircle'],
+  ];
+
+  function renderStatus(status: ToolStatus) {
+    const view = render(
+      <ToolCallTimeline
+        toolCalls={[makeTool({ status, name: 'read_file', output: 'body' })]}
+        summary="Used 1 tool"
+      />,
+    );
+    if (view.queryByLabelText('Used 1 tool, collapsed')) {
+      fireEvent.press(view.getByText('Used 1 tool'));
+    }
+    return view;
+  }
+
+  it.each(EXPECTED)('renders %s with its own glyph and label', (status, label, iconTestId) => {
+    const view = renderStatus(status);
+
+    for (const glyph of STATUS_GLYPHS) {
+      if (glyph === iconTestId) expect(view.getAllByTestId(glyph).length).toBeGreaterThan(0);
+      else expect(view.queryByTestId(glyph)).toBeNull();
+    }
+    expect(view.getByLabelText(new RegExp(label, 'i'))).toBeTruthy();
+  });
+
+  it('gives every status a distinct row rendering', () => {
+    const rendered = EXPECTED.map(([status]) => {
+      const view = renderStatus(status);
+      const snapshot = JSON.stringify(view.toJSON());
+      view.unmount();
+      return snapshot;
+    });
+    expect(new Set(rendered).size).toBe(EXPECTED.length);
+  });
+
+  it('keeps the group open while a call waits on approval', () => {
+    const { getByLabelText } = render(
+      <ToolCallTimeline
+        toolCalls={[makeTool({ status: 'awaiting-approval' })]}
+        summary="Using 1 tool"
+      />,
+    );
+    expect(getByLabelText('Using 1 tool, expanded')).toBeTruthy();
+  });
+
+  it('closes a group whose worst outcome was a cancellation with that word, not Done', () => {
+    const { getAllByText, getByText, queryByText } = render(
+      <ToolCallTimeline
+        toolCalls={[makeTool({ status: 'canceled' }), makeTool({ id: 't2', status: 'succeeded' })]}
+        summary="Used 2 tools"
+      />,
+    );
+
+    fireEvent.press(getByText('Used 2 tools'));
+    expect(getAllByText('Canceled').length).toBeGreaterThan(0);
+    expect(queryByText('Done')).toBeNull();
+  });
+});
+
+describe('WebSearchToolCard inside the timeline', () => {
+  it('shows the search query as progress while the search runs', () => {
+    const tools = [makeTool({ status: 'running', input: '{"query":"AGI Workforce pricing"}' })];
+    const { getByText } = render(<ToolCallTimeline toolCalls={tools} summary="Using 1 tool" />);
+
+    expect(getByText('Searching the web\u2026')).toBeTruthy();
+    expect(getByText('Searching for \u201cAGI Workforce pricing\u201d')).toBeTruthy();
+  });
+
+  it('lists the sources as openable citation chips once the search succeeds', async () => {
+    const tools = [
+      makeTool({
+        searchResults: [
+          { url: 'https://example.com/a', title: 'A' },
+          { url: 'https://docs.example.org/b', title: 'B' },
+        ],
+      }),
+    ];
+    const { getByText, getByLabelText } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
+    );
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(getByText('2 sources')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Open source example.com, A'));
+    await Promise.resolve();
+    expect(require('expo-web-browser').openBrowserAsync).toHaveBeenCalledWith(
+      'https://example.com/a',
+      expect.anything(),
+    );
+  });
+
+  it('names the failure instead of the sources when the search fails', () => {
+    const tools = [makeTool({ status: 'failed', output: 'Upstream search provider refused' })];
+    const { getByText } = render(<ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />);
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(getByText('Upstream search provider refused')).toBeTruthy();
+  });
+
+  it('says the result set is incomplete when the search is partial', () => {
+    const tools = [
+      makeTool({ status: 'partial', searchResults: [{ url: 'https://example.com', title: 'A' }] }),
+    ];
+    const { getByText } = render(<ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />);
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(getByText('The search stopped early, these sources are incomplete.')).toBeTruthy();
   });
 });

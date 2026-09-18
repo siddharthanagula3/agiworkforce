@@ -16,6 +16,7 @@ import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { transcribeAudioFile } from '@/src/features/voice/services/voiceInput';
 import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
 import { colors } from '@/src/ui/theme';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import { getDisplayName, isCloudManagedModelId } from '@/src/features/model-picker/service';
 import {
   createMessageIdSet,
@@ -116,7 +117,8 @@ export default function VoiceScreen() {
   const params = useLocalSearchParams<{ returnTo?: string; audioUri?: string }>();
   const insets = useSafeAreaInsets();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const voiceInputEnabled = useSettingsStore((s) => s.voiceEnabled);
+  const voiceAllowed = useCapability('canUseVoice');
+  const voiceInputEnabled = useSettingsStore((s) => s.voiceEnabled) && voiceAllowed;
   const pttMode = useSettingsStore((s) => s.voicePushToTalk);
   const setVoicePushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
   const selectedModel = useModelStore((s) => s.selectedModel);
@@ -184,7 +186,7 @@ export default function VoiceScreen() {
   // it as the first turn instead of opening a microphone the user did not ask for.
   useEffect(() => {
     const audioUri = params.audioUri;
-    if (!audioUri || transcribedUriRef.current === audioUri) return;
+    if (!voiceAllowed || !audioUri || transcribedUriRef.current === audioUri) return;
     transcribedUriRef.current = audioUri;
     setFileTranscription('Transcribing the recording…');
     transcribeAudioFile(audioUri, { lang: activeSpeechLanguage() })
@@ -204,7 +206,7 @@ export default function VoiceScreen() {
       .catch((err: unknown) => {
         setFileTranscription(voiceCaptureErrorMessage(err));
       });
-  }, [params.audioUri, sendVoiceMessage]);
+  }, [params.audioUri, sendVoiceMessage, voiceAllowed]);
 
   const handlePttToggle = useCallback(() => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -223,6 +225,14 @@ export default function VoiceScreen() {
 
   const modelLabel = getDisplayName(selectedModel);
   const isCloudModel = isCloudManagedModelId(selectedModel);
+
+  if (!voiceAllowed) {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+        <CapabilityUnavailable label="Voice mode" onDismiss={handleClose} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>

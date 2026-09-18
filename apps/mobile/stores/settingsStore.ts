@@ -6,6 +6,7 @@ import {
   type ToolApprovalPolicy,
 } from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import { isAudioRoute, type AudioRoute } from '@/src/features/voice/services/audioRoute';
 
 // ── Types re-exported for consumers and mode-specific stores ─────────────────
 
@@ -61,6 +62,7 @@ export interface SettingsState {
   ttsProvider: TTSProvider;
   voicePushToTalk: boolean;
   voiceOnboardingSeen: boolean;
+  audioRoute: AudioRoute;
   isTemporaryChat: boolean;
   capabilities: Capabilities;
 
@@ -76,6 +78,7 @@ export interface SettingsState {
   setTtsProvider: (provider: TTSProvider) => void;
   setVoicePushToTalk: (enabled: boolean) => void;
   setVoiceOnboardingSeen: (seen: boolean) => void;
+  setAudioRoute: (route: AudioRoute) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setCapability: (key: keyof Capabilities, value: boolean) => void;
 }
@@ -128,6 +131,7 @@ export const useSettingsStore = create<SettingsState>()(
       ttsProvider: 'system',
       voicePushToTalk: false,
       voiceOnboardingSeen: false,
+      audioRoute: 'auto',
       isTemporaryChat: false,
       capabilities: {
         webSearch: true,
@@ -152,6 +156,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
       setVoicePushToTalk: (enabled) => set({ voicePushToTalk: enabled }),
       setVoiceOnboardingSeen: (seen) => set({ voiceOnboardingSeen: seen }),
+      setAudioRoute: (route) => set({ audioRoute: route }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
       setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
     }),
@@ -171,6 +176,7 @@ export const useSettingsStore = create<SettingsState>()(
           if (!isToolApprovalPolicy(state.toolApprovalPolicy)) {
             state.toolApprovalPolicy = DEFAULT_TOOL_APPROVAL_POLICY;
           }
+          if (!isAudioRoute(state.audioRoute)) state.audioRoute = 'auto';
         }
       },
     },

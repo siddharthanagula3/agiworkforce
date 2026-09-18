@@ -55,7 +55,13 @@ export function ModeSwitchModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleCancel}
+      accessibilityViewIsModal
+    >
       <View
         style={{
           flex: 1,

@@ -13,6 +13,14 @@ export function isValidExternalHttpUrl(url: string): boolean {
   }
 }
 
+export function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 export type ExternalLinkKind = 'http' | 'system-intent' | 'blocked';
 
 export function classifyExternalLink(url: string): ExternalLinkKind {

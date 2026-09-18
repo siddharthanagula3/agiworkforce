@@ -52,6 +52,7 @@ import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { collectSearchableMobileFiles } from '@/src/features/search/mobileGlobalSearch';
+import { useCapability } from '@/src/lib/capabilities';
 import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
@@ -82,6 +83,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 ) {
   const router = useRouter();
   const { colors: themeColors } = useTheme();
+  const cameraAllowed = useCapability('canUseCamera');
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const chatStyle = useChatStore((s) => s.chatStyle);
@@ -362,13 +364,15 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             paddingBottom: 20,
           }}
         >
-          <AttachmentCard
-            icon={<Camera size={22} color={themeColors.teal} />}
-            label="Camera"
-            onPress={handleCamera}
-            bg={cardBg}
-            textColor={themeColors.textPrimary}
-          />
+          {cameraAllowed ? (
+            <AttachmentCard
+              icon={<Camera size={22} color={themeColors.teal} />}
+              label="Camera"
+              onPress={handleCamera}
+              bg={cardBg}
+              textColor={themeColors.textPrimary}
+            />
+          ) : null}
           <AttachmentCard
             icon={<ImageIcon size={22} color={themeColors.teal} />}
             label="Photos"

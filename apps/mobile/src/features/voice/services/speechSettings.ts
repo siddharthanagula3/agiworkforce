@@ -1,4 +1,5 @@
 import { useSettingsStore } from '@/stores/settingsStore';
+import type { AudioRoute } from '@/src/features/voice/services/audioRoute';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
@@ -21,6 +22,11 @@ export function autoListenEnabled(): boolean {
   return useChatAppModeStore.getState().appMode === 'cloud'
     ? useCloudSettingsStore.getState().autoListenEnabled
     : useLocalSettingsStore.getState().autoListenEnabled;
+}
+
+/** Every capture and every live call reads one route, so the picker moves both. */
+export function activeAudioRoute(): AudioRoute {
+  return useSettingsStore.getState().audioRoute;
 }
 
 /**

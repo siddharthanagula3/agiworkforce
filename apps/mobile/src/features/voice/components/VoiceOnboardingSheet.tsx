@@ -91,6 +91,7 @@ export function VoiceOnboardingSheet({
       transparent
       onRequestClose={onDismiss}
       statusBarTranslucent
+      accessibilityViewIsModal
     >
       <Animated.View
         entering={FadeIn.duration(160)}

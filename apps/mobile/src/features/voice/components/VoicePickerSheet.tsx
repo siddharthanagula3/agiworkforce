@@ -95,6 +95,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
       transparent
       onRequestClose={onDismiss}
       statusBarTranslucent
+      accessibilityViewIsModal
     >
       <Animated.View
         entering={FadeIn.duration(160)}
