@@ -4,7 +4,8 @@ import {
   DESKTOP_RELEASE_CHANNELS,
   desktopChannelCarriesMaturity,
 } from '@/lib/releases/github-desktop-releases';
-import mobileReleaseState from '../../../../mobile/src/features/release-state/mobileReleaseState.json';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   FEATURE_MATURITIES,
   FlagDefinitionInputSchema,
@@ -95,7 +96,15 @@ describe('feature maturity and release channel registry', () => {
   });
 
   it('states the mobile surface maturity and channel in the shared vocabulary', () => {
-    const state = mobileReleaseState as { maturity: string; channel: string; released: boolean };
+    const state = JSON.parse(
+      readFileSync(
+        path.resolve(
+          __dirname,
+          '../../../../mobile/src/features/release-state/mobileReleaseState.json',
+        ),
+        'utf8',
+      ),
+    ) as { maturity: string; channel: string; released: boolean };
     expect(FEATURE_MATURITIES).toContain(state.maturity);
     expect(RELEASE_CHANNELS).toContain(state.channel);
     expect(state.released).toBe(false);
