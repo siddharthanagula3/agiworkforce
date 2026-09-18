@@ -182,6 +182,93 @@ export interface ResearchStep {
   note?: string;
 }
 
+/**
+ * What the run is asked to produce, chosen before it starts rather than at
+ * export time. It is also the run's stop rule: a deliverable that asks for
+ * more sources is not done until it has them.
+ */
+export const RESEARCH_DELIVERABLE_DEPTHS = ['executive-summary', 'full-report'] as const;
+export type ResearchDeliverableDepth = (typeof RESEARCH_DELIVERABLE_DEPTHS)[number];
+
+export const RESEARCH_DELIVERABLE_FORMATS = ['prose', 'prose-with-tables', 'bullet-brief'] as const;
+export type ResearchDeliverableFormat = (typeof RESEARCH_DELIVERABLE_FORMATS)[number];
+
+export const RESEARCH_MAX_MIN_SOURCES = 40;
+
+export interface ResearchDeliverableSpec {
+  depth: ResearchDeliverableDepth;
+  format: ResearchDeliverableFormat;
+  /** Distinct sources the run must have before it may call itself done, 0 for no floor. */
+  minSources: number;
+  /** Stop gathering once a round adds no source the run did not already have. */
+  stopWhenNoNewSources: boolean;
+  /** Keep the finished report as its own library entry, not only in the chat. */
+  saveToLibrary: boolean;
+}
+
+export const DEFAULT_RESEARCH_DELIVERABLE: ResearchDeliverableSpec = {
+  depth: 'full-report',
+  format: 'prose',
+  minSources: 0,
+  stopWhenNoNewSources: true,
+  saveToLibrary: false,
+};
+
+export function normalizeResearchDeliverable(value: unknown): ResearchDeliverableSpec {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_RESEARCH_DELIVERABLE };
+  const raw = value as Record<string, unknown>;
+  const depth = (RESEARCH_DELIVERABLE_DEPTHS as readonly string[]).includes(raw['depth'] as string)
+    ? (raw['depth'] as ResearchDeliverableDepth)
+    : DEFAULT_RESEARCH_DELIVERABLE.depth;
+  const format = (RESEARCH_DELIVERABLE_FORMATS as readonly string[]).includes(
+    raw['format'] as string,
+  )
+    ? (raw['format'] as ResearchDeliverableFormat)
+    : DEFAULT_RESEARCH_DELIVERABLE.format;
+  const requested = Number(raw['minSources']);
+  return {
+    depth,
+    format,
+    minSources: Number.isFinite(requested)
+      ? Math.min(RESEARCH_MAX_MIN_SOURCES, Math.max(0, Math.floor(requested)))
+      : DEFAULT_RESEARCH_DELIVERABLE.minSources,
+    stopWhenNoNewSources:
+      typeof raw['stopWhenNoNewSources'] === 'boolean'
+        ? raw['stopWhenNoNewSources']
+        : DEFAULT_RESEARCH_DELIVERABLE.stopWhenNoNewSources,
+    saveToLibrary: raw['saveToLibrary'] === true,
+  };
+}
+
+export const RESEARCH_GAP_STATUSES = ['open', 'closed'] as const;
+export type ResearchGapStatus = (typeof RESEARCH_GAP_STATUSES)[number];
+
+/**
+ * Something the plan committed to that the report does not answer. Derived from
+ * the plan against the finished report, never asserted by the model, so a gap
+ * is evidence rather than a claim.
+ */
+export interface ResearchGap {
+  id: string;
+  /** The planned question this gap belongs to. */
+  question: string;
+  status: ResearchGapStatus;
+  /** Why it is still open, or how it was closed. */
+  reason: string;
+}
+
+export function isResearchGap(value: unknown): value is ResearchGap {
+  if (!value || typeof value !== 'object') return false;
+  const gap = value as Record<string, unknown>;
+  return (
+    typeof gap['id'] === 'string' &&
+    gap['id'].length > 0 &&
+    typeof gap['question'] === 'string' &&
+    typeof gap['reason'] === 'string' &&
+    (RESEARCH_GAP_STATUSES as readonly string[]).includes(gap['status'] as string)
+  );
+}
+
 export type ResearchReportStatus =
   'pending' | 'researching' | 'synthesizing' | 'completed' | 'interrupted' | 'failed';
 
@@ -266,6 +353,12 @@ export interface ResearchReport {
   citations: Citation[];
 
   steps?: ResearchStep[];
+
+  /** What the run was asked to produce, recorded so a reader can judge it. */
+  deliverable?: ResearchDeliverableSpec;
+
+  /** Planned questions the finished report does not answer. */
+  gaps?: ResearchGap[];
 
   status: ResearchReportStatus;
 
