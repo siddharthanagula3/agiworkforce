@@ -254,3 +254,71 @@ describe('DOC-024, /enterprise agrees with the dated ledger', () => {
     expect(lower).toContain('erasure');
   });
 });
+
+describe('the trust ledger expires rather than drifting', () => {
+  const TRUST = path.join(APP_DIR, 'trust', 'page.tsx');
+  const MAX_ROW_AGE_DAYS = 400;
+  const DAY_MS = 24 * 60 * 60 * 1_000;
+  const source = rendered(TRUST);
+  const today = new Date();
+
+  function daysOld(iso: string): number {
+    return (today.getTime() - new Date(`${iso}T00:00:00Z`).getTime()) / DAY_MS;
+  }
+
+  it('states its next review as a date a machine can check', () => {
+    expect(source).toMatch(/const NEXT_REVIEW_DATE = '\d{4}-\d{2}-\d{2}';/u);
+  });
+
+  it('fails once the stated review date has passed, which is the prompt to re-measure', () => {
+    const declared = /const NEXT_REVIEW_DATE = '(\d{4}-\d{2}-\d{2})';/u.exec(source)?.[1];
+    expect(declared).toBeDefined();
+    expect(daysOld(declared ?? ''), `next review ${declared} has passed`).toBeLessThan(0);
+  });
+
+  it('carries an as-of date on every row, none of them in the future', () => {
+    const dates = [...source.matchAll(/As of (\d{4}-\d{2}-\d{2})/gu)].map(
+      (match) => match[1] ?? '',
+    );
+    expect(dates.length).toBeGreaterThan(10);
+    for (const date of dates) {
+      expect(daysOld(date), `as of ${date} is in the future`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('holds no row that has gone unreviewed past the ledger cadence', () => {
+    const stale = [...source.matchAll(/As of (\d{4}-\d{2}-\d{2})/gu)]
+      .map((match) => match[1] ?? '')
+      .filter((date) => daysOld(date) > MAX_ROW_AGE_DAYS);
+
+    expect(stale).toEqual([]);
+  });
+
+  it('points the continuity row at a summary that exists', () => {
+    expect(source).toContain('docs/runbooks/business-continuity.md');
+    const summary = readFileSync(
+      path.resolve(WEB_ROOT, '..', '..', 'docs', 'runbooks', 'business-continuity.md'),
+      'utf8',
+    );
+    expect(summary).toContain('Recovery point and recovery time');
+    expect(summary).toContain('Known gaps');
+  });
+
+  it('names an evidence document for each row that has one, and says so where none exists', () => {
+    for (const document of [
+      'docs/runbooks/business-continuity.md',
+      'docs/runbooks/database-backup-restore.md',
+      'docs/runbooks/break-glass-production-access.md',
+      'docs/runbooks/incident-response.md',
+      'docs/runbooks/personal-data-breach.md',
+      'docs/security/security.md',
+    ]) {
+      expect(source, `${document} is cited but missing`).toContain(document);
+      expect(
+        statSync(path.resolve(WEB_ROOT, '..', '..', document)).isFile(),
+        `${document} does not exist`,
+      ).toBe(true);
+    }
+    expect(source).toContain('No SOC 2 report, ISO 27001 certificate or penetration test report');
+  });
+});

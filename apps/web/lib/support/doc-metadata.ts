@@ -143,6 +143,7 @@ export const SUPPORT_DOC_METADATA: Readonly<Record<string, DocMetadata>> = Objec
   'export-your-data': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'files-and-attachments': metadata('ga', 'user', ['web', 'desktop', 'mobile'], CLOUD_DOC_PLANS),
   'getting-started': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
+  glossary: metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'install-desktop-and-mobile': metadata('beta', 'user', ['desktop', 'mobile'], ALL_DOC_PLANS),
   'install-the-cli': metadata('ga', 'developer', ['cli'], ALL_DOC_PLANS),
   'keyboard-shortcuts': metadata('ga', 'user', ['web', 'desktop'], ALL_DOC_PLANS),

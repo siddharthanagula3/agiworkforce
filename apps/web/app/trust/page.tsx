@@ -24,15 +24,62 @@ export const metadata = buildMetadata({
 });
 
 const LAST_REVIEWED = POLICY_LAST_UPDATED.trust;
-const NEXT_REVIEW = 'November 2026';
+
+/** Machine-checkable so the honesty test can fail the build once it passes. */
+const NEXT_REVIEW_DATE = '2026-11-30';
+
+const NEXT_REVIEW = new Intl.DateTimeFormat('en-GB', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+}).format(new Date(`${NEXT_REVIEW_DATE}T00:00:00Z`));
 
 const SECTIONS = [
   { label: 'What we hold, and what we do not', id: 'compliance' },
   { label: 'Control by control, dated', id: 'posture' },
   { label: 'Do not take our word for it', id: 'verify' },
+  { label: 'The documents behind the rows', id: 'evidence' },
   { label: 'When this page last moved', id: 'changes' },
   { label: 'Go deeper on any of it', id: 'related' },
 ] as const;
+
+const EVIDENCE: { label: string; value: string }[] = [
+  {
+    label: 'Business continuity and disaster recovery',
+    value:
+      'docs/runbooks/business-continuity.md. The recovery mechanism per asset, the evidence for each, and the gaps: no declared objectives, no scheduled restore test, one region.',
+  },
+  {
+    label: 'Database backup and restore',
+    value:
+      'docs/runbooks/database-backup-restore.md, with the two drill scripts it names. The procedure a real recovery follows, and what Neon actually retains.',
+  },
+  {
+    label: 'Production access',
+    value:
+      'docs/runbooks/break-glass-production-access.md and the hash-chained grant log the workspace itself can read. The runbook is the procedure; the log is the record of every use of it.',
+  },
+  {
+    label: 'Incident handling',
+    value:
+      'docs/runbooks/incident-response.md and docs/runbooks/incident-postmortem-template.md. The severity ladder on this page comes from the first; no postmortem has been published, because no severity 1 has been declared.',
+  },
+  {
+    label: 'Personal data breach',
+    value:
+      'docs/runbooks/personal-data-breach.md. The assessment and notification path behind the notification duty stated on /status.',
+  },
+  {
+    label: 'Security mechanisms',
+    value:
+      'docs/security/security.md. The mechanism behind each control named on /security, including the encryption key ring a restore depends on.',
+  },
+  {
+    label: 'Audit reports',
+    value:
+      'None exist. No SOC 2 report, ISO 27001 certificate or penetration test report can be handed over, because none has been produced. That row is not a disclosure restriction.',
+  },
+];
 
 const COMPLIANCE: { label: string; value: string }[] = [
   {
@@ -151,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 155 of 242 database-backed hosted API route files. Counted against the 242 route files that reach the database; the other 110 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 87 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-18.',
+      'Partial: 158 of 247 database-backed hosted API route files. Counted against the 247 route files that reach the database; the other 111 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 89 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-18.',
   },
   {
     label: 'Authentication and CSRF',
@@ -196,7 +243,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Business continuity evidence',
     value:
-      'Not published. No recovery point objective, no recovery time objective, and no restore test evidence has been published. Treat continuity as unproven. As of 2026-08-05.',
+      'Summarised, with the gaps named. docs/runbooks/business-continuity.md states the recovery mechanism for each asset, the evidence in the repository for each one, and what is not measured: no declared recovery point or recovery time objective, no scheduled restore test, and no second region or provider for serving. Two restore drills exist and are run by a human, so the recovery point is a property of the configuration rather than a tested outcome. As of 2026-09-18.',
   },
 ];
 
@@ -308,6 +355,24 @@ export default function TrustPage() {
                 </Stack>
               </Section>
 
+              <Section id="evidence" labelledBy="agi-trust-evidence-title" rule>
+                <Stack gap="loose">
+                  <div>
+                    <h2 className="agi-ds-h2" id="agi-trust-evidence-title">
+                      The documents behind the rows.
+                    </h2>
+                    <Prose>
+                      A row that cites a command asks you to reproduce the evidence. These are the
+                      written documents the rows rest on. They live in the repository rather than
+                      behind a portal, and under a mutual non-disclosure agreement we will hand over
+                      the copy that applies to your review. Ask through the contact below and name
+                      the row.
+                    </Prose>
+                  </div>
+                  <Ledger caption="Evidence documents" rows={EVIDENCE} />
+                </Stack>
+              </Section>
+
               <Section id="changes" labelledBy="agi-trust-changes-title" rule>
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-trust-changes-title">
@@ -316,6 +381,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-18',
+                        value:
+                          'Business continuity moved from not published to summarised with the gaps named: docs/runbooks/business-continuity.md states the recovery mechanism for each asset and the evidence for it, and says plainly that no recovery point or recovery time objective is declared, no restore test is scheduled, and there is no second region or provider. A documents section was added naming what sits behind each row, including the rows where no document exists because no audit has been performed. The review date is now a date in the source rather than a month in prose, and the honesty test fails the build once it passes, so a stale ledger cannot ship quietly.',
+                      },
                       {
                         label: '2026-09-18',
                         value:
