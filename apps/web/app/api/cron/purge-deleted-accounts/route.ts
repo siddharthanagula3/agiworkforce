@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { syncErasureLedger } from '@/lib/server/erasure-tombstones';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   sweepExpiredMcpDiscoveryCache,
@@ -202,6 +203,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  let erasureLedger: Awaited<ReturnType<typeof syncErasureLedger>> | null = null;
+  try {
+    erasureLedger = await syncErasureLedger(db);
+  } catch (error) {
+    failed += 1;
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Erasure ledger could not be synced after the purge sweep',
+    );
+  }
+
   return NextResponse.json({
     message: deletionColumnsProvisioned
       ? 'Deleted account erasures queued'
@@ -216,5 +228,6 @@ export async function GET(request: NextRequest) {
     resurrected,
     resweepsQueued,
     connectorCacheRowsExpired,
+    erasureLedger,
   });
 }

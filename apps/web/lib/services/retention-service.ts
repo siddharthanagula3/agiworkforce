@@ -2,7 +2,27 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-export type LegalHoldScope = 'organization' | 'member';
+export type LegalHoldScope = 'organization' | 'member' | 'custodian';
+
+/**
+ * The stores a hold can name, shared with the eDiscovery export so a hold and
+ * the export of what it holds cannot disagree about what a "file" is.
+ */
+export const LEGAL_HOLD_RESOURCE_TYPES = [
+  'conversation',
+  'message',
+  'project',
+  'project_file',
+  'file',
+  'artifact',
+  'work_run',
+] as const;
+
+export type LegalHoldResourceType = (typeof LEGAL_HOLD_RESOURCE_TYPES)[number];
+
+export function isLegalHoldResourceType(value: string): value is LegalHoldResourceType {
+  return (LEGAL_HOLD_RESOURCE_TYPES as readonly string[]).includes(value);
+}
 
 export interface LegalHold {
   id: string;
@@ -11,10 +31,26 @@ export interface LegalHold {
   reason: string | null;
   scope: LegalHoldScope;
   subjectUserId: string | null;
+  /** Empty for organization and member scopes; the held people for custodian scope. */
+  custodianUserIds: string[];
+  /** null preserves every store, which is what a hold placed before 0261 meant. */
+  resourceTypes: LegalHoldResourceType[] | null;
   createdByUserId: string;
   releasedAt: string | null;
   releasedByUserId: string | null;
   createdAt: string;
+}
+
+/** Everyone a hold preserves, whichever shape it was placed in. */
+export function heldSubjects(hold: LegalHold): string[] {
+  if (hold.scope === 'member') return hold.subjectUserId ? [hold.subjectUserId] : [];
+  if (hold.scope === 'custodian') return hold.custodianUserIds;
+  return [];
+}
+
+/** A hold with no resource_types covers every store; a narrowed one covers what it names. */
+export function holdCovers(hold: LegalHold, resourceType: LegalHoldResourceType): boolean {
+  return hold.resourceTypes === null || hold.resourceTypes.includes(resourceType);
 }
 
 export type RetentionSweepOutcome = 'deleted' | 'nothing_due' | 'held' | 'aborted' | 'failed';
@@ -57,28 +93,38 @@ export const RETENTION_SWEEP_BATCH = 500;
  */
 export const RETENTION_SWEEP_MAX_BATCHES = 10;
 
-interface HoldRow {
+export interface HoldRow {
   id: string;
   organization_id: string;
   name: string;
   reason: string | null;
   scope: LegalHoldScope;
   subject_user_id: string | null;
+  resource_types: string[] | null;
+  custodian_user_ids: string[] | null;
   created_by_user_id: string;
   released_at: string | Date | null;
   released_by_user_id: string | null;
   created_at: string | Date;
 }
 
-const HOLD_COLUMNS = `id, organization_id, name, reason, scope, subject_user_id,
-  created_by_user_id, released_at, released_by_user_id, created_at`;
+/**
+ * Custodians come back as an aggregate rather than a second round trip: the
+ * sweep reads holds on the path that decides whether to delete, and a hold whose
+ * custodian list failed to load separately would silently preserve nobody.
+ */
+export const HOLD_COLUMNS = `h.id, h.organization_id, h.name, h.reason, h.scope, h.subject_user_id,
+  h.resource_types, h.created_by_user_id, h.released_at, h.released_by_user_id, h.created_at,
+  coalesce(array(select c.user_id from public.legal_hold_custodians c
+                  where c.hold_id = h.id order by c.user_id), array[]::text[]) as custodian_user_ids`;
 
 function toIso(value: string | Date | null): string | null {
   if (value === null) return null;
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function formatHold(row: HoldRow): LegalHold {
+export function formatHold(row: HoldRow): LegalHold {
+  const resourceTypes = row.resource_types?.filter(isLegalHoldResourceType) ?? null;
   return {
     id: row.id,
     organizationId: row.organization_id,
@@ -86,6 +132,8 @@ function formatHold(row: HoldRow): LegalHold {
     reason: row.reason,
     scope: row.scope,
     subjectUserId: row.subject_user_id,
+    custodianUserIds: row.custodian_user_ids ?? [],
+    resourceTypes: resourceTypes && resourceTypes.length > 0 ? resourceTypes : null,
     createdByUserId: row.created_by_user_id,
     releasedAt: toIso(row.released_at),
     releasedByUserId: row.released_by_user_id,
@@ -100,10 +148,10 @@ export async function listLegalHolds(
 ): Promise<LegalHold[]> {
   const rows = await db.query<HoldRow>(
     `select ${HOLD_COLUMNS}
-       from public.legal_holds
-      where organization_id = $1
-        ${options.includeReleased ? '' : 'and released_at is null'}
-      order by created_at desc
+       from public.legal_holds h
+      where h.organization_id = $1
+        ${options.includeReleased ? '' : 'and h.released_at is null'}
+      order by h.created_at desc
       limit 200`,
     [organizationId],
   );
@@ -123,6 +171,10 @@ export async function countActiveLegalHolds(
   return Number(rows[0]?.count ?? 0);
 }
 
+/**
+ * A custodian-scoped hold with an empty list reads as a hold while preserving
+ * nobody, so it is refused here as well as by 0261's constraint.
+ */
 export async function createLegalHold(
   db: DatabaseAdapter,
   input: {
@@ -131,25 +183,54 @@ export async function createLegalHold(
     reason: string | null;
     scope: LegalHoldScope;
     subjectUserId: string | null;
+    custodianUserIds?: string[];
+    resourceTypes?: LegalHoldResourceType[] | null;
     createdByUserId: string;
   },
 ): Promise<LegalHold> {
-  const [row] = await db.query<HoldRow>(
+  const custodians =
+    input.scope === 'custodian' ? Array.from(new Set(input.custodianUserIds ?? [])) : [];
+  if (input.scope === 'custodian' && custodians.length === 0) {
+    throw new Error('A custodian-scoped legal hold needs at least one custodian.');
+  }
+  const resourceTypes = input.resourceTypes?.length
+    ? Array.from(new Set(input.resourceTypes))
+    : null;
+
+  const [row] = await db.query<{ id: string }>(
     `insert into public.legal_holds
-       (organization_id, name, reason, scope, subject_user_id, created_by_user_id)
-     values ($1, $2, $3, $4, $5, $6)
-     returning ${HOLD_COLUMNS}`,
+       (organization_id, name, reason, scope, subject_user_id, resource_types, created_by_user_id)
+     values ($1, $2, $3, $4, $5, $6::text[], $7)
+     returning id`,
     [
       input.organizationId,
       input.name,
       input.reason,
       input.scope,
       input.scope === 'member' ? input.subjectUserId : null,
+      resourceTypes,
       input.createdByUserId,
     ],
   );
   if (!row) throw new Error(`legal_holds insert returned no row for ${input.organizationId}`);
-  return formatHold(row);
+
+  for (const userId of custodians) {
+    await db.query(
+      `insert into public.legal_hold_custodians (hold_id, user_id, added_by_user_id)
+       values ($1, $2, $3)
+       on conflict (hold_id, user_id) do nothing`,
+      [row.id, userId, input.createdByUserId],
+    );
+  }
+
+  const [created] = await db.query<HoldRow>(
+    `select ${HOLD_COLUMNS}
+       from public.legal_holds h
+      where h.id = $1 and h.organization_id = $2`,
+    [row.id, input.organizationId],
+  );
+  if (!created) throw new Error(`legal_holds row ${row.id} disappeared during creation`);
+  return formatHold(created);
 }
 
 /**
@@ -163,12 +244,20 @@ export async function releaseLegalHold(
   holdId: string,
   releasedByUserId: string,
 ): Promise<LegalHold | null> {
-  const [row] = await db.query<HoldRow>(
+  const [released] = await db.query<{ id: string }>(
     `update public.legal_holds
         set released_at = now(), released_by_user_id = $3
       where id = $2 and organization_id = $1 and released_at is null
-      returning ${HOLD_COLUMNS}`,
+      returning id`,
     [organizationId, holdId, releasedByUserId],
+  );
+  if (!released) return null;
+
+  const [row] = await db.query<HoldRow>(
+    `select ${HOLD_COLUMNS}
+       from public.legal_holds h
+      where h.id = $1 and h.organization_id = $2`,
+    [released.id, organizationId],
   );
   return row ? formatHold(row) : null;
 }
@@ -271,10 +360,11 @@ export async function sweepOrganizationRetention(
     return result;
   }
 
-  const organizationHold = holds.some((hold) => hold.scope === 'organization');
-  const heldUserIds = holds
-    .filter((hold) => hold.scope === 'member' && hold.subjectUserId)
-    .map((hold) => hold.subjectUserId as string);
+  // The sweep deletes conversations, so only a hold that names the conversation
+  // store suspends it. A hold narrowed to files does not keep chat alive.
+  const conversationHolds = holds.filter((hold) => holdCovers(hold, 'conversation'));
+  const organizationHold = conversationHolds.some((hold) => hold.scope === 'organization');
+  const heldUserIds = Array.from(new Set(conversationHolds.flatMap(heldSubjects)));
 
   if (organizationHold) {
     const result: RetentionSweepResult = {
@@ -457,11 +547,11 @@ export async function readRetentionBacklog(
   const retentionDays = policy.retention_days;
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const holds = await listLegalHolds(db, organizationId);
+  const holds = (await listLegalHolds(db, organizationId)).filter((hold) =>
+    holdCovers(hold, 'conversation'),
+  );
   const organizationHold = holds.some((hold) => hold.scope === 'organization');
-  const heldUserIds = holds
-    .filter((hold) => hold.scope === 'member' && hold.subjectUserId)
-    .map((hold) => hold.subjectUserId as string);
+  const heldUserIds = Array.from(new Set(holds.flatMap(heldSubjects)));
 
   const [counts] = await db.query<{ pending: string | number; held: string | number }>(
     `select count(*) filter (where not (user_id = any($3::text[])))::int as pending,

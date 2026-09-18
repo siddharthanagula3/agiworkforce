@@ -224,6 +224,14 @@ const ALLOWLIST = [
       'purpose: constraining by owner would show a moderator only their own reports',
   },
   {
+    match: /lib\/server\/erasure-tombstones\.ts$/,
+    tables: ['erasure_ledger_replays'],
+    reason:
+      'one row per post-restore erasure replay (0264). A replay is per database, not per ' +
+      'subject or tenant, so there is no owner to constrain by; performed_by names the ' +
+      'operator who ran it, not whose data it concerns. app_rls holds no grant on the table',
+  },
+  {
     match: /lib\/server\/account-erasure\.ts$/,
     tables: ['media_assets'],
     reason:

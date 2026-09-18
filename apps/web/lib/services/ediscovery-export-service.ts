@@ -1,19 +1,22 @@
 import 'server-only';
 
+import { createHash } from 'node:crypto';
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { LegalHold } from './retention-service';
+import {
+  HOLD_COLUMNS,
+  LEGAL_HOLD_RESOURCE_TYPES,
+  formatHold,
+  heldSubjects,
+  holdCovers,
+  type HoldRow,
+  type LegalHold,
+  type LegalHoldResourceType,
+} from './retention-service';
 
 export const EDISCOVERY_PAGE_SIZE = 500;
 
-export type EdiscoveryRecordType =
-  | 'hold'
-  | 'conversation'
-  | 'message'
-  | 'project'
-  | 'project_file'
-  | 'file'
-  | 'artifact'
-  | 'work_run';
+export type EdiscoveryRecordType = 'hold' | LegalHoldResourceType;
 
 export interface EdiscoveryRecord {
   type: EdiscoveryRecordType;
@@ -21,10 +24,14 @@ export interface EdiscoveryRecord {
 }
 
 interface SourceDefinition {
-  type: EdiscoveryRecordType;
+  type: LegalHoldResourceType;
   sql: string;
 }
 
+/**
+ * Every source binds the same parameters in the same order, so a filter that
+ * reaches one store reaches all of them. Nulls in $2, $6 and $7 mean unbounded.
+ */
 const SOURCES: readonly SourceDefinition[] = [
   {
     type: 'conversation',
@@ -32,8 +39,10 @@ const SOURCES: readonly SourceDefinition[] = [
                  c.deleted_at
             from public.web_conversations c
            where c.organization_id = $1
-             and ($2::text is null or c.user_id = $2)
+             and ($2::text[] is null or c.user_id = any($2::text[]))
              and (c.created_at, c.id) > ($3::timestamptz, $4::uuid)
+             and ($6::timestamptz is null or c.created_at >= $6)
+             and ($7::timestamptz is null or c.created_at < $7)
            order by c.created_at, c.id
            limit $5`,
   },
@@ -44,8 +53,10 @@ const SOURCES: readonly SourceDefinition[] = [
             from public.web_messages m
             join public.web_conversations c on c.id = m.conversation_id
            where c.organization_id = $1
-             and ($2::text is null or c.user_id = $2)
+             and ($2::text[] is null or c.user_id = any($2::text[]))
              and (m.created_at, m.id) > ($3::timestamptz, $4::uuid)
+             and ($6::timestamptz is null or m.created_at >= $6)
+             and ($7::timestamptz is null or m.created_at < $7)
            order by m.created_at, m.id
            limit $5`,
   },
@@ -55,8 +66,10 @@ const SOURCES: readonly SourceDefinition[] = [
                  p.created_at, p.updated_at
             from public.user_projects p
            where p.organization_id = $1
-             and ($2::text is null or p.user_id = $2)
+             and ($2::text[] is null or p.user_id = any($2::text[]))
              and (p.created_at, p.id) > ($3::timestamptz, $4::uuid)
+             and ($6::timestamptz is null or p.created_at >= $6)
+             and ($7::timestamptz is null or p.created_at < $7)
            order by p.created_at, p.id
            limit $5`,
   },
@@ -67,8 +80,10 @@ const SOURCES: readonly SourceDefinition[] = [
             from public.project_knowledge_files k
             join public.user_projects p on p.id = k.project_id
            where p.organization_id = $1
-             and ($2::text is null or p.user_id = $2)
+             and ($2::text[] is null or p.user_id = any($2::text[]))
              and (k.created_at, k.id) > ($3::timestamptz, $4::uuid)
+             and ($6::timestamptz is null or k.created_at >= $6)
+             and ($7::timestamptz is null or k.created_at < $7)
            order by k.created_at, k.id
            limit $5`,
   },
@@ -78,8 +93,10 @@ const SOURCES: readonly SourceDefinition[] = [
                  f.provider, f.model, f.source_surface, f.created_at, f.deleted_at
             from public.media_assets f
            where f.organization_id = $1
-             and ($2::text is null or f.user_id = $2)
+             and ($2::text[] is null or f.user_id = any($2::text[]))
              and (f.created_at, f.id) > ($3::timestamptz, $4::uuid)
+             and ($6::timestamptz is null or f.created_at >= $6)
+             and ($7::timestamptz is null or f.created_at < $7)
            order by f.created_at, f.id
            limit $5`,
   },
@@ -89,8 +106,10 @@ const SOURCES: readonly SourceDefinition[] = [
                  a.content, a.current_version, a.created_at, a.updated_at, a.deleted_at
             from public.web_artifacts a
            where a.organization_id = $1
-             and ($2::text is null or a.user_id = $2)
+             and ($2::text[] is null or a.user_id = any($2::text[]))
              and (a.created_at, a.id) > ($3::timestamptz, $4::uuid)
+             and ($6::timestamptz is null or a.created_at >= $6)
+             and ($7::timestamptz is null or a.created_at < $7)
            order by a.created_at, a.id
            limit $5`,
   },
@@ -100,8 +119,10 @@ const SOURCES: readonly SourceDefinition[] = [
                  r.provider, r.model, r.created_at, r.completed_at
             from public.cloud_agent_runs r
            where r.organization_id = $1
-             and ($2::text is null or r.user_id = $2)
+             and ($2::text[] is null or r.user_id = any($2::text[]))
              and (r.created_at, r.id) > ($3::timestamptz, $4::uuid)
+             and ($6::timestamptz is null or r.created_at >= $6)
+             and ($7::timestamptz is null or r.created_at < $7)
            order by r.created_at, r.id
            limit $5`,
   },
@@ -109,29 +130,116 @@ const SOURCES: readonly SourceDefinition[] = [
 
 const START_CURSOR = { createdAt: '-infinity', id: '00000000-0000-0000-0000-000000000000' };
 
+export const EDISCOVERY_GENESIS_HASH = '0'.repeat(64);
+
+export interface EdiscoveryFilter {
+  /** null exports every store the hold covers. */
+  resourceTypes: LegalHoldResourceType[] | null;
+  /** null exports every custodian the hold covers. */
+  custodianUserIds: string[] | null;
+  /** Inclusive lower bound on the record's own created_at. */
+  from: string | null;
+  /** Exclusive upper bound, so two adjacent windows neither overlap nor gap. */
+  to: string | null;
+}
+
+export const UNFILTERED_EXPORT: EdiscoveryFilter = {
+  resourceTypes: null,
+  custodianUserIds: null,
+  from: null,
+  to: null,
+};
+
+export interface EdiscoveryManifestEntry {
+  resourceType: EdiscoveryRecordType;
+  records: number;
+  bytes: number;
+  sha256: string;
+}
+
+export interface EdiscoveryManifest {
+  holdId: string;
+  holdName: string;
+  organizationId: string;
+  filter: EdiscoveryFilter;
+  /** The stores actually exported, after the hold's own scope narrowed the filter. */
+  resourceTypes: EdiscoveryRecordType[];
+  custodianUserIds: string[] | null;
+  entries: EdiscoveryManifestEntry[];
+  records: number;
+  bytes: number;
+  sha256: string;
+  generatedAt: string;
+}
+
 function toCursorValue(value: unknown): string {
   return value instanceof Date ? value.toISOString() : String(value);
+}
+
+/**
+ * A filter can only narrow what the hold preserves: the hold is the authority
+ * the export runs on, so asking past it returns nothing rather than reaching.
+ */
+export function exportedResourceTypes(
+  hold: LegalHold,
+  filter: EdiscoveryFilter,
+): LegalHoldResourceType[] {
+  return LEGAL_HOLD_RESOURCE_TYPES.filter(
+    (type) => holdCovers(hold, type) && (filter.resourceTypes?.includes(type) ?? true),
+  );
+}
+
+/**
+ * The people this export reads, or null for the whole workspace. A hold that
+ * already names people bounds the filter; the filter can only intersect it.
+ */
+export function exportedCustodians(hold: LegalHold, filter: EdiscoveryFilter): string[] | null {
+  const held = heldSubjects(hold);
+  if (held.length === 0)
+    return filter.custodianUserIds?.length ? [...filter.custodianUserIds] : null;
+  if (!filter.custodianUserIds?.length) return held;
+  const wanted = new Set(filter.custodianUserIds);
+  return held.filter((userId) => wanted.has(userId));
+}
+
+export interface EdiscoveryExportChunk {
+  records: EdiscoveryRecord[];
+  resourceType: EdiscoveryRecordType;
 }
 
 export async function* iterateLegalHoldExport(
   db: DatabaseAdapter,
   hold: LegalHold,
-): AsyncGenerator<EdiscoveryRecord[]> {
-  yield [{ type: 'hold', data: { ...hold } }];
-  const subject = hold.scope === 'member' ? hold.subjectUserId : null;
+  filter: EdiscoveryFilter = UNFILTERED_EXPORT,
+): AsyncGenerator<EdiscoveryExportChunk> {
+  yield { resourceType: 'hold', records: [{ type: 'hold', data: { ...hold } }] };
+
+  const custodians = exportedCustodians(hold, filter);
+  // An intersection that came out empty is not "no filter": it means the filter
+  // asked for people this hold does not preserve, and exporting the whole
+  // workspace instead would reach past the hold.
+  if (custodians !== null && custodians.length === 0) return;
+
+  const types = new Set(exportedResourceTypes(hold, filter));
 
   for (const source of SOURCES) {
+    if (!types.has(source.type)) continue;
     let cursor = START_CURSOR;
     for (;;) {
       const rows = await db.query<Record<string, unknown>>(source.sql, [
         hold.organizationId,
-        subject,
+        custodians,
         cursor.createdAt,
         cursor.id,
         EDISCOVERY_PAGE_SIZE,
+        filter.from,
+        filter.to,
       ]);
       if (rows.length === 0) break;
-      yield rows.map((data) => ({ type: source.type, data }));
+      yield {
+        resourceType: source.type,
+        records: rows.map((data) => ({ type: source.type, data })),
+      };
       const last = rows[rows.length - 1] as Record<string, unknown>;
       cursor = { createdAt: toCursorValue(last['created_at']), id: String(last['id']) };
       if (rows.length < EDISCOVERY_PAGE_SIZE) break;
@@ -139,41 +247,176 @@ export async function* iterateLegalHoldExport(
   }
 }
 
+/**
+ * The digest covers the bytes that left the process, not a re-serialization of
+ * the rows: checksumming what the recipient never received proves nothing.
+ */
+export class EdiscoveryManifestBuilder {
+  private readonly entries = new Map<
+    EdiscoveryRecordType,
+    { records: number; bytes: number; hash: ReturnType<typeof createHash> }
+  >();
+  private readonly whole = createHash('sha256');
+  private totalRecords = 0;
+  private totalBytes = 0;
+
+  constructor(
+    private readonly hold: LegalHold,
+    private readonly filter: EdiscoveryFilter,
+  ) {}
+
+  add(resourceType: EdiscoveryRecordType, records: number, bytes: Uint8Array): void {
+    let entry = this.entries.get(resourceType);
+    if (!entry) {
+      entry = { records: 0, bytes: 0, hash: createHash('sha256') };
+      this.entries.set(resourceType, entry);
+    }
+    entry.records += records;
+    entry.bytes += bytes.byteLength;
+    entry.hash.update(bytes);
+    this.whole.update(bytes);
+    this.totalRecords += records;
+    this.totalBytes += bytes.byteLength;
+  }
+
+  build(generatedAt: string): EdiscoveryManifest {
+    return {
+      holdId: this.hold.id,
+      holdName: this.hold.name,
+      organizationId: this.hold.organizationId,
+      filter: this.filter,
+      resourceTypes: exportedResourceTypes(this.hold, this.filter),
+      custodianUserIds: exportedCustodians(this.hold, this.filter),
+      entries: [...this.entries.entries()].map(([resourceType, entry]) => ({
+        resourceType,
+        records: entry.records,
+        bytes: entry.bytes,
+        sha256: entry.hash.copy().digest('hex'),
+      })),
+      records: this.totalRecords,
+      bytes: this.totalBytes,
+      sha256: this.whole.copy().digest('hex'),
+      generatedAt,
+    };
+  }
+}
+
+export interface EdiscoveryCustodyInput {
+  organizationId: string;
+  holdId: string;
+  holdName: string;
+  requestedByUserId: string;
+  requestedVia: string;
+  filter: EdiscoveryFilter;
+  manifest: EdiscoveryManifest | null;
+  outcome: 'completed' | 'failed';
+  error: string | null;
+  startedAt: string;
+  completedAt: string;
+}
+
+/**
+ * Every field an opposing party would question is inside the digest, in a fixed
+ * order, so editing any of them in place breaks the link to every later row.
+ */
+export function ediscoveryCustodyHash(previousHash: string, input: EdiscoveryCustodyInput): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        previousHash,
+        input.organizationId,
+        input.holdId,
+        input.holdName,
+        input.requestedByUserId,
+        input.requestedVia,
+        input.filter,
+        input.manifest,
+        input.outcome,
+        input.error ?? '',
+        input.startedAt,
+        input.completedAt,
+      ]),
+    )
+    .digest('hex');
+}
+
+export interface EdiscoveryCustodyRecord extends EdiscoveryCustodyInput {
+  id: string;
+  records: number;
+  bytes: number;
+  contentDigest: string;
+  previousHash: string;
+  entryHash: string;
+}
+
+/**
+ * Writes the custody record for one export. Requires the privileged connection:
+ * the table is append-only for every role and the application role holds SELECT
+ * alone, because a custody log the exporting workspace can edit is not custody.
+ */
+export async function recordEdiscoveryExport(
+  db: DatabaseAdapter,
+  input: EdiscoveryCustodyInput,
+): Promise<EdiscoveryCustodyRecord> {
+  const [previous] = await db.query<{ entry_hash: string }>(
+    `select entry_hash from public.ediscovery_exports
+      where organization_id = $1
+      order by completed_at desc, id desc
+      limit 1`,
+    [input.organizationId],
+  );
+  const previousHash = previous?.entry_hash ?? EDISCOVERY_GENESIS_HASH;
+  const entryHash = ediscoveryCustodyHash(previousHash, input);
+
+  const [row] = await db.query<{ id: string }>(
+    `insert into public.ediscovery_exports
+       (organization_id, hold_id, hold_name, requested_by_user_id, requested_via, filter,
+        manifest, record_count, byte_count, content_digest, outcome, error, started_at,
+        completed_at, previous_hash, entry_hash)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+     returning id`,
+    [
+      input.organizationId,
+      input.holdId,
+      input.holdName,
+      input.requestedByUserId,
+      input.requestedVia,
+      JSON.stringify(input.filter),
+      JSON.stringify(input.manifest ?? {}),
+      input.manifest?.records ?? 0,
+      input.manifest?.bytes ?? 0,
+      input.manifest?.sha256 ?? EDISCOVERY_GENESIS_HASH,
+      input.outcome,
+      input.error,
+      input.startedAt,
+      input.completedAt,
+      previousHash,
+      entryHash,
+    ],
+  );
+
+  return {
+    ...input,
+    id: row?.id ?? '',
+    records: input.manifest?.records ?? 0,
+    bytes: input.manifest?.bytes ?? 0,
+    contentDigest: input.manifest?.sha256 ?? EDISCOVERY_GENESIS_HASH,
+    previousHash,
+    entryHash,
+  };
+}
+
 export async function readLegalHold(
   db: DatabaseAdapter,
   organizationId: string,
   holdId: string,
 ): Promise<LegalHold | null> {
-  const [row] = await db.query<{
-    id: string;
-    organization_id: string;
-    name: string;
-    reason: string | null;
-    scope: 'organization' | 'member';
-    subject_user_id: string | null;
-    created_by_user_id: string;
-    released_at: string | Date | null;
-    released_by_user_id: string | null;
-    created_at: string | Date;
-  }>(
-    `select id, organization_id, name, reason, scope, subject_user_id, created_by_user_id,
-            released_at, released_by_user_id, created_at
-       from public.legal_holds
-      where organization_id = $1 and id = $2
+  const [row] = await db.query<HoldRow>(
+    `select ${HOLD_COLUMNS}
+       from public.legal_holds h
+      where h.organization_id = $1 and h.id = $2
       limit 1`,
     [organizationId, holdId],
   );
-  if (!row) return null;
-  return {
-    id: row.id,
-    organizationId: row.organization_id,
-    name: row.name,
-    reason: row.reason,
-    scope: row.scope,
-    subjectUserId: row.subject_user_id,
-    createdByUserId: row.created_by_user_id,
-    releasedAt: row.released_at === null ? null : toCursorValue(row.released_at),
-    releasedByUserId: row.released_by_user_id,
-    createdAt: toCursorValue(row.created_at),
-  };
+  return row ? formatHold(row) : null;
 }

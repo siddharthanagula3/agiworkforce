@@ -15,6 +15,9 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));
 vi.mock('@/lib/jobs/job-service', () => ({ enqueueJob: mocks.enqueueJob }));
+vi.mock('@/lib/server/erasure-tombstones', () => ({
+  syncErasureLedger: vi.fn(async () => ({ recorded: 0, replayed: 0 })),
+}));
 
 import { GET } from './route';
 
