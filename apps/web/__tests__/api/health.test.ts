@@ -38,6 +38,23 @@ vi.mock('stripe', () => ({
 }));
 
 const mockNeonQuery = vi.fn().mockResolvedValue([{ '?column?': 1 }]);
+vi.mock('@agiworkforce/types', () => ({
+  getDefaultModelFor: () => 'model-under-test',
+  getModelMetadataById: () => ({ id: 'model-under-test' }),
+  isModelLive: () => true,
+  listManagedRoutesForModel: () => [{ routeId: 'route-a', provider: 'provider-under-test' }],
+}));
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  listAvailableManagedProviderIds: () => new Set(['provider-under-test']),
+}));
+vi.mock('@/lib/services/provider-availability-service', () => ({
+  getProviderAvailabilityMap: async () => ({}),
+}));
+vi.mock('@/lib/jobs/job-service', () => ({
+  readJobQueueStats: async () => [
+    { queue: 'default', queued: 0, running: 0, dead: 0, oldestQueuedAgeMs: 0, stuck: 0 },
+  ],
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: mockNeonQuery,
@@ -60,7 +77,9 @@ describe('Health Check API', () => {
       type: 'recurring',
       recurring: { interval: 'month' },
     });
-    mockNeonQuery.mockResolvedValue([{ '?column?': 1 }]);
+    mockNeonQuery.mockImplementation(async (sql: string) =>
+      sql.includes('to_regclass') ? [{ missing: 0 }] : [{ '?column?': 1 }],
+    );
   });
 
   afterEach(() => {
