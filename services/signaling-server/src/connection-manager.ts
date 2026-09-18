@@ -1,8 +1,8 @@
-
 import type { WebSocket } from 'ws';
 import { logger } from './logger.js';
 import {
   MAX_CONNECTIONS_PER_IP,
+  CLOSE_ALL_TIMEOUT_MS,
   CONNECTION_IDLE_TIMEOUT_MS,
   STALE_CONNECTION_CHECK_INTERVAL_MS,
 } from './constants.js';
@@ -146,6 +146,11 @@ class ConnectionManager {
     return this.connections.size;
   }
 
+  /**
+   * A shutdown that leaves its bookkeeping behind rejects the same client when
+   * it reconnects: the per-IP count still holds the socket that the restart
+   * closed, and no 'close' event is coming for a process that is going away.
+   */
   closeAllConnections(reason: string = 'server_shutdown'): Promise<void> {
     return new Promise((resolve) => {
       const sockets = Array.from(this.connections.keys());
@@ -158,9 +163,16 @@ class ConnectionManager {
       logger.info({ count: sockets.length }, 'Closing all connections');
 
       let closed = 0;
+      let settled = false;
+      const timer = setTimeout(() => {
+        settled = true;
+        resolve();
+      }, CLOSE_ALL_TIMEOUT_MS);
       const checkDone = () => {
         closed++;
-        if (closed >= sockets.length) {
+        if (closed >= sockets.length && !settled) {
+          settled = true;
+          clearTimeout(timer);
           resolve();
         }
       };
@@ -171,14 +183,13 @@ class ConnectionManager {
             socket.send(JSON.stringify({ type: 'server_shutdown', reason }));
           }
           socket.close(1001, reason);
-          checkDone();
         } catch {
+          // A socket that cannot be closed is still gone with this process.
+        } finally {
+          this.removeConnection(socket, { trigger: 'server_shutdown', closeReason: reason });
           checkDone();
         }
       }
-
-      // Safety timeout
-      setTimeout(resolve, 5000);
     });
   }
 

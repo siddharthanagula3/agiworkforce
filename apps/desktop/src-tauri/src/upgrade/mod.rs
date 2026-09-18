@@ -1,18 +1,15 @@
 //! Versions the app carries that are not the app's own version, and what an
 //! upgrade is allowed to do when one of them does not line up.
 
+pub mod installed;
 pub mod recovery;
 
 /// The bundled llama.cpp runtime. `llama-cpp-2` is a compile-time feature, so
-/// without a number of its own the runtime silently inherits the app version
-/// and nothing can tell a runtime change from a UI change.
-/// Bump this whenever the `llama-cpp-2` requirement in Cargo.toml moves.
+/// without a number of its own the runtime silently inherits the app version.
 pub const LOCAL_RUNTIME_VERSION: u32 = 1;
 
 /// The `llama-cpp-2` requirement `LOCAL_RUNTIME_VERSION` above was last
-/// reviewed against. scripts/verify-desktop-upgrade.mjs fails when this and
-/// Cargo.toml disagree, so the dependency cannot move without the runtime
-/// version moving with it.
+/// reviewed against. scripts/verify-desktop-upgrade.mjs fails when this and.
 pub const LOCAL_RUNTIME_DEPENDENCY: &str = "0.1";
 
 /// The oldest local runtime whose cached artifacts this build still reads.
@@ -24,8 +21,7 @@ pub const MIN_COMPATIBLE_RUNTIME_VERSION: u32 = 1;
 pub const LOCAL_DATA_FORMAT_VERSION: u32 = 1;
 
 /// The bundled native-messaging host and browser bridge. The sidecar speaks to
-/// a browser extension that updates on its own schedule, so it is versioned
-/// separately from the app that happens to ship it.
+/// a browser extension that updates on its own schedule, so it is versioned.
 pub const SIDECAR_DAEMON_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,7 +50,8 @@ pub fn decide_upgrade(installed: InstalledVersions) -> UpgradeDecision {
             supported: LOCAL_DATA_FORMAT_VERSION,
         };
     }
-    if installed.runtime != LOCAL_RUNTIME_VERSION || installed.runtime < MIN_COMPATIBLE_RUNTIME_VERSION
+    if installed.runtime != LOCAL_RUNTIME_VERSION
+        || installed.runtime < MIN_COMPATIBLE_RUNTIME_VERSION
     {
         return UpgradeDecision::RebuildRuntimeArtifacts;
     }
@@ -62,8 +59,7 @@ pub fn decide_upgrade(installed: InstalledVersions) -> UpgradeDecision {
 }
 
 /// Whether the updater may offer a release at all. An update that would leave
-/// the installed data unreadable is not an update, it is data loss with a
-/// progress bar.
+/// the installed data unreadable is not an update, it is data loss with a.
 pub fn updater_compatible(installed: InstalledVersions, offered_data_format: u32) -> bool {
     offered_data_format >= installed.data_format
 }

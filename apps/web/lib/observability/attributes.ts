@@ -36,6 +36,10 @@ export const OBSERVABILITY_ATTRIBUTE = {
   routingStatus: 'agi.routing.status',
   configurationComponent: 'agi.configuration.component',
   configurationState: 'agi.configuration.state',
+  completionKind: 'agi.completion.kind',
+  completionStatus: 'agi.completion.status',
+  completionReportedStatus: 'agi.completion.reported_status',
+  completionReason: 'agi.completion.reason',
 } as const;
 
 export type ObservabilityAttribute =

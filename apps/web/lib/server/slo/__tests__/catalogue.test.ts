@@ -10,7 +10,11 @@ import {
   formatObjective,
   measuredSlos,
   publishedSlos,
+  segmentableSlos,
+  segmentColumn,
+  segmentsOf,
   SLO_CATALOGUE,
+  SLO_SEGMENTS,
 } from '../catalogue';
 
 const MIGRATIONS_DIR = path.resolve(__dirname, '../../../../db/neon');
@@ -36,7 +40,8 @@ function migrationCorpus(): string {
   return readdirSync(MIGRATIONS_DIR)
     .filter((name) => name.endsWith('.sql'))
     .map((name) => readFileSync(path.join(MIGRATIONS_DIR, name), 'utf8'))
-    .join('\n');
+    .join('\n')
+    .toLowerCase();
 }
 
 describe('SLO catalogue', () => {
@@ -67,7 +72,9 @@ describe('SLO catalogue', () => {
     const migrations = migrationCorpus();
     for (const slo of SLO_CATALOGUE) {
       if (slo.source) {
-        expect(migrations).toContain(`create table if not exists public.${slo.source.table} (`);
+        expect(migrations).toContain(
+          `create table if not exists public.${slo.source.table} (`.toLowerCase(),
+        );
         expect(slo.source.coverage.length).toBeGreaterThan(0);
         expect(slo.missingInstrument).toBeUndefined();
       } else {
@@ -95,11 +102,71 @@ describe('SLO catalogue', () => {
 
   it('splits the catalogue into what is measured and what is only declared', () => {
     expect(measuredSlos().length + declaredOnlySlos().length).toBe(publishedSlos().length);
-    expect(declaredOnlySlos().map((slo) => slo.id)).toEqual([
-      'authentication',
-      'search',
-      'notifications',
+    expect(declaredOnlySlos().map((slo) => slo.id)).toEqual(['notifications']);
+  });
+
+  it('measures Login and Search rather than declaring them', () => {
+    for (const id of ['authentication', 'search']) {
+      const slo = findSlo(id);
+      expect(slo?.source).not.toBeNull();
+      expect(slo?.missingInstrument).toBeUndefined();
+      expect(slo?.source?.good.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps a refused credential out of the authentication denominator', () => {
+    const source = findSlo('authentication')?.source;
+
+    expect(source?.eligible).toContain('succeeded');
+    expect(source?.eligible).toContain('failed');
+    expect(source?.eligible).not.toContain('rejected');
+    expect(source?.coverage.toLowerCase()).toContain('rejected');
+  });
+
+  it('separates a search that failed from a search that matched nothing', () => {
+    const source = findSlo('search')?.source;
+
+    expect(source?.table).toBe('search_history');
+    expect(source?.eligible).toBe('outcome is not null');
+    expect(source?.good).toContain('succeeded');
+  });
+
+  it('segments the routed objectives by region, provider and model', () => {
+    for (const id of ['chat', 'first-token', 'completion']) {
+      const slo = findSlo(id);
+      expect(segmentsOf(slo!)).toEqual(SLO_SEGMENTS);
+      expect(segmentColumn(slo!, 'model')).toBe('model_key');
+      expect(segmentColumn(slo!, 'provider')).toBe('provider');
+      expect(segmentColumn(slo!, 'region')).toBe('region');
+    }
+  });
+
+  it('segments Login and Search by the dimensions their rows carry', () => {
+    for (const id of ['authentication', 'search']) {
+      expect(segmentsOf(findSlo(id)!)).toEqual(['region', 'provider']);
+      expect(segmentColumn(findSlo(id)!, 'model')).toBeUndefined();
+    }
+  });
+
+  it('never claims a segment for an indicator whose table has no such column', () => {
+    const migrations = migrationCorpus();
+    for (const slo of SLO_CATALOGUE) {
+      for (const segment of segmentsOf(slo)) {
+        const column = segmentColumn(slo, segment);
+        expect(column).toBeTruthy();
+        expect(migrations).toContain(column!.toLowerCase());
+      }
+    }
+    expect(segmentsOf(findSlo('work')!)).toEqual([]);
+  });
+
+  it('lists the indicators a given segment can split', () => {
+    expect(segmentableSlos('model').map((slo) => slo.id)).toEqual([
+      'chat',
+      'first-token',
+      'completion',
     ]);
+    expect(segmentableSlos('region').map((slo) => slo.id)).toContain('authentication');
   });
 
   it('finds a definition by id', () => {

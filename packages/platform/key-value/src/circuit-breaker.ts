@@ -21,7 +21,20 @@ const MAX_THRESHOLD = 100;
 const MIN_COOLDOWN_MS = 100;
 const MAX_COOLDOWN_MS = 300_000;
 
+/**
+ * The same three states the shared breaker in `@agiworkforce/utils` uses. This
+ * package declares no dependency on that one, so the vocabulary is mirrored
+ * here and `KEY_VALUE_BREAKER_CONTRACT` is what keeps the two from drifting.
+ */
 export type KeyValueCircuitState = 'closed' | 'open' | 'half-open';
+
+export const KEY_VALUE_BREAKER_CONTRACT = {
+  states: ['closed', 'open', 'half-open'] as const,
+  /** Consecutive failures, not a windowed rate: a key-value call is cheap and uniform. */
+  trip: 'consecutive-failures',
+  /** One breaker per store instance, never one for every backend at once. */
+  scope: 'per-store',
+} as const;
 
 export interface KeyValueBreakerPolicy {
   failureThreshold: number;

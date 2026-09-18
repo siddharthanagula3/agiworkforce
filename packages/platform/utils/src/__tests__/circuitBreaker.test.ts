@@ -1,11 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CircuitBreaker,
   CircuitOpenError,
   DependencyOverloadedError,
   DependencyTimeoutError,
   circuitBreakerSnapshots,
+  circuitName,
   getCircuitBreaker,
+  getScopedCircuitBreaker,
   isDependencyUnavailableError,
   resetCircuitBreakers,
 } from '../circuitBreaker';
@@ -445,5 +447,48 @@ describe('CircuitBreaker', () => {
     expect(snapshots.map((snapshot) => snapshot.name)).toContain('registry-demo');
     expect(snapshots.find((snapshot) => snapshot.name === 'registry-demo')?.healthy).toBe(true);
     resetCircuitBreakers();
+  });
+});
+
+describe('per-dependency scoping', () => {
+  beforeEach(() => {
+    resetCircuitBreakers();
+  });
+
+  it('names a breaker for the one dependency it protects', () => {
+    expect(circuitName('provider', 'vendor-a')).toBe('provider:vendor-a');
+    expect(() => circuitName('provider', '  ')).toThrow(/scoped to/);
+  });
+
+  it('gives two providers independent breakers, so one outage is not all of them', async () => {
+    const first = getScopedCircuitBreaker('provider', 'vendor-a', {
+      volumeThreshold: 1,
+      failureRateThreshold: 0.1,
+    });
+    const second = getScopedCircuitBreaker('provider', 'vendor-b', {
+      volumeThreshold: 1,
+      failureRateThreshold: 0.1,
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await first
+        .execute(async () => {
+          throw new Error('vendor-a is down');
+        })
+        .catch(() => undefined);
+    }
+
+    expect(first.snapshot().state).not.toBe('closed');
+    expect(second.snapshot().state).toBe('closed');
+    await expect(second.execute(async () => 'ok')).resolves.toBe('ok');
+  });
+
+  it('returns the same breaker for the same dependency rather than a fresh one per call', () => {
+    expect(getScopedCircuitBreaker('provider', 'vendor-a')).toBe(
+      getScopedCircuitBreaker('provider', 'vendor-a'),
+    );
+    expect(circuitBreakerSnapshots().map((snapshot) => snapshot.name)).toEqual([
+      'provider:vendor-a',
+    ]);
   });
 });

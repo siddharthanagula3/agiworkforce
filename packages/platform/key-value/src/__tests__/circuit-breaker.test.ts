@@ -4,6 +4,7 @@ import { createMemoryKeyValueStore } from '../adapters/memory';
 import {
   createCircuitBreakerKeyValueStore,
   resolveKeyValueBreakerPolicy,
+  KEY_VALUE_BREAKER_CONTRACT,
   KeyValueCircuitOpenError,
   KEY_VALUE_BREAKER_COOLDOWN_MS_ENV,
   KEY_VALUE_BREAKER_THRESHOLD_ENV,
@@ -153,5 +154,36 @@ describe('key-value circuit breaker', () => {
     expect(resolveKeyValueBreakerPolicy({ [KEY_VALUE_BREAKER_THRESHOLD_ENV]: '0' })).toEqual(
       resolveKeyValueBreakerPolicy({}),
     );
+  });
+});
+
+describe('the contract this breaker shares with the platform one', () => {
+  it('uses the same three states, so a reader does not have to learn two vocabularies', () => {
+    expect([...KEY_VALUE_BREAKER_CONTRACT.states]).toEqual(['closed', 'open', 'half-open']);
+  });
+
+  it('states why it trips on consecutive failures rather than on a windowed rate', () => {
+    expect(KEY_VALUE_BREAKER_CONTRACT.trip).toBe('consecutive-failures');
+  });
+
+  it('is scoped to one store, never shared across every backend at once', async () => {
+    const failing = createCircuitBreakerKeyValueStore(
+      {
+        get: async () => {
+          throw new Error('backend down');
+        },
+      } as never,
+      { policy: { failureThreshold: 1, cooldownMs: 10_000 } },
+    );
+    const healthy = createCircuitBreakerKeyValueStore({ get: async () => 'ok' } as never, {
+      policy: { failureThreshold: 1, cooldownMs: 10_000 },
+    });
+
+    await failing.get('k').catch(() => undefined);
+
+    expect(KEY_VALUE_BREAKER_CONTRACT.scope).toBe('per-store');
+    expect(failing.circuitState()).toBe('open');
+    expect(healthy.circuitState()).toBe('closed');
+    await expect(healthy.get('k')).resolves.toBe('ok');
   });
 });

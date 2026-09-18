@@ -32,6 +32,8 @@ import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from './clie
 import { logger, generateCorrelationId } from './logger.js';
 import { connectionManager } from './connection-manager.js';
 import { metrics } from './metrics.js';
+import { buildInfoMetric, canonicalEndpoint, releaseIdentity } from './release.js';
+import { buildConfigBackup, persistConfigBackup } from './config-backup.js';
 import { shutdownOtel, spanTraceparent, startOtel, startSpan } from './otel.js';
 import { TRACEPARENT_HEADER, parseTraceparent } from './trace-context.js';
 import {
@@ -157,6 +159,8 @@ const publicHttpUrl = process.env['SIGNALING_HTTP_URL'] ?? `http://${host}:${por
 const publicWsUrl =
   process.env['SIGNALING_WS_URL'] ??
   `${publicHttpUrl.startsWith('https') ? 'wss' : 'ws'}://${host}:${port}${wsPath}`;
+const release = releaseIdentity();
+const canonicalUrl = canonicalEndpoint();
 
 const app = express();
 
@@ -434,6 +438,7 @@ app.get('/health', healthLimiter, (_req, res) => {
     status: isShuttingDown ? 'shutting_down' : isReady ? 'healthy' : 'starting',
     uptime: metrics.getUptimeSeconds(),
     timestamp: Date.now(),
+    deployment: release,
     connections: {
       total: stats.totalConnections,
       uniqueIps: stats.uniqueIps,
@@ -466,7 +471,14 @@ app.get(
   },
   (_req, res) => {
     res.set('Content-Type', 'text/plain; version=0.0.4');
-    res.send(metrics.toPrometheusFormat());
+    res.send(
+      [
+        '# HELP signaling_build_info The deployment serving this process',
+        '# TYPE signaling_build_info gauge',
+        buildInfoMetric(release),
+        metrics.toPrometheusFormat(),
+      ].join('\n'),
+    );
   },
 );
 
@@ -475,12 +487,14 @@ app.get('/admin/status', adminLimiter, adminAuthMiddleware, (_req, res) => {
 
   res.json({
     adminEnabled: isAdminEnabled(),
+    deployment: release,
     server: {
       host,
       port,
       wsPath,
       publicHttpUrl,
       publicWsUrl,
+      canonicalUrl,
     },
     config: {
       defaultTtl: DEFAULT_TTL_SECONDS,
@@ -493,6 +507,10 @@ app.get('/admin/status', adminLimiter, adminAuthMiddleware, (_req, res) => {
     },
     timestamp: Date.now(),
   });
+});
+
+app.get('/admin/config-backup', adminLimiter, adminAuthMiddleware, (_req, res) => {
+  res.json(buildConfigBackup());
 });
 
 const adminBlacklistSchema = z.object({
@@ -1054,6 +1072,8 @@ server.listen(port, host, () => {
       wsPath,
       publicHttpUrl,
       publicWsUrl,
+      canonicalUrl,
+      deployment: release,
       security: {
         adminEndpoints: isAdminEnabled() ? 'enabled' : 'disabled',
         pairingAuth: SIGNALING_SECRET ? 'enabled' : 'DISABLED_NO_SECRET',
@@ -1066,6 +1086,20 @@ server.listen(port, host, () => {
     },
     'Signaling server started with security features',
   );
+
+  const backupDir = process.env['SIGNALING_CONFIG_BACKUP_DIR'];
+  if (backupDir) {
+    void persistConfigBackup(backupDir)
+      .then(({ file, backup, drift }) => {
+        logger.info(
+          { file, drift, missingRequired: backup.missingRequired },
+          'Deployed configuration backed up',
+        );
+      })
+      .catch((error) => {
+        logger.error({ error }, 'Failed to back up the deployed configuration');
+      });
+  }
 });
 
 function validateSignalPayload(kind: string, payload: unknown): boolean {

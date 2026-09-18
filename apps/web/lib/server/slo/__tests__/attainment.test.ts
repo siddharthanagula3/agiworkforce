@@ -9,6 +9,7 @@ import {
   burnRateOf,
   evaluateBurnRates,
   measureSlo,
+  measureSloBySegment,
   measureSloCatalogue,
   BURN_RATE_MIN_SAMPLES,
   BURN_RATE_THRESHOLDS,
@@ -41,6 +42,99 @@ const FIRST_TOKEN = findSlo('first-token')!;
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+function fakeRows(rows: Record<string, unknown>[]): { db: DatabaseAdapter; calls: Captured[] } {
+  const calls: Captured[] = [];
+  const db = {
+    query: vi.fn(async (sql: string, params: unknown[] = []) => {
+      calls.push({ sql, params });
+      return rows;
+    }),
+  } as unknown as DatabaseAdapter;
+  return { db, calls };
+}
+
+describe('SLO segmentation', () => {
+  it('reads one attainment per region without losing the aggregate query shape', async () => {
+    const { db, calls } = fakeRows([
+      { segment_value: 'iad1', eligible: '100', good: '99', latency_p95_ms: '820' },
+      { segment_value: 'sfo1', eligible: '100', good: '80', latency_p95_ms: '2100' },
+    ]);
+
+    const segments = await measureSloBySegment(
+      CHAT,
+      'region',
+      new Date('2026-08-18T00:00:00.000Z'),
+      NOW,
+      db,
+    );
+
+    expect(calls[0]?.sql).toContain('group by 1');
+    expect(calls[0]?.sql).toContain('coalesce(region');
+    expect(segments.map((entry) => entry.value)).toEqual(['iad1', 'sfo1']);
+    expect(segments[0]?.attainment).toBeCloseTo(0.99, 6);
+    expect(segments[1]?.attainment).toBeCloseTo(0.8, 6);
+  });
+
+  it('splits by the model column, not by a column name it invented', async () => {
+    const { db, calls } = fakeRows([
+      { segment_value: 'a/b', eligible: '10', good: '10', latency_p95_ms: null },
+    ]);
+
+    await measureSloBySegment(CHAT, 'model', new Date('2026-08-18T00:00:00.000Z'), NOW, db);
+
+    expect(calls[0]?.sql).toContain('coalesce(model_key');
+  });
+
+  it('passes the latency threshold through for a latency indicator', async () => {
+    const { db, calls } = fakeRows([
+      { segment_value: 'openai', eligible: '10', good: '9', latency_p95_ms: '900' },
+    ]);
+
+    const segments = await measureSloBySegment(
+      FIRST_TOKEN,
+      'provider',
+      new Date('2026-08-18T00:00:00.000Z'),
+      NOW,
+      db,
+    );
+
+    expect(calls[0]?.params).toHaveLength(3);
+    expect(segments[0]?.latencyP95Ms).toBe(900);
+  });
+
+  it('returns nothing, and runs no query, for a segment the indicator does not carry', async () => {
+    const { db, calls } = fakeRows([]);
+
+    const segments = await measureSloBySegment(
+      findSlo('work')!,
+      'model',
+      new Date('2026-08-18T00:00:00.000Z'),
+      NOW,
+      db,
+    );
+
+    expect(segments).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('drops a bucket with no sample instead of reporting it as a zero-percent outage', async () => {
+    const { db } = fakeRows([
+      { segment_value: 'iad1', eligible: '0', good: '0', latency_p95_ms: null },
+      { segment_value: 'sfo1', eligible: '5', good: '5', latency_p95_ms: null },
+    ]);
+
+    const segments = await measureSloBySegment(
+      CHAT,
+      'region',
+      new Date('2026-08-18T00:00:00.000Z'),
+      NOW,
+      db,
+    );
+
+    expect(segments.map((entry) => entry.value)).toEqual(['sfo1']);
+  });
 });
 
 describe('SLO attainment', () => {

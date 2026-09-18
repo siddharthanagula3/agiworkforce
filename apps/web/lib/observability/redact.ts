@@ -1,3 +1,5 @@
+import { FIELDS_NEVER_LOGGED } from '@/lib/identity/log-hygiene';
+
 export const REDACTED = '[redacted]';
 
 export const MAX_ATTRIBUTE_LENGTH = 256;
@@ -62,8 +64,13 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   /\bxox[abposr]-[A-Za-z0-9-]{10,}/gu,
 ];
 
+// The same list scripts/check-llm-log-hygiene.mjs refuses at build time. A
+// camel-cased name like systemPrompt survives the segment rules below.
+const NEVER_LOGGED_KEYS = new Set<string>(FIELDS_NEVER_LOGGED.map((field) => field.toLowerCase()));
+
 function isDeniedKey(key: string): boolean {
   const lower = key.toLowerCase();
+  if (NEVER_LOGGED_KEYS.has(lower.replace(/[^a-z0-9]+/gu, ''))) return true;
   if (DENIED_KEY_SUBSTRINGS.some((needle) => lower.includes(needle))) return true;
   const segments = lower.split(/[^a-z0-9]+/u).filter(Boolean);
   const final = segments[segments.length - 1];

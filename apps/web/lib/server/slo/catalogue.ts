@@ -1,5 +1,12 @@
 export type SloIndicatorKind = 'availability' | 'latency';
 
+/** Dimensions an objective can be read along, not only in aggregate. */
+export type SloSegment = 'region' | 'provider' | 'model';
+
+export const SLO_SEGMENTS: readonly SloSegment[] = ['region', 'provider', 'model'];
+
+export type SloSegmentColumns = Partial<Record<SloSegment, string>>;
+
 export interface SloIndicatorSource {
   /** Unqualified table in the `public` schema the indicator is computed from. */
   table: string;
@@ -10,6 +17,12 @@ export interface SloIndicatorSource {
   good: string;
   /** Milliseconds a latency indicator is measured on, for the percentile read. */
   latencyMs?: string;
+  /**
+   * The column each segment reads. A segment the table does not carry is
+   * absent rather than mapped to a constant: an objective split by a dimension
+   * the rows never recorded reads as one bucket and hides the outlier.
+   */
+  segments?: SloSegmentColumns;
   coverage: string;
 }
 
@@ -50,6 +63,13 @@ function analyticsSource(eventName: string, coverage: string): SloIndicatorSourc
   };
 }
 
+/** routing_decision_traces carries all three dimensions on every served turn. */
+const ROUTING_SEGMENTS: SloSegmentColumns = {
+  region: 'region',
+  provider: 'provider',
+  model: 'model_key',
+};
+
 const ANALYTICS_COVERAGE =
   'Accounts that granted the product analytics purpose. Consent is read per event, so an account that refused it is absent from both sides of the ratio.';
 
@@ -67,9 +87,16 @@ export const SLO_CATALOGUE: readonly SloDefinition[] = [
     objective: 0.999,
     windowDays: MONTHLY_WINDOW_DAYS,
     statement: 'Sign-in and session verification succeed when the identity provider is reachable.',
-    source: null,
-    missingInstrument:
-      'Authentication runs in the identity provider and in the request proxy, neither of which writes a per-attempt outcome row. The failures recorded in security_audit_logs are rejected credentials, which are the product working, not an outage.',
+    source: {
+      table: 'authentication_attempts',
+      occurredAt: 'occurred_at',
+      eligible: `outcome = any (array['succeeded', 'failed'])`,
+      good: `outcome = 'succeeded'`,
+      latencyMs: 'duration_ms',
+      segments: { region: 'region', provider: 'provider' },
+      coverage:
+        "Verification attempts the product made against the identity provider. A rejected credential is recorded as 'rejected' and is not a sample: refusing a wrong password is the product working, not an outage.",
+    },
   },
   {
     id: 'chat',
@@ -83,6 +110,7 @@ export const SLO_CATALOGUE: readonly SloDefinition[] = [
       occurredAt: 'created_at',
       eligible: TERMINAL_TURN,
       good: `outcome = 'succeeded'`,
+      segments: ROUTING_SEGMENTS,
       coverage:
         'Every served turn the router traced, on every surface. Shadow turns are excluded: they are never delivered to anyone.',
     },
@@ -101,6 +129,7 @@ export const SLO_CATALOGUE: readonly SloDefinition[] = [
       eligible: `${SERVED_TURN} and ttft_ms is not null`,
       good: 'ttft_ms <= $3',
       latencyMs: 'ttft_ms',
+      segments: ROUTING_SEGMENTS,
       coverage: 'Served turns whose first token the router timed.',
     },
   },
@@ -118,6 +147,7 @@ export const SLO_CATALOGUE: readonly SloDefinition[] = [
       eligible: `${SERVED_TURN} and duration_ms is not null`,
       good: 'duration_ms <= $3',
       latencyMs: 'duration_ms',
+      segments: ROUTING_SEGMENTS,
       coverage: 'Served turns the router timed to completion.',
     },
   },
@@ -194,9 +224,16 @@ export const SLO_CATALOGUE: readonly SloDefinition[] = [
     objective: 0.99,
     windowDays: MONTHLY_WINDOW_DAYS,
     statement: 'A search returns results rather than an error.',
-    source: null,
-    missingInstrument:
-      'search_history records the query and how many results came back, never whether the search itself failed, so a failed search and a search with no matches are the same row.',
+    source: {
+      table: 'search_history',
+      occurredAt: 'created_at',
+      eligible: 'outcome is not null',
+      good: `outcome = 'succeeded'`,
+      latencyMs: 'duration_ms',
+      segments: { region: 'region', provider: 'provider' },
+      coverage:
+        'Searches that recorded an outcome. A search that matched nothing is a successful search; only a search that failed to run is a bad sample.',
+    },
   },
   {
     id: 'remote-control',
@@ -302,6 +339,18 @@ export function alertableSlos(): readonly SloDefinition[] {
 
 export function findSlo(id: string): SloDefinition | undefined {
   return SLO_CATALOGUE.find((slo) => slo.id === id);
+}
+
+export function segmentColumn(slo: SloDefinition, segment: SloSegment): string | undefined {
+  return slo.source?.segments?.[segment];
+}
+
+export function segmentsOf(slo: SloDefinition): readonly SloSegment[] {
+  return SLO_SEGMENTS.filter((segment) => segmentColumn(slo, segment) !== undefined);
+}
+
+export function segmentableSlos(segment: SloSegment): readonly SloDefinition[] {
+  return SLO_CATALOGUE.filter((slo) => segmentColumn(slo, segment) !== undefined);
 }
 
 const PERCENT = 100;

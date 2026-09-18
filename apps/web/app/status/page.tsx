@@ -21,7 +21,8 @@ import { getCachedSloAttainment, type SloAttainment } from '@/lib/server/slo/att
 import { declaredOnlySlos, formatObjective } from '@/lib/server/slo/catalogue';
 import { CAPABILITY_DEGRADATION } from '@/lib/server/slo/degradation';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
-import { contactMailto } from '@/lib/legal-constants';
+import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import { statusMirrorUrl } from '@/lib/server/incident/out-of-band';
 
 export const metadata = buildMetadata({
   title: 'Status: a live, honestly scoped health signal',
@@ -166,6 +167,7 @@ const NOT_COVERED = [
 ];
 
 export default async function StatusPage() {
+  const mirrorUrl = statusMirrorUrl();
   const health = await fetchHealth();
   const attainment = await fetchAttainment();
   const checks = health.checks;
@@ -230,7 +232,46 @@ export default async function StatusPage() {
           </Stack>
         </Section>
 
-        <Section id="scope" labelledBy="agi-status-scope-title" rule ground="2">
+        <Section id="independent" labelledBy="agi-status-independent-title" rule ground="2">
+          <Stack gap="loose">
+            <div>
+              <h2 className="agi-ds-h2" id="agi-status-independent-title">
+                Where to read this when this page is down.
+              </h2>
+              <Prose>
+                This page is served by the same deployment it reports on, so an outage broad enough
+                to take the application down takes this page with it. A copy of the current state is
+                pushed to an origin we do not serve, and every incident alert is also sent on a
+                transport that shares no vendor with our email. Neither depends on the application
+                being able to answer a request.
+              </Prose>
+            </div>
+            <Ledger
+              caption="Independent of this deployment"
+              rows={[
+                {
+                  label: 'Status mirror',
+                  value:
+                    mirrorUrl ?? 'Not configured. This page is the only place status is published.',
+                  quiet: mirrorUrl === undefined,
+                },
+                {
+                  label: 'If neither answers',
+                  value: `Write to ${CONTACT_EMAIL}. A reply may be delayed while the incident is open, but the mailbox is not hosted by this deployment.`,
+                },
+              ]}
+            />
+            {mirrorUrl ? (
+              <Prose size="sm">
+                <Link href={mirrorUrl} className="agi-ds-link">
+                  Open the status mirror
+                </Link>
+              </Prose>
+            ) : null}
+          </Stack>
+        </Section>
+
+        <Section id="scope" labelledBy="agi-status-scope-title" rule>
           <Stack gap="loose">
             <div>
               <h2 className="agi-ds-h2" id="agi-status-scope-title">

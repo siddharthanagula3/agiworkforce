@@ -702,6 +702,29 @@ export function getCircuitBreaker(options: CircuitBreakerOptions): CircuitBreake
   return breaker;
 }
 
+export const CIRCUIT_SCOPE_SEPARATOR = ':';
+
+export type CircuitScope = 'provider' | 'model' | 'inbound' | 'connector' | 'store';
+
+/**
+ * One breaker per dependency, never one for a class of them. A breaker keyed
+ * only by 'provider' opens for every provider the first time any one of them
+ * fails, which turns a single vendor's outage into a total one.
+ */
+export function circuitName(scope: CircuitScope, dependency: string): string {
+  const id = dependency.trim();
+  if (id.length === 0) throw new Error(`A ${scope} circuit needs a dependency to be scoped to`);
+  return `${scope}${CIRCUIT_SCOPE_SEPARATOR}${id}`;
+}
+
+export function getScopedCircuitBreaker(
+  scope: CircuitScope,
+  dependency: string,
+  options: Omit<CircuitBreakerOptions, 'name'> = {},
+): CircuitBreaker {
+  return getCircuitBreaker({ ...options, name: circuitName(scope, dependency) });
+}
+
 export function circuitBreakerSnapshots(): CircuitBreakerSnapshot[] {
   return [...registry.values()].map((breaker) => breaker.snapshot());
 }

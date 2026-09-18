@@ -20,6 +20,7 @@ import {
   type PageOutcome,
   type PageTarget,
 } from './pager';
+import { publishStatusMirror, sendOutOfBandAlert } from './out-of-band';
 
 const INCIDENT_KEY_PREFIX = 'agi-incident';
 const INCIDENT_TTL_SECONDS = 6 * 60 * 60;
@@ -44,6 +45,8 @@ export interface IncidentDispatchResult {
   delivery: 'delivered' | 'undeliverable';
   paged: PageOutcome;
   channel: PageOutcome;
+  /** The transport that shares no vendor with the email channel. */
+  outOfBand: PageOutcome;
   reason?: string;
 }
 
@@ -130,7 +133,30 @@ export async function notifyIncident(
   const delivered = emails.some((sent) => sent.delivered);
   const reason = emails.find((sent) => !sent.delivered)?.reason;
 
-  if (!delivered && paged !== 'paged' && channel !== 'paged') {
+  // Every channel above depends on something that may be part of the outage:
+  // the email vendor, or this application reaching its own webhooks. The
+  // out-of-band transport is tried whenever none of them carried the alert.
+  const needsFallback = !delivered && paged !== 'paged' && channel !== 'paged';
+  const outOfBand = needsFallback
+    ? await sendOutOfBandAlert({
+        severity: notification.severity,
+        subject: notification.subject,
+        text,
+        target: targets[0],
+        source: notification.source ?? notification.key,
+      })
+    : 'unconfigured';
+
+  if (needsFallback) {
+    await publishStatusMirror({
+      publishedAt: now.toISOString(),
+      status: notification.severity === 'critical' ? 'disrupted' : 'degraded',
+      headline: notification.subject,
+      detail: notification.text,
+    });
+  }
+
+  if (needsFallback && outOfBand !== 'paged') {
     logger.error(
       { key: notification.key, severity: notification.severity, level, reason },
       'Incident alert could NOT be delivered · no human has been told',
@@ -140,9 +166,10 @@ export async function notifyIncident(
   return {
     level,
     notified: targets.map((target) => target.handle),
-    delivery: delivered ? 'delivered' : 'undeliverable',
+    delivery: delivered || outOfBand === 'paged' ? 'delivered' : 'undeliverable',
     paged,
     channel,
+    outOfBand,
     ...(delivered ? {} : { reason }),
   };
 }

@@ -26,6 +26,12 @@ import {
   ONCALL_ROTATION_START_ENV,
 } from '../on-call';
 import { INCIDENT_CHANNEL_WEBHOOK_ENV, PAGER_WEBHOOK_ENV } from '../pager';
+import {
+  OUT_OF_BAND_WEBHOOK_ENV,
+  STATUS_MIRROR_WRITE_URL_ENV,
+  STATUS_MIRROR_URL_ENV,
+  statusMirrorUrl,
+} from '../out-of-band';
 
 const NOW = new Date('2026-09-07T00:00:00.000Z');
 const LATER = new Date('2026-09-07T00:20:00.000Z');
@@ -63,6 +69,9 @@ beforeEach(() => {
   process.env[ONCALL_ESCALATE_AFTER_MINUTES_ENV] = '10';
   delete process.env[PAGER_WEBHOOK_ENV];
   delete process.env[INCIDENT_CHANNEL_WEBHOOK_ENV];
+  delete process.env[OUT_OF_BAND_WEBHOOK_ENV];
+  delete process.env[STATUS_MIRROR_WRITE_URL_ENV];
+  delete process.env[STATUS_MIRROR_URL_ENV];
   vi.unstubAllGlobals();
 });
 
@@ -155,6 +164,78 @@ describe('incident dispatch', () => {
       expect.objectContaining({ key: 'health-probe' }),
       expect.stringContaining('no human has been told'),
     );
+  });
+
+  it('reaches the responder on a transport that is not the email vendor when Resend is down', async () => {
+    mocks.sendSupportEmail.mockResolvedValue({ delivered: false, reason: 'resend unreachable' });
+    process.env[OUT_OF_BAND_WEBHOOK_ENV] = 'https://out-of-band.example.test/hook';
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await notifyIncident(ALERT, NOW);
+
+    expect(result.outOfBand).toBe('paged');
+    expect(result.delivery).toBe('delivered');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://out-of-band.example.test/hook');
+    expect(mocks.error).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('no human has been told'),
+    );
+  });
+
+  it('does not use the fallback transport when a channel already carried the alert', async () => {
+    process.env[PAGER_WEBHOOK_ENV] = 'https://pager.example.test/hook';
+    process.env[OUT_OF_BAND_WEBHOOK_ENV] = 'https://out-of-band.example.test/hook';
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await notifyIncident(ALERT, NOW);
+
+    expect(result.outOfBand).toBe('unconfigured');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes the incident to an origin this deployment does not serve', async () => {
+    mocks.sendSupportEmail.mockResolvedValue({ delivered: false, reason: 'resend unreachable' });
+    process.env[STATUS_MIRROR_WRITE_URL_ENV] = 'https://mirror.example.test/status.json';
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await notifyIncident(ALERT, NOW);
+
+    const mirrorCall = fetchMock.mock.calls.find(
+      ([url]) => url === 'https://mirror.example.test/status.json',
+    );
+    expect(mirrorCall?.[1]).toMatchObject({ method: 'PUT' });
+    expect(JSON.parse(String((mirrorCall?.[1] as RequestInit).body))).toMatchObject({
+      status: 'disrupted',
+      headline: ALERT.subject,
+    });
+  });
+
+  it('still says nobody was told when the fallback transport also fails', async () => {
+    mocks.sendSupportEmail.mockResolvedValue({ delivered: false, reason: 'no api key' });
+    process.env[OUT_OF_BAND_WEBHOOK_ENV] = 'https://out-of-band.example.test/hook';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 500 })),
+    );
+
+    const result = await notifyIncident(ALERT, NOW);
+
+    expect(result.outOfBand).toBe('failed');
+    expect(result.delivery).toBe('undeliverable');
+    expect(mocks.error).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'health-probe' }),
+      expect.stringContaining('no human has been told'),
+    );
+  });
+
+  it('reports no status mirror rather than a broken link when none is configured', () => {
+    expect(statusMirrorUrl()).toBeUndefined();
+    process.env[STATUS_MIRROR_URL_ENV] = 'https://status.example.test';
+    expect(statusMirrorUrl()).toBe('https://status.example.test');
   });
 
   it('carries the escalation level into the text a responder reads', async () => {
